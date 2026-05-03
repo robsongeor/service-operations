@@ -7,5 +7,8 @@ export type Equipment = {
     gr_Site?: {
         gr_siteid: string
         gr_name: string
+        gr_Customer?: {
+            gr_name: string
+        }
     }
 }

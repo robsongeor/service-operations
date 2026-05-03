@@ -1,0 +1,41 @@
+.jobs-table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    background: #ffffff;
+    border-radius: 16px;
+    border: 1px solid #e5e7eb;
+}
+
+.jobs-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.jobs-table thead {
+    background: #f9fafb;
+}
+
+.jobs-table th {
+    text-align: left;
+    font-weight: 600;
+    color: #6b7280;
+    padding: 14px 16px;
+    border-bottom: 1px solid #e5e7eb;
+    white-space: nowrap;
+}
+
+.jobs-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #111827;
+    vertical-align: middle;
+}
+
+.jobs-table tbody tr:hover {
+    background: #f9fafb;
+}
+
+.jobs-table tbody tr:last-child td {
+    border-bottom: none;
+}

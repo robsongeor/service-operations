@@ -69,3 +69,28 @@ export async function createJob(
         throw new Error(error)
     }
 }
+
+export async function updateJobStatus(
+    token: string,
+    jobId: string,
+    status: number
+) {
+    const response = await fetch(
+        `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2/gr_jobs(${jobId})`,
+        {
+            method: 'PATCH',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+            },
+            body: JSON.stringify({
+                gr_status: status,
+            }),
+        }
+    )
+
+    if (!response.ok) {
+        throw new Error('Failed to update job status')
+    }
+}

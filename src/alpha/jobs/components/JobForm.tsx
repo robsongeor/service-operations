@@ -19,9 +19,23 @@ type Props = {
     selectedSiteId: string
     onSiteChange: (id: string) => void
 
+    siteSearch: string
+    onSiteSearchChange: (value: string) => void
+    onSelectSite: (id: string, label: string) => void
+
     siteContacts: SiteContact[]
     selectedContactId: string
     onContactChange: (id: string) => void
+
+    newContactName: string
+    newContactPhone: string
+    newContactEmail: string
+
+    onSaveNewContact: () => void
+
+    onNewContactNameChange: (v: string) => void
+    onNewContactPhoneChange: (v: string) => void
+    onNewContactEmailChange: (v: string) => void
 
     onJobNumberChange: (v: string) => void
     onOrderNumberChange: (v: string) => void
@@ -44,6 +58,15 @@ export default function JobForm(props: Props) {
     const filteredSiteContacts = props.siteContacts.filter(
         (sc) => sc.gr_Site?.gr_siteid === props.selectedSiteId,
     )
+
+    const filteredSites = props.sites.filter((site) => {
+        const search = props.siteSearch.toLowerCase()
+
+        return (
+            site.gr_name.toLowerCase().includes(search) ||
+            site.gr_Customer?.gr_name.toLowerCase().includes(search)
+        )
+    })
 
     return (
         <div>
@@ -103,18 +126,30 @@ export default function JobForm(props: Props) {
                 ))}
             </select>
 
-            <select
-                value={props.selectedSiteId}
-                onChange={(e) => props.onSiteChange(e.target.value)}
-            >
-                <option value="">Select site (optional)</option>
+            <input
+                placeholder="Search site"
+                value={props.siteSearch}
+                onChange={(e) => props.onSiteSearchChange(e.target.value)}
+            />
 
-                {props.sites.map((site) => (
-                    <option key={site.gr_siteid} value={site.gr_siteid}>
-                        {site.gr_Customer.gr_name} - {site.gr_name} - {site.gr_address}
-                    </option>
-                ))}
-            </select>
+            {props.siteSearch && (
+                <div>
+                    {filteredSites.map((site) => (
+                        <button
+                            key={site.gr_siteid}
+                            onClick={() =>
+                                props.onSelectSite(
+                                    site.gr_siteid,
+                                    `${site.gr_Customer?.gr_name ?? 'Unknown customer'} - ${site.gr_name}`,
+                                )
+                            }
+                        >
+                            {site.gr_Customer?.gr_name} - {site.gr_name}
+                        </button>
+                    ))}
+                </div>
+            )
+            }
 
             <select
                 value={props.selectedContactId}
@@ -132,10 +167,39 @@ export default function JobForm(props: Props) {
                     >
                         {sc.gr_Contact?.gr_name}
                     </option>
+
                 ))}
+
+                <option value="__new__">➕ Add new contact</option>
             </select>
 
+            {props.selectedContactId === '__new__' && (
+                <div>
+                    <input
+                        placeholder="Contact name"
+                        value={props.newContactName}
+                        onChange={(e) => props.onNewContactNameChange(e.target.value)}
+                    />
+
+                    <input
+                        placeholder="Contact phone"
+                        value={props.newContactPhone}
+                        onChange={(e) => props.onNewContactPhoneChange(e.target.value)}
+                    />
+
+                    <input
+                        placeholder="Contact email"
+                        value={props.newContactEmail}
+                        onChange={(e) => props.onNewContactEmailChange(e.target.value)}
+                    />
+
+                    <button type="button" onClick={props.onSaveNewContact}>
+                        Save new contact
+                    </button>
+                </div>
+            )}
+
             <button onClick={props.onSubmit}>Create Job</button>
-        </div>
+        </div >
     )
 }

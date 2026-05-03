@@ -5,7 +5,9 @@ import type { Equipment } from '../types/equipment.types'
 import {
     fetchJobs as fetchJobsApi,
     createJob as createJobApi,
+    updateJobStatus as updateJobStatusApi,
 } from '../services/jobsApi'
+
 import { fetchEquipment as fetchEquipmentApi } from '../services/equipmentApi'
 import type { Mechanic } from '../types/mechanic.types'
 
@@ -14,6 +16,11 @@ import { fetchSites as fetchSitesApi } from '../services/sitesApi'
 
 import type { SiteContact } from '../types/siteContact.types'
 import { fetchSiteContacts as fetchSiteContactsApi } from '../services/siteContactsApi'
+
+import {
+    createContact as createContactApi,
+    createSiteContact as createSiteContactApi,
+} from '../services/contactsApi'
 
 export function useJobs() {
     const { instance, accounts } = useMsal()
@@ -31,6 +38,27 @@ export function useJobs() {
         })
 
         return response.accessToken
+    }
+
+    const createContactForSite = async (contact: {
+        siteId: string
+        name: string
+        phone?: string
+        email?: string
+    }) => {
+        const token = await getAccessToken()
+
+        const contactId = await createContactApi(token, {
+            name: contact.name,
+            phone: contact.phone,
+            email: contact.email,
+        })
+
+        await createSiteContactApi(token, contact.siteId, contactId)
+
+        await fetchSiteContacts()
+
+        return contactId
     }
 
     const fetchSiteContacts = async () => {
@@ -74,6 +102,14 @@ export function useJobs() {
         setEquipmentList(equipment)
     }
 
+    const updateJobStatus = async (jobId: string, status: number) => {
+        const token = await getAccessToken()
+
+        await updateJobStatusApi(token, jobId, status)
+
+        await fetchJobs()
+    }
+
     const createJob = async (job: {
         jobNumber: string
         orderNumber: string
@@ -109,5 +145,7 @@ export function useJobs() {
         createJob,
         mechanics,
         siteContacts,
+        createContactForSite,
+        updateJobStatus,
     }
 }
