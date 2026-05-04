@@ -6,6 +6,7 @@ import {
     fetchJobs as fetchJobsApi,
     createJob as createJobApi,
     updateJobStatus as updateJobStatusApi,
+    updateJobFields as updateJobFieldsApi,
 } from '../services/jobsApi'
 
 import { fetchEquipment as fetchEquipmentApi } from '../services/equipmentApi'
@@ -110,6 +111,21 @@ export function useJobs() {
         await fetchJobs()
     }
 
+    const updateJobFields = async (
+        jobId: string,
+        fields: {
+            gr_jobnumber?: string
+            gr_description?: string
+            gr_ordernumber?: string
+        }
+    ) => {
+        const token = await getAccessToken()
+
+        await updateJobFieldsApi(token, jobId, fields)
+
+        await fetchJobs()
+    }
+
     const createJob = async (job: {
         jobNumber: string
         orderNumber: string
@@ -147,5 +163,6 @@ export function useJobs() {
         siteContacts,
         createContactForSite,
         updateJobStatus,
+        updateJobFields,
     }
 }

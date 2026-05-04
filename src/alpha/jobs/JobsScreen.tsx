@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useJobs } from './hooks/useJobs'
 import JobForm from './components/JobForm'
 import JobsTable from './components/JobsTable'
+import type { Job } from './types/job.types'
+import { emailJobToMechanic } from './services/jobEmail'
 
 export default function JobsScreen() {
     const {
@@ -12,6 +14,7 @@ export default function JobsScreen() {
         siteContacts,
         createJob: createJobInDataverse,
         updateJobStatus,
+        updateJobFields,
         createContactForSite,
     } = useJobs()
 
@@ -113,6 +116,26 @@ export default function JobsScreen() {
         }
     }, [selectedSiteId, siteContacts])
 
+    const [visibleStatuses, setVisibleStatuses] = useState<number[]>([
+        122830001, // Unallocated
+        122830000, // Allocated
+        122830002, // Waiting
+        122830003, // Complete
+    ])
+
+    const toggleStatus = (status: number) => {
+        setVisibleStatuses((prev) =>
+            prev.includes(status)
+                ? prev.filter((s) => s !== status)
+                : [...prev, status]
+        )
+    }
+
+    const filteredJobs = jobs.filter((job) =>
+        visibleStatuses.includes(job.gr_status)
+    )
+
+
     return (
         <div>
             <h1>Jobs</h1>
@@ -173,9 +196,15 @@ export default function JobsScreen() {
                 }}
                 onSubmit={createJob}
             />
+
             <JobsTable
-                jobs={jobs}
+                jobs={filteredJobs}
+                visibleStatuses={visibleStatuses}
+                onToggleStatus={toggleStatus}
                 onStatusChange={updateJobStatus}
+                onJobFieldsChange={updateJobFields}
+                onEmailJob={emailJobToMechanic}
+                mechanics={mechanics}
             />
         </div>
     )

@@ -11,6 +11,7 @@ export type Job = {
         gr_model: string
     }
     gr_Mechanic?: {
+        gr_mechanicid: string
         gr_name: string
         gr_phone: string
         gr_email: string

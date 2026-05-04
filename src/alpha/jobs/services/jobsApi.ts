@@ -4,7 +4,7 @@ const DATAVERSE_URL = import.meta.env.VITE_DATAVERSE_URL
 
 export async function fetchJobs(accessToken: string): Promise<Job[]> {
     const result = await fetch(
-        `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=gr_jobid,gr_jobnumber,gr_status,gr_ordernumber,gr_description&$expand=gr_Equipment($select=gr_fleet,gr_make,gr_model,gr_serial),gr_Mechanic($select=gr_name), gr_Site($select=gr_name,gr_address;$expand=gr_Customer($select=gr_name)),gr_Contact($select=gr_name,gr_phone,gr_email)`,
+        `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=gr_jobid,gr_jobnumber,gr_status,gr_ordernumber,gr_description&$expand=gr_Equipment($select=gr_fleet,gr_make,gr_model,gr_serial),gr_Mechanic($select=gr_mechanicid,gr_name,gr_phone,gr_email),gr_Site($select=gr_name,gr_address;$expand=gr_Customer($select=gr_name)),gr_Contact($select=gr_name,gr_phone,gr_email)`,
         {
             headers: {
                 Authorization: `Bearer ${accessToken}`,
@@ -92,5 +92,32 @@ export async function updateJobStatus(
 
     if (!response.ok) {
         throw new Error('Failed to update job status')
+    }
+}
+
+export async function updateJobFields(
+    token: string,
+    jobId: string,
+    fields: {
+        gr_jobnumber?: string
+        gr_description?: string
+        gr_ordernumber?: string
+    }
+) {
+    const response = await fetch(
+        `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2/gr_jobs(${jobId})`,
+        {
+            method: 'PATCH',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+            },
+            body: JSON.stringify(fields),
+        }
+    )
+
+    if (!response.ok) {
+        throw new Error('Failed to update job')
     }
 }
