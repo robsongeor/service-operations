@@ -50,3 +50,29 @@ export async function createEquipment(
     const data = await result.json()
     return data.gr_equipmentid
 }
+
+export async function updateEquipmentSite(
+    accessToken: string,
+    equipmentId: string,
+    siteId: string,
+) {
+    const result = await fetch(
+        `${DATAVERSE_URL}/api/data/v9.2/gr_equipments(${equipmentId})`,
+        {
+            method: 'PATCH',
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+            },
+            body: JSON.stringify({
+                'gr_Site@odata.bind': `/gr_sites(${siteId})`,
+            }),
+        },
+    )
+
+    if (!result.ok) {
+        const error = await result.text()
+        throw new Error(error)
+    }
+}

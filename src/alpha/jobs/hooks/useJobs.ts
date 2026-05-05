@@ -11,8 +11,10 @@ import {
 
 import {
     fetchEquipment as fetchEquipmentApi,
-    createEquipment as createEquipmentApi
+    createEquipment as createEquipmentApi,
+    updateEquipmentSite
 } from '../services/equipmentApi'
+
 import type { Mechanic } from '../types/mechanic.types'
 
 import type { Site } from '../types/site.types'
@@ -156,6 +158,18 @@ export function useJobs() {
         const token = await getAccessToken()
 
         await createJobApi(token, job)
+
+        if (job.equipmentId && job.siteId) {
+            try {
+                await updateEquipmentSite(
+                    token,
+                    job.equipmentId,
+                    job.siteId
+                )
+            } catch (error) {
+                console.error('Failed to update equipment site:', error)
+            }
+        }
 
         await fetchJobs()
     }
