@@ -40,6 +40,28 @@ export default function JobsScreen() {
     const [newEquipmentMake, setNewEquipmentMake] = useState('')
     const [newEquipmentModel, setNewEquipmentModel] = useState('')
 
+    const jobForm = {
+        jobNumber,
+        orderNumber,
+        description,
+        selectedMechanicId: mechanic,
+        onJobNumberChange: setJobNumber,
+        onOrderNumberChange: setOrderNumber,
+        onDescriptionChange: setDescription,
+        onMechanicChange: setMechanic,
+    }
+
+    const equipmentForm = {
+        fleet: newEquipmentFleet,
+        serial: newEquipmentSerial,
+        make: newEquipmentMake,
+        model: newEquipmentModel,
+        onFleetChange: setNewEquipmentFleet,
+        onSerialChange: setNewEquipmentSerial,
+        onMakeChange: setNewEquipmentMake,
+        onModelChange: setNewEquipmentModel,
+    }
+
     const saveNewContact = async () => {
         if (!selectedSiteId) {
             alert('Please select a site first')
@@ -69,6 +91,18 @@ export default function JobsScreen() {
             alert('Failed to create contact')
         }
     }
+
+    const contactForm = {
+        name: newContactName,
+        phone: newContactPhone,
+        email: newContactEmail,
+        onNameChange: setNewContactName,
+        onPhoneChange: setNewContactPhone,
+        onEmailChange: setNewContactEmail,
+        onSave: saveNewContact,
+    }
+
+
 
     const createJob = async () => {
         if (!description.trim()) {
@@ -145,19 +179,12 @@ export default function JobsScreen() {
         <div>
             <h1>Jobs</h1>
             <JobForm
+                jobForm={jobForm}
+                equipmentForm={equipmentForm}
+                contactForm={contactForm}
                 onAddNewEquipment={() => {
                     setSelectedEquipmentId('__new__')
                 }}
-                newEquipmentFleet={newEquipmentFleet}
-                newEquipmentSerial={newEquipmentSerial}
-                newEquipmentMake={newEquipmentMake}
-                newEquipmentModel={newEquipmentModel}
-
-                onNewEquipmentFleetChange={setNewEquipmentFleet}
-                onNewEquipmentSerialChange={setNewEquipmentSerial}
-                onNewEquipmentMakeChange={setNewEquipmentMake}
-                onNewEquipmentModelChange={setNewEquipmentModel}
-
                 onSaveNewEquipment={async () => {
                     const newId = await createEquipment({
                         fleet: newEquipmentFleet,
@@ -168,14 +195,6 @@ export default function JobsScreen() {
 
                     setSelectedEquipmentId(newId)
                 }}
-
-                onSaveNewContact={saveNewContact}
-                newContactName={newContactName}
-                newContactPhone={newContactPhone}
-                newContactEmail={newContactEmail}
-                onNewContactNameChange={setNewContactName}
-                onNewContactPhoneChange={setNewContactPhone}
-                onNewContactEmailChange={setNewContactEmail}
                 siteSearch={siteSearch}
                 onSiteSearchChange={(value) => {
                     setSiteSearch(value)
@@ -192,19 +211,10 @@ export default function JobsScreen() {
                 onContactChange={setSelectedContactId}
                 sites={sites}
                 selectedSiteId={selectedSiteId}
-                onSiteChange={setSelectedSiteId}
                 mechanics={mechanics}
-                selectedMechanicId={mechanic}
-                onMechanicChange={setMechanic}
-                jobNumber={jobNumber}
-                orderNumber={orderNumber}
-                description={description}
                 equipmentSearch={equipmentSearch}
                 equipmentList={equipmentList}
                 selectedEquipmentId={selectedEquipmentId}
-                onJobNumberChange={setJobNumber}
-                onOrderNumberChange={setOrderNumber}
-                onDescriptionChange={setDescription}
                 onEquipmentSearchChange={(value) => {
                     setEquipmentSearch(value)
                     setSelectedEquipmentId('')
