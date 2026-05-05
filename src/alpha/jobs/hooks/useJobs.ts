@@ -9,7 +9,10 @@ import {
     updateJobFields as updateJobFieldsApi,
 } from '../services/jobsApi'
 
-import { fetchEquipment as fetchEquipmentApi } from '../services/equipmentApi'
+import {
+    fetchEquipment as fetchEquipmentApi,
+    createEquipment as createEquipmentApi
+} from '../services/equipmentApi'
 import type { Mechanic } from '../types/mechanic.types'
 
 import type { Site } from '../types/site.types'
@@ -39,6 +42,21 @@ export function useJobs() {
         })
 
         return response.accessToken
+    }
+
+    const createEquipment = async (equipment: {
+        fleet: string
+        serial: string
+        make?: string
+        model?: string
+    }) => {
+        const token = await getAccessToken()
+
+        const equipmentId = await createEquipmentApi(token, equipment)
+
+        await fetchEquipment()
+
+        return equipmentId
     }
 
     const createContactForSite = async (contact: {
@@ -159,6 +177,7 @@ export function useJobs() {
         fetchJobs,
         fetchEquipment,
         createJob,
+        createEquipment,
         mechanics,
         siteContacts,
         createContactForSite,

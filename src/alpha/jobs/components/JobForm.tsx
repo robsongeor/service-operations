@@ -43,17 +43,33 @@ type Props = {
     onEquipmentSearchChange: (v: string) => void
     onSelectEquipment: (id: string, label: string) => void
     onSubmit: () => void
+
+    onAddNewEquipment: () => void
+
+    newEquipmentFleet: string
+    newEquipmentSerial: string
+    newEquipmentMake: string
+    newEquipmentModel: string
+
+    onNewEquipmentFleetChange: (v: string) => void
+    onNewEquipmentSerialChange: (v: string) => void
+    onNewEquipmentMakeChange: (v: string) => void
+    onNewEquipmentModelChange: (v: string) => void
+
+    onSaveNewEquipment: () => void
 }
 
 export default function JobForm(props: Props) {
-    const filteredEquipment = props.equipmentList.filter((eq) => {
-        const search = props.equipmentSearch.toLowerCase()
+    const filteredEquipment = props.equipmentList
+        .filter((eq) => {
+            const search = props.equipmentSearch.toLowerCase()
 
-        return (
-            eq.gr_fleet?.toLowerCase().includes(search) ||
-            eq.gr_serial?.toLowerCase().includes(search)
-        )
-    })
+            return (
+                eq.gr_fleet?.toLowerCase().includes(search) ||
+                eq.gr_serial?.toLowerCase().includes(search)
+            )
+        })
+        .slice(0, 5)
 
     const filteredSiteContacts = props.siteContacts.filter(
         (sc) => sc.gr_Site?.gr_siteid === props.selectedSiteId,
@@ -94,7 +110,7 @@ export default function JobForm(props: Props) {
                 onChange={(e) => props.onEquipmentSearchChange(e.target.value)}
             />
 
-            {props.equipmentSearch && (
+            {props.equipmentSearch.trim().length > 0 && (
                 <div>
                     {filteredEquipment.map((eq) => (
                         <button
@@ -110,6 +126,45 @@ export default function JobForm(props: Props) {
                             {eq.gr_fleet} - {eq.gr_make} {eq.gr_model} - {eq.gr_serial}
                         </button>
                     ))}
+
+                    <button
+                        type="button"
+                        onClick={props.onAddNewEquipment}
+                    >
+                        ➕ Add new equipment
+                    </button>
+                </div>
+            )}
+
+            {props.selectedEquipmentId === '__new__' && (
+                <div>
+                    <input
+                        placeholder="Fleet number"
+                        value={props.newEquipmentFleet}
+                        onChange={(e) => props.onNewEquipmentFleetChange(e.target.value)}
+                    />
+
+                    <input
+                        placeholder="Serial number"
+                        value={props.newEquipmentSerial}
+                        onChange={(e) => props.onNewEquipmentSerialChange(e.target.value)}
+                    />
+
+                    <input
+                        placeholder="Make"
+                        value={props.newEquipmentMake}
+                        onChange={(e) => props.onNewEquipmentMakeChange(e.target.value)}
+                    />
+
+                    <input
+                        placeholder="Model"
+                        value={props.newEquipmentModel}
+                        onChange={(e) => props.onNewEquipmentModelChange(e.target.value)}
+                    />
+
+                    <button type="button" onClick={props.onSaveNewEquipment}>
+                        Save new equipment
+                    </button>
                 </div>
             )}
 

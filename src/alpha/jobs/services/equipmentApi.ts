@@ -16,3 +16,37 @@ export async function fetchEquipment(accessToken: string): Promise<Equipment[]> 
     const data = await result.json()
     return data.value ?? []
 }
+
+export async function createEquipment(
+    accessToken: string,
+    equipment: {
+        fleet: string
+        serial: string
+        make?: string
+        model?: string
+    },
+): Promise<string> {
+    const result = await fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_equipments`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            Prefer: 'return=representation',
+        },
+        body: JSON.stringify({
+            gr_fleet: equipment.fleet,
+            gr_serial: equipment.serial,
+            gr_make: equipment.make,
+            gr_model: equipment.model,
+        }),
+    })
+
+    if (!result.ok) {
+        const error = await result.text()
+        throw new Error(error)
+    }
+
+    const data = await result.json()
+    return data.gr_equipmentid
+}

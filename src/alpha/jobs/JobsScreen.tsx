@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useJobs } from './hooks/useJobs'
 import JobForm from './components/JobForm'
 import JobsTable from './components/JobsTable'
-import type { Job } from './types/job.types'
 import { emailJobToMechanic } from './services/jobEmail'
 
 export default function JobsScreen() {
@@ -16,6 +15,7 @@ export default function JobsScreen() {
         updateJobStatus,
         updateJobFields,
         createContactForSite,
+        createEquipment,
     } = useJobs()
 
     const [jobNumber, setJobNumber] = useState('')
@@ -34,6 +34,11 @@ export default function JobsScreen() {
     const [newContactName, setNewContactName] = useState('')
     const [newContactPhone, setNewContactPhone] = useState('')
     const [newContactEmail, setNewContactEmail] = useState('')
+
+    const [newEquipmentFleet, setNewEquipmentFleet] = useState('')
+    const [newEquipmentSerial, setNewEquipmentSerial] = useState('')
+    const [newEquipmentMake, setNewEquipmentMake] = useState('')
+    const [newEquipmentModel, setNewEquipmentModel] = useState('')
 
     const saveNewContact = async () => {
         if (!selectedSiteId) {
@@ -140,6 +145,30 @@ export default function JobsScreen() {
         <div>
             <h1>Jobs</h1>
             <JobForm
+                onAddNewEquipment={() => {
+                    setSelectedEquipmentId('__new__')
+                }}
+                newEquipmentFleet={newEquipmentFleet}
+                newEquipmentSerial={newEquipmentSerial}
+                newEquipmentMake={newEquipmentMake}
+                newEquipmentModel={newEquipmentModel}
+
+                onNewEquipmentFleetChange={setNewEquipmentFleet}
+                onNewEquipmentSerialChange={setNewEquipmentSerial}
+                onNewEquipmentMakeChange={setNewEquipmentMake}
+                onNewEquipmentModelChange={setNewEquipmentModel}
+
+                onSaveNewEquipment={async () => {
+                    const newId = await createEquipment({
+                        fleet: newEquipmentFleet,
+                        serial: newEquipmentSerial,
+                        make: newEquipmentMake,
+                        model: newEquipmentModel,
+                    })
+
+                    setSelectedEquipmentId(newId)
+                }}
+
                 onSaveNewContact={saveNewContact}
                 newContactName={newContactName}
                 newContactPhone={newContactPhone}
