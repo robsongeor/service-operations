@@ -1,7 +1,7 @@
 import { useMsal } from '@azure/msal-react'
 import LoginScreen from './alpha/LoginScreen'
 import TestScreen from './alpha/test-screen/TestScreen'
-import { Routes, Route, NavLink } from 'react-router-dom'
+import { Routes, Route } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import JobsScreen from './alpha/jobs/JobsScreen'
 

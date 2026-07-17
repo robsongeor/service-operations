@@ -30,6 +30,7 @@ import {
 } from '../services/sitesApi'
 
 import type { SiteContact } from '../types/siteContact.types'
+import type { JobType } from '../types/jobType.types'
 import { fetchSiteContacts as fetchSiteContactsApi } from '../services/siteContactsApi'
 
 import {
@@ -193,6 +194,7 @@ export function useJobs() {
         jobNumber: string
         orderNumber: string
         description: string
+        jobType: JobType
         equipmentId?: string
         mechanicId?: string
         siteId?: string

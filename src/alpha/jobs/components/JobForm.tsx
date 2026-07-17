@@ -3,16 +3,19 @@ import type { Mechanic } from '../types/mechanic.types'
 import type { Site } from '../types/site.types'
 import type { SiteContact } from '../types/siteContact.types'
 import type { Customer } from '../types/customer.types'
+import { JOB_TYPE_OPTIONS, type JobType } from '../types/jobType.types'
 
 type Props = {
     jobForm: {
         jobNumber: string
         orderNumber: string
         description: string
+        jobType: JobType
         selectedMechanicId: string
         onJobNumberChange: (v: string) => void
         onOrderNumberChange: (v: string) => void
         onDescriptionChange: (v: string) => void
+        onJobTypeChange: (jobType: JobType) => void
         onMechanicChange: (id: string) => void
     }
 
@@ -114,6 +117,19 @@ export default function JobForm(props: Props) {
                 value={props.jobForm.description}
                 onChange={(e) => props.jobForm.onDescriptionChange(e.target.value)}
             />
+
+            <select
+                value={props.jobForm.jobType}
+                onChange={(e) =>
+                    props.jobForm.onJobTypeChange(Number(e.target.value) as JobType)
+                }
+            >
+                {JOB_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                        {option.label}
+                    </option>
+                ))}
+            </select>
 
             <input
                 placeholder="Search equipment"

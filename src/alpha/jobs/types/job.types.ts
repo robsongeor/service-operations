@@ -1,9 +1,12 @@
+import type { JobType } from './jobType.types'
+
 export type Job = {
     gr_jobid: string
     gr_jobnumber: string
     gr_status: number
     gr_ordernumber: string
     gr_description: string
+    gr_jobtype?: JobType
     gr_Equipment?: {
         gr_fleet: string
         gr_serial: string

@@ -184,6 +184,7 @@ export default function JobsScreen() {
                 jobNumber,
                 orderNumber,
                 description,
+                jobType,
                 equipmentId: selectedEquipmentId || undefined,
                 mechanicId: mechanic || undefined,
                 siteId: selectedSiteId || undefined,
@@ -193,6 +194,7 @@ export default function JobsScreen() {
             setJobNumber('')
             setOrderNumber('')
             setDescription('')
+            setJobType(JOB_TYPES.BREAKDOWN)
             setSelectedEquipmentId('')
             setEquipmentSearch('')
             setMechanic('')

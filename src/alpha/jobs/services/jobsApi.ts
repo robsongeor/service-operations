@@ -1,10 +1,11 @@
 import type { Job } from '../types/job.types'
+import type { JobType } from '../types/jobType.types'
 
 const DATAVERSE_URL = import.meta.env.VITE_DATAVERSE_URL
 
 export async function fetchJobs(accessToken: string): Promise<Job[]> {
     const result = await fetch(
-        `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=gr_jobid,gr_jobnumber,gr_status,gr_ordernumber,gr_description&$expand=gr_Equipment($select=gr_fleet,gr_make,gr_model,gr_serial),gr_Mechanic($select=gr_mechanicid,gr_name,gr_phone,gr_email),gr_Site($select=gr_name,gr_address;$expand=gr_Customer($select=gr_name)),gr_Contact($select=gr_name,gr_phone,gr_email)`,
+        `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=gr_jobid,gr_jobnumber,gr_status,gr_ordernumber,gr_description,gr_jobtype&$expand=gr_Equipment($select=gr_fleet,gr_make,gr_model,gr_serial),gr_Mechanic($select=gr_mechanicid,gr_name,gr_phone,gr_email),gr_Site($select=gr_name,gr_address;$expand=gr_Customer($select=gr_name)),gr_Contact($select=gr_name,gr_phone,gr_email)`,
         {
             headers: {
                 Authorization: `Bearer ${accessToken}`,
@@ -23,16 +24,18 @@ export async function createJob(
         jobNumber: string
         orderNumber: string
         description: string
+        jobType: JobType
         equipmentId?: string
         mechanicId?: string
         siteId?: string
         contactId?: string
     }
 ) {
-    const newJob: Record<string, string> = {
+    const newJob: Record<string, string | number> = {
         gr_jobnumber: job.jobNumber,
         gr_ordernumber: job.orderNumber,
         gr_description: job.description,
+        gr_jobtype: job.jobType,
     }
 
     if (job.equipmentId) {

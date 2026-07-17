@@ -1,7 +1,7 @@
-import { useState } from 'react'
 import type { Job } from '../types/job.types'
 import './JobsTable.css'
 import type { Mechanic } from '../types/mechanic.types'
+import { getJobTypeLabel } from '../types/jobType.types'
 
 type Props = {
     jobs: Job[]
@@ -45,6 +45,7 @@ export default function JobsTable({
                 <thead>
                     <tr>
                         <th>Job Number</th>
+                        <th>Job Type</th>
                         <th>Equipment</th>
                         <th>Site</th>
                         <th>Description</th>
@@ -97,6 +98,8 @@ export default function JobsTable({
                                     }}
                                 />
                             </td>
+
+                            <td>{getJobTypeLabel(job.gr_jobtype)}</td>
 
                             <td>
                                 {job.gr_Equipment
