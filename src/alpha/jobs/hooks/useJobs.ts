@@ -17,8 +17,17 @@ import {
 
 import type { Mechanic } from '../types/mechanic.types'
 
+import type { Customer } from '../types/customer.types'
+import {
+    createCustomer as createCustomerApi,
+    fetchCustomers as fetchCustomersApi,
+} from '../services/customersApi'
+
 import type { Site } from '../types/site.types'
-import { fetchSites as fetchSitesApi } from '../services/sitesApi'
+import {
+    createSite as createSiteApi,
+    fetchSites as fetchSitesApi,
+} from '../services/sitesApi'
 
 import type { SiteContact } from '../types/siteContact.types'
 import { fetchSiteContacts as fetchSiteContactsApi } from '../services/siteContactsApi'
@@ -28,12 +37,15 @@ import {
     createSiteContact as createSiteContactApi,
 } from '../services/contactsApi'
 
+
+
 export function useJobs() {
     const { instance, accounts } = useMsal()
 
     const [jobs, setJobs] = useState<Job[]>([])
     const [equipmentList, setEquipmentList] = useState<Equipment[]>([])
     const [mechanics, setMechanics] = useState<Mechanic[]>([])
+    const [customers, setCustomers] = useState<Customer[]>([])
     const [sites, setSites] = useState<Site[]>([])
     const [siteContacts, setSiteContacts] = useState<SiteContact[]>([])
 
@@ -59,6 +71,31 @@ export function useJobs() {
         await fetchEquipment()
 
         return equipmentId
+    }
+
+    const createCustomer = async (customer: {
+        name: string
+    }) => {
+        const token = await getAccessToken()
+
+        const customerId = await createCustomerApi(token, customer)
+
+        await fetchCustomers()
+
+        return customerId
+    }
+
+    const createSite = async (site: {
+        customerId: string
+        name: string
+        address?: string
+    }) => {
+        const token = await getAccessToken()
+        const siteId = await createSiteApi(token, site)
+
+        await fetchSites()
+
+        return siteId
     }
 
     const createContactForSite = async (contact: {
@@ -92,6 +129,12 @@ export function useJobs() {
         const token = await getAccessToken()
         const sites = await fetchSitesApi(token)
         setSites(sites)
+    }
+
+    const fetchCustomers = async () => {
+        const token = await getAccessToken()
+        const customers = await fetchCustomersApi(token)
+        setCustomers(customers)
     }
 
     const fetchMechanics = async () => {
@@ -181,6 +224,7 @@ export function useJobs() {
             fetchJobs()
             fetchEquipment()
             fetchSites()
+            fetchCustomers()
             fetchSiteContacts()
         }
     }, [accounts])
@@ -189,14 +233,18 @@ export function useJobs() {
         jobs,
         equipmentList,
         sites,
+        customers,
         fetchJobs,
         fetchEquipment,
         createJob,
         createEquipment,
+        createSite,
+        createCustomer,
         mechanics,
         siteContacts,
         createContactForSite,
         updateJobStatus,
         updateJobFields,
+
     }
 }

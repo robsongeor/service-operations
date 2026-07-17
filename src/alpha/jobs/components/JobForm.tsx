@@ -2,10 +2,9 @@ import type { Equipment } from '../types/equipment.types'
 import type { Mechanic } from '../types/mechanic.types'
 import type { Site } from '../types/site.types'
 import type { SiteContact } from '../types/siteContact.types'
+import type { Customer } from '../types/customer.types'
 
 type Props = {
-
-
     jobForm: {
         jobNumber: string
         orderNumber: string
@@ -37,14 +36,29 @@ type Props = {
         onMakeChange: (v: string) => void
         onModelChange: (v: string) => void
     }
+
+    siteForm: {
+        customerId: string
+        customerName: string
+        name: string
+        address: string
+        onCustomerChange: (id: string) => void
+        onCustomerNameChange: (v: string) => void
+        onNameChange: (v: string) => void
+        onAddressChange: (v: string) => void
+    }
+
     equipmentSearch: string
     equipmentList: Equipment[]
     selectedEquipmentId: string
     sites: Site[]
+    customers: Customer[]
     selectedSiteId: string
     siteSearch: string
     onSiteSearchChange: (value: string) => void
     onSelectSite: (id: string, label: string) => void
+    onAddNewSite: () => void
+    onSaveNewSite: () => void
     siteContacts: SiteContact[]
     selectedContactId: string
     onContactChange: (id: string) => void
@@ -189,6 +203,7 @@ export default function JobForm(props: Props) {
                     {filteredSites.map((site) => (
                         <button
                             key={site.gr_siteid}
+                            type="button"
                             onClick={() =>
                                 props.onSelectSite(
                                     site.gr_siteid,
@@ -199,17 +214,70 @@ export default function JobForm(props: Props) {
                             {site.gr_Customer?.gr_name} - {site.gr_name}
                         </button>
                     ))}
+
+                    <button type="button" onClick={props.onAddNewSite}>
+                        + Add new site
+                    </button>
                 </div>
             )
             }
 
+            {props.selectedSiteId === '__new__' && (
+                <div>
+                    <select
+                        value={props.siteForm.customerId}
+                        onChange={(e) =>
+                            props.siteForm.onCustomerChange(e.target.value)
+                        }
+                    >
+                        <option value="">Select customer</option>
+
+                        {props.customers.map((customer) => (
+                            <option
+                                key={customer.gr_customerid}
+                                value={customer.gr_customerid}
+                            >
+                                {customer.gr_name}
+                            </option>
+                        ))}
+                        <option value="__new__">+ Add new customer</option>
+                    </select>
+                    {props.siteForm.customerId === '__new__' && (
+                        <input
+                            placeholder="Customer name"
+                            value={props.siteForm.customerName}
+                            onChange={(e) =>
+                                props.siteForm.onCustomerNameChange(e.target.value)
+                            }
+                        />
+                    )}
+                    <input
+                        placeholder="Site name"
+                        value={props.siteForm.name}
+                        onChange={(e) => props.siteForm.onNameChange(e.target.value)}
+                    />
+
+                    <input
+                        placeholder="Site address"
+                        value={props.siteForm.address}
+                        onChange={(e) => props.siteForm.onAddressChange(e.target.value)}
+                    />
+
+                    <button type="button" onClick={props.onSaveNewSite}>
+                        Save new site
+                    </button>
+                </div>
+            )}
+
             <select
                 value={props.selectedContactId}
                 onChange={(e) => props.onContactChange(e.target.value)}
-                disabled={!props.selectedSiteId}
+                disabled={!props.selectedSiteId || props.selectedSiteId === '__new__'}
             >
                 <option value="">
-                    {props.selectedSiteId ? 'Select contact (optional)' : 'Select a site first'}
+                    {props.selectedSiteId && props.selectedSiteId !== '__new__'
+                        ? 'Select contact (optional)'
+                        : 'Contact: Save or select a site first'}
                 </option>
 
                 {filteredSiteContacts.map((sc) => (
