@@ -166,6 +166,7 @@ export function useJobs() {
                     job.equipmentId,
                     job.siteId
                 )
+                await fetchEquipment()
             } catch (error) {
                 console.error('Failed to update equipment site:', error)
             }
