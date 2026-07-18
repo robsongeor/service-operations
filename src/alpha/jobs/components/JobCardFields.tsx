@@ -161,9 +161,6 @@ export default function JobCardFields({
                         <h3>Job card</h3>
                         <p>The normal workflow for the technician assigned on the Details tab.</p>
                     </div>
-                    <span className={`job-card-current status-${status}`}>
-                        {JOB_CARD_STATUS_OPTIONS.find((option) => option.value === status)?.label}
-                    </span>
                 </div>
 
                 <div className="primary-technician-card">
@@ -175,6 +172,9 @@ export default function JobCardFields({
                         </small>
                     </div>
                     <div className="primary-technician-actions">
+                        <span className={`job-card-current status-${status}`}>
+                            {JOB_CARD_STATUS_OPTIONS.find((option) => option.value === status)?.label}
+                        </span>
                         <button
                             type="button"
                             className="primary-technician-send"
