@@ -1,0 +1,98 @@
+.mechanics-page { color: #202723; }
+.mechanics-page-header { position: sticky; z-index: 20; top: 0; display: flex; min-height: 72px; align-items: center; justify-content: space-between; gap: 18px; box-sizing: border-box; margin: -24px -24px 20px; padding: 0 24px; border-bottom: 1px solid #e2e7e4; background: rgba(255,255,255,.96); box-shadow: 0 4px 14px rgba(24,34,29,.05); backdrop-filter: blur(10px); }
+.mechanics-page-header span, .mechanic-jobs-heading > div > span { color: #77817b; font-size: .67rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.mechanics-page-header h1, .mechanic-detail-header h2, .mechanic-detail-header p, .mechanic-jobs-heading h3, .mechanics-data-state h2, .mechanics-data-state p { margin: 0; }
+.mechanics-page-header h1 { margin-top: 2px; font-size: 1.45rem; }
+.mechanic-primary-button, .mechanic-secondary-button { min-height: 38px; padding: 0 15px; border-radius: 8px; font-size: .76rem; font-weight: 750; cursor: pointer; }
+.mechanic-primary-button { border: 1px solid #176f66; background: #176f66; color: #fff; }
+.mechanic-secondary-button { border: 1px solid #ccd5d0; background: #fff; color: #344039; }
+.mechanic-primary-button:disabled { cursor: wait; opacity: .6; }
+
+.mechanics-workspace { display: grid; grid-template-columns: 280px minmax(0,1fr); min-height: calc(100vh - 116px); overflow: hidden; border: 1px solid #dfe5e1; border-radius: 13px; background: #fff; box-shadow: 0 8px 28px rgba(25,36,30,.06); }
+.mechanics-directory { border-right: 1px solid #e0e6e2; background: #f7f9f8; }
+.mechanics-directory-tools { display: grid; gap: 10px; padding: 14px; border-bottom: 1px solid #e0e6e2; }
+.mechanics-directory-tools input[type="search"] { width: 100%; height: 38px; box-sizing: border-box; padding: 0 10px; border: 1px solid #ced7d2; border-radius: 8px; background: #fff; }
+.mechanics-directory-tools label { display: flex; align-items: center; gap: 7px; color: #66716b; font-size: .68rem; font-weight: 650; }
+.mechanics-list { display: grid; padding: 8px; }
+.mechanic-card { display: grid; grid-template-columns: 38px minmax(0,1fr) 12px; gap: 9px; align-items: center; padding: 10px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: #344039; text-align: left; cursor: pointer; }
+.mechanic-card:hover { background: #fff; }
+.mechanic-card.selected { border-color: #cfe0da; background: #fff; box-shadow: 0 4px 12px rgba(25,40,32,.05); }
+.mechanic-avatar { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 11px; background: #dfece7; color: #285d4d; font-size: .68rem; font-weight: 800; }
+.mechanic-avatar.large { width: 48px; height: 48px; border-radius: 14px; font-size: .82rem; }
+.mechanic-card-copy { display: grid; min-width: 0; gap: 2px; }
+.mechanic-card-copy strong { overflow: hidden; font-size: .75rem; text-overflow: ellipsis; white-space: nowrap; }
+.mechanic-card-copy small { color: #7a847e; font-size: .62rem; }
+.mechanic-card > span:last-child { color: #849089; font-size: 1rem; }
+.mechanics-list-empty { margin: 12px; color: #7b847f; font-size: .72rem; }
+
+.mechanic-detail { min-width: 0; padding: 22px; }
+.mechanic-detail-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding-bottom: 20px; border-bottom: 1px solid #e4e9e6; }
+.mechanic-detail-person { display: flex; min-width: 0; align-items: center; gap: 12px; }
+.mechanic-name-line { display: flex; align-items: center; gap: 8px; }
+.mechanic-detail-header h2 { font-size: 1.15rem; }
+.mechanic-detail-header p { margin-top: 4px; color: #748079; font-size: .72rem; }
+.mechanic-state { padding: 4px 7px; border-radius: 999px; background: #eee; color: #707772; font-size: .58rem; font-weight: 750; }
+.mechanic-state.active { background: #e4f3ec; color: #1b6854; }
+.mechanic-detail-actions { display: flex; gap: 7px; }
+.mechanic-detail-actions button { min-height: 34px; padding: 0 11px; border: 1px solid #cbd4cf; border-radius: 7px; background: #fff; color: #3d4942; font-size: .69rem; font-weight: 700; cursor: pointer; }
+.mechanic-detail-actions button:hover { border-color: #769488; background: #f3f8f6; }
+.mechanic-action-error { margin: 12px 0 0; padding: 10px; border-radius: 8px; background: #fff0f0; color: #913b3b; font-size: .7rem; }
+
+.mechanic-jobs-section { margin-top: 20px; }
+.mechanic-jobs-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; margin-bottom: 11px; }
+.mechanic-jobs-heading h3 { margin-top: 2px; font-size: 1rem; }
+.mechanic-job-tabs { display: flex; gap: 4px; padding: 3px; border-radius: 8px; background: #eff3f1; }
+.mechanic-job-tabs button { min-height: 29px; padding: 0 9px; border: 0; border-radius: 6px; background: transparent; color: #6a746e; font-size: .64rem; font-weight: 750; cursor: pointer; }
+.mechanic-job-tabs button.active { background: #fff; box-shadow: 0 2px 7px rgba(27,41,34,.08); color: #20594a; }
+.mechanic-jobs-table-shell { overflow-x: auto; border: 1px solid #e0e6e2; border-radius: 10px; }
+.mechanic-jobs-table { width: 100%; min-width: 880px; border-collapse: collapse; font-size: .7rem; }
+.mechanic-jobs-table th, .mechanic-jobs-table td { padding: 11px 10px; border-bottom: 1px solid #e8ece9; text-align: left; vertical-align: top; }
+.mechanic-jobs-table th { background: #f5f7f6; color: #6c7670; font-size: .59rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.mechanic-jobs-table tbody tr:last-child td { border-bottom: 0; }
+.mechanic-jobs-table tbody tr:hover { background: #fafcfb; }
+.mechanic-jobs-table td strong, .mechanic-jobs-table td small { display: block; }
+.mechanic-jobs-table td small { margin-top: 2px; color: #7c8580; font-size: .61rem; }
+.mechanic-job-description { max-width: 270px; line-height: 1.4; }
+.mechanic-job-status { display: inline-block; padding: 4px 7px; border-radius: 999px; background: #edf0ee; color: #626c66; font-size: .59rem; font-weight: 750; white-space: nowrap; }
+.mechanic-job-status.status-122830000 { background: #e5f0f8; color: #36627f; }
+.mechanic-job-status.status-122830002 { background: #f5eadc; color: #815f35; }
+.mechanic-job-status.status-122830003 { background: #e5f2eb; color: #26654f; }
+.mechanic-jobs-empty { display: grid; gap: 3px; padding: 38px 20px; text-align: center; }
+.mechanic-jobs-empty strong { color: #425048; font-size: .8rem; text-transform: capitalize; }
+.mechanic-jobs-empty span { color: #7a847e; font-size: .68rem; }
+.mechanic-detail-empty { display: grid; min-height: 380px; place-content: center; text-align: center; }
+.mechanic-detail-empty h2, .mechanic-detail-empty p { margin: 0; }
+.mechanic-detail-empty h2 { font-size: 1rem; }
+.mechanic-detail-empty p { margin-top: 5px; color: #79827d; font-size: .75rem; }
+
+.mechanics-data-state { padding: 40px; border: 1px solid #dfe5e1; border-radius: 13px; background: #fff; text-align: center; }
+.mechanics-data-state h2 { font-size: .95rem; }
+.mechanics-data-state p { margin-top: 6px; color: #758079; font-size: .78rem; }
+.mechanics-data-error { display: flex; align-items: center; justify-content: space-between; text-align: left; }
+.mechanics-data-error button { padding: 9px 13px; border: 1px solid #176f66; border-radius: 7px; background: #176f66; color: #fff; font-weight: 700; cursor: pointer; }
+
+.mechanic-dialog-backdrop { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(18,27,22,.4); }
+.mechanic-dialog { width: min(460px,100%); overflow: hidden; border-radius: 14px; background: #fff; box-shadow: 0 24px 70px rgba(18,28,22,.24); }
+.mechanic-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; padding: 19px 21px 16px; border-bottom: 1px solid #e4e9e6; }
+.mechanic-dialog > header span { color: #758079; font-size: .63rem; font-weight: 750; letter-spacing: .07em; text-transform: uppercase; }
+.mechanic-dialog > header h2 { margin: 2px 0 0; font-size: 1.12rem; }
+.mechanic-dialog > header button { padding: 0; border: 0; background: transparent; color: #66716b; font-size: 1.35rem; cursor: pointer; }
+.mechanic-dialog form { display: grid; gap: 14px; padding: 20px 21px; }
+.mechanic-field { display: grid; gap: 6px; }
+.mechanic-field span { color: #526059; font-size: .69rem; font-weight: 750; }
+.mechanic-field input { width: 100%; height: 40px; box-sizing: border-box; padding: 0 10px; border: 1px solid #ced7d2; border-radius: 8px; }
+.mechanic-field input:focus { border-color: #43877a; outline: 3px solid rgba(23,111,102,.12); }
+.mechanic-form-error { margin: 0; padding: 10px; border-radius: 8px; background: #fff0f0; color: #913b3b; font-size: .7rem; }
+.mechanic-dialog form > footer { display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px; }
+
+@media (max-width: 900px) {
+    .mechanics-workspace { grid-template-columns: 230px minmax(0,1fr); }
+    .mechanic-detail-header { align-items: flex-start; flex-direction: column; }
+}
+
+@media (max-width: 700px) {
+    .mechanics-workspace { grid-template-columns: 1fr; }
+    .mechanics-directory { border-right: 0; border-bottom: 1px solid #e0e6e2; }
+    .mechanics-list { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    .mechanic-jobs-heading { align-items: flex-start; flex-direction: column; }
+}

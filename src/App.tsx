@@ -1,12 +1,12 @@
 import { useMsal } from '@azure/msal-react'
 import LoginScreen from './alpha/LoginScreen'
-import TestScreen from './alpha/test-screen/TestScreen'
 import { Routes, Route } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import JobsScreen from './alpha/jobs/JobsScreen'
 import SchedulingScreen from './alpha/scheduling/SchedulingScreen'
 import PricingScreen from './alpha/quotes/PricingScreen'
 import QuotesScreen from './alpha/quotes/QuotesScreen'
+import MechanicsScreen from './alpha/mechanics/MechanicsScreen'
 
 function App() {
   const { accounts } = useMsal()
@@ -24,7 +24,7 @@ function App() {
       <div style={{ flex: 1, minWidth: 0, padding: '24px' }}>
         <Routes>
           <Route path="/" element={<div>Overview</div>} />
-          <Route path="/mechanics" element={<TestScreen />} />
+          <Route path="/mechanics" element={<MechanicsScreen />} />
           <Route path="/jobs" element={<JobsScreen />} />
           <Route path="/scheduling" element={<SchedulingScreen />} />
           <Route path="/quotes" element={<QuotesScreen />} />

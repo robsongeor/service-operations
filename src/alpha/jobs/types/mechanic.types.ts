@@ -3,4 +3,5 @@ export type Mechanic = {
     gr_name: string
     gr_email: string
     gr_phone: string
+    statecode?: number
 }
