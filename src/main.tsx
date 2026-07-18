@@ -5,6 +5,7 @@ import { MsalProvider } from '@azure/msal-react'
 import App from './App'
 import { msalConfig } from './auth/authConfig'
 import { BrowserRouter } from 'react-router-dom'
+import './index.css'
 
 
 const msalInstance = new PublicClientApplication(msalConfig)

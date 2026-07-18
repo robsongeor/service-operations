@@ -2,6 +2,7 @@ import type { JobType } from './jobType.types'
 
 export type Job = {
     gr_jobid: string
+    createdon: string
     gr_jobnumber: string
     gr_status: number
     gr_ordernumber: string

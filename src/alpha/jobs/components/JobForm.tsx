@@ -4,6 +4,7 @@ import type { Site } from '../types/site.types'
 import type { SiteContact } from '../types/siteContact.types'
 import type { Customer } from '../types/customer.types'
 import { JOB_TYPE_OPTIONS, type JobType } from '../types/jobType.types'
+import './JobForm.css'
 
 type Props = {
     jobForm: {
@@ -18,7 +19,6 @@ type Props = {
         onJobTypeChange: (jobType: JobType) => void
         onMechanicChange: (id: string) => void
     }
-
     contactForm: {
         name: string
         phone: string
@@ -28,7 +28,6 @@ type Props = {
         onEmailChange: (v: string) => void
         onSave: () => void
     }
-
     equipmentForm: {
         fleet: string
         serial: string
@@ -39,7 +38,6 @@ type Props = {
         onMakeChange: (v: string) => void
         onModelChange: (v: string) => void
     }
-
     siteForm: {
         customerId: string
         customerName: string
@@ -50,7 +48,6 @@ type Props = {
         onNameChange: (v: string) => void
         onAddressChange: (v: string) => void
     }
-
     equipmentSearch: string
     equipmentList: Equipment[]
     selectedEquipmentId: string
@@ -75,23 +72,21 @@ type Props = {
 
 export default function JobForm(props: Props) {
     const filteredEquipment = props.equipmentList
-        .filter((eq) => {
+        .filter((equipment) => {
             const search = props.equipmentSearch.toLowerCase()
-
             return (
-                eq.gr_fleet?.toLowerCase().includes(search) ||
-                eq.gr_serial?.toLowerCase().includes(search)
+                equipment.gr_fleet?.toLowerCase().includes(search) ||
+                equipment.gr_serial?.toLowerCase().includes(search)
             )
         })
         .slice(0, 5)
 
     const filteredSiteContacts = props.siteContacts.filter(
-        (sc) => sc.gr_Site?.gr_siteid === props.selectedSiteId,
+        (siteContact) => siteContact.gr_Site?.gr_siteid === props.selectedSiteId,
     )
 
     const filteredSites = props.sites.filter((site) => {
         const search = props.siteSearch.toLowerCase()
-
         return (
             site.gr_name.toLowerCase().includes(search) ||
             site.gr_Customer?.gr_name.toLowerCase().includes(search)
@@ -99,243 +94,243 @@ export default function JobForm(props: Props) {
     })
 
     return (
-        <div>
-            <input
-                placeholder="Job number"
-                value={props.jobForm.jobNumber}
-                onChange={(e) => props.jobForm.onJobNumberChange(e.target.value)}
-            />
-
-            <input
-                placeholder="Order number"
-                value={props.jobForm.orderNumber}
-                onChange={(e) => props.jobForm.onOrderNumberChange(e.target.value)}
-            />
-
-            <input
-                placeholder="Description"
-                value={props.jobForm.description}
-                onChange={(e) => props.jobForm.onDescriptionChange(e.target.value)}
-            />
-
-            <select
-                value={props.jobForm.jobType}
-                onChange={(e) =>
-                    props.jobForm.onJobTypeChange(Number(e.target.value) as JobType)
-                }
-            >
-                {JOB_TYPE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                        {option.label}
-                    </option>
-                ))}
-            </select>
-
-            <input
-                placeholder="Search equipment"
-                value={props.equipmentSearch}
-                onChange={(e) => props.onEquipmentSearchChange(e.target.value)}
-            />
-
-            {props.equipmentSearch.trim().length > 0 && (
+        <div className="job-form-card">
+            <div className="job-form-header">
                 <div>
-                    {filteredEquipment.map((eq) => (
-                        <button
-                            key={eq.gr_equipmentid}
-                            type="button"
-                            onClick={() =>
-                                props.onSelectEquipment(
-                                    eq.gr_equipmentid,
-                                    `${eq.gr_fleet} - ${eq.gr_serial}`,
-                                )
+                    <p className="job-form-eyebrow">New work order</p>
+                    <h2>Create job</h2>
+                </div>
+                <span className="job-form-required">* Required</span>
+            </div>
+
+            <section className="job-form-section">
+                <div className="job-form-section-heading">
+                    <span>1</span>
+                    <div>
+                        <h3>Job details</h3>
+                        <p>Identify and describe the work.</p>
+                    </div>
+                </div>
+
+                <div className="job-form-grid job-form-grid-three">
+                    <label className="job-form-field">
+                        <span>Job type *</span>
+                        <select
+                            value={props.jobForm.jobType}
+                            onChange={(event) =>
+                                props.jobForm.onJobTypeChange(Number(event.target.value) as JobType)
                             }
                         >
-                            {eq.gr_fleet} - {eq.gr_make} {eq.gr_model} - {eq.gr_serial}
-                        </button>
-                    ))}
+                            {JOB_TYPE_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                    {option.label}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
 
-                    <button
-                        type="button"
-                        onClick={props.onAddNewEquipment}
-                    >
-                        ➕ Add new equipment
-                    </button>
-                </div>
-            )}
+                    <label className="job-form-field">
+                        <span>Job number</span>
+                        <input
+                            placeholder="e.g. 143687"
+                            value={props.jobForm.jobNumber}
+                            onChange={(event) => props.jobForm.onJobNumberChange(event.target.value)}
+                        />
+                    </label>
 
-            {props.selectedEquipmentId === '__new__' && (
-                <div>
-                    <input
-                        placeholder="Fleet number"
-                        value={props.equipmentForm.fleet}
-                        onChange={(e) => props.equipmentForm.onFleetChange(e.target.value)}
-                    />
+                    <label className="job-form-field">
+                        <span>Order number</span>
+                        <input
+                            placeholder="Optional"
+                            value={props.jobForm.orderNumber}
+                            onChange={(event) => props.jobForm.onOrderNumberChange(event.target.value)}
+                        />
+                    </label>
 
-                    <input
-                        placeholder="Serial number"
-                        value={props.equipmentForm.serial}
-                        onChange={(e) => props.equipmentForm.onSerialChange(e.target.value)}
-                    />
-
-                    <input
-                        placeholder="Make"
-                        value={props.equipmentForm.make}
-                        onChange={(e) => props.equipmentForm.onMakeChange(e.target.value)}
-                    />
-
-                    <input
-                        placeholder="Model"
-                        value={props.equipmentForm.model}
-                        onChange={(e) => props.equipmentForm.onModelChange(e.target.value)}
-                    />
-
-                    <button type="button" onClick={props.onSaveNewEquipment}>
-                        Save new equipment
-                    </button>
-                </div>
-            )}
-
-            <select
-                value={props.jobForm.selectedMechanicId}
-                onChange={(e) => props.jobForm.onMechanicChange(e.target.value)}
-            >
-                <option value="">Select mechanic (optional)</option>
-
-                {props.mechanics.map((mechanic) => (
-                    <option key={mechanic.gr_mechanicid} value={mechanic.gr_mechanicid}>
-                        {mechanic.gr_name}
-                    </option>
-                ))}
-            </select>
-
-            <input
-                placeholder="Search site"
-                value={props.siteSearch}
-                onChange={(e) => props.onSiteSearchChange(e.target.value)}
-            />
-
-            {props.siteSearch && (
-                <div>
-                    {filteredSites.map((site) => (
-                        <button
-                            key={site.gr_siteid}
-                            type="button"
-                            onClick={() =>
-                                props.onSelectSite(
-                                    site.gr_siteid,
-                                    `${site.gr_Customer?.gr_name ?? 'Unknown customer'} - ${site.gr_name}`,
-                                )
-                            }
+                    <label className="job-form-field">
+                        <span>Mechanic</span>
+                        <select
+                            value={props.jobForm.selectedMechanicId}
+                            onChange={(event) => props.jobForm.onMechanicChange(event.target.value)}
                         >
-                            {site.gr_Customer?.gr_name} - {site.gr_name}
-                        </button>
-                    ))}
+                            <option value="">Unassigned</option>
+                            {props.mechanics.map((mechanic) => (
+                                <option key={mechanic.gr_mechanicid} value={mechanic.gr_mechanicid}>
+                                    {mechanic.gr_name}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
 
-                    <button type="button" onClick={props.onAddNewSite}>
-                        + Add new site
-                    </button>
+                    <label className="job-form-field job-form-field-wide">
+                        <span>Description *</span>
+                        <textarea
+                            rows={3}
+                            placeholder="Describe the fault, request, or work required"
+                            value={props.jobForm.description}
+                            onChange={(event) => props.jobForm.onDescriptionChange(event.target.value)}
+                        />
+                    </label>
                 </div>
-            )
-            }
+            </section>
 
-            {props.selectedSiteId === '__new__' && (
-                <div>
-                    <select
-                        value={props.siteForm.customerId}
-                        onChange={(e) =>
-                            props.siteForm.onCustomerChange(e.target.value)
-                        }
-                    >
-                        <option value="">Select customer</option>
+            <section className="job-form-section">
+                <div className="job-form-section-heading">
+                    <span>2</span>
+                    <div>
+                        <h3>Equipment</h3>
+                        <p>Optional for site-wide, charger, pickup, or delivery jobs.</p>
+                    </div>
+                </div>
 
-                        {props.customers.map((customer) => (
-                            <option
-                                key={customer.gr_customerid}
-                                value={customer.gr_customerid}
+                <label className="job-form-field">
+                    <span>Equipment search</span>
+                    <input
+                        placeholder="Search by fleet or serial number"
+                        value={props.equipmentSearch}
+                        onChange={(event) => props.onEquipmentSearchChange(event.target.value)}
+                    />
+                </label>
+
+                {props.equipmentSearch.trim().length > 0 && (
+                    <div className="job-form-results">
+                        {filteredEquipment.map((equipment) => (
+                            <button
+                                key={equipment.gr_equipmentid}
+                                type="button"
+                                onClick={() =>
+                                    props.onSelectEquipment(
+                                        equipment.gr_equipmentid,
+                                        `${equipment.gr_fleet} - ${equipment.gr_serial}`,
+                                    )
+                                }
                             >
-                                {customer.gr_name}
+                                <strong>{equipment.gr_fleet || 'No fleet number'}</strong>
+                                <span>{equipment.gr_make} {equipment.gr_model} · {equipment.gr_serial}</span>
+                            </button>
+                        ))}
+                        <button type="button" className="job-form-add-result" onClick={props.onAddNewEquipment}>
+                            + Add new equipment
+                        </button>
+                    </div>
+                )}
+
+                {props.selectedEquipmentId === '__new__' && (
+                    <div className="job-form-subpanel">
+                        <h4>New equipment</h4>
+                        <div className="job-form-grid job-form-grid-two">
+                            <label className="job-form-field"><span>Fleet number</span><input value={props.equipmentForm.fleet} onChange={(event) => props.equipmentForm.onFleetChange(event.target.value)} /></label>
+                            <label className="job-form-field"><span>Serial number</span><input value={props.equipmentForm.serial} onChange={(event) => props.equipmentForm.onSerialChange(event.target.value)} /></label>
+                            <label className="job-form-field"><span>Make</span><input value={props.equipmentForm.make} onChange={(event) => props.equipmentForm.onMakeChange(event.target.value)} /></label>
+                            <label className="job-form-field"><span>Model</span><input value={props.equipmentForm.model} onChange={(event) => props.equipmentForm.onModelChange(event.target.value)} /></label>
+                        </div>
+                        <button type="button" className="job-form-secondary-button" onClick={props.onSaveNewEquipment}>Save equipment</button>
+                    </div>
+                )}
+            </section>
+
+            <section className="job-form-section">
+                <div className="job-form-section-heading">
+                    <span>3</span>
+                    <div>
+                        <h3>Location and contact</h3>
+                        <p>Select where the work is taking place and who to contact.</p>
+                    </div>
+                </div>
+
+                <label className="job-form-field">
+                    <span>Site</span>
+                    <input
+                        placeholder="Search by customer or site name"
+                        value={props.siteSearch}
+                        onChange={(event) => props.onSiteSearchChange(event.target.value)}
+                    />
+                </label>
+
+                {props.siteSearch && (
+                    <div className="job-form-results">
+                        {filteredSites.map((site) => (
+                            <button
+                                key={site.gr_siteid}
+                                type="button"
+                                onClick={() =>
+                                    props.onSelectSite(
+                                        site.gr_siteid,
+                                        `${site.gr_Customer?.gr_name ?? 'Unknown customer'} - ${site.gr_name}`,
+                                    )
+                                }
+                            >
+                                <strong>{site.gr_Customer?.gr_name ?? 'Unknown customer'}</strong>
+                                <span>{site.gr_name} · {site.gr_address}</span>
+                            </button>
+                        ))}
+                        <button type="button" className="job-form-add-result" onClick={props.onAddNewSite}>+ Add new site</button>
+                    </div>
+                )}
+
+                {props.selectedSiteId === '__new__' && (
+                    <div className="job-form-subpanel">
+                        <h4>New site</h4>
+                        <div className="job-form-grid job-form-grid-two">
+                            <label className="job-form-field">
+                                <span>Customer *</span>
+                                <select value={props.siteForm.customerId} onChange={(event) => props.siteForm.onCustomerChange(event.target.value)}>
+                                    <option value="">Select customer</option>
+                                    {props.customers.map((customer) => (
+                                        <option key={customer.gr_customerid} value={customer.gr_customerid}>{customer.gr_name}</option>
+                                    ))}
+                                    <option value="__new__">+ Add new customer</option>
+                                </select>
+                            </label>
+                            {props.siteForm.customerId === '__new__' && (
+                                <label className="job-form-field">
+                                    <span>New customer name *</span>
+                                    <input value={props.siteForm.customerName} onChange={(event) => props.siteForm.onCustomerNameChange(event.target.value)} />
+                                </label>
+                            )}
+                            <label className="job-form-field"><span>Site name *</span><input value={props.siteForm.name} onChange={(event) => props.siteForm.onNameChange(event.target.value)} /></label>
+                            <label className="job-form-field"><span>Site address</span><input value={props.siteForm.address} onChange={(event) => props.siteForm.onAddressChange(event.target.value)} /></label>
+                        </div>
+                        <button type="button" className="job-form-secondary-button" onClick={props.onSaveNewSite}>Save site</button>
+                    </div>
+                )}
+
+                <label className="job-form-field">
+                    <span>Contact</span>
+                    <select
+                        value={props.selectedContactId}
+                        onChange={(event) => props.onContactChange(event.target.value)}
+                        disabled={!props.selectedSiteId || props.selectedSiteId === '__new__'}
+                    >
+                        <option value="">
+                            {props.selectedSiteId && props.selectedSiteId !== '__new__' ? 'Select contact (optional)' : 'Save or select a site first'}
+                        </option>
+                        {filteredSiteContacts.map((siteContact) => (
+                            <option key={siteContact.gr_sitecontactid} value={siteContact.gr_Contact?.gr_contactid ?? ''}>
+                                {siteContact.gr_Contact?.gr_name}
                             </option>
                         ))}
-                        <option value="__new__">+ Add new customer</option>
+                        <option value="__new__">+ Add new contact</option>
                     </select>
-                    {props.siteForm.customerId === '__new__' && (
-                        <input
-                            placeholder="Customer name"
-                            value={props.siteForm.customerName}
-                            onChange={(e) =>
-                                props.siteForm.onCustomerNameChange(e.target.value)
-                            }
-                        />
-                    )}
-                    <input
-                        placeholder="Site name"
-                        value={props.siteForm.name}
-                        onChange={(e) => props.siteForm.onNameChange(e.target.value)}
-                    />
+                </label>
 
-                    <input
-                        placeholder="Site address"
-                        value={props.siteForm.address}
-                        onChange={(e) => props.siteForm.onAddressChange(e.target.value)}
-                    />
+                {props.selectedContactId === '__new__' && (
+                    <div className="job-form-subpanel">
+                        <h4>New contact</h4>
+                        <div className="job-form-grid job-form-grid-three">
+                            <label className="job-form-field"><span>Name *</span><input value={props.contactForm.name} onChange={(event) => props.contactForm.onNameChange(event.target.value)} /></label>
+                            <label className="job-form-field"><span>Phone</span><input type="tel" value={props.contactForm.phone} onChange={(event) => props.contactForm.onPhoneChange(event.target.value)} /></label>
+                            <label className="job-form-field"><span>Email</span><input type="email" value={props.contactForm.email} onChange={(event) => props.contactForm.onEmailChange(event.target.value)} /></label>
+                        </div>
+                        <button type="button" className="job-form-secondary-button" onClick={props.contactForm.onSave}>Save contact</button>
+                    </div>
+                )}
+            </section>
 
-                    <button type="button" onClick={props.onSaveNewSite}>
-                        Save new site
-                    </button>
-                </div>
-            )}
-
-            <select
-                value={props.selectedContactId}
-                onChange={(e) => props.onContactChange(e.target.value)}
-                disabled={!props.selectedSiteId || props.selectedSiteId === '__new__'}
-            >
-                <option value="">
-                    {props.selectedSiteId && props.selectedSiteId !== '__new__'
-                        ? 'Select contact (optional)'
-                        : 'Contact: Save or select a site first'}
-                </option>
-
-                {filteredSiteContacts.map((sc) => (
-                    <option
-                        key={sc.gr_sitecontactid}
-                        value={sc.gr_Contact?.gr_contactid ?? ''}
-                    >
-                        {sc.gr_Contact?.gr_name}
-                    </option>
-
-                ))}
-
-                <option value="__new__">➕ Add new contact</option>
-            </select>
-
-            {props.selectedContactId === '__new__' && (
-                <div>
-                    <input
-                        placeholder="Contact name"
-                        value={props.contactForm.name}
-                        onChange={(e) => props.contactForm.onNameChange(e.target.value)}
-                    />
-
-                    <input
-                        placeholder="Contact phone"
-                        value={props.contactForm.phone}
-                        onChange={(e) => props.contactForm.onPhoneChange(e.target.value)}
-                    />
-
-                    <input
-                        placeholder="Contact email"
-                        value={props.contactForm.email}
-                        onChange={(e) => props.contactForm.onEmailChange(e.target.value)}
-                    />
-
-                    <button type="button" onClick={props.contactForm.onSave}>
-                        Save new contact
-                    </button>
-                </div>
-            )}
-
-            <button onClick={props.onSubmit}>Create Job</button>
-        </div >
+            <div className="job-form-actions">
+                <p>Job type and description are required.</p>
+                <button type="button" className="job-form-primary-button" onClick={props.onSubmit}>Create job</button>
+            </div>
+        </div>
     )
 }
