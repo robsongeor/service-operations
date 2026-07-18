@@ -127,6 +127,16 @@ export default function JobCardFields({
         }
     }
 
+    const sendPrimaryTechnician = async () => {
+        if (!job.gr_Mechanic?.gr_email) {
+            setError('The primary technician needs an email address before the job can be sent.')
+            return
+        }
+
+        emailJobToMechanic(job)
+        await changeStatus(JOB_CARD_STATUSES.SENT)
+    }
+
     const removeAssignment = async (assignment: JobAssignment) => {
         if (!window.confirm(`Remove ${assignment.gr_Mechanic?.gr_name ?? 'this technician'} from the assignment history?`)) return
         setUpdatingAssignmentId(assignment.gr_jobassignmentid)
@@ -167,21 +177,16 @@ export default function JobCardFields({
                     <div className="primary-technician-actions">
                         <button
                             type="button"
-                            disabled={!job.gr_Mechanic?.gr_email || status !== JOB_CARD_STATUSES.NOT_SENT}
-                            onClick={() => emailJobToMechanic(job)}
+                            className="primary-technician-send"
+                            disabled={isUpdating || !job.gr_Mechanic?.gr_email || status !== JOB_CARD_STATUSES.NOT_SENT}
+                            onClick={() => void sendPrimaryTechnician()}
                         >
-                            {status === JOB_CARD_STATUSES.NOT_SENT ? 'Open email' : 'Email recorded'}
+                            {isUpdating
+                                ? 'Sending...'
+                                : status === JOB_CARD_STATUSES.NOT_SENT
+                                    ? 'Send job'
+                                    : JOB_CARD_STATUS_OPTIONS.find((option) => option.value === status)?.label}
                         </button>
-                        {status === JOB_CARD_STATUSES.NOT_SENT && job.gr_Mechanic?.gr_email && (
-                            <button
-                                type="button"
-                                className="job-assignment-mark-sent"
-                                disabled={isUpdating}
-                                onClick={() => void changeStatus(JOB_CARD_STATUSES.SENT)}
-                            >
-                                Mark sent
-                            </button>
-                        )}
                     </div>
                 </div>
 
@@ -225,11 +230,6 @@ export default function JobCardFields({
                                                 >
                                                     Remove
                                                 </button>
-                                            </div>
-                                            <div className="job-assignment-dates">
-                                                <span>Sent: {formatTimestamp(assignment.gr_emailsenton)}</span>
-                                                <span>Submitted: {formatTimestamp(assignment.gr_submittedon)}</span>
-                                                <span>Closed: {formatTimestamp(assignment.gr_closedon)}</span>
                                             </div>
                                         </div>
                                     </article>

@@ -735,17 +735,6 @@
 .job-assignment-controls .job-assignment-remove { border-color: #e3c4c4; color: #974848; }
 .job-assignment-controls .job-assignment-send { margin-left: auto; border-color: #176f66; background: #176f66; color: #ffffff; }
 
-.job-assignment-dates {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px 12px;
-    margin-top: 9px;
-    padding-top: 8px;
-    border-top: 1px solid #edf0ee;
-    color: #7c8580;
-    font-size: 0.59rem;
-}
-
 .primary-technician-card {
     display: flex;
     align-items: center;
@@ -784,7 +773,7 @@
     cursor: pointer;
 }
 
-.primary-technician-actions .job-assignment-mark-sent {
+.primary-technician-actions .primary-technician-send {
     border-color: #176f66;
     background: #176f66;
     color: #ffffff;
