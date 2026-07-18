@@ -4,7 +4,9 @@ The application creates an **Email Dispatch** row whenever Email or Send job is 
 
 ## Test flow
 
-Create an automated cloud flow inside the Service Operations solution.
+The automated test flow is created by `scripts/setup-email-dispatch-flow.ps1` inside the Service Operations solution. The steps below describe its generated definition.
+
+The current environment contains the active flow **Test Job Email Dispatch** (`933d522f-9f82-f111-ab0e-70a8a5564ae2`). Run `scripts/test-email-dispatch-flow.ps1` to create a temporary dispatch, verify that the flow returns Email Sent = Yes, and remove the test row.
 
 1. Select **Microsoft Dataverse — When a row is added, modified or deleted**.
 2. Set **Change type** to `Added`.

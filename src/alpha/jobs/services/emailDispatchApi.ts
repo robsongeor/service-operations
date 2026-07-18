@@ -41,7 +41,7 @@ export async function createEmailDispatch(
         fields['gr_JobAssignment@odata.bind'] = `/gr_jobassignments(${input.assignmentId})`
     }
 
-    const response = await fetch(`${API_URL}/gr_emaildispatches`, {
+    const response = await fetch(`${API_URL}/gr_emaildispatchs`, {
         method: 'POST',
         headers: {
             ...headers(token, true),
@@ -56,7 +56,7 @@ export async function createEmailDispatch(
 
 async function fetchEmailDispatch(token: string, dispatchId: string): Promise<EmailDispatchResult> {
     const response = await fetch(
-        `${API_URL}/gr_emaildispatches(${dispatchId})?$select=gr_emaildispatchid,gr_emailsent,gr_completedon,gr_errormessage`,
+        `${API_URL}/gr_emaildispatchs(${dispatchId})?$select=gr_emaildispatchid,gr_emailsent,gr_completedon,gr_errormessage`,
         { cache: 'no-store', headers: headers(token) },
     )
     if (!response.ok) throw new Error(await errorMessage(response, 'Failed to read email flow result'))

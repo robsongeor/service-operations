@@ -172,4 +172,9 @@ foreach ($column in @(
 $publish = [Microsoft.Crm.Sdk.Messages.PublishXmlRequest]::new()
 $publish.ParameterXml = '<importexportxml><entities><entity>gr_emaildispatch</entity></entities></importexportxml>'
 $service.Execute($publish) | Out-Null
-Write-Output 'Published Email Dispatch schema successfully.'
+$verifyRequest = [Microsoft.Xrm.Sdk.Messages.RetrieveEntityRequest]::new()
+$verifyRequest.LogicalName = 'gr_emaildispatch'
+$verifyRequest.EntityFilters = [Microsoft.Xrm.Sdk.Metadata.EntityFilters]::Entity
+$verifyRequest.RetrieveAsIfPublished = $true
+$verifiedEntity = $service.Execute($verifyRequest).EntityMetadata
+Write-Output "Published Email Dispatch schema successfully: logical=$($verifiedEntity.LogicalName), entitySet=$($verifiedEntity.EntitySetName)"
