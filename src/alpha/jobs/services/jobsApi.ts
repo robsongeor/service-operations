@@ -23,7 +23,7 @@ export async function fetchJobs(accessToken: string): Promise<Job[]> {
 export async function createJob(
     accessToken: string,
     job: JobSaveInput,
-) {
+): Promise<string> {
     const newJob: Record<string, string | number> = {
         gr_jobnumber: job.jobNumber,
         gr_ordernumber: job.orderNumber,
@@ -56,6 +56,7 @@ export async function createJob(
                 Authorization: `Bearer ${accessToken}`,
                 'Content-Type': 'application/json',
                 Accept: 'application/json',
+                Prefer: 'return=representation',
             },
             body: JSON.stringify(newJob),
         },
@@ -65,6 +66,9 @@ export async function createJob(
         const error = await result.text()
         throw new Error(error)
     }
+
+    const createdJob = await result.json()
+    return createdJob.gr_jobid
 }
 
 export async function updateJobStatus(

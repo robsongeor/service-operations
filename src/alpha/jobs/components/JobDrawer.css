@@ -243,6 +243,201 @@
     margin: 0;
 }
 
+.job-schedule-section {
+    display: grid;
+    grid-column: 1 / -1;
+    gap: 14px;
+}
+
+.job-schedule-toggle {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.job-schedule-toggle > span:first-child {
+    display: grid;
+    gap: 3px;
+}
+
+.job-schedule-toggle strong {
+    color: #282e2a;
+    font-size: 0.9rem;
+}
+
+.job-schedule-toggle small {
+    color: #7b827d;
+    font-size: 0.72rem;
+}
+
+.job-schedule-toggle-icon {
+    display: grid;
+    width: 30px;
+    height: 30px;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 1px solid #d5dbd7;
+    border-radius: 50%;
+    background: #f3f5f3;
+    color: #48514b;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.job-schedule-options {
+    display: grid;
+    gap: 8px;
+}
+
+.job-schedule-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px 12px;
+    border: 1px solid #dce2de;
+    border-radius: 9px;
+    background: #ffffff;
+}
+
+.job-schedule-option > div:first-child {
+    display: grid;
+    gap: 2px;
+}
+
+.job-schedule-option strong {
+    color: #29312c;
+    font-size: 0.78rem;
+}
+
+.job-schedule-option > div:first-child span {
+    color: #707873;
+    font-size: 0.71rem;
+}
+
+.job-schedule-option-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 8px;
+}
+
+.job-schedule-option-actions .job-schedule-option-status {
+    padding: 4px 8px;
+    min-height: auto;
+    border-radius: 999px;
+    border-color: transparent;
+    background: #eef1ef;
+    color: #68716b;
+    font-size: 0.65rem;
+    font-weight: 750;
+}
+
+.job-schedule-option-actions .job-schedule-option-status.confirmed {
+    background: #dcefe8;
+    color: #176f66;
+}
+
+.job-schedule-option-actions .job-schedule-option-status:disabled {
+    cursor: default;
+    opacity: 1;
+}
+
+.job-schedule-option-actions button,
+.job-schedule-add {
+    min-height: 32px;
+    padding: 0 10px;
+    border: 1px solid #cfd6d1;
+    border-radius: 7px;
+    background: #ffffff;
+    color: #4a534d;
+    font-size: 0.7rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.job-schedule-option-actions button:hover:not(:disabled) {
+    border-color: #d4aaaa;
+    color: #963e3e;
+}
+
+.job-schedule-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid #d8dfda;
+    border-radius: 10px;
+    background: #f6f8f6;
+}
+
+.job-schedule-confirmed {
+    display: flex;
+    grid-column: 1 / -1;
+    align-items: center;
+    gap: 8px;
+    color: #4c554f;
+    font-size: 0.73rem;
+    font-weight: 650;
+}
+
+.job-schedule-confirmed input {
+    width: 16px;
+    height: 16px;
+    accent-color: #176f66;
+}
+
+.job-schedule-error {
+    grid-column: 1 / -1;
+    color: #9b3636 !important;
+    font-size: 0.72rem !important;
+}
+
+.job-schedule-add {
+    border-color: #176f66;
+    background: #176f66;
+    color: #ffffff;
+}
+
+.job-schedule-form-actions {
+    display: flex;
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.job-schedule-form-actions button {
+    min-height: 34px;
+    padding: 0 12px;
+    border: 1px solid #cfd6d1;
+    border-radius: 7px;
+    background: #ffffff;
+    color: #4a534d;
+    font-size: 0.7rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.job-schedule-form-actions .job-schedule-add {
+    border-color: #176f66;
+    background: #176f66;
+    color: #ffffff;
+}
+
+.job-schedule-option-actions button:disabled,
+.job-schedule-add:disabled {
+    cursor: wait;
+    opacity: 0.55;
+}
+
 .job-edit-divider h3 {
     color: #282e2a;
     font-size: 0.9rem;
@@ -326,6 +521,15 @@
 
     .job-edit-field-wide {
         grid-column: auto;
+    }
+
+    .job-schedule-form {
+        grid-template-columns: 1fr;
+    }
+
+    .job-schedule-option {
+        align-items: flex-start;
+        flex-direction: column;
     }
 }
 .job-delete-backdrop {

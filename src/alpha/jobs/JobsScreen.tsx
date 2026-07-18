@@ -11,8 +11,10 @@ import './JobsScreen.css'
 export default function JobsScreen() {
     const {
         jobs, equipmentList, mechanics, sites, customers, siteContacts,
+        scheduleOptions,
         createJob, updateJob, deleteJob, updateJobStatus, updateJobFields,
         createContactForSite, createEquipment, createSite, createCustomer,
+        createScheduleOption, updateScheduleOption, deleteScheduleOption,
     } = useJobs()
     const [editingJob, setEditingJob] = useState<Job | null>(null)
     const [isCreatingJob, setIsCreatingJob] = useState(false)
@@ -66,6 +68,7 @@ export default function JobsScreen() {
                 <JobCreateDrawer
                     {...sharedDrawerProps}
                     onCreateJob={createJob}
+                    onCreateScheduleOption={createScheduleOption}
                     onClose={() => setIsCreatingJob(false)}
                 />
             )}
@@ -76,6 +79,10 @@ export default function JobsScreen() {
                     job={editingJob}
                     onSave={updateJob}
                     onDelete={deleteJob}
+                    scheduleOptions={scheduleOptions}
+                    onCreateScheduleOption={createScheduleOption}
+                    onUpdateScheduleOption={updateScheduleOption}
+                    onDeleteScheduleOption={deleteScheduleOption}
                     onClose={() => setEditingJob(null)}
                 />
             )}

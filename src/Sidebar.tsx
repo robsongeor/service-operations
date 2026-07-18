@@ -6,6 +6,7 @@ const menuItems = [
     { label: 'Overview', shortLabel: 'O', path: '/' },
     { label: 'Mechanics', shortLabel: 'M', path: '/mechanics' },
     { label: 'Jobs', shortLabel: 'J', path: '/jobs' },
+    { label: 'Scheduling', shortLabel: 'C', path: '/scheduling' },
 ]
 
 export default function Sidebar() {

@@ -4,6 +4,7 @@ import TestScreen from './alpha/test-screen/TestScreen'
 import { Routes, Route } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import JobsScreen from './alpha/jobs/JobsScreen'
+import SchedulingScreen from './alpha/scheduling/SchedulingScreen'
 
 function App() {
   const { accounts } = useMsal()
@@ -23,6 +24,7 @@ function App() {
           <Route path="/" element={<div>Overview</div>} />
           <Route path="/mechanics" element={<TestScreen />} />
           <Route path="/jobs" element={<JobsScreen />} />
+          <Route path="/scheduling" element={<SchedulingScreen />} />
         </Routes>
       </div>
     </div>

@@ -12,6 +12,17 @@ import {
 } from '../services/jobsApi'
 import type { JobSaveInput } from '../types/jobSave.types'
 import type { JobStatus } from '../types/jobStatus.types'
+import type {
+    JobScheduleOption,
+    JobScheduleOptionInput,
+} from '../types/jobSchedule.types'
+import {
+    createJobScheduleOption as createJobScheduleOptionApi,
+    deleteJobScheduleOption as deleteJobScheduleOptionApi,
+    fetchJobScheduleOptions as fetchJobScheduleOptionsApi,
+    updateJobScheduleConfirmation as updateJobScheduleConfirmationApi,
+    updateJobScheduleOption as updateJobScheduleOptionApi,
+} from '../services/jobScheduleApi'
 
 import {
     fetchEquipment as fetchEquipmentApi,
@@ -53,6 +64,7 @@ export function useJobs() {
     const [customers, setCustomers] = useState<Customer[]>([])
     const [sites, setSites] = useState<Site[]>([])
     const [siteContacts, setSiteContacts] = useState<SiteContact[]>([])
+    const [scheduleOptions, setScheduleOptions] = useState<JobScheduleOption[]>([])
 
     const getAccessToken = async () => {
         const response = await instance.acquireTokenSilent({
@@ -148,6 +160,69 @@ export function useJobs() {
         setJobs(jobs)
     }
 
+    const fetchScheduleOptions = async () => {
+        const token = await getAccessToken()
+        const options = await fetchJobScheduleOptionsApi(token)
+        setScheduleOptions(options)
+    }
+
+    const createScheduleOption = async (option: JobScheduleOptionInput) => {
+        const token = await getAccessToken()
+
+        if (option.confirmed) {
+            const currentlyConfirmed = scheduleOptions.filter(
+                (currentOption) =>
+                    currentOption._gr_job_value?.toLowerCase() === option.jobId.toLowerCase()
+                    && currentOption.gr_confirmed,
+            )
+
+            await Promise.all(currentlyConfirmed.map((currentOption) =>
+                updateJobScheduleConfirmationApi(
+                    token,
+                    currentOption.gr_jobscheduleoptionid,
+                    false,
+                ),
+            ))
+        }
+
+        await createJobScheduleOptionApi(token, option)
+        await fetchScheduleOptions()
+    }
+
+    const confirmScheduleOption = async (jobId: string, optionId: string) => {
+        const token = await getAccessToken()
+        const optionsForJob = scheduleOptions.filter(
+            (option) => option._gr_job_value?.toLowerCase() === jobId.toLowerCase(),
+        )
+
+        await Promise.all(optionsForJob.map((option) =>
+            updateJobScheduleConfirmationApi(
+                token,
+                option.gr_jobscheduleoptionid,
+                option.gr_jobscheduleoptionid === optionId,
+            ),
+        ))
+
+        await fetchScheduleOptions()
+    }
+
+    const updateScheduleOption = async (
+        optionId: string,
+        option: JobScheduleOptionInput,
+    ) => {
+        const token = await getAccessToken()
+        await updateJobScheduleOptionApi(token, optionId, option)
+        await fetchScheduleOptions()
+    }
+
+    const deleteScheduleOption = async (optionId: string) => {
+        const token = await getAccessToken()
+        await deleteJobScheduleOptionApi(token, optionId)
+        setScheduleOptions((currentOptions) => currentOptions.filter(
+            (option) => option.gr_jobscheduleoptionid !== optionId,
+        ))
+    }
+
     const fetchEquipment = async () => {
         const token = await getAccessToken()
         const equipment = await fetchEquipmentApi(token)
@@ -221,7 +296,7 @@ export function useJobs() {
     const createJob = async (job: JobSaveInput) => {
         const token = await getAccessToken()
 
-        await createJobApi(token, job)
+        const jobId = await createJobApi(token, job)
 
         if (job.equipmentId && job.siteId) {
             try {
@@ -237,6 +312,7 @@ export function useJobs() {
         }
 
         await fetchJobs()
+        return jobId
     }
 
     const deleteJob = async (jobId: string) => {
@@ -272,6 +348,7 @@ export function useJobs() {
                 initialSites,
                 initialCustomers,
                 initialSiteContacts,
+                initialScheduleOptions,
                 mechanicsData,
             ] = await Promise.all([
                 fetchJobsApi(token),
@@ -279,6 +356,7 @@ export function useJobs() {
                 fetchSitesApi(token),
                 fetchCustomersApi(token),
                 fetchSiteContactsApi(token),
+                fetchJobScheduleOptionsApi(token),
                 mechanicsRequest,
             ])
 
@@ -289,6 +367,7 @@ export function useJobs() {
             setSites(initialSites)
             setCustomers(initialCustomers)
             setSiteContacts(initialSiteContacts)
+            setScheduleOptions(initialScheduleOptions)
             setMechanics(mechanicsData.value ?? [])
         }
 
@@ -301,10 +380,12 @@ export function useJobs() {
 
     return {
         jobs,
+        scheduleOptions,
         equipmentList,
         sites,
         customers,
         fetchJobs,
+        fetchScheduleOptions,
         fetchEquipment,
         createJob,
         createEquipment,
@@ -317,6 +398,10 @@ export function useJobs() {
         updateJobFields,
         updateJob,
         deleteJob,
+        createScheduleOption,
+        confirmScheduleOption,
+        updateScheduleOption,
+        deleteScheduleOption,
 
     }
 }

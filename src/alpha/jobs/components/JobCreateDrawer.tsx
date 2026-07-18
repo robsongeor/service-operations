@@ -11,6 +11,11 @@ import { useJobEditor } from '../hooks/useJobEditor'
 import JobDrawerShell from './JobDrawerShell'
 import JobCoreFields from './JobCoreFields'
 import JobRelationshipFields from './JobRelationshipFields'
+import JobScheduleFields from './JobScheduleFields'
+import type {
+    JobScheduleOptionDraft,
+    JobScheduleOptionInput,
+} from '../types/jobSchedule.types'
 import './JobDrawer.css'
 
 type Props = {
@@ -23,14 +28,15 @@ type Props = {
     onCreateSite: (site: { customerId: string; name: string; address?: string }) => Promise<string>
     onCreateContact: (contact: { siteId: string; name: string; phone?: string; email?: string }) => Promise<string>
     onCreateEquipment: (equipment: { fleet: string; serial: string; make?: string; model?: string }) => Promise<string>
-    onCreateJob: (job: JobSaveInput) => Promise<void>
+    onCreateJob: (job: JobSaveInput) => Promise<string>
+    onCreateScheduleOption: (option: JobScheduleOptionInput) => Promise<void>
     onClose: () => void
 }
 
 export default function JobCreateDrawer({
     mechanics, equipmentList, sites, customers, siteContacts,
     onCreateCustomer, onCreateSite, onCreateContact, onCreateEquipment,
-    onCreateJob, onClose,
+    onCreateJob, onCreateScheduleOption, onClose,
 }: Props) {
     const editor = useJobEditor({
         initialDraft: {
@@ -46,15 +52,19 @@ export default function JobCreateDrawer({
     const { draft, setDraft } = editor
     const [isSaving, setIsSaving] = useState(false)
     const [saveError, setSaveError] = useState('')
+    const [scheduleDrafts, setScheduleDrafts] = useState<JobScheduleOptionDraft[]>([])
+    const [jobWasCreated, setJobWasCreated] = useState(false)
 
     const createJob = async () => {
         if (!draft.description.trim()) return setSaveError('Enter a job description before creating the job.')
         if (draft.customerId && !draft.siteId) return setSaveError('Select a site for the chosen customer.')
 
+        let createdJob = false
+
         try {
             setIsSaving(true)
             setSaveError('')
-            await onCreateJob({
+            const jobId = await onCreateJob({
                 jobNumber: draft.jobNumber.trim(),
                 orderNumber: draft.orderNumber.trim(),
                 description: draft.description.trim(),
@@ -65,10 +75,26 @@ export default function JobCreateDrawer({
                 siteId: draft.siteId || undefined,
                 contactId: draft.contactId || undefined,
             })
+
+            createdJob = true
+            setJobWasCreated(true)
+
+            await Promise.all(scheduleDrafts.map((option) =>
+                onCreateScheduleOption({
+                    jobId,
+                    scheduleType: option.scheduleType,
+                    scheduleDate: option.scheduleDate,
+                    scheduleTime: option.scheduleTime,
+                    confirmed: option.confirmed,
+                }),
+            ))
+
             onClose()
         } catch (error) {
             console.error(error)
-            setSaveError('The job could not be created. Please try again.')
+            setSaveError(createdJob
+                ? 'The job was created, but its schedule could not be saved. Close this drawer and add it from Edit Job.'
+                : 'The job could not be created. Please try again.')
         } finally { setIsSaving(false) }
     }
 
@@ -84,8 +110,13 @@ export default function JobCreateDrawer({
                     : <span>Create this job in Dataverse.</span>}
                 <div className="job-edit-footer-actions">
                     <button type="button" onClick={onClose} disabled={isSaving}>Cancel</button>
-                    <button type="button" className="primary" onClick={createJob} disabled={isSaving}>
-                        {isSaving ? 'Creating...' : 'Create job'}
+                    <button
+                        type="button"
+                        className="primary"
+                        onClick={jobWasCreated ? onClose : createJob}
+                        disabled={isSaving}
+                    >
+                        {isSaving ? 'Creating...' : jobWasCreated ? 'Close' : 'Create job'}
                     </button>
                 </div>
             </>}
@@ -99,6 +130,10 @@ export default function JobCreateDrawer({
                     onCreateSite={onCreateSite}
                     onCreateContact={onCreateContact}
                     onCreateEquipment={onCreateEquipment}
+                />
+                <JobScheduleFields
+                    draftOptions={scheduleDrafts}
+                    onDraftOptionsChange={setScheduleDrafts}
                 />
             </div>
         </JobDrawerShell>

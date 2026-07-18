@@ -10,8 +10,13 @@ import type { JobSaveInput } from '../types/jobSave.types'
 import { useJobEditor } from '../hooks/useJobEditor'
 import JobCoreFields from './JobCoreFields'
 import JobRelationshipFields from './JobRelationshipFields'
+import JobScheduleFields from './JobScheduleFields'
 import JobDrawerShell from './JobDrawerShell'
 import './JobDrawer.css'
+import type {
+    JobScheduleOption,
+    JobScheduleOptionInput,
+} from '../types/jobSchedule.types'
 
 type Props = {
     job: Job
@@ -20,6 +25,7 @@ type Props = {
     sites: Site[]
     customers: Customer[]
     siteContacts: SiteContact[]
+    scheduleOptions: JobScheduleOption[]
     onCreateCustomer: (customer: { name: string }) => Promise<string>
     onCreateSite: (site: {
         customerId: string
@@ -40,6 +46,12 @@ type Props = {
     }) => Promise<string>
     onSave: (jobId: string, job: JobSaveInput) => Promise<void>
     onDelete: (jobId: string) => Promise<void>
+    onCreateScheduleOption: (option: JobScheduleOptionInput) => Promise<void>
+    onUpdateScheduleOption: (
+        optionId: string,
+        option: JobScheduleOptionInput,
+    ) => Promise<void>
+    onDeleteScheduleOption: (optionId: string) => Promise<void>
     onClose: () => void
 }
 
@@ -50,12 +62,16 @@ export default function JobEditDrawer({
     sites,
     customers,
     siteContacts,
+    scheduleOptions,
     onCreateCustomer,
     onCreateSite,
     onCreateContact,
     onCreateEquipment,
     onSave,
     onDelete,
+    onCreateScheduleOption,
+    onUpdateScheduleOption,
+    onDeleteScheduleOption,
     onClose,
 }: Props) {
     const editor = useJobEditor({
@@ -185,6 +201,14 @@ export default function JobEditDrawer({
                     onCreateSite={onCreateSite}
                     onCreateContact={onCreateContact}
                     onCreateEquipment={onCreateEquipment}
+                />
+
+                <JobScheduleFields
+                    jobId={job.gr_jobid}
+                    scheduleOptions={scheduleOptions}
+                    onCreate={onCreateScheduleOption}
+                    onUpdate={onUpdateScheduleOption}
+                    onDelete={onDeleteScheduleOption}
                 />
             </div>
         </JobDrawerShell>
