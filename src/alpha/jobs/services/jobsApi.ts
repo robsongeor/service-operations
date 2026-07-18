@@ -1,19 +1,7 @@
 import type { Job } from '../types/job.types'
-import type { JobType } from '../types/jobType.types'
+import type { JobSaveInput } from '../types/jobSave.types'
 
 const DATAVERSE_URL = import.meta.env.VITE_DATAVERSE_URL
-
-export type JobUpdate = {
-    jobNumber: string
-    orderNumber: string
-    description: string
-    jobType: JobType
-    status: number
-    equipmentId: string
-    mechanicId: string
-    siteId: string
-    contactId: string
-}
 
 export async function fetchJobs(accessToken: string): Promise<Job[]> {
     const result = await fetch(
@@ -34,22 +22,14 @@ export async function fetchJobs(accessToken: string): Promise<Job[]> {
 
 export async function createJob(
     accessToken: string,
-    job: {
-        jobNumber: string
-        orderNumber: string
-        description: string
-        jobType: JobType
-        equipmentId?: string
-        mechanicId?: string
-        siteId?: string
-        contactId?: string
-    }
+    job: JobSaveInput,
 ) {
     const newJob: Record<string, string | number> = {
         gr_jobnumber: job.jobNumber,
         gr_ordernumber: job.orderNumber,
         gr_description: job.description,
         gr_jobtype: job.jobType,
+        gr_status: job.status,
     }
 
     if (job.equipmentId) {
@@ -142,7 +122,7 @@ export async function updateJobFields(
 export async function updateJob(
     token: string,
     jobId: string,
-    job: JobUpdate,
+    job: JobSaveInput,
 ) {
     const fields: Record<string, string | number | null> = {
         gr_jobnumber: job.jobNumber,

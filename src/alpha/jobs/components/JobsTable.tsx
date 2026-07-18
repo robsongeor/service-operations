@@ -1,14 +1,19 @@
 import { useMemo, useState } from 'react'
 import type { Job } from '../types/job.types'
 import type { Mechanic } from '../types/mechanic.types'
-import { getJobTypeLabel } from '../types/jobType.types'
+import { JOB_TYPE_OPTIONS, getJobTypeLabel, type JobType } from '../types/jobType.types'
+import {
+    JOB_STATUS_OPTIONS,
+    JOB_STATUS_PRIORITY,
+    type JobStatus,
+} from '../types/jobStatus.types'
 import './JobsTable.css'
 
 type Props = {
     jobs: Job[]
-    visibleStatuses: number[]
-    onToggleStatus: (status: number) => void
-    onStatusChange: (jobId: string, status: number) => void
+    visibleStatuses: JobStatus[]
+    onToggleStatus: (status: JobStatus) => void
+    onStatusChange: (jobId: string, status: JobStatus) => void
     onJobFieldsChange: (
         jobId: string,
         fields: {
@@ -21,20 +26,6 @@ type Props = {
     onEmailJob: (job: Job) => void
     onEditJob: (job: Job) => void
     mechanics: Mechanic[]
-}
-
-const statusOptions = [
-    { label: 'Unallocated', value: 122830001 },
-    { label: 'Allocated', value: 122830000 },
-    { label: 'Waiting for parts', value: 122830002 },
-    { label: 'Complete', value: 122830003 },
-]
-
-const statusPriority: Record<number, number> = {
-    122830003: 0, // Complete
-    122830002: 1, // Waiting for parts
-    122830000: 2, // Allocated
-    122830001: 3, // Unallocated
 }
 
 const createdDateFormatter = new Intl.DateTimeFormat('en-NZ', {
@@ -54,18 +45,24 @@ export default function JobsTable({
     mechanics,
 }: Props) {
     const [searchText, setSearchText] = useState('')
+    const [selectedJobType, setSelectedJobType] = useState<JobType | 'all'>('all')
     const [sort, setSort] = useState<{
         column: 'created' | 'status'
         direction: 'ascending' | 'descending'
     }>({ column: 'status', direction: 'ascending' })
 
+    const jobsForSelectedType = useMemo(() => {
+        if (selectedJobType === 'all') return jobs
+        return jobs.filter((job) => job.gr_jobtype === selectedJobType)
+    }, [jobs, selectedJobType])
+
     const matchingJobs = useMemo(() => {
         const search = searchText.trim().toLowerCase()
 
-        if (!search) return jobs
+        if (!search) return jobsForSelectedType
 
-        return jobs.filter((job) => {
-            const statusLabel = statusOptions.find((status) => status.value === job.gr_status)?.label
+        return jobsForSelectedType.filter((job) => {
+            const statusLabel = JOB_STATUS_OPTIONS.find((status) => status.value === job.gr_status)?.label
             const searchableText = [
                 job.gr_jobnumber,
                 job.gr_ordernumber,
@@ -91,14 +88,14 @@ export default function JobsTable({
 
             return searchableText.includes(search)
         })
-    }, [jobs, searchText])
+    }, [jobsForSelectedType, searchText])
 
     const sortedJobs = useMemo(() => {
         return [...matchingJobs].sort((firstJob, secondJob) => {
             if (sort.column === 'status') {
                 const statusDifference =
-                    (statusPriority[firstJob.gr_status] ?? Number.MAX_SAFE_INTEGER) -
-                    (statusPriority[secondJob.gr_status] ?? Number.MAX_SAFE_INTEGER)
+                    JOB_STATUS_PRIORITY[firstJob.gr_status] -
+                    JOB_STATUS_PRIORITY[secondJob.gr_status]
 
                 if (statusDifference !== 0) {
                     return sort.direction === 'ascending' ? statusDifference : -statusDifference
@@ -149,27 +146,56 @@ export default function JobsTable({
                         />
                     </label>
                     <span className="jobs-list-count">
-                        {searchText.trim() ? `${matchingJobs.length} of ${jobs.length}` : `${jobs.length} shown`}
+                        {searchText.trim()
+                            ? `${matchingJobs.length} of ${jobsForSelectedType.length}`
+                            : `${jobsForSelectedType.length} shown`}
                     </span>
                 </div>
             </div>
 
-            <div className="jobs-list-toolbar" aria-label="Filter jobs by status">
-                <span>Show</span>
-                {statusOptions.map((status) => {
-                    const isActive = visibleStatuses.includes(status.value)
-                    return (
+            <div className="jobs-filter-bar">
+                <div className="jobs-type-tabs" role="tablist" aria-label="Filter jobs by type">
+                    <button
+                        type="button"
+                        role="tab"
+                        aria-selected={selectedJobType === 'all'}
+                        className={selectedJobType === 'all' ? 'jobs-type-tab active' : 'jobs-type-tab'}
+                        onClick={() => setSelectedJobType('all')}
+                    >
+                        All jobs
+                    </button>
+                    {JOB_TYPE_OPTIONS.map((jobType) => (
                         <button
-                            key={status.value}
+                            key={jobType.value}
                             type="button"
-                            className={isActive ? 'status-filter active' : 'status-filter'}
-                            aria-pressed={isActive}
-                            onClick={() => onToggleStatus(status.value)}
+                            role="tab"
+                            aria-selected={selectedJobType === jobType.value}
+                            className={selectedJobType === jobType.value ? 'jobs-type-tab active' : 'jobs-type-tab'}
+                            onClick={() => setSelectedJobType(jobType.value)}
                         >
-                            {status.label}
+                            {jobType.label}
                         </button>
-                    )
-                })}
+                    ))}
+                </div>
+
+                <div className="jobs-list-toolbar" aria-label="Filter jobs by status">
+                    <span>Status</span>
+                    {JOB_STATUS_OPTIONS.map((status) => {
+                        const isActive = visibleStatuses.includes(status.value)
+                        return (
+                            <button
+                                key={status.value}
+                                type="button"
+                                data-status={status.value}
+                                className={isActive ? 'status-filter active' : 'status-filter'}
+                                aria-pressed={isActive}
+                                onClick={() => onToggleStatus(status.value)}
+                            >
+                                {status.label}
+                            </button>
+                        )
+                    })}
+                </div>
             </div>
 
             <div className="jobs-table-scroll">
@@ -228,17 +254,17 @@ export default function JobsTable({
                         )}
 
                         {sortedJobs.map((job) => (
-                            <tr key={job.gr_jobid}>
+                            <tr key={job.gr_jobid} data-status={job.gr_status}>
                                 <td>
                                     <input
                                         key={`${job.gr_jobid}-number-${job.gr_jobnumber}`}
                                         className="jobs-table-inline jobs-table-job-number"
                                         type="text"
                                         aria-label="Job number"
-                                        defaultValue={job.gr_jobnumber}
+                                        defaultValue={job.gr_jobnumber ?? ''}
                                         onBlur={(event) => {
                                             const newValue = event.target.value.trim()
-                                            if (newValue !== job.gr_jobnumber) {
+                                            if (newValue !== (job.gr_jobnumber ?? '')) {
                                                 onJobFieldsChange(job.gr_jobid, { gr_jobnumber: newValue })
                                             }
                                         }}
@@ -250,7 +276,9 @@ export default function JobsTable({
                                 </td>
 
                                 <td>
-                                    <span className="job-type-pill">{getJobTypeLabel(job.gr_jobtype)}</span>
+                                    <span className="job-type-pill" data-job-type={job.gr_jobtype ?? ''}>
+                                        {getJobTypeLabel(job.gr_jobtype)}
+                                    </span>
                                 </td>
 
                                 <td>
@@ -278,11 +306,11 @@ export default function JobsTable({
                                         key={`${job.gr_jobid}-description-${job.gr_description}`}
                                         className="jobs-table-inline jobs-table-description"
                                         aria-label="Job description"
-                                        defaultValue={job.gr_description}
+                                        defaultValue={job.gr_description ?? ''}
                                         rows={2}
                                         onBlur={(event) => {
                                             const newValue = event.target.value.trim()
-                                            if (newValue !== job.gr_description) {
+                                            if (newValue !== (job.gr_description ?? '')) {
                                                 onJobFieldsChange(job.gr_jobid, { gr_description: newValue })
                                             }
                                         }}
@@ -327,9 +355,9 @@ export default function JobsTable({
                                         data-status={job.gr_status}
                                         aria-label="Job status"
                                         value={job.gr_status}
-                                        onChange={(event) => onStatusChange(job.gr_jobid, Number(event.target.value))}
+                                        onChange={(event) => onStatusChange(job.gr_jobid, Number(event.target.value) as JobStatus)}
                                     >
-                                        {statusOptions.map((status) => (
+                                        {JOB_STATUS_OPTIONS.map((status) => (
                                             <option key={status.value} value={status.value}>{status.label}</option>
                                         ))}
                                     </select>
@@ -342,10 +370,10 @@ export default function JobsTable({
                                         type="text"
                                         aria-label="Order number"
                                         placeholder="—"
-                                        defaultValue={job.gr_ordernumber}
+                                        defaultValue={job.gr_ordernumber ?? ''}
                                         onBlur={(event) => {
                                             const newValue = event.target.value.trim()
-                                            if (newValue !== job.gr_ordernumber) {
+                                            if (newValue !== (job.gr_ordernumber ?? '')) {
                                                 onJobFieldsChange(job.gr_jobid, { gr_ordernumber: newValue })
                                             }
                                         }}

@@ -11,6 +11,7 @@ type Mechanic = {
 
 function TestScreen() {
     const { instance, accounts } = useMsal()
+    const account = accounts[0]
     const [name, setName] = useState('')
     const [phone, setPhone] = useState('')
     const [email, setEmail] = useState('')
@@ -26,7 +27,7 @@ function TestScreen() {
     const fetchMechanics = async () => {
         const response = await instance.acquireTokenSilent({
             scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`],
-            account: accounts[0],
+            account,
         })
 
         const result = await fetch(
@@ -44,10 +45,35 @@ function TestScreen() {
     }
 
     useEffect(() => {
-        if (accounts.length > 0) {
-            fetchMechanics()
+        if (!account) return
+
+        let cancelled = false
+
+        const loadMechanics = async () => {
+            const response = await instance.acquireTokenSilent({
+                scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`],
+                account,
+            })
+            const result = await fetch(
+                `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2/gr_mechanics?$select=gr_mechanicid,gr_name,gr_phone,gr_email`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${response.accessToken}`,
+                        Accept: 'application/json',
+                    },
+                },
+            )
+            const data = await result.json()
+
+            if (!cancelled) setMechanics(data.value ?? [])
         }
-    }, [accounts])
+
+        void loadMechanics()
+
+        return () => {
+            cancelled = true
+        }
+    }, [account, instance])
 
     const createMechanic = async () => {
         if (!name || !phone || !email) {
@@ -57,7 +83,7 @@ function TestScreen() {
 
         const response = await instance.acquireTokenSilent({
             scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`],
-            account: accounts[0],
+            account,
         })
 
         const result = await fetch(

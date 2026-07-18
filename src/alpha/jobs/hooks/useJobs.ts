@@ -9,7 +9,8 @@ import {
     updateJobFields as updateJobFieldsApi,
     updateJob as updateJobApi,
 } from '../services/jobsApi'
-import type { JobUpdate } from '../services/jobsApi'
+import type { JobSaveInput } from '../types/jobSave.types'
+import type { JobStatus } from '../types/jobStatus.types'
 
 import {
     fetchEquipment as fetchEquipmentApi,
@@ -32,7 +33,6 @@ import {
 } from '../services/sitesApi'
 
 import type { SiteContact } from '../types/siteContact.types'
-import type { JobType } from '../types/jobType.types'
 import { fetchSiteContacts as fetchSiteContactsApi } from '../services/siteContactsApi'
 
 import {
@@ -44,6 +44,7 @@ import {
 
 export function useJobs() {
     const { instance, accounts } = useMsal()
+    const account = accounts[0]
 
     const [jobs, setJobs] = useState<Job[]>([])
     const [equipmentList, setEquipmentList] = useState<Equipment[]>([])
@@ -55,7 +56,7 @@ export function useJobs() {
     const getAccessToken = async () => {
         const response = await instance.acquireTokenSilent({
             scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`],
-            account: accounts[0],
+            account,
         })
 
         return response.accessToken
@@ -140,23 +141,6 @@ export function useJobs() {
         setCustomers(customers)
     }
 
-    const fetchMechanics = async () => {
-        const token = await getAccessToken()
-
-        const result = await fetch(
-            `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2/gr_mechanics?$select=gr_mechanicid,gr_name`,
-            {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    Accept: 'application/json',
-                },
-            },
-        )
-
-        const data = await result.json()
-        setMechanics(data.value ?? [])
-    }
-
     const fetchJobs = async () => {
         const token = await getAccessToken()
         const jobs = await fetchJobsApi(token)
@@ -169,7 +153,7 @@ export function useJobs() {
         setEquipmentList(equipment)
     }
 
-    const updateJobStatus = async (jobId: string, status: number) => {
+    const updateJobStatus = async (jobId: string, status: JobStatus) => {
         const token = await getAccessToken()
 
         await updateJobStatusApi(token, jobId, status)
@@ -192,7 +176,7 @@ export function useJobs() {
         await fetchJobs()
     }
 
-    const updateJob = async (jobId: string, job: JobUpdate) => {
+    const updateJob = async (jobId: string, job: JobSaveInput) => {
         const token = await getAccessToken()
 
         await updateJobApi(token, jobId, job)
@@ -233,16 +217,7 @@ export function useJobs() {
         ))
     }
 
-    const createJob = async (job: {
-        jobNumber: string
-        orderNumber: string
-        description: string
-        jobType: JobType
-        equipmentId?: string
-        mechanicId?: string
-        siteId?: string
-        contactId?: string
-    }) => {
+    const createJob = async (job: JobSaveInput) => {
         const token = await getAccessToken()
 
         await createJobApi(token, job)
@@ -264,15 +239,58 @@ export function useJobs() {
     }
 
     useEffect(() => {
-        if (accounts.length > 0) {
-            fetchMechanics()
-            fetchJobs()
-            fetchEquipment()
-            fetchSites()
-            fetchCustomers()
-            fetchSiteContacts()
+        if (!account) return
+
+        let cancelled = false
+
+        const loadInitialData = async () => {
+            const response = await instance.acquireTokenSilent({
+                scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`],
+                account,
+            })
+            const token = response.accessToken
+            const mechanicsRequest = fetch(
+                `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2/gr_mechanics?$select=gr_mechanicid,gr_name,gr_phone,gr_email`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        Accept: 'application/json',
+                    },
+                },
+            ).then((result) => result.json())
+
+            const [
+                initialJobs,
+                initialEquipment,
+                initialSites,
+                initialCustomers,
+                initialSiteContacts,
+                mechanicsData,
+            ] = await Promise.all([
+                fetchJobsApi(token),
+                fetchEquipmentApi(token),
+                fetchSitesApi(token),
+                fetchCustomersApi(token),
+                fetchSiteContactsApi(token),
+                mechanicsRequest,
+            ])
+
+            if (cancelled) return
+
+            setJobs(initialJobs)
+            setEquipmentList(initialEquipment)
+            setSites(initialSites)
+            setCustomers(initialCustomers)
+            setSiteContacts(initialSiteContacts)
+            setMechanics(mechanicsData.value ?? [])
         }
-    }, [accounts])
+
+        void loadInitialData()
+
+        return () => {
+            cancelled = true
+        }
+    }, [account, instance])
 
     return {
         jobs,

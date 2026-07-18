@@ -6,13 +6,13 @@ export function emailJobToMechanic(job: Job) {
         return
     }
 
-    const subject = `Job ${job.gr_jobnumber}`
+    const subject = `Job ${job.gr_jobnumber ?? 'Unnumbered'}`
 
     const body = `
-Job: ${job.gr_jobnumber}
+Job: ${job.gr_jobnumber ?? 'Unnumbered'}
 
 Description:
-${job.gr_description}
+${job.gr_description ?? 'No description'}
 
 Equipment:
 ${job.gr_Equipment

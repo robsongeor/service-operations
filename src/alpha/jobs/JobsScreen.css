@@ -1,0 +1,28 @@
+.jobs-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 18px;
+}
+
+.jobs-page-header h1 {
+    margin: 0;
+}
+
+.jobs-create-button {
+    min-height: 38px;
+    padding: 0 16px;
+    border: 1px solid #176f66;
+    border-radius: 9px;
+    background: #176f66;
+    color: #ffffff;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.jobs-create-button:hover {
+    background: #125f57;
+}

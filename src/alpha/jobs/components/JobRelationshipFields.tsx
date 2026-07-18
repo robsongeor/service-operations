@@ -1,0 +1,252 @@
+import { useState } from 'react'
+import type { Equipment } from '../types/equipment.types'
+import type { useJobEditor } from '../hooks/useJobEditor'
+
+type Props = {
+    editor: ReturnType<typeof useJobEditor>
+    equipmentList: Equipment[]
+    onCreateCustomer: (customer: { name: string }) => Promise<string>
+    onCreateSite: (site: { customerId: string; name: string; address?: string }) => Promise<string>
+    onCreateContact: (contact: { siteId: string; name: string; phone?: string; email?: string }) => Promise<string>
+    onCreateEquipment: (equipment: { fleet: string; serial: string; make?: string; model?: string }) => Promise<string>
+}
+
+type Panel = '' | 'equipment' | 'customer' | 'site' | 'contact'
+
+export default function JobRelationshipFields({
+    editor,
+    equipmentList,
+    onCreateCustomer,
+    onCreateSite,
+    onCreateContact,
+    onCreateEquipment,
+}: Props) {
+    const {
+        draft, setDraft, customerSearch, setCustomerSearch,
+        customerSearchOpen, setCustomerSearchOpen, filteredCustomers,
+        filteredSites, filteredContacts, selectCustomer, selectSite,
+    } = editor
+    const [panel, setPanel] = useState<Panel>('')
+    const [isCreating, setIsCreating] = useState(false)
+    const [createError, setCreateError] = useState('')
+    const [createdCustomerId, setCreatedCustomerId] = useState('')
+    const [equipment, setEquipment] = useState({ fleet: '', serial: '', make: '', model: '' })
+    const [customer, setCustomer] = useState({ name: '', siteName: '', address: '' })
+    const [site, setSite] = useState({ name: '', address: '' })
+    const [contact, setContact] = useState({ name: '', phone: '', email: '' })
+
+    const openPanel = (nextPanel: Panel) => {
+        setPanel(nextPanel)
+        setCreateError('')
+    }
+
+    const createEquipment = async () => {
+        if (!equipment.fleet.trim() && !equipment.serial.trim()) {
+            setCreateError('Enter a fleet or serial number.')
+            return
+        }
+        try {
+            setIsCreating(true)
+            setCreateError('')
+            const equipmentId = await onCreateEquipment({
+                fleet: equipment.fleet.trim(), serial: equipment.serial.trim(),
+                make: equipment.make.trim() || undefined,
+                model: equipment.model.trim() || undefined,
+            })
+            setDraft((current) => ({ ...current, equipmentId }))
+            setEquipment({ fleet: '', serial: '', make: '', model: '' })
+            setPanel('')
+        } catch (error) {
+            console.error(error)
+            setCreateError('Equipment could not be created.')
+        } finally { setIsCreating(false) }
+    }
+
+    const createCustomerAndSite = async () => {
+        if (!customer.name.trim()) return setCreateError('Enter a customer name.')
+        if (!customer.siteName.trim()) return setCreateError('Enter a site name.')
+        try {
+            setIsCreating(true)
+            setCreateError('')
+            const customerId = createdCustomerId || await onCreateCustomer({ name: customer.name.trim() })
+            if (!createdCustomerId) setCreatedCustomerId(customerId)
+            const siteId = await onCreateSite({
+                customerId, name: customer.siteName.trim(),
+                address: customer.address.trim() || undefined,
+            })
+            setDraft((current) => ({ ...current, customerId, siteId, contactId: '' }))
+            setCustomerSearch(customer.name.trim())
+            setCustomer({ name: '', siteName: '', address: '' })
+            setCreatedCustomerId('')
+            setPanel('')
+        } catch (error) {
+            console.error(error)
+            setCreateError(createdCustomerId
+                ? 'The customer exists, but the site could not be created. Try again.'
+                : 'The customer or site could not be created.')
+        } finally { setIsCreating(false) }
+    }
+
+    const createSite = async () => {
+        if (!draft.customerId) return setCreateError('Select a customer first.')
+        if (!site.name.trim()) return setCreateError('Enter a site name.')
+        try {
+            setIsCreating(true)
+            setCreateError('')
+            const siteId = await onCreateSite({
+                customerId: draft.customerId, name: site.name.trim(),
+                address: site.address.trim() || undefined,
+            })
+            setDraft((current) => ({ ...current, siteId, contactId: '' }))
+            setSite({ name: '', address: '' })
+            setPanel('')
+        } catch (error) {
+            console.error(error)
+            setCreateError('Site could not be created.')
+        } finally { setIsCreating(false) }
+    }
+
+    const createContact = async () => {
+        if (!draft.siteId) return setCreateError('Select a site first.')
+        if (!contact.name.trim()) return setCreateError('Enter a contact name.')
+        try {
+            setIsCreating(true)
+            setCreateError('')
+            const contactId = await onCreateContact({
+                siteId: draft.siteId, name: contact.name.trim(),
+                phone: contact.phone.trim() || undefined,
+                email: contact.email.trim() || undefined,
+            })
+            setDraft((current) => ({ ...current, contactId }))
+            setContact({ name: '', phone: '', email: '' })
+            setPanel('')
+        } catch (error) {
+            console.error(error)
+            setCreateError('Contact could not be created.')
+        } finally { setIsCreating(false) }
+    }
+
+    const actions = (create: () => void, label: string) => (
+        <div className="job-edit-create-actions">
+            <button type="button" onClick={() => setPanel('')} disabled={isCreating}>Cancel</button>
+            <button type="button" className="primary" onClick={create} disabled={isCreating}>
+                {isCreating ? 'Creating...' : label}
+            </button>
+        </div>
+    )
+
+    return <>
+        <div className="job-edit-divider job-edit-field-wide">
+            <h3>Equipment and location</h3>
+            <p>Change which records this job references.</p>
+        </div>
+
+        <label className="job-edit-field job-edit-field-wide">
+            <span>Equipment</span>
+            <select value={draft.equipmentId} onChange={(event) => {
+                if (event.target.value === '__new__') return openPanel('equipment')
+
+                const equipmentId = event.target.value
+                const selectedEquipment = equipmentList.find(
+                    (item) => item.gr_equipmentid === equipmentId,
+                )
+                setDraft((current) => ({ ...current, equipmentId }))
+
+                const equipmentSite = selectedEquipment?.gr_Site
+                const equipmentCustomer = equipmentSite?.gr_Customer
+
+                if (equipmentSite && equipmentCustomer) {
+                    setCustomerSearch(equipmentCustomer.gr_name)
+                    setCustomerSearchOpen(false)
+                    selectCustomer(equipmentCustomer.gr_customerid)
+                    selectSite(equipmentSite.gr_siteid)
+                }
+            }}>
+                <option value="">No equipment</option>
+                <option value="__new__">+ Add new equipment</option>
+                {equipmentList.map((item) => <option key={item.gr_equipmentid} value={item.gr_equipmentid}>
+                    {item.gr_fleet || 'No fleet'} — {item.gr_make} {item.gr_model} — {item.gr_serial}
+                </option>)}
+            </select>
+        </label>
+        {panel === 'equipment' && <div className="job-edit-create-panel job-edit-field-wide">
+            <div><h4>New equipment</h4><p>Create and select equipment for this job.</p></div>
+            <label className="job-edit-field"><span>Fleet number</span><input autoFocus value={equipment.fleet} onChange={(e) => setEquipment({ ...equipment, fleet: e.target.value })} /></label>
+            <label className="job-edit-field"><span>Serial number</span><input value={equipment.serial} onChange={(e) => setEquipment({ ...equipment, serial: e.target.value })} /></label>
+            <label className="job-edit-field"><span>Make</span><input value={equipment.make} onChange={(e) => setEquipment({ ...equipment, make: e.target.value })} /></label>
+            <label className="job-edit-field"><span>Model</span><input value={equipment.model} onChange={(e) => setEquipment({ ...equipment, model: e.target.value })} /></label>
+            {createError && <p className="job-edit-error" role="alert">{createError}</p>}
+            {actions(createEquipment, 'Create equipment')}
+        </div>}
+
+        <label className="job-edit-field job-edit-field-wide job-edit-combobox">
+            <span>Customer</span>
+            <input role="combobox" aria-expanded={customerSearchOpen} aria-controls="job-editor-customer-results" autoComplete="off" placeholder="Search customers" value={customerSearch}
+                onFocus={() => setCustomerSearchOpen(true)} onChange={(event) => {
+                    setCustomerSearch(event.target.value)
+                    setCustomerSearchOpen(true)
+                    setDraft((current) => ({ ...current, customerId: '', siteId: '', contactId: '' }))
+                }} />
+            {customerSearchOpen && <div className="job-edit-results" id="job-editor-customer-results" role="listbox">
+                <button type="button" className="job-edit-add-result" onClick={() => {
+                    setCustomer({ ...customer, name: customerSearch })
+                    setCustomerSearchOpen(false)
+                    openPanel('customer')
+                }}>+ Add new customer</button>
+                {filteredCustomers.map((item) => <button key={item.gr_customerid} type="button" role="option" aria-selected={item.gr_customerid === draft.customerId} onClick={() => {
+                    setCustomerSearch(item.gr_name)
+                    setCustomerSearchOpen(false)
+                    selectCustomer(item.gr_customerid)
+                }}>{item.gr_name}</button>)}
+                {filteredCustomers.length === 0 && <span>No customers found</span>}
+            </div>}
+        </label>
+        {panel === 'customer' && <div className="job-edit-create-panel job-edit-field-wide">
+            <div><h4>New customer and site</h4><p>Create both records together and select them for this job.</p></div>
+            <label className="job-edit-field"><span>Customer name</span><input autoFocus value={customer.name} onChange={(e) => { setCustomer({ ...customer, name: e.target.value }); setCreatedCustomerId('') }} /></label>
+            <label className="job-edit-field"><span>Site name</span><input value={customer.siteName} onChange={(e) => setCustomer({ ...customer, siteName: e.target.value })} /></label>
+            <label className="job-edit-field"><span>Site address</span><input value={customer.address} onChange={(e) => setCustomer({ ...customer, address: e.target.value })} /></label>
+            {createError && <p className="job-edit-error" role="alert">{createError}</p>}
+            {actions(createCustomerAndSite, 'Create customer and site')}
+        </div>}
+
+        <label className="job-edit-field job-edit-field-wide"><span>Site</span>
+            <select value={draft.siteId} disabled={!draft.customerId} onChange={(event) => {
+                if (event.target.value === '__new__') return openPanel('site')
+                selectSite(event.target.value)
+            }}>
+                <option value="">{draft.customerId ? 'Select site' : 'Select a customer first'}</option>
+                {draft.customerId && <option value="__new__">+ Add new site</option>}
+                {filteredSites.map((item) => <option key={item.gr_siteid} value={item.gr_siteid}>{item.gr_name} — {item.gr_address}</option>)}
+            </select>
+        </label>
+        {panel === 'site' && <div className="job-edit-create-panel job-edit-field-wide">
+            <div><h4>New site</h4><p>Create a site for {customerSearch} and select it for this job.</p></div>
+            <label className="job-edit-field"><span>Site name</span><input autoFocus value={site.name} onChange={(e) => setSite({ ...site, name: e.target.value })} /></label>
+            <label className="job-edit-field"><span>Site address</span><input value={site.address} onChange={(e) => setSite({ ...site, address: e.target.value })} /></label>
+            {createError && <p className="job-edit-error" role="alert">{createError}</p>}
+            {actions(createSite, 'Create site')}
+        </div>}
+
+        <label className="job-edit-field job-edit-field-wide"><span>Contact</span>
+            <select value={draft.contactId} disabled={!draft.siteId} onChange={(event) => {
+                if (event.target.value === '__new__') return openPanel('contact')
+                setDraft((current) => ({ ...current, contactId: event.target.value }))
+            }}>
+                <option value="">{draft.siteId ? 'No contact' : 'Select a site first'}</option>
+                {draft.siteId && <option value="__new__">+ Add new contact</option>}
+                {filteredContacts.map((item) => <option key={item.gr_sitecontactid} value={item.gr_Contact?.gr_contactid ?? ''}>
+                    {item.gr_Contact?.gr_name}{item.gr_Contact?.gr_phone ? ` — ${item.gr_Contact.gr_phone}` : ''}
+                </option>)}
+            </select>
+        </label>
+        {panel === 'contact' && <div className="job-edit-create-panel job-edit-field-wide">
+            <div><h4>New contact</h4><p>Create and select a contact for the chosen site.</p></div>
+            <label className="job-edit-field"><span>Contact name</span><input autoFocus value={contact.name} onChange={(e) => setContact({ ...contact, name: e.target.value })} /></label>
+            <label className="job-edit-field"><span>Phone</span><input type="tel" value={contact.phone} onChange={(e) => setContact({ ...contact, phone: e.target.value })} /></label>
+            <label className="job-edit-field"><span>Email</span><input type="email" value={contact.email} onChange={(e) => setContact({ ...contact, email: e.target.value })} /></label>
+            {createError && <p className="job-edit-error" role="alert">{createError}</p>}
+            {actions(createContact, 'Create contact')}
+        </div>}
+    </>
+}
