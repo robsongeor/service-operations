@@ -295,6 +295,62 @@
     text-align: center;
 }
 
+.scheduling-data-state {
+    min-height: 180px;
+    padding: 32px;
+    border: 1px solid #dfe7e3;
+    border-radius: 14px;
+    background: #ffffff;
+    color: #52605a;
+}
+
+.scheduling-data-state h2,
+.scheduling-data-state p {
+    margin: 0;
+}
+
+.scheduling-data-state h2 {
+    color: #1f2f29;
+    font-size: 1rem;
+}
+
+.scheduling-data-state p {
+    margin-top: 6px;
+    font-size: 0.88rem;
+}
+
+.scheduling-data-state-error {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    border-color: #efcaca;
+    background: #fffafa;
+}
+
+.scheduling-data-state-error details {
+    margin-top: 12px;
+    font-size: 0.78rem;
+}
+
+.scheduling-data-state-error pre {
+    max-width: min(800px, 70vw);
+    overflow: auto;
+    white-space: pre-wrap;
+}
+
+.scheduling-data-state-error button {
+    flex: 0 0 auto;
+    padding: 9px 14px;
+    border: 1px solid #176f66;
+    border-radius: 8px;
+    background: #176f66;
+    color: #ffffff;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
 @media (max-width: 700px) {
     .scheduling-page-header {
         align-items: flex-start;

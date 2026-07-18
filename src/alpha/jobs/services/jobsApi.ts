@@ -16,6 +16,11 @@ export async function fetchJobs(accessToken: string): Promise<Job[]> {
         },
     )
 
+    if (!result.ok) {
+        const error = await result.text()
+        throw new Error(`Failed to fetch jobs: ${error}`)
+    }
+
     const data = await result.json()
     return data.value ?? []
 }

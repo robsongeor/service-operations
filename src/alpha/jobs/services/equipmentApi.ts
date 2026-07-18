@@ -13,6 +13,11 @@ export async function fetchEquipment(accessToken: string): Promise<Equipment[]> 
         },
     )
 
+    if (!result.ok) {
+        const error = await result.text()
+        throw new Error(`Failed to fetch equipment: ${error}`)
+    }
+
     const data = await result.json()
     return data.value ?? []
 }

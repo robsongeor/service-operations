@@ -19,8 +19,15 @@ The app supports jobs that are linked to equipment as well as jobs without equip
 - Sort jobs by status priority or creation date.
 - Filter jobs by status.
 - Edit complete job details in a side drawer.
+- Delete jobs with an explicit confirmation step.
+- Create customers, sites, contacts, and equipment without leaving the job drawer.
 - Quickly edit job number, description, order number, mechanic, and status from the table.
 - Email a job to its assigned mechanic.
+- Add one or more scheduling options while creating or editing a job.
+- Schedule work as flexible for a week, any time on a day, morning, after a specified time, or at an exact time.
+- Mark scheduling options as confirmed or provisional.
+- Review scheduled work in a seven-day planner and move between weeks.
+- Open the complete job editor directly from the scheduling board.
 
 ## Job workflow
 
@@ -42,6 +49,20 @@ Jobs currently use these statuses:
 | Unallocated | `122830001` | 4 |
 
 The default table order follows the operational workflow above, with completed jobs first and unallocated jobs last.
+
+## Scheduling workflow
+
+Each job can have multiple scheduling options. This supports tentative customer options before one appointment is confirmed, as well as work that can be completed flexibly during a week.
+
+| Schedule type | Dataverse choice value | Meaning |
+| --- | ---: | --- |
+| Flexible week | `122830000` | The job can be completed on any suitable day in the selected week. |
+| Any time | `122830001` | The job can be completed at any time on the selected day. |
+| Morning | `122830002` | The job should be completed during the morning of the selected day. |
+| After time | `122830003` | The job should be completed after the stored time. |
+| Exact time | `122830004` | The job is scheduled for the stored time. |
+
+The scheduling screen groups flexible work into a weekly lane and dated work into daily columns. Confirmed and provisional options are shown separately through their card state.
 
 ## Technology
 
@@ -70,7 +91,13 @@ Before running the project, you need:
    npm install
    ```
 
-2. Create a `.env` file in the project root:
+2. Copy `.env.example` to `.env`:
+
+   ```powershell
+   Copy-Item .env.example .env
+   ```
+
+3. Replace the placeholders in `.env` with the Microsoft Entra application ID, tenant ID, and Dataverse organization URL:
 
    ```env
    VITE_MSAL_CLIENT_ID=your-application-client-id
@@ -78,21 +105,23 @@ Before running the project, you need:
    VITE_DATAVERSE_URL=https://your-environment.crm.dynamics.com
    ```
 
-3. Make sure the Microsoft Entra app registration includes this local redirect URI:
+   Use the organization URL without `/api/data/v9.2` and without a trailing slash.
+
+4. Make sure the Microsoft Entra app registration includes this local redirect URI:
 
    ```text
    http://localhost:5173
    ```
 
-4. Make sure the signed-in user and app registration can request the Dataverse `user_impersonation` scope.
+5. Make sure the signed-in user and app registration can request the Dataverse `user_impersonation` scope.
 
-5. Start the development server:
+6. Start the development server:
 
    ```bash
    npm run dev
    ```
 
-6. Open `http://localhost:5173` and sign in.
+7. Open `http://localhost:5173` and sign in.
 
 Do not commit the `.env` file. It is already excluded by `.gitignore`.
 
@@ -118,6 +147,7 @@ The application currently expects the following Dataverse entity sets:
 | Sites | `gr_sites` |
 | Contacts | `gr_contacts` |
 | Site/contact links | `gr_sitecontacts` |
+| Job schedule options | `gr_jobscheduleoptions` |
 
 Important job columns and relationships include:
 
@@ -132,6 +162,16 @@ Important job columns and relationships include:
 - `gr_Contact`
 - Dataverse system column `createdon`
 
+The job schedule option table requires:
+
+- `gr_jobscheduleoptionid`
+- `gr_name`
+- `gr_scheduletype`
+- `gr_scheduledate`
+- `gr_scheduletime`
+- `gr_confirmed`
+- `gr_Job` lookup to `gr_jobs`
+
 Important relationship rules:
 
 - A job may have equipment, but equipment is not mandatory.
@@ -139,6 +179,7 @@ Important relationship rules:
 - A site and contact are connected through `gr_sitecontacts`.
 - When a saved job has both equipment and a site, the equipment record's `gr_Site` lookup is updated to that site.
 - The job's customer is derived from its selected site rather than stored as a separate job lookup.
+- A job can have multiple schedule option records through the `gr_Job` lookup.
 
 If the schema or Choice values change in Dataverse, the corresponding API queries and TypeScript constants must also be updated.
 
@@ -148,11 +189,12 @@ If the schema or Choice values change in Dataverse, the corresponding API querie
 src/
 ├── alpha/
 │   ├── jobs/
-│   │   ├── components/    Job form, table, and edit drawer
-│   │   ├── hooks/         Job feature state and operations
-│   │   ├── services/      Dataverse requests and job email helper
-│   │   ├── types/         Dataverse and form types
-│   │   └── JobsScreen.tsx Job feature composition and form state
+│   │   ├── components/    Job table and create/edit drawer fields
+│   │   ├── hooks/         Job data and editor state
+│   │   ├── services/      Dataverse APIs and job email helper
+│   │   ├── types/         Job, relationship, and schedule types
+│   │   └── JobsScreen.tsx Job operations screen
+│   ├── scheduling/        Seven-day scheduling board
 │   ├── test-screen/       Current mechanic management prototype
 │   └── LoginScreen.tsx    Microsoft sign-in screen
 ├── auth/                  MSAL configuration
@@ -164,8 +206,10 @@ src/
 The jobs feature uses a simple separation of responsibilities:
 
 - Components display fields and raise user actions.
-- `JobsScreen` manages form-specific state and coordinates the screen.
-- `useJobs` owns shared job data and calls the service layer.
+- `JobsScreen` composes the job table and job drawers.
+- `SchedulingScreen` groups schedule options into weekly and daily lanes.
+- `useJobEditor` manages customer, site, contact, and equipment selections.
+- `useJobs` owns shared job and schedule data and calls the service layer.
 - Service files communicate with the Dataverse Web API.
 - Type files describe the records returned by Dataverse.
 
@@ -175,6 +219,7 @@ The jobs feature uses a simple separation of responsibilities:
 | --- | --- | --- |
 | `/` | Overview | Placeholder |
 | `/jobs` | Job operations | Active development |
+| `/scheduling` | Seven-day scheduling planner | Active development |
 | `/mechanics` | Mechanic management | Prototype |
 
 The Settings navigation item does not yet have an implemented route.
@@ -191,9 +236,10 @@ The Settings navigation item does not yet have an implemented route.
 
 Likely next areas of development include:
 
-- Weekly scheduling for jobs with exact dates and flexible “next week” scheduling.
+- Job-linked quotes with editable line items, GST totals, and revision tracking.
+- Conflict warnings for the smaller set of jobs that receive schedule options.
+- Faster triage and allocation controls for breakdown work.
 - Dedicated management pages for sites, customers, contacts, and equipment.
 - A production-ready mechanic management screen.
 - Job history and audit notes for equipment or location corrections.
-- Improved error, loading, and success feedback.
 - Overview reporting for active work, waiting parts, and upcoming service jobs.

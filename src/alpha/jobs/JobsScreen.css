@@ -40,3 +40,80 @@
 .jobs-create-button:hover {
     background: #125f57;
 }
+
+.jobs-create-button:disabled {
+    border-color: #aab7b2;
+    background: #aab7b2;
+    cursor: not-allowed;
+}
+
+.jobs-data-state {
+    display: flex;
+    min-height: 180px;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 32px;
+    border: 1px solid #dfe7e3;
+    border-radius: 14px;
+    background: #ffffff;
+    color: #52605a;
+    text-align: left;
+}
+
+.jobs-data-state h2,
+.jobs-data-state p {
+    margin: 0;
+}
+
+.jobs-data-state h2 {
+    color: #1f2f29;
+    font-size: 1rem;
+}
+
+.jobs-data-state p {
+    margin-top: 6px;
+    font-size: 0.88rem;
+}
+
+.jobs-loading-indicator {
+    width: 22px;
+    height: 22px;
+    border: 3px solid #d9e7e3;
+    border-top-color: #176f66;
+    border-radius: 50%;
+    animation: jobs-loading-spin 0.8s linear infinite;
+}
+
+.jobs-data-state-error {
+    justify-content: space-between;
+    border-color: #efcaca;
+    background: #fffafa;
+}
+
+.jobs-data-state-error details {
+    margin-top: 12px;
+    font-size: 0.78rem;
+}
+
+.jobs-data-state-error pre {
+    max-width: min(800px, 70vw);
+    overflow: auto;
+    white-space: pre-wrap;
+}
+
+.jobs-data-state-error button {
+    flex: 0 0 auto;
+    padding: 9px 14px;
+    border: 1px solid #176f66;
+    border-radius: 8px;
+    background: #176f66;
+    color: #ffffff;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+@keyframes jobs-loading-spin {
+    to { transform: rotate(360deg); }
+}

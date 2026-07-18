@@ -118,6 +118,9 @@ export default function SchedulingScreen() {
         createScheduleOption,
         updateScheduleOption,
         deleteScheduleOption,
+        isLoading,
+        loadError,
+        retryInitialLoad,
     } = useJobs()
     const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
     const [editingJob, setEditingJob] = useState<Job | null>(null)
@@ -170,6 +173,25 @@ export default function SchedulingScreen() {
                 </div>
             </header>
 
+            {isLoading ? (
+                <section className="scheduling-data-state" aria-live="polite">
+                    <h2>Loading schedule</h2>
+                    <p>Connecting to Dataverse and preparing the weekly planner.</p>
+                </section>
+            ) : loadError ? (
+                <section className="scheduling-data-state scheduling-data-state-error" role="alert">
+                    <div>
+                        <h2>Schedule could not be loaded</h2>
+                        <p>Dataverse returned an error. Check the details or try again.</p>
+                        <details>
+                            <summary>Error details</summary>
+                            <pre>{loadError}</pre>
+                        </details>
+                    </div>
+                    <button type="button" onClick={retryInitialLoad}>Try again</button>
+                </section>
+            ) : (
+            <>
             <section className="scheduling-summary">
                 <div>
                     <span>Seven-day planner</span>
@@ -237,6 +259,8 @@ export default function SchedulingScreen() {
                     </div>
                 </div>
             </div>
+            </>
+            )}
 
             {editingJob && (
                 <JobEditDrawer

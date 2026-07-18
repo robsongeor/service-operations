@@ -15,6 +15,11 @@ export async function fetchSiteContacts(
         },
     )
 
+    if (!result.ok) {
+        const error = await result.text()
+        throw new Error(`Failed to fetch site contacts: ${error}`)
+    }
+
     const data = await result.json()
     return data.value ?? []
 }

@@ -65,6 +65,9 @@ export function useJobs() {
     const [sites, setSites] = useState<Site[]>([])
     const [siteContacts, setSiteContacts] = useState<SiteContact[]>([])
     const [scheduleOptions, setScheduleOptions] = useState<JobScheduleOption[]>([])
+    const [isLoading, setIsLoading] = useState(false)
+    const [loadError, setLoadError] = useState('')
+    const [reloadKey, setReloadKey] = useState(0)
 
     const getAccessToken = async () => {
         const response = await instance.acquireTokenSilent({
@@ -327,48 +330,67 @@ export function useJobs() {
         let cancelled = false
 
         const loadInitialData = async () => {
-            const response = await instance.acquireTokenSilent({
-                scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`],
-                account,
-            })
-            const token = response.accessToken
-            const mechanicsRequest = fetch(
-                `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2/gr_mechanics?$select=gr_mechanicid,gr_name,gr_phone,gr_email`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        Accept: 'application/json',
+            setIsLoading(true)
+            setLoadError('')
+
+            try {
+                const response = await instance.acquireTokenSilent({
+                    scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`],
+                    account,
+                })
+                const token = response.accessToken
+                const mechanicsRequest = fetch(
+                    `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2/gr_mechanics?$select=gr_mechanicid,gr_name,gr_phone,gr_email`,
+                    {
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                            Accept: 'application/json',
+                        },
                     },
-                },
-            ).then((result) => result.json())
+                ).then(async (result) => {
+                    if (!result.ok) {
+                        throw new Error(`Failed to fetch mechanics: ${await result.text()}`)
+                    }
+                    return result.json()
+                })
 
-            const [
-                initialJobs,
-                initialEquipment,
-                initialSites,
-                initialCustomers,
-                initialSiteContacts,
-                initialScheduleOptions,
-                mechanicsData,
-            ] = await Promise.all([
-                fetchJobsApi(token),
-                fetchEquipmentApi(token),
-                fetchSitesApi(token),
-                fetchCustomersApi(token),
-                fetchSiteContactsApi(token),
-                fetchJobScheduleOptionsApi(token),
-                mechanicsRequest,
-            ])
+                const [
+                    initialJobs,
+                    initialEquipment,
+                    initialSites,
+                    initialCustomers,
+                    initialSiteContacts,
+                    initialScheduleOptions,
+                    mechanicsData,
+                ] = await Promise.all([
+                    fetchJobsApi(token),
+                    fetchEquipmentApi(token),
+                    fetchSitesApi(token),
+                    fetchCustomersApi(token),
+                    fetchSiteContactsApi(token),
+                    fetchJobScheduleOptionsApi(token),
+                    mechanicsRequest,
+                ])
 
-            if (cancelled) return
+                if (cancelled) return
 
-            setJobs(initialJobs)
-            setEquipmentList(initialEquipment)
-            setSites(initialSites)
-            setCustomers(initialCustomers)
-            setSiteContacts(initialSiteContacts)
-            setScheduleOptions(initialScheduleOptions)
-            setMechanics(mechanicsData.value ?? [])
+                setJobs(initialJobs)
+                setEquipmentList(initialEquipment)
+                setSites(initialSites)
+                setCustomers(initialCustomers)
+                setSiteContacts(initialSiteContacts)
+                setScheduleOptions(initialScheduleOptions)
+                setMechanics(mechanicsData.value ?? [])
+            } catch (error) {
+                if (cancelled) return
+
+                console.error('Failed to load Dataverse data:', error)
+                setLoadError(error instanceof Error
+                    ? error.message
+                    : 'Dataverse data could not be loaded.')
+            } finally {
+                if (!cancelled) setIsLoading(false)
+            }
         }
 
         void loadInitialData()
@@ -376,7 +398,7 @@ export function useJobs() {
         return () => {
             cancelled = true
         }
-    }, [account, instance])
+    }, [account, instance, reloadKey])
 
     return {
         jobs,
@@ -402,6 +424,9 @@ export function useJobs() {
         confirmScheduleOption,
         updateScheduleOption,
         deleteScheduleOption,
+        isLoading,
+        loadError,
+        retryInitialLoad: () => setReloadKey((current) => current + 1),
 
     }
 }

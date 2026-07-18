@@ -15,6 +15,7 @@ export default function JobsScreen() {
         createJob, updateJob, deleteJob, updateJobStatus, updateJobFields,
         createContactForSite, createEquipment, createSite, createCustomer,
         createScheduleOption, updateScheduleOption, deleteScheduleOption,
+        isLoading, loadError, retryInitialLoad,
     } = useJobs()
     const [editingJob, setEditingJob] = useState<Job | null>(null)
     const [isCreatingJob, setIsCreatingJob] = useState(false)
@@ -48,21 +49,55 @@ export default function JobsScreen() {
         <div className="jobs-page">
             <header className="jobs-page-header">
                 <h1>Jobs</h1>
-                <button className="jobs-create-button" type="button" onClick={() => setIsCreatingJob(true)}>
+                <button
+                    className="jobs-create-button"
+                    type="button"
+                    onClick={() => setIsCreatingJob(true)}
+                    disabled={isLoading || Boolean(loadError)}
+                >
                     + Create job
                 </button>
             </header>
 
-            <JobsTable
-                jobs={filteredJobs}
-                visibleStatuses={visibleStatuses}
-                onToggleStatus={toggleStatus}
-                onStatusChange={updateJobStatus}
-                onJobFieldsChange={updateJobFields}
-                onEmailJob={emailJobToMechanic}
-                onEditJob={setEditingJob}
-                mechanics={mechanics}
-            />
+            {isLoading ? (
+                <section className="jobs-data-state" aria-live="polite">
+                    <span className="jobs-loading-indicator" aria-hidden="true" />
+                    <div>
+                        <h2>Loading jobs</h2>
+                        <p>Connecting to Dataverse and preparing the operations table.</p>
+                    </div>
+                </section>
+            ) : loadError ? (
+                <section className="jobs-data-state jobs-data-state-error" role="alert">
+                    <div>
+                        <h2>Jobs could not be loaded</h2>
+                        <p>Dataverse returned an error. Check the details or try again.</p>
+                        <details>
+                            <summary>Error details</summary>
+                            <pre>{loadError}</pre>
+                        </details>
+                    </div>
+                    <button type="button" onClick={retryInitialLoad}>Try again</button>
+                </section>
+            ) : jobs.length === 0 ? (
+                <section className="jobs-data-state">
+                    <div>
+                        <h2>No jobs found</h2>
+                        <p>Dataverse is connected, but the jobs table contains no records.</p>
+                    </div>
+                </section>
+            ) : (
+                <JobsTable
+                    jobs={filteredJobs}
+                    visibleStatuses={visibleStatuses}
+                    onToggleStatus={toggleStatus}
+                    onStatusChange={updateJobStatus}
+                    onJobFieldsChange={updateJobFields}
+                    onEmailJob={emailJobToMechanic}
+                    onEditJob={setEditingJob}
+                    mechanics={mechanics}
+                />
+            )}
 
             {isCreatingJob && (
                 <JobCreateDrawer
