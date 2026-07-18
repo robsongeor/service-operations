@@ -162,3 +162,21 @@ export async function updateJob(
         throw new Error(`Failed to update job: ${error}`)
     }
 }
+
+export async function deleteJob(token: string, jobId: string) {
+    const response = await fetch(
+        `${DATAVERSE_URL}/api/data/v9.2/gr_jobs(${jobId})`,
+        {
+            method: 'DELETE',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: 'application/json',
+            },
+        },
+    )
+
+    if (!response.ok) {
+        const error = await response.text()
+        throw new Error(`Failed to delete job: ${error}`)
+    }
+}

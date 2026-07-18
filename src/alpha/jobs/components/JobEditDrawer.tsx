@@ -39,6 +39,7 @@ type Props = {
         model?: string
     }) => Promise<string>
     onSave: (jobId: string, job: JobSaveInput) => Promise<void>
+    onDelete: (jobId: string) => Promise<void>
     onClose: () => void
 }
 
@@ -54,6 +55,7 @@ export default function JobEditDrawer({
     onCreateContact,
     onCreateEquipment,
     onSave,
+    onDelete,
     onClose,
 }: Props) {
     const editor = useJobEditor({
@@ -77,6 +79,9 @@ export default function JobEditDrawer({
     const { draft, setDraft } = editor
     const [isSaving, setIsSaving] = useState(false)
     const [saveError, setSaveError] = useState('')
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+    const [isDeleting, setIsDeleting] = useState(false)
+    const [deleteError, setDeleteError] = useState('')
 
     const saveChanges = async () => {
         if (!draft.description.trim()) {
@@ -112,17 +117,46 @@ export default function JobEditDrawer({
         }
     }
 
+    const deleteJob = async () => {
+        try {
+            setIsDeleting(true)
+            setDeleteError('')
+            await onDelete(job.gr_jobid)
+            setShowDeleteConfirm(false)
+            onClose()
+        } catch (error) {
+            console.error(error)
+            setDeleteError('The job could not be deleted. Please try again.')
+        } finally {
+            setIsDeleting(false)
+        }
+    }
+
     return (
+        <>
         <JobDrawerShell
             eyebrow="Edit job"
             title={job.gr_jobnumber || 'Unnumbered job'}
-            busy={isSaving}
+            busy={isSaving || isDeleting}
             onClose={onClose}
             footer={
                 <>
-                    {saveError
-                        ? <span className="job-edit-save-error" role="alert">{saveError}</span>
-                        : <span>Save to update this job in Dataverse.</span>}
+                    <div className="job-edit-footer-leading">
+                        <button
+                            type="button"
+                            className="job-edit-delete-button"
+                            onClick={() => {
+                                setDeleteError('')
+                                setShowDeleteConfirm(true)
+                            }}
+                            disabled={isSaving}
+                        >
+                            Delete job
+                        </button>
+                        {saveError
+                            ? <span className="job-edit-save-error" role="alert">{saveError}</span>
+                            : <span>Save to update this job in Dataverse.</span>}
+                    </div>
                     <div className="job-edit-footer-actions">
                         <button type="button" onClick={onClose} disabled={isSaving}>Cancel</button>
                         <button
@@ -154,5 +188,44 @@ export default function JobEditDrawer({
                 />
             </div>
         </JobDrawerShell>
+
+        {showDeleteConfirm && (
+            <div
+                className="job-delete-backdrop"
+                role="presentation"
+                onMouseDown={() => {
+                    if (!isDeleting) setShowDeleteConfirm(false)
+                }}
+            >
+                <div
+                    className="job-delete-dialog"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="job-delete-title"
+                    onMouseDown={(event) => event.stopPropagation()}
+                >
+                    <div className="job-delete-icon" aria-hidden="true">!</div>
+                    <div>
+                        <p className="job-delete-eyebrow">Delete job</p>
+                        <h3 id="job-delete-title">
+                            Delete {job.gr_jobnumber || 'this unnumbered job'}?
+                        </h3>
+                        <p className="job-delete-message">
+                            This permanently removes the job from Dataverse. This action cannot be undone.
+                        </p>
+                    </div>
+                    {deleteError && <p className="job-delete-error" role="alert">{deleteError}</p>}
+                    <div className="job-delete-actions">
+                        <button type="button" onClick={() => setShowDeleteConfirm(false)} disabled={isDeleting}>
+                            Cancel
+                        </button>
+                        <button type="button" className="danger" onClick={deleteJob} disabled={isDeleting}>
+                            {isDeleting ? 'Deleting...' : 'Delete job'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+        </>
     )
 }

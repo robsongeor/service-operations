@@ -1,35 +1,103 @@
 .sidebar {
+    position: sticky;
+    z-index: 30;
+    top: 0;
+    display: flex;
     width: 280px;
     height: 100vh;
-    padding: 28px 22px;
-    box-sizing: border-box;
-
-    background: linear-gradient(180deg, #eef8f7 0%, #f7f7f7 100%);
-    border-right: 1px solid rgba(255, 255, 255, 0.7);
-
-    display: flex;
+    align-self: flex-start;
+    flex: 0 0 auto;
     flex-direction: column;
-    font-family: Inter, system-ui, sans-serif;
+    box-sizing: border-box;
+    padding: 24px 18px 20px;
+    border-right: 1px solid #dce5e2;
+    background: linear-gradient(180deg, #edf8f6 0%, #f7f8f7 100%);
+    color: #17201c;
+    transition: width 180ms ease, padding 180ms ease;
+}
+
+.sidebar.collapsed {
+    width: 76px;
+    padding-right: 12px;
+    padding-left: 12px;
+}
+
+.sidebar-toggle {
+    position: absolute;
+    z-index: 31;
+    top: 28px;
+    right: -14px;
+    display: grid;
+    width: 28px;
+    height: 28px;
+    place-items: center;
+    padding: 0 0 2px;
+    border: 1px solid #d6dfdb;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 4px 12px rgba(26, 39, 33, 0.1);
+    color: #303a35;
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.sidebar-toggle:hover {
+    border-color: #8b9992;
+    background: #f7f9f8;
 }
 
 .sidebar-header {
     display: flex;
-    justify-content: space-between;
+    min-width: 0;
     align-items: center;
+    gap: 12px;
     margin-bottom: 34px;
+    padding: 0 4px;
 }
 
 .sidebar-logo {
+    display: grid;
     width: 36px;
     height: 36px;
-    border-radius: 14px;
-    background: #171717;
+    flex: 0 0 36px;
+    place-items: center;
+    border-radius: 11px;
+    background: #17201c;
+    color: #ffffff;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+}
+
+.sidebar-brand {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    overflow: hidden;
+    white-space: nowrap;
+    transition: max-width 150ms ease, opacity 120ms ease;
+}
+
+.sidebar-brand strong {
+    font-size: 0.88rem;
+}
+
+.sidebar-brand span {
+    color: #727d77;
+    font-size: 0.7rem;
 }
 
 .sidebar-section-title {
-    font-size: 13px;
-    color: #9ca3af;
-    margin: 0 0 14px;
+    margin: 0 10px 12px;
+    overflow: hidden;
+    color: #89938e;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    transition: opacity 120ms ease;
 }
 
 .sidebar-nav {
@@ -39,25 +107,87 @@
 }
 
 .sidebar-link {
-    height: 38px;
-    padding: 0 14px;
-    border-radius: 999px;
-
     display: flex;
+    height: 42px;
+    min-width: 0;
     align-items: center;
-    gap: 12px;
-
+    gap: 11px;
+    box-sizing: border-box;
+    padding: 0 10px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    color: #3f4944;
+    font-size: 0.78rem;
+    font-weight: 650;
     text-decoration: none;
-    color: #111827;
-    font-size: 14px;
-    font-weight: 500;
+    transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.sidebar-link:hover {
+    background: rgba(255, 255, 255, 0.65);
+    color: #17201c;
 }
 
 .sidebar-link.active {
+    border-color: #dfe6e2;
     background: #ffffff;
-    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+    box-shadow: 0 6px 16px rgba(20, 35, 28, 0.06);
+    color: #17201c;
+}
+
+.sidebar-link-icon {
+    display: grid;
+    width: 24px;
+    height: 24px;
+    flex: 0 0 24px;
+    place-items: center;
+    border: 1px solid #cbd5d0;
+    border-radius: 8px;
+    color: #64706a;
+    font-size: 0.64rem;
+    font-weight: 800;
+}
+
+.sidebar-link.active .sidebar-link-icon {
+    border-color: #63857a;
+    background: #e9f3ef;
+    color: #285c4c;
+}
+
+.sidebar-link-label {
+    overflow: hidden;
+    white-space: nowrap;
+    transition: max-width 150ms ease, opacity 120ms ease;
 }
 
 .sidebar-spacer {
     flex: 1;
+}
+
+.sidebar.collapsed .sidebar-brand,
+.sidebar.collapsed .sidebar-link-label {
+    max-width: 0;
+    opacity: 0;
+}
+
+.sidebar.collapsed .sidebar-section-title {
+    opacity: 0;
+}
+
+.sidebar.collapsed .sidebar-link {
+    justify-content: center;
+    gap: 0;
+    padding-right: 0;
+    padding-left: 0;
+}
+
+.sidebar.collapsed .sidebar-header {
+    justify-content: center;
+    padding: 0;
+}
+
+@media (max-width: 760px) {
+    .sidebar.open {
+        width: 220px;
+    }
 }

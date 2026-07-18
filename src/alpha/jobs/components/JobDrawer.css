@@ -278,6 +278,25 @@
     gap: 8px;
 }
 
+.job-edit-footer-leading {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 10px;
+}
+
+.job-edit-delete-button {
+    flex: 0 0 auto;
+    border-color: #dfb9b9 !important;
+    color: #963e3e !important;
+}
+
+.job-edit-delete-button:hover:not(:disabled) {
+    border-color: #9f3f3f !important;
+    background: #9f3f3f !important;
+    color: #ffffff !important;
+}
+
 .job-edit-footer button {
     min-height: 36px;
     padding: 0 14px;
@@ -308,4 +327,104 @@
     .job-edit-field-wide {
         grid-column: auto;
     }
+}
+.job-delete-backdrop {
+    position: fixed;
+    z-index: 1100;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: rgba(19, 24, 21, 0.38);
+    backdrop-filter: blur(3px);
+}
+
+.job-delete-dialog {
+    display: grid;
+    width: min(420px, 100%);
+    box-sizing: border-box;
+    grid-template-columns: 42px 1fr;
+    gap: 14px;
+    padding: 22px;
+    border: 1px solid #e2d7d7;
+    border-radius: 14px;
+    background: #fffdfc;
+    box-shadow: 0 24px 60px rgba(30, 20, 20, 0.2);
+}
+
+.job-delete-icon {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    place-items: center;
+    border-radius: 50%;
+    background: #f8dddd;
+    color: #963e3e;
+    font-size: 1rem;
+    font-weight: 800;
+}
+
+.job-delete-eyebrow,
+.job-delete-dialog h3,
+.job-delete-message,
+.job-delete-error {
+    margin: 0;
+}
+
+.job-delete-eyebrow {
+    margin-bottom: 4px;
+    color: #9a5555;
+    font-size: 0.67rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.job-delete-dialog h3 {
+    color: #26201f;
+    font-size: 1.05rem;
+}
+
+.job-delete-message {
+    margin-top: 8px;
+    color: #6f6764;
+    font-size: 0.78rem;
+    line-height: 1.5;
+}
+
+.job-delete-error {
+    grid-column: 1 / -1;
+    color: #9b3636;
+    font-size: 0.75rem;
+}
+
+.job-delete-actions {
+    display: flex;
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.job-delete-actions button {
+    min-height: 36px;
+    padding: 0 14px;
+    border: 1px solid #cfd5d1;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #343a36;
+    font-size: 0.76rem;
+    font-weight: 750;
+    cursor: pointer;
+}
+
+.job-delete-actions button.danger {
+    border-color: #9f3f3f;
+    background: #9f3f3f;
+    color: #ffffff;
+}
+
+.job-delete-actions button:disabled {
+    cursor: wait;
+    opacity: 0.55;
 }

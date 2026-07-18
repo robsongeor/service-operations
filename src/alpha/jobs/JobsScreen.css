@@ -1,9 +1,23 @@
+.jobs-page {
+    --jobs-page-header-height: 72px;
+}
+
 .jobs-page-header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
     display: flex;
+    min-height: var(--jobs-page-header-height);
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    margin-bottom: 18px;
+    box-sizing: border-box;
+    margin: -24px -24px 18px;
+    padding: 0 24px;
+    border-bottom: 1px solid #e2e7e4;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 4px 14px rgba(24, 34, 29, 0.05);
+    backdrop-filter: blur(10px);
 }
 
 .jobs-page-header h1 {

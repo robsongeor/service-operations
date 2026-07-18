@@ -8,6 +8,7 @@ import {
     updateJobStatus as updateJobStatusApi,
     updateJobFields as updateJobFieldsApi,
     updateJob as updateJobApi,
+    deleteJob as deleteJobApi,
 } from '../services/jobsApi'
 import type { JobSaveInput } from '../types/jobSave.types'
 import type { JobStatus } from '../types/jobStatus.types'
@@ -238,6 +239,12 @@ export function useJobs() {
         await fetchJobs()
     }
 
+    const deleteJob = async (jobId: string) => {
+        const token = await getAccessToken()
+        await deleteJobApi(token, jobId)
+        setJobs((currentJobs) => currentJobs.filter((job) => job.gr_jobid !== jobId))
+    }
+
     useEffect(() => {
         if (!account) return
 
@@ -309,6 +316,7 @@ export function useJobs() {
         updateJobStatus,
         updateJobFields,
         updateJob,
+        deleteJob,
 
     }
 }

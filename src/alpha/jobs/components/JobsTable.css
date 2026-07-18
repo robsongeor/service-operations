@@ -218,7 +218,7 @@
 
 .jobs-table th {
     position: sticky;
-    top: 0;
+    top: var(--jobs-page-header-height, 72px);
     z-index: 3;
     padding: 9px 10px;
     border-bottom: 1px solid #dfe4e1;
@@ -265,7 +265,18 @@
 }
 
 .jobs-table tbody tr {
+    cursor: copy;
+    outline: 0 solid transparent;
+    outline-offset: -2px;
     transition: background 100ms ease;
+}
+
+.jobs-table tbody tr[data-selected="true"] {
+    outline: 2px solid #315b4d;
+}
+
+.jobs-table tbody tr:focus-visible {
+    outline: 2px solid #315b4d;
 }
 
 .jobs-table tbody tr:hover {
@@ -511,6 +522,30 @@
     color: #79807b !important;
     text-align: center;
 }
+
+.jobs-copy-feedback {
+    position: fixed;
+    z-index: 1200;
+    right: 24px;
+    bottom: 24px;
+    max-width: min(380px, calc(100vw - 48px));
+    box-sizing: border-box;
+    padding: 11px 14px;
+    border: 1px solid #8fb9a7;
+    border-radius: 10px;
+    background: #edf7f2;
+    box-shadow: 0 12px 30px rgba(20, 40, 31, 0.16);
+    color: #285746;
+    font-size: 0.76rem;
+    font-weight: 700;
+}
+
+.jobs-copy-feedback.error {
+    border-color: #deb2b2;
+    background: #fff0f0;
+    color: #8c3838;
+}
+
 
 @media (max-width: 720px) {
     .jobs-list-card {

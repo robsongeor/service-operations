@@ -46,6 +46,11 @@ export default function JobsTable({
 }: Props) {
     const [searchText, setSearchText] = useState('')
     const [selectedJobType, setSelectedJobType] = useState<JobType | 'all'>('all')
+    const [selectedRowId, setSelectedRowId] = useState<string | null>(null)
+    const [copyFeedback, setCopyFeedback] = useState<{
+        message: string
+        isError: boolean
+    } | null>(null)
     const [sort, setSort] = useState<{
         column: 'created' | 'status'
         direction: 'ascending' | 'descending'
@@ -127,6 +132,52 @@ export default function JobsTable({
             }
         })
     }
+
+    const spreadsheetCell = (value?: string | null) =>
+        (value ?? '').replace(/[\t\r\n]+/g, ' ').trim()
+
+    const copyJobRow = async (job: Job) => {
+        const addressParts = spreadsheetCell(job.gr_Site?.gr_address)
+            .split(',')
+            .map((part) => part.trim())
+            .filter(Boolean)
+        const siteAddress = addressParts[0] ?? ''
+        const siteSuburb = addressParts[1] ?? ''
+        const siteCity = addressParts.slice(2).join(', ')
+        const spreadsheetRow = [
+            job.gr_Mechanic?.gr_name,
+            job.gr_Equipment?.gr_model,
+            job.gr_Equipment?.gr_fleet,
+            job.gr_Site?.gr_Customer?.gr_name,
+            job.gr_description,
+            siteAddress,
+            siteSuburb,
+            siteCity,
+            job.gr_ordernumber,
+        ].map(spreadsheetCell).join('\t')
+
+        try {
+            await navigator.clipboard.writeText(spreadsheetRow)
+            setSelectedRowId(job.gr_jobid)
+            setCopyFeedback({
+                message: `Job ${job.gr_jobnumber || 'row'} copied — paste it into the job book.`,
+                isError: false,
+            })
+        } catch (error) {
+            console.error(error)
+            setCopyFeedback({
+                message: 'The row could not be copied. Check clipboard permission and try again.',
+                isError: true,
+            })
+        }
+
+        window.setTimeout(() => setCopyFeedback(null), 2600)
+    }
+
+    const isInteractiveTarget = (target: EventTarget | null) =>
+        target instanceof Element && Boolean(
+            target.closest('button, input, select, textarea, a, label'),
+        )
 
     return (
         <section className="jobs-list-card">
@@ -254,7 +305,21 @@ export default function JobsTable({
                         )}
 
                         {sortedJobs.map((job) => (
-                            <tr key={job.gr_jobid} data-status={job.gr_status}>
+                            <tr
+                                key={job.gr_jobid}
+                                data-status={job.gr_status}
+                                data-selected={selectedRowId === job.gr_jobid ? 'true' : undefined}
+                                tabIndex={0}
+                                title="Click the row to copy it for the job book"
+                                onClick={(event) => {
+                                    if (!isInteractiveTarget(event.target)) void copyJobRow(job)
+                                }}
+                                onKeyDown={(event) => {
+                                    if (event.key === 'Enter' && event.target === event.currentTarget) {
+                                        void copyJobRow(job)
+                                    }
+                                }}
+                            >
                                 <td>
                                     <input
                                         key={`${job.gr_jobid}-number-${job.gr_jobnumber}`}
@@ -406,6 +471,16 @@ export default function JobsTable({
                     </tbody>
                 </table>
             </div>
+
+            {copyFeedback && (
+                <div
+                    className={copyFeedback.isError ? 'jobs-copy-feedback error' : 'jobs-copy-feedback'}
+                    role="status"
+                >
+                    {copyFeedback.message}
+                </div>
+            )}
+
         </section>
     )
 }

@@ -11,7 +11,7 @@ import './JobsScreen.css'
 export default function JobsScreen() {
     const {
         jobs, equipmentList, mechanics, sites, customers, siteContacts,
-        createJob, updateJob, updateJobStatus, updateJobFields,
+        createJob, updateJob, deleteJob, updateJobStatus, updateJobFields,
         createContactForSite, createEquipment, createSite, createCustomer,
     } = useJobs()
     const [editingJob, setEditingJob] = useState<Job | null>(null)
@@ -43,7 +43,7 @@ export default function JobsScreen() {
     }
 
     return (
-        <div>
+        <div className="jobs-page">
             <header className="jobs-page-header">
                 <h1>Jobs</h1>
                 <button className="jobs-create-button" type="button" onClick={() => setIsCreatingJob(true)}>
@@ -75,6 +75,7 @@ export default function JobsScreen() {
                     {...sharedDrawerProps}
                     job={editingJob}
                     onSave={updateJob}
+                    onDelete={deleteJob}
                     onClose={() => setEditingJob(null)}
                 />
             )}

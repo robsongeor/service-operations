@@ -13,12 +13,12 @@ function App() {
   }
 
   return (
-    <div style={{ display: 'flex', height: '100vh' }}>
+    <div style={{ display: 'flex', minHeight: '100vh' }}>
       {/* Sidebar */}
       <Sidebar />
 
       {/* Main Content */}
-      <div style={{ flex: 1, padding: '24px' }}>
+      <div style={{ flex: 1, minWidth: 0, padding: '24px' }}>
         <Routes>
           <Route path="/" element={<div>Overview</div>} />
           <Route path="/mechanics" element={<TestScreen />} />
