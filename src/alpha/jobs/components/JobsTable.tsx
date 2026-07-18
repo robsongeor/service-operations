@@ -470,9 +470,12 @@ export default function JobsTable({
                                         <button
                                             className={'jobs-table-action jobs-email-action status-' + assignmentStatus}
                                             type="button"
-                                            title={`${assignmentLabel}. Open the Job card tab for ${job.gr_Mechanic?.gr_name ?? 'this job'}.`}
+                                            title={job.gr_Mechanic
+                                                ? `${assignmentLabel}. Open the Job card tab for ${job.gr_Mechanic.gr_name}.`
+                                                : 'Assign a technician before emailing this job.'}
                                             aria-label={`${assignmentLabel}. Open job card`}
                                             onClick={() => onManageAssignments(job)}
+                                            disabled={!job.gr_Mechanic}
                                         >
                                             {assignmentLabel}
                                         </button>
