@@ -24,8 +24,8 @@ type Props = {
             'gr_Mechanic@odata.bind'?: string | null
         }
     ) => void
+    onEmailJob: (job: Job) => Promise<void>
     onEditJob: (job: Job) => void
-    onManageAssignments: (job: Job) => void
     mechanics: Mechanic[]
 }
 
@@ -41,13 +41,14 @@ export default function JobsTable({
     onToggleStatus,
     onStatusChange,
     onJobFieldsChange,
+    onEmailJob,
     onEditJob,
-    onManageAssignments,
     mechanics,
 }: Props) {
     const [searchText, setSearchText] = useState('')
     const [selectedJobType, setSelectedJobType] = useState<JobType | 'all'>('all')
     const [selectedRowId, setSelectedRowId] = useState<string | null>(null)
+    const [sendingJobId, setSendingJobId] = useState<string | null>(null)
     const [copyFeedback, setCopyFeedback] = useState<{
         message: string
         isError: boolean
@@ -56,6 +57,17 @@ export default function JobsTable({
         column: 'created' | 'status'
         direction: 'ascending' | 'descending'
     }>({ column: 'status', direction: 'ascending' })
+
+    const sendJobEmail = async (job: Job) => {
+        setSendingJobId(job.gr_jobid)
+        try {
+            await onEmailJob(job)
+        } catch (error) {
+            window.alert(error instanceof Error ? error.message : 'The email flow did not complete.')
+        } finally {
+            setSendingJobId(null)
+        }
+    }
 
     const jobsForSelectedType = useMemo(() => {
         if (selectedJobType === 'all') return jobs
@@ -307,6 +319,7 @@ export default function JobsTable({
 
                         {sortedJobs.map((job) => {
                             const assignmentStatus = getJobCardStatus(job.gr_jobcardstatus)
+                            const isSending = sendingJobId === job.gr_jobid
                             const assignmentLabel = !job.gr_Mechanic
                                 ? 'Email'
                                 : assignmentStatus === JOB_CARD_STATUSES.NOT_SENT
@@ -471,13 +484,15 @@ export default function JobsTable({
                                             className={'jobs-table-action jobs-email-action status-' + assignmentStatus}
                                             type="button"
                                             title={job.gr_Mechanic
-                                                ? `${assignmentLabel}. Open the Job card tab for ${job.gr_Mechanic.gr_name}.`
+                                                ? assignmentStatus === JOB_CARD_STATUSES.NOT_SENT
+                                                    ? `Send this job to ${job.gr_Mechanic.gr_name} through Power Automate.`
+                                                    : `${assignmentLabel} to ${job.gr_Mechanic.gr_name}.`
                                                 : 'Assign a technician before emailing this job.'}
-                                            aria-label={`${assignmentLabel}. Open job card`}
-                                            onClick={() => onManageAssignments(job)}
-                                            disabled={!job.gr_Mechanic}
+                                            aria-label={`${assignmentLabel} job to technician`}
+                                            onClick={() => void sendJobEmail(job)}
+                                            disabled={isSending || !job.gr_Mechanic || assignmentStatus !== JOB_CARD_STATUSES.NOT_SENT}
                                         >
-                                            {assignmentLabel}
+                                            {isSending ? 'Sending...' : assignmentLabel}
                                         </button>
                                     </div>
                                 </td>

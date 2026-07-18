@@ -17,7 +17,8 @@ export default function JobsScreen() {
         jobAssignments,
         createJob, updateJob, deleteJob, updateJobStatus, updateJobFields,
         updateJobCardStatus,
-        createJobAssignment, updateJobAssignmentStatus, deleteJobAssignment,
+        sendPrimaryJobEmail, sendAssignmentJobEmail,
+        createJobAssignment, deleteJobAssignment,
         createContactForSite, createEquipment, createSite, createCustomer,
         createScheduleOption, updateScheduleOption, deleteScheduleOption,
         isLoading, loadError, retryInitialLoad,
@@ -109,11 +110,8 @@ export default function JobsScreen() {
                     onToggleStatus={toggleStatus}
                     onStatusChange={updateJobStatus}
                     onJobFieldsChange={updateJobFields}
+                    onEmailJob={sendPrimaryJobEmail}
                     onEditJob={setEditingJob}
-                    onManageAssignments={(job) => {
-                        setEditingInitialTab('jobcard')
-                        setEditingJob(job)
-                    }}
                     mechanics={mechanics}
                 />
             )}
@@ -148,7 +146,8 @@ export default function JobsScreen() {
                     onOpenQuote={openQuote}
                     onJobCardStatusChange={updateJobCardStatus}
                     onCreateAssignment={createJobAssignment}
-                    onAssignmentStatusChange={updateJobAssignmentStatus}
+                    onSendPrimary={sendPrimaryJobEmail}
+                    onSendAssignment={sendAssignmentJobEmail}
                     onDeleteAssignment={deleteJobAssignment}
                     onClose={() => {
                         setEditingJob(null)

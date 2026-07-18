@@ -13,7 +13,7 @@ import {
 } from '../services/jobsApi'
 import type { JobSaveInput } from '../types/jobSave.types'
 import type { JobStatus } from '../types/jobStatus.types'
-import type { JobCardStatus } from '../types/jobCardStatus.types'
+import { JOB_CARD_STATUSES, type JobCardStatus } from '../types/jobCardStatus.types'
 import type { JobAssignmentInput } from '../types/jobAssignment.types'
 import {
     createJobAssignment as createJobAssignmentApi,
@@ -22,6 +22,8 @@ import {
     updateJobAssignmentStatus as updateJobAssignmentStatusApi,
 } from '../services/jobAssignmentsApi'
 import type { JobAssignment } from '../types/jobAssignment.types'
+import { createEmailDispatch, waitForEmailDispatch } from '../services/emailDispatchApi'
+import { buildAssignmentJobEmail, buildPrimaryJobEmail } from '../services/jobEmail'
 import type {
     JobScheduleOption,
     JobScheduleOptionInput,
@@ -275,6 +277,35 @@ export function useJobs() {
         await fetchJobAssignments()
     }
 
+    const sendPrimaryJobEmail = async (job: Job) => {
+        const token = await getAccessToken()
+        const email = buildPrimaryJobEmail(job)
+        const dispatchId = await createEmailDispatch(token, {
+            jobId: job.gr_jobid,
+            ...email,
+        })
+        await waitForEmailDispatch(token, dispatchId)
+        await updateJobCardStatusApi(token, job.gr_jobid, JOB_CARD_STATUSES.SENT)
+        await fetchJobs()
+    }
+
+    const sendAssignmentJobEmail = async (job: Job, assignment: JobAssignment) => {
+        const token = await getAccessToken()
+        const email = buildAssignmentJobEmail(job, assignment)
+        const dispatchId = await createEmailDispatch(token, {
+            jobId: job.gr_jobid,
+            assignmentId: assignment.gr_jobassignmentid,
+            ...email,
+        })
+        await waitForEmailDispatch(token, dispatchId)
+        await updateJobAssignmentStatusApi(
+            token,
+            assignment.gr_jobassignmentid,
+            JOB_CARD_STATUSES.SENT,
+        )
+        await fetchJobAssignments()
+    }
+
     const deleteJobAssignment = async (assignmentId: string) => {
         const token = await getAccessToken()
         await deleteJobAssignmentApi(token, assignmentId)
@@ -475,6 +506,8 @@ export function useJobs() {
         createContactForSite,
         updateJobStatus,
         updateJobCardStatus,
+        sendPrimaryJobEmail,
+        sendAssignmentJobEmail,
         createJobAssignment,
         updateJobAssignmentStatus,
         deleteJobAssignment,

@@ -1,51 +1,18 @@
 import type { Job } from '../types/job.types'
 import type { JobAssignment } from '../types/jobAssignment.types'
 
-export function emailJobToMechanic(job: Job) {
-    if (!job.gr_Mechanic?.gr_email) {
-        alert('Mechanic has no email')
-        return
-    }
+export type JobEmail = {
+    recipientEmail: string
+    recipientName: string
+    subject: string
+    body: string
+}
 
-    const subject = `Job ${job.gr_jobnumber ?? 'Unnumbered'}`
-
-    const body = `
-Job: ${job.gr_jobnumber ?? 'Unnumbered'}
+function jobDetails(job: Job) {
+    return `Job: ${job.gr_jobnumber ?? 'Unnumbered'}
 
 Description:
 ${job.gr_description ?? 'No description'}
-
-Equipment:
-${job.gr_Equipment
-            ? `${job.gr_Equipment.gr_fleet} - ${job.gr_Equipment.gr_make} ${job.gr_Equipment.gr_model}`
-            : 'N/A'}
-
-Site:
-${job.gr_Site?.gr_name ?? 'N/A'}
-`
-
-    const mailto = `mailto:${job.gr_Mechanic.gr_email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
-
-    window.location.href = mailto
-}
-
-export function emailJobAssignment(job: Job, assignment: JobAssignment) {
-    const mechanic = assignment.gr_Mechanic
-    if (!mechanic?.gr_email) {
-        alert('This technician has no email address')
-        return
-    }
-
-    const subject = `Job ${job.gr_jobnumber ?? 'Unnumbered'}`
-    const instructions = assignment.gr_workinstructions?.trim()
-        ? `\n\nWork instructions:\n${assignment.gr_workinstructions.trim()}`
-        : ''
-    const body = `Hi ${mechanic.gr_name},
-
-You have been assigned job ${job.gr_jobnumber ?? 'Unnumbered'}.
-
-Description:
-${job.gr_description ?? 'No description'}${instructions}
 
 Equipment:
 ${job.gr_Equipment
@@ -53,8 +20,40 @@ ${job.gr_Equipment
         : 'N/A'}
 
 Site:
-${job.gr_Site?.gr_name ?? 'N/A'}
-`
+${job.gr_Site?.gr_name ?? 'N/A'}`
+}
 
-    window.location.href = `mailto:${mechanic.gr_email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+export function buildPrimaryJobEmail(job: Job): JobEmail {
+    if (!job.gr_Mechanic?.gr_email) {
+        throw new Error('The primary technician needs an email address before the job can be sent.')
+    }
+
+    return {
+        recipientEmail: job.gr_Mechanic.gr_email,
+        recipientName: job.gr_Mechanic.gr_name,
+        subject: `Job ${job.gr_jobnumber ?? 'Unnumbered'}`,
+        body: `Hi ${job.gr_Mechanic.gr_name},
+
+You have been assigned the following job.
+
+${jobDetails(job)}`,
+    }
+}
+
+export function buildAssignmentJobEmail(job: Job, assignment: JobAssignment): JobEmail {
+    const mechanic = assignment.gr_Mechanic
+    if (!mechanic?.gr_email) {
+        throw new Error('This technician needs an email address before the job can be sent.')
+    }
+
+    return {
+        recipientEmail: mechanic.gr_email,
+        recipientName: mechanic.gr_name,
+        subject: `Job ${job.gr_jobnumber ?? 'Unnumbered'}`,
+        body: `Hi ${mechanic.gr_name},
+
+You have been added to the following job.
+
+${jobDetails(job)}`,
+    }
 }

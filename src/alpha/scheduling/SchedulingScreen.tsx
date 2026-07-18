@@ -119,8 +119,9 @@ export default function SchedulingScreen() {
         createEquipment,
         updateJob,
         updateJobCardStatus,
+        sendPrimaryJobEmail,
+        sendAssignmentJobEmail,
         createJobAssignment,
-        updateJobAssignmentStatus,
         deleteJobAssignment,
         deleteJob,
         createScheduleOption,
@@ -308,7 +309,8 @@ export default function SchedulingScreen() {
                     onOpenQuote={openQuote}
                     onJobCardStatusChange={updateJobCardStatus}
                     onCreateAssignment={createJobAssignment}
-                    onAssignmentStatusChange={updateJobAssignmentStatus}
+                    onSendPrimary={sendPrimaryJobEmail}
+                    onSendAssignment={sendAssignmentJobEmail}
                     onDeleteAssignment={deleteJobAssignment}
                     onClose={() => setEditingJob(null)}
                 />

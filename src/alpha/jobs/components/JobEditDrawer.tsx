@@ -63,7 +63,8 @@ type Props = {
     onOpenQuote: (quoteId: string) => void
     onJobCardStatusChange: (jobId: string, status: JobCardStatus) => Promise<void>
     onCreateAssignment: (assignment: JobAssignmentInput) => Promise<void>
-    onAssignmentStatusChange: (assignmentId: string, status: JobCardStatus) => Promise<void>
+    onSendPrimary: (job: Job) => Promise<void>
+    onSendAssignment: (job: Job, assignment: JobAssignment) => Promise<void>
     onDeleteAssignment: (assignmentId: string) => Promise<void>
     initialTab?: 'details' | 'scheduling' | 'jobcard' | 'quotes'
     onClose: () => void
@@ -92,7 +93,8 @@ export default function JobEditDrawer({
     onOpenQuote,
     onJobCardStatusChange,
     onCreateAssignment,
-    onAssignmentStatusChange,
+    onSendPrimary,
+    onSendAssignment,
     onDeleteAssignment,
     initialTab = 'details',
     onClose,
@@ -304,7 +306,8 @@ export default function JobEditDrawer({
                         assignments={assignments}
                         onStatusChange={onJobCardStatusChange}
                         onCreateAssignment={onCreateAssignment}
-                        onAssignmentStatusChange={onAssignmentStatusChange}
+                        onSendPrimary={onSendPrimary}
+                        onSendAssignment={onSendAssignment}
                         onDeleteAssignment={onDeleteAssignment}
                     />
                 )}

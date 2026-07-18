@@ -2,7 +2,6 @@ import { useState } from 'react'
 import type { Job } from '../types/job.types'
 import type { Mechanic } from '../types/mechanic.types'
 import type { JobAssignment } from '../types/jobAssignment.types'
-import { emailJobAssignment, emailJobToMechanic } from '../services/jobEmail'
 import {
     getJobCardStatus,
     JOB_CARD_STATUSES,
@@ -21,7 +20,8 @@ type Props = {
         mechanicName: string
         instructions?: string
     }) => Promise<void>
-    onAssignmentStatusChange: (assignmentId: string, status: JobCardStatus) => Promise<void>
+    onSendPrimary: (job: Job) => Promise<void>
+    onSendAssignment: (job: Job, assignment: JobAssignment) => Promise<void>
     onDeleteAssignment: (assignmentId: string) => Promise<void>
 }
 
@@ -106,7 +106,8 @@ export default function JobCardFields({
     assignments,
     onStatusChange,
     onCreateAssignment,
-    onAssignmentStatusChange,
+    onSendPrimary,
+    onSendAssignment,
     onDeleteAssignment,
 }: Props) {
     const [status, setStatus] = useState(() => getJobCardStatus(job.gr_jobcardstatus))
@@ -173,11 +174,7 @@ export default function JobCardFields({
         setUpdatingAssignmentId(assignment.gr_jobassignmentid)
         setError('')
         try {
-            emailJobAssignment(job, assignment)
-            await onAssignmentStatusChange(
-                assignment.gr_jobassignmentid,
-                JOB_CARD_STATUSES.SENT,
-            )
+            await onSendAssignment(job, assignment)
         } catch (sendError) {
             setError(sendError instanceof Error
                 ? sendError.message
@@ -193,8 +190,19 @@ export default function JobCardFields({
             return
         }
 
-        emailJobToMechanic(job)
-        await changeStatus(JOB_CARD_STATUSES.SENT)
+        setIsUpdating(true)
+        setError('')
+        try {
+            await onSendPrimary(job)
+            setStatus(JOB_CARD_STATUSES.SENT)
+            setSentOn(new Date().toISOString())
+        } catch (sendError) {
+            setError(sendError instanceof Error
+                ? sendError.message
+                : 'The job email flow did not complete.')
+        } finally {
+            setIsUpdating(false)
+        }
     }
 
     const removeAssignment = async (assignment: JobAssignment) => {
