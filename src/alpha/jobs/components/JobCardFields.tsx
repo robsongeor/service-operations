@@ -37,6 +37,69 @@ function formatTimestamp(value?: string | null) {
     return value ? timestamp.format(new Date(value)) : 'Not recorded'
 }
 
+type TechnicianCardProps = {
+    name: string
+    detail: string
+    status: JobCardStatus
+    instructions?: string | null
+    isBusy: boolean
+    canSend: boolean
+    onSend: () => void
+    onRemove?: () => void
+}
+
+function TechnicianCard({
+    name,
+    detail,
+    status,
+    instructions,
+    isBusy,
+    canSend,
+    onSend,
+    onRemove,
+}: TechnicianCardProps) {
+    const statusLabel = JOB_CARD_STATUS_OPTIONS.find((option) => option.value === status)?.label
+
+    return (
+        <article className="job-assignment-card technician-job-card">
+            <div className="job-assignment-main">
+                <div className="job-assignment-title">
+                    <div>
+                        <strong>{name}</strong>
+                        <small>{detail}</small>
+                    </div>
+                    <span className={`job-card-current status-${status}`}>{statusLabel}</span>
+                </div>
+                {instructions && <p>{instructions}</p>}
+                <div className="job-assignment-controls">
+                    <button
+                        type="button"
+                        className="job-assignment-send"
+                        onClick={onSend}
+                        disabled={isBusy || !canSend || status !== JOB_CARD_STATUSES.NOT_SENT}
+                    >
+                        {isBusy
+                            ? 'Sending...'
+                            : status === JOB_CARD_STATUSES.NOT_SENT
+                                ? 'Send job'
+                                : statusLabel}
+                    </button>
+                    {onRemove && (
+                        <button
+                            type="button"
+                            className="job-assignment-remove"
+                            disabled={isBusy}
+                            onClick={onRemove}
+                        >
+                            Remove
+                        </button>
+                    )}
+                </div>
+            </div>
+        </article>
+    )
+}
+
 export default function JobCardFields({
     job,
     mechanics,
@@ -163,32 +226,16 @@ export default function JobCardFields({
                     </div>
                 </div>
 
-                <div className="primary-technician-card">
-                    <div>
-                        <strong>{job.gr_Mechanic?.gr_name ?? 'No technician assigned'}</strong>
-                        <small>
-                            {job.gr_Mechanic?.gr_email
-                                || 'Assign a technician with an email address on the Details tab.'}
-                        </small>
-                    </div>
-                    <div className="primary-technician-actions">
-                        <span className={`job-card-current status-${status}`}>
-                            {JOB_CARD_STATUS_OPTIONS.find((option) => option.value === status)?.label}
-                        </span>
-                        <button
-                            type="button"
-                            className="primary-technician-send"
-                            disabled={isUpdating || !job.gr_Mechanic?.gr_email || status !== JOB_CARD_STATUSES.NOT_SENT}
-                            onClick={() => void sendPrimaryTechnician()}
-                        >
-                            {isUpdating
-                                ? 'Sending...'
-                                : status === JOB_CARD_STATUSES.NOT_SENT
-                                    ? 'Send job'
-                                    : JOB_CARD_STATUS_OPTIONS.find((option) => option.value === status)?.label}
-                        </button>
-                    </div>
-                </div>
+                <TechnicianCard
+                    name={job.gr_Mechanic?.gr_name ?? 'No technician assigned'}
+                    detail={job.gr_Mechanic?.gr_email
+                        ? `Primary technician · ${job.gr_Mechanic.gr_email}`
+                        : 'Assign a technician with an email address on the Details tab.'}
+                    status={status}
+                    isBusy={isUpdating}
+                    canSend={Boolean(job.gr_Mechanic?.gr_email)}
+                    onSend={() => void sendPrimaryTechnician()}
+                />
 
                 <div className="job-additional-technicians">
                     {assignments.length > 0 && (
@@ -197,42 +244,17 @@ export default function JobCardFields({
                                 const assignmentStatus = getJobCardStatus(assignment.gr_jobcardstatus)
                                 const isBusy = updatingAssignmentId === assignment.gr_jobassignmentid
                                 return (
-                                    <article className="job-assignment-card" key={assignment.gr_jobassignmentid}>
-                                        <div className="job-assignment-main">
-                                            <div className="job-assignment-title">
-                                                <div>
-                                                    <strong>{assignment.gr_Mechanic?.gr_name ?? 'Unknown technician'}</strong>
-                                                    <small>Added technician · {formatTimestamp(assignment.gr_assignedon)}</small>
-                                                </div>
-                                                <span className={`job-card-current status-${assignmentStatus}`}>
-                                                    {JOB_CARD_STATUS_OPTIONS.find((option) => option.value === assignmentStatus)?.label}
-                                                </span>
-                                            </div>
-                                            {assignment.gr_workinstructions && <p>{assignment.gr_workinstructions}</p>}
-                                            <div className="job-assignment-controls">
-                                                <button
-                                                    type="button"
-                                                    className="job-assignment-send"
-                                                    onClick={() => void sendAssignment(assignment)}
-                                                    disabled={!assignment.gr_Mechanic?.gr_email || assignmentStatus !== JOB_CARD_STATUSES.NOT_SENT}
-                                                >
-                                                    {isBusy
-                                                        ? 'Sending...'
-                                                        : assignmentStatus === JOB_CARD_STATUSES.NOT_SENT
-                                                            ? 'Send job'
-                                                            : JOB_CARD_STATUS_OPTIONS.find((option) => option.value === assignmentStatus)?.label}
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="job-assignment-remove"
-                                                    disabled={isBusy}
-                                                    onClick={() => void removeAssignment(assignment)}
-                                                >
-                                                    Remove
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </article>
+                                    <TechnicianCard
+                                        key={assignment.gr_jobassignmentid}
+                                        name={assignment.gr_Mechanic?.gr_name ?? 'Unknown technician'}
+                                        detail={`Added technician · ${formatTimestamp(assignment.gr_assignedon)}`}
+                                        status={assignmentStatus}
+                                        instructions={assignment.gr_workinstructions}
+                                        isBusy={isBusy}
+                                        canSend={Boolean(assignment.gr_Mechanic?.gr_email)}
+                                        onSend={() => void sendAssignment(assignment)}
+                                        onRemove={() => void removeAssignment(assignment)}
+                                    />
                                 )
                             })}
                         </div>

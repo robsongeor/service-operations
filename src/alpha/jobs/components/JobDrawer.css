@@ -671,7 +671,7 @@
     justify-self: end;
 }
 
-.job-additional-technicians .job-assignment-card {
+.technician-job-card {
     grid-template-columns: minmax(0, 1fr);
     border-color: #d7e1dc;
     background: #fbfcfb;
@@ -734,54 +734,6 @@
 .job-assignment-controls select { min-height: 34px; border: 1px solid #ced6d1; border-radius: 8px; background: #fff; padding: 0 8px; color: #35423b; font-size: 0.7rem; }
 .job-assignment-controls .job-assignment-remove { border-color: #e3c4c4; color: #974848; }
 .job-assignment-controls .job-assignment-send { margin-left: auto; border-color: #176f66; background: #176f66; color: #ffffff; }
-
-.primary-technician-card {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 13px;
-    border: 1px solid #d7e1dc;
-    border-radius: 10px;
-    background: #f8fbf9;
-}
-
-.primary-technician-card > div:first-child {
-    display: grid;
-    min-width: 0;
-    gap: 3px;
-}
-
-.primary-technician-card strong { color: #293a32; font-size: 0.8rem; }
-.primary-technician-card small { overflow: hidden; color: #748079; font-size: 0.65rem; text-overflow: ellipsis; }
-
-.primary-technician-actions {
-    display: flex;
-    flex: 0 0 auto;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 7px;
-}
-
-.primary-technician-actions button {
-    min-height: 34px;
-    padding: 0 11px;
-    border: 1px solid #cbd6d1;
-    border-radius: 8px;
-    background: #ffffff;
-    color: #315c50;
-    font-size: 0.68rem;
-    font-weight: 750;
-    cursor: pointer;
-}
-
-.primary-technician-actions .primary-technician-send {
-    border-color: #176f66;
-    background: #176f66;
-    color: #ffffff;
-}
-
-.primary-technician-actions button:disabled { cursor: default; opacity: 0.5; }
 
 .job-quotes-section {
     display: grid;
