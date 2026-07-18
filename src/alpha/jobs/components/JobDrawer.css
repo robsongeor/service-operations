@@ -733,6 +733,7 @@
 .job-assignment-controls label span { color: #69736e; font-size: 0.6rem; font-weight: 700; }
 .job-assignment-controls select { min-height: 34px; border: 1px solid #ced6d1; border-radius: 8px; background: #fff; padding: 0 8px; color: #35423b; font-size: 0.7rem; }
 .job-assignment-controls .job-assignment-remove { border-color: #e3c4c4; color: #974848; }
+.job-assignment-controls .job-assignment-send { margin-left: auto; border-color: #176f66; background: #176f66; color: #ffffff; }
 
 .job-assignment-dates {
     display: flex;

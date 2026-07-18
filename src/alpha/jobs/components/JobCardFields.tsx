@@ -104,15 +104,24 @@ export default function JobCardFields({
         }
     }
 
-    const changeAssignmentStatus = async (assignmentId: string, nextStatus: JobCardStatus) => {
-        setUpdatingAssignmentId(assignmentId)
+    const sendAssignment = async (assignment: JobAssignment) => {
+        if (!assignment.gr_Mechanic?.gr_email) {
+            setError('This technician needs an email address before the job can be sent.')
+            return
+        }
+
+        setUpdatingAssignmentId(assignment.gr_jobassignmentid)
         setError('')
         try {
-            await onAssignmentStatusChange(assignmentId, nextStatus)
-        } catch (updateError) {
-            setError(updateError instanceof Error
-                ? updateError.message
-                : 'The assignment status could not be updated.')
+            emailJobAssignment(job, assignment)
+            await onAssignmentStatusChange(
+                assignment.gr_jobassignmentid,
+                JOB_CARD_STATUSES.SENT,
+            )
+        } catch (sendError) {
+            setError(sendError instanceof Error
+                ? sendError.message
+                : 'The job could not be recorded as sent.')
         } finally {
             setUpdatingAssignmentId('')
         }
@@ -196,38 +205,18 @@ export default function JobCardFields({
                                             </div>
                                             {assignment.gr_workinstructions && <p>{assignment.gr_workinstructions}</p>}
                                             <div className="job-assignment-controls">
-                                                <label>
-                                                    <span>Status</span>
-                                                    <select
-                                                        value={assignmentStatus}
-                                                        disabled={isBusy}
-                                                        onChange={(event) => void changeAssignmentStatus(
-                                                            assignment.gr_jobassignmentid,
-                                                            Number(event.target.value) as JobCardStatus,
-                                                        )}
-                                                    >
-                                                        {JOB_CARD_STATUS_OPTIONS.map((option) => (
-                                                            <option key={option.value} value={option.value}>{option.label}</option>
-                                                        ))}
-                                                    </select>
-                                                </label>
                                                 <button
                                                     type="button"
-                                                    onClick={() => emailJobAssignment(job, assignment)}
+                                                    className="job-assignment-send"
+                                                    onClick={() => void sendAssignment(assignment)}
                                                     disabled={!assignment.gr_Mechanic?.gr_email || assignmentStatus !== JOB_CARD_STATUSES.NOT_SENT}
                                                 >
-                                                    {assignmentStatus === JOB_CARD_STATUSES.NOT_SENT ? 'Open email' : 'Email recorded'}
+                                                    {isBusy
+                                                        ? 'Sending...'
+                                                        : assignmentStatus === JOB_CARD_STATUSES.NOT_SENT
+                                                            ? 'Send job'
+                                                            : JOB_CARD_STATUS_OPTIONS.find((option) => option.value === assignmentStatus)?.label}
                                                 </button>
-                                                {assignmentStatus === JOB_CARD_STATUSES.NOT_SENT && (
-                                                    <button
-                                                        type="button"
-                                                        className="job-assignment-mark-sent"
-                                                        disabled={isBusy}
-                                                        onClick={() => void changeAssignmentStatus(assignment.gr_jobassignmentid, JOB_CARD_STATUSES.SENT)}
-                                                    >
-                                                        Mark sent
-                                                    </button>
-                                                )}
                                                 <button
                                                     type="button"
                                                     className="job-assignment-remove"
