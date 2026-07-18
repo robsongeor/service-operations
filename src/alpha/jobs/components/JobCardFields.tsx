@@ -117,7 +117,6 @@ export default function JobCardFields({
     const [updatingAssignmentId, setUpdatingAssignmentId] = useState('')
     const [showAssignmentForm, setShowAssignmentForm] = useState(false)
     const [mechanicId, setMechanicId] = useState('')
-    const [instructions, setInstructions] = useState('')
     const [error, setError] = useState('')
 
     const changeStatus = async (nextStatus: JobCardStatus) => {
@@ -153,10 +152,8 @@ export default function JobCardFields({
                 jobId: job.gr_jobid,
                 mechanicId,
                 mechanicName: mechanic.gr_name,
-                instructions,
             })
             setMechanicId('')
-            setInstructions('')
             setShowAssignmentForm(false)
         } catch (createError) {
             setError(createError instanceof Error
@@ -278,15 +275,6 @@ export default function JobCardFields({
                                         </option>
                                     ))}
                                 </select>
-                            </label>
-                            <label className="job-edit-field job-edit-field-wide">
-                                <span>Work instructions</span>
-                                <textarea
-                                    rows={3}
-                                    value={instructions}
-                                    placeholder="What should this technician complete?"
-                                    onChange={(event) => setInstructions(event.target.value)}
-                                />
                             </label>
                             <button type="button" className="job-assignment-save" onClick={() => void addAssignment()} disabled={isUpdating}>
                                 {isUpdating ? 'Adding...' : 'Add technician'}
