@@ -308,7 +308,7 @@ export default function JobsTable({
                         {sortedJobs.map((job) => {
                             const assignmentStatus = getJobCardStatus(job.gr_jobcardstatus)
                             const assignmentLabel = !job.gr_Mechanic
-                                ? 'Assign tech'
+                                ? 'Email'
                                 : assignmentStatus === JOB_CARD_STATUSES.NOT_SENT
                                     ? 'Email'
                                     : assignmentStatus === JOB_CARD_STATUSES.SENT
