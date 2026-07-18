@@ -1,6 +1,6 @@
 # Technician job assignments
 
-Jobs retain a current technician lookup for fast filtering and the Mechanics page. The organization-owned **Job Assignment** table preserves every technician visit and its individual email and paperwork history.
+Jobs retain a primary technician lookup for the normal single-technician workflow, fast filtering, and the Mechanics page. The organization-owned **Job Assignment** table is used only for additional technicians and preserves each extra visit's email and paperwork history.
 
 ## Job Assignment table
 
@@ -20,10 +20,11 @@ The table is organization-owned so office users with table access see the comple
 
 ## Behaviour
 
-- Adding an assignment records the technician and instructions, and makes that technician the job's current mechanic.
+- The technician selected on the Job remains the primary technician and uses the Job's existing job-card fields.
+- Adding an assignment records an additional technician and instructions without replacing the primary technician.
 - Previous assignments are not overwritten.
 - Email and job-card status are tracked independently for every assignment.
-- The Jobs table action displays an assignment summary without adding a column.
+- The Jobs table action displays the primary job-card email/status without adding a column.
 - Overall Job Card Status remains office-controlled and is closed only after all required technician paperwork has been accepted.
 
 Run `scripts/setup-job-assignment-schema.ps1` to create and publish the schema in the Service Operations solution.

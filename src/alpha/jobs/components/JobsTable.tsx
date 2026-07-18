@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { Job } from '../types/job.types'
 import type { Mechanic } from '../types/mechanic.types'
-import type { JobAssignment } from '../types/jobAssignment.types'
 import { JOB_TYPE_OPTIONS, getJobTypeLabel, type JobType } from '../types/jobType.types'
 import {
     JOB_STATUS_OPTIONS,
@@ -13,7 +12,6 @@ import { getJobCardStatus, JOB_CARD_STATUSES } from '../types/jobCardStatus.type
 
 type Props = {
     jobs: Job[]
-    assignments: JobAssignment[]
     visibleStatuses: JobStatus[]
     onToggleStatus: (status: JobStatus) => void
     onStatusChange: (jobId: string, status: JobStatus) => void
@@ -39,7 +37,6 @@ const createdDateFormatter = new Intl.DateTimeFormat('en-NZ', {
 
 export default function JobsTable({
     jobs,
-    assignments,
     visibleStatuses,
     onToggleStatus,
     onStatusChange,
@@ -309,36 +306,16 @@ export default function JobsTable({
                         )}
 
                         {sortedJobs.map((job) => {
-                            const jobAssignments = assignments.filter((assignment) =>
-                                assignment._gr_job_value?.toLowerCase() === job.gr_jobid.toLowerCase(),
-                            )
-                            const sentCount = jobAssignments.filter((assignment) =>
-                                getJobCardStatus(assignment.gr_jobcardstatus) >= JOB_CARD_STATUSES.SENT,
-                            ).length
-                            const submittedCount = jobAssignments.filter((assignment) =>
-                                getJobCardStatus(assignment.gr_jobcardstatus) >= JOB_CARD_STATUSES.SUBMITTED,
-                            ).length
-                            const closedCount = jobAssignments.filter((assignment) =>
-                                getJobCardStatus(assignment.gr_jobcardstatus) === JOB_CARD_STATUSES.CLOSED,
-                            ).length
-                            const assignmentLabel = jobAssignments.length === 0
-                                ? job.gr_Mechanic ? 'Start history' : 'Assign tech'
-                                : closedCount === jobAssignments.length
-                                    ? `${closedCount} closed`
-                                    : submittedCount > 0
-                                        ? `${submittedCount}/${jobAssignments.length} submitted`
-                                        : sentCount > 0
-                                            ? `${sentCount}/${jobAssignments.length} sent`
-                                            : `${jobAssignments.length} assigned`
-                            const assignmentStatus = jobAssignments.length === 0
-                                ? JOB_CARD_STATUSES.NOT_SENT
-                                : closedCount === jobAssignments.length
-                                    ? JOB_CARD_STATUSES.CLOSED
-                                    : submittedCount > 0
-                                        ? JOB_CARD_STATUSES.SUBMITTED
-                                        : sentCount > 0
-                                            ? JOB_CARD_STATUSES.SENT
-                                            : JOB_CARD_STATUSES.NOT_SENT
+                            const assignmentStatus = getJobCardStatus(job.gr_jobcardstatus)
+                            const assignmentLabel = !job.gr_Mechanic
+                                ? 'Assign tech'
+                                : assignmentStatus === JOB_CARD_STATUSES.NOT_SENT
+                                    ? 'Email'
+                                    : assignmentStatus === JOB_CARD_STATUSES.SENT
+                                        ? '✓ Sent'
+                                        : assignmentStatus === JOB_CARD_STATUSES.SUBMITTED
+                                            ? 'Submitted'
+                                            : 'Closed'
 
                             return (
                             <tr
@@ -493,8 +470,8 @@ export default function JobsTable({
                                         <button
                                             className={'jobs-table-action jobs-email-action status-' + assignmentStatus}
                                             type="button"
-                                            title={`${assignmentLabel}. Open the Job card tab to manage technician emails.`}
-                                            aria-label={`${assignmentLabel}. Manage technician assignments`}
+                                            title={`${assignmentLabel}. Open the Job card tab for ${job.gr_Mechanic?.gr_name ?? 'this job'}.`}
+                                            aria-label={`${assignmentLabel}. Open job card`}
                                             onClick={() => onManageAssignments(job)}
                                         >
                                             {assignmentLabel}

@@ -105,7 +105,6 @@ export default function JobsScreen() {
             ) : (
                 <JobsTable
                     jobs={filteredJobs}
-                    assignments={jobAssignments}
                     visibleStatuses={visibleStatuses}
                     onToggleStatus={toggleStatus}
                     onStatusChange={updateJobStatus}

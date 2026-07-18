@@ -50,7 +50,7 @@ export async function createJobAssignment(
         method: 'POST',
         headers: headers(token, true),
         body: JSON.stringify({
-            gr_name: `${assignment.mechanicName} assignment`,
+            gr_name: `${assignment.mechanicName} additional assignment`,
             gr_workinstructions: assignment.instructions?.trim() || null,
             gr_assignedon: new Date().toISOString(),
             gr_jobcardstatus: JOB_CARD_STATUSES.NOT_SENT,
@@ -59,15 +59,6 @@ export async function createJobAssignment(
         }),
     })
     await ensureSuccess(response, 'Failed to assign technician')
-
-    const updateCurrentMechanic = await fetch(`${API_URL}/gr_jobs(${assignment.jobId})`, {
-        method: 'PATCH',
-        headers: headers(token, true),
-        body: JSON.stringify({
-            'gr_Mechanic@odata.bind': `/gr_mechanics(${assignment.mechanicId})`,
-        }),
-    })
-    await ensureSuccess(updateCurrentMechanic, 'Assignment created, but current technician could not be updated')
 }
 
 export async function updateJobAssignmentStatus(

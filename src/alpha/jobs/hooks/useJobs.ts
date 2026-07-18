@@ -263,7 +263,7 @@ export function useJobs() {
     const createJobAssignment = async (assignment: JobAssignmentInput) => {
         const token = await getAccessToken()
         await createJobAssignmentApi(token, assignment)
-        await Promise.all([fetchJobAssignments(), fetchJobs()])
+        await fetchJobAssignments()
     }
 
     const updateJobAssignmentStatus = async (

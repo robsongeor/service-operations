@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { Job } from '../types/job.types'
 import type { Mechanic } from '../types/mechanic.types'
 import type { JobAssignment } from '../types/jobAssignment.types'
-import { emailJobAssignment } from '../services/jobEmail'
+import { emailJobAssignment, emailJobToMechanic } from '../services/jobEmail'
 import {
     getJobCardStatus,
     JOB_CARD_STATUSES,
@@ -76,11 +76,8 @@ export default function JobCardFields({
         }
     }
 
-    const addAssignment = async (
-        selectedMechanicId = mechanicId,
-        selectedInstructions = instructions,
-    ) => {
-        const mechanic = mechanics.find((item) => item.gr_mechanicid === selectedMechanicId)
+    const addAssignment = async () => {
+        const mechanic = mechanics.find((item) => item.gr_mechanicid === mechanicId)
         if (!mechanic) {
             setError('Choose a technician first.')
             return
@@ -91,9 +88,9 @@ export default function JobCardFields({
         try {
             await onCreateAssignment({
                 jobId: job.gr_jobid,
-                mechanicId: selectedMechanicId,
+                mechanicId,
                 mechanicName: mechanic.gr_name,
-                instructions: selectedInstructions,
+                instructions,
             })
             setMechanicId('')
             setInstructions('')
@@ -141,9 +138,9 @@ export default function JobCardFields({
             <section className="job-card-section technician-assignments-section">
                 <div className="job-card-heading">
                     <div>
-                        <span>Technician history</span>
-                        <h3>Assignments</h3>
-                        <p>Each technician keeps their own email and job-card trail.</p>
+                        <span>Only when required</span>
+                        <h3>Additional technicians</h3>
+                        <p>Add another technician without replacing the primary technician.</p>
                     </div>
                     <button
                         type="button"
@@ -151,7 +148,7 @@ export default function JobCardFields({
                         onClick={() => setShowAssignmentForm((current) => !current)}
                         disabled={isUpdating}
                     >
-                        {showAssignmentForm ? 'Cancel' : '+ Assign technician'}
+                        {showAssignmentForm ? 'Cancel' : '+ Add another tech'}
                     </button>
                 </div>
 
@@ -161,7 +158,13 @@ export default function JobCardFields({
                             <span>Technician</span>
                             <select value={mechanicId} onChange={(event) => setMechanicId(event.target.value)}>
                                 <option value="">Select technician</option>
-                                {mechanics.filter((mechanic) => mechanic.statecode !== 1).map((mechanic) => (
+                                {mechanics.filter((mechanic) =>
+                                    mechanic.statecode !== 1
+                                    && mechanic.gr_mechanicid !== job.gr_Mechanic?.gr_mechanicid
+                                    && !assignments.some((assignment) =>
+                                        assignment.gr_Mechanic?.gr_mechanicid === mechanic.gr_mechanicid,
+                                    )
+                                ).map((mechanic) => (
                                     <option key={mechanic.gr_mechanicid} value={mechanic.gr_mechanicid}>
                                         {mechanic.gr_name}
                                     </option>
@@ -185,25 +188,8 @@ export default function JobCardFields({
 
                 {assignments.length === 0 ? (
                     <div className="job-assignment-empty">
-                        <strong>No technician assignments yet</strong>
-                        <span>
-                            {job.gr_Mechanic
-                                ? `${job.gr_Mechanic.gr_name} is the current technician, but this job predates assignment history.`
-                                : 'Add the first technician to begin the email and paperwork trail.'}
-                        </span>
-                        {job.gr_Mechanic && (
-                            <button
-                                type="button"
-                                className="job-assignment-save"
-                                disabled={isUpdating}
-                                onClick={() => void addAssignment(
-                                    job.gr_Mechanic!.gr_mechanicid,
-                                    'Initial assignment imported from the job record.',
-                                )}
-                            >
-                                {isUpdating ? 'Adding...' : `Add ${job.gr_Mechanic.gr_name} to history`}
-                            </button>
-                        )}
+                        <strong>One technician is enough for this job</strong>
+                        <span>Use “Add another tech” only if someone else also needs to attend.</span>
                     </div>
                 ) : (
                     <div className="job-assignment-list">
@@ -285,17 +271,46 @@ export default function JobCardFields({
             <section className="job-card-section overall-job-card-section">
                 <div className="job-card-heading">
                     <div>
-                        <span>Overall paperwork</span>
+                        <span>Primary technician</span>
                         <h3>Job card</h3>
-                        <p>Close the overall paperwork after every required technician card is accepted.</p>
+                        <p>The normal workflow for the technician assigned on the Details tab.</p>
                     </div>
                     <span className={`job-card-current status-${status}`}>
                         {JOB_CARD_STATUS_OPTIONS.find((option) => option.value === status)?.label}
                     </span>
                 </div>
 
+                <div className="primary-technician-card">
+                    <div>
+                        <strong>{job.gr_Mechanic?.gr_name ?? 'No technician assigned'}</strong>
+                        <small>
+                            {job.gr_Mechanic?.gr_email
+                                || 'Assign a technician with an email address on the Details tab.'}
+                        </small>
+                    </div>
+                    <div className="primary-technician-actions">
+                        <button
+                            type="button"
+                            disabled={!job.gr_Mechanic?.gr_email || status !== JOB_CARD_STATUSES.NOT_SENT}
+                            onClick={() => emailJobToMechanic(job)}
+                        >
+                            {status === JOB_CARD_STATUSES.NOT_SENT ? 'Open email' : 'Email recorded'}
+                        </button>
+                        {status === JOB_CARD_STATUSES.NOT_SENT && job.gr_Mechanic?.gr_email && (
+                            <button
+                                type="button"
+                                className="job-assignment-mark-sent"
+                                disabled={isUpdating}
+                                onClick={() => void changeStatus(JOB_CARD_STATUSES.SENT)}
+                            >
+                                Mark sent
+                            </button>
+                        )}
+                    </div>
+                </div>
+
                 <label className="job-edit-field job-card-status-field">
-                    <span>Overall job card status</span>
+                    <span>Job card status</span>
                     <select
                         value={status}
                         disabled={isUpdating}
