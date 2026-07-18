@@ -117,6 +117,7 @@ export default function SchedulingScreen() {
         createContactForSite,
         createEquipment,
         updateJob,
+        updateJobCardStatus,
         deleteJob,
         createScheduleOption,
         updateScheduleOption,
@@ -298,6 +299,7 @@ export default function SchedulingScreen() {
                     )}
                     onCreateQuote={createQuoteForJob}
                     onOpenQuote={openQuote}
+                    onJobCardStatusChange={updateJobCardStatus}
                     onClose={() => setEditingJob(null)}
                 />
             )}

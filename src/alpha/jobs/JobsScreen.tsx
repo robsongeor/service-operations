@@ -16,6 +16,7 @@ export default function JobsScreen() {
         scheduleOptions,
         jobQuotes,
         createJob, updateJob, deleteJob, updateJobStatus, updateJobFields,
+        updateJobCardStatus,
         createContactForSite, createEquipment, createSite, createCustomer,
         createScheduleOption, updateScheduleOption, deleteScheduleOption,
         isLoading, loadError, retryInitialLoad,
@@ -136,6 +137,7 @@ export default function JobsScreen() {
                     )}
                     onCreateQuote={createQuoteForJob}
                     onOpenQuote={openQuote}
+                    onJobCardStatusChange={updateJobCardStatus}
                     onClose={() => setEditingJob(null)}
                 />
             )}

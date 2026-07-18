@@ -449,7 +449,7 @@
     z-index: 3;
     top: 0;
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 4px;
     margin: 0 -24px 22px;
     padding: 12px 24px 0;
@@ -507,6 +507,90 @@
     padding-top: 0;
     border-top: 0;
 }
+
+.job-card-section {
+    display: grid;
+    gap: 18px;
+}
+
+.job-card-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.job-card-heading span:first-child {
+    color: #78817c;
+    font-size: 0.63rem;
+    font-weight: 750;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+}
+
+.job-card-heading h3,
+.job-card-heading p {
+    margin: 0;
+}
+
+.job-card-heading h3 {
+    margin-top: 2px;
+    color: #26312b;
+    font-size: 1rem;
+}
+
+.job-card-heading p {
+    margin-top: 4px;
+    color: #79827d;
+    font-size: 0.7rem;
+}
+
+.job-card-current {
+    flex: 0 0 auto;
+    padding: 5px 8px;
+    border-radius: 999px;
+    background: #f0f2f1;
+    color: #65706a;
+    font-size: 0.62rem;
+    font-weight: 750;
+}
+
+.job-card-current.status-122830001 { background: #eaf3fa; color: #35617f; }
+.job-card-current.status-122830002 { background: #fff3df; color: #7d5b27; }
+.job-card-current.status-122830003 { background: #e7f4ee; color: #24644f; }
+
+.job-card-status-field small {
+    color: #7d8580;
+    font-size: 0.65rem;
+    font-weight: 450;
+    line-height: 1.4;
+}
+
+.job-card-timeline {
+    display: grid;
+    overflow: hidden;
+    border: 1px solid #dde4e0;
+    border-radius: 10px;
+    background: #ffffff;
+}
+
+.job-card-timeline > div {
+    display: grid;
+    grid-template-columns: 18px 1fr;
+    gap: 10px;
+    align-items: center;
+    min-height: 54px;
+    padding: 0 13px;
+    border-bottom: 1px solid #e7ebe8;
+}
+
+.job-card-timeline > div:last-child { border-bottom: 0; }
+.job-card-timeline > div > span { width: 10px; height: 10px; border: 2px solid #c4ccc7; border-radius: 50%; }
+.job-card-timeline > div.complete > span { border-color: #29715d; background: #29715d; box-shadow: 0 0 0 4px #e6f2ed; }
+.job-card-timeline > div > div { display: grid; gap: 2px; }
+.job-card-timeline strong { color: #39443e; font-size: 0.74rem; }
+.job-card-timeline small { color: #7c8580; font-size: 0.65rem; }
+.job-card-error { margin: 0; padding: 10px; border-radius: 8px; background: #fff0f0; color: #913b3b; font-size: 0.7rem; }
 
 .job-quotes-section {
     display: grid;

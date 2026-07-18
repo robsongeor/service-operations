@@ -1,5 +1,6 @@
 import type { JobType } from './jobType.types'
 import type { JobStatus } from './jobStatus.types'
+import type { JobCardStatus } from './jobCardStatus.types'
 
 export type Job = {
     gr_jobid: string
@@ -9,6 +10,10 @@ export type Job = {
     gr_ordernumber: string | null
     gr_description: string | null
     gr_jobtype?: JobType
+    gr_jobcardstatus?: JobCardStatus | null
+    gr_jobcardsenton?: string | null
+    gr_jobcardsubmittedon?: string | null
+    gr_jobcardclosedon?: string | null
     gr_Equipment?: {
         gr_equipmentid: string
         gr_fleet: string

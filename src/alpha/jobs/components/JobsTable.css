@@ -505,8 +505,6 @@
     display: flex;
     gap: 4px;
 }
-
-
 .jobs-table-action:hover:not(:disabled) {
     border-color: #1d211e;
     background: #1d211e;
@@ -516,6 +514,31 @@
 .jobs-table-action:disabled {
     cursor: not-allowed;
     opacity: 0.35;
+}
+
+.jobs-email-action.status-122830001,
+.jobs-email-action.status-122830002,
+.jobs-email-action.status-122830003 {
+    opacity: 1;
+    cursor: default;
+}
+
+.jobs-email-action.status-122830001 {
+    border-color: #bcd1e2;
+    background: #edf5fa;
+    color: #35617f;
+}
+
+.jobs-email-action.status-122830002 {
+    border-color: #dfc38f;
+    background: #fff5e3;
+    color: #7c5924;
+}
+
+.jobs-email-action.status-122830003 {
+    border-color: #afd1c2;
+    background: #e9f5ef;
+    color: #24634f;
 }
 
 .jobs-table-empty {

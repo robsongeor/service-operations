@@ -13,12 +13,14 @@ import JobRelationshipFields from './JobRelationshipFields'
 import JobScheduleFields from './JobScheduleFields'
 import JobDrawerShell from './JobDrawerShell'
 import JobQuotesSection from './JobQuotesSection'
+import JobCardFields from './JobCardFields'
 import './JobDrawer.css'
 import type {
     JobScheduleOption,
     JobScheduleOptionInput,
 } from '../types/jobSchedule.types'
 import type { Quote } from '../../quotes/types/quote.types'
+import type { JobCardStatus } from '../types/jobCardStatus.types'
 
 type Props = {
     job: Job
@@ -57,6 +59,7 @@ type Props = {
     onDeleteScheduleOption: (optionId: string) => Promise<void>
     onCreateQuote: (jobId: string) => void
     onOpenQuote: (quoteId: string) => void
+    onJobCardStatusChange: (jobId: string, status: JobCardStatus) => Promise<void>
     onClose: () => void
 }
 
@@ -80,6 +83,7 @@ export default function JobEditDrawer({
     onDeleteScheduleOption,
     onCreateQuote,
     onOpenQuote,
+    onJobCardStatusChange,
     onClose,
 }: Props) {
     const editor = useJobEditor({
@@ -106,7 +110,7 @@ export default function JobEditDrawer({
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
     const [isDeleting, setIsDeleting] = useState(false)
     const [deleteError, setDeleteError] = useState('')
-    const [activeTab, setActiveTab] = useState<'details' | 'scheduling' | 'quotes'>('details')
+    const [activeTab, setActiveTab] = useState<'details' | 'scheduling' | 'jobcard' | 'quotes'>('details')
     const jobScheduleCount = scheduleOptions.filter(
         (option) => option._gr_job_value?.toLowerCase() === job.gr_jobid.toLowerCase(),
     ).length
@@ -229,6 +233,15 @@ export default function JobEditDrawer({
                     Quotes
                     {quotes.length > 0 && <span>{quotes.length}</span>}
                 </button>
+                <button
+                    type="button"
+                    className={activeTab === 'jobcard' ? 'active' : ''}
+                    aria-selected={activeTab === 'jobcard'}
+                    role="tab"
+                    onClick={() => setActiveTab('jobcard')}
+                >
+                    Job card
+                </button>
             </nav>
 
             <div className="job-edit-tab-panel" role="tabpanel">
@@ -271,6 +284,10 @@ export default function JobEditDrawer({
                             onOpenQuote={onOpenQuote}
                         />
                     </div>
+                )}
+
+                {activeTab === 'jobcard' && (
+                    <JobCardFields job={job} onStatusChange={onJobCardStatusChange} />
                 )}
             </div>
         </JobDrawerShell>

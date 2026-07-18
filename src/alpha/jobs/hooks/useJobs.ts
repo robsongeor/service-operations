@@ -6,12 +6,14 @@ import {
     fetchJobs as fetchJobsApi,
     createJob as createJobApi,
     updateJobStatus as updateJobStatusApi,
+    updateJobCardStatus as updateJobCardStatusApi,
     updateJobFields as updateJobFieldsApi,
     updateJob as updateJobApi,
     deleteJob as deleteJobApi,
 } from '../services/jobsApi'
 import type { JobSaveInput } from '../types/jobSave.types'
 import type { JobStatus } from '../types/jobStatus.types'
+import type { JobCardStatus } from '../types/jobCardStatus.types'
 import type {
     JobScheduleOption,
     JobScheduleOptionInput,
@@ -243,6 +245,12 @@ export function useJobs() {
         await fetchJobs()
     }
 
+    const updateJobCardStatus = async (jobId: string, status: JobCardStatus) => {
+        const token = await getAccessToken()
+        await updateJobCardStatusApi(token, jobId, status)
+        await fetchJobs()
+    }
+
     const updateJobFields = async (
         jobId: string,
         fields: {
@@ -424,6 +432,7 @@ export function useJobs() {
         siteContacts,
         createContactForSite,
         updateJobStatus,
+        updateJobCardStatus,
         updateJobFields,
         updateJob,
         deleteJob,

@@ -8,6 +8,11 @@ import {
     type JobStatus,
 } from '../types/jobStatus.types'
 import './JobsTable.css'
+import {
+    getJobCardStatus,
+    JOB_CARD_STATUSES,
+    JOB_CARD_STATUS_OPTIONS,
+} from '../types/jobCardStatus.types'
 
 type Props = {
     jobs: Job[]
@@ -32,6 +37,14 @@ const createdDateFormatter = new Intl.DateTimeFormat('en-NZ', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
+})
+
+const sentDateFormatter = new Intl.DateTimeFormat('en-NZ', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
 })
 
 export default function JobsTable({
@@ -455,14 +468,25 @@ export default function JobsTable({
                                             Edit
                                         </button>
                                         <button
-                                            className="jobs-table-action"
+                                            className={'jobs-table-action jobs-email-action status-' + getJobCardStatus(job.gr_jobcardstatus)}
                                             type="button"
-                                            title={job.gr_Mechanic ? 'Email job to mechanic' : 'Assign a mechanic first'}
+                                            title={!job.gr_Mechanic
+                                                ? 'Assign a mechanic first'
+                                                : getJobCardStatus(job.gr_jobcardstatus) === JOB_CARD_STATUSES.NOT_SENT
+                                                    ? 'Email job to ' + job.gr_Mechanic.gr_name
+                                                    : (JOB_CARD_STATUS_OPTIONS.find((status) => status.value === getJobCardStatus(job.gr_jobcardstatus))?.label ?? '')
+                                                        + (job.gr_jobcardsenton ? ' — sent ' + sentDateFormatter.format(new Date(job.gr_jobcardsenton)) : '')}
                                             aria-label="Email job to mechanic"
                                             onClick={() => onEmailJob(job)}
-                                            disabled={!job.gr_Mechanic}
+                                            disabled={!job.gr_Mechanic || getJobCardStatus(job.gr_jobcardstatus) !== JOB_CARD_STATUSES.NOT_SENT}
                                         >
-                                            Email
+                                            {getJobCardStatus(job.gr_jobcardstatus) === JOB_CARD_STATUSES.NOT_SENT
+                                                ? 'Email'
+                                                : getJobCardStatus(job.gr_jobcardstatus) === JOB_CARD_STATUSES.SENT
+                                                    ? '✓ Sent'
+                                                    : getJobCardStatus(job.gr_jobcardstatus) === JOB_CARD_STATUSES.SUBMITTED
+                                                        ? 'Submitted'
+                                                        : 'Closed'}
                                         </button>
                                     </div>
                                 </td>
