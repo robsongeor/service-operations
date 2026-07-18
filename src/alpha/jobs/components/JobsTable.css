@@ -506,6 +506,7 @@
     gap: 4px;
 }
 
+
 .jobs-table-action:hover:not(:disabled) {
     border-color: #1d211e;
     background: #1d211e;

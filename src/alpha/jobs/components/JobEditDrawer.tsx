@@ -12,11 +12,13 @@ import JobCoreFields from './JobCoreFields'
 import JobRelationshipFields from './JobRelationshipFields'
 import JobScheduleFields from './JobScheduleFields'
 import JobDrawerShell from './JobDrawerShell'
+import JobQuotesSection from './JobQuotesSection'
 import './JobDrawer.css'
 import type {
     JobScheduleOption,
     JobScheduleOptionInput,
 } from '../types/jobSchedule.types'
+import type { Quote } from '../../quotes/types/quote.types'
 
 type Props = {
     job: Job
@@ -26,6 +28,7 @@ type Props = {
     customers: Customer[]
     siteContacts: SiteContact[]
     scheduleOptions: JobScheduleOption[]
+    quotes: Quote[]
     onCreateCustomer: (customer: { name: string }) => Promise<string>
     onCreateSite: (site: {
         customerId: string
@@ -52,6 +55,8 @@ type Props = {
         option: JobScheduleOptionInput,
     ) => Promise<void>
     onDeleteScheduleOption: (optionId: string) => Promise<void>
+    onCreateQuote: (jobId: string) => void
+    onOpenQuote: (quoteId: string) => void
     onClose: () => void
 }
 
@@ -63,6 +68,7 @@ export default function JobEditDrawer({
     customers,
     siteContacts,
     scheduleOptions,
+    quotes,
     onCreateCustomer,
     onCreateSite,
     onCreateContact,
@@ -72,6 +78,8 @@ export default function JobEditDrawer({
     onCreateScheduleOption,
     onUpdateScheduleOption,
     onDeleteScheduleOption,
+    onCreateQuote,
+    onOpenQuote,
     onClose,
 }: Props) {
     const editor = useJobEditor({
@@ -98,6 +106,10 @@ export default function JobEditDrawer({
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
     const [isDeleting, setIsDeleting] = useState(false)
     const [deleteError, setDeleteError] = useState('')
+    const [activeTab, setActiveTab] = useState<'details' | 'scheduling' | 'quotes'>('details')
+    const jobScheduleCount = scheduleOptions.filter(
+        (option) => option._gr_job_value?.toLowerCase() === job.gr_jobid.toLowerCase(),
+    ).length
 
     const saveChanges = async () => {
         if (!draft.description.trim()) {
@@ -187,29 +199,79 @@ export default function JobEditDrawer({
                 </>
             }
         >
-            <div className="job-edit-grid">
-                <JobCoreFields
-                    draft={draft}
-                    setDraft={setDraft}
-                    mechanics={mechanics}
-                />
+            <nav className="job-edit-tabs" aria-label="Job sections">
+                <button
+                    type="button"
+                    className={activeTab === 'details' ? 'active' : ''}
+                    aria-selected={activeTab === 'details'}
+                    role="tab"
+                    onClick={() => setActiveTab('details')}
+                >
+                    Details
+                </button>
+                <button
+                    type="button"
+                    className={activeTab === 'scheduling' ? 'active' : ''}
+                    aria-selected={activeTab === 'scheduling'}
+                    role="tab"
+                    onClick={() => setActiveTab('scheduling')}
+                >
+                    Scheduling
+                    {jobScheduleCount > 0 && <span>{jobScheduleCount}</span>}
+                </button>
+                <button
+                    type="button"
+                    className={activeTab === 'quotes' ? 'active' : ''}
+                    aria-selected={activeTab === 'quotes'}
+                    role="tab"
+                    onClick={() => setActiveTab('quotes')}
+                >
+                    Quotes
+                    {quotes.length > 0 && <span>{quotes.length}</span>}
+                </button>
+            </nav>
 
-                <JobRelationshipFields
-                    editor={editor}
-                    equipmentList={equipmentList}
-                    onCreateCustomer={onCreateCustomer}
-                    onCreateSite={onCreateSite}
-                    onCreateContact={onCreateContact}
-                    onCreateEquipment={onCreateEquipment}
-                />
+            <div className="job-edit-tab-panel" role="tabpanel">
+                {activeTab === 'details' && (
+                    <div className="job-edit-grid">
+                        <JobCoreFields
+                            draft={draft}
+                            setDraft={setDraft}
+                            mechanics={mechanics}
+                        />
 
-                <JobScheduleFields
-                    jobId={job.gr_jobid}
-                    scheduleOptions={scheduleOptions}
-                    onCreate={onCreateScheduleOption}
-                    onUpdate={onUpdateScheduleOption}
-                    onDelete={onDeleteScheduleOption}
-                />
+                        <JobRelationshipFields
+                            editor={editor}
+                            equipmentList={equipmentList}
+                            onCreateCustomer={onCreateCustomer}
+                            onCreateSite={onCreateSite}
+                            onCreateContact={onCreateContact}
+                            onCreateEquipment={onCreateEquipment}
+                        />
+                    </div>
+                )}
+
+                {activeTab === 'scheduling' && (
+                    <div className="job-edit-grid">
+                        <JobScheduleFields
+                            jobId={job.gr_jobid}
+                            scheduleOptions={scheduleOptions}
+                            onCreate={onCreateScheduleOption}
+                            onUpdate={onUpdateScheduleOption}
+                            onDelete={onDeleteScheduleOption}
+                        />
+                    </div>
+                )}
+
+                {activeTab === 'quotes' && (
+                    <div className="job-edit-grid">
+                        <JobQuotesSection
+                            quotes={quotes}
+                            onCreateQuote={() => onCreateQuote(job.gr_jobid)}
+                            onOpenQuote={onOpenQuote}
+                        />
+                    </div>
+                )}
             </div>
         </JobDrawerShell>
 

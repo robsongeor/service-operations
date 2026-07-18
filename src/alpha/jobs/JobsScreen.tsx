@@ -7,11 +7,14 @@ import { emailJobToMechanic } from './services/jobEmail'
 import type { Job } from './types/job.types'
 import { JOB_STATUSES, type JobStatus } from './types/jobStatus.types'
 import './JobsScreen.css'
+import { useNavigate } from 'react-router-dom'
 
 export default function JobsScreen() {
+    const navigate = useNavigate()
     const {
         jobs, equipmentList, mechanics, sites, customers, siteContacts,
         scheduleOptions,
+        jobQuotes,
         createJob, updateJob, deleteJob, updateJobStatus, updateJobFields,
         createContactForSite, createEquipment, createSite, createCustomer,
         createScheduleOption, updateScheduleOption, deleteScheduleOption,
@@ -25,6 +28,16 @@ export default function JobsScreen() {
         JOB_STATUSES.WAITING_FOR_PARTS,
         JOB_STATUSES.COMPLETE,
     ])
+
+    const createQuoteForJob = (jobId: string) => {
+        setEditingJob(null)
+        navigate(`/quotes?new=1&jobId=${encodeURIComponent(jobId)}`)
+    }
+
+    const openQuote = (quoteId: string) => {
+        setEditingJob(null)
+        navigate(`/quotes?quoteId=${encodeURIComponent(quoteId)}`)
+    }
 
     const toggleStatus = (status: JobStatus) => {
         setVisibleStatuses((current) => current.includes(status)
@@ -118,6 +131,11 @@ export default function JobsScreen() {
                     onCreateScheduleOption={createScheduleOption}
                     onUpdateScheduleOption={updateScheduleOption}
                     onDeleteScheduleOption={deleteScheduleOption}
+                    quotes={jobQuotes.filter((quote) =>
+                        quote._gr_job_value?.toLowerCase() === editingJob.gr_jobid.toLowerCase(),
+                    )}
+                    onCreateQuote={createQuoteForJob}
+                    onOpenQuote={openQuote}
                     onClose={() => setEditingJob(null)}
                 />
             )}

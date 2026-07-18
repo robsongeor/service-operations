@@ -237,6 +237,7 @@ The Settings navigation item does not yet have an implemented route.
 Likely next areas of development include:
 
 - Job-linked quotes with editable line items, GST totals, and revision tracking.
+- A shared pricing catalogue for labour, consumables, standard services, and common parts.
 - Conflict warnings for the smaller set of jobs that receive schedule options.
 - Faster triage and allocation controls for breakdown work.
 - Dedicated management pages for sites, customers, contacts, and equipment.

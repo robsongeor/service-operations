@@ -7,6 +7,7 @@ import {
 import type { Job } from '../jobs/types/job.types'
 import JobEditDrawer from '../jobs/components/JobEditDrawer'
 import './SchedulingScreen.css'
+import { useNavigate } from 'react-router-dom'
 
 const dayHeadingFormatter = new Intl.DateTimeFormat('en-NZ', { weekday: 'short' })
 const dayNumberFormatter = new Intl.DateTimeFormat('en-NZ', {
@@ -101,9 +102,11 @@ function ScheduleCard({
 }
 
 export default function SchedulingScreen() {
+    const navigate = useNavigate()
     const {
         jobs,
         scheduleOptions,
+        jobQuotes,
         mechanics,
         equipmentList,
         sites,
@@ -124,6 +127,16 @@ export default function SchedulingScreen() {
     } = useJobs()
     const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
     const [editingJob, setEditingJob] = useState<Job | null>(null)
+
+    const createQuoteForJob = (jobId: string) => {
+        setEditingJob(null)
+        navigate(`/quotes?new=1&jobId=${encodeURIComponent(jobId)}`)
+    }
+
+    const openQuote = (quoteId: string) => {
+        setEditingJob(null)
+        navigate(`/quotes?quoteId=${encodeURIComponent(quoteId)}`)
+    }
 
     const weekDays = useMemo(
         () => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)),
@@ -280,6 +293,11 @@ export default function SchedulingScreen() {
                     onCreateScheduleOption={createScheduleOption}
                     onUpdateScheduleOption={updateScheduleOption}
                     onDeleteScheduleOption={deleteScheduleOption}
+                    quotes={jobQuotes.filter((quote) =>
+                        quote._gr_job_value?.toLowerCase() === editingJob.gr_jobid.toLowerCase(),
+                    )}
+                    onCreateQuote={createQuoteForJob}
+                    onOpenQuote={openQuote}
                     onClose={() => setEditingJob(null)}
                 />
             )}

@@ -51,6 +51,8 @@ import {
     createContact as createContactApi,
     createSiteContact as createSiteContactApi,
 } from '../services/contactsApi'
+import { fetchQuotes as fetchQuotesApi } from '../../quotes/services/quotesApi'
+import type { Quote } from '../../quotes/types/quote.types'
 
 
 
@@ -65,6 +67,7 @@ export function useJobs() {
     const [sites, setSites] = useState<Site[]>([])
     const [siteContacts, setSiteContacts] = useState<SiteContact[]>([])
     const [scheduleOptions, setScheduleOptions] = useState<JobScheduleOption[]>([])
+    const [jobQuotes, setJobQuotes] = useState<Quote[]>([])
     const [isLoading, setIsLoading] = useState(false)
     const [loadError, setLoadError] = useState('')
     const [reloadKey, setReloadKey] = useState(0)
@@ -361,6 +364,7 @@ export function useJobs() {
                     initialCustomers,
                     initialSiteContacts,
                     initialScheduleOptions,
+                    initialQuotes,
                     mechanicsData,
                 ] = await Promise.all([
                     fetchJobsApi(token),
@@ -369,6 +373,7 @@ export function useJobs() {
                     fetchCustomersApi(token),
                     fetchSiteContactsApi(token),
                     fetchJobScheduleOptionsApi(token),
+                    fetchQuotesApi(token),
                     mechanicsRequest,
                 ])
 
@@ -380,6 +385,7 @@ export function useJobs() {
                 setCustomers(initialCustomers)
                 setSiteContacts(initialSiteContacts)
                 setScheduleOptions(initialScheduleOptions)
+                setJobQuotes(initialQuotes)
                 setMechanics(mechanicsData.value ?? [])
             } catch (error) {
                 if (cancelled) return
@@ -403,6 +409,7 @@ export function useJobs() {
     return {
         jobs,
         scheduleOptions,
+        jobQuotes,
         equipmentList,
         sites,
         customers,
