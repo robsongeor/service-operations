@@ -592,6 +592,145 @@
 .job-card-timeline small { color: #7c8580; font-size: 0.65rem; }
 .job-card-error { margin: 0; padding: 10px; border-radius: 8px; background: #fff0f0; color: #913b3b; font-size: 0.7rem; }
 
+.job-card-layout {
+    display: grid;
+    gap: 24px;
+}
+
+.overall-job-card-section {
+    padding-top: 22px;
+    border-top: 1px solid #e2e7e4;
+}
+
+.job-assignment-add,
+.job-assignment-save,
+.job-assignment-controls button {
+    min-height: 34px;
+    padding: 0 11px;
+    border: 1px solid #cdd8d3;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #315c50;
+    font-size: 0.68rem;
+    font-weight: 750;
+    cursor: pointer;
+}
+
+.job-assignment-add,
+.job-assignment-save,
+.job-assignment-controls .job-assignment-mark-sent {
+    border-color: #176f66;
+    background: #176f66;
+    color: #ffffff;
+}
+
+.job-assignment-add:disabled,
+.job-assignment-save:disabled,
+.job-assignment-controls button:disabled {
+    cursor: default;
+    opacity: 0.5;
+}
+
+.job-assignment-form {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid #cfe0d9;
+    border-radius: 10px;
+    background: #f7fbf9;
+}
+
+.job-assignment-save {
+    justify-self: end;
+}
+
+.job-assignment-empty {
+    display: grid;
+    gap: 4px;
+    padding: 22px 14px;
+    border: 1px dashed #cfd9d4;
+    border-radius: 10px;
+    color: #68746e;
+    text-align: center;
+}
+
+.job-assignment-empty strong { color: #3a4b43; font-size: 0.76rem; }
+.job-assignment-empty span { font-size: 0.67rem; }
+
+.job-assignment-list {
+    display: grid;
+    gap: 10px;
+}
+
+.job-assignment-card {
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr);
+    gap: 10px;
+    padding: 13px;
+    border: 1px solid #dce3df;
+    border-radius: 10px;
+    background: #ffffff;
+}
+
+.job-assignment-index {
+    display: grid;
+    width: 24px;
+    height: 24px;
+    place-items: center;
+    border-radius: 50%;
+    background: #eaf3ef;
+    color: #296252;
+    font-size: 0.67rem;
+    font-weight: 800;
+}
+
+.job-assignment-main,
+.job-assignment-title > div {
+    display: grid;
+    gap: 3px;
+}
+
+.job-assignment-title {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.job-assignment-title strong { color: #29372f; font-size: 0.8rem; }
+.job-assignment-title small { color: #7b8580; font-size: 0.63rem; }
+.job-assignment-main > p { margin: 8px 0 0; color: #5d6963; font-size: 0.7rem; line-height: 1.45; white-space: pre-wrap; }
+
+.job-assignment-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 7px;
+    margin-top: 10px;
+}
+
+.job-assignment-controls label {
+    display: grid;
+    flex: 1 1 126px;
+    gap: 3px;
+}
+
+.job-assignment-controls label span { color: #69736e; font-size: 0.6rem; font-weight: 700; }
+.job-assignment-controls select { min-height: 34px; border: 1px solid #ced6d1; border-radius: 8px; background: #fff; padding: 0 8px; color: #35423b; font-size: 0.7rem; }
+.job-assignment-controls .job-assignment-remove { border-color: #e3c4c4; color: #974848; }
+
+.job-assignment-dates {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px 12px;
+    margin-top: 9px;
+    padding-top: 8px;
+    border-top: 1px solid #edf0ee;
+    color: #7c8580;
+    font-size: 0.59rem;
+}
+
 .job-quotes-section {
     display: grid;
     grid-column: 1 / -1;

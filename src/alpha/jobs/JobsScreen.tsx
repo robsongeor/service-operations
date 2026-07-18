@@ -3,7 +3,6 @@ import { useJobs } from './hooks/useJobs'
 import JobsTable from './components/JobsTable'
 import JobEditDrawer from './components/JobEditDrawer'
 import JobCreateDrawer from './components/JobCreateDrawer'
-import { emailJobToMechanic } from './services/jobEmail'
 import type { Job } from './types/job.types'
 import { JOB_STATUSES, type JobStatus } from './types/jobStatus.types'
 import './JobsScreen.css'
@@ -15,13 +14,16 @@ export default function JobsScreen() {
         jobs, equipmentList, mechanics, sites, customers, siteContacts,
         scheduleOptions,
         jobQuotes,
+        jobAssignments,
         createJob, updateJob, deleteJob, updateJobStatus, updateJobFields,
         updateJobCardStatus,
+        createJobAssignment, updateJobAssignmentStatus, deleteJobAssignment,
         createContactForSite, createEquipment, createSite, createCustomer,
         createScheduleOption, updateScheduleOption, deleteScheduleOption,
         isLoading, loadError, retryInitialLoad,
     } = useJobs()
     const [editingJob, setEditingJob] = useState<Job | null>(null)
+    const [editingInitialTab, setEditingInitialTab] = useState<'details' | 'jobcard'>('details')
     const [isCreatingJob, setIsCreatingJob] = useState(false)
     const [visibleStatuses, setVisibleStatuses] = useState<JobStatus[]>([
         JOB_STATUSES.UNALLOCATED,
@@ -103,12 +105,16 @@ export default function JobsScreen() {
             ) : (
                 <JobsTable
                     jobs={filteredJobs}
+                    assignments={jobAssignments}
                     visibleStatuses={visibleStatuses}
                     onToggleStatus={toggleStatus}
                     onStatusChange={updateJobStatus}
                     onJobFieldsChange={updateJobFields}
-                    onEmailJob={emailJobToMechanic}
                     onEditJob={setEditingJob}
+                    onManageAssignments={(job) => {
+                        setEditingInitialTab('jobcard')
+                        setEditingJob(job)
+                    }}
                     mechanics={mechanics}
                 />
             )}
@@ -126,6 +132,7 @@ export default function JobsScreen() {
                 <JobEditDrawer
                     {...sharedDrawerProps}
                     job={editingJob}
+                    initialTab={editingInitialTab}
                     onSave={updateJob}
                     onDelete={deleteJob}
                     scheduleOptions={scheduleOptions}
@@ -135,10 +142,19 @@ export default function JobsScreen() {
                     quotes={jobQuotes.filter((quote) =>
                         quote._gr_job_value?.toLowerCase() === editingJob.gr_jobid.toLowerCase(),
                     )}
+                    assignments={jobAssignments.filter((assignment) =>
+                        assignment._gr_job_value?.toLowerCase() === editingJob.gr_jobid.toLowerCase(),
+                    )}
                     onCreateQuote={createQuoteForJob}
                     onOpenQuote={openQuote}
                     onJobCardStatusChange={updateJobCardStatus}
-                    onClose={() => setEditingJob(null)}
+                    onCreateAssignment={createJobAssignment}
+                    onAssignmentStatusChange={updateJobAssignmentStatus}
+                    onDeleteAssignment={deleteJobAssignment}
+                    onClose={() => {
+                        setEditingJob(null)
+                        setEditingInitialTab('details')
+                    }}
                 />
             )}
         </div>

@@ -14,6 +14,14 @@ import {
 import type { JobSaveInput } from '../types/jobSave.types'
 import type { JobStatus } from '../types/jobStatus.types'
 import type { JobCardStatus } from '../types/jobCardStatus.types'
+import type { JobAssignmentInput } from '../types/jobAssignment.types'
+import {
+    createJobAssignment as createJobAssignmentApi,
+    deleteJobAssignment as deleteJobAssignmentApi,
+    fetchJobAssignments as fetchJobAssignmentsApi,
+    updateJobAssignmentStatus as updateJobAssignmentStatusApi,
+} from '../services/jobAssignmentsApi'
+import type { JobAssignment } from '../types/jobAssignment.types'
 import type {
     JobScheduleOption,
     JobScheduleOptionInput,
@@ -70,6 +78,7 @@ export function useJobs() {
     const [siteContacts, setSiteContacts] = useState<SiteContact[]>([])
     const [scheduleOptions, setScheduleOptions] = useState<JobScheduleOption[]>([])
     const [jobQuotes, setJobQuotes] = useState<Quote[]>([])
+    const [jobAssignments, setJobAssignments] = useState<JobAssignment[]>([])
     const [isLoading, setIsLoading] = useState(false)
     const [loadError, setLoadError] = useState('')
     const [reloadKey, setReloadKey] = useState(0)
@@ -245,6 +254,35 @@ export function useJobs() {
         await fetchJobs()
     }
 
+    const fetchJobAssignments = async () => {
+        const token = await getAccessToken()
+        const assignments = await fetchJobAssignmentsApi(token)
+        setJobAssignments(assignments)
+    }
+
+    const createJobAssignment = async (assignment: JobAssignmentInput) => {
+        const token = await getAccessToken()
+        await createJobAssignmentApi(token, assignment)
+        await Promise.all([fetchJobAssignments(), fetchJobs()])
+    }
+
+    const updateJobAssignmentStatus = async (
+        assignmentId: string,
+        status: JobCardStatus,
+    ) => {
+        const token = await getAccessToken()
+        await updateJobAssignmentStatusApi(token, assignmentId, status)
+        await fetchJobAssignments()
+    }
+
+    const deleteJobAssignment = async (assignmentId: string) => {
+        const token = await getAccessToken()
+        await deleteJobAssignmentApi(token, assignmentId)
+        setJobAssignments((current) => current.filter(
+            (assignment) => assignment.gr_jobassignmentid !== assignmentId,
+        ))
+    }
+
     const updateJobCardStatus = async (jobId: string, status: JobCardStatus) => {
         const token = await getAccessToken()
         await updateJobCardStatusApi(token, jobId, status)
@@ -373,6 +411,7 @@ export function useJobs() {
                     initialSiteContacts,
                     initialScheduleOptions,
                     initialQuotes,
+                    initialAssignments,
                     mechanicsData,
                 ] = await Promise.all([
                     fetchJobsApi(token),
@@ -382,6 +421,7 @@ export function useJobs() {
                     fetchSiteContactsApi(token),
                     fetchJobScheduleOptionsApi(token),
                     fetchQuotesApi(token),
+                    fetchJobAssignmentsApi(token),
                     mechanicsRequest,
                 ])
 
@@ -394,6 +434,7 @@ export function useJobs() {
                 setSiteContacts(initialSiteContacts)
                 setScheduleOptions(initialScheduleOptions)
                 setJobQuotes(initialQuotes)
+                setJobAssignments(initialAssignments)
                 setMechanics(mechanicsData.value ?? [])
             } catch (error) {
                 if (cancelled) return
@@ -418,6 +459,7 @@ export function useJobs() {
         jobs,
         scheduleOptions,
         jobQuotes,
+        jobAssignments,
         equipmentList,
         sites,
         customers,
@@ -433,6 +475,9 @@ export function useJobs() {
         createContactForSite,
         updateJobStatus,
         updateJobCardStatus,
+        createJobAssignment,
+        updateJobAssignmentStatus,
+        deleteJobAssignment,
         updateJobFields,
         updateJob,
         deleteJob,

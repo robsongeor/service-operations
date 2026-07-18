@@ -21,6 +21,7 @@ import type {
 } from '../types/jobSchedule.types'
 import type { Quote } from '../../quotes/types/quote.types'
 import type { JobCardStatus } from '../types/jobCardStatus.types'
+import type { JobAssignment, JobAssignmentInput } from '../types/jobAssignment.types'
 
 type Props = {
     job: Job
@@ -31,6 +32,7 @@ type Props = {
     siteContacts: SiteContact[]
     scheduleOptions: JobScheduleOption[]
     quotes: Quote[]
+    assignments: JobAssignment[]
     onCreateCustomer: (customer: { name: string }) => Promise<string>
     onCreateSite: (site: {
         customerId: string
@@ -60,6 +62,10 @@ type Props = {
     onCreateQuote: (jobId: string) => void
     onOpenQuote: (quoteId: string) => void
     onJobCardStatusChange: (jobId: string, status: JobCardStatus) => Promise<void>
+    onCreateAssignment: (assignment: JobAssignmentInput) => Promise<void>
+    onAssignmentStatusChange: (assignmentId: string, status: JobCardStatus) => Promise<void>
+    onDeleteAssignment: (assignmentId: string) => Promise<void>
+    initialTab?: 'details' | 'scheduling' | 'jobcard' | 'quotes'
     onClose: () => void
 }
 
@@ -72,6 +78,7 @@ export default function JobEditDrawer({
     siteContacts,
     scheduleOptions,
     quotes,
+    assignments,
     onCreateCustomer,
     onCreateSite,
     onCreateContact,
@@ -84,6 +91,10 @@ export default function JobEditDrawer({
     onCreateQuote,
     onOpenQuote,
     onJobCardStatusChange,
+    onCreateAssignment,
+    onAssignmentStatusChange,
+    onDeleteAssignment,
+    initialTab = 'details',
     onClose,
 }: Props) {
     const editor = useJobEditor({
@@ -110,7 +121,7 @@ export default function JobEditDrawer({
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
     const [isDeleting, setIsDeleting] = useState(false)
     const [deleteError, setDeleteError] = useState('')
-    const [activeTab, setActiveTab] = useState<'details' | 'scheduling' | 'jobcard' | 'quotes'>('details')
+    const [activeTab, setActiveTab] = useState<'details' | 'scheduling' | 'jobcard' | 'quotes'>(initialTab)
     const jobScheduleCount = scheduleOptions.filter(
         (option) => option._gr_job_value?.toLowerCase() === job.gr_jobid.toLowerCase(),
     ).length
@@ -287,7 +298,15 @@ export default function JobEditDrawer({
                 )}
 
                 {activeTab === 'jobcard' && (
-                    <JobCardFields job={job} onStatusChange={onJobCardStatusChange} />
+                    <JobCardFields
+                        job={job}
+                        mechanics={mechanics}
+                        assignments={assignments}
+                        onStatusChange={onJobCardStatusChange}
+                        onCreateAssignment={onCreateAssignment}
+                        onAssignmentStatusChange={onAssignmentStatusChange}
+                        onDeleteAssignment={onDeleteAssignment}
+                    />
                 )}
             </div>
         </JobDrawerShell>

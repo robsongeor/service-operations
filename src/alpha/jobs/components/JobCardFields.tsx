@@ -1,5 +1,8 @@
 import { useState } from 'react'
 import type { Job } from '../types/job.types'
+import type { Mechanic } from '../types/mechanic.types'
+import type { JobAssignment } from '../types/jobAssignment.types'
+import { emailJobAssignment } from '../services/jobEmail'
 import {
     getJobCardStatus,
     JOB_CARD_STATUSES,
@@ -9,7 +12,17 @@ import {
 
 type Props = {
     job: Job
+    mechanics: Mechanic[]
+    assignments: JobAssignment[]
     onStatusChange: (jobId: string, status: JobCardStatus) => Promise<void>
+    onCreateAssignment: (assignment: {
+        jobId: string
+        mechanicId: string
+        mechanicName: string
+        instructions?: string
+    }) => Promise<void>
+    onAssignmentStatusChange: (assignmentId: string, status: JobCardStatus) => Promise<void>
+    onDeleteAssignment: (assignmentId: string) => Promise<void>
 }
 
 const timestamp = new Intl.DateTimeFormat('en-NZ', {
@@ -20,12 +33,28 @@ const timestamp = new Intl.DateTimeFormat('en-NZ', {
     minute: '2-digit',
 })
 
-export default function JobCardFields({ job, onStatusChange }: Props) {
+function formatTimestamp(value?: string | null) {
+    return value ? timestamp.format(new Date(value)) : 'Not recorded'
+}
+
+export default function JobCardFields({
+    job,
+    mechanics,
+    assignments,
+    onStatusChange,
+    onCreateAssignment,
+    onAssignmentStatusChange,
+    onDeleteAssignment,
+}: Props) {
     const [status, setStatus] = useState(() => getJobCardStatus(job.gr_jobcardstatus))
     const [sentOn, setSentOn] = useState(job.gr_jobcardsenton)
     const [submittedOn, setSubmittedOn] = useState(job.gr_jobcardsubmittedon)
     const [closedOn, setClosedOn] = useState(job.gr_jobcardclosedon)
     const [isUpdating, setIsUpdating] = useState(false)
+    const [updatingAssignmentId, setUpdatingAssignmentId] = useState('')
+    const [showAssignmentForm, setShowAssignmentForm] = useState(false)
+    const [mechanicId, setMechanicId] = useState('')
+    const [instructions, setInstructions] = useState('')
     const [error, setError] = useState('')
 
     const changeStatus = async (nextStatus: JobCardStatus) => {
@@ -47,53 +76,255 @@ export default function JobCardFields({ job, onStatusChange }: Props) {
         }
     }
 
-    const formatTimestamp = (value?: string | null) => value
-        ? timestamp.format(new Date(value))
-        : 'Not recorded'
+    const addAssignment = async (
+        selectedMechanicId = mechanicId,
+        selectedInstructions = instructions,
+    ) => {
+        const mechanic = mechanics.find((item) => item.gr_mechanicid === selectedMechanicId)
+        if (!mechanic) {
+            setError('Choose a technician first.')
+            return
+        }
+
+        setIsUpdating(true)
+        setError('')
+        try {
+            await onCreateAssignment({
+                jobId: job.gr_jobid,
+                mechanicId: selectedMechanicId,
+                mechanicName: mechanic.gr_name,
+                instructions: selectedInstructions,
+            })
+            setMechanicId('')
+            setInstructions('')
+            setShowAssignmentForm(false)
+        } catch (createError) {
+            setError(createError instanceof Error
+                ? createError.message
+                : 'The technician could not be assigned.')
+        } finally {
+            setIsUpdating(false)
+        }
+    }
+
+    const changeAssignmentStatus = async (assignmentId: string, nextStatus: JobCardStatus) => {
+        setUpdatingAssignmentId(assignmentId)
+        setError('')
+        try {
+            await onAssignmentStatusChange(assignmentId, nextStatus)
+        } catch (updateError) {
+            setError(updateError instanceof Error
+                ? updateError.message
+                : 'The assignment status could not be updated.')
+        } finally {
+            setUpdatingAssignmentId('')
+        }
+    }
+
+    const removeAssignment = async (assignment: JobAssignment) => {
+        if (!window.confirm(`Remove ${assignment.gr_Mechanic?.gr_name ?? 'this technician'} from the assignment history?`)) return
+        setUpdatingAssignmentId(assignment.gr_jobassignmentid)
+        setError('')
+        try {
+            await onDeleteAssignment(assignment.gr_jobassignmentid)
+        } catch (deleteError) {
+            setError(deleteError instanceof Error
+                ? deleteError.message
+                : 'The assignment could not be removed.')
+        } finally {
+            setUpdatingAssignmentId('')
+        }
+    }
 
     return (
-        <section className="job-card-section">
-            <div className="job-card-heading">
-                <div>
-                    <span>Paperwork workflow</span>
-                    <h3>Job card</h3>
-                    <p>The technician submits the paperwork; the office controls final closure.</p>
+        <div className="job-card-layout">
+            <section className="job-card-section technician-assignments-section">
+                <div className="job-card-heading">
+                    <div>
+                        <span>Technician history</span>
+                        <h3>Assignments</h3>
+                        <p>Each technician keeps their own email and job-card trail.</p>
+                    </div>
+                    <button
+                        type="button"
+                        className="job-assignment-add"
+                        onClick={() => setShowAssignmentForm((current) => !current)}
+                        disabled={isUpdating}
+                    >
+                        {showAssignmentForm ? 'Cancel' : '+ Assign technician'}
+                    </button>
                 </div>
-                <span className={`job-card-current status-${status}`}>
-                    {JOB_CARD_STATUS_OPTIONS.find((option) => option.value === status)?.label}
-                </span>
-            </div>
 
-            <label className="job-edit-field job-card-status-field">
-                <span>Job card status</span>
-                <select
-                    value={status}
-                    disabled={isUpdating}
-                    onChange={(event) => void changeStatus(Number(event.target.value) as JobCardStatus)}
-                >
-                    {JOB_CARD_STATUS_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                </select>
-                <small>Manual changes are available while the email and submission automation is being built.</small>
-            </label>
+                {showAssignmentForm && (
+                    <div className="job-assignment-form">
+                        <label className="job-edit-field">
+                            <span>Technician</span>
+                            <select value={mechanicId} onChange={(event) => setMechanicId(event.target.value)}>
+                                <option value="">Select technician</option>
+                                {mechanics.filter((mechanic) => mechanic.statecode !== 1).map((mechanic) => (
+                                    <option key={mechanic.gr_mechanicid} value={mechanic.gr_mechanicid}>
+                                        {mechanic.gr_name}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        <label className="job-edit-field job-edit-field-wide">
+                            <span>Work instructions</span>
+                            <textarea
+                                rows={3}
+                                value={instructions}
+                                placeholder="What should this technician complete?"
+                                onChange={(event) => setInstructions(event.target.value)}
+                            />
+                        </label>
+                        <button type="button" className="job-assignment-save" onClick={() => void addAssignment()} disabled={isUpdating}>
+                            {isUpdating ? 'Assigning...' : 'Add assignment'}
+                        </button>
+                    </div>
+                )}
 
-            <div className="job-card-timeline">
-                <div className={sentOn ? 'complete' : ''}>
-                    <span aria-hidden="true" />
-                    <div><strong>Sent</strong><small>{formatTimestamp(sentOn)}</small></div>
+                {assignments.length === 0 ? (
+                    <div className="job-assignment-empty">
+                        <strong>No technician assignments yet</strong>
+                        <span>
+                            {job.gr_Mechanic
+                                ? `${job.gr_Mechanic.gr_name} is the current technician, but this job predates assignment history.`
+                                : 'Add the first technician to begin the email and paperwork trail.'}
+                        </span>
+                        {job.gr_Mechanic && (
+                            <button
+                                type="button"
+                                className="job-assignment-save"
+                                disabled={isUpdating}
+                                onClick={() => void addAssignment(
+                                    job.gr_Mechanic!.gr_mechanicid,
+                                    'Initial assignment imported from the job record.',
+                                )}
+                            >
+                                {isUpdating ? 'Adding...' : `Add ${job.gr_Mechanic.gr_name} to history`}
+                            </button>
+                        )}
+                    </div>
+                ) : (
+                    <div className="job-assignment-list">
+                        {assignments.map((assignment, index) => {
+                            const assignmentStatus = getJobCardStatus(assignment.gr_jobcardstatus)
+                            const isBusy = updatingAssignmentId === assignment.gr_jobassignmentid
+                            return (
+                                <article className="job-assignment-card" key={assignment.gr_jobassignmentid}>
+                                    <div className="job-assignment-index">{assignments.length - index}</div>
+                                    <div className="job-assignment-main">
+                                        <div className="job-assignment-title">
+                                            <div>
+                                                <strong>{assignment.gr_Mechanic?.gr_name ?? 'Unknown technician'}</strong>
+                                                <small>Assigned {formatTimestamp(assignment.gr_assignedon)}</small>
+                                            </div>
+                                            <span className={`job-card-current status-${assignmentStatus}`}>
+                                                {JOB_CARD_STATUS_OPTIONS.find((option) => option.value === assignmentStatus)?.label}
+                                            </span>
+                                        </div>
+                                        {assignment.gr_workinstructions && <p>{assignment.gr_workinstructions}</p>}
+                                        <div className="job-assignment-controls">
+                                            <label>
+                                                <span>Status</span>
+                                                <select
+                                                    value={assignmentStatus}
+                                                    disabled={isBusy}
+                                                    onChange={(event) => void changeAssignmentStatus(
+                                                        assignment.gr_jobassignmentid,
+                                                        Number(event.target.value) as JobCardStatus,
+                                                    )}
+                                                >
+                                                    {JOB_CARD_STATUS_OPTIONS.map((option) => (
+                                                        <option key={option.value} value={option.value}>{option.label}</option>
+                                                    ))}
+                                                </select>
+                                            </label>
+                                            <button
+                                                type="button"
+                                                onClick={() => emailJobAssignment(job, assignment)}
+                                                disabled={!assignment.gr_Mechanic?.gr_email || assignmentStatus !== JOB_CARD_STATUSES.NOT_SENT}
+                                                title={assignmentStatus === JOB_CARD_STATUSES.NOT_SENT
+                                                    ? 'Open an email draft for this technician'
+                                                    : `Email recorded as ${JOB_CARD_STATUS_OPTIONS.find((option) => option.value === assignmentStatus)?.label}`}
+                                            >
+                                                {assignmentStatus === JOB_CARD_STATUSES.NOT_SENT ? 'Open email' : 'Email recorded'}
+                                            </button>
+                                            {assignmentStatus === JOB_CARD_STATUSES.NOT_SENT && (
+                                                <button
+                                                    type="button"
+                                                    className="job-assignment-mark-sent"
+                                                    disabled={isBusy}
+                                                    onClick={() => void changeAssignmentStatus(assignment.gr_jobassignmentid, JOB_CARD_STATUSES.SENT)}
+                                                >
+                                                    Mark sent
+                                                </button>
+                                            )}
+                                            <button
+                                                type="button"
+                                                className="job-assignment-remove"
+                                                disabled={isBusy}
+                                                onClick={() => void removeAssignment(assignment)}
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+                                        <div className="job-assignment-dates">
+                                            <span>Sent: {formatTimestamp(assignment.gr_emailsenton)}</span>
+                                            <span>Submitted: {formatTimestamp(assignment.gr_submittedon)}</span>
+                                            <span>Closed: {formatTimestamp(assignment.gr_closedon)}</span>
+                                        </div>
+                                    </div>
+                                </article>
+                            )
+                        })}
+                    </div>
+                )}
+            </section>
+
+            <section className="job-card-section overall-job-card-section">
+                <div className="job-card-heading">
+                    <div>
+                        <span>Overall paperwork</span>
+                        <h3>Job card</h3>
+                        <p>Close the overall paperwork after every required technician card is accepted.</p>
+                    </div>
+                    <span className={`job-card-current status-${status}`}>
+                        {JOB_CARD_STATUS_OPTIONS.find((option) => option.value === status)?.label}
+                    </span>
                 </div>
-                <div className={submittedOn ? 'complete' : ''}>
-                    <span aria-hidden="true" />
-                    <div><strong>Submitted</strong><small>{formatTimestamp(submittedOn)}</small></div>
+
+                <label className="job-edit-field job-card-status-field">
+                    <span>Overall job card status</span>
+                    <select
+                        value={status}
+                        disabled={isUpdating}
+                        onChange={(event) => void changeStatus(Number(event.target.value) as JobCardStatus)}
+                    >
+                        {JOB_CARD_STATUS_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                    </select>
+                    <small>This remains office-controlled while technician submission automation is being built.</small>
+                </label>
+
+                <div className="job-card-timeline">
+                    <div className={sentOn ? 'complete' : ''}>
+                        <span aria-hidden="true" />
+                        <div><strong>Sent</strong><small>{formatTimestamp(sentOn)}</small></div>
+                    </div>
+                    <div className={submittedOn ? 'complete' : ''}>
+                        <span aria-hidden="true" />
+                        <div><strong>Submitted</strong><small>{formatTimestamp(submittedOn)}</small></div>
+                    </div>
+                    <div className={closedOn ? 'complete' : ''}>
+                        <span aria-hidden="true" />
+                        <div><strong>Closed</strong><small>{formatTimestamp(closedOn)}</small></div>
+                    </div>
                 </div>
-                <div className={closedOn ? 'complete' : ''}>
-                    <span aria-hidden="true" />
-                    <div><strong>Closed</strong><small>{formatTimestamp(closedOn)}</small></div>
-                </div>
-            </div>
+            </section>
 
             {error && <p className="job-card-error" role="alert">{error}</p>}
-        </section>
+        </div>
     )
 }

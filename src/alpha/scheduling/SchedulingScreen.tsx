@@ -107,6 +107,7 @@ export default function SchedulingScreen() {
         jobs,
         scheduleOptions,
         jobQuotes,
+        jobAssignments,
         mechanics,
         equipmentList,
         sites,
@@ -118,6 +119,9 @@ export default function SchedulingScreen() {
         createEquipment,
         updateJob,
         updateJobCardStatus,
+        createJobAssignment,
+        updateJobAssignmentStatus,
+        deleteJobAssignment,
         deleteJob,
         createScheduleOption,
         updateScheduleOption,
@@ -297,9 +301,15 @@ export default function SchedulingScreen() {
                     quotes={jobQuotes.filter((quote) =>
                         quote._gr_job_value?.toLowerCase() === editingJob.gr_jobid.toLowerCase(),
                     )}
+                    assignments={jobAssignments.filter((assignment) =>
+                        assignment._gr_job_value?.toLowerCase() === editingJob.gr_jobid.toLowerCase(),
+                    )}
                     onCreateQuote={createQuoteForJob}
                     onOpenQuote={openQuote}
                     onJobCardStatusChange={updateJobCardStatus}
+                    onCreateAssignment={createJobAssignment}
+                    onAssignmentStatusChange={updateJobAssignmentStatus}
+                    onDeleteAssignment={deleteJobAssignment}
                     onClose={() => setEditingJob(null)}
                 />
             )}
