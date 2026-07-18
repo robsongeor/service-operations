@@ -195,7 +195,7 @@
 .jobs-table th:nth-child(8) { width: 115px; }
 .jobs-table th:nth-child(9) { width: 130px; }
 .jobs-table th:nth-child(10) { width: 88px; }
-.jobs-table th:nth-child(11) { width: 60px; }
+.jobs-table th:nth-child(11) { width: 105px; }
 
 .jobs-table-date {
     color: #626a65 !important;
@@ -327,6 +327,11 @@
     font-size: 0.67rem;
     font-weight: 700;
     cursor: pointer;
+}
+
+.jobs-table-actions {
+    display: flex;
+    gap: 4px;
 }
 
 .jobs-table-action:hover:not(:disabled) {

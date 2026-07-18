@@ -7,7 +7,9 @@ import {
     createJob as createJobApi,
     updateJobStatus as updateJobStatusApi,
     updateJobFields as updateJobFieldsApi,
+    updateJob as updateJobApi,
 } from '../services/jobsApi'
+import type { JobUpdate } from '../services/jobsApi'
 
 import {
     fetchEquipment as fetchEquipmentApi,
@@ -190,6 +192,47 @@ export function useJobs() {
         await fetchJobs()
     }
 
+    const updateJob = async (jobId: string, job: JobUpdate) => {
+        const token = await getAccessToken()
+
+        await updateJobApi(token, jobId, job)
+
+        if (job.equipmentId && job.siteId) {
+            await updateEquipmentSite(token, job.equipmentId, job.siteId)
+            await fetchEquipment()
+        }
+
+        const selectedEquipment = equipmentList.find(
+            (equipment) => equipment.gr_equipmentid === job.equipmentId,
+        )
+        const selectedMechanic = mechanics.find(
+            (mechanic) => mechanic.gr_mechanicid === job.mechanicId,
+        )
+        const selectedSite = sites.find(
+            (site) => site.gr_siteid === job.siteId,
+        )
+        const selectedContact = siteContacts.find(
+            (siteContact) => siteContact.gr_Contact?.gr_contactid === job.contactId,
+        )?.gr_Contact
+
+        setJobs((currentJobs) => currentJobs.map((currentJob) =>
+            currentJob.gr_jobid === jobId
+                ? {
+                    ...currentJob,
+                    gr_jobnumber: job.jobNumber,
+                    gr_ordernumber: job.orderNumber,
+                    gr_description: job.description,
+                    gr_jobtype: job.jobType,
+                    gr_status: job.status,
+                    gr_Equipment: selectedEquipment,
+                    gr_Mechanic: selectedMechanic,
+                    gr_Site: selectedSite,
+                    gr_Contact: selectedContact,
+                }
+                : currentJob,
+        ))
+    }
+
     const createJob = async (job: {
         jobNumber: string
         orderNumber: string
@@ -247,6 +290,7 @@ export function useJobs() {
         createContactForSite,
         updateJobStatus,
         updateJobFields,
+        updateJob,
 
     }
 }

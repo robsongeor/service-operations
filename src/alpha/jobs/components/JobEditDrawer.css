@@ -1,0 +1,311 @@
+.job-edit-backdrop {
+    position: fixed;
+    z-index: 1000;
+    inset: 0;
+    display: flex;
+    justify-content: flex-end;
+    background: rgba(20, 25, 22, 0.28);
+}
+
+.job-edit-drawer {
+    display: flex;
+    flex-direction: column;
+    width: min(480px, 92vw);
+    height: 100%;
+    overflow-y: auto;
+    background: #fdfdfb;
+    box-shadow: -16px 0 40px rgba(22, 30, 26, 0.16);
+}
+
+.job-edit-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 22px 24px;
+    border-bottom: 1px solid #e2e6e3;
+}
+
+.job-edit-header p,
+.job-edit-header h2,
+.job-edit-body p {
+    margin: 0;
+}
+
+.job-edit-header p {
+    color: #747b76;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+}
+
+.job-edit-header h2 {
+    margin-top: 3px;
+    font-size: 1.35rem;
+}
+
+.job-edit-header button {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    place-items: center;
+    border: 0;
+    border-radius: 50%;
+    background: #eef0ed;
+    color: #333936;
+    font-size: 1.3rem;
+    cursor: pointer;
+}
+
+.job-edit-body {
+    flex: 1;
+    padding: 24px;
+    color: #666e69;
+    font-size: 0.85rem;
+}
+
+.job-edit-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.job-edit-field {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 7px;
+    color: #3c4540;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.job-edit-field-wide {
+    grid-column: span 2;
+}
+
+.job-edit-field input,
+.job-edit-field select,
+.job-edit-field textarea {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #d0d7d2;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #202421;
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 450;
+    outline: none;
+}
+
+.job-edit-field input,
+.job-edit-field select {
+    min-height: 40px;
+    padding: 0 11px;
+}
+
+.job-edit-field textarea {
+    min-height: 110px;
+    padding: 10px 11px;
+    resize: vertical;
+}
+
+.job-edit-field input:focus,
+.job-edit-field select:focus,
+.job-edit-field textarea:focus {
+    border-color: #68736d;
+    box-shadow: 0 0 0 3px rgba(80, 90, 84, 0.1);
+}
+
+.job-edit-divider {
+    margin-top: 6px;
+    padding-top: 20px;
+    border-top: 1px solid #e2e6e3;
+}
+
+.job-edit-combobox {
+    position: relative;
+}
+
+.job-edit-results {
+    position: absolute;
+    z-index: 2;
+    top: calc(100% + 5px);
+    right: 0;
+    left: 0;
+    display: grid;
+    overflow: hidden;
+    border: 1px solid #d3d9d5;
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: 0 10px 24px rgba(22, 30, 26, 0.12);
+}
+
+.job-edit-results button,
+.job-edit-results > span {
+    min-height: 38px;
+    padding: 0 11px;
+    border: 0;
+    border-bottom: 1px solid #e8ebe8;
+    background: #ffffff;
+    color: #343a36;
+    font-size: 0.8rem;
+    text-align: left;
+}
+
+.job-edit-results button {
+    cursor: pointer;
+}
+
+.job-edit-results button:hover,
+.job-edit-results button[aria-selected="true"] {
+    background: #f0f4f1;
+}
+
+.job-edit-results > span {
+    display: flex;
+    align-items: center;
+    color: #7a827d;
+}
+
+.job-edit-results > :last-child {
+    border-bottom: 0;
+}
+
+.job-edit-results .job-edit-add-result {
+    color: #176f66;
+    font-weight: 750;
+}
+
+.job-edit-create-panel {
+    display: grid;
+    gap: 14px;
+    padding: 16px;
+    border: 1px solid #cfe0dc;
+    border-radius: 10px;
+    background: #f3f8f6;
+}
+
+.job-edit-create-panel h4,
+.job-edit-create-panel p {
+    margin: 0;
+}
+
+.job-edit-create-panel h4 {
+    color: #26302b;
+    font-size: 0.85rem;
+}
+
+.job-edit-create-panel p {
+    margin-top: 2px;
+    color: #747d77;
+    font-size: 0.72rem;
+}
+
+.job-edit-create-panel .job-edit-error {
+    color: #9b3636;
+}
+
+.job-edit-create-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.job-edit-create-actions button {
+    min-height: 34px;
+    padding: 0 12px;
+    border: 1px solid #cbd2cd;
+    border-radius: 7px;
+    background: #ffffff;
+    color: #303733;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.job-edit-create-actions button.primary {
+    border-color: #176f66;
+    background: #176f66;
+    color: #ffffff;
+}
+
+.job-edit-create-actions button:disabled {
+    cursor: wait;
+    opacity: 0.55;
+}
+
+
+.job-edit-divider h3,
+.job-edit-divider p {
+    margin: 0;
+}
+
+.job-edit-divider h3 {
+    color: #282e2a;
+    font-size: 0.9rem;
+}
+
+.job-edit-divider p {
+    margin-top: 3px;
+    color: #7b827d;
+    font-size: 0.72rem;
+}
+
+.job-edit-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 24px;
+    border-top: 1px solid #e2e6e3;
+    background: #f7f8f6;
+}
+
+.job-edit-footer span {
+    color: #7b827d;
+    font-size: 0.72rem;
+}
+
+.job-edit-footer .job-edit-save-error {
+    color: #9b3636;
+}
+
+.job-edit-footer-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.job-edit-footer button {
+    min-height: 36px;
+    padding: 0 14px;
+    border: 1px solid #ccd2ce;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #303632;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.job-edit-footer button.primary {
+    border-color: #176f66;
+    background: #176f66;
+    color: #ffffff;
+}
+
+.job-edit-footer button:disabled {
+    cursor: wait;
+    opacity: 0.55;
+}
+
+@media (max-width: 520px) {
+    .job-edit-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .job-edit-field-wide {
+        grid-column: auto;
+    }
+}

@@ -19,6 +19,7 @@ type Props = {
         }
     ) => void
     onEmailJob: (job: Job) => void
+    onEditJob: (job: Job) => void
     mechanics: Mechanic[]
 }
 
@@ -49,6 +50,7 @@ export default function JobsTable({
     onStatusChange,
     onJobFieldsChange,
     onEmailJob,
+    onEditJob,
     mechanics,
 }: Props) {
     const [searchText, setSearchText] = useState('')
@@ -229,6 +231,7 @@ export default function JobsTable({
                             <tr key={job.gr_jobid}>
                                 <td>
                                     <input
+                                        key={`${job.gr_jobid}-number-${job.gr_jobnumber}`}
                                         className="jobs-table-inline jobs-table-job-number"
                                         type="text"
                                         aria-label="Job number"
@@ -272,6 +275,7 @@ export default function JobsTable({
 
                                 <td>
                                     <textarea
+                                        key={`${job.gr_jobid}-description-${job.gr_description}`}
                                         className="jobs-table-inline jobs-table-description"
                                         aria-label="Job description"
                                         defaultValue={job.gr_description}
@@ -333,6 +337,7 @@ export default function JobsTable({
 
                                 <td>
                                     <input
+                                        key={`${job.gr_jobid}-order-${job.gr_ordernumber}`}
                                         className="jobs-table-inline jobs-table-order"
                                         type="text"
                                         aria-label="Order number"
@@ -348,16 +353,25 @@ export default function JobsTable({
                                 </td>
 
                                 <td>
-                                    <button
-                                        className="jobs-table-action"
-                                        type="button"
-                                        title={job.gr_Mechanic ? 'Email job to mechanic' : 'Assign a mechanic first'}
-                                        aria-label="Email job to mechanic"
-                                        onClick={() => onEmailJob(job)}
-                                        disabled={!job.gr_Mechanic}
-                                    >
-                                        Email
-                                    </button>
+                                    <div className="jobs-table-actions">
+                                        <button
+                                            className="jobs-table-action"
+                                            type="button"
+                                            onClick={() => onEditJob(job)}
+                                        >
+                                            Edit
+                                        </button>
+                                        <button
+                                            className="jobs-table-action"
+                                            type="button"
+                                            title={job.gr_Mechanic ? 'Email job to mechanic' : 'Assign a mechanic first'}
+                                            aria-label="Email job to mechanic"
+                                            onClick={() => onEmailJob(job)}
+                                            disabled={!job.gr_Mechanic}
+                                        >
+                                            Email
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         ))}

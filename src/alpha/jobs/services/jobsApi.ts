@@ -3,13 +3,27 @@ import type { JobType } from '../types/jobType.types'
 
 const DATAVERSE_URL = import.meta.env.VITE_DATAVERSE_URL
 
+export type JobUpdate = {
+    jobNumber: string
+    orderNumber: string
+    description: string
+    jobType: JobType
+    status: number
+    equipmentId: string
+    mechanicId: string
+    siteId: string
+    contactId: string
+}
+
 export async function fetchJobs(accessToken: string): Promise<Job[]> {
     const result = await fetch(
-        `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=gr_jobid,createdon,gr_jobnumber,gr_status,gr_ordernumber,gr_description,gr_jobtype&$expand=gr_Equipment($select=gr_fleet,gr_make,gr_model,gr_serial),gr_Mechanic($select=gr_mechanicid,gr_name,gr_phone,gr_email),gr_Site($select=gr_name,gr_address;$expand=gr_Customer($select=gr_name)),gr_Contact($select=gr_name,gr_phone,gr_email)`,
+        `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=gr_jobid,createdon,gr_jobnumber,gr_status,gr_ordernumber,gr_description,gr_jobtype&$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_serial),gr_Mechanic($select=gr_mechanicid,gr_name,gr_phone,gr_email),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name,gr_phone,gr_email)`,
         {
+            cache: 'no-store',
             headers: {
                 Authorization: `Bearer ${accessToken}`,
                 Accept: 'application/json',
+                'Cache-Control': 'no-cache',
             },
         },
     )
@@ -122,5 +136,49 @@ export async function updateJobFields(
 
     if (!response.ok) {
         throw new Error('Failed to update job')
+    }
+}
+
+export async function updateJob(
+    token: string,
+    jobId: string,
+    job: JobUpdate,
+) {
+    const fields: Record<string, string | number | null> = {
+        gr_jobnumber: job.jobNumber,
+        gr_ordernumber: job.orderNumber,
+        gr_description: job.description,
+        gr_jobtype: job.jobType,
+        gr_status: job.status,
+        'gr_Equipment@odata.bind': job.equipmentId
+            ? `/gr_equipments(${job.equipmentId})`
+            : null,
+        'gr_Mechanic@odata.bind': job.mechanicId
+            ? `/gr_mechanics(${job.mechanicId})`
+            : null,
+        'gr_Site@odata.bind': job.siteId
+            ? `/gr_sites(${job.siteId})`
+            : null,
+        'gr_Contact@odata.bind': job.contactId
+            ? `/gr_contacts(${job.contactId})`
+            : null,
+    }
+
+    const response = await fetch(
+        `${DATAVERSE_URL}/api/data/v9.2/gr_jobs(${jobId})`,
+        {
+            method: 'PATCH',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+            },
+            body: JSON.stringify(fields),
+        },
+    )
+
+    if (!response.ok) {
+        const error = await response.text()
+        throw new Error(`Failed to update job: ${error}`)
     }
 }

@@ -4,6 +4,8 @@ import JobForm from './components/JobForm'
 import JobsTable from './components/JobsTable'
 import { emailJobToMechanic } from './services/jobEmail'
 import { JOB_TYPES, type JobType } from './types/jobType.types'
+import type { Job } from './types/job.types'
+import JobEditDrawer from './components/JobEditDrawer'
 
 export default function JobsScreen() {
     const {
@@ -14,6 +16,7 @@ export default function JobsScreen() {
         customers,
         siteContacts,
         createJob: createJobInDataverse,
+        updateJob,
         updateJobStatus,
         updateJobFields,
         createContactForSite,
@@ -21,6 +24,8 @@ export default function JobsScreen() {
         createSite,
         createCustomer,
     } = useJobs()
+
+    const [editingJob, setEditingJob] = useState<Job | null>(null)
 
     const [jobNumber, setJobNumber] = useState('')
     const [orderNumber, setOrderNumber] = useState('')
@@ -323,8 +328,26 @@ export default function JobsScreen() {
                 onStatusChange={updateJobStatus}
                 onJobFieldsChange={updateJobFields}
                 onEmailJob={emailJobToMechanic}
+                onEditJob={setEditingJob}
                 mechanics={mechanics}
             />
+
+            {editingJob && (
+                <JobEditDrawer
+                    job={editingJob}
+                    mechanics={mechanics}
+                    equipmentList={equipmentList}
+                    sites={sites}
+                    customers={customers}
+                    siteContacts={siteContacts}
+                    onCreateCustomer={createCustomer}
+                    onCreateSite={createSite}
+                    onCreateContact={createContactForSite}
+                    onCreateEquipment={createEquipment}
+                    onSave={updateJob}
+                    onClose={() => setEditingJob(null)}
+                />
+            )}
         </div>
     )
 }
