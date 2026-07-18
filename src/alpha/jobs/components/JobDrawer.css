@@ -601,11 +601,6 @@
     order: -1;
 }
 
-.technician-assignments-section {
-    padding-top: 22px;
-    border-top: 1px solid #e2e7e4;
-}
-
 .job-assignment-add,
 .job-assignment-save,
 .job-assignment-controls button {
@@ -665,6 +660,21 @@
 .job-assignment-list {
     display: grid;
     gap: 10px;
+}
+
+.job-additional-technicians {
+    display: grid;
+    gap: 10px;
+}
+
+.job-additional-technicians > .job-assignment-add {
+    justify-self: end;
+}
+
+.job-additional-technicians .job-assignment-card {
+    grid-template-columns: minmax(0, 1fr);
+    border-color: #d7e1dc;
+    background: #fbfcfb;
 }
 
 .job-assignment-card {
