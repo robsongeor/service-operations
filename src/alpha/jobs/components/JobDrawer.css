@@ -671,7 +671,7 @@
     justify-self: end;
 }
 
-.technician-job-card {
+.job-assignment-card.technician-job-card {
     grid-template-columns: minmax(0, 1fr);
     border-color: #d7e1dc;
     background: #fbfcfb;
