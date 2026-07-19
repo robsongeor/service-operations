@@ -15,6 +15,12 @@ import {
     updateEquipment as updateEquipmentApi,
 } from '../services/equipmentManagerApi'
 import type { EquipmentUpdateInput } from '../types/equipmentManager.types'
+import {
+    fetchEquipmentServicePlans,
+    saveEquipmentMaintenanceHistory as saveEquipmentMaintenanceHistoryApi,
+    type MaintenanceHistoryInput,
+} from '../servicePlans/servicePlanApi'
+import type { EquipmentServicePlan } from '../servicePlans/equipmentServicePlan.types'
 
 export function useEquipmentManager() {
     const { instance, accounts } = useMsal()
@@ -23,6 +29,7 @@ export function useEquipmentManager() {
     const [customers, setCustomers] = useState<Customer[]>([])
     const [sites, setSites] = useState<Site[]>([])
     const [jobs, setJobs] = useState<Job[]>([])
+    const [servicePlans, setServicePlans] = useState<EquipmentServicePlan[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [loadError, setLoadError] = useState('')
     const [isSaving, setIsSaving] = useState(false)
@@ -42,16 +49,18 @@ export function useEquipmentManager() {
         setLoadError('')
         try {
             const token = await getToken()
-            const [nextEquipment, nextCustomers, nextSites, nextJobs] = await Promise.all([
+            const [nextEquipment, nextCustomers, nextSites, nextJobs, nextServicePlans] = await Promise.all([
                 fetchEquipment(token),
                 fetchCustomers(token),
                 fetchSites(token),
                 fetchJobs(token),
+                fetchEquipmentServicePlans(token),
             ])
             setEquipment(nextEquipment)
             setCustomers(nextCustomers)
             setSites(nextSites)
             setJobs(nextJobs)
+            setServicePlans(nextServicePlans)
         } catch (error) {
             setLoadError(error instanceof Error ? error.message : 'Equipment data could not be loaded.')
         } finally {
@@ -67,14 +76,15 @@ export function useEquipmentManager() {
             setLoadError('')
             try {
                 const token = await getToken()
-                const [nextEquipment, nextCustomers, nextSites, nextJobs] = await Promise.all([
-                    fetchEquipment(token), fetchCustomers(token), fetchSites(token), fetchJobs(token),
+                const [nextEquipment, nextCustomers, nextSites, nextJobs, nextServicePlans] = await Promise.all([
+                    fetchEquipment(token), fetchCustomers(token), fetchSites(token), fetchJobs(token), fetchEquipmentServicePlans(token),
                 ])
                 if (!cancelled) {
                     setEquipment(nextEquipment)
                     setCustomers(nextCustomers)
                     setSites(nextSites)
                     setJobs(nextJobs)
+                    setServicePlans(nextServicePlans)
                 }
             } catch (error) {
                 if (!cancelled) setLoadError(error instanceof Error ? error.message : 'Equipment data could not be loaded.')
@@ -178,14 +188,51 @@ export function useEquipmentManager() {
         }
     }
 
+    const saveEquipmentMaintenanceHistory = async (
+        record: Equipment,
+        existingPlans: EquipmentServicePlan[],
+        input: MaintenanceHistoryInput,
+    ) => {
+        setIsSaving(true)
+        setSaveError('')
+        try {
+            const token = await getToken()
+            const updatedPlans = await saveEquipmentMaintenanceHistoryApi(token, record.gr_equipmentid, existingPlans, input)
+            setEquipment((current) => current.map((item) =>
+                item.gr_equipmentid === record.gr_equipmentid
+                    ? { ...item, gr_currenthourmeter: input.currentHourMeter }
+                    : item,
+            ))
+            setServicePlans((current) => {
+                const updatedTypes = new Set(updatedPlans.map((plan) => plan.gr_servicetype))
+                const retained = current.filter((plan) =>
+                    plan._gr_equipment_value?.toLowerCase() !== record.gr_equipmentid.toLowerCase()
+                    || !updatedTypes.has(plan.gr_servicetype)
+                )
+                return [...retained, ...updatedPlans]
+            })
+            return {
+                equipment: { ...record, gr_currenthourmeter: input.currentHourMeter },
+                servicePlans: updatedPlans,
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Maintenance history could not be saved.'
+            setSaveError(message)
+            throw error
+        } finally {
+            setIsSaving(false)
+        }
+    }
+
     return {
-        equipment, customers, sites, jobs, isLoading, isSaving, loadError, saveError,
+        equipment, customers, sites, jobs, servicePlans, isLoading, isSaving, loadError, saveError,
         reload: load,
         clearSaveError: () => setSaveError(''),
         createCustomer,
         createSite,
         createEquipment,
         updateEquipment,
+        saveEquipmentMaintenanceHistory,
         deleteEquipment,
     }
 }

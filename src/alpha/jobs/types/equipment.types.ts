@@ -6,6 +6,8 @@ export type Equipment = {
     gr_model: string | null
     statecode?: number
     statuscode?: number
+    gr_currenthourmeter?: number | null
+    gr_servicetrackingenabled?: boolean | null
     gr_Site?: {
         gr_siteid: string
         gr_name: string

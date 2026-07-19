@@ -4,7 +4,7 @@ import type { Equipment } from '../types/equipment.types'
 import type { Site } from '../types/site.types'
 import type { Customer } from '../types/customer.types'
 import type { SiteContact } from '../types/siteContact.types'
-import { JOB_TYPES } from '../types/jobType.types'
+import { JOB_TYPES, type JobType } from '../types/jobType.types'
 import { JOB_STATUSES } from '../types/jobStatus.types'
 import type { JobSaveInput } from '../types/jobSave.types'
 import { useJobEditor } from '../hooks/useJobEditor'
@@ -17,6 +17,18 @@ import type {
     JobScheduleOptionInput,
 } from '../types/jobSchedule.types'
 import './JobDrawer.css'
+import { SERVICE_TYPES } from '../../equipment/servicePlans/equipmentServicePlan.types'
+import type { EquipmentServicePlan } from '../../equipment/servicePlans/equipmentServicePlan.types'
+import { jobRequiresMaintenance } from '../types/jobType.types'
+import JobMaintenanceSummary from './JobMaintenanceSummary'
+
+export type JobCreateInitialValues = {
+    equipmentId?: string
+    siteId?: string
+    customerId?: string
+    contactId?: string
+    jobType?: JobType
+}
 
 type Props = {
     mechanics: Mechanic[]
@@ -24,27 +36,36 @@ type Props = {
     sites: Site[]
     customers: Customer[]
     siteContacts: SiteContact[]
+    servicePlans: EquipmentServicePlan[]
     onCreateCustomer: (customer: { name: string }) => Promise<string>
     onCreateSite: (site: { customerId: string; name: string; address?: string }) => Promise<string>
     onCreateContact: (contact: { siteId: string; name: string; phone?: string; email?: string }) => Promise<string>
     onCreateEquipment: (equipment: { fleet: string; serial: string; make?: string; model?: string }) => Promise<string>
     onCreateJob: (job: JobSaveInput) => Promise<string>
     onCreateScheduleOption: (option: JobScheduleOptionInput) => Promise<void>
+    initialValues?: JobCreateInitialValues
     onClose: () => void
 }
 
 export default function JobCreateDrawer({
-    mechanics, equipmentList, sites, customers, siteContacts,
+    mechanics, equipmentList, sites, customers, siteContacts, servicePlans,
     onCreateCustomer, onCreateSite, onCreateContact, onCreateEquipment,
-    onCreateJob, onCreateScheduleOption, onClose,
+    onCreateJob, onCreateScheduleOption, initialValues, onClose,
 }: Props) {
+    const initialCustomer = customers.find((customer) => customer.gr_customerid === initialValues?.customerId)
     const editor = useJobEditor({
         initialDraft: {
             jobNumber: '', orderNumber: '', description: '',
-            jobType: JOB_TYPES.BREAKDOWN,
+            jobType: initialValues?.jobType ?? JOB_TYPES.BREAKDOWN,
             status: JOB_STATUSES.UNALLOCATED,
-            mechanicId: '', equipmentId: '', customerId: '', siteId: '', contactId: '',
+            mechanicId: '',
+            equipmentId: initialValues?.equipmentId ?? '',
+            customerId: initialValues?.customerId ?? '',
+            siteId: initialValues?.siteId ?? '',
+            contactId: initialValues?.contactId ?? '',
+            serviceType: SERVICE_TYPES.NONE,
         },
+        initialCustomerSearch: initialCustomer?.gr_name ?? '',
         customers,
         sites,
         siteContacts,
@@ -74,6 +95,7 @@ export default function JobCreateDrawer({
                 mechanicId: draft.mechanicId || undefined,
                 siteId: draft.siteId || undefined,
                 contactId: draft.contactId || undefined,
+                serviceType: draft.serviceType,
             })
 
             createdJob = true
@@ -123,6 +145,10 @@ export default function JobCreateDrawer({
         >
             <div className="job-edit-grid">
                 <JobCoreFields draft={draft} setDraft={setDraft} mechanics={mechanics} />
+                {jobRequiresMaintenance(draft.jobType) && <JobMaintenanceSummary
+                    equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)}
+                    servicePlans={servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === draft.equipmentId.toLowerCase())}
+                />}
                 <JobRelationshipFields
                     editor={editor}
                     equipmentList={equipmentList}

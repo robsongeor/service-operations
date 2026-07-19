@@ -5,7 +5,7 @@ import type { Equipment } from '../types/equipment.types'
 import type { Site } from '../types/site.types'
 import type { Customer } from '../types/customer.types'
 import type { SiteContact } from '../types/siteContact.types'
-import { JOB_TYPES } from '../types/jobType.types'
+import { JOB_TYPES, jobRequiresMaintenance } from '../types/jobType.types'
 import type { JobSaveInput } from '../types/jobSave.types'
 import { useJobEditor } from '../hooks/useJobEditor'
 import JobCoreFields from './JobCoreFields'
@@ -23,6 +23,8 @@ import type {
 import type { Quote } from '../../quotes/types/quote.types'
 import type { JobCardStatus } from '../types/jobCardStatus.types'
 import type { JobAssignment, JobAssignmentInput } from '../types/jobAssignment.types'
+import { SERVICE_TYPES, type EquipmentServicePlan } from '../../equipment/servicePlans/equipmentServicePlan.types'
+import JobMaintenanceSummary from './JobMaintenanceSummary'
 
 type Props = {
     job: Job
@@ -34,6 +36,7 @@ type Props = {
     scheduleOptions: JobScheduleOption[]
     quotes: Quote[]
     assignments: JobAssignment[]
+    servicePlans: EquipmentServicePlan[]
     onCreateCustomer: (customer: { name: string }) => Promise<string>
     onCreateSite: (site: {
         customerId: string
@@ -81,6 +84,7 @@ export default function JobEditDrawer({
     scheduleOptions,
     quotes,
     assignments,
+    servicePlans,
     onCreateCustomer,
     onCreateSite,
     onCreateContact,
@@ -112,6 +116,7 @@ export default function JobEditDrawer({
             customerId: job.gr_Site?.gr_Customer?.gr_customerid ?? '',
             siteId: job.gr_Site?.gr_siteid ?? '',
             contactId: job.gr_Contact?.gr_contactid ?? '',
+            serviceType: job.gr_servicetype ?? SERVICE_TYPES.NONE,
         },
         initialCustomerSearch: job.gr_Site?.gr_Customer?.gr_name ?? '',
         customers,
@@ -139,6 +144,10 @@ export default function JobEditDrawer({
             setSaveError('Select a site for the chosen customer before saving.')
             return
         }
+        if (draft.status === 122830003 && jobRequiresMaintenance(draft.jobType)) {
+            if (!draft.equipmentId) return setSaveError('Select equipment before completing a service job.')
+            if (draft.serviceType === SERVICE_TYPES.NONE) return setSaveError('Select a service type before completing a service job.')
+        }
 
         try {
             setIsSaving(true)
@@ -153,6 +162,8 @@ export default function JobEditDrawer({
                 mechanicId: draft.mechanicId,
                 siteId: draft.siteId,
                 contactId: draft.contactId,
+                serviceType: draft.serviceType,
+                hourMeter: job.gr_hourmeter ?? undefined,
             })
             onClose()
         } catch (error) {
@@ -266,6 +277,11 @@ export default function JobEditDrawer({
                             setDraft={setDraft}
                             mechanics={mechanics}
                         />
+
+                        {jobRequiresMaintenance(draft.jobType) && <JobMaintenanceSummary
+                            equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)}
+                            servicePlans={servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === draft.equipmentId.toLowerCase())}
+                        />}
 
                         <JobRelationshipFields
                             editor={editor}

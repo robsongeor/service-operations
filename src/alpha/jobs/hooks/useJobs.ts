@@ -24,6 +24,7 @@ import {
 import type { JobAssignment } from '../types/jobAssignment.types'
 import { createEmailDispatch, waitForEmailDispatch } from '../services/emailDispatchApi'
 import { buildAssignmentJobEmail, buildPrimaryJobEmail } from '../services/jobEmail'
+import { assertJobHasEmailableJobNumber } from '../services/jobEmailRules'
 import type {
     JobScheduleOption,
     JobScheduleOptionInput,
@@ -65,6 +66,18 @@ import {
 } from '../services/contactsApi'
 import { fetchQuotes as fetchQuotesApi } from '../../quotes/services/quotesApi'
 import type { Quote } from '../../quotes/types/quote.types'
+import { JOB_STATUSES } from '../types/jobStatus.types'
+import { jobRequiresMaintenance } from '../types/jobType.types'
+import {
+    applyServiceCompletion,
+    calculateIncreasingHourMeter,
+} from '../../equipment/servicePlans/servicePlanCalculations'
+import {
+    completeEquipmentServicePlans,
+    fetchEquipmentServicePlans,
+    updateEquipmentCurrentHourMeter,
+} from '../../equipment/servicePlans/servicePlanApi'
+import { SERVICE_TYPES, type EquipmentServicePlan } from '../../equipment/servicePlans/equipmentServicePlan.types'
 
 
 
@@ -81,6 +94,7 @@ export function useJobs() {
     const [scheduleOptions, setScheduleOptions] = useState<JobScheduleOption[]>([])
     const [jobQuotes, setJobQuotes] = useState<Quote[]>([])
     const [jobAssignments, setJobAssignments] = useState<JobAssignment[]>([])
+    const [servicePlans, setServicePlans] = useState<EquipmentServicePlan[]>([])
     const [isLoading, setIsLoading] = useState(false)
     const [loadError, setLoadError] = useState('')
     const [reloadKey, setReloadKey] = useState(0)
@@ -248,12 +262,52 @@ export function useJobs() {
         setEquipmentList(equipment)
     }
 
+    const processServiceCompletion = async (token: string, job: Job, completedDate: string) => {
+        if (!jobRequiresMaintenance(job.gr_jobtype)) return
+        if (!job.gr_servicetype || job.gr_servicetype === SERVICE_TYPES.NONE) return
+        if (!job.gr_Equipment?.gr_equipmentid) throw new Error('Select equipment before completing a service job.')
+        if (job.gr_hourmeter == null) throw new Error('Enter the hour meter before completing a service job.')
+
+        const equipment = equipmentList.find((item) => item.gr_equipmentid === job.gr_Equipment?.gr_equipmentid)
+        const completion = {
+            jobId: job.gr_jobid,
+            completedDate,
+            hourMeter: job.gr_hourmeter,
+            serviceType: job.gr_servicetype,
+        }
+        await completeEquipmentServicePlans(token, job.gr_Equipment.gr_equipmentid, servicePlans, completion)
+        setServicePlans((current) => current.map((plan) =>
+            plan._gr_equipment_value?.toLowerCase() === job.gr_Equipment?.gr_equipmentid.toLowerCase()
+                ? applyServiceCompletion([plan], completion)[0]
+                : plan,
+        ))
+
+        const nextCurrentHours = calculateIncreasingHourMeter(equipment?.gr_currenthourmeter, job.gr_hourmeter)
+        if (nextCurrentHours !== (equipment?.gr_currenthourmeter ?? 0)) {
+            await updateEquipmentCurrentHourMeter(token, job.gr_Equipment.gr_equipmentid, nextCurrentHours)
+            setEquipmentList((current) => current.map((item) => item.gr_equipmentid === job.gr_Equipment?.gr_equipmentid
+                ? { ...item, gr_currenthourmeter: nextCurrentHours }
+                : item))
+        }
+    }
+
     const updateJobStatus = async (jobId: string, status: JobStatus) => {
         const token = await getAccessToken()
-
-        await updateJobStatusApi(token, jobId, status)
-
-        await fetchJobs()
+        const currentJob = jobs.find((job) => job.gr_jobid === jobId)
+        const isCompleting = status === JOB_STATUSES.COMPLETE && currentJob?.gr_status !== JOB_STATUSES.COMPLETE
+        const completedDate = currentJob?.gr_completeddate ?? new Date().toISOString()
+        if (isCompleting && jobRequiresMaintenance(currentJob?.gr_jobtype)) {
+            if (!currentJob?.gr_Equipment) throw new Error('Select equipment before completing a service job.')
+            if (!currentJob.gr_servicetype || currentJob.gr_servicetype === SERVICE_TYPES.NONE) throw new Error('Select a service type before completing a service job.')
+            if (currentJob.gr_hourmeter == null) throw new Error('Enter the hour meter before completing a service job.')
+        }
+        await updateJobStatusApi(token, jobId, status, isCompleting ? completedDate : undefined)
+        if (isCompleting && currentJob && jobRequiresMaintenance(currentJob.gr_jobtype)) {
+            await processServiceCompletion(token, currentJob, completedDate)
+        }
+        setJobs((current) => current.map((job) => job.gr_jobid === jobId
+            ? { ...job, gr_status: status, gr_completeddate: isCompleting ? completedDate : job.gr_completeddate }
+            : job))
     }
 
     const fetchJobAssignments = async () => {
@@ -278,6 +332,7 @@ export function useJobs() {
     }
 
     const sendPrimaryJobEmail = async (job: Job) => {
+        assertJobHasEmailableJobNumber(job)
         const token = await getAccessToken()
         const email = buildPrimaryJobEmail(job)
         const dispatchId = await createEmailDispatch(token, {
@@ -290,6 +345,7 @@ export function useJobs() {
     }
 
     const sendAssignmentJobEmail = async (job: Job, assignment: JobAssignment) => {
+        assertJobHasEmailableJobNumber(job)
         const token = await getAccessToken()
         const email = buildAssignmentJobEmail(job, assignment)
         const dispatchId = await createEmailDispatch(token, {
@@ -337,8 +393,26 @@ export function useJobs() {
 
     const updateJob = async (jobId: string, job: JobSaveInput) => {
         const token = await getAccessToken()
+        const currentJob = jobs.find((item) => item.gr_jobid === jobId)
+        const isCompleting = job.status === JOB_STATUSES.COMPLETE && currentJob?.gr_status !== JOB_STATUSES.COMPLETE
+        if (isCompleting && jobRequiresMaintenance(job.jobType)) {
+            if (!job.equipmentId) throw new Error('Select equipment before completing a service job.')
+            if (job.serviceType === SERVICE_TYPES.NONE) throw new Error('Select a service type before completing a service job.')
+            if (job.hourMeter == null) throw new Error('Enter the hour meter before completing a service job.')
+        }
+        const completedDate = job.completedDate || (isCompleting ? new Date().toISOString() : undefined)
+        const jobWithCompletion = { ...job, completedDate }
+        await updateJobApi(token, jobId, jobWithCompletion)
 
-        await updateJobApi(token, jobId, job)
+        if (isCompleting && jobRequiresMaintenance(job.jobType)) {
+            const selectedEquipmentForCompletion = equipmentList.find((item) => item.gr_equipmentid === job.equipmentId)
+            await processServiceCompletion(token, {
+                ...currentJob!,
+                gr_Equipment: selectedEquipmentForCompletion,
+                gr_servicetype: job.serviceType,
+                gr_hourmeter: job.hourMeter,
+            }, completedDate!)
+        }
 
         if (job.equipmentId && job.siteId) {
             await updateEquipmentSite(token, job.equipmentId, job.siteId)
@@ -367,6 +441,9 @@ export function useJobs() {
                     gr_description: job.description,
                     gr_jobtype: job.jobType,
                     gr_status: job.status,
+                    gr_servicetype: job.serviceType,
+                    gr_hourmeter: job.hourMeter ?? currentJob.gr_hourmeter ?? null,
+                    gr_completeddate: completedDate ?? currentJob.gr_completeddate ?? null,
                     gr_Equipment: selectedEquipment,
                     gr_Mechanic: selectedMechanic,
                     gr_Site: selectedSite,
@@ -443,6 +520,7 @@ export function useJobs() {
                     initialScheduleOptions,
                     initialQuotes,
                     initialAssignments,
+                    initialServicePlans,
                     mechanicsData,
                 ] = await Promise.all([
                     fetchJobsApi(token),
@@ -453,6 +531,7 @@ export function useJobs() {
                     fetchJobScheduleOptionsApi(token),
                     fetchQuotesApi(token),
                     fetchJobAssignmentsApi(token),
+                    fetchEquipmentServicePlans(token),
                     mechanicsRequest,
                 ])
 
@@ -466,6 +545,7 @@ export function useJobs() {
                 setScheduleOptions(initialScheduleOptions)
                 setJobQuotes(initialQuotes)
                 setJobAssignments(initialAssignments)
+                setServicePlans(initialServicePlans)
                 setMechanics(mechanicsData.value ?? [])
             } catch (error) {
                 if (cancelled) return
@@ -491,6 +571,7 @@ export function useJobs() {
         scheduleOptions,
         jobQuotes,
         jobAssignments,
+        servicePlans,
         equipmentList,
         sites,
         customers,

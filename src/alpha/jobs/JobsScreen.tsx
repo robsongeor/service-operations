@@ -15,6 +15,7 @@ export default function JobsScreen() {
         scheduleOptions,
         jobQuotes,
         jobAssignments,
+        servicePlans,
         createJob, updateJob, deleteJob, updateJobStatus, updateJobFields,
         updateJobCardStatus,
         sendPrimaryJobEmail, sendAssignmentJobEmail,
@@ -56,6 +57,7 @@ export default function JobsScreen() {
         sites,
         customers,
         siteContacts,
+        servicePlans,
         onCreateCustomer: createCustomer,
         onCreateSite: createSite,
         onCreateContact: createContactForSite,
@@ -142,6 +144,7 @@ export default function JobsScreen() {
                     assignments={jobAssignments.filter((assignment) =>
                         assignment._gr_job_value?.toLowerCase() === editingJob.gr_jobid.toLowerCase(),
                     )}
+                    servicePlans={servicePlans}
                     onCreateQuote={createQuoteForJob}
                     onOpenQuote={openQuote}
                     onJobCardStatusChange={updateJobCardStatus}

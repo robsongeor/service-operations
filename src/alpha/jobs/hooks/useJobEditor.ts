@@ -4,6 +4,7 @@ import type { Site } from '../types/site.types'
 import type { SiteContact } from '../types/siteContact.types'
 import type { JobType } from '../types/jobType.types'
 import type { JobStatus } from '../types/jobStatus.types'
+import type { ServiceType } from '../../equipment/servicePlans/equipmentServicePlan.types'
 
 export type JobEditorDraft = {
     jobNumber: string
@@ -16,6 +17,7 @@ export type JobEditorDraft = {
     customerId: string
     siteId: string
     contactId: string
+    serviceType: ServiceType
 }
 
 type Options = {

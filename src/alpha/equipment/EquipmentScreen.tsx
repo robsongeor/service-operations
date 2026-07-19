@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import EquipmentDrawer from './components/EquipmentDrawer'
 import EquipmentTable from './components/EquipmentTable'
 import { useEquipmentManager } from './hooks/useEquipmentManager'
+import { useJobs } from '../jobs/hooks/useJobs'
+import JobCreateDrawer, { type JobCreateInitialValues } from '../jobs/components/JobCreateDrawer'
 import type { Equipment } from '../jobs/types/equipment.types'
 import type { EquipmentSortKey, SortDirection } from './types/equipmentManager.types'
 import './EquipmentScreen.css'
@@ -11,8 +13,23 @@ type StateFilter = 'all' | 'active' | 'inactive'
 const text = (value?: string | null) => value?.trim().toLocaleLowerCase() ?? ''
 
 export default function EquipmentScreen() {
-    const { equipment, customers, sites, jobs, isLoading, isSaving, loadError, saveError, reload, clearSaveError, createCustomer, createSite, createEquipment, updateEquipment, deleteEquipment } = useEquipmentManager()
+    const { equipment, customers, sites, jobs, servicePlans, isLoading, isSaving, loadError, saveError, reload, clearSaveError, createCustomer, createSite, createEquipment, updateEquipment, saveEquipmentMaintenanceHistory, deleteEquipment } = useEquipmentManager()
+    const {
+        equipmentList: jobEquipmentList,
+        mechanics,
+        sites: jobSites,
+        customers: jobCustomers,
+        siteContacts,
+        servicePlans: jobServicePlans,
+        createJob,
+        createCustomer: createJobCustomer,
+        createSite: createJobSite,
+        createContactForSite,
+        createEquipment: createJobEquipment,
+        createScheduleOption,
+    } = useJobs()
     const [editingEquipment, setEditingEquipment] = useState<Equipment | null>(null)
+    const [creatingJobForEquipment, setCreatingJobForEquipment] = useState<Equipment | null>(null)
     const [isCreatingEquipment, setIsCreatingEquipment] = useState(false)
     const [search, setSearch] = useState('')
     const [customerId, setCustomerId] = useState('')
@@ -41,6 +58,28 @@ export default function EquipmentScreen() {
         if (key === sortKey) setSortDirection((current) => current === 'asc' ? 'desc' : 'asc')
         else { setSortKey(key); setSortDirection('asc') }
     }
+    const getInitialJobValues = (record: Equipment): JobCreateInitialValues => {
+        const siteId = record.gr_Site?.gr_siteid ?? ''
+        const contactsForSite = siteId
+            ? siteContacts.filter((siteContact) => siteContact.gr_Site?.gr_siteid === siteId)
+            : []
+
+        return {
+            equipmentId: record.gr_equipmentid,
+            siteId,
+            customerId: record.gr_Site?.gr_Customer?.gr_customerid ?? '',
+            contactId: contactsForSite.length === 1 ? contactsForSite[0].gr_Contact?.gr_contactid ?? '' : '',
+        }
+    }
+    const openJobCreateForEquipment = (record: Equipment) => {
+        setCreatingJobForEquipment(record)
+        setEditingEquipment(null)
+    }
+    const closeEquipmentJobCreate = () => {
+        const record = creatingJobForEquipment
+        setCreatingJobForEquipment(null)
+        if (record) setEditingEquipment(record)
+    }
 
     return (
         <main className="equipment-page">
@@ -55,10 +94,30 @@ export default function EquipmentScreen() {
                     <label>State<select value={stateFilter} onChange={(event) => setStateFilter(event.target.value as StateFilter)}><option value="all">All states</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
                 </div>
                 <div className="equipment-results-count">Showing {rows.length} of {equipment.length}</div>
-                <EquipmentTable equipment={rows} sortKey={sortKey} sortDirection={sortDirection} onSort={changeSort} onEdit={(item) => { clearSaveError(); setEditingEquipment(item) }} />
+                <EquipmentTable equipment={rows} servicePlans={servicePlans} sortKey={sortKey} sortDirection={sortDirection} onSort={changeSort} onEdit={(item) => { clearSaveError(); setEditingEquipment(item) }} />
             </section>}
             {isCreatingEquipment && <EquipmentDrawer mode="create" customers={customers} sites={sites} jobs={jobs} isSaving={isSaving} saveError={saveError} onClose={() => setIsCreatingEquipment(false)} onCreateCustomer={createCustomer} onCreateSite={createSite} onCreate={async (input) => { await createEquipment(input); setIsCreatingEquipment(false) }} />}
-            {editingEquipment && <EquipmentDrawer mode="edit" equipment={editingEquipment} customers={customers} sites={sites} jobs={jobs} isSaving={isSaving} saveError={saveError} onClose={() => setEditingEquipment(null)} onSave={async (input) => { const updated = await updateEquipment(editingEquipment, input); setEditingEquipment(updated) }} onDelete={async () => { await deleteEquipment(editingEquipment.gr_equipmentid); setEditingEquipment(null) }} />}
+            {editingEquipment && <EquipmentDrawer mode="edit" equipment={editingEquipment} servicePlans={servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === editingEquipment.gr_equipmentid.toLowerCase())} customers={customers} sites={sites} jobs={jobs} isSaving={isSaving} saveError={saveError} onClose={() => setEditingEquipment(null)} onSave={async (input) => { const updated = await updateEquipment(editingEquipment, input); setEditingEquipment(updated) }} onSaveMaintenanceHistory={async (plans, input) => { const updated = await saveEquipmentMaintenanceHistory(editingEquipment, plans, input); setEditingEquipment(updated.equipment) }} onCreateJob={openJobCreateForEquipment} onDelete={async () => { await deleteEquipment(editingEquipment.gr_equipmentid); setEditingEquipment(null) }} />}
+            {creatingJobForEquipment && <JobCreateDrawer
+                mechanics={mechanics}
+                equipmentList={jobEquipmentList}
+                sites={jobSites}
+                customers={jobCustomers}
+                siteContacts={siteContacts}
+                servicePlans={jobServicePlans}
+                initialValues={getInitialJobValues(creatingJobForEquipment)}
+                onCreateCustomer={createJobCustomer}
+                onCreateSite={createJobSite}
+                onCreateContact={createContactForSite}
+                onCreateEquipment={createJobEquipment}
+                onCreateJob={async (input) => {
+                    const jobId = await createJob(input)
+                    await reload()
+                    return jobId
+                }}
+                onCreateScheduleOption={createScheduleOption}
+                onClose={closeEquipmentJobCreate}
+            />}
         </main>
     )
 }

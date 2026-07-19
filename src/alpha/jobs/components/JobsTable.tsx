@@ -9,6 +9,7 @@ import {
 } from '../types/jobStatus.types'
 import './JobsTable.css'
 import { getJobCardStatus, JOB_CARD_STATUSES } from '../types/jobCardStatus.types'
+import { JOB_NUMBER_REQUIRED_EMAIL_MESSAGE, jobHasEmailableJobNumber } from '../services/jobEmailRules'
 
 type Props = {
     jobs: Job[]
@@ -59,6 +60,11 @@ export default function JobsTable({
     }>({ column: 'status', direction: 'ascending' })
 
     const sendJobEmail = async (job: Job) => {
+        if (!jobHasEmailableJobNumber(job)) {
+            window.alert(JOB_NUMBER_REQUIRED_EMAIL_MESSAGE)
+            return
+        }
+
         setSendingJobId(job.gr_jobid)
         try {
             await onEmailJob(job)
@@ -320,6 +326,7 @@ export default function JobsTable({
                         {sortedJobs.map((job) => {
                             const assignmentStatus = getJobCardStatus(job.gr_jobcardstatus)
                             const isSending = sendingJobId === job.gr_jobid
+                            const hasJobNumber = jobHasEmailableJobNumber(job)
                             const assignmentLabel = !job.gr_Mechanic
                                 ? 'Email'
                                 : assignmentStatus === JOB_CARD_STATUSES.NOT_SENT
@@ -446,7 +453,10 @@ export default function JobsTable({
                                         data-status={job.gr_status}
                                         aria-label="Job status"
                                         value={job.gr_status}
-                                        onChange={(event) => onStatusChange(job.gr_jobid, Number(event.target.value) as JobStatus)}
+                                        onChange={async (event) => {
+                                            try { await onStatusChange(job.gr_jobid, Number(event.target.value) as JobStatus) }
+                                            catch (error) { window.alert(error instanceof Error ? error.message : 'The job status could not be updated.') }
+                                        }}
                                     >
                                         {JOB_STATUS_OPTIONS.map((status) => (
                                             <option key={status.value} value={status.value}>{status.label}</option>
@@ -483,14 +493,16 @@ export default function JobsTable({
                                         <button
                                             className={'jobs-table-action jobs-email-action status-' + assignmentStatus}
                                             type="button"
-                                            title={job.gr_Mechanic
+                                            title={!hasJobNumber
+                                                ? JOB_NUMBER_REQUIRED_EMAIL_MESSAGE
+                                                : job.gr_Mechanic
                                                 ? assignmentStatus === JOB_CARD_STATUSES.NOT_SENT
                                                     ? `Send this job to ${job.gr_Mechanic.gr_name} through Power Automate.`
                                                     : `${assignmentLabel} to ${job.gr_Mechanic.gr_name}.`
                                                 : 'Assign a technician before emailing this job.'}
                                             aria-label={`${assignmentLabel} job to technician`}
                                             onClick={() => void sendJobEmail(job)}
-                                            disabled={isSending || !job.gr_Mechanic || assignmentStatus !== JOB_CARD_STATUSES.NOT_SENT}
+                                            disabled={isSending || !hasJobNumber || !job.gr_Mechanic || assignmentStatus !== JOB_CARD_STATUSES.NOT_SENT}
                                         >
                                             {isSending ? 'Sending...' : assignmentLabel}
                                         </button>

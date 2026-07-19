@@ -8,6 +8,7 @@ import {
     JOB_CARD_STATUS_OPTIONS,
     type JobCardStatus,
 } from '../types/jobCardStatus.types'
+import { JOB_NUMBER_REQUIRED_EMAIL_MESSAGE, jobHasEmailableJobNumber } from '../services/jobEmailRules'
 
 type Props = {
     job: Job
@@ -44,6 +45,7 @@ type TechnicianCardProps = {
     instructions?: string | null
     isBusy: boolean
     canSend: boolean
+    disabledHint?: string
     onSend: () => void
     onRemove?: () => void
 }
@@ -55,6 +57,7 @@ function TechnicianCard({
     instructions,
     isBusy,
     canSend,
+    disabledHint,
     onSend,
     onRemove,
 }: TechnicianCardProps) {
@@ -75,6 +78,7 @@ function TechnicianCard({
                     <button
                         type="button"
                         className="job-assignment-send"
+                        title={!canSend ? disabledHint : undefined}
                         onClick={onSend}
                         disabled={isBusy || !canSend || status !== JOB_CARD_STATUSES.NOT_SENT}
                     >
@@ -119,6 +123,7 @@ export default function JobCardFields({
     const [showAssignmentForm, setShowAssignmentForm] = useState(false)
     const [mechanicId, setMechanicId] = useState('')
     const [error, setError] = useState('')
+    const hasJobNumber = jobHasEmailableJobNumber(job)
 
     const changeStatus = async (nextStatus: JobCardStatus) => {
         setIsUpdating(true)
@@ -166,6 +171,11 @@ export default function JobCardFields({
     }
 
     const sendAssignment = async (assignment: JobAssignment) => {
+        if (!hasJobNumber) {
+            setError(JOB_NUMBER_REQUIRED_EMAIL_MESSAGE)
+            return
+        }
+
         if (!assignment.gr_Mechanic?.gr_email) {
             setError('This technician needs an email address before the job can be sent.')
             return
@@ -185,6 +195,11 @@ export default function JobCardFields({
     }
 
     const sendPrimaryTechnician = async () => {
+        if (!hasJobNumber) {
+            setError(JOB_NUMBER_REQUIRED_EMAIL_MESSAGE)
+            return
+        }
+
         if (!job.gr_Mechanic?.gr_email) {
             setError('The primary technician needs an email address before the job can be sent.')
             return
@@ -238,7 +253,10 @@ export default function JobCardFields({
                         : 'Assign a technician with an email address on the Details tab.'}
                     status={status}
                     isBusy={isUpdating}
-                    canSend={Boolean(job.gr_Mechanic?.gr_email)}
+                    canSend={hasJobNumber && Boolean(job.gr_Mechanic?.gr_email)}
+                    disabledHint={!hasJobNumber
+                        ? JOB_NUMBER_REQUIRED_EMAIL_MESSAGE
+                        : 'The primary technician needs an email address before the job can be sent.'}
                     onSend={() => void sendPrimaryTechnician()}
                 />
 
@@ -256,7 +274,10 @@ export default function JobCardFields({
                                         status={assignmentStatus}
                                         instructions={assignment.gr_workinstructions}
                                         isBusy={isBusy}
-                                        canSend={Boolean(assignment.gr_Mechanic?.gr_email)}
+                                        canSend={hasJobNumber && Boolean(assignment.gr_Mechanic?.gr_email)}
+                                        disabledHint={!hasJobNumber
+                                            ? JOB_NUMBER_REQUIRED_EMAIL_MESSAGE
+                                            : 'This technician needs an email address before the job can be sent.'}
                                         onSend={() => void sendAssignment(assignment)}
                                         onRemove={() => void removeAssignment(assignment)}
                                     />

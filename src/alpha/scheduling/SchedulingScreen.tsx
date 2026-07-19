@@ -108,6 +108,7 @@ export default function SchedulingScreen() {
         scheduleOptions,
         jobQuotes,
         jobAssignments,
+        servicePlans,
         mechanics,
         equipmentList,
         sites,
@@ -290,6 +291,7 @@ export default function SchedulingScreen() {
                     customers={customers}
                     siteContacts={siteContacts}
                     scheduleOptions={scheduleOptions}
+                    servicePlans={servicePlans}
                     onCreateCustomer={createCustomer}
                     onCreateSite={createSite}
                     onCreateContact={createContactForSite}

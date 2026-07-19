@@ -77,6 +77,14 @@
 .equipment-state-note, .equipment-history-note { margin: 8px 0 0; color: #7b827d; font-size: .72rem; }
 .equipment-history-section { margin-top: 0; }
 .equipment-history-count { color: #7b827d; font-size: .72rem; }
+.edit-drawer-header .equipment-create-job-button { display: inline-flex; width: auto; min-width: max-content; height: 34px; align-items: center; justify-content: center; padding: 0 12px; border: 1px solid #176f66; border-radius: 8px; background: #176f66; color: #fff; font-size: .72rem; font-weight: 750; }
+.edit-drawer-header .equipment-create-job-button:hover:not(:disabled) { background: #125f57; }
+.equipment-edit-tabs { position: sticky; z-index: 3; top: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin: -20px -20px 22px; padding: 12px 20px 0; border-bottom: 1px solid #dfe5e1; background: rgba(253,253,251,.97); backdrop-filter: blur(8px); }
+.equipment-edit-tabs button { position: relative; display: flex; min-width: 0; min-height: 39px; align-items: center; justify-content: center; gap: 6px; padding: 0 7px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #707a74; font-size: .7rem; font-weight: 750; cursor: pointer; }
+.equipment-edit-tabs button:hover { color: #263a32; }
+.equipment-edit-tabs button.active { border-bottom-color: #176f66; color: #155f56; }
+.equipment-edit-tabs button span { display: grid; min-width: 18px; height: 18px; place-items: center; padding: 0 3px; border-radius: 999px; background: #e5eeea; color: #46645a; font-size: .58rem; }
+.equipment-edit-tab-panel { min-height: 320px; }
 .equipment-footer-leading { display: flex; min-width: 0; align-items: center; gap: 10px; }
 .equipment-footer-leading > span { color: #7b827d; font-size: .72rem; }
 .equipment-footer-leading .equipment-footer-error { color: #9b3636; }
@@ -93,3 +101,25 @@
 
 @media (max-width: 850px) { .equipment-toolbar { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 600px) { .equipment-toolbar, .equipment-form-grid { grid-template-columns: 1fr; } .equipment-page-header { margin-left: -24px; margin-right: -24px; } }
+
+.equipment-maintenance-summary { display: grid; gap: .15rem; white-space: nowrap; }
+.equipment-maintenance-summary small { color: #64748b; }
+.equipment-maintenance-actions { display: flex; justify-content: flex-end; margin: 14px 0; }
+.equipment-maintenance-actions button { min-height: 34px; padding: 0 12px; border: 1px solid #176f66; border-radius: 8px; background: #176f66; color: #fff; font-size: .72rem; font-weight: 750; cursor: pointer; }
+.equipment-maintenance-actions button:disabled { cursor: wait; opacity: .55; }
+.equipment-maintenance-plans { display: grid; gap: .75rem; }
+.equipment-maintenance-plans article { border: 1px solid #dbe3ec; border-radius: 8px; padding: .85rem; }
+.equipment-maintenance-plans article > div { display: flex; justify-content: space-between; gap: 1rem; }
+.equipment-maintenance-plans dl { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .75rem; margin: .75rem 0 0; }
+.equipment-maintenance-plans dt { color: #64748b; font-size: .75rem; }
+.equipment-maintenance-plans dd { margin: .2rem 0 0; font-weight: 600; }
+.equipment-maintenance-status { border-radius: 999px; padding: .2rem .55rem; font-size: .75rem; font-weight: 700; background: #e2e8f0; }
+.equipment-maintenance-status.status-ok { background: #dcfce7; color: #166534; }
+.equipment-maintenance-status.status-due-soon { background: #fef3c7; color: #92400e; }
+.equipment-maintenance-status.status-due, .equipment-maintenance-status.status-overdue { background: #fee2e2; color: #991b1b; }
+.equipment-maintenance-history-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 12px; border: 1px solid #dde4e0; border-radius: 10px; background: #f8faf8; }
+.equipment-maintenance-history-group legend { grid-column: 1 / -1; padding: 0 4px; color: #26302a; font-size: .78rem; font-weight: 800; }
+.equipment-maintenance-history-group label { min-width: 0; }
+.equipment-maintenance-history-group input { width: 100%; min-width: 0; }
+@media (max-width: 900px) { .equipment-maintenance-plans dl { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .equipment-maintenance-history-group { grid-template-columns: 1fr; } }

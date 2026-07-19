@@ -5,7 +5,7 @@ const DATAVERSE_URL = import.meta.env.VITE_DATAVERSE_URL
 
 export async function fetchJobs(accessToken: string): Promise<Job[]> {
     const result = await fetch(
-        `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=gr_jobid,createdon,gr_jobnumber,gr_status,gr_ordernumber,gr_description,gr_jobtype,gr_jobcardstatus,gr_jobcardsenton,gr_jobcardsubmittedon,gr_jobcardclosedon&$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_serial),gr_Mechanic($select=gr_mechanicid,gr_name,gr_phone,gr_email),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name,gr_phone,gr_email)`,
+        `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=gr_jobid,createdon,gr_jobnumber,gr_status,gr_ordernumber,gr_description,gr_jobtype,gr_jobcardstatus,gr_jobcardsenton,gr_jobcardsubmittedon,gr_jobcardclosedon,gr_hourmeter,gr_completeddate,gr_servicetype&$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_serial,gr_currenthourmeter,gr_servicetrackingenabled),gr_Mechanic($select=gr_mechanicid,gr_name,gr_phone,gr_email),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name,gr_phone,gr_email)`,
         {
             cache: 'no-store',
             headers: {
@@ -35,6 +35,7 @@ export async function createJob(
         gr_description: job.description,
         gr_jobtype: job.jobType,
         gr_status: job.status,
+        gr_servicetype: job.serviceType,
     }
 
     if (job.equipmentId) {
@@ -52,6 +53,8 @@ export async function createJob(
     if (job.contactId) {
         newJob['gr_Contact@odata.bind'] = `/gr_contacts(${job.contactId})`
     }
+    if (job.hourMeter != null) newJob.gr_hourmeter = job.hourMeter
+    if (job.completedDate) newJob.gr_completeddate = job.completedDate
 
     const result = await fetch(
         `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2/gr_jobs`,
@@ -79,7 +82,8 @@ export async function createJob(
 export async function updateJobStatus(
     token: string,
     jobId: string,
-    status: number
+    status: number,
+    completedDate?: string,
 ) {
     const response = await fetch(
         `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2/gr_jobs(${jobId})`,
@@ -92,6 +96,7 @@ export async function updateJobStatus(
             },
             body: JSON.stringify({
                 gr_status: status,
+                ...(completedDate ? { gr_completeddate: completedDate } : {}),
             }),
         }
     )
@@ -171,6 +176,8 @@ export async function updateJob(
         gr_description: job.description,
         gr_jobtype: job.jobType,
         gr_status: job.status,
+        gr_servicetype: job.serviceType,
+        gr_hourmeter: job.hourMeter ?? null,
         'gr_Equipment@odata.bind': job.equipmentId
             ? `/gr_equipments(${job.equipmentId})`
             : null,
@@ -184,6 +191,7 @@ export async function updateJob(
             ? `/gr_contacts(${job.contactId})`
             : null,
     }
+    if (job.completedDate) fields.gr_completeddate = job.completedDate
 
     const response = await fetch(
         `${DATAVERSE_URL}/api/data/v9.2/gr_jobs(${jobId})`,

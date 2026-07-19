@@ -1239,3 +1239,30 @@ The priority is a reliable daily operations workflow:
 7. Receive paperwork.
 8. Process and close the job.
 9. Preserve operational history.
+
+---
+
+## 29. Equipment service-plan engine
+
+The Equipment feature now owns the maintenance engine under:
+
+```text
+src/alpha/equipment/servicePlans/
+```
+
+Calculation and status helpers are independent of React. Dataverse reads and writes are
+handled by `servicePlanApi.ts`. Completing a Job with A, B or C Service updates the
+applicable Equipment Service Plan records from the actual Job hour meter (A only; A+B;
+or A+B+C), then increases Equipment Current Hour Meter when appropriate. A missing hour
+meter or Equipment lookup prevents service-plan completion. Service Type None leaves
+maintenance records unchanged.
+
+The Equipment Manager loads plans alongside Equipment and displays a read-only Maintenance
+section plus a compact nearest-due summary. These state updates are immutable and do not
+reload the page or alter historical Jobs.
+
+Maintenance is relevant only to Service jobs. `jobRequiresMaintenance` in the Job Type
+module centralises that decision for drawer visibility and completion validation. In the
+manager-facing Job drawer, office staff choose A, B, or C Service while planning. Hour
+Meter and Completed Date belong to the future technician completion workflow and are not
+editable there. Completed Date remains set by the completion workflow.

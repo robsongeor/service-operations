@@ -1,6 +1,7 @@
 import type { JobType } from './jobType.types'
 import type { JobStatus } from './jobStatus.types'
 import type { JobCardStatus } from './jobCardStatus.types'
+import type { ServiceType } from '../../equipment/servicePlans/equipmentServicePlan.types'
 
 export type Job = {
     gr_jobid: string
@@ -14,6 +15,9 @@ export type Job = {
     gr_jobcardsenton?: string | null
     gr_jobcardsubmittedon?: string | null
     gr_jobcardclosedon?: string | null
+    gr_hourmeter?: number | null
+    gr_completeddate?: string | null
+    gr_servicetype?: ServiceType | null
     gr_Equipment?: {
         gr_equipmentid: string
         gr_fleet: string | null

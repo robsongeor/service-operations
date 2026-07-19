@@ -1,8 +1,10 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { Mechanic } from '../types/mechanic.types'
 import { JOB_TYPE_OPTIONS, type JobType } from '../types/jobType.types'
+import { jobRequiresMaintenance } from '../types/jobType.types'
 import type { JobEditorDraft } from '../hooks/useJobEditor'
 import { JOB_STATUS_OPTIONS, type JobStatus } from '../types/jobStatus.types'
+import { SERVICE_TYPES, SERVICE_TYPE_OPTIONS, type ServiceType } from '../../equipment/servicePlans/equipmentServicePlan.types'
 
 type Props = {
     draft: JobEditorDraft
@@ -94,6 +96,25 @@ export default function JobCoreFields({ draft, setDraft, mechanics }: Props) {
                     ))}
                 </select>
             </label>
+
+            {jobRequiresMaintenance(draft.jobType) && <>
+                <div className="job-edit-divider job-edit-field-wide">
+                    <h3>Maintenance</h3>
+                    <p>Select the maintenance type to be carried out. The maintenance summary below shows the equipment's current service schedule.</p>
+                </div>
+                <label className="job-edit-field">
+                    <span>Service type *</span>
+                    <select value={draft.serviceType} onChange={(event) => setDraft((current) => ({
+                        ...current,
+                        serviceType: Number(event.target.value) as ServiceType,
+                    }))}>
+                        <option value={SERVICE_TYPES.NONE}>Select service type</option>
+                        {SERVICE_TYPE_OPTIONS.filter((option) => option.value !== SERVICE_TYPES.NONE).map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                    </select>
+                </label>
+            </>}
         </>
     )
 }

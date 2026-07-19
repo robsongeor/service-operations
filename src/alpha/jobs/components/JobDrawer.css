@@ -1004,3 +1004,23 @@
     cursor: wait;
     opacity: 0.55;
 }
+
+.job-maintenance-summary {
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid #d7ddd9;
+    border-radius: 10px;
+    background: #f8faf8;
+}
+
+.job-maintenance-summary-heading { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.job-maintenance-summary h3, .job-maintenance-summary p { margin: 0; }
+.job-maintenance-summary-heading span, .job-maintenance-summary p { color: #68736d; font-size: .8rem; }
+.job-maintenance-summary-plans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.job-maintenance-summary-plans article { display: grid; gap: 4px; padding: 10px; border: 1px solid #e0e5e2; border-radius: 8px; background: #fff; }
+.job-maintenance-summary-plans article.overdue { border-color: #efb4b4; background: #fff6f6; }
+.job-maintenance-summary-plans article.overdue strong,
+.job-maintenance-summary-plans article .job-maintenance-overdue { color: #a33939; }
+.job-maintenance-summary-plans article span { color: #68736d; font-size: .77rem; }
+@media (max-width: 640px) { .job-maintenance-summary-heading { display: grid; } .job-maintenance-summary-plans { grid-template-columns: 1fr; } }
