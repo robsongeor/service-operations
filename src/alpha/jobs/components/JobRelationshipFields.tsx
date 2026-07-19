@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { Equipment } from '../types/equipment.types'
 import type { useJobEditor } from '../hooks/useJobEditor'
 
@@ -12,6 +12,13 @@ type Props = {
 }
 
 type Panel = '' | 'equipment' | 'customer' | 'site' | 'contact'
+
+const normalizeSearch = (value?: string | null) => value?.trim().replace(/\s+/g, ' ').toLocaleLowerCase() ?? ''
+const equipmentLabel = (item: Equipment) => ({
+    identifier: item.gr_fleet || (item.gr_serial ? `Serial ${item.gr_serial}` : 'Equipment'),
+    model: [item.gr_make, item.gr_model].filter(Boolean).join(' '),
+    location: [item.gr_Site?.gr_Customer?.gr_name, item.gr_Site?.gr_name].filter(Boolean).join(' · '),
+})
 
 export default function JobRelationshipFields({
     editor,
@@ -34,10 +41,43 @@ export default function JobRelationshipFields({
     const [customer, setCustomer] = useState({ name: '', siteName: '', address: '' })
     const [site, setSite] = useState({ name: '', address: '' })
     const [contact, setContact] = useState({ name: '', phone: '', email: '' })
+    const selectedEquipment = equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)
+    const [equipmentSearch, setEquipmentSearch] = useState(() => selectedEquipment ? equipmentLabel(selectedEquipment).identifier : '')
+    const [equipmentSearchOpen, setEquipmentSearchOpen] = useState(false)
+    const [equipmentActiveIndex, setEquipmentActiveIndex] = useState(0)
+    const equipmentResults = useMemo(() => {
+        const query = normalizeSearch(equipmentSearch)
+        if (!query) return []
+        return equipmentList.map((item) => {
+            const identifiers = [item.gr_fleet, item.gr_serial].map(normalizeSearch)
+            const details = [item.gr_make, item.gr_model, item.gr_Site?.gr_Customer?.gr_name, item.gr_Site?.gr_name, item.gr_Site?.gr_address].map(normalizeSearch)
+            return { item, score: identifiers.some((value) => value.includes(query)) ? 0 : details.some((value) => value.includes(query)) ? 1 : 2 }
+        }).filter(({ score }) => score < 2).sort((a, b) => a.score - b.score || equipmentLabel(a.item).identifier.localeCompare(equipmentLabel(b.item).identifier)).slice(0, 25).map(({ item }) => item)
+    }, [equipmentList, equipmentSearch])
 
     const openPanel = (nextPanel: Panel) => {
         setPanel(nextPanel)
         setCreateError('')
+    }
+
+    const selectEquipment = (item: Equipment) => {
+        setDraft((current) => ({ ...current, equipmentId: item.gr_equipmentid }))
+        setEquipmentSearch(equipmentLabel(item).identifier)
+        setEquipmentSearchOpen(false)
+        const site = item.gr_Site
+        const customer = site?.gr_Customer
+        if (site && customer) {
+            setCustomerSearch(customer.gr_name)
+            setCustomerSearchOpen(false)
+            selectCustomer(customer.gr_customerid)
+            selectSite(site.gr_siteid)
+        }
+    }
+
+    const clearEquipment = () => {
+        setDraft((current) => ({ ...current, equipmentId: '' }))
+        setEquipmentSearch('')
+        setEquipmentSearchOpen(false)
     }
 
     const createEquipment = async () => {

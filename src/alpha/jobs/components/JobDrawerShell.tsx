@@ -7,6 +7,7 @@ type Props = {
     busy?: boolean
     children: ReactNode
     footer: ReactNode
+    headerAction?: ReactNode
     onClose: () => void
 }
 

@@ -8,6 +8,7 @@ import PricingScreen from './alpha/quotes/PricingScreen'
 import QuotesScreen from './alpha/quotes/QuotesScreen'
 import MechanicsScreen from './alpha/mechanics/MechanicsScreen'
 import EquipmentScreen from './alpha/equipment/EquipmentScreen'
+import CustomerDashboardScreen from './alpha/customers/CustomerDashboardScreen'
 
 function App() {
   const { accounts } = useMsal()
@@ -25,6 +26,7 @@ function App() {
       <div style={{ flex: 1, minWidth: 0, padding: '24px' }}>
         <Routes>
           <Route path="/" element={<div>Overview</div>} />
+          <Route path="/customers" element={<CustomerDashboardScreen />} />
           <Route path="/mechanics" element={<MechanicsScreen />} />
           <Route path="/equipment" element={<EquipmentScreen />} />
           <Route path="/jobs" element={<JobsScreen />} />

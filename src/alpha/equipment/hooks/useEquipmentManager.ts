@@ -117,13 +117,13 @@ export function useEquipmentManager() {
         }
     }
 
-    const createEquipment = async (input: EquipmentUpdateInput) => {
+    const createEquipment = async (input: EquipmentUpdateInput, resolvedSite?: Site) => {
         setIsSaving(true)
         setSaveError('')
         try {
             const token = await getToken()
             const createdResponse = await createEquipmentApi(token, input)
-            const selectedSite = sites.find((site) => site.gr_siteid === input.siteId)
+            const selectedSite = resolvedSite ?? sites.find((site) => site.gr_siteid === input.siteId)
             const created: Equipment = {
                 ...createdResponse,
                 gr_fleet: input.fleet.trim() || null,

@@ -1,0 +1,148 @@
+.customer-dashboard-page { display: grid; gap: 18px; color: #202421; }
+
+.customer-dashboard-selector,
+.customer-dashboard-header,
+.customer-summary-grid article,
+.customer-dashboard-content,
+.customer-site-card,
+.customer-dashboard-empty,
+.customer-dashboard-state {
+    border: 1px solid #dfe5e1;
+    border-radius: 12px;
+    background: #fdfdfb;
+}
+
+.customer-dashboard-selector {
+    position: sticky;
+    z-index: 8;
+    top: 0;
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) minmax(220px, 320px) minmax(220px, 320px);
+    gap: 14px;
+    align-items: end;
+    padding: 16px 18px;
+    box-shadow: 0 4px 14px rgba(24,34,29,.05);
+}
+
+.customer-dashboard-selector p,
+.customer-dashboard-selector h1,
+.customer-dashboard-header h2,
+.customer-dashboard-header span,
+.customer-section-heading h3,
+.customer-section-heading span,
+.customer-site-card h4,
+.customer-site-card p {
+    margin: 0;
+}
+
+.customer-dashboard-selector p,
+.customer-dashboard-header span,
+.customer-section-heading span {
+    color: #737a76;
+    font-size: .67rem;
+    font-weight: 750;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+}
+
+.customer-dashboard-selector h1 { margin-top: 3px; font-size: 1.35rem; }
+.customer-dashboard-selector label { display: grid; gap: 5px; color: #59615c; font-size: .7rem; font-weight: 750; }
+.customer-dashboard-selector input,
+.customer-dashboard-selector select {
+    min-height: 38px;
+    box-sizing: border-box;
+    padding: 0 10px;
+    border: 1px solid #d3d9d5;
+    border-radius: 8px;
+    background: #fff;
+    color: #202421;
+    font: inherit;
+}
+
+.customer-dashboard-state,
+.customer-dashboard-empty {
+    display: grid;
+    gap: 8px;
+    min-height: 180px;
+    place-items: center;
+    padding: 28px;
+    color: #65706a;
+    text-align: center;
+}
+
+.customer-dashboard-state.error { display: flex; justify-content: space-between; text-align: left; }
+.customer-dashboard-state button { min-height: 34px; padding: 0 12px; border: 0; border-radius: 8px; background: #176f66; color: #fff; font-weight: 750; cursor: pointer; }
+.customer-dashboard-empty strong { color: #26302a; font-size: 1rem; }
+.customer-dashboard-empty p { max-width: 520px; margin: 0; font-size: .78rem; line-height: 1.45; }
+.customer-dashboard-empty.compact { min-height: 86px; }
+
+.customer-dashboard-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 18px;
+}
+
+.customer-dashboard-header h2 { margin-top: 3px; font-size: 1.55rem; }
+.customer-dashboard-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.customer-dashboard-actions button {
+    min-height: 36px;
+    padding: 0 13px;
+    border: 1px solid #cfd6d1;
+    border-radius: 8px;
+    background: #fff;
+    color: #303632;
+    font-size: .75rem;
+    font-weight: 750;
+    cursor: pointer;
+}
+.customer-dashboard-actions button:first-child { border-color: #176f66; background: #176f66; color: #fff; }
+.customer-dashboard-actions button:disabled { cursor: default; opacity: .55; }
+
+.customer-summary-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+.customer-summary-grid article { display: grid; gap: 5px; padding: 14px; }
+.customer-summary-grid span { color: #747d77; font-size: .68rem; font-weight: 750; }
+.customer-summary-grid strong { color: #27312b; font-size: 1.1rem; }
+
+.customer-dashboard-content { display: grid; gap: 14px; padding: 16px; }
+.customer-section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; }
+.customer-section-heading h3 { margin-top: 3px; font-size: 1rem; }
+.customer-section-heading small { color: #7a827d; font-size: .7rem; }
+
+.customer-site-card { overflow: hidden; }
+.customer-site-card > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 14px 16px; border-bottom: 1px solid #e3e8e5; background: #f8faf8; }
+.customer-site-card h4 { color: #28312c; font-size: .95rem; }
+.customer-site-card p { margin-top: 3px; color: #747d77; font-size: .74rem; }
+.customer-site-card > header > span { color: #68736d; font-size: .7rem; font-weight: 750; }
+
+.customer-equipment-table-wrap { overflow-x: auto; }
+.customer-equipment-table { width: 100%; min-width: 860px; border-collapse: collapse; table-layout: fixed; font-size: .75rem; }
+.customer-equipment-table th { padding: 9px 12px; border-bottom: 1px solid #e2e7e4; color: #6b726e; font-size: .64rem; text-align: left; text-transform: uppercase; }
+.customer-equipment-table td { min-height: 46px; padding: 10px 12px; border-bottom: 1px solid #edf0ed; color: #46504a; vertical-align: top; }
+.customer-equipment-table tbody tr { cursor: pointer; transition: background 100ms ease; }
+.customer-equipment-table tbody tr:hover { background: #f5f8f6; }
+.customer-equipment-table tbody tr:focus-visible { outline: 2px solid #315b4d; outline-offset: -2px; }
+.customer-equipment-table td small { display: block; margin-top: 3px; color: #77817b; }
+
+.customer-maintenance-status { display: inline-flex; padding: 4px 8px; border-radius: 999px; background: #edf0ee; color: #606a64; font-size: .66rem; font-weight: 750; }
+.customer-maintenance-status.status-ok { background: #dcfce7; color: #166534; }
+.customer-maintenance-status.status-due-soon { background: #fef3c7; color: #92400e; }
+.customer-maintenance-status.status-due,
+.customer-maintenance-status.status-overdue { background: #fee2e2; color: #991b1b; }
+
+@media (max-width: 1180px) {
+    .customer-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 860px) {
+    .customer-dashboard-selector { grid-template-columns: 1fr; position: static; }
+    .customer-dashboard-header,
+    .customer-section-heading { align-items: flex-start; flex-direction: column; }
+    .customer-dashboard-actions { justify-content: flex-start; }
+    .customer-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 560px) {
+    .customer-summary-grid { grid-template-columns: 1fr; }
+}

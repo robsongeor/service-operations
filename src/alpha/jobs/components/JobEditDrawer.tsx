@@ -25,6 +25,8 @@ import type { JobCardStatus } from '../types/jobCardStatus.types'
 import type { JobAssignment, JobAssignmentInput } from '../types/jobAssignment.types'
 import { SERVICE_TYPES, type EquipmentServicePlan } from '../../equipment/servicePlans/equipmentServicePlan.types'
 import JobMaintenanceSummary from './JobMaintenanceSummary'
+import { JOB_CARD_STATUSES, getJobCardStatus } from '../types/jobCardStatus.types'
+import { JOB_NUMBER_REQUIRED_EMAIL_MESSAGE, jobHasEmailableJobNumber } from '../services/jobEmailRules'
 
 type Props = {
     job: Job
@@ -129,10 +131,28 @@ export default function JobEditDrawer({
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
     const [isDeleting, setIsDeleting] = useState(false)
     const [deleteError, setDeleteError] = useState('')
+    const [isEmailing, setIsEmailing] = useState(false)
     const [activeTab, setActiveTab] = useState<'details' | 'scheduling' | 'jobcard' | 'quotes'>(initialTab)
     const jobScheduleCount = scheduleOptions.filter(
         (option) => option._gr_job_value?.toLowerCase() === job.gr_jobid.toLowerCase(),
     ).length
+    const jobCardStatus = getJobCardStatus(job.gr_jobcardstatus)
+    const hasJobNumber = jobHasEmailableJobNumber(job)
+    const emailLabel = jobCardStatus === JOB_CARD_STATUSES.NOT_SENT
+        ? isEmailing ? 'Sending...' : 'Email'
+        : jobCardStatus === JOB_CARD_STATUSES.SENT
+            ? '✓ Sent'
+            : jobCardStatus === JOB_CARD_STATUSES.SUBMITTED
+                ? 'Submitted'
+                : 'Closed'
+    const emailTitle = !hasJobNumber
+        ? JOB_NUMBER_REQUIRED_EMAIL_MESSAGE
+        : !job.gr_Mechanic
+            ? 'Assign a technician before emailing this job.'
+            : jobCardStatus === JOB_CARD_STATUSES.NOT_SENT
+                ? `Email job to ${job.gr_Mechanic.gr_name}`
+                : 'Job card has already been emailed.'
+    const canEmailJob = hasJobNumber && Boolean(job.gr_Mechanic) && jobCardStatus === JOB_CARD_STATUSES.NOT_SENT
 
     const saveChanges = async () => {
         if (!draft.description.trim()) {
@@ -189,13 +209,45 @@ export default function JobEditDrawer({
         }
     }
 
+    const emailJob = async () => {
+        if (!hasJobNumber) {
+            setSaveError(JOB_NUMBER_REQUIRED_EMAIL_MESSAGE)
+            return
+        }
+        if (!job.gr_Mechanic) {
+            setSaveError('Assign a technician before emailing this job.')
+            return
+        }
+
+        try {
+            setIsEmailing(true)
+            setSaveError('')
+            await onSendPrimary(job)
+        } catch (error) {
+            setSaveError(error instanceof Error ? error.message : 'The job email flow did not complete.')
+        } finally {
+            setIsEmailing(false)
+        }
+    }
+
     return (
         <>
         <JobDrawerShell
             eyebrow="Edit job"
             title={job.gr_jobnumber || 'Unnumbered job'}
-            busy={isSaving || isDeleting}
+            busy={isSaving || isDeleting || isEmailing}
             onClose={onClose}
+            headerAction={
+                <button
+                    type="button"
+                    className={`job-drawer-email-action status-${jobCardStatus}`}
+                    title={emailTitle}
+                    onClick={() => void emailJob()}
+                    disabled={isSaving || isDeleting || isEmailing || !canEmailJob}
+                >
+                    {emailLabel}
+                </button>
+            }
             footer={
                 <>
                     <div className="job-edit-footer-leading">

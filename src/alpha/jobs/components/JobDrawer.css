@@ -58,6 +58,54 @@
     cursor: pointer;
 }
 
+.edit-drawer-header .job-drawer-email-action {
+    display: inline-flex;
+    width: auto;
+    min-width: 72px;
+    height: 34px;
+    align-items: center;
+    justify-content: center;
+    padding: 0 13px;
+    border: 1px solid #176f66;
+    border-radius: 999px;
+    background: #176f66;
+    color: #ffffff;
+    font-size: 0.75rem;
+    font-weight: 750;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.edit-drawer-header .job-drawer-email-action.status-122830001,
+.edit-drawer-header .job-drawer-email-action.status-122830002,
+.edit-drawer-header .job-drawer-email-action.status-122830003 {
+    opacity: 1;
+    cursor: default;
+}
+
+.edit-drawer-header .job-drawer-email-action.status-122830001 {
+    border-color: #bcd1e2;
+    background: #edf5fa;
+    color: #35617f;
+}
+
+.edit-drawer-header .job-drawer-email-action.status-122830002 {
+    border-color: #dfc38f;
+    background: #fff5e3;
+    color: #7c5924;
+}
+
+.edit-drawer-header .job-drawer-email-action.status-122830003 {
+    border-color: #afd1c2;
+    background: #e9f5ef;
+    color: #24634f;
+}
+
+.edit-drawer-header .job-drawer-email-action:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
 .job-edit-body {
     flex: 1;
     overflow-y: auto;
