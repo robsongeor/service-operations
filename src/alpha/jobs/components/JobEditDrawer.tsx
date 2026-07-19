@@ -27,6 +27,8 @@ import { SERVICE_TYPES, type EquipmentServicePlan } from '../../equipment/servic
 import JobMaintenanceSummary from './JobMaintenanceSummary'
 import { JOB_CARD_STATUSES, getJobCardStatus } from '../types/jobCardStatus.types'
 import { JOB_NUMBER_REQUIRED_EMAIL_MESSAGE, jobHasEmailableJobNumber } from '../services/jobEmailRules'
+import { OFFICE_ACTIONS, type JobOfficeUpdate } from '../types/officeAction.types'
+import JobOfficeFields from './JobOfficeFields'
 
 type Props = {
     job: Job
@@ -72,7 +74,10 @@ type Props = {
     onSendPrimary: (job: Job) => Promise<void>
     onSendAssignment: (job: Job, assignment: JobAssignment) => Promise<void>
     onDeleteAssignment: (assignmentId: string) => Promise<void>
-    initialTab?: 'details' | 'scheduling' | 'jobcard' | 'quotes'
+    officeUpdates?: JobOfficeUpdate[]
+    onCreateOfficeUpdate?: (input: { jobId: string; jobNumber?: string | null; text: string }) => Promise<JobOfficeUpdate>
+    onSaveOfficeAttention?: (jobId: string, officeAttentionRequired: boolean) => Promise<void>
+    initialTab?: 'details' | 'office' | 'scheduling' | 'jobcard' | 'quotes'
     onClose: () => void
 }
 
@@ -103,6 +108,9 @@ export default function JobEditDrawer({
     onSendPrimary,
     onSendAssignment,
     onDeleteAssignment,
+    officeUpdates = [],
+    onCreateOfficeUpdate = async () => { throw new Error('Office updates are unavailable in this view.') },
+    onSaveOfficeAttention = async () => { throw new Error('Office attention is unavailable in this view.') },
     initialTab = 'details',
     onClose,
 }: Props) {
@@ -132,7 +140,10 @@ export default function JobEditDrawer({
     const [isDeleting, setIsDeleting] = useState(false)
     const [deleteError, setDeleteError] = useState('')
     const [isEmailing, setIsEmailing] = useState(false)
-    const [activeTab, setActiveTab] = useState<'details' | 'scheduling' | 'jobcard' | 'quotes'>(initialTab)
+    const [activeTab, setActiveTab] = useState<'details' | 'office' | 'scheduling' | 'jobcard' | 'quotes'>(initialTab)
+    const [officeAction, setOfficeAction] = useState(job.gr_currentofficeaction ?? OFFICE_ACTIONS.NONE)
+    const [officeActionOwner, setOfficeActionOwner] = useState(job.gr_officeactionowner ?? '')
+    const [officeAttentionRequired, setOfficeAttentionRequired] = useState(job.gr_officeattentionrequired === true)
     const jobScheduleCount = scheduleOptions.filter(
         (option) => option._gr_job_value?.toLowerCase() === job.gr_jobid.toLowerCase(),
     ).length
@@ -184,6 +195,9 @@ export default function JobEditDrawer({
                 contactId: draft.contactId,
                 serviceType: draft.serviceType,
                 hourMeter: job.gr_hourmeter ?? undefined,
+                currentOfficeAction: officeAction,
+                officeActionOwner: officeActionOwner.trim(),
+                officeAttentionRequired,
             })
             onClose()
         } catch (error) {
@@ -292,6 +306,15 @@ export default function JobEditDrawer({
                 </button>
                 <button
                     type="button"
+                    className={activeTab === 'office' ? 'active' : ''}
+                    aria-selected={activeTab === 'office'}
+                    role="tab"
+                    onClick={() => setActiveTab('office')}
+                >
+                    Office
+                </button>
+                <button
+                    type="button"
                     className={activeTab === 'scheduling' ? 'active' : ''}
                     aria-selected={activeTab === 'scheduling'}
                     role="tab"
@@ -345,6 +368,8 @@ export default function JobEditDrawer({
                         />
                     </div>
                 )}
+
+                {activeTab === 'office' && <JobOfficeFields action={officeAction} owner={officeActionOwner} attentionRequired={officeAttentionRequired} updates={officeUpdates} onActionChange={setOfficeAction} onOwnerChange={setOfficeActionOwner} onAttentionRequiredChange={setOfficeAttentionRequired} onAddUpdate={async (text) => { await onSaveOfficeAttention(job.gr_jobid, officeAttentionRequired); return onCreateOfficeUpdate({ jobId: job.gr_jobid, jobNumber: job.gr_jobnumber, text }) }} />}
 
                 {activeTab === 'scheduling' && (
                     <div className="job-edit-grid">

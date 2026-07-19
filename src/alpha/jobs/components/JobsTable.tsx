@@ -10,6 +10,7 @@ import {
 import './JobsTable.css'
 import { getJobCardStatus, JOB_CARD_STATUSES } from '../types/jobCardStatus.types'
 import { JOB_NUMBER_REQUIRED_EMAIL_MESSAGE, jobHasEmailableJobNumber } from '../services/jobEmailRules'
+import { getOfficeActionLabel, jobNeedsOfficeAttention, type JobOfficeUpdate } from '../types/officeAction.types'
 
 type Props = {
     jobs: Job[]
@@ -28,6 +29,7 @@ type Props = {
     onEmailJob: (job: Job) => Promise<void>
     onEditJob: (job: Job) => void
     mechanics: Mechanic[]
+    officeUpdates: JobOfficeUpdate[]
 }
 
 const createdDateFormatter = new Intl.DateTimeFormat('en-NZ', {
@@ -45,9 +47,11 @@ export default function JobsTable({
     onEmailJob,
     onEditJob,
     mechanics,
+    officeUpdates,
 }: Props) {
     const [searchText, setSearchText] = useState('')
     const [selectedJobType, setSelectedJobType] = useState<JobType | 'all'>('all')
+    const [officeActionFilter, setOfficeActionFilter] = useState<'all' | 'required' | 'none'>('all')
     const [selectedRowId, setSelectedRowId] = useState<string | null>(null)
     const [sendingJobId, setSendingJobId] = useState<string | null>(null)
     const [copyFeedback, setCopyFeedback] = useState<{
@@ -58,6 +62,10 @@ export default function JobsTable({
         column: 'created' | 'status'
         direction: 'ascending' | 'descending'
     }>({ column: 'status', direction: 'ascending' })
+    const latestOfficeUpdates = useMemo(() => officeUpdates.reduce<Record<string, JobOfficeUpdate>>((current, update) => {
+        if (!current[update.jobId] || current[update.jobId].createdAt < update.createdAt) current[update.jobId] = update
+        return current
+    }, {}), [officeUpdates])
 
     const sendJobEmail = async (job: Job) => {
         if (!jobHasEmailableJobNumber(job)) {
@@ -75,10 +83,16 @@ export default function JobsTable({
         }
     }
 
-    const jobsForSelectedType = useMemo(() => {
-        if (selectedJobType === 'all') return jobs
-        return jobs.filter((job) => job.gr_jobtype === selectedJobType)
-    }, [jobs, selectedJobType])
+    const jobsForSelectedType = useMemo(() => jobs.filter((job) => {
+        if (selectedJobType !== 'all' && job.gr_jobtype !== selectedJobType) return false
+        const needsAttention = jobNeedsOfficeAttention(job)
+        const matchesOfficeActionFilter = officeActionFilter === 'all'
+            ? true
+            : officeActionFilter === 'required'
+                ? needsAttention
+                : !needsAttention
+        return matchesOfficeActionFilter
+    }), [jobs, officeActionFilter, selectedJobType])
 
     const matchingJobs = useMemo(() => {
         const search = searchText.trim().toLowerCase()
@@ -105,6 +119,9 @@ export default function JobsTable({
                 job.gr_Contact?.gr_phone,
                 job.gr_Contact?.gr_email,
                 job.gr_Mechanic?.gr_name,
+                getOfficeActionLabel(job.gr_currentofficeaction ?? undefined),
+                job.gr_officeactionowner,
+                latestOfficeUpdates[job.gr_jobid]?.text,
             ]
                 .filter(Boolean)
                 .join(' ')
@@ -112,7 +129,7 @@ export default function JobsTable({
 
             return searchableText.includes(search)
         })
-    }, [jobsForSelectedType, searchText])
+    }, [jobsForSelectedType, latestOfficeUpdates, searchText])
 
     const sortedJobs = useMemo(() => {
         return [...matchingJobs].sort((firstJob, secondJob) => {
@@ -266,6 +283,11 @@ export default function JobsTable({
                         )
                     })}
                 </div>
+                <div className="jobs-office-filter" aria-label="Filter jobs by office attention">
+                    <button type="button" className={officeActionFilter === 'all' ? 'active' : ''} onClick={() => setOfficeActionFilter('all')}>All</button>
+                    <button type="button" className={officeActionFilter === 'required' ? 'active' : ''} onClick={() => setOfficeActionFilter('required')}>Needs Attention</button>
+                    <button type="button" className={officeActionFilter === 'none' ? 'active' : ''} onClick={() => setOfficeActionFilter('none')}>No Attention Required</button>
+                </div>
             </div>
 
             <div className="jobs-table-scroll">
@@ -310,6 +332,7 @@ export default function JobsTable({
                                 </button>
                             </th>
                             <th>Order</th>
+                            <th>Latest Update</th>
                             <th aria-label="Actions" />
                         </tr>
                     </thead>
@@ -317,13 +340,14 @@ export default function JobsTable({
                     <tbody>
                         {matchingJobs.length === 0 && (
                             <tr>
-                                <td colSpan={11} className="jobs-table-empty">
+                                <td colSpan={13} className="jobs-table-empty">
                                     {searchText.trim() ? 'No jobs match your search.' : 'No jobs match the selected filters.'}
                                 </td>
                             </tr>
                         )}
 
                         {sortedJobs.map((job) => {
+                            const latestOfficeUpdate = latestOfficeUpdates[job.gr_jobid]
                             const assignmentStatus = getJobCardStatus(job.gr_jobcardstatus)
                             const isSending = sendingJobId === job.gr_jobid
                             const hasJobNumber = jobHasEmailableJobNumber(job)
@@ -367,6 +391,7 @@ export default function JobsTable({
                                             }
                                         }}
                                     />
+                                    {jobNeedsOfficeAttention(job) && <span className="jobs-office-indicator" title="Office attention required" aria-label="Office attention required" />}
                                 </td>
 
                                 <td className="jobs-table-date">
@@ -480,6 +505,8 @@ export default function JobsTable({
                                         }}
                                     />
                                 </td>
+
+                                <td className="jobs-office-update" title={latestOfficeUpdate?.text || undefined}>{latestOfficeUpdate?.text ? latestOfficeUpdate.text.length > 42 ? `${latestOfficeUpdate.text.slice(0, 42).trimEnd()}...` : latestOfficeUpdate.text : ''}</td>
 
                                 <td>
                                     <div className="jobs-table-actions">

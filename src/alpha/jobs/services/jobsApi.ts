@@ -5,7 +5,7 @@ const DATAVERSE_URL = import.meta.env.VITE_DATAVERSE_URL
 
 export async function fetchJobs(accessToken: string): Promise<Job[]> {
     const result = await fetch(
-        `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=gr_jobid,createdon,gr_jobnumber,gr_status,gr_ordernumber,gr_description,gr_jobtype,gr_jobcardstatus,gr_jobcardsenton,gr_jobcardsubmittedon,gr_jobcardclosedon,gr_hourmeter,gr_completeddate,gr_servicetype&$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_serial,gr_currenthourmeter,gr_servicetrackingenabled),gr_Mechanic($select=gr_mechanicid,gr_name,gr_phone,gr_email),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name,gr_phone,gr_email)`,
+        `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=gr_jobid,createdon,gr_jobnumber,gr_status,gr_ordernumber,gr_description,gr_jobtype,gr_jobcardstatus,gr_jobcardsenton,gr_jobcardsubmittedon,gr_jobcardclosedon,gr_hourmeter,gr_completeddate,gr_servicetype,gr_currentofficeaction,gr_officeactionowner,gr_officeattentionrequired&$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_serial,gr_currenthourmeter,gr_servicetrackingenabled),gr_Mechanic($select=gr_mechanicid,gr_name,gr_phone,gr_email),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name,gr_phone,gr_email)`,
         {
             cache: 'no-store',
             headers: {
@@ -53,6 +53,8 @@ export async function createJob(
     if (job.contactId) {
         newJob['gr_Contact@odata.bind'] = `/gr_contacts(${job.contactId})`
     }
+    if (job.currentOfficeAction != null) newJob.gr_currentofficeaction = job.currentOfficeAction
+    if (job.officeActionOwner != null) newJob.gr_officeactionowner = job.officeActionOwner
     if (job.hourMeter != null) newJob.gr_hourmeter = job.hourMeter
     if (job.completedDate) newJob.gr_completeddate = job.completedDate
 
@@ -165,18 +167,42 @@ export async function updateJobFields(
     }
 }
 
+export async function updateJobOfficeAttention(
+    token: string,
+    jobId: string,
+    officeAttentionRequired: boolean,
+) {
+    const response = await fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobs(${jobId})`, {
+        method: 'PATCH',
+        headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+        },
+        body: JSON.stringify({ gr_officeattentionrequired: officeAttentionRequired }),
+    })
+
+    if (!response.ok) {
+        const error = await response.text()
+        throw new Error(`Failed to update office attention: ${error}`)
+    }
+}
+
 export async function updateJob(
     token: string,
     jobId: string,
     job: JobSaveInput,
 ) {
-    const fields: Record<string, string | number | null> = {
+    const fields: Record<string, string | number | boolean | null> = {
         gr_jobnumber: job.jobNumber,
         gr_ordernumber: job.orderNumber,
         gr_description: job.description,
         gr_jobtype: job.jobType,
         gr_status: job.status,
         gr_servicetype: job.serviceType,
+        gr_currentofficeaction: job.currentOfficeAction ?? null,
+        gr_officeactionowner: job.officeActionOwner?.trim() || null,
+        gr_officeattentionrequired: job.officeAttentionRequired === true,
         gr_hourmeter: job.hourMeter ?? null,
         'gr_Equipment@odata.bind': job.equipmentId
             ? `/gr_equipments(${job.equipmentId})`

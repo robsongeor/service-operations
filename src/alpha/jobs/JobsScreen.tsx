@@ -16,12 +16,15 @@ export default function JobsScreen() {
         jobQuotes,
         jobAssignments,
         servicePlans,
+        officeUpdates,
         createJob, updateJob, deleteJob, updateJobStatus, updateJobFields,
         updateJobCardStatus,
         sendPrimaryJobEmail, sendAssignmentJobEmail,
         createJobAssignment, deleteJobAssignment,
         createContactForSite, createEquipment, createSite, createCustomer,
         createScheduleOption, updateScheduleOption, deleteScheduleOption,
+        createJobOfficeUpdate,
+        updateJobOfficeAttention,
         isLoading, loadError, retryInitialLoad,
     } = useJobs()
     const [editingJob, setEditingJob] = useState<Job | null>(null)
@@ -115,6 +118,7 @@ export default function JobsScreen() {
                     onEmailJob={sendPrimaryJobEmail}
                     onEditJob={setEditingJob}
                     mechanics={mechanics}
+                    officeUpdates={officeUpdates}
                 />
             )}
 
@@ -152,6 +156,9 @@ export default function JobsScreen() {
                     onSendPrimary={sendPrimaryJobEmail}
                     onSendAssignment={sendAssignmentJobEmail}
                     onDeleteAssignment={deleteJobAssignment}
+                    officeUpdates={officeUpdates.filter((update) => update.jobId.toLowerCase() === editingJob.gr_jobid.toLowerCase())}
+                    onCreateOfficeUpdate={createJobOfficeUpdate}
+                    onSaveOfficeAttention={updateJobOfficeAttention}
                     onClose={() => {
                         setEditingJob(null)
                         setEditingInitialTab('details')

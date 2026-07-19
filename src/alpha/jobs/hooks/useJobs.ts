@@ -8,6 +8,7 @@ import {
     updateJobStatus as updateJobStatusApi,
     updateJobCardStatus as updateJobCardStatusApi,
     updateJobFields as updateJobFieldsApi,
+    updateJobOfficeAttention as updateJobOfficeAttentionApi,
     updateJob as updateJobApi,
     deleteJob as deleteJobApi,
 } from '../services/jobsApi'
@@ -59,6 +60,8 @@ import {
 
 import type { SiteContact } from '../types/siteContact.types'
 import { fetchSiteContacts as fetchSiteContactsApi } from '../services/siteContactsApi'
+import { createJobOfficeUpdate as createJobOfficeUpdateApi, fetchJobOfficeUpdates as fetchJobOfficeUpdatesApi } from '../services/jobOfficeUpdatesApi'
+import type { JobOfficeUpdate } from '../types/officeAction.types'
 
 import {
     createContact as createContactApi,
@@ -95,6 +98,7 @@ export function useJobs() {
     const [jobQuotes, setJobQuotes] = useState<Quote[]>([])
     const [jobAssignments, setJobAssignments] = useState<JobAssignment[]>([])
     const [servicePlans, setServicePlans] = useState<EquipmentServicePlan[]>([])
+    const [officeUpdates, setOfficeUpdates] = useState<JobOfficeUpdate[]>([])
     const [isLoading, setIsLoading] = useState(false)
     const [loadError, setLoadError] = useState('')
     const [reloadKey, setReloadKey] = useState(0)
@@ -291,6 +295,27 @@ export function useJobs() {
         }
     }
 
+    const fetchJobOfficeUpdates = async () => {
+        const token = await getAccessToken()
+        const updates = await fetchJobOfficeUpdatesApi(token)
+        setOfficeUpdates(updates)
+    }
+
+    const createJobOfficeUpdate = async (input: { jobId: string; jobNumber?: string | null; text: string }) => {
+        const token = await getAccessToken()
+        const created = await createJobOfficeUpdateApi(token, input)
+        setOfficeUpdates((current) => [created, ...current])
+        return created
+    }
+
+    const updateJobOfficeAttention = async (jobId: string, officeAttentionRequired: boolean) => {
+        const token = await getAccessToken()
+        await updateJobOfficeAttentionApi(token, jobId, officeAttentionRequired)
+        setJobs((current) => current.map((job) => job.gr_jobid === jobId
+            ? { ...job, gr_officeattentionrequired: officeAttentionRequired }
+            : job))
+    }
+
     const updateJobStatus = async (jobId: string, status: JobStatus) => {
         const token = await getAccessToken()
         const currentJob = jobs.find((job) => job.gr_jobid === jobId)
@@ -444,6 +469,9 @@ export function useJobs() {
                     gr_servicetype: job.serviceType,
                     gr_hourmeter: job.hourMeter ?? currentJob.gr_hourmeter ?? null,
                     gr_completeddate: completedDate ?? currentJob.gr_completeddate ?? null,
+                    gr_currentofficeaction: job.currentOfficeAction ?? currentJob.gr_currentofficeaction ?? null,
+                    gr_officeactionowner: job.officeActionOwner?.trim() || null,
+                    gr_officeattentionrequired: job.officeAttentionRequired === true,
                     gr_Equipment: selectedEquipment,
                     gr_Mechanic: selectedMechanic,
                     gr_Site: selectedSite,
@@ -521,6 +549,7 @@ export function useJobs() {
                     initialQuotes,
                     initialAssignments,
                     initialServicePlans,
+                    initialOfficeUpdates,
                     mechanicsData,
                 ] = await Promise.all([
                     fetchJobsApi(token),
@@ -532,6 +561,7 @@ export function useJobs() {
                     fetchQuotesApi(token),
                     fetchJobAssignmentsApi(token),
                     fetchEquipmentServicePlans(token),
+                    fetchJobOfficeUpdatesApi(token),
                     mechanicsRequest,
                 ])
 
@@ -546,6 +576,7 @@ export function useJobs() {
                 setJobQuotes(initialQuotes)
                 setJobAssignments(initialAssignments)
                 setServicePlans(initialServicePlans)
+                setOfficeUpdates(initialOfficeUpdates)
                 setMechanics(mechanicsData.value ?? [])
             } catch (error) {
                 if (cancelled) return
@@ -572,12 +603,16 @@ export function useJobs() {
         jobQuotes,
         jobAssignments,
         servicePlans,
+        officeUpdates,
         equipmentList,
         sites,
         customers,
         fetchJobs,
         fetchScheduleOptions,
         fetchEquipment,
+        fetchJobOfficeUpdates,
+        createJobOfficeUpdate,
+        updateJobOfficeAttention,
         createJob,
         createEquipment,
         createSite,
