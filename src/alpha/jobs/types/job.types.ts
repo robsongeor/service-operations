@@ -16,10 +16,10 @@ export type Job = {
     gr_jobcardclosedon?: string | null
     gr_Equipment?: {
         gr_equipmentid: string
-        gr_fleet: string
-        gr_serial: string
-        gr_make: string
-        gr_model: string
+        gr_fleet: string | null
+        gr_serial: string | null
+        gr_make: string | null
+        gr_model: string | null
     }
     gr_Mechanic?: {
         gr_mechanicid: string

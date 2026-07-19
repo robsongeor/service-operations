@@ -14,6 +14,7 @@ import JobScheduleFields from './JobScheduleFields'
 import JobDrawerShell from './JobDrawerShell'
 import JobQuotesSection from './JobQuotesSection'
 import JobCardFields from './JobCardFields'
+import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation'
 import './JobDrawer.css'
 import type {
     JobScheduleOption,
@@ -314,43 +315,16 @@ export default function JobEditDrawer({
             </div>
         </JobDrawerShell>
 
-        {showDeleteConfirm && (
-            <div
-                className="job-delete-backdrop"
-                role="presentation"
-                onMouseDown={() => {
-                    if (!isDeleting) setShowDeleteConfirm(false)
-                }}
-            >
-                <div
-                    className="job-delete-dialog"
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="job-delete-title"
-                    onMouseDown={(event) => event.stopPropagation()}
-                >
-                    <div className="job-delete-icon" aria-hidden="true">!</div>
-                    <div>
-                        <p className="job-delete-eyebrow">Delete job</p>
-                        <h3 id="job-delete-title">
-                            Delete {job.gr_jobnumber || 'this unnumbered job'}?
-                        </h3>
-                        <p className="job-delete-message">
-                            This permanently removes the job from Dataverse. This action cannot be undone.
-                        </p>
-                    </div>
-                    {deleteError && <p className="job-delete-error" role="alert">{deleteError}</p>}
-                    <div className="job-delete-actions">
-                        <button type="button" onClick={() => setShowDeleteConfirm(false)} disabled={isDeleting}>
-                            Cancel
-                        </button>
-                        <button type="button" className="danger" onClick={deleteJob} disabled={isDeleting}>
-                            {isDeleting ? 'Deleting...' : 'Delete job'}
-                        </button>
-                    </div>
-                </div>
-            </div>
-        )}
+        {showDeleteConfirm && <EditDrawerConfirmation
+            eyebrow="Delete job"
+            title={`Delete ${job.gr_jobnumber || 'this unnumbered job'}?`}
+            message="This permanently removes the job from Dataverse. This action cannot be undone."
+            error={deleteError}
+            isBusy={isDeleting}
+            confirmLabel={isDeleting ? 'Deleting...' : 'Delete job'}
+            onCancel={() => setShowDeleteConfirm(false)}
+            onConfirm={() => void deleteJob()}
+        />}
         </>
     )
 }

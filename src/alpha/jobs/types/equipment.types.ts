@@ -1,9 +1,11 @@
 export type Equipment = {
     gr_equipmentid: string
-    gr_fleet: string
-    gr_serial: string
-    gr_make: string
-    gr_model: string
+    gr_fleet: string | null
+    gr_serial: string | null
+    gr_make: string | null
+    gr_model: string | null
+    statecode?: number
+    statuscode?: number
     gr_Site?: {
         gr_siteid: string
         gr_name: string

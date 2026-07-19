@@ -5,6 +5,7 @@ import './Sidebar.css'
 const menuItems = [
     { label: 'Overview', shortLabel: 'O', path: '/' },
     { label: 'Mechanics', shortLabel: 'M', path: '/mechanics' },
+    { label: 'Equipment', shortLabel: 'E', path: '/equipment' },
     { label: 'Jobs', shortLabel: 'J', path: '/jobs' },
     { label: 'Scheduling', shortLabel: 'C', path: '/scheduling' },
     { label: 'Quotes', shortLabel: 'Q', path: '/quotes' },
