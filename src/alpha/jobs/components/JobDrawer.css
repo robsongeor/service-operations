@@ -227,6 +227,11 @@
     color: #176f66;
     font-weight: 750;
 }
+.job-equipment-results { max-height: 300px; overflow-y: auto; }
+.job-equipment-results button:not(.job-edit-add-result) { display: grid; gap: 2px; min-height: 54px; padding: 8px 11px; }
+.job-equipment-results button strong { color: #28342d; font-size: .78rem; }
+.job-equipment-results button small { color: #707a74; font-size: .68rem; font-weight: 450; }
+.job-equipment-selected { display: flex; min-height: 40px; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 10px; border: 1px solid #bed8cf; border-radius: 8px; background: #f1f8f5; }.job-equipment-selected > div { display: grid; gap: 1px; min-width: 0; }.job-equipment-selected strong { color: #263a32; font-size: .8rem; }.job-equipment-selected small { overflow: hidden; color: #66746c; font-size: .67rem; text-overflow: ellipsis; white-space: nowrap; }.job-equipment-selected button { flex: 0 0 auto; padding: 0; border: 0; background: transparent; color: #176f66; font: inherit; font-size: .72rem; font-weight: 750; cursor: pointer; }
 
 .job-edit-create-panel {
     display: grid;

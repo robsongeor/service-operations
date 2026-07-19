@@ -11,6 +11,7 @@ export type Equipment = {
     gr_Site?: {
         gr_siteid: string
         gr_name: string
+        gr_address?: string
         gr_Customer?: {
             gr_customerid: string
             gr_name: string

@@ -45,15 +45,19 @@ export default function JobRelationshipFields({
     const [equipmentSearch, setEquipmentSearch] = useState(() => selectedEquipment ? equipmentLabel(selectedEquipment).identifier : '')
     const [equipmentSearchOpen, setEquipmentSearchOpen] = useState(false)
     const [equipmentActiveIndex, setEquipmentActiveIndex] = useState(0)
+    const [showLegacyEquipmentSelect] = useState(false)
     const equipmentResults = useMemo(() => {
         const query = normalizeSearch(equipmentSearch)
-        if (!query) return []
         return equipmentList.map((item) => {
             const identifiers = [item.gr_fleet, item.gr_serial].map(normalizeSearch)
             const details = [item.gr_make, item.gr_model, item.gr_Site?.gr_Customer?.gr_name, item.gr_Site?.gr_name, item.gr_Site?.gr_address].map(normalizeSearch)
+            if (!query) {
+                const score = item.gr_Site?.gr_siteid === draft.siteId ? 0 : item.gr_Site?.gr_Customer?.gr_customerid === draft.customerId ? 1 : 2
+                return { item, score }
+            }
             return { item, score: identifiers.some((value) => value.includes(query)) ? 0 : details.some((value) => value.includes(query)) ? 1 : 2 }
-        }).filter(({ score }) => score < 2).sort((a, b) => a.score - b.score || equipmentLabel(a.item).identifier.localeCompare(equipmentLabel(b.item).identifier)).slice(0, 25).map(({ item }) => item)
-    }, [equipmentList, equipmentSearch])
+        }).filter(({ score }) => !query || score < 2).sort((a, b) => a.score - b.score || equipmentLabel(a.item).identifier.localeCompare(equipmentLabel(b.item).identifier)).slice(0, 5).map(({ item }) => item)
+    }, [draft.customerId, draft.siteId, equipmentList, equipmentSearch])
 
     const openPanel = (nextPanel: Panel) => {
         setPanel(nextPanel)
@@ -181,9 +185,10 @@ export default function JobRelationshipFields({
             <p>Change which records this job references.</p>
         </div>
 
-        <label className="job-edit-field job-edit-field-wide">
+        <label className="job-edit-field job-edit-field-wide job-edit-combobox">
             <span>Equipment</span>
-            <select value={draft.equipmentId} onChange={(event) => {
+            {selectedEquipment ? <div className="job-equipment-selected"><div><strong>{equipmentLabel(selectedEquipment).identifier}</strong>{equipmentLabel(selectedEquipment).model && <small>{equipmentLabel(selectedEquipment).model}</small>}{equipmentLabel(selectedEquipment).location && <small>{equipmentLabel(selectedEquipment).location}</small>}</div><button type="button" aria-label="Change selected equipment" onClick={clearEquipment}>Change</button></div> : <><input role="combobox" aria-expanded={equipmentSearchOpen} aria-controls="job-editor-equipment-results" autoComplete="off" placeholder="Search fleet, serial, make or model..." value={equipmentSearch} onFocus={() => setEquipmentSearchOpen(true)} onChange={(event) => { setEquipmentSearch(event.target.value); setEquipmentSearchOpen(true); setEquipmentActiveIndex(0) }} onKeyDown={(event) => { if (event.key === 'ArrowDown') { event.preventDefault(); setEquipmentActiveIndex((current) => Math.min(current + 1, equipmentResults.length - 1)) } if (event.key === 'ArrowUp') { event.preventDefault(); setEquipmentActiveIndex((current) => Math.max(current - 1, 0)) } if (event.key === 'Enter' && equipmentResults[equipmentActiveIndex]) { event.preventDefault(); selectEquipment(equipmentResults[equipmentActiveIndex]) } if (event.key === 'Escape') setEquipmentSearchOpen(false) }} />{equipmentSearchOpen && <div className="job-edit-results job-equipment-results" id="job-editor-equipment-results" role="listbox"><button type="button" className="job-edit-add-result" onClick={clearEquipment}>No Equipment</button><button type="button" className="job-edit-add-result" onClick={() => { setEquipmentSearchOpen(false); openPanel('equipment') }}>+ Add new equipment</button>{equipmentResults.map((item, index) => { const label = equipmentLabel(item); return <button key={item.gr_equipmentid} type="button" role="option" aria-selected={index === equipmentActiveIndex} className={index === equipmentActiveIndex ? 'active' : ''} onMouseEnter={() => setEquipmentActiveIndex(index)} onClick={() => selectEquipment(item)}><strong>{label.identifier}</strong>{label.model && <small>{label.model}</small>}{label.location && <small>{label.location}</small>}</button> })}{equipmentSearch.trim() && equipmentResults.length === 0 && <span>No Equipment found for &quot;{equipmentSearch.trim()}&quot;</span>}</div>}</>}
+            {showLegacyEquipmentSelect && <select value={draft.equipmentId} onChange={(event) => {
                 if (event.target.value === '__new__') return openPanel('equipment')
 
                 const equipmentId = event.target.value
@@ -207,7 +212,7 @@ export default function JobRelationshipFields({
                 {equipmentList.map((item) => <option key={item.gr_equipmentid} value={item.gr_equipmentid}>
                     {item.gr_fleet || 'No fleet'} — {item.gr_make} {item.gr_model} — {item.gr_serial}
                 </option>)}
-            </select>
+            </select>}
         </label>
         {panel === 'equipment' && <div className="job-edit-create-panel job-edit-field-wide">
             <div><h4>New equipment</h4><p>Create and select equipment for this job.</p></div>
@@ -225,7 +230,8 @@ export default function JobRelationshipFields({
                 onFocus={() => setCustomerSearchOpen(true)} onChange={(event) => {
                     setCustomerSearch(event.target.value)
                     setCustomerSearchOpen(true)
-                    setDraft((current) => ({ ...current, customerId: '', siteId: '', contactId: '' }))
+                    setDraft((current) => ({ ...current, equipmentId: '', customerId: '', siteId: '', contactId: '' }))
+                    setEquipmentSearch('')
                 }} />
             {customerSearchOpen && <div className="job-edit-results" id="job-editor-customer-results" role="listbox">
                 <button type="button" className="job-edit-add-result" onClick={() => {
@@ -236,6 +242,7 @@ export default function JobRelationshipFields({
                 {filteredCustomers.map((item) => <button key={item.gr_customerid} type="button" role="option" aria-selected={item.gr_customerid === draft.customerId} onClick={() => {
                     setCustomerSearch(item.gr_name)
                     setCustomerSearchOpen(false)
+                    if (selectedEquipment?.gr_Site?.gr_Customer?.gr_customerid !== item.gr_customerid) clearEquipment()
                     selectCustomer(item.gr_customerid)
                 }}>{item.gr_name}</button>)}
                 {filteredCustomers.length === 0 && <span>No customers found</span>}
@@ -253,6 +260,7 @@ export default function JobRelationshipFields({
         <label className="job-edit-field job-edit-field-wide"><span>Site</span>
             <select value={draft.siteId} disabled={!draft.customerId} onChange={(event) => {
                 if (event.target.value === '__new__') return openPanel('site')
+                if (selectedEquipment?.gr_Site?.gr_siteid !== event.target.value) clearEquipment()
                 selectSite(event.target.value)
             }}>
                 <option value="">{draft.customerId ? 'Select site' : 'Select a customer first'}</option>
