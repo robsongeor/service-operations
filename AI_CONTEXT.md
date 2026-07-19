@@ -338,6 +338,55 @@ Search currently spans information such as:
 - Contact
 - Mechanic
 
+It also spans Current Office Action, Office Action Owner, and the newest Office Update.
+
+### Office Action workflow
+
+Office Action is stored in Dataverse and is independent of operational Job Status.
+
+The Job table columns are:
+
+```text
+gr_currentofficeaction       Choice
+gr_officeactionowner         Single line of text
+gr_officeattentionrequired   Yes/No, default false
+```
+
+Office Action choices use the `122830000` to `122830010` values defined in
+`src/alpha/jobs/types/officeAction.types.ts`. `None` is `122830000`.
+
+Office Attention Required—not Current Office Action—is the source of truth for:
+
+- the orange marker beside Job Number;
+- the All / Needs Attention / No Attention Required filters; and
+- the current office attention workload.
+
+`gr_jobofficeupdates` is the append-only update-history table. Its verified schema is:
+
+```text
+Primary name: gr_name
+Job lookup:   gr_Job -> gr_jobs
+Update text:  gr_update
+Audit fields: createdon, createdby
+```
+
+The Office tab owns Current Office Action, free-text Owner, Attention Required, and update
+history. Turning attention off never removes Action, Owner, or history. Adding an update
+saves the current attention value first, then creates the child update record.
+
+Provisioning and read-only metadata verification scripts are available under `scripts/`:
+
+```text
+setup-job-office-update-schema.ps1
+verify-job-office-attention-schema.ps1
+```
+
+Known follow-ups:
+
+- Pass Office update data/actions to the Job drawer opened from Scheduling.
+- Allow Office history failures to degrade independently instead of blocking the complete Jobs load.
+- Add pagination or Job-scoped querying before Office Update history becomes large.
+
 ### Automatic selection rules
 
 When a selected customer has exactly one site:

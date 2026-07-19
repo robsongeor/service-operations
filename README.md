@@ -148,6 +148,7 @@ The application currently expects the following Dataverse entity sets:
 | Contacts | `gr_contacts` |
 | Site/contact links | `gr_sitecontacts` |
 | Job schedule options | `gr_jobscheduleoptions` |
+| Job Office Updates | `gr_jobofficeupdates` |
 
 Important job columns and relationships include:
 
@@ -160,6 +161,9 @@ Important job columns and relationships include:
 - `gr_Mechanic`
 - `gr_Site`
 - `gr_Contact`
+- `gr_currentofficeaction` (Choice)
+- `gr_officeactionowner` (single line of text)
+- `gr_officeattentionrequired` (Yes/No; defaults to `false`)
 - Dataverse system column `createdon`
 
 The job schedule option table requires:
@@ -180,6 +184,25 @@ Important relationship rules:
 - When a saved job has both equipment and a site, the equipment record's `gr_Site` lookup is updated to that site.
 - The job's customer is derived from its selected site rather than stored as a separate job lookup.
 - A job can have multiple schedule option records through the `gr_Job` lookup.
+
+### Office Action workflow
+
+Current Office Action describes the Job's office context. It is separate from Job Status
+and may remain set while the office is waiting for an external party.
+
+Office Attention Required is the source of truth for the orange Job-table marker and the
+Needs Attention filters. It is not inferred from the selected Office Action.
+
+Office updates are append-only child records in `gr_jobofficeupdates`:
+
+- Primary name: `gr_name`
+- Job lookup: `gr_Job` (to `gr_jobs`)
+- Update text: `gr_update`
+- Standard audit fields: `createdon`, `createdby`
+
+The Job drawer saves Current Office Action, Owner, and Attention Required through the
+normal Job update path. Adding an Office Update saves the current attention value first,
+then creates the update record. Update history is retained when attention is switched off.
 
 If the schema or Choice values change in Dataverse, the corresponding API queries and TypeScript constants must also be updated.
 
