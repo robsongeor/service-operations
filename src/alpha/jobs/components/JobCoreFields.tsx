@@ -1,18 +1,23 @@
-import type { Dispatch, SetStateAction } from 'react'
+import { useState, type Dispatch, type SetStateAction } from 'react'
 import type { Mechanic } from '../types/mechanic.types'
 import { JOB_TYPE_OPTIONS, type JobType } from '../types/jobType.types'
 import { jobRequiresMaintenance } from '../types/jobType.types'
 import type { JobEditorDraft } from '../hooks/useJobEditor'
 import { JOB_STATUS_OPTIONS, type JobStatus } from '../types/jobStatus.types'
 import { SERVICE_TYPES, SERVICE_TYPE_OPTIONS, type ServiceType } from '../../equipment/servicePlans/equipmentServicePlan.types'
+import SearchableMechanicSelect from './SearchableMechanicSelect'
 
 type Props = {
     draft: JobEditorDraft
     setDraft: Dispatch<SetStateAction<JobEditorDraft>>
     mechanics: Mechanic[]
+    allowEmptyJobType?: boolean
+    jobTypeError?: string
 }
 
-export default function JobCoreFields({ draft, setDraft, mechanics }: Props) {
+export default function JobCoreFields({ draft, setDraft, mechanics, allowEmptyJobType = false, jobTypeError = '' }: Props) {
+    const [mechanicSelectOpen, setMechanicSelectOpen] = useState(false)
+
     return (
         <>
             <label className="job-edit-field">
@@ -21,13 +26,15 @@ export default function JobCoreFields({ draft, setDraft, mechanics }: Props) {
                     value={draft.jobType}
                     onChange={(event) => setDraft((current) => ({
                         ...current,
-                        jobType: Number(event.target.value) as JobType,
+                        jobType: event.target.value ? Number(event.target.value) as JobType : '',
                     }))}
                 >
+                    {allowEmptyJobType && <option value="">Select job type</option>}
                     {JOB_TYPE_OPTIONS.map((option) => (
                         <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                 </select>
+                {jobTypeError && !draft.jobType && <small className="job-edit-field-error" role="alert">{jobTypeError}</small>}
             </label>
 
             <label className="job-edit-field">
@@ -81,20 +88,19 @@ export default function JobCoreFields({ draft, setDraft, mechanics }: Props) {
 
             <label className="job-edit-field job-edit-field-wide">
                 <span>Mechanic</span>
-                <select
-                    value={draft.mechanicId}
-                    onChange={(event) => setDraft((current) => ({
-                        ...current,
-                        mechanicId: event.target.value,
-                    }))}
-                >
-                    <option value="">Unassigned</option>
-                    {mechanics.map((mechanic) => (
-                        <option key={mechanic.gr_mechanicid} value={mechanic.gr_mechanicid}>
-                            {mechanic.gr_name}
-                        </option>
-                    ))}
-                </select>
+                <SearchableMechanicSelect
+                    mechanics={mechanics}
+                    selectedId={draft.mechanicId}
+                    isOpen={mechanicSelectOpen}
+                    isSaving={false}
+                    variant="drawer"
+                    onOpen={() => setMechanicSelectOpen(true)}
+                    onClose={() => setMechanicSelectOpen(false)}
+                    onSelect={(mechanicId) => {
+                        setDraft((current) => ({ ...current, mechanicId }))
+                        setMechanicSelectOpen(false)
+                    }}
+                />
             </label>
 
             {jobRequiresMaintenance(draft.jobType) && <>

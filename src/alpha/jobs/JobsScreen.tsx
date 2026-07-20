@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useJobs } from './hooks/useJobs'
 import JobsTable from './components/JobsTable'
 import JobEditDrawer from './components/JobEditDrawer'
 import JobCreateDrawer from './components/JobCreateDrawer'
 import type { Job } from './types/job.types'
-import { JOB_STATUSES, type JobStatus } from './types/jobStatus.types'
+import type { JobStatus } from './types/jobStatus.types'
+import { JOBS_VIEW_STATE_KEY, restoreJobsViewState, type JobsViewState } from './types/jobsViewState.types'
 import './JobsScreen.css'
 import { useNavigate } from 'react-router-dom'
 
@@ -30,12 +31,12 @@ export default function JobsScreen() {
     const [editingJob, setEditingJob] = useState<Job | null>(null)
     const [editingInitialTab, setEditingInitialTab] = useState<'details' | 'jobcard'>('details')
     const [isCreatingJob, setIsCreatingJob] = useState(false)
-    const [visibleStatuses, setVisibleStatuses] = useState<JobStatus[]>([
-        JOB_STATUSES.UNALLOCATED,
-        JOB_STATUSES.ALLOCATED,
-        JOB_STATUSES.WAITING_FOR_PARTS,
-        JOB_STATUSES.COMPLETE,
-    ])
+    const [viewState, setViewState] = useState<JobsViewState>(restoreJobsViewState)
+    const visibleStatuses = viewState.visibleStatuses
+
+    useEffect(() => {
+        sessionStorage.setItem(JOBS_VIEW_STATE_KEY, JSON.stringify(viewState))
+    }, [viewState])
 
     const createQuoteForJob = (jobId: string) => {
         setEditingJob(null)
@@ -48,9 +49,12 @@ export default function JobsScreen() {
     }
 
     const toggleStatus = (status: JobStatus) => {
-        setVisibleStatuses((current) => current.includes(status)
-            ? current.filter((currentStatus) => currentStatus !== status)
-            : [...current, status])
+        setViewState((current) => ({
+            ...current,
+            visibleStatuses: current.visibleStatuses.includes(status)
+                ? current.visibleStatuses.filter((currentStatus) => currentStatus !== status)
+                : [...current.visibleStatuses, status],
+        }))
     }
 
     const filteredJobs = jobs.filter((job) => visibleStatuses.includes(job.gr_status))
@@ -112,6 +116,8 @@ export default function JobsScreen() {
                 <JobsTable
                     jobs={filteredJobs}
                     visibleStatuses={visibleStatuses}
+                    viewState={viewState}
+                    onViewStateChange={setViewState}
                     onToggleStatus={toggleStatus}
                     onStatusChange={updateJobStatus}
                     onJobFieldsChange={updateJobFields}

@@ -57,6 +57,7 @@
 .mechanic-job-status.status-122830000 { background: #e5f0f8; color: #36627f; }
 .mechanic-job-status.status-122830002 { background: #f5eadc; color: #815f35; }
 .mechanic-job-status.status-122830003 { background: #e5f2eb; color: #26654f; }
+.mechanic-job-status.status-122830004 { background: #eeeafd; color: #604f88; }
 .mechanic-jobs-empty { display: grid; gap: 3px; padding: 38px 20px; text-align: center; }
 .mechanic-jobs-empty strong { color: #425048; font-size: .8rem; text-transform: capitalize; }
 .mechanic-jobs-empty span { color: #7a847e; font-size: .68rem; }

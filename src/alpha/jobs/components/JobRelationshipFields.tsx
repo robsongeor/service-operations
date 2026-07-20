@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { Equipment } from '../types/equipment.types'
 import type { useJobEditor } from '../hooks/useJobEditor'
+import { deriveSiteNameFromAddress } from '../../shared/siteName'
 
 type Props = {
     editor: ReturnType<typeof useJobEditor>
@@ -46,6 +47,14 @@ export default function JobRelationshipFields({
     const [equipmentSearchOpen, setEquipmentSearchOpen] = useState(false)
     const [equipmentActiveIndex, setEquipmentActiveIndex] = useState(0)
     const [showLegacyEquipmentSelect] = useState(false)
+    const equipmentConflictsWithCustomer = (customerId: string) => {
+        const equipmentCustomerId = selectedEquipment?.gr_Site?.gr_Customer?.gr_customerid
+        return Boolean(equipmentCustomerId && equipmentCustomerId !== customerId)
+    }
+    const equipmentConflictsWithSite = (siteId: string) => {
+        const equipmentSiteId = selectedEquipment?.gr_Site?.gr_siteid
+        return Boolean(equipmentSiteId && equipmentSiteId !== siteId)
+    }
     const equipmentResults = useMemo(() => {
         const query = normalizeSearch(equipmentSearch)
         return equipmentList.map((item) => {
@@ -98,6 +107,7 @@ export default function JobRelationshipFields({
                 model: equipment.model.trim() || undefined,
             })
             setDraft((current) => ({ ...current, equipmentId }))
+            setEquipmentSearch(equipment.fleet.trim() || (equipment.serial.trim() ? `Serial ${equipment.serial.trim()}` : 'Equipment'))
             setEquipment({ fleet: '', serial: '', make: '', model: '' })
             setPanel('')
         } catch (error) {
@@ -108,16 +118,18 @@ export default function JobRelationshipFields({
 
     const createCustomerAndSite = async () => {
         if (!customer.name.trim()) return setCreateError('Enter a customer name.')
-        if (!customer.siteName.trim()) return setCreateError('Enter a site name.')
+        const siteName = customer.siteName.trim() || deriveSiteNameFromAddress(customer.address)
+        if (!siteName) return setCreateError('Enter a Site Name, or an Address that can be used to generate one.')
         try {
             setIsCreating(true)
             setCreateError('')
             const customerId = createdCustomerId || await onCreateCustomer({ name: customer.name.trim() })
             if (!createdCustomerId) setCreatedCustomerId(customerId)
             const siteId = await onCreateSite({
-                customerId, name: customer.siteName.trim(),
+                customerId, name: siteName,
                 address: customer.address.trim() || undefined,
             })
+            if (equipmentConflictsWithCustomer(customerId) || equipmentConflictsWithSite(siteId)) clearEquipment()
             setDraft((current) => ({ ...current, customerId, siteId, contactId: '' }))
             setCustomerSearch(customer.name.trim())
             setCustomer({ name: '', siteName: '', address: '' })
@@ -133,14 +145,16 @@ export default function JobRelationshipFields({
 
     const createSite = async () => {
         if (!draft.customerId) return setCreateError('Select a customer first.')
-        if (!site.name.trim()) return setCreateError('Enter a site name.')
+        const siteName = site.name.trim() || deriveSiteNameFromAddress(site.address)
+        if (!siteName) return setCreateError('Enter a Site Name, or an Address that can be used to generate one.')
         try {
             setIsCreating(true)
             setCreateError('')
             const siteId = await onCreateSite({
-                customerId: draft.customerId, name: site.name.trim(),
+                customerId: draft.customerId, name: siteName,
                 address: site.address.trim() || undefined,
             })
+            if (equipmentConflictsWithSite(siteId)) clearEquipment()
             setDraft((current) => ({ ...current, siteId, contactId: '' }))
             setSite({ name: '', address: '' })
             setPanel('')
@@ -230,8 +244,7 @@ export default function JobRelationshipFields({
                 onFocus={() => setCustomerSearchOpen(true)} onChange={(event) => {
                     setCustomerSearch(event.target.value)
                     setCustomerSearchOpen(true)
-                    setDraft((current) => ({ ...current, equipmentId: '', customerId: '', siteId: '', contactId: '' }))
-                    setEquipmentSearch('')
+                    setDraft((current) => ({ ...current, customerId: '', siteId: '', contactId: '' }))
                 }} />
             {customerSearchOpen && <div className="job-edit-results" id="job-editor-customer-results" role="listbox">
                 <button type="button" className="job-edit-add-result" onClick={() => {
@@ -242,7 +255,7 @@ export default function JobRelationshipFields({
                 {filteredCustomers.map((item) => <button key={item.gr_customerid} type="button" role="option" aria-selected={item.gr_customerid === draft.customerId} onClick={() => {
                     setCustomerSearch(item.gr_name)
                     setCustomerSearchOpen(false)
-                    if (selectedEquipment?.gr_Site?.gr_Customer?.gr_customerid !== item.gr_customerid) clearEquipment()
+                    if (equipmentConflictsWithCustomer(item.gr_customerid)) clearEquipment()
                     selectCustomer(item.gr_customerid)
                 }}>{item.gr_name}</button>)}
                 {filteredCustomers.length === 0 && <span>No customers found</span>}
@@ -252,7 +265,8 @@ export default function JobRelationshipFields({
             <div><h4>New customer and site</h4><p>Create both records together and select them for this job.</p></div>
             <label className="job-edit-field"><span>Customer name</span><input autoFocus value={customer.name} onChange={(e) => { setCustomer({ ...customer, name: e.target.value }); setCreatedCustomerId('') }} /></label>
             <label className="job-edit-field"><span>Site name</span><input value={customer.siteName} onChange={(e) => setCustomer({ ...customer, siteName: e.target.value })} /></label>
-            <label className="job-edit-field"><span>Site address</span><input value={customer.address} onChange={(e) => setCustomer({ ...customer, address: e.target.value })} /></label>
+            <label className="job-edit-field"><span>Site address</span><input value={customer.address} onChange={(e) => { const address = e.target.value; const previousDerived = deriveSiteNameFromAddress(customer.address); setCustomer({ ...customer, address, siteName: !customer.siteName.trim() || customer.siteName === previousDerived ? deriveSiteNameFromAddress(address) : customer.siteName }) }} /></label>
+            {customer.siteName && customer.siteName === deriveSiteNameFromAddress(customer.address) && <p>Site Name generated from address.</p>}
             {createError && <p className="job-edit-error" role="alert">{createError}</p>}
             {actions(createCustomerAndSite, 'Create customer and site')}
         </div>}
@@ -260,7 +274,7 @@ export default function JobRelationshipFields({
         <label className="job-edit-field job-edit-field-wide"><span>Site</span>
             <select value={draft.siteId} disabled={!draft.customerId} onChange={(event) => {
                 if (event.target.value === '__new__') return openPanel('site')
-                if (selectedEquipment?.gr_Site?.gr_siteid !== event.target.value) clearEquipment()
+                if (equipmentConflictsWithSite(event.target.value)) clearEquipment()
                 selectSite(event.target.value)
             }}>
                 <option value="">{draft.customerId ? 'Select site' : 'Select a customer first'}</option>
@@ -271,7 +285,8 @@ export default function JobRelationshipFields({
         {panel === 'site' && <div className="job-edit-create-panel job-edit-field-wide">
             <div><h4>New site</h4><p>Create a site for {customerSearch} and select it for this job.</p></div>
             <label className="job-edit-field"><span>Site name</span><input autoFocus value={site.name} onChange={(e) => setSite({ ...site, name: e.target.value })} /></label>
-            <label className="job-edit-field"><span>Site address</span><input value={site.address} onChange={(e) => setSite({ ...site, address: e.target.value })} /></label>
+            <label className="job-edit-field"><span>Site address</span><input value={site.address} onChange={(e) => { const address = e.target.value; const previousDerived = deriveSiteNameFromAddress(site.address); setSite({ ...site, address, name: !site.name.trim() || site.name === previousDerived ? deriveSiteNameFromAddress(address) : site.name }) }} /></label>
+            {site.name && site.name === deriveSiteNameFromAddress(site.address) && <p>Site Name generated from address.</p>}
             {createError && <p className="job-edit-error" role="alert">{createError}</p>}
             {actions(createSite, 'Create site')}
         </div>}

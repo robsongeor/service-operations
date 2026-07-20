@@ -168,6 +168,8 @@
     box-shadow: 0 0 0 3px rgba(80, 90, 84, 0.1);
 }
 
+.job-edit-field-error { color: #9b3636; font-size: .68rem; font-weight: 600; }
+
 .job-edit-divider {
     margin-top: 6px;
     padding-top: 20px;
@@ -875,6 +877,7 @@
 }
 .job-office-section { display: grid; gap: 14px; }.job-office-section .job-edit-divider { margin-top: 0; }.job-office-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }.job-office-attention { display: flex; align-items: flex-start; gap: 10px; padding: 12px; border: 1px solid #dce3df; border-radius: 8px; background: #fafcfb; color: #334039; cursor: pointer; }.job-office-attention input { width: 17px; height: 17px; margin: 1px 0 0; accent-color: #d97706; }.job-office-attention span { display: grid; gap: 3px; }.job-office-attention strong { font-size: .78rem; }.job-office-attention small, .job-office-hint { color: #717b75; font-size: .72rem; line-height: 1.4; }.job-office-hint { margin: -6px 0 0; }
 .job-office-add { display: grid; gap: 9px; padding-top: 14px; border-top: 1px solid #e2e6e3; }.job-office-add button { justify-self: end; min-height: 34px; padding: 0 12px; border: 1px solid #176f66; border-radius: 8px; background: #176f66; color: #fff; font: inherit; font-size: .75rem; font-weight: 750; cursor: pointer; }.job-office-history { display: grid; gap: 10px; padding-top: 14px; border-top: 1px solid #e2e6e3; }.job-office-history h4, .job-office-history p { margin: 0; }.job-office-history h4 { color: #29342e; font-size: .84rem; }.job-office-history > p { color: #77817b; font-size: .74rem; }.job-office-history article { display: grid; gap: 6px; padding: 11px; border: 1px solid #dce3df; border-radius: 8px; background: #fafcfb; }.job-office-history article p { color: #3c4741; font-size: .76rem; line-height: 1.45; white-space: pre-wrap; }.job-office-history time { color: #77817b; font-size: .68rem; }
+.job-office-user { justify-self: start; max-width: 100%; overflow: hidden; padding: 3px 7px; border-radius: 999px; background: #e9eeeb; color: #59645e; font-size: .62rem; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
 
 .job-edit-footer {
     display: flex;

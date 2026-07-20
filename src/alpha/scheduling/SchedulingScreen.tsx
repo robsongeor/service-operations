@@ -8,6 +8,7 @@ import type { Job } from '../jobs/types/job.types'
 import JobEditDrawer from '../jobs/components/JobEditDrawer'
 import './SchedulingScreen.css'
 import { useNavigate } from 'react-router-dom'
+import { getJobTypeLabel } from '../jobs/types/jobType.types'
 
 const dayHeadingFormatter = new Intl.DateTimeFormat('en-NZ', { weekday: 'short' })
 const dayNumberFormatter = new Intl.DateTimeFormat('en-NZ', {
@@ -83,20 +84,20 @@ function ScheduleCard({
             disabled={!job}
             aria-label={job ? `Edit job ${job.gr_jobnumber || 'without a job number'}` : undefined}
         >
+            <strong className="schedule-card-customer">{job?.gr_Site?.gr_Customer?.gr_name || 'No customer'}</strong>
             <div className="schedule-card-topline">
-                <span>{scheduleLabel(option)}</span>
+                <span>{job?.gr_jobnumber || 'Unnumbered job'} · {getJobTypeLabel(job?.gr_jobtype)}</span>
                 <span>{option.gr_confirmed ? 'Confirmed' : 'Option'}</span>
             </div>
-            <strong>{job?.gr_jobnumber || 'Unnumbered job'}</strong>
-            <p>{job?.gr_description || 'No description'}</p>
             <div className="schedule-card-detail">
-                <span>{job?.gr_Site?.gr_Customer?.gr_name || 'No customer'}</span>
+                <span>{job?.gr_Equipment?.gr_fleet || 'No equipment'}</span>
                 <span>{job?.gr_Site?.gr_name || 'No site'}</span>
             </div>
             <div className="schedule-card-footer">
                 <span>{job?.gr_Mechanic?.gr_name || 'Unassigned'}</span>
-                {job?.gr_Equipment?.gr_fleet && <span>{job.gr_Equipment.gr_fleet}</span>}
+                <span>{scheduleLabel(option)}</span>
             </div>
+            <p>{job?.gr_description || 'No description'}</p>
         </button>
     )
 }

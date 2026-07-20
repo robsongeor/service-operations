@@ -196,7 +196,7 @@ export default function EquipmentDrawer(props: Props) {
         if (isCreate) return
         const currentHourMeter = Number(maintenanceForm.currentHourMeter)
         if (!Number.isFinite(currentHourMeter) || currentHourMeter < 0) {
-            setMaintenanceError('Current Hour Meter cannot be negative.')
+            setMaintenanceError('Last Known Hour Meter cannot be negative.')
             return
         }
 
@@ -214,7 +214,7 @@ export default function EquipmentDrawer(props: Props) {
                 return
             }
             if (hours != null && currentHourMeter < hours) {
-                setMaintenanceError('Current Hour Meter cannot be less than any entered Last Completed Hours.')
+                setMaintenanceError('Last Known Hour Meter cannot be less than any entered Last Completed Hours.')
                 return
             }
             nextPlans.push({
@@ -587,7 +587,7 @@ export default function EquipmentDrawer(props: Props) {
 
                     {isCreate && parsedSpreadsheetRow && <details className="equipment-spreadsheet-source" open={sourceContextOpen} onToggle={(event) => setSourceContextOpen(event.currentTarget.open)}><summary>Spreadsheet source</summary><dl><div><dt>Job Number</dt><dd>{parsedSpreadsheetRow.jobNumber || '-'}</dd></div><div><dt>Date</dt><dd>{parsedSpreadsheetRow.date || '-'}</dd></div><div><dt>Mechanic</dt><dd>{parsedSpreadsheetRow.mechanic || '-'}</dd></div><div><dt>Description</dt><dd>{parsedSpreadsheetRow.description || '-'}</dd></div><div><dt>Contact details</dt><dd>{parsedSpreadsheetRow.contactDetails || '-'}</dd></div><div><dt>Status</dt><dd>{parsedSpreadsheetRow.status || '-'}</dd></div><div><dt>Comments</dt><dd>{parsedSpreadsheetRow.comments || '-'}</dd></div><div><dt>Order number</dt><dd>{parsedSpreadsheetRow.orderNumber || '-'}</dd></div><div><dt>in so</dt><dd>{parsedSpreadsheetRow.inSo || '-'}</dd></div></dl></details>}
 
-                    {!isCreate && activeTab === 'maintenance' && <EditDrawerSection title="Maintenance" meta={<span>Current hour meter: {equipment?.gr_currenthourmeter ?? '-'}</span>}>
+                    {!isCreate && activeTab === 'maintenance' && <EditDrawerSection title="Maintenance" meta={<span>Last Known Hour Meter: {equipment?.gr_currenthourmeter ?? '-'}</span>}>
                         <div className="equipment-maintenance-actions">
                             <button type="button" onClick={openMaintenanceDialog} disabled={busy}>Edit Maintenance History</button>
                         </div>
@@ -642,8 +642,8 @@ export default function EquipmentDrawer(props: Props) {
             onCancel={() => { if (!busy) setMaintenanceDialogOpen(false) }}
             onSubmit={() => void saveMaintenanceHistory()}
         >
-            <p className="edit-form-dialog-context">Update the current meter and historical service completions. Next due hours are calculated automatically.</p>
-            <label>Current Hour Meter<input type="number" min="0" value={maintenanceForm.currentHourMeter} onChange={(event) => { setMaintenanceForm((current) => ({ ...current, currentHourMeter: event.target.value })); setMaintenanceError('') }} /></label>
+            <p className="edit-form-dialog-context">Update the last known meter reading and historical service completions. Next due hours are calculated automatically.</p>
+            <label>Last Known Hour Meter<input type="number" min="0" value={maintenanceForm.currentHourMeter} onChange={(event) => { setMaintenanceForm((current) => ({ ...current, currentHourMeter: event.target.value })); setMaintenanceError('') }} /></label>
             {PLANNED_SERVICE_TYPES.map((serviceType) => {
                 const label = SERVICE_TYPE_OPTIONS.find((option) => option.value === serviceType)?.label
                 return <fieldset className="equipment-maintenance-history-group" key={serviceType}>

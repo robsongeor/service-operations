@@ -14,6 +14,14 @@ const mapUpdate = (value: Record<string, unknown>): JobOfficeUpdate => ({
         : undefined,
 })
 
+async function fetchJobOfficeUpdate(token: string, updateId: string): Promise<JobOfficeUpdate> {
+    const response = await fetch(`${API_URL}/gr_jobofficeupdates(${updateId})?${select}&${expand}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    })
+    if (!response.ok) throw new Error(`Failed to load the created office update: ${await response.text()}`)
+    return mapUpdate(await response.json())
+}
+
 export async function fetchJobOfficeUpdates(token: string): Promise<JobOfficeUpdate[]> {
     const response = await fetch(`${API_URL}/gr_jobofficeupdates?${select}&${expand}&$orderby=createdon desc`, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } })
     if (!response.ok) throw new Error(`Failed to load office updates: ${await response.text()}`)
@@ -32,5 +40,12 @@ export async function createJobOfficeUpdate(token: string, input: { jobId: strin
         }),
     })
     if (!response.ok) throw new Error(`Failed to create office update: ${await response.text()}`)
-    return mapUpdate(await response.json())
+    const created = await response.json()
+    const updateId = String(created.gr_jobofficeupdateid ?? '')
+    if (!updateId) return mapUpdate(created)
+    try {
+        return await fetchJobOfficeUpdate(token, updateId)
+    } catch {
+        return mapUpdate(created)
+    }
 }

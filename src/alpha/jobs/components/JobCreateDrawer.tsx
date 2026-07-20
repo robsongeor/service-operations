@@ -4,7 +4,7 @@ import type { Equipment } from '../types/equipment.types'
 import type { Site } from '../types/site.types'
 import type { Customer } from '../types/customer.types'
 import type { SiteContact } from '../types/siteContact.types'
-import { JOB_TYPES, type JobType } from '../types/jobType.types'
+import type { JobType } from '../types/jobType.types'
 import { JOB_STATUSES } from '../types/jobStatus.types'
 import type { JobSaveInput } from '../types/jobSave.types'
 import { useJobEditor } from '../hooks/useJobEditor'
@@ -56,7 +56,7 @@ export default function JobCreateDrawer({
     const editor = useJobEditor({
         initialDraft: {
             jobNumber: '', orderNumber: '', description: '',
-            jobType: initialValues?.jobType ?? JOB_TYPES.BREAKDOWN,
+            jobType: initialValues?.jobType ?? '',
             status: JOB_STATUSES.UNALLOCATED,
             mechanicId: '',
             equipmentId: initialValues?.equipmentId ?? '',
@@ -75,8 +75,13 @@ export default function JobCreateDrawer({
     const [saveError, setSaveError] = useState('')
     const [scheduleDrafts, setScheduleDrafts] = useState<JobScheduleOptionDraft[]>([])
     const [jobWasCreated, setJobWasCreated] = useState(false)
+    const [jobTypeError, setJobTypeError] = useState('')
 
     const createJob = async () => {
+        if (!draft.jobType) {
+            setJobTypeError('Select a job type before creating the job.')
+            return
+        }
         if (!draft.description.trim()) return setSaveError('Enter a job description before creating the job.')
         if (draft.customerId && !draft.siteId) return setSaveError('Select a site for the chosen customer.')
 
@@ -144,7 +149,7 @@ export default function JobCreateDrawer({
             </>}
         >
             <div className="job-edit-grid">
-                <JobCoreFields draft={draft} setDraft={setDraft} mechanics={mechanics} />
+                <JobCoreFields draft={draft} setDraft={setDraft} mechanics={mechanics} allowEmptyJobType jobTypeError={jobTypeError} />
                 {jobRequiresMaintenance(draft.jobType) && <JobMaintenanceSummary
                     equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)}
                     servicePlans={servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === draft.equipmentId.toLowerCase())}

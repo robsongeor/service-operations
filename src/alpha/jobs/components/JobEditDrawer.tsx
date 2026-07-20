@@ -166,6 +166,10 @@ export default function JobEditDrawer({
     const canEmailJob = hasJobNumber && Boolean(job.gr_Mechanic) && jobCardStatus === JOB_CARD_STATUSES.NOT_SENT
 
     const saveChanges = async () => {
+        if (!draft.jobType) {
+            setSaveError('Select a job type before saving.')
+            return
+        }
         if (!draft.description.trim()) {
             setSaveError('Enter a job description before saving.')
             return

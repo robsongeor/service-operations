@@ -282,11 +282,15 @@ Current job statuses:
 | Status | Dataverse value | Default table priority |
 |---|---:|---:|
 | Complete | `122830003` | 1 |
-| Waiting for parts | `122830002` | 2 |
-| Allocated | `122830000` | 3 |
-| Unallocated | `122830001` | 4 |
+| Completion Review | `122830004` | 2 |
+| Waiting for parts | `122830002` | 3 |
+| Allocated | `122830000` | 4 |
+| Unallocated | `122830001` | 5 |
 
 The current default table order follows the operational workflow above.
+
+Completion Review is a non-complete operational state. It does not set Completed Date or
+run equipment maintenance completion. Only Complete triggers those workflows.
 
 Do not assume the numeric Dataverse values are sequential in workflow order.
 
@@ -402,6 +406,14 @@ Automatically select that contact.
 ```
 
 The user must still be able to change the automatic selection.
+
+Create Job starts with no Job Type unless a valid initial type is supplied by the opening
+workflow. A Job Type must be selected before creation. The shared searchable mechanic
+selector is used by the Jobs table and the Create/Edit Job drawers.
+
+Equipment created inside Create Job has no Site initially. It remains selected while the
+user resolves Customer and Site, and is cleared only when a known existing Equipment Site
+or Customer conflicts with an explicitly chosen relationship.
 
 ### Equipment movement rule
 
@@ -674,6 +686,7 @@ The current scheduling screen:
 - Groups dated work into day columns
 - Visually distinguishes confirmed and provisional options
 - Allows the full job editor to be opened from a schedule card
+- Shows Customer first on each card for rapid planner scanning
 
 ### Schedule records
 
@@ -1309,6 +1322,9 @@ maintenance records unchanged.
 The Equipment Manager loads plans alongside Equipment and displays a read-only Maintenance
 section plus a compact nearest-due summary. These state updates are immutable and do not
 reload the page or alter historical Jobs.
+
+The Equipment Current Hour Meter field is labelled **Last Known Hour Meter** in the UI;
+the Dataverse logical name and TypeScript/API property names remain unchanged.
 
 Maintenance is relevant only to Service jobs. `jobRequiresMaintenance` in the Job Type
 module centralises that decision for drawer visibility and completion validation. In the

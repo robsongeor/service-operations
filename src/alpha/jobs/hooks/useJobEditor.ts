@@ -10,7 +10,7 @@ export type JobEditorDraft = {
     jobNumber: string
     orderNumber: string
     description: string
-    jobType: JobType
+    jobType: JobType | ''
     mechanicId: string
     status: JobStatus
     equipmentId: string

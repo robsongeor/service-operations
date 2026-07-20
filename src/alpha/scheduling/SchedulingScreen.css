@@ -254,17 +254,21 @@
     text-transform: uppercase;
 }
 
-.schedule-card > strong {
+.schedule-card-customer {
     display: block;
-    margin-top: 7px;
-    color: #222a25;
-    font-size: 0.78rem;
+    overflow: hidden;
+    margin-bottom: 7px;
+    color: #183e33;
+    font-size: 0.82rem;
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .schedule-card > p {
     display: -webkit-box;
     overflow: hidden;
-    margin: 3px 0 8px;
+    margin: 8px 0 0;
     color: #454e48;
     font-size: 0.7rem;
     line-height: 1.35;
@@ -275,6 +279,7 @@
 .schedule-card-detail {
     display: grid;
     gap: 1px;
+    margin-top: 7px;
     padding-top: 7px;
     border-top: 1px solid rgba(113, 129, 120, 0.16);
     color: #66706a;

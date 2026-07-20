@@ -205,7 +205,7 @@ export default function CustomerDashboardScreen() {
                         </header>
                         <div className="customer-equipment-table-wrap">
                             <table className="customer-equipment-table">
-                                <thead><tr><th>Fleet Number</th><th>Make</th><th>Model</th><th>Current Hour Meter</th><th>Next Service</th><th>Maintenance Status</th></tr></thead>
+                                <thead><tr><th>Fleet Number</th><th>Make</th><th>Model</th><th>Last Known Hour Meter</th><th>Next Service</th><th>Maintenance Status</th></tr></thead>
                                 <tbody>
                                     {rows.length === 0 ? <tr><td colSpan={6}>No equipment recorded for this site.</td></tr> : rows.map((item) => {
                                         const plans = servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === item.gr_equipmentid.toLowerCase())

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { Job } from '../types/job.types'
 import type { Mechanic } from '../types/mechanic.types'
-import { JOB_TYPE_OPTIONS, getJobTypeLabel, type JobType } from '../types/jobType.types'
+import { JOB_TYPE_OPTIONS, getJobTypeLabel } from '../types/jobType.types'
 import {
     JOB_STATUS_OPTIONS,
     JOB_STATUS_PRIORITY,
@@ -11,10 +11,14 @@ import './JobsTable.css'
 import { getJobCardStatus, JOB_CARD_STATUSES } from '../types/jobCardStatus.types'
 import { JOB_NUMBER_REQUIRED_EMAIL_MESSAGE, jobHasEmailableJobNumber } from '../services/jobEmailRules'
 import { getOfficeActionLabel, jobNeedsOfficeAttention, type JobOfficeUpdate } from '../types/officeAction.types'
+import type { JobsViewState } from '../types/jobsViewState.types'
+import SearchableMechanicSelect from './SearchableMechanicSelect'
 
 type Props = {
     jobs: Job[]
     visibleStatuses: JobStatus[]
+    viewState: JobsViewState
+    onViewStateChange: (state: JobsViewState) => void
     onToggleStatus: (status: JobStatus) => void
     onStatusChange: (jobId: string, status: JobStatus) => void
     onJobFieldsChange: (
@@ -25,7 +29,7 @@ type Props = {
             gr_ordernumber?: string
             'gr_Mechanic@odata.bind'?: string | null
         }
-    ) => void
+    ) => Promise<void>
     onEmailJob: (job: Job) => Promise<void>
     onEditJob: (job: Job) => void
     mechanics: Mechanic[]
@@ -41,6 +45,8 @@ const createdDateFormatter = new Intl.DateTimeFormat('en-NZ', {
 export default function JobsTable({
     jobs,
     visibleStatuses,
+    viewState,
+    onViewStateChange,
     onToggleStatus,
     onStatusChange,
     onJobFieldsChange,
@@ -49,19 +55,15 @@ export default function JobsTable({
     mechanics,
     officeUpdates,
 }: Props) {
-    const [searchText, setSearchText] = useState('')
-    const [selectedJobType, setSelectedJobType] = useState<JobType | 'all'>('all')
-    const [officeActionFilter, setOfficeActionFilter] = useState<'all' | 'required' | 'none'>('all')
+    const { searchText, selectedJobType, officeAttentionFilter, sort } = viewState
     const [selectedRowId, setSelectedRowId] = useState<string | null>(null)
     const [sendingJobId, setSendingJobId] = useState<string | null>(null)
+    const [openMechanicJobId, setOpenMechanicJobId] = useState<string | null>(null)
+    const [savingMechanicJobId, setSavingMechanicJobId] = useState<string | null>(null)
     const [copyFeedback, setCopyFeedback] = useState<{
         message: string
         isError: boolean
     } | null>(null)
-    const [sort, setSort] = useState<{
-        column: 'created' | 'status'
-        direction: 'ascending' | 'descending'
-    }>({ column: 'status', direction: 'ascending' })
     const latestOfficeUpdates = useMemo(() => officeUpdates.reduce<Record<string, JobOfficeUpdate>>((current, update) => {
         if (!current[update.jobId] || current[update.jobId].createdAt < update.createdAt) current[update.jobId] = update
         return current
@@ -86,13 +88,13 @@ export default function JobsTable({
     const jobsForSelectedType = useMemo(() => jobs.filter((job) => {
         if (selectedJobType !== 'all' && job.gr_jobtype !== selectedJobType) return false
         const needsAttention = jobNeedsOfficeAttention(job)
-        const matchesOfficeActionFilter = officeActionFilter === 'all'
+        const matchesOfficeActionFilter = officeAttentionFilter === 'all'
             ? true
-            : officeActionFilter === 'required'
+            : officeAttentionFilter === 'required'
                 ? needsAttention
                 : !needsAttention
         return matchesOfficeActionFilter
-    }), [jobs, officeActionFilter, selectedJobType])
+    }), [jobs, officeAttentionFilter, selectedJobType])
 
     const matchingJobs = useMemo(() => {
         const search = searchText.trim().toLowerCase()
@@ -154,19 +156,10 @@ export default function JobsTable({
     }, [matchingJobs, sort])
 
     const toggleSort = (column: 'created' | 'status') => {
-        setSort((current) => {
-            if (current.column !== column) {
-                return {
-                    column,
-                    direction: column === 'created' ? 'descending' : 'ascending',
-                }
-            }
-
-            return {
-                column,
-                direction: current.direction === 'ascending' ? 'descending' : 'ascending',
-            }
-        })
+        const nextSort = sort.column !== column
+            ? { column, direction: column === 'created' ? 'descending' as const : 'ascending' as const }
+            : { column, direction: sort.direction === 'ascending' ? 'descending' as const : 'ascending' as const }
+        onViewStateChange({ ...viewState, sort: nextSort })
     }
 
     const spreadsheetCell = (value?: string | null) =>
@@ -229,7 +222,7 @@ export default function JobsTable({
                             type="search"
                             placeholder="Search jobs..."
                             value={searchText}
-                            onChange={(event) => setSearchText(event.target.value)}
+                            onChange={(event) => onViewStateChange({ ...viewState, searchText: event.target.value })}
                         />
                     </label>
                     <span className="jobs-list-count">
@@ -247,7 +240,7 @@ export default function JobsTable({
                         role="tab"
                         aria-selected={selectedJobType === 'all'}
                         className={selectedJobType === 'all' ? 'jobs-type-tab active' : 'jobs-type-tab'}
-                        onClick={() => setSelectedJobType('all')}
+                        onClick={() => onViewStateChange({ ...viewState, selectedJobType: 'all' })}
                     >
                         All jobs
                     </button>
@@ -258,7 +251,7 @@ export default function JobsTable({
                             role="tab"
                             aria-selected={selectedJobType === jobType.value}
                             className={selectedJobType === jobType.value ? 'jobs-type-tab active' : 'jobs-type-tab'}
-                            onClick={() => setSelectedJobType(jobType.value)}
+                            onClick={() => onViewStateChange({ ...viewState, selectedJobType: jobType.value })}
                         >
                             {jobType.label}
                         </button>
@@ -284,9 +277,9 @@ export default function JobsTable({
                     })}
                 </div>
                 <div className="jobs-office-filter" aria-label="Filter jobs by office attention">
-                    <button type="button" className={officeActionFilter === 'all' ? 'active' : ''} onClick={() => setOfficeActionFilter('all')}>All</button>
-                    <button type="button" className={officeActionFilter === 'required' ? 'active' : ''} onClick={() => setOfficeActionFilter('required')}>Needs Attention</button>
-                    <button type="button" className={officeActionFilter === 'none' ? 'active' : ''} onClick={() => setOfficeActionFilter('none')}>No Attention Required</button>
+                    <button type="button" className={officeAttentionFilter === 'all' ? 'active' : ''} onClick={() => onViewStateChange({ ...viewState, officeAttentionFilter: 'all' })}>All</button>
+                    <button type="button" className={officeAttentionFilter === 'required' ? 'active' : ''} onClick={() => onViewStateChange({ ...viewState, officeAttentionFilter: 'required' })}>Needs Attention</button>
+                    <button type="button" className={officeAttentionFilter === 'none' ? 'active' : ''} onClick={() => onViewStateChange({ ...viewState, officeAttentionFilter: 'none' })}>No Attention Required</button>
                 </div>
             </div>
 
@@ -294,6 +287,7 @@ export default function JobsTable({
                 <table className="jobs-table">
                     <thead>
                         <tr>
+                            <th className="jobs-attention-column"><span className="jobs-visually-hidden">Office attention</span></th>
                             <th>Job</th>
                             <th aria-sort={sort.column === 'created' ? sort.direction : 'none'}>
                                 <button
@@ -377,6 +371,9 @@ export default function JobsTable({
                                     }
                                 }}
                             >
+                                <td className="jobs-attention-column">
+                                    {jobNeedsOfficeAttention(job) && <span className="jobs-office-indicator" title="Office attention required" aria-label="Office attention required" />}
+                                </td>
                                 <td>
                                     <input
                                         key={`${job.gr_jobid}-number-${job.gr_jobnumber}`}
@@ -391,7 +388,6 @@ export default function JobsTable({
                                             }
                                         }}
                                     />
-                                    {jobNeedsOfficeAttention(job) && <span className="jobs-office-indicator" title="Office attention required" aria-label="Office attention required" />}
                                 </td>
 
                                 <td className="jobs-table-date">
@@ -450,26 +446,22 @@ export default function JobsTable({
                                 </td>
 
                                 <td>
-                                    <select
-                                        className="jobs-table-select"
-                                        aria-label="Assigned mechanic"
-                                        value={job.gr_Mechanic?.gr_mechanicid ?? ''}
-                                        onChange={(event) => {
-                                            const mechanicId = event.target.value
-                                            onJobFieldsChange(job.gr_jobid, {
-                                                'gr_Mechanic@odata.bind': mechanicId
-                                                    ? `/gr_mechanics(${mechanicId})`
-                                                    : null,
-                                            })
+                                    <SearchableMechanicSelect
+                                        mechanics={mechanics}
+                                        selectedId={job.gr_Mechanic?.gr_mechanicid ?? ''}
+                                        isOpen={openMechanicJobId === job.gr_jobid}
+                                        isSaving={savingMechanicJobId === job.gr_jobid}
+                                        onOpen={() => setOpenMechanicJobId(job.gr_jobid)}
+                                        onClose={() => setOpenMechanicJobId(null)}
+                                        onSelect={(mechanicId) => {
+                                            if (savingMechanicJobId || mechanicId === (job.gr_Mechanic?.gr_mechanicid ?? '')) { setOpenMechanicJobId(null); return }
+                                            setOpenMechanicJobId(null)
+                                            setSavingMechanicJobId(job.gr_jobid)
+                                            void onJobFieldsChange(job.gr_jobid, {
+                                                'gr_Mechanic@odata.bind': mechanicId ? `/gr_mechanics(${mechanicId})` : null,
+                                            }).catch((error) => window.alert(error instanceof Error ? error.message : 'The technician could not be updated.')).finally(() => setSavingMechanicJobId(null))
                                         }}
-                                    >
-                                        <option value="">Unassigned</option>
-                                        {mechanics.map((mechanic) => (
-                                            <option key={mechanic.gr_mechanicid} value={mechanic.gr_mechanicid}>
-                                                {mechanic.gr_name}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    />
                                 </td>
 
                                 <td>

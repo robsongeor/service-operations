@@ -17,6 +17,6 @@ export function getJobTypeLabel(jobType?: JobType) {
     return JOB_TYPE_OPTIONS.find((option) => option.value === jobType)?.label ?? 'Not set'
 }
 
-export function jobRequiresMaintenance(jobType?: JobType) {
+export function jobRequiresMaintenance(jobType?: JobType | '') {
     return jobType === JOB_TYPES.SERVICE
 }

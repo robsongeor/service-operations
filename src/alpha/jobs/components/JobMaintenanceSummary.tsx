@@ -14,7 +14,7 @@ export default function JobMaintenanceSummary({ equipment, servicePlans }: Props
     return <section className="job-maintenance-summary job-edit-field-wide" aria-label="Current Maintenance Schedule">
         <div className="job-maintenance-summary-heading">
             <h3>Current Maintenance Schedule</h3>
-            <span>Current hour meter: {equipment?.gr_currenthourmeter ?? '-'}</span>
+            <span>Last Known Hour Meter: {equipment?.gr_currenthourmeter ?? '-'}</span>
         </div>
         {!equipment ? <p>Select equipment to view its maintenance plan.</p> : servicePlans.length === 0 ? <p>No maintenance schedule has been created for this equipment.</p> : <div className="job-maintenance-summary-plans">
             {[SERVICE_TYPES.A, SERVICE_TYPES.B, SERVICE_TYPES.C].map((serviceType) => {
