@@ -15,6 +15,7 @@ import {
     type QuoteLineInput,
     type QuoteStatus,
 } from '../types/quote.types'
+import { buildQuoteTableClipboard, copyQuoteTable, isCopyableQuoteLine } from '../utils/quoteTableClipboard'
 
 type EditableLine = QuoteLineInput & { key: string }
 
@@ -110,6 +111,7 @@ export default function QuoteEditorDialog({
     const [lines, setLines] = useState<EditableLine[]>(() => existingLines.length
         ? existingLines.map(existingLine)
         : [newLine(0)])
+    const [copyFeedback, setCopyFeedback] = useState<'success' | 'error' | ''>('')
 
     const totals = useMemo(() => {
         const extended = lines.map((line) => roundMoney(line.quantity * line.unitPrice))
@@ -124,6 +126,29 @@ export default function QuoteEditorDialog({
 
     const updateLine = (key: string, changes: Partial<EditableLine>) => {
         setLines((current) => current.map((line) => line.key === key ? { ...line, ...changes } : line))
+    }
+
+    const copyableLines = lines.flatMap((line, index) => isCopyableQuoteLine(line) ? [{
+        description: line.description,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        extendedPrice: totals.extended[index],
+    }] : [])
+
+    const copyTable = async () => {
+        if (copyableLines.length === 0) return
+        try {
+            await copyQuoteTable(buildQuoteTableClipboard(copyableLines, {
+                subtotal: totals.subtotal,
+                gst: totals.gst,
+                total: totals.total,
+                gstRatePercent: gstRate,
+            }))
+            setCopyFeedback('success')
+        } catch {
+            setCopyFeedback('error')
+        }
+        window.setTimeout(() => setCopyFeedback(''), 2400)
     }
 
     const selectPricingItem = (key: string, pricingItemId: string) => {
@@ -321,6 +346,10 @@ export default function QuoteEditorDialog({
                     {error && <p className="quote-form-error" role="alert">{error}</p>}
 
                     <footer>
+                        <div className="quote-copy-action">
+                            <button type="button" className="quote-secondary-button" title="Copy Quote line items and totals as a formatted table" disabled={copyableLines.length === 0} onClick={() => void copyTable()}>Copy Table</button>
+                            {copyFeedback && <span className={copyFeedback === 'error' ? 'quote-copy-feedback error' : 'quote-copy-feedback'} role="status">{copyFeedback === 'success' ? 'Quote table copied.' : 'Unable to copy Quote table. Please try again.'}</span>}
+                        </div>
                         <button type="button" className="quote-secondary-button" onClick={onClose}>Cancel</button>
                         <button type="submit" className="quote-primary-button" disabled={isSaving || lines.length === 0}>
                             {isSaving ? 'Saving…' : quote ? 'Save quote' : 'Create quote'}

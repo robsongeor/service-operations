@@ -525,7 +525,7 @@ export function useJobs() {
                 })
                 const token = response.accessToken
                 const mechanicsRequest = fetch(
-                    `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2/gr_mechanics?$select=gr_mechanicid,gr_name,gr_phone,gr_email`,
+                    `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2/gr_mechanics?$select=gr_mechanicid,gr_name,gr_phone,gr_email,gr_camnumber,gr_rego,gr_region`,
                     {
                         headers: {
                             Authorization: `Bearer ${token}`,

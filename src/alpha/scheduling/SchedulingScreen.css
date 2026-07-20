@@ -77,13 +77,55 @@
     font-size: 1.05rem;
 }
 
-.scheduling-summary > span {
+.scheduling-summary-controls > span {
     padding: 6px 10px;
     border-radius: 999px;
     background: #eef1ef;
     color: #68716b;
     font-size: 0.7rem;
     font-weight: 700;
+}
+
+.scheduling-summary-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.scheduling-display-mode {
+    display: inline-flex;
+    padding: 2px;
+    border: 1px solid #d8dfdb;
+    border-radius: 9px;
+    background: #f4f6f5;
+}
+
+.scheduling-display-mode button {
+    min-height: 28px;
+    padding: 0 9px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #66716b;
+    font: inherit;
+    font-size: 0.68rem;
+    font-weight: 750;
+    cursor: pointer;
+}
+
+.scheduling-display-mode button:hover {
+    color: #263b33;
+}
+
+.scheduling-display-mode button.active {
+    background: #ffffff;
+    box-shadow: 0 1px 4px rgba(24, 35, 29, 0.12);
+    color: #176f66;
+}
+
+.scheduling-display-mode button:focus-visible {
+    outline: 2px solid rgba(23, 111, 102, 0.3);
+    outline-offset: 1px;
 }
 
 .schedule-board-scroll {
@@ -233,6 +275,50 @@
     box-shadow: inset 3px 0 #176f66, 0 3px 8px rgba(24, 35, 29, 0.05);
 }
 
+.schedule-card-compact {
+    padding: 8px;
+}
+
+.schedule-card-compact .schedule-card-customer {
+    margin-bottom: 5px;
+}
+
+.schedule-card-compact .schedule-card-expanded-content {
+    display: none;
+}
+
+.schedule-card-compact:hover:not(:disabled),
+.schedule-card-compact:focus-visible {
+    position: relative;
+    z-index: 5;
+    padding: 10px;
+}
+
+.schedule-card-compact:hover:not(:disabled) .schedule-card-compact-content,
+.schedule-card-compact:focus-visible .schedule-card-compact-content {
+    display: none;
+}
+
+.schedule-card-compact:hover:not(:disabled) .schedule-card-expanded-content,
+.schedule-card-compact:focus-visible .schedule-card-expanded-content {
+    display: block;
+    animation: schedule-card-expand 160ms ease-out both;
+}
+
+@keyframes schedule-card-expand {
+    from {
+        opacity: 0;
+        transform: translateY(-3px) scale(0.985);
+        transform-origin: top center;
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        transform-origin: top center;
+    }
+}
+
 .schedule-card-topline,
 .schedule-card-footer {
     display: flex;
@@ -265,7 +351,7 @@
     white-space: nowrap;
 }
 
-.schedule-card > p {
+.schedule-card-expanded-content > p {
     display: -webkit-box;
     overflow: hidden;
     margin: 8px 0 0;
@@ -366,5 +452,17 @@
     .scheduling-summary {
         align-items: flex-start;
         flex-direction: column;
+    }
+
+    .scheduling-summary-controls {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .schedule-card-compact:hover:not(:disabled) .schedule-card-expanded-content,
+    .schedule-card-compact:focus-visible .schedule-card-expanded-content {
+        animation: none;
     }
 }

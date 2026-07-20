@@ -6,6 +6,9 @@ export type MechanicInput = {
     name: string
     phone: string
     email: string
+    camNumber: string
+    rego: string
+    region: string
 }
 
 function headers(token: string, includeContentType = false) {
@@ -31,7 +34,7 @@ async function ensureSuccess(response: Response, action: string) {
 
 export async function fetchMechanics(token: string): Promise<Mechanic[]> {
     const response = await fetch(
-        `${API_URL}/gr_mechanics?$select=gr_mechanicid,gr_name,gr_phone,gr_email,statecode&$orderby=gr_name asc`,
+        `${API_URL}/gr_mechanics?$select=gr_mechanicid,gr_name,gr_phone,gr_email,gr_camnumber,gr_rego,gr_region,statecode&$orderby=gr_name asc`,
         { cache: 'no-store', headers: headers(token) },
     )
     await ensureSuccess(response, 'Failed to load mechanics')
@@ -47,6 +50,9 @@ export async function createMechanic(token: string, mechanic: MechanicInput): Pr
             gr_name: mechanic.name.trim(),
             gr_phone: mechanic.phone.trim() || null,
             gr_email: mechanic.email.trim() || null,
+            gr_camnumber: mechanic.camNumber.trim() || null,
+            gr_rego: mechanic.rego.trim().replace(/\s+/g, ' ') || null,
+            gr_region: mechanic.region.trim() || null,
         }),
     })
     await ensureSuccess(response, 'Failed to create mechanic')
@@ -64,6 +70,9 @@ export async function updateMechanic(
             gr_name: mechanic.name.trim(),
             gr_phone: mechanic.phone.trim() || null,
             gr_email: mechanic.email.trim() || null,
+            gr_camnumber: mechanic.camNumber.trim() || null,
+            gr_rego: mechanic.rego.trim().replace(/\s+/g, ' ') || null,
+            gr_region: mechanic.region.trim() || null,
         }),
     })
     await ensureSuccess(response, 'Failed to update mechanic')

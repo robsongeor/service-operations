@@ -83,6 +83,11 @@
 .mechanic-field span { color: #526059; font-size: .69rem; font-weight: 750; }
 .mechanic-field input { width: 100%; height: 40px; box-sizing: border-box; padding: 0 10px; border: 1px solid #ced7d2; border-radius: 8px; }
 .mechanic-field input:focus { border-color: #43877a; outline: 3px solid rgba(23,111,102,.12); }
+.mechanic-form-section { display: grid; gap: 3px; padding-top: 12px; border-top: 1px solid #e4e9e6; }
+.mechanic-form-section strong { color: #334039; font-size: .76rem; }
+.mechanic-form-section span { color: #77817b; font-size: .66rem; }
+.mechanic-vehicle-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.mechanic-region-field { grid-column: 1 / -1; }
 .mechanic-form-error { margin: 0; padding: 10px; border-radius: 8px; background: #fff0f0; color: #913b3b; font-size: .7rem; }
 .mechanic-dialog form > footer { display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px; }
 
@@ -96,4 +101,9 @@
     .mechanics-directory { border-right: 0; border-bottom: 1px solid #e0e6e2; }
     .mechanics-list { grid-template-columns: repeat(2,minmax(0,1fr)); }
     .mechanic-jobs-heading { align-items: flex-start; flex-direction: column; }
+}
+
+@media (max-width: 480px) {
+    .mechanic-vehicle-grid { grid-template-columns: 1fr; }
+    .mechanic-region-field { grid-column: auto; }
 }

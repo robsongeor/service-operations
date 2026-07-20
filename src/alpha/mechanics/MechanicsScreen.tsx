@@ -38,7 +38,7 @@ export default function MechanicsScreen() {
         const query = search.trim().toLowerCase()
         return mechanics.filter((mechanic) => {
             if (!showInactive && mechanic.statecode !== 0) return false
-            return !query || [mechanic.gr_name, mechanic.gr_phone, mechanic.gr_email]
+            return !query || [mechanic.gr_name, mechanic.gr_phone, mechanic.gr_email, mechanic.gr_camnumber, mechanic.gr_rego, mechanic.gr_region]
                 .some((value) => value?.toLowerCase().includes(query))
         })
     }, [mechanics, search, showInactive])

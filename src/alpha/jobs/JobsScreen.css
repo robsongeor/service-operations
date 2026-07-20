@@ -1,5 +1,7 @@
 .jobs-page {
     --jobs-page-header-height: 72px;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .jobs-page-header {

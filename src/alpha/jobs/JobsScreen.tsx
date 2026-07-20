@@ -121,7 +121,6 @@ export default function JobsScreen() {
                     onToggleStatus={toggleStatus}
                     onStatusChange={updateJobStatus}
                     onJobFieldsChange={updateJobFields}
-                    onEmailJob={sendPrimaryJobEmail}
                     onEditJob={setEditingJob}
                     mechanics={mechanics}
                     officeUpdates={officeUpdates}

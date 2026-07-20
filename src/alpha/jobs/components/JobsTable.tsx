@@ -8,11 +8,15 @@ import {
     type JobStatus,
 } from '../types/jobStatus.types'
 import './JobsTable.css'
-import { getJobCardStatus, JOB_CARD_STATUSES } from '../types/jobCardStatus.types'
-import { JOB_NUMBER_REQUIRED_EMAIL_MESSAGE, jobHasEmailableJobNumber } from '../services/jobEmailRules'
 import { getOfficeActionLabel, jobNeedsOfficeAttention, type JobOfficeUpdate } from '../types/officeAction.types'
 import type { JobsViewState } from '../types/jobsViewState.types'
 import SearchableMechanicSelect from './SearchableMechanicSelect'
+import {
+    buildMailtoUrl,
+    buildTechnicianEmailBody,
+    buildTechnicianEmailSubject,
+    isValidTechnicianEmail,
+} from '../utils/technicianMailto'
 
 type Props = {
     jobs: Job[]
@@ -30,7 +34,6 @@ type Props = {
             'gr_Mechanic@odata.bind'?: string | null
         }
     ) => Promise<void>
-    onEmailJob: (job: Job) => Promise<void>
     onEditJob: (job: Job) => void
     mechanics: Mechanic[]
     officeUpdates: JobOfficeUpdate[]
@@ -50,14 +53,12 @@ export default function JobsTable({
     onToggleStatus,
     onStatusChange,
     onJobFieldsChange,
-    onEmailJob,
     onEditJob,
     mechanics,
     officeUpdates,
 }: Props) {
     const { searchText, selectedJobType, officeAttentionFilter, sort } = viewState
     const [selectedRowId, setSelectedRowId] = useState<string | null>(null)
-    const [sendingJobId, setSendingJobId] = useState<string | null>(null)
     const [openMechanicJobId, setOpenMechanicJobId] = useState<string | null>(null)
     const [savingMechanicJobId, setSavingMechanicJobId] = useState<string | null>(null)
     const [copyFeedback, setCopyFeedback] = useState<{
@@ -68,22 +69,6 @@ export default function JobsTable({
         if (!current[update.jobId] || current[update.jobId].createdAt < update.createdAt) current[update.jobId] = update
         return current
     }, {}), [officeUpdates])
-
-    const sendJobEmail = async (job: Job) => {
-        if (!jobHasEmailableJobNumber(job)) {
-            window.alert(JOB_NUMBER_REQUIRED_EMAIL_MESSAGE)
-            return
-        }
-
-        setSendingJobId(job.gr_jobid)
-        try {
-            await onEmailJob(job)
-        } catch (error) {
-            window.alert(error instanceof Error ? error.message : 'The email flow did not complete.')
-        } finally {
-            setSendingJobId(null)
-        }
-    }
 
     const jobsForSelectedType = useMemo(() => jobs.filter((job) => {
         if (selectedJobType !== 'all' && job.gr_jobtype !== selectedJobType) return false
@@ -283,7 +268,12 @@ export default function JobsTable({
                 </div>
             </div>
 
-            <div className="jobs-table-scroll">
+            <div
+                className="jobs-table-scroll"
+                role="region"
+                aria-label="Jobs table"
+                tabIndex={0}
+            >
                 <table className="jobs-table">
                     <thead>
                         <tr>
@@ -327,7 +317,7 @@ export default function JobsTable({
                             </th>
                             <th>Order</th>
                             <th>Latest Update</th>
-                            <th aria-label="Actions" />
+                            <th className="jobs-table-actions-column" aria-label="Actions" />
                         </tr>
                     </thead>
 
@@ -342,18 +332,13 @@ export default function JobsTable({
 
                         {sortedJobs.map((job) => {
                             const latestOfficeUpdate = latestOfficeUpdates[job.gr_jobid]
-                            const assignmentStatus = getJobCardStatus(job.gr_jobcardstatus)
-                            const isSending = sendingJobId === job.gr_jobid
-                            const hasJobNumber = jobHasEmailableJobNumber(job)
-                            const assignmentLabel = !job.gr_Mechanic
-                                ? 'Email'
-                                : assignmentStatus === JOB_CARD_STATUSES.NOT_SENT
-                                    ? 'Email'
-                                    : assignmentStatus === JOB_CARD_STATUSES.SENT
-                                        ? '✓ Sent'
-                                        : assignmentStatus === JOB_CARD_STATUSES.SUBMITTED
-                                            ? 'Submitted'
-                                            : 'Closed'
+                            const mechanicEmail = job.gr_Mechanic?.gr_email?.trim() ?? ''
+                            const canEmailTechnician = Boolean(job.gr_Mechanic) && isValidTechnicianEmail(mechanicEmail)
+                            const emailTooltip = !job.gr_Mechanic
+                                ? 'Assign a technician before emailing job details.'
+                                : !isValidTechnicianEmail(mechanicEmail)
+                                    ? 'The allocated technician does not have an email address.'
+                                    : 'Email technician'
 
                             return (
                             <tr
@@ -500,7 +485,7 @@ export default function JobsTable({
 
                                 <td className="jobs-office-update" title={latestOfficeUpdate?.text || undefined}>{latestOfficeUpdate?.text ? latestOfficeUpdate.text.length > 42 ? `${latestOfficeUpdate.text.slice(0, 42).trimEnd()}...` : latestOfficeUpdate.text : ''}</td>
 
-                                <td>
+                                <td className="jobs-table-actions-column">
                                     <div className="jobs-table-actions">
                                         <button
                                             className="jobs-table-action"
@@ -510,20 +495,31 @@ export default function JobsTable({
                                             Edit
                                         </button>
                                         <button
-                                            className={'jobs-table-action jobs-email-action status-' + assignmentStatus}
+                                            className="jobs-table-action jobs-technician-email-action"
                                             type="button"
-                                            title={!hasJobNumber
-                                                ? JOB_NUMBER_REQUIRED_EMAIL_MESSAGE
-                                                : job.gr_Mechanic
-                                                ? assignmentStatus === JOB_CARD_STATUSES.NOT_SENT
-                                                    ? `Send this job to ${job.gr_Mechanic.gr_name} through Power Automate.`
-                                                    : `${assignmentLabel} to ${job.gr_Mechanic.gr_name}.`
-                                                : 'Assign a technician before emailing this job.'}
-                                            aria-label={`${assignmentLabel} job to technician`}
-                                            onClick={() => void sendJobEmail(job)}
-                                            disabled={isSending || !hasJobNumber || !job.gr_Mechanic || assignmentStatus !== JOB_CARD_STATUSES.NOT_SENT}
+                                            title={emailTooltip}
+                                            aria-label="Email job details to technician"
+                                            onClick={() => {
+                                                if (!job.gr_Mechanic || !canEmailTechnician) return
+                                                try {
+                                                    window.location.href = buildMailtoUrl({
+                                                        recipient: mechanicEmail,
+                                                        subject: buildTechnicianEmailSubject(job),
+                                                        body: buildTechnicianEmailBody(
+                                                            job,
+                                                            job.gr_Mechanic.gr_name,
+                                                        ),
+                                                    })
+                                                } catch {
+                                                    window.alert('Unable to open an email for this technician.')
+                                                }
+                                            }}
+                                            disabled={!canEmailTechnician}
                                         >
-                                            {isSending ? 'Sending...' : assignmentLabel}
+                                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                                <path d="M3 6.5h18v11H3z" />
+                                                <path d="m4 7 8 6 8-6" />
+                                            </svg>
                                         </button>
                                     </div>
                                 </td>

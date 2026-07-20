@@ -332,6 +332,12 @@ The jobs feature currently supports:
 - Emailing job information to the assigned technician
 - Opening the full job editor from the scheduling board
 
+The compact Jobs table email action currently opens a plain-text `mailto:` draft addressed
+to the allocated technician's persisted `gr_email` value. It includes grouped Job Number,
+Equipment, Work Required, Customer/Site, Contact, and order-number sections where applicable.
+The existing Power Automate dispatch and Job Card status workflow remains available in the
+Job drawer and is intentionally not invoked by this temporary table action.
+
 Search currently spans information such as:
 
 - Job number
@@ -580,6 +586,10 @@ The table is organisation-owned.
 - Overall paperwork closure remains controlled by the office.
 - The overall job card should not be treated as closed until all required technician paperwork is accepted.
 
+Mechanic directory records also carry optional vehicle and location attributes using
+`gr_camnumber`, `gr_rego`, and `gr_region`. These fields are informational and do not
+change Job assignment or Scheduling relationships.
+
 Schema setup is documented in:
 
 ```text
@@ -687,6 +697,13 @@ The current scheduling screen:
 - Visually distinguishes confirmed and provisional options
 - Allows the full job editor to be opened from a schedule card
 - Shows Customer first on each card for rapid planner scanning
+- Supports Expanded, Compact, and Today Expanded card display modes
+
+The selected Scheduling display mode is restored for the current browser session from the
+versioned `service-operations.scheduling-display-mode.v1` session-storage entry. Compact
+cards show Customer, Job Number, Job Type, and confirmation state, then reveal the shared
+expanded detail view on hover or keyboard focus. Today Expanded uses the local calendar
+date and keeps all other visible days compact.
 
 ### Schedule records
 
@@ -731,6 +748,10 @@ The intended direction includes:
 - A shared pricing catalogue
 
 Before extending quotes, inspect the existing quote types, services, screen and Dataverse schema document.
+
+The Quote editor can copy its current valid line items and existing calculated Subtotal,
+GST, and Total to the clipboard as both an inline-styled HTML table and tab-separated
+plain text. Rich clipboard failures fall back to plain text and do not affect Quote save.
 
 Do not independently invent replacement entity names when matching tables and columns already exist in the branch.
 

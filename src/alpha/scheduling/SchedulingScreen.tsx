@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useJobs } from '../jobs/hooks/useJobs'
 import {
     SCHEDULE_TYPE,
@@ -9,6 +9,11 @@ import JobEditDrawer from '../jobs/components/JobEditDrawer'
 import './SchedulingScreen.css'
 import { useNavigate } from 'react-router-dom'
 import { getJobTypeLabel } from '../jobs/types/jobType.types'
+import {
+    SCHEDULING_DISPLAY_MODE_KEY,
+    restoreSchedulingDisplayMode,
+    type SchedulingDisplayMode,
+} from './schedulingDisplayMode'
 
 const dayHeadingFormatter = new Intl.DateTimeFormat('en-NZ', { weekday: 'short' })
 const dayNumberFormatter = new Intl.DateTimeFormat('en-NZ', {
@@ -71,35 +76,66 @@ function ScheduleCard({
     option,
     job,
     onOpen,
+    variant,
 }: {
     option: JobScheduleOption
     job?: Job
     onOpen: (job: Job) => void
+    variant: 'expanded' | 'compact'
 }) {
+    const customerName = job?.gr_Site?.gr_Customer?.gr_name || 'No customer'
+    const jobNumber = job?.gr_jobnumber || 'Unnumbered job'
+    const jobType = getJobTypeLabel(job?.gr_jobtype)
+    const confirmationLabel = option.gr_confirmed ? 'Confirmed' : 'Option'
+
     return (
         <button
             type="button"
-            className={`schedule-card${option.gr_confirmed ? ' confirmed' : ''}`}
+            className={`schedule-card schedule-card-${variant}${option.gr_confirmed ? ' confirmed' : ''}`}
             onClick={() => job && onOpen(job)}
             disabled={!job}
-            aria-label={job ? `Edit job ${job.gr_jobnumber || 'without a job number'}` : undefined}
+            aria-label={job ? `Edit ${customerName}, job ${jobNumber}, ${jobType}, ${confirmationLabel}` : undefined}
         >
-            <strong className="schedule-card-customer">{job?.gr_Site?.gr_Customer?.gr_name || 'No customer'}</strong>
-            <div className="schedule-card-topline">
-                <span>{job?.gr_jobnumber || 'Unnumbered job'} · {getJobTypeLabel(job?.gr_jobtype)}</span>
-                <span>{option.gr_confirmed ? 'Confirmed' : 'Option'}</span>
+            {variant === 'compact' && (
+                <div className="schedule-card-compact-content" aria-hidden="true">
+                    <strong className="schedule-card-customer" title={customerName}>{customerName}</strong>
+                    <div className="schedule-card-topline">
+                        <span>{jobNumber} · {jobType}</span>
+                        <span>{confirmationLabel}</span>
+                    </div>
+                </div>
+            )}
+            <div className="schedule-card-expanded-content">
+                <strong className="schedule-card-customer" title={customerName}>{customerName}</strong>
+                <div className="schedule-card-topline">
+                    <span>{jobNumber} · {jobType}</span>
+                    <span>{confirmationLabel}</span>
+                </div>
+                <div className="schedule-card-detail">
+                    <span>{job?.gr_Equipment?.gr_fleet || 'No equipment'}</span>
+                    <span>{job?.gr_Site?.gr_name || 'No site'}</span>
+                </div>
+                <div className="schedule-card-footer">
+                    <span>{job?.gr_Mechanic?.gr_name || 'Unassigned'}</span>
+                    <span>{scheduleLabel(option)}</span>
+                </div>
+                <p>{job?.gr_description || 'No description'}</p>
             </div>
-            <div className="schedule-card-detail">
-                <span>{job?.gr_Equipment?.gr_fleet || 'No equipment'}</span>
-                <span>{job?.gr_Site?.gr_name || 'No site'}</span>
-            </div>
-            <div className="schedule-card-footer">
-                <span>{job?.gr_Mechanic?.gr_name || 'Unassigned'}</span>
-                <span>{scheduleLabel(option)}</span>
-            </div>
-            <p>{job?.gr_description || 'No description'}</p>
         </button>
     )
+}
+
+function getCardVariant(
+    displayMode: SchedulingDisplayMode,
+    option: JobScheduleOption,
+    todayKey: string,
+): 'expanded' | 'compact' {
+    if (displayMode === 'expanded') return 'expanded'
+    return displayMode === 'today-expanded'
+        && option.gr_scheduletype !== SCHEDULE_TYPE.WEEK
+        && dateKey(option.gr_scheduledate) === todayKey
+        ? 'expanded'
+        : 'compact'
 }
 
 export default function SchedulingScreen() {
@@ -135,6 +171,15 @@ export default function SchedulingScreen() {
     } = useJobs()
     const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
     const [editingJob, setEditingJob] = useState<Job | null>(null)
+    const [displayMode, setDisplayMode] = useState<SchedulingDisplayMode>(restoreSchedulingDisplayMode)
+
+    useEffect(() => {
+        try {
+            sessionStorage.setItem(SCHEDULING_DISPLAY_MODE_KEY, displayMode)
+        } catch {
+            // The planner remains usable when storage is unavailable.
+        }
+    }, [displayMode])
 
     const createQuoteForJob = (jobId: string) => {
         setEditingJob(null)
@@ -218,7 +263,26 @@ export default function SchedulingScreen() {
                     <span>Seven-day planner</span>
                     <h2>{rangeFormatter.format(weekStart)} – {rangeFormatter.format(weekEnd)}</h2>
                 </div>
-                <span>{optionsThisWeek.length} scheduled {optionsThisWeek.length === 1 ? 'option' : 'options'}</span>
+                <div className="scheduling-summary-controls">
+                    <div className="scheduling-display-mode" role="group" aria-label="Schedule card display mode">
+                        {([
+                            ['expanded', 'Expanded'],
+                            ['compact', 'Compact'],
+                            ['today-expanded', 'Today Expanded'],
+                        ] as const).map(([mode, label]) => (
+                            <button
+                                key={mode}
+                                type="button"
+                                className={displayMode === mode ? 'active' : ''}
+                                aria-pressed={displayMode === mode}
+                                onClick={() => setDisplayMode(mode)}
+                            >
+                                {label}
+                            </button>
+                        ))}
+                    </div>
+                    <span>{optionsThisWeek.length} scheduled {optionsThisWeek.length === 1 ? 'option' : 'options'}</span>
+                </div>
             </section>
 
             <div className="schedule-board-scroll">
@@ -236,6 +300,7 @@ export default function SchedulingScreen() {
                                         option={option}
                                         job={jobsById.get(option._gr_job_value?.toLowerCase())}
                                         onOpen={setEditingJob}
+                                        variant={getCardVariant(displayMode, option, todayKey)}
                                     />
                                 ))}
                             </div>
@@ -268,6 +333,7 @@ export default function SchedulingScreen() {
                                                 option={option}
                                                 job={jobsById.get(option._gr_job_value?.toLowerCase())}
                                                 onOpen={setEditingJob}
+                                                variant={getCardVariant(displayMode, option, todayKey)}
                                             />
                                         ))}
                                         {dayOptions.length === 0 && (
