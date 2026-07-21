@@ -135,6 +135,11 @@ Do not include:
 
 Do not include a trailing slash.
 
+For the Azure Static Web Apps production build, configure these same public Vite values as
+GitHub Actions repository variables named `VITE_MSAL_CLIENT_ID`, `VITE_MSAL_TENANT_ID`, and
+`VITE_DATAVERSE_URL`. The SPA redirect URI uses the active browser origin, so both the local
+development URL and the Azure Static Web Apps URL must be registered in Microsoft Entra.
+
 The Microsoft Entra application registration must include:
 
 ```text
