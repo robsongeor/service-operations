@@ -19,7 +19,7 @@ import type {
 import './JobDrawer.css'
 import { SERVICE_TYPES } from '../../equipment/servicePlans/equipmentServicePlan.types'
 import type { EquipmentServicePlan } from '../../equipment/servicePlans/equipmentServicePlan.types'
-import { jobRequiresMaintenance } from '../types/jobType.types'
+import { jobRequiresMaintenance, STANDARD_JOB_TYPE_OPTIONS } from '../types/jobType.types'
 import JobMaintenanceSummary from './JobMaintenanceSummary'
 
 export type JobCreateInitialValues = {
@@ -149,7 +149,7 @@ export default function JobCreateDrawer({
             </>}
         >
             <div className="job-edit-grid">
-                <JobCoreFields draft={draft} setDraft={setDraft} mechanics={mechanics} allowEmptyJobType jobTypeError={jobTypeError} />
+                <JobCoreFields draft={draft} setDraft={setDraft} mechanics={mechanics} allowEmptyJobType jobTypeError={jobTypeError} jobTypeOptions={STANDARD_JOB_TYPE_OPTIONS} />
                 {jobRequiresMaintenance(draft.jobType) && <JobMaintenanceSummary
                     equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)}
                     servicePlans={servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === draft.equipmentId.toLowerCase())}

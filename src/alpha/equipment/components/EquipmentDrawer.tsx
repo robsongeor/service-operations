@@ -29,6 +29,7 @@ type SharedProps = {
 
 type CreateProps = SharedProps & {
     mode: 'create'
+    initialValues?: Partial<EquipmentUpdateInput>
     onCreate: (input: EquipmentUpdateInput, resolvedSite?: Site) => Promise<void>
     onCreateCustomer: (input: { name: string }) => Promise<Customer>
     onCreateSite: (input: { customerId: string; name: string; address?: string }, customer?: Customer) => Promise<Site>
@@ -66,12 +67,16 @@ export default function EquipmentDrawer(props: Props) {
     const { customers, sites, jobs, isSaving, saveError, onClose } = props
     const isCreate = props.mode === 'create'
     const equipment = isCreate ? undefined : props.equipment
+    const initialValues = isCreate ? props.initialValues : undefined
     const [form, setForm] = useState<EquipmentUpdateInput>({
-        fleet: equipment?.gr_fleet ?? '',
-        make: equipment?.gr_make ?? '',
-        model: equipment?.gr_model ?? '',
-        serial: equipment?.gr_serial ?? '',
-        siteId: equipment?.gr_Site?.gr_siteid ?? '',
+        fleet: equipment?.gr_fleet ?? initialValues?.fleet ?? '',
+        make: equipment?.gr_make ?? initialValues?.make ?? '',
+        model: equipment?.gr_model ?? initialValues?.model ?? '',
+        serial: equipment?.gr_serial ?? initialValues?.serial ?? '',
+        siteId: equipment?.gr_Site?.gr_siteid ?? initialValues?.siteId ?? '',
+        registrationNumber: equipment?.gr_registrationnumber ?? initialValues?.registrationNumber ?? '',
+        wofRequired: equipment?.gr_wofrequired ?? initialValues?.wofRequired ?? false,
+        currentWofExpiry: equipment?.gr_currentwofexpiry ?? initialValues?.currentWofExpiry ?? '',
     })
     const [customerId, setCustomerId] = useState(equipment?.gr_Site?.gr_Customer?.gr_customerid ?? '')
     const [customerMode, setCustomerMode] = useState<CustomerMode>(equipment ? 'existing' : 'none')
@@ -470,7 +475,7 @@ export default function EquipmentDrawer(props: Props) {
         }
     }
 
-    const updateField = (field: keyof EquipmentUpdateInput, value: string) => {
+    const updateField = (field: keyof EquipmentUpdateInput, value: string | boolean) => {
         setForm((current) => ({ ...current, [field]: value }))
         if (formError) setFormError('')
     }
@@ -548,6 +553,9 @@ export default function EquipmentDrawer(props: Props) {
                             <label>Serial number<input value={form.serial} onChange={(event) => updateField('serial', event.target.value)} /></label>
                             <label>Make<input value={form.make} onChange={(event) => updateField('make', event.target.value)} /></label>
                             <label>Model<input value={form.model} onChange={(event) => updateField('model', event.target.value)} /></label>
+                            <label>Registration Number<input value={form.registrationNumber} onChange={(event) => updateField('registrationNumber', event.target.value)} /></label>
+                            <label>Current WOF Expiry<input type="date" value={form.currentWofExpiry} onChange={(event) => updateField('currentWofExpiry', event.target.value)} /></label>
+                            <label className="equipment-wof-required"><input type="checkbox" checked={form.wofRequired} onChange={(event) => updateField('wofRequired', event.target.checked)} /> WOF Required</label>
                             {isCreate ? <div className="equipment-relationship-fields">
                                 <label>Customer<input value={customerQuery} placeholder="Search or enter customer..." onChange={(event) => {
                                     const value = event.target.value

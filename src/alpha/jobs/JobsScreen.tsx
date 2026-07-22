@@ -4,8 +4,10 @@ import JobsTable from './components/JobsTable'
 import JobEditDrawer from './components/JobEditDrawer'
 import JobCreateDrawer from './components/JobCreateDrawer'
 import type { Job } from './types/job.types'
-import type { JobStatus } from './types/jobStatus.types'
-import { DEFAULT_JOBS_VIEW_STATE, getJobsViewStateKey, restoreJobsViewState, type JobsViewState, type ScheduledJobsVisibility } from './types/jobsViewState.types'
+import { DEFAULT_JOBS_VIEW_STATE, applyJobsDefaultView, getJobsViewStateKey, restoreJobsViewState, type JobsViewState, type ScheduledJobsVisibility } from './types/jobsViewState.types'
+import { JOB_STATUS_OPTIONS, type JobStatus } from './types/jobStatus.types'
+import { JOB_TYPE_OPTIONS } from './types/jobType.types'
+import { APPLICATION_DEFAULT_JOBS_VIEW, canonicaliseJobStatuses, getJobsDefaultViewKey, restoreJobsDefaultView, saveJobsDefaultView, type JobsDefaultView } from './types/jobsDefaultView.types'
 import { getSignedInUserInfo } from '../../auth/signedInUser'
 import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
 import PageSettingsButton from '../shared/settings/PageSettingsButton'
@@ -18,6 +20,7 @@ export default function JobsScreen() {
     const activeAccount = useActiveMsalAccount()
     const signedInUser = getSignedInUserInfo(activeAccount)
     const storageKey = signedInUser ? getJobsViewStateKey(signedInUser.storageId) : null
+    const defaultViewStorageKey = signedInUser ? getJobsDefaultViewKey(signedInUser.storageId) : null
     const {
         jobs, equipmentList, mechanics, sites, customers, siteContacts,
         scheduleOptions,
@@ -38,16 +41,24 @@ export default function JobsScreen() {
     const [editingJob, setEditingJob] = useState<Job | null>(null)
     const [editingInitialTab, setEditingInitialTab] = useState<'details' | 'jobcard'>('details')
     const [isCreatingJob, setIsCreatingJob] = useState(false)
+    const [defaultView, setDefaultView] = useState<JobsDefaultView>(() => defaultViewStorageKey
+        ? restoreJobsDefaultView(defaultViewStorageKey) ?? APPLICATION_DEFAULT_JOBS_VIEW
+        : APPLICATION_DEFAULT_JOBS_VIEW)
     const [viewState, setViewState] = useState<JobsViewState>(() => storageKey
-        ? restoreJobsViewState(storageKey, true)
+        ? restoreJobsViewState(storageKey, true) ?? applyJobsDefaultView(defaultView)
         : DEFAULT_JOBS_VIEW_STATE)
     const [settingsOpen, setSettingsOpen] = useState(false)
     const [draftScheduledVisibility, setDraftScheduledVisibility] = useState<ScheduledJobsVisibility>(viewState.scheduledJobsVisibility)
+    const [draftDefaultView, setDraftDefaultView] = useState<JobsDefaultView>(defaultView)
     const visibleStatuses = viewState.visibleStatuses
 
     useEffect(() => {
         if (!storageKey) return
-        sessionStorage.setItem(storageKey, JSON.stringify(viewState))
+        try {
+            sessionStorage.setItem(storageKey, JSON.stringify(viewState))
+        } catch {
+            // Jobs remains usable when browser storage is unavailable.
+        }
     }, [storageKey, viewState])
 
     const createQuoteForJob = (jobId: string) => {
@@ -66,6 +77,23 @@ export default function JobsScreen() {
             visibleStatuses: current.visibleStatuses.includes(status)
                 ? current.visibleStatuses.filter((currentStatus) => currentStatus !== status)
                 : [...current.visibleStatuses, status],
+        }))
+    }
+
+    const currentMatchesDefault = viewState.selectedJobType === defaultView.selectedJobType
+        && canonicaliseJobStatuses(viewState.visibleStatuses).join(',') === canonicaliseJobStatuses(defaultView.visibleStatuses).join(',')
+        && viewState.searchText === ''
+
+    const resetToDefault = () => {
+        const savedDefault = defaultViewStorageKey
+            ? restoreJobsDefaultView(defaultViewStorageKey) ?? APPLICATION_DEFAULT_JOBS_VIEW
+            : APPLICATION_DEFAULT_JOBS_VIEW
+        setDefaultView(savedDefault)
+        setViewState((current) => ({
+            ...current,
+            selectedJobType: savedDefault.selectedJobType,
+            visibleStatuses: [...savedDefault.visibleStatuses],
+            searchText: '',
         }))
     }
 
@@ -97,7 +125,11 @@ export default function JobsScreen() {
                     <PageSettingsButton
                         active={viewState.scheduledJobsVisibility !== 'all'}
                         title={viewState.scheduledJobsVisibility === 'all' ? 'Settings' : `Settings: ${scheduledSettingLabels[viewState.scheduledJobsVisibility]}`}
-                        onClick={() => { setDraftScheduledVisibility(viewState.scheduledJobsVisibility); setSettingsOpen(true) }}
+                        onClick={() => {
+                            setDraftScheduledVisibility(viewState.scheduledJobsVisibility)
+                            setDraftDefaultView({ ...defaultView, visibleStatuses: [...defaultView.visibleStatuses] })
+                            setSettingsOpen(true)
+                        }}
                     />
                     <button
                         className="jobs-create-button"
@@ -144,6 +176,8 @@ export default function JobsScreen() {
                     viewState={viewState}
                     onViewStateChange={setViewState}
                     onToggleStatus={toggleStatus}
+                    onResetToDefault={resetToDefault}
+                    resetToDefaultDisabled={currentMatchesDefault}
                     onStatusChange={updateJobStatus}
                     onJobFieldsChange={updateJobFields}
                     onEditJob={setEditingJob}
@@ -156,10 +190,17 @@ export default function JobsScreen() {
             <PageSettingsDialog
                 open={settingsOpen}
                 title="Settings"
-                description="Choose which scheduled Jobs appear. Unscheduled Jobs are always shown."
+                description="Configure Jobs page visibility and your saved starting view."
                 onCancel={() => setSettingsOpen(false)}
                 onApply={() => {
                     setViewState((current) => ({ ...current, scheduledJobsVisibility: draftScheduledVisibility }))
+                    const nextDefaultView = {
+                        ...draftDefaultView,
+                        visibleStatuses: canonicaliseJobStatuses(draftDefaultView.visibleStatuses),
+                    }
+                    if (defaultViewStorageKey && saveJobsDefaultView(defaultViewStorageKey, nextDefaultView)) {
+                        setDefaultView(nextDefaultView)
+                    }
                     setSettingsOpen(false)
                 }}
             >
@@ -177,6 +218,44 @@ export default function JobsScreen() {
                         </label>
                     ))}
                 </fieldset>
+                <section className="jobs-default-view-settings" aria-labelledby="jobs-default-view-heading">
+                    <div>
+                        <h3 id="jobs-default-view-heading">Default View</h3>
+                        <p>Choose the Jobs tab and statuses used when no previous view is retained, or when Reset to Default is selected. Saving does not change the currently active tab or statuses.</p>
+                    </div>
+                    <label className="jobs-default-tab">
+                        <span>Default tab</span>
+                        <select
+                            value={draftDefaultView.selectedJobType}
+                            onChange={(event) => setDraftDefaultView((current) => ({
+                                ...current,
+                                selectedJobType: event.target.value === 'all' ? 'all' : Number(event.target.value) as JobsDefaultView['selectedJobType'],
+                            }))}
+                        >
+                            <option value="all">All jobs</option>
+                            {JOB_TYPE_OPTIONS.map((jobType) => <option key={jobType.value} value={jobType.value}>{jobType.label}</option>)}
+                        </select>
+                    </label>
+                    <fieldset className="jobs-default-statuses">
+                        <legend>Default statuses</legend>
+                        {JOB_STATUS_OPTIONS.map((status) => (
+                            <label key={status.value}>
+                                <input
+                                    type="checkbox"
+                                    checked={draftDefaultView.visibleStatuses.includes(status.value)}
+                                    onChange={() => setDraftDefaultView((current) => ({
+                                        ...current,
+                                        visibleStatuses: current.visibleStatuses.includes(status.value)
+                                            ? current.visibleStatuses.filter((currentStatus) => currentStatus !== status.value)
+                                            : [...current.visibleStatuses, status.value],
+                                    }))}
+                                />
+                                <span>{status.label}</span>
+                            </label>
+                        ))}
+                        <small>No statuses selected means no Jobs are shown, matching the existing status-filter behaviour.</small>
+                    </fieldset>
+                </section>
             </PageSettingsDialog>
 
             {isCreatingJob && (

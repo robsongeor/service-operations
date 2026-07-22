@@ -1,5 +1,6 @@
 import type { Job } from '../types/job.types'
 import type { JobSaveInput } from '../types/jobSave.types'
+import { assertJobTypeAllowedForCreation, type JobCreationSource } from '../types/jobType.types'
 
 const DATAVERSE_URL = import.meta.env.VITE_DATAVERSE_URL
 
@@ -28,7 +29,9 @@ export async function fetchJobs(accessToken: string): Promise<Job[]> {
 export async function createJob(
     accessToken: string,
     job: JobSaveInput,
+    source: JobCreationSource = 'standard',
 ): Promise<string> {
+    assertJobTypeAllowedForCreation(job.jobType, source)
     const newJob: Record<string, string | number> = {
         gr_jobnumber: job.jobNumber,
         gr_ordernumber: job.orderNumber,

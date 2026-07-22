@@ -5,7 +5,7 @@ import type { Equipment } from '../types/equipment.types'
 import type { Site } from '../types/site.types'
 import type { Customer } from '../types/customer.types'
 import type { SiteContact } from '../types/siteContact.types'
-import { JOB_TYPES, jobRequiresMaintenance } from '../types/jobType.types'
+import { JOB_TYPES, JOB_TYPE_OPTIONS, STANDARD_JOB_TYPE_OPTIONS, jobRequiresMaintenance } from '../types/jobType.types'
 import type { JobSaveInput } from '../types/jobSave.types'
 import { useJobEditor } from '../hooks/useJobEditor'
 import JobCoreFields from './JobCoreFields'
@@ -352,6 +352,9 @@ export default function JobEditDrawer({
                 {activeTab === 'details' && (
                     <div className="job-edit-grid">
                         <JobCoreFields
+                            jobTypeOptions={job.gr_jobtype === JOB_TYPES.WOF
+                                ? JOB_TYPE_OPTIONS.filter((option) => option.value === JOB_TYPES.WOF)
+                                : STANDARD_JOB_TYPE_OPTIONS}
                             draft={draft}
                             setDraft={setDraft}
                             mechanics={mechanics}

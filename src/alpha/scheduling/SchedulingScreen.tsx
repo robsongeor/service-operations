@@ -6,13 +6,18 @@ import {
 } from '../jobs/types/jobSchedule.types'
 import type { Job } from '../jobs/types/job.types'
 import JobEditDrawer from '../jobs/components/JobEditDrawer'
+import JobTypeTabs from '../jobs/components/JobTypeTabs'
+import '../jobs/components/JobTypeControls.css'
 import './SchedulingScreen.css'
 import { useNavigate } from 'react-router-dom'
 import { getJobTypeLabel } from '../jobs/types/jobType.types'
 import {
     SCHEDULING_DISPLAY_MODE_KEY,
+    SCHEDULING_JOB_TYPE_FILTER_KEY,
     restoreSchedulingDisplayMode,
+    restoreSchedulingJobTypeFilter,
     type SchedulingDisplayMode,
+    type SchedulingJobTypeFilter,
 } from './schedulingDisplayMode'
 
 const dayHeadingFormatter = new Intl.DateTimeFormat('en-NZ', { weekday: 'short' })
@@ -91,7 +96,8 @@ function ScheduleCard({
     return (
         <button
             type="button"
-            className={`schedule-card schedule-card-${variant}${option.gr_confirmed ? ' confirmed' : ''}`}
+            className={`job-type-colour schedule-card schedule-card-${variant}${option.gr_confirmed ? ' confirmed' : ''}`}
+            data-job-type={job?.gr_jobtype ?? ''}
             onClick={() => job && onOpen(job)}
             disabled={!job}
             aria-label={job ? `Edit ${customerName}, job ${jobNumber}, ${jobType}, ${confirmationLabel}` : undefined}
@@ -100,17 +106,19 @@ function ScheduleCard({
                 <div className="schedule-card-compact-content" aria-hidden="true">
                     <strong className="schedule-card-customer" title={customerName}>{customerName}</strong>
                     <div className="schedule-card-topline">
-                        <span>{jobNumber} · {jobType}</span>
+                        <span>{jobNumber}</span>
                         <span>{confirmationLabel}</span>
                     </div>
+                    <p>{job?.gr_description || 'No description'}</p>
                 </div>
             )}
             <div className="schedule-card-expanded-content">
                 <strong className="schedule-card-customer" title={customerName}>{customerName}</strong>
                 <div className="schedule-card-topline">
-                    <span>{jobNumber} · {jobType}</span>
+                    <span>{jobNumber}</span>
                     <span>{confirmationLabel}</span>
                 </div>
+                <p>{job?.gr_description || 'No description'}</p>
                 <div className="schedule-card-detail">
                     <span>{job?.gr_Equipment?.gr_fleet || 'No equipment'}</span>
                     <span>{job?.gr_Site?.gr_name || 'No site'}</span>
@@ -119,7 +127,6 @@ function ScheduleCard({
                     <span>{job?.gr_Mechanic?.gr_name || 'Unassigned'}</span>
                     <span>{scheduleLabel(option)}</span>
                 </div>
-                <p>{job?.gr_description || 'No description'}</p>
             </div>
         </button>
     )
@@ -172,6 +179,7 @@ export default function SchedulingScreen() {
     const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
     const [editingJob, setEditingJob] = useState<Job | null>(null)
     const [displayMode, setDisplayMode] = useState<SchedulingDisplayMode>(restoreSchedulingDisplayMode)
+    const [selectedJobType, setSelectedJobType] = useState<SchedulingJobTypeFilter>(restoreSchedulingJobTypeFilter)
 
     useEffect(() => {
         try {
@@ -180,6 +188,14 @@ export default function SchedulingScreen() {
             // The planner remains usable when storage is unavailable.
         }
     }, [displayMode])
+
+    useEffect(() => {
+        try {
+            sessionStorage.setItem(SCHEDULING_JOB_TYPE_FILTER_KEY, String(selectedJobType))
+        } catch {
+            // The planner remains usable when storage is unavailable.
+        }
+    }, [selectedJobType])
 
     const createQuoteForJob = (jobId: string) => {
         setEditingJob(null)
@@ -204,7 +220,11 @@ export default function SchedulingScreen() {
         const optionDate = dateKey(option.gr_scheduledate)
         return optionDate >= dateKey(weekStart) && optionDate <= dateKey(weekEnd)
     })
-    const flexibleWeekOptions = optionsThisWeek.filter(
+    const visibleOptionsThisWeek = optionsThisWeek.filter((option) => {
+        if (selectedJobType === 'all') return true
+        return jobsById.get(option._gr_job_value?.toLowerCase())?.gr_jobtype === selectedJobType
+    })
+    const flexibleWeekOptions = visibleOptionsThisWeek.filter(
         (option) => option.gr_scheduletype === SCHEDULE_TYPE.WEEK,
     )
     const todayKey = dateKey(new Date())
@@ -281,9 +301,13 @@ export default function SchedulingScreen() {
                             </button>
                         ))}
                     </div>
-                    <span>{optionsThisWeek.length} scheduled {optionsThisWeek.length === 1 ? 'option' : 'options'}</span>
+                    <span>{visibleOptionsThisWeek.length} scheduled {visibleOptionsThisWeek.length === 1 ? 'option' : 'options'}</span>
                 </div>
             </section>
+
+            <div className="scheduling-job-type-filter">
+                <JobTypeTabs selectedJobType={selectedJobType} onChange={setSelectedJobType} ariaLabel="Filter scheduled jobs by type" />
+            </div>
 
             <div className="schedule-board-scroll">
                 <div className="schedule-board">
@@ -310,7 +334,7 @@ export default function SchedulingScreen() {
                     <div className="schedule-week-grid">
                         {weekDays.map((day) => {
                             const currentDateKey = dateKey(day)
-                            const dayOptions = optionsThisWeek.filter(
+                            const dayOptions = visibleOptionsThisWeek.filter(
                                 (option) =>
                                     option.gr_scheduletype !== SCHEDULE_TYPE.WEEK
                                     && dateKey(option.gr_scheduledate) === currentDateKey,

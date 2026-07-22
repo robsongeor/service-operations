@@ -22,6 +22,7 @@
 .mechanic-card-copy { display: grid; min-width: 0; gap: 2px; }
 .mechanic-card-copy strong { overflow: hidden; font-size: .75rem; text-overflow: ellipsis; white-space: nowrap; }
 .mechanic-card-copy small { color: #7a847e; font-size: .62rem; }
+.mechanic-qualification-summary { overflow: hidden; margin-top: 3px; color: #286451; font-size: .58rem; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
 .mechanic-card > span:last-child { color: #849089; font-size: 1rem; }
 .mechanics-list-empty { margin: 12px; color: #7b847f; font-size: .72rem; }
 
@@ -73,7 +74,7 @@
 .mechanics-data-error button { padding: 9px 13px; border: 1px solid #176f66; border-radius: 7px; background: #176f66; color: #fff; font-weight: 700; cursor: pointer; }
 
 .mechanic-dialog-backdrop { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(18,27,22,.4); }
-.mechanic-dialog { width: min(460px,100%); overflow: hidden; border-radius: 14px; background: #fff; box-shadow: 0 24px 70px rgba(18,28,22,.24); }
+.mechanic-dialog { width: min(620px,100%); max-height: calc(100vh - 48px); overflow: auto; border-radius: 14px; background: #fff; box-shadow: 0 24px 70px rgba(18,28,22,.24); }
 .mechanic-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; padding: 19px 21px 16px; border-bottom: 1px solid #e4e9e6; }
 .mechanic-dialog > header span { color: #758079; font-size: .63rem; font-weight: 750; letter-spacing: .07em; text-transform: uppercase; }
 .mechanic-dialog > header h2 { margin: 2px 0 0; font-size: 1.12rem; }
@@ -90,6 +91,7 @@
 .mechanic-region-field { grid-column: 1 / -1; }
 .mechanic-form-error { margin: 0; padding: 10px; border-radius: 8px; background: #fff0f0; color: #913b3b; font-size: .7rem; }
 .mechanic-dialog form > footer { display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px; }
+.mechanic-qualifications { display: grid; gap: 10px; padding-top: 14px; border-top: 1px solid #e4e9e6; }.mechanic-qualifications-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }.mechanic-qualifications-heading>div { display: grid; gap: 3px; }.mechanic-qualifications-heading strong { color: #334039; font-size: .76rem; }.mechanic-qualifications-heading span { color: #77817b; font-size: .66rem; }.mechanic-qualifications-heading>button,.mechanic-qualification-list article button { min-height: 30px; padding: 0 9px; border: 1px solid #cbd4cf; border-radius: 7px; background: #fff; color: #3d4942; font-size: .63rem; font-weight: 700; cursor: pointer; }.mechanic-qualification-empty { margin: 0; padding: 15px; border-radius: 8px; background: #f5f7f6; color: #77817b; font-size: .68rem; text-align: center; }.mechanic-qualification-list { display: grid; gap: 7px; }.mechanic-qualification-list article { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 10px; border: 1px solid #e1e6e3; border-radius: 8px; }.mechanic-qualification-list article>div:first-child { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }.mechanic-qualification-list article strong { color: #344139; font-size: .7rem; }.mechanic-qualification-list article small { flex-basis: 100%; color: #7a847e; font-size: .61rem; }.mechanic-qualification-list article>div:last-child { display: flex; flex-shrink: 0; gap: 5px; }.qualification-status { padding: 3px 6px; border-radius: 999px; background: #ecefed; color: #5e6862; font-size: .56rem; font-weight: 800; }.qualification-status.valid { background: #e0f1e9; color: #24644e; }.qualification-status.expired,.qualification-status.type-inactive { background: #f8e1dd; color: #8c4439; }.qualification-status.future { background: #e5ebf5; color: #435e83; }.qualification-active { display: flex!important; align-items: center; grid-template-columns: auto 1fr; }.qualification-active input { min-height: auto!important; width: auto!important; }.edit-form-dialog textarea { box-sizing: border-box; width: 100%; padding: 9px 10px; border: 1px solid #d0d7d2; border-radius: 8px; font: inherit; resize: vertical; }
 
 @media (max-width: 900px) {
     .mechanics-workspace { grid-template-columns: 230px minmax(0,1fr); }

@@ -380,6 +380,12 @@ Both the sidebar and Jobs preference key use `instance.getActiveAccount()` as th
 truth. When MSAL has exactly one cached account and no active account, that account is made
 active. Multiple cached accounts are never resolved by array order.
 
+Jobs Default View preferences are stored separately per signed-in account using
+`service-operations.jobs-default-view.v1.<encoded-account-id>`. A valid retained Current
+View State takes priority during normal page loads; Default View is used only when Current
+View State is absent or when Reset to Default is explicitly selected. Reset applies the
+saved Job Type tab and statuses, clears search text, and preserves unrelated view fields.
+
 Search currently spans information such as:
 
 - Job number
@@ -539,6 +545,41 @@ Equipment is the current master record.
 Each Job retains its own historical Site and other job-specific relationships.
 Editing or moving Equipment must never automatically update previous Jobs.
 ```
+
+### WOF / REGO architecture
+
+WOF is the protected Job Type `122830003`. It remains visible in shared Job tables, filters,
+history and Scheduling, but standard create/edit forms cannot create a WOF or convert a
+normal Job to WOF. WOF Jobs are created only through `/wof` and have a linked specialised
+`gr_wofinspection` record.
+
+Equipment stores the current summary in `gr_registrationnumber`, `gr_wofrequired`,
+`gr_currentwofexpiry` and `gr_lastwofcompleted`. WOF Inspection retains historical REGO and
+previous-expiry snapshots. Internal eligibility is derived from active Technician
+Qualification records whose Qualification Type stable code is `WOF_CERTIFIED`; external
+providers remain separate and use provider type code `WOF_INSPECTOR`. Internal and external
+primary performers are mutually exclusive.
+
+WOF due-state calculations are centralised in `src/alpha/wof/utils/wofRules.ts`; Due Soon is
+user-configurable per signed-in account with a validated 30-day default. WOF table preferences
+use the same account-scoped `sessionStorage` architecture as Jobs. Missing expiry is Unknown,
+and date-only values remain `YYYY-MM-DD` strings. Create WOF reuses the shared Equipment drawer;
+its nested creation passes a WOF Required default without changing normal Equipment defaults.
+Create and edit use the shared `WofEditorDrawer`. Table Customer and Site values prefer the
+linked Job's historical Site/Customer and fall back to the Equipment's current relationship.
+Editing updates the linked Job, then its WOF Inspection, then its schedule; partial failures are
+reported explicitly and the screen reloads only after all requested updates succeed. Equipment
+cannot be changed once the linked Job is completed.
+Equipment expiry is updated
+only after a passed WOF. Transactionally safe WOF completion automation is deferred in the
+initial screen rather than coupling an unsafe sequence of Job and Equipment updates.
+
+Technician qualifications are managed through Technician Qualification records from the
+Mechanics workflow; no qualification flags are stored directly on Mechanic. Qualification
+Type codes are stable integration identifiers. Active periods for the same technician and
+Qualification Type may not overlap, while non-overlapping history is retained. Normal
+removal deactivates the qualification instead of deleting it. Qualification status and WOF
+eligibility share the helpers in `src/alpha/wof/utils/wofRules.ts`.
 
 ## 11. Customer, site and contact model
 
@@ -770,6 +811,13 @@ cards show Customer, Job Number, Job Type, and confirmation state, then reveal t
 expanded detail view on hover or keyboard focus. Today Expanded uses the local calendar
 date and keeps all other visible days compact.
 
+Scheduling cards and the Jobs table badges use one shared Job Type colour mapping. The
+cards apply those colours to their full background and border without displaying a Job
+Type badge. Scheduling also uses the same shared tab controls as the Jobs table. Its
+All jobs, Breakdown, Service, and Workshop filter is restored for the current browser
+session from `service-operations.scheduling-job-type-filter.v1`; it filters the flexible
+weekly lane, daily cards, day counts, and visible scheduled-option total together.
+
 ### Schedule records
 
 Expected Job Schedule Option columns:
@@ -817,6 +865,12 @@ Before extending quotes, inspect the existing quote types, services, screen and 
 The Quote editor can copy its current valid line items and existing calculated Subtotal,
 GST, and Total to the clipboard as both an inline-styled HTML table and tab-separated
 plain text. Rich clipboard failures fall back to plain text and do not affect Quote save.
+
+The Quotes register supports shared status mappings, persisted All Quotes/My Quotes view
+selection, and Quote Date sorting. My Quotes uses built-in Dataverse Created By matched to
+the signed-in Entra object ID; it must never fall back to display-name matching or return all
+Quotes. The Quote editor uses the shared searchable-select component for Job, Customer, and
+Equipment; application validation requires at least one of those relationships.
 
 Do not independently invent replacement entity names when matching tables and columns already exist in the branch.
 

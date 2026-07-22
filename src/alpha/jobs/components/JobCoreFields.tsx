@@ -13,9 +13,10 @@ type Props = {
     mechanics: Mechanic[]
     allowEmptyJobType?: boolean
     jobTypeError?: string
+    jobTypeOptions?: typeof JOB_TYPE_OPTIONS
 }
 
-export default function JobCoreFields({ draft, setDraft, mechanics, allowEmptyJobType = false, jobTypeError = '' }: Props) {
+export default function JobCoreFields({ draft, setDraft, mechanics, allowEmptyJobType = false, jobTypeError = '', jobTypeOptions = JOB_TYPE_OPTIONS }: Props) {
     const [mechanicSelectOpen, setMechanicSelectOpen] = useState(false)
 
     return (
@@ -30,7 +31,7 @@ export default function JobCoreFields({ draft, setDraft, mechanics, allowEmptyJo
                     }))}
                 >
                     {allowEmptyJobType && <option value="">Select job type</option>}
-                    {JOB_TYPE_OPTIONS.map((option) => (
+                    {jobTypeOptions.map((option) => (
                         <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                 </select>

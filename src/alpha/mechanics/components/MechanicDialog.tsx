@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react'
 import type { Mechanic } from '../../jobs/types/mechanic.types'
 import type { MechanicInput } from '../services/mechanicsApi'
+import type { QualificationType, TechnicianQualification, TechnicianQualificationInput } from '../../wof/types/wof.types'
+import QualificationManager from './QualificationManager'
 
 type Props = {
     mechanic: Mechanic | null
@@ -8,9 +10,14 @@ type Props = {
     error: string
     onClose: () => void
     onSave: (input: MechanicInput) => Promise<void>
+    qualifications: TechnicianQualification[]
+    qualificationTypes: QualificationType[]
+    onCreateQualification: (input: TechnicianQualificationInput) => Promise<void>
+    onUpdateQualification: (id: string, input: TechnicianQualificationInput) => Promise<void>
+    onDeactivateQualification: (id: string) => Promise<void>
 }
 
-export default function MechanicDialog({ mechanic, isSaving, error, onClose, onSave }: Props) {
+export default function MechanicDialog({ mechanic, isSaving, error, onClose, onSave, qualifications, qualificationTypes, onCreateQualification, onUpdateQualification, onDeactivateQualification }: Props) {
     const [name, setName] = useState(mechanic?.gr_name ?? '')
     const [phone, setPhone] = useState(mechanic?.gr_phone ?? '')
     const [email, setEmail] = useState(mechanic?.gr_email ?? '')
@@ -70,6 +77,7 @@ export default function MechanicDialog({ mechanic, isSaving, error, onClose, onS
                             <input value={region} placeholder="Enter region..." onChange={(event) => setRegion(event.target.value)} />
                         </label>
                     </div>
+                    <QualificationManager mechanic={mechanic} qualifications={qualifications} qualificationTypes={qualificationTypes} busy={isSaving} onCreate={onCreateQualification} onUpdate={onUpdateQualification} onDeactivate={onDeactivateQualification} />
                     {error && <p className="mechanic-form-error" role="alert">{error}</p>}
                     <footer>
                         <button type="button" className="mechanic-secondary-button" onClick={onClose}>Cancel</button>

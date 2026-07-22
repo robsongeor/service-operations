@@ -1,0 +1,11 @@
+.job-type-tabs { display: flex; align-items: flex-end; gap: 2px; }
+.job-type-tab { min-height: 38px; padding: 0 15px; border: 1px solid transparent; border-bottom: 3px solid transparent; border-radius: 8px 8px 0 0; background: transparent; color: #68706b; font: inherit; font-size: .74rem; font-weight: 650; cursor: pointer; transition: background 120ms ease, border-color 120ms ease, color 120ms ease; }
+.job-type-tab:hover { background: #f2f4f1; color: #292e2b; }
+.job-type-tab.active { border-color: #dfe4e1; border-bottom-color: #202421; background: #f4f5f2; color: #202421; }
+.job-type-tab:focus-visible { outline: 2px solid #55796d; outline-offset: -2px; }
+.job-type-colour { --job-type-border: #d8ddd9; --job-type-background: #eceeeb; --job-type-text: #4f5652; }
+.job-type-colour[data-job-type="122830000"] { --job-type-border: #e5aaa0; --job-type-background: #f8d9d3; --job-type-text: #87382d; }
+.job-type-colour[data-job-type="122830001"] { --job-type-border: #a9c9e5; --job-type-background: #dceaf7; --job-type-text: #285f8d; }
+.job-type-colour[data-job-type="122830002"] { --job-type-border: #cbb2df; --job-type-background: #ebdff4; --job-type-text: #674187; }
+.job-type-colour[data-job-type="122830003"] { --job-type-border: #9fcfbd; --job-type-background: #d9eee6; --job-type-text: #276653; }
+.job-type-badge { display: inline-flex; align-items: center; min-height: 23px; padding: 0 8px; border: 1px solid var(--job-type-border); border-radius: 999px; background: var(--job-type-background); color: var(--job-type-text); font-size: .67rem; font-weight: 700; white-space: nowrap; }

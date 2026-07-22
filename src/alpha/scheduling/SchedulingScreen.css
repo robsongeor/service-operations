@@ -92,6 +92,9 @@
     gap: 10px;
 }
 
+.scheduling-job-type-filter { display: flex; padding: 0 12px; border: 1px solid #dfe5e1; border-bottom: 0; border-radius: 13px 13px 0 0; background: #fff; }
+.scheduling-job-type-filter + .schedule-board-scroll .schedule-board { border-radius: 0 0 13px 13px; }
+
 .scheduling-display-mode {
     display: inline-flex;
     padding: 2px;
@@ -243,9 +246,9 @@
     display: block;
     width: 100%;
     padding: 10px;
-    border: 1px dashed #bfc9c3;
+    border: 1px dashed var(--job-type-border);
     border-radius: 9px;
-    background: #ffffff;
+    background: var(--job-type-background);
     box-shadow: 0 2px 7px rgba(24, 35, 29, 0.04);
     color: inherit;
     font: inherit;
@@ -255,7 +258,7 @@
 }
 
 .schedule-card:hover:not(:disabled) {
-    border-color: #83958b;
+    border-color: var(--job-type-text);
     box-shadow: 0 6px 14px rgba(24, 35, 29, 0.1);
     transform: translateY(-1px);
 }
@@ -270,9 +273,8 @@
 }
 
 .schedule-card.confirmed {
-    border: 1px solid #73a99a;
-    background: #edf7f3;
-    box-shadow: inset 3px 0 #176f66, 0 3px 8px rgba(24, 35, 29, 0.05);
+    border-style: solid;
+    box-shadow: inset 3px 0 var(--job-type-text), 0 3px 8px rgba(24, 35, 29, 0.05);
 }
 
 .schedule-card-compact {
@@ -328,7 +330,7 @@
 }
 
 .schedule-card-topline span:first-child {
-    color: #176f66;
+    color: var(--job-type-text);
     font-size: 0.66rem;
     font-weight: 800;
 }
@@ -351,10 +353,11 @@
     white-space: nowrap;
 }
 
-.schedule-card-expanded-content > p {
+.schedule-card-expanded-content > p,
+.schedule-card-compact-content > p {
     display: -webkit-box;
     overflow: hidden;
-    margin: 8px 0 0;
+    margin: 6px 0 0;
     color: #454e48;
     font-size: 0.7rem;
     line-height: 1.35;
