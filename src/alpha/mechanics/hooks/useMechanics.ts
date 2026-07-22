@@ -10,12 +10,16 @@ import {
     updateMechanic as updateMechanicApi,
     type MechanicInput,
 } from '../services/mechanicsApi'
+import type { QualificationType, TechnicianQualification, TechnicianQualificationInput } from '../../wof/types/wof.types'
+import { createTechnicianQualification as createQualificationApi, deactivateTechnicianQualification as deactivateQualificationApi, fetchAllTechnicianQualifications, fetchQualificationTypes, updateTechnicianQualification as updateQualificationApi } from '../../wof/services/qualificationApi'
 
 export function useMechanics() {
     const { instance, accounts } = useMsal()
     const account = accounts[0]
     const [mechanics, setMechanics] = useState<Mechanic[]>([])
     const [jobs, setJobs] = useState<Job[]>([])
+    const [qualifications, setQualifications] = useState<TechnicianQualification[]>([])
+    const [qualificationTypes, setQualificationTypes] = useState<QualificationType[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [loadError, setLoadError] = useState('')
     const [isSaving, setIsSaving] = useState(false)
@@ -35,12 +39,16 @@ export function useMechanics() {
         setLoadError('')
         try {
             const token = await getToken()
-            const [nextMechanics, nextJobs] = await Promise.all([
+            const [nextMechanics, nextJobs, nextQualifications, nextQualificationTypes] = await Promise.all([
                 fetchMechanicsApi(token),
                 fetchJobs(token),
+                fetchAllTechnicianQualifications(token),
+                fetchQualificationTypes(token),
             ])
             setMechanics(nextMechanics)
             setJobs(nextJobs)
+            setQualifications(nextQualifications)
+            setQualificationTypes(nextQualificationTypes)
         } catch (error) {
             setLoadError(error instanceof Error ? error.message : 'Mechanics could not be loaded.')
         } finally {
@@ -56,13 +64,17 @@ export function useMechanics() {
             setLoadError('')
             try {
                 const token = await getToken()
-                const [nextMechanics, nextJobs] = await Promise.all([
+                const [nextMechanics, nextJobs, nextQualifications, nextQualificationTypes] = await Promise.all([
                     fetchMechanicsApi(token),
                     fetchJobs(token),
+                    fetchAllTechnicianQualifications(token),
+                    fetchQualificationTypes(token),
                 ])
                 if (!cancelled) {
                     setMechanics(nextMechanics)
                     setJobs(nextJobs)
+                    setQualifications(nextQualifications)
+                    setQualificationTypes(nextQualificationTypes)
                 }
             } catch (error) {
                 if (!cancelled) {
@@ -95,18 +107,27 @@ export function useMechanics() {
     return {
         mechanics,
         jobs,
+        qualifications,
+        qualificationTypes,
         isLoading,
         isSaving,
         loadError,
         saveError,
         reload: load,
         clearSaveError: () => setSaveError(''),
-        createMechanic: (input: MechanicInput) => mutate((token) => createMechanicApi(token, input)),
+        createMechanic: async (input: MechanicInput) => {
+            let created: Mechanic | undefined
+            await mutate(async (token) => { created = await createMechanicApi(token, input) })
+            return created!
+        },
         updateMechanic: (mechanicId: string, input: MechanicInput) => mutate(
             (token) => updateMechanicApi(token, mechanicId, input),
         ),
         setMechanicActive: (mechanicId: string, active: boolean) => mutate(
             (token) => setMechanicActiveApi(token, mechanicId, active),
         ),
+        createQualification: (input: TechnicianQualificationInput) => mutate((token) => createQualificationApi(token, input, qualifications, qualificationTypes)),
+        updateQualification: (id: string, input: TechnicianQualificationInput) => mutate((token) => updateQualificationApi(token, id, input, qualifications, qualificationTypes)),
+        deactivateQualification: (id: string) => mutate((token) => deactivateQualificationApi(token, id)),
     }
 }

@@ -42,10 +42,10 @@ export async function fetchMechanics(token: string): Promise<Mechanic[]> {
     return data.value ?? []
 }
 
-export async function createMechanic(token: string, mechanic: MechanicInput): Promise<void> {
+export async function createMechanic(token: string, mechanic: MechanicInput): Promise<Mechanic> {
     const response = await fetch(`${API_URL}/gr_mechanics`, {
         method: 'POST',
-        headers: headers(token, true),
+        headers: { ...headers(token, true), Prefer: 'return=representation' },
         body: JSON.stringify({
             gr_name: mechanic.name.trim(),
             gr_phone: mechanic.phone.trim() || null,
@@ -56,6 +56,7 @@ export async function createMechanic(token: string, mechanic: MechanicInput): Pr
         }),
     })
     await ensureSuccess(response, 'Failed to create mechanic')
+    return response.json()
 }
 
 export async function updateMechanic(

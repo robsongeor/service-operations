@@ -8,6 +8,7 @@ const menuItems = [
     { label: 'Customers', shortLabel: 'C', path: '/customers' },
     { label: 'Mechanics', shortLabel: 'M', path: '/mechanics' },
     { label: 'Equipment', shortLabel: 'E', path: '/equipment' },
+    { label: 'WOF / REGO', shortLabel: 'W', path: '/wof' },
     { label: 'Jobs', shortLabel: 'J', path: '/jobs' },
     { label: 'Scheduling', shortLabel: 'C', path: '/scheduling' },
     { label: 'Quotes', shortLabel: 'Q', path: '/quotes' },

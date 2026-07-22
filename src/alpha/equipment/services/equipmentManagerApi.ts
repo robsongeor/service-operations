@@ -23,6 +23,9 @@ export async function createEquipment(
             gr_make: input.make.trim() || null,
             gr_model: input.model.trim() || null,
             gr_serial: input.serial.trim() || null,
+            gr_registrationnumber: input.registrationNumber.trim() || null,
+            gr_wofrequired: input.wofRequired,
+            gr_currentwofexpiry: input.currentWofExpiry || null,
             'gr_Site@odata.bind': input.siteId ? `/gr_sites(${input.siteId})` : null,
         }),
     })
@@ -51,6 +54,9 @@ export async function updateEquipment(
             gr_make: input.make.trim() || null,
             gr_model: input.model.trim() || null,
             gr_serial: input.serial.trim() || null,
+            gr_registrationnumber: input.registrationNumber.trim() || null,
+            gr_wofrequired: input.wofRequired,
+            gr_currentwofexpiry: input.currentWofExpiry || null,
             'gr_Site@odata.bind': input.siteId ? `/gr_sites(${input.siteId})` : null,
         }),
     })
@@ -83,6 +89,9 @@ export function applyEquipmentUpdate(
         gr_make: input.make.trim() || null,
         gr_model: input.model.trim() || null,
         gr_serial: input.serial.trim() || null,
+        gr_registrationnumber: input.registrationNumber.trim() || null,
+        gr_wofrequired: input.wofRequired,
+        gr_currentwofexpiry: input.currentWofExpiry || null,
         gr_Site: site,
     }
 }

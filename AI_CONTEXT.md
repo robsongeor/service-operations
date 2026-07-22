@@ -546,6 +546,41 @@ Each Job retains its own historical Site and other job-specific relationships.
 Editing or moving Equipment must never automatically update previous Jobs.
 ```
 
+### WOF / REGO architecture
+
+WOF is the protected Job Type `122830003`. It remains visible in shared Job tables, filters,
+history and Scheduling, but standard create/edit forms cannot create a WOF or convert a
+normal Job to WOF. WOF Jobs are created only through `/wof` and have a linked specialised
+`gr_wofinspection` record.
+
+Equipment stores the current summary in `gr_registrationnumber`, `gr_wofrequired`,
+`gr_currentwofexpiry` and `gr_lastwofcompleted`. WOF Inspection retains historical REGO and
+previous-expiry snapshots. Internal eligibility is derived from active Technician
+Qualification records whose Qualification Type stable code is `WOF_CERTIFIED`; external
+providers remain separate and use provider type code `WOF_INSPECTOR`. Internal and external
+primary performers are mutually exclusive.
+
+WOF due-state calculations are centralised in `src/alpha/wof/utils/wofRules.ts`; Due Soon is
+user-configurable per signed-in account with a validated 30-day default. WOF table preferences
+use the same account-scoped `sessionStorage` architecture as Jobs. Missing expiry is Unknown,
+and date-only values remain `YYYY-MM-DD` strings. Create WOF reuses the shared Equipment drawer;
+its nested creation passes a WOF Required default without changing normal Equipment defaults.
+Create and edit use the shared `WofEditorDrawer`. Table Customer and Site values prefer the
+linked Job's historical Site/Customer and fall back to the Equipment's current relationship.
+Editing updates the linked Job, then its WOF Inspection, then its schedule; partial failures are
+reported explicitly and the screen reloads only after all requested updates succeed. Equipment
+cannot be changed once the linked Job is completed.
+Equipment expiry is updated
+only after a passed WOF. Transactionally safe WOF completion automation is deferred in the
+initial screen rather than coupling an unsafe sequence of Job and Equipment updates.
+
+Technician qualifications are managed through Technician Qualification records from the
+Mechanics workflow; no qualification flags are stored directly on Mechanic. Qualification
+Type codes are stable integration identifiers. Active periods for the same technician and
+Qualification Type may not overlap, while non-overlapping history is retained. Normal
+removal deactivates the qualification instead of deleting it. Qualification status and WOF
+eligibility share the helpers in `src/alpha/wof/utils/wofRules.ts`.
+
 ## 11. Customer, site and contact model
 
 The Customer Dashboard now has Sites, Open Jobs, Quotes, Contacts and Info tabs plus

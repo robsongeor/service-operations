@@ -6,6 +6,9 @@ export type EquipmentUpdateInput = {
     model: string
     serial: string
     siteId: string
+    registrationNumber: string
+    wofRequired: boolean
+    currentWofExpiry: string
 }
 
 export type EquipmentSortKey = 'fleet' | 'customer' | 'site' | 'make' | 'model' | 'serial'

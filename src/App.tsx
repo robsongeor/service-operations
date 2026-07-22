@@ -10,6 +10,7 @@ import MechanicsScreen from './alpha/mechanics/MechanicsScreen'
 import EquipmentScreen from './alpha/equipment/EquipmentScreen'
 import CustomerDashboardScreen from './alpha/customers/CustomerDashboardScreen'
 import JobApiTestScreen from './alpha/job-api-test/JobApiTestScreen'
+import WofScreen from './alpha/wof/WofScreen'
 import { getSignedInUserInfo } from './auth/signedInUser'
 import { useActiveMsalAccount } from './auth/useActiveMsalAccount'
 
@@ -39,6 +40,7 @@ function App() {
           <Route path="/quotes" element={<QuotesScreen key={signedInUser?.storageId || 'account-pending'} />} />
           <Route path="/pricing" element={<PricingScreen />} />
           <Route path="/job-api-test" element={<JobApiTestScreen />} />
+          <Route path="/wof" element={<WofScreen key={signedInUser?.storageId || 'account-pending'} accountId={signedInUser?.storageId || 'account-pending'} />} />
         </Routes>
       </div>
     </div>

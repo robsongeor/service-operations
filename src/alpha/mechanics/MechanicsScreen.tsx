@@ -6,6 +6,7 @@ import MechanicDialog from './components/MechanicDialog'
 import { useMechanics } from './hooks/useMechanics'
 import type { MechanicInput } from './services/mechanicsApi'
 import './MechanicsScreen.css'
+import { getQualificationStatus } from '../wof/utils/wofRules'
 
 const createdDate = new Intl.DateTimeFormat('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })
 
@@ -17,6 +18,8 @@ export default function MechanicsScreen() {
     const {
         mechanics,
         jobs,
+        qualifications,
+        qualificationTypes,
         isLoading,
         isSaving,
         loadError,
@@ -26,6 +29,9 @@ export default function MechanicsScreen() {
         createMechanic,
         updateMechanic,
         setMechanicActive,
+        createQualification,
+        updateQualification,
+        deactivateQualification,
     } = useMechanics()
     const [selectedId, setSelectedId] = useState('')
     const [search, setSearch] = useState('')
@@ -60,12 +66,18 @@ export default function MechanicsScreen() {
         (job) => job.gr_Mechanic?.gr_mechanicid === mechanicId && job.gr_status !== JOB_STATUSES.COMPLETE,
     ).length
 
+    const qualificationsFor = (mechanicId: string) => qualifications.filter((qualification) => qualification.gr_Technician?.gr_mechanicid === mechanicId)
+    const validQualificationsFor = (mechanicId: string) => qualificationsFor(mechanicId).filter((qualification) => getQualificationStatus(qualification) === 'valid')
+
     const saveMechanic = async (input: MechanicInput) => {
         try {
             if (editingMechanic) {
                 await updateMechanic(editingMechanic.gr_mechanicid, input)
             } else {
-                await createMechanic(input)
+                const created = await createMechanic(input)
+                setEditingMechanic(created)
+                setSelectedId(created.gr_mechanicid)
+                return
             }
             setEditingMechanic(undefined)
         } catch {
@@ -121,6 +133,7 @@ export default function MechanicsScreen() {
                                         <span className="mechanic-card-copy">
                                             <strong>{mechanic.gr_name}</strong>
                                             <small>{mechanic.statecode === 0 ? `${count} open ${count === 1 ? 'job' : 'jobs'}` : 'Inactive'}</small>
+                                            {validQualificationsFor(mechanic.gr_mechanicid).length > 0 && <span className="mechanic-qualification-summary">{validQualificationsFor(mechanic.gr_mechanicid)[0].gr_QualificationType?.gr_name}{validQualificationsFor(mechanic.gr_mechanicid).length > 1 ? ` +${validQualificationsFor(mechanic.gr_mechanicid).length - 1}` : ''}</span>}
                                         </span>
                                         <span aria-hidden="true">›</span>
                                     </button>
@@ -203,6 +216,11 @@ export default function MechanicsScreen() {
                     error={saveError}
                     onClose={() => setEditingMechanic(undefined)}
                     onSave={saveMechanic}
+                    qualifications={editingMechanic ? qualificationsFor(editingMechanic.gr_mechanicid) : []}
+                    qualificationTypes={qualificationTypes}
+                    onCreateQualification={createQualification}
+                    onUpdateQualification={updateQualification}
+                    onDeactivateQualification={deactivateQualification}
                 />
             )}
         </div>

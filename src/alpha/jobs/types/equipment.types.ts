@@ -8,6 +8,10 @@ export type Equipment = {
     statuscode?: number
     gr_currenthourmeter?: number | null
     gr_servicetrackingenabled?: boolean | null
+    gr_registrationnumber?: string | null
+    gr_wofrequired?: boolean | null
+    gr_currentwofexpiry?: string | null
+    gr_lastwofcompleted?: string | null
     gr_Site?: {
         gr_siteid: string
         gr_name: string
