@@ -18,8 +18,7 @@ function liftTrucksProxy(env: Record<string, string | undefined>): Plugin {
     if (!request.url) return false
 
     const requestUrl = new URL(request.url, 'http://localhost')
-    const match = requestUrl.pathname.match(/^\/api\/lifttrucks\/jobs\/([^/]+)$/)
-    if (!match) return false
+    if (requestUrl.pathname !== '/api/joblookup') return false
 
     if (request.method !== 'GET') {
       response.setHeader('Allow', 'GET')
@@ -27,21 +26,22 @@ function liftTrucksProxy(env: Record<string, string | undefined>): Plugin {
       return true
     }
 
-    let jobNumber: string
-    try {
-      jobNumber = decodeURIComponent(match[1]).trim()
-    } catch {
-      sendJson(response, 400, { error: 'Job Number is invalid.' })
+    const jobNumber = requestUrl.searchParams.get('jobNumber')?.trim() ?? ''
+    if (!jobNumber) {
+      response.setHeader('X-Job-Lookup-Source', 'internal-proxy')
+      sendJson(response, 400, { error: 'Job Number is required.' })
       return true
     }
-    if (!jobNumber) {
-      sendJson(response, 400, { error: 'Job Number is required.' })
+    if (jobNumber.length > 100 || !/^[A-Za-z0-9._-]+$/.test(jobNumber)) {
+      response.setHeader('X-Job-Lookup-Source', 'internal-proxy')
+      sendJson(response, 400, { error: 'Job Number is invalid.' })
       return true
     }
 
     const username = env.LIFTTRUCKS_API_USERNAME
     const password = env.LIFTTRUCKS_API_PASSWORD
     if (!username || !password) {
+      response.setHeader('X-Job-Lookup-Source', 'internal-proxy')
       sendJson(response, 500, {
         error: 'Lift Trucks API credentials are not configured on the server.',
       })
@@ -67,13 +67,16 @@ function liftTrucksProxy(env: Record<string, string | undefined>): Plugin {
 
       response.statusCode = upstreamResponse.status
       response.statusMessage = upstreamResponse.statusText
+      response.setHeader('X-Job-Lookup-Source', 'upstream-service')
       const contentType = upstreamResponse.headers.get('content-type')
       if (contentType) response.setHeader('Content-Type', contentType)
       response.end(Buffer.from(await upstreamResponse.arrayBuffer()))
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
+        response.setHeader('X-Job-Lookup-Source', 'internal-proxy')
         sendJson(response, 504, { error: 'The Lift Trucks API request timed out.' })
       } else {
+        response.setHeader('X-Job-Lookup-Source', 'internal-proxy')
         sendJson(response, 502, {
           error: 'The Lift Trucks API could not be reached.',
           detail: error instanceof Error ? error.message : String(error),

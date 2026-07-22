@@ -11,10 +11,12 @@ import EquipmentScreen from './alpha/equipment/EquipmentScreen'
 import CustomerDashboardScreen from './alpha/customers/CustomerDashboardScreen'
 import JobApiTestScreen from './alpha/job-api-test/JobApiTestScreen'
 import { getSignedInUserInfo } from './auth/signedInUser'
+import { useActiveMsalAccount } from './auth/useActiveMsalAccount'
 
 function App() {
   const { accounts } = useMsal()
-  const signedInUser = getSignedInUserInfo(accounts[0])
+  const activeAccount = useActiveMsalAccount()
+  const signedInUser = getSignedInUserInfo(activeAccount)
 
   if (accounts.length === 0) {
     return <LoginScreen />

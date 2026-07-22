@@ -130,6 +130,14 @@ LIFTTRUCKS_API_PASSWORD=
 Never prefix the Lift Trucks credentials with `VITE_`; doing so would expose them to the
 browser bundle.
 
+Production Job lookup requests use the managed Azure Functions endpoint at
+`api/joblookup`. The Azure Static Web Apps workflow deploys the `api/` directory through
+`api_location: "api"`; production credentials must be configured as Static Web App
+environment settings. For Azure Functions local development, copy
+`api/local.settings.json.example` to the ignored `api/local.settings.json`. The Vite
+development middleware implements the same same-origin endpoint for the normal `npm run dev`
+workflow and reads the same unprefixed values from the ignored root `.env`.
+
 `VITE_DATAVERSE_URL` must contain the Dataverse organisation URL only.
 
 Correct example:
@@ -368,6 +376,9 @@ Jobs view preferences are stored in `sessionStorage` per signed-in MSAL account 
 once to the first resolved account and removed, so it cannot leak into later user profiles.
 The sidebar footer uses the same resolved MSAL account to show the signed-in display name
 beside the build-injected application version; it does not perform a Graph or Dataverse lookup.
+Both the sidebar and Jobs preference key use `instance.getActiveAccount()` as their source of
+truth. When MSAL has exactly one cached account and no active account, that account is made
+active. Multiple cached accounts are never resolved by array order.
 
 Search currently spans information such as:
 

@@ -1,0 +1,9 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "LIFTTRUCKS_API_USERNAME": "your-lifttrucks-api-username",
+    "LIFTTRUCKS_API_PASSWORD": "your-lifttrucks-api-password"
+  }
+}

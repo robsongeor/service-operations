@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useMsal } from '@azure/msal-react'
 import { useJobs } from './hooks/useJobs'
 import JobsTable from './components/JobsTable'
 import JobEditDrawer from './components/JobEditDrawer'
@@ -8,6 +7,7 @@ import type { Job } from './types/job.types'
 import type { JobStatus } from './types/jobStatus.types'
 import { DEFAULT_JOBS_VIEW_STATE, getJobsViewStateKey, restoreJobsViewState, type JobsViewState, type ScheduledJobsVisibility } from './types/jobsViewState.types'
 import { getSignedInUserInfo } from '../../auth/signedInUser'
+import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
 import PageSettingsButton from '../shared/settings/PageSettingsButton'
 import PageSettingsDialog from '../shared/settings/PageSettingsDialog'
 import './JobsScreen.css'
@@ -15,8 +15,8 @@ import { useNavigate } from 'react-router-dom'
 
 export default function JobsScreen() {
     const navigate = useNavigate()
-    const { accounts } = useMsal()
-    const signedInUser = getSignedInUserInfo(accounts[0])
+    const activeAccount = useActiveMsalAccount()
+    const signedInUser = getSignedInUserInfo(activeAccount)
     const storageKey = signedInUser ? getJobsViewStateKey(signedInUser.storageId) : null
     const {
         jobs, equipmentList, mechanics, sites, customers, siteContacts,

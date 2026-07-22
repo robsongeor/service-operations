@@ -11,12 +11,20 @@ function displayValue(value: unknown) {
     return String(value)
 }
 
+type RequestDiagnostics = {
+    endpoint: string
+    status: string
+    source: string
+    body: string
+}
+
 export default function JobApiTestScreen() {
     const [jobNumber, setJobNumber] = useState('')
     const [jobCards, setJobCards] = useState<Record<string, unknown>[]>([])
     const [message, setMessage] = useState('Enter a Job Number to view its job card.')
     const [error, setError] = useState('')
     const [isLoading, setIsLoading] = useState(false)
+    const [diagnostics, setDiagnostics] = useState<RequestDiagnostics | null>(null)
 
     const search = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault()
@@ -26,6 +34,7 @@ export default function JobApiTestScreen() {
             setError('Enter a Job Number.')
             setJobCards([])
             setMessage('No request sent.')
+            setDiagnostics(null)
             return
         }
 
@@ -33,18 +42,36 @@ export default function JobApiTestScreen() {
         setError('')
         setJobCards([])
         setMessage('')
+        setDiagnostics(null)
+
+        const endpoint = `/api/joblookup?${new URLSearchParams({ jobNumber: trimmedJobNumber })}`
 
         try {
-            const apiResponse = await fetch(`/api/lifttrucks/jobs/${encodeURIComponent(trimmedJobNumber)}?page=1&pageSize=50&ApiKey=500256`) // https://webview.liftrucks.co.nz/api/01/JCJob/100000?page=1&pageSize=50&ApiKey=500256
+            const apiResponse = await fetch(endpoint)
             const body = await apiResponse.text()
+            const responseSource = apiResponse.headers.get('x-job-lookup-source') || 'internal endpoint'
 
             if (!apiResponse.ok) {
                 setError(`${apiResponse.status} ${apiResponse.statusText || 'Request failed'}`)
                 setMessage(body || 'The API returned an empty error response.')
+                setDiagnostics({
+                    endpoint,
+                    status: `${apiResponse.status} ${apiResponse.statusText || ''}`.trim(),
+                    source: responseSource,
+                    body: body || '(empty response body)',
+                })
                 return
             }
 
-            const result: unknown = JSON.parse(body)
+            let result: unknown
+            try {
+                result = JSON.parse(body)
+            } catch {
+                setError('Invalid proxy response')
+                setMessage('The endpoint returned a successful response that was not valid JSON.')
+                setDiagnostics({ endpoint, status: `${apiResponse.status} ${apiResponse.statusText}`.trim(), source: responseSource, body })
+                return
+            }
             const records = Array.isArray(result) ? result : [result]
             const returnedJobCards = records.flatMap((record) => {
                 if (!isRecord(record) || !isRecord(record.JCJob) || !isRecord(record.JCJob.JCJobCard)) {
@@ -61,6 +88,7 @@ export default function JobApiTestScreen() {
             const message = requestError instanceof Error ? requestError.message : String(requestError)
             setError('Network failure')
             setMessage(`The proxy endpoint could not be reached. ${message}`)
+            setDiagnostics({ endpoint, status: 'No HTTP response', source: 'internal endpoint', body: message })
         } finally {
             setIsLoading(false)
         }
@@ -148,6 +176,18 @@ export default function JobApiTestScreen() {
                         <div className={error ? 'job-api-test-state error' : 'job-api-test-state'}>{message}</div>
                     )}
                 </div>
+                {diagnostics && (
+                    <section className="job-api-test-diagnostics" aria-label="Request diagnostics">
+                        <h3>Request diagnostics</h3>
+                        <dl>
+                            <div><dt>Internal endpoint</dt><dd>{diagnostics.endpoint}</dd></div>
+                            <div><dt>HTTP status</dt><dd>{diagnostics.status}</dd></div>
+                            <div><dt>Failure source</dt><dd>{diagnostics.source}</dd></div>
+                        </dl>
+                        <span>Response body</span>
+                        <pre>{diagnostics.body}</pre>
+                    </section>
+                )}
             </section>
         </main>
     )
