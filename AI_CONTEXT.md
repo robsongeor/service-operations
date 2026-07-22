@@ -380,6 +380,12 @@ Both the sidebar and Jobs preference key use `instance.getActiveAccount()` as th
 truth. When MSAL has exactly one cached account and no active account, that account is made
 active. Multiple cached accounts are never resolved by array order.
 
+Jobs Default View preferences are stored separately per signed-in account using
+`service-operations.jobs-default-view.v1.<encoded-account-id>`. A valid retained Current
+View State takes priority during normal page loads; Default View is used only when Current
+View State is absent or when Reset to Default is explicitly selected. Reset applies the
+saved Job Type tab and statuses, clears search text, and preserves unrelated view fields.
+
 Search currently spans information such as:
 
 - Job number
@@ -769,6 +775,13 @@ versioned `service-operations.scheduling-display-mode.v1` session-storage entry.
 cards show Customer, Job Number, Job Type, and confirmation state, then reveal the shared
 expanded detail view on hover or keyboard focus. Today Expanded uses the local calendar
 date and keeps all other visible days compact.
+
+Scheduling cards and the Jobs table badges use one shared Job Type colour mapping. The
+cards apply those colours to their full background and border without displaying a Job
+Type badge. Scheduling also uses the same shared tab controls as the Jobs table. Its
+All jobs, Breakdown, Service, and Workshop filter is restored for the current browser
+session from `service-operations.scheduling-job-type-filter.v1`; it filters the flexible
+weekly lane, daily cards, day counts, and visible scheduled-option total together.
 
 ### Schedule records
 

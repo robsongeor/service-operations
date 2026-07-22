@@ -32,6 +32,19 @@
 .jobs-scheduled-settings label { display: flex; min-height: 42px; align-items: center; gap: 10px; padding: 0 12px; border: 1px solid #dce3df; border-radius: 9px; color: #3d4a44; font-size: .82rem; cursor: pointer; }
 .jobs-scheduled-settings label:has(input:checked) { border-color: #65a091; background: #eef7f4; color: #175f57; font-weight: 700; }
 .jobs-scheduled-settings input { accent-color: #176f66; }
+.jobs-default-view-settings { display: grid; gap: 14px; margin-top: 20px; padding-top: 18px; border-top: 1px solid #e1e7e3; }
+.jobs-default-view-settings h3, .jobs-default-view-settings p { margin: 0; }
+.jobs-default-view-settings h3 { font-size: .9rem; }
+.jobs-default-view-settings p { margin-top: 5px; color: #66736d; font-size: .78rem; line-height: 1.45; }
+.jobs-default-tab { display: grid; gap: 6px; color: #3d4a44; font-size: .8rem; font-weight: 700; }
+.jobs-default-tab select { min-height: 38px; padding: 0 10px; border: 1px solid #d4dcd7; border-radius: 8px; background: #fff; color: #28332e; font: inherit; }
+.jobs-default-tab select:focus-visible { border-color: #55796d; outline: 2px solid rgba(85,121,109,.22); outline-offset: 1px; }
+.jobs-default-statuses { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin: 0; padding: 0; border: 0; }
+.jobs-default-statuses legend { grid-column: 1 / -1; margin-bottom: 1px; color: #3d4a44; font-size: .8rem; font-weight: 700; }
+.jobs-default-statuses label { display: flex; min-height: 36px; align-items: center; gap: 8px; padding: 0 9px; border: 1px solid #dce3df; border-radius: 8px; color: #46534d; font-size: .76rem; cursor: pointer; }
+.jobs-default-statuses label:has(input:checked) { border-color: #8eb5aa; background: #f0f7f4; color: #175f57; }
+.jobs-default-statuses input { accent-color: #176f66; }
+.jobs-default-statuses small { grid-column: 1 / -1; color: #737f79; font-size: .7rem; line-height: 1.4; }
 
 .jobs-create-button {
     min-height: 38px;

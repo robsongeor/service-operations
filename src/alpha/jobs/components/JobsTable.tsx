@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
 import type { Job } from '../types/job.types'
 import type { Mechanic } from '../types/mechanic.types'
-import { JOB_TYPE_OPTIONS, getJobTypeLabel } from '../types/jobType.types'
+import { getJobTypeLabel } from '../types/jobType.types'
+import JobTypeBadge from './JobTypeBadge'
+import JobTypeTabs from './JobTypeTabs'
 import {
     JOB_STATUS_OPTIONS,
     JOB_STATUS_PRIORITY,
@@ -27,6 +29,8 @@ type Props = {
     viewState: JobsViewState
     onViewStateChange: (state: JobsViewState) => void
     onToggleStatus: (status: JobStatus) => void
+    onResetToDefault: () => void
+    resetToDefaultDisabled: boolean
     onStatusChange: (jobId: string, status: JobStatus) => void
     onJobFieldsChange: (
         jobId: string,
@@ -55,6 +59,8 @@ export default function JobsTable({
     viewState,
     onViewStateChange,
     onToggleStatus,
+    onResetToDefault,
+    resetToDefaultDisabled,
     onStatusChange,
     onJobFieldsChange,
     onEditJob,
@@ -266,30 +272,10 @@ export default function JobsTable({
             </div>
 
             <div className="jobs-filter-bar">
-                <div className="jobs-type-tabs" role="tablist" aria-label="Filter jobs by type">
-                    <button
-                        type="button"
-                        role="tab"
-                        aria-selected={selectedJobType === 'all'}
-                        className={selectedJobType === 'all' ? 'jobs-type-tab active' : 'jobs-type-tab'}
-                        onClick={() => onViewStateChange({ ...viewState, selectedJobType: 'all' })}
-                    >
-                        All jobs
-                    </button>
-                    {JOB_TYPE_OPTIONS.map((jobType) => (
-                        <button
-                            key={jobType.value}
-                            type="button"
-                            role="tab"
-                            aria-selected={selectedJobType === jobType.value}
-                            className={selectedJobType === jobType.value ? 'jobs-type-tab active' : 'jobs-type-tab'}
-                            onClick={() => onViewStateChange({ ...viewState, selectedJobType: jobType.value })}
-                        >
-                            {jobType.label}
-                        </button>
-                    ))}
-                </div>
-
+                <JobTypeTabs
+                    selectedJobType={selectedJobType}
+                    onChange={(jobType) => onViewStateChange({ ...viewState, selectedJobType: jobType })}
+                />
                 <div className="jobs-list-toolbar" aria-label="Filter jobs by status">
                     <span>Status</span>
                     {JOB_STATUS_OPTIONS.map((status) => {
@@ -313,6 +299,14 @@ export default function JobsTable({
                     <button type="button" className={officeAttentionFilter === 'required' ? 'active' : ''} onClick={() => onViewStateChange({ ...viewState, officeAttentionFilter: 'required' })}>Needs Attention</button>
                     <button type="button" className={officeAttentionFilter === 'none' ? 'active' : ''} onClick={() => onViewStateChange({ ...viewState, officeAttentionFilter: 'none' })}>No Attention Required</button>
                 </div>
+                <button
+                    type="button"
+                    className="jobs-reset-default"
+                    onClick={onResetToDefault}
+                    disabled={resetToDefaultDisabled}
+                >
+                    Reset to Default
+                </button>
             </div>
 
             <div
@@ -422,9 +416,7 @@ export default function JobsTable({
                                 </td>
 
                                 <td>
-                                    <span className="job-type-pill" data-job-type={job.gr_jobtype ?? ''}>
-                                        {getJobTypeLabel(job.gr_jobtype)}
-                                    </span>
+                                    <JobTypeBadge jobType={job.gr_jobtype} />
                                 </td>
 
                                 <td>
