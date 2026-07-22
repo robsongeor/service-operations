@@ -23,6 +23,30 @@ jobs:
         with:
           submodules: true
           lfs: false
+          fetch-depth: 0
+      - name: Determine application version
+        shell: bash
+        run: |
+          EXACT_TAG=$(git describe --tags --exact-match HEAD 2>/dev/null || true)
+          SHORT_SHA=$(git rev-parse --short HEAD)
+
+          if [ -n "$EXACT_TAG" ]; then
+            VERSION="$EXACT_TAG"
+            IS_RELEASE="true"
+          else
+            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
+
+            if [ -n "$LATEST_TAG" ]; then
+              VERSION="Unreleased · $SHORT_SHA"
+            else
+              VERSION="Development · $SHORT_SHA"
+            fi
+
+            IS_RELEASE="false"
+          fi
+
+          echo "VITE_APP_VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "VITE_APP_VERSION_IS_RELEASE=$IS_RELEASE" >> "$GITHUB_ENV"
       - name: Build And Deploy
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1

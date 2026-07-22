@@ -9,9 +9,12 @@ import QuotesScreen from './alpha/quotes/QuotesScreen'
 import MechanicsScreen from './alpha/mechanics/MechanicsScreen'
 import EquipmentScreen from './alpha/equipment/EquipmentScreen'
 import CustomerDashboardScreen from './alpha/customers/CustomerDashboardScreen'
+import JobApiTestScreen from './alpha/job-api-test/JobApiTestScreen'
+import { getSignedInUserInfo } from './auth/signedInUser'
 
 function App() {
   const { accounts } = useMsal()
+  const signedInUser = getSignedInUserInfo(accounts[0])
 
   if (accounts.length === 0) {
     return <LoginScreen />
@@ -29,10 +32,11 @@ function App() {
           <Route path="/customers" element={<CustomerDashboardScreen />} />
           <Route path="/mechanics" element={<MechanicsScreen />} />
           <Route path="/equipment" element={<EquipmentScreen />} />
-          <Route path="/jobs" element={<JobsScreen />} />
+          <Route path="/jobs" element={<JobsScreen key={signedInUser?.storageId || 'account-pending'} />} />
           <Route path="/scheduling" element={<SchedulingScreen />} />
           <Route path="/quotes" element={<QuotesScreen />} />
           <Route path="/pricing" element={<PricingScreen />} />
+          <Route path="/job-api-test" element={<JobApiTestScreen />} />
         </Routes>
       </div>
     </div>

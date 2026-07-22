@@ -1,0 +1,18 @@
+.page-settings-button { position: relative; display: inline-flex; min-height: 38px; align-items: center; gap: 7px; padding: 0 11px; border: 1px solid #cfd8d3; border-radius: 9px; background: #fff; color: #415049; font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; }
+.page-settings-button:hover { border-color: #7f938a; background: #f5f8f6; }
+.page-settings-button.active { border-color: #559181; background: #edf7f3; color: #176f66; }
+.page-settings-button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.6; }
+.page-settings-button i { position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: #d27a2c; }
+.page-settings-backdrop { position: fixed; z-index: 3000; inset: 0; display: grid; box-sizing: border-box; padding: 20px; place-items: center; background: rgba(20,29,25,.38); }
+.page-settings-dialog { width: min(460px, 100%); max-height: calc(100vh - 40px); overflow: auto; border: 1px solid #d8e0dc; border-radius: 14px; background: #fff; box-shadow: 0 24px 70px rgba(18,31,24,.25); color: #22302a; }
+.page-settings-dialog header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 20px 20px 15px; border-bottom: 1px solid #e5eae7; }
+.page-settings-dialog h2, .page-settings-dialog p { margin: 0; }
+.page-settings-dialog h2 { font-size: 1.1rem; }
+.page-settings-dialog p { margin-top: 5px; color: #66736d; font-size: .8rem; line-height: 1.45; }
+.page-settings-dialog header > button { border: 0; background: transparent; color: #68746e; font-size: 1.5rem; line-height: 1; cursor: pointer; }
+.page-settings-body { padding: 18px 20px; }
+.page-settings-dialog footer { display: flex; justify-content: flex-end; gap: 9px; padding: 14px 20px; border-top: 1px solid #e5eae7; background: #fafbf9; }
+.page-settings-dialog footer button { min-height: 36px; padding: 0 14px; border-radius: 8px; font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; }
+.page-settings-dialog footer .secondary { border: 1px solid #ccd5d0; background: #fff; color: #46524c; }
+.page-settings-dialog footer .primary { border: 1px solid #176f66; background: #176f66; color: #fff; }
+@media (max-width: 520px) { .page-settings-backdrop { align-items: end; padding: 10px; } .page-settings-dialog { max-height: calc(100vh - 20px); } }

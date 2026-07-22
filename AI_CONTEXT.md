@@ -119,6 +119,17 @@ VITE_MSAL_TENANT_ID=
 VITE_DATAVERSE_URL=
 ```
 
+The temporary Job API Test page also requires these server-only variables when its local
+Vite proxy is used:
+
+```env
+LIFTTRUCKS_API_USERNAME=
+LIFTTRUCKS_API_PASSWORD=
+```
+
+Never prefix the Lift Trucks credentials with `VITE_`; doing so would expose them to the
+browser bundle.
+
 `VITE_DATAVERSE_URL` must contain the Dataverse organisation URL only.
 
 Correct example:
@@ -139,6 +150,13 @@ For the Azure Static Web Apps production build, configure these same public Vite
 GitHub Actions repository variables named `VITE_MSAL_CLIENT_ID`, `VITE_MSAL_TENANT_ID`, and
 `VITE_DATAVERSE_URL`. The SPA redirect URI uses the active browser origin, so both the local
 development URL and the Azure Static Web Apps URL must be registered in Microsoft Entra.
+
+Production deployments are built by the Azure Static Web Apps workflow from the configured
+`v1-deployment` branch. Release versions are identified by immutable Git tags that point to
+the exact commit being deployed. The workflow injects `VITE_APP_VERSION` and
+`VITE_APP_VERSION_IS_RELEASE` into the Vite build. Exact-tag builds display that tag; newer
+untagged commits are labelled `Unreleased` with their short commit SHA. Local builds safely
+fall back to `Development` when build metadata is unavailable.
 
 The Microsoft Entra application registration must include:
 
@@ -206,6 +224,7 @@ Always run `npm run build` before considering a feature complete.
 | `/mechanics` | Mechanic management | Prototype/active development |
 | `/equipment` | Equipment Manager | First version |
 | `/quotes` | Quote management | Development branch feature |
+| `/job-api-test` | Temporary Lift Trucks Job API lookup | Development/migration only |
 | Settings navigation | Settings | Route not implemented |
 
 Authentication is handled at the application level. Users who are not signed in are shown the Microsoft login screen.
@@ -342,6 +361,13 @@ to the allocated technician's persisted `gr_email` value. It includes grouped Jo
 Equipment, Work Required, Customer/Site, Contact, and order-number sections where applicable.
 The existing Power Automate dispatch and Job Card status workflow remains available in the
 Job drawer and is intentionally not invoked by this temporary table action.
+
+Jobs view preferences are stored in `sessionStorage` per signed-in MSAL account using
+`service-operations.jobs-view-state.v2.<encoded-account-id>`. Account identity prefers
+`homeAccountId`, then `localAccountId`, then username. The old unscoped v1 value is migrated
+once to the first resolved account and removed, so it cannot leak into later user profiles.
+The sidebar footer uses the same resolved MSAL account to show the signed-in display name
+beside the build-injected application version; it does not perform a Graph or Dataverse lookup.
 
 Search currently spans information such as:
 
@@ -504,6 +530,29 @@ Editing or moving Equipment must never automatically update previous Jobs.
 ```
 
 ## 11. Customer, site and contact model
+
+The Customer Dashboard now has Sites, Open Jobs, Quotes, Contacts and Info tabs plus
+shared-shell Create Customer and Edit Customer drawers. Sites is the default operational
+hierarchy and keeps Equipment grouped beneath its current Site; each Site owns its own
+address and operating hours. Open Jobs uses the shared `isOpenJob` helper and groups the
+already-loaded Customer Jobs by their persisted Job Site. Selecting a row opens the shared
+Job drawer. Quotes filters the already-loaded Quote register by the Customer ID reached
+through the linked Job Site, with Status and Site filters and sortable flat output;
+selecting a Quote opens the existing Quote route/editor workflow. These views add no N+1
+requests.
+
+Contacts consolidates Site Contact junction rows into one person with a `siteIds[]` array,
+allowing Customer-wide, single-Site and multi-Site associations without duplicate Contact
+cards. Info contains Customer-level accounts contact details, purchase-order requirements,
+notes and summary counts without duplicating Site or Contact lists.
+
+The shared Customer drawer has independent Info and Sites tabs. Cross-tab save validation
+opens the first tab containing an error, and creating a Customer requires its first Site.
+All drawer changes are held only in page state and are intentionally not connected to
+Dataverse yet. The Contacts tab is read-only and performs no writes. Prototype Customers
+cannot be used to create Jobs, preventing temporary identifiers from reaching Dataverse
+payloads. Prototype Site removal is isolated so it can be replaced by Archive Site when
+Dataverse persistence is designed.
 
 Important relationship rules:
 

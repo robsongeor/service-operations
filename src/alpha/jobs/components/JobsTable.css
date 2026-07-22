@@ -260,10 +260,18 @@
     color: #1c211e;
 }
 
-.jobs-table-sort span {
-    font-size: 0.8rem;
-    line-height: 1;
+.jobs-table-sort-icon {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.5;
 }
+
+.jobs-table-sort:focus-visible { border-radius: 3px; outline: 2px solid #55796d; outline-offset: 2px; }
 
 .jobs-table td {
     height: 58px;
@@ -590,7 +598,8 @@
     opacity: 0.35;
 }
 
-.jobs-technician-email-action {
+.jobs-technician-email-action,
+.jobs-spreadsheet-copy-action {
     display: inline-grid;
     width: 29px;
     min-width: 29px;
@@ -599,7 +608,8 @@
     border-radius: 8px;
 }
 
-.jobs-technician-email-action svg {
+.jobs-technician-email-action svg,
+.jobs-spreadsheet-copy-action svg {
     width: 14px;
     height: 14px;
     fill: none;

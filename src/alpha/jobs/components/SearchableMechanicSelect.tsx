@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Mechanic } from '../types/mechanic.types'
 import './SearchableMechanicSelect.css'
@@ -23,7 +23,7 @@ export default function SearchableMechanicSelect({ mechanics, selectedId, isOpen
     const onCloseRef = useRef(onClose)
     const [query, setQuery] = useState('')
     const [activeIndex, setActiveIndex] = useState(0)
-    const [position, setPosition] = useState({ top: 0, left: 0, width: 220 })
+    const [position, setPosition] = useState({ top: 0, left: 0, width: 220, maxHeight: 320 })
     const selected = mechanics.find((mechanic) => mechanic.gr_mechanicid === selectedId)
     const results = useMemo(() => {
         const search = normalize(query)
@@ -34,16 +34,30 @@ export default function SearchableMechanicSelect({ mechanics, selectedId, isOpen
     }, [mechanics, query])
     const optionCount = results.length + 1
 
+    const updatePosition = useCallback(() => {
+        const rect = rootRef.current?.getBoundingClientRect()
+        if (!rect) return
+        const margin = 8
+        const gap = 4
+        const width = Math.min(Math.max(rect.width, 220), window.innerWidth - margin * 2)
+        const left = Math.min(Math.max(margin, rect.left), window.innerWidth - width - margin)
+        const desiredHeight = Math.min(menuRef.current?.scrollHeight || 320, 320)
+        const availableBelow = window.innerHeight - rect.bottom - gap - margin
+        const availableAbove = rect.top - gap - margin
+        const opensUpward = availableBelow < desiredHeight && availableAbove > availableBelow
+        const maxHeight = Math.max(120, Math.min(desiredHeight, opensUpward ? availableAbove : availableBelow))
+        const top = opensUpward
+            ? Math.max(margin, rect.top - gap - maxHeight)
+            : Math.max(margin, rect.bottom + gap)
+        setPosition({ top, left, width, maxHeight })
+    }, [])
+
     useEffect(() => {
         onCloseRef.current = onClose
     }, [onClose])
 
     useEffect(() => {
         if (!isOpen) return
-        const updatePosition = () => {
-            const rect = rootRef.current?.getBoundingClientRect()
-            if (rect) setPosition({ top: rect.bottom + 4, left: rect.left, width: Math.max(rect.width, 220) })
-        }
         const closeOnOutsideClick = (event: MouseEvent) => {
             const target = event.target as Node
             if (!rootRef.current?.contains(target) && !menuRef.current?.contains(target)) onCloseRef.current()
@@ -58,7 +72,13 @@ export default function SearchableMechanicSelect({ mechanics, selectedId, isOpen
             window.removeEventListener('resize', updatePosition)
             window.removeEventListener('scroll', updatePosition, true)
         }
-    }, [isOpen])
+    }, [isOpen, updatePosition])
+
+    useLayoutEffect(() => {
+        if (!isOpen) return
+        const frame = requestAnimationFrame(updatePosition)
+        return () => cancelAnimationFrame(frame)
+    }, [isOpen, results.length, updatePosition])
 
     const chooseActive = () => {
         if (activeIndex === 0) onSelect('')
@@ -69,7 +89,7 @@ export default function SearchableMechanicSelect({ mechanics, selectedId, isOpen
         <button type="button" className="jobs-mechanic-trigger" aria-label="Assigned mechanic" aria-haspopup="listbox" aria-expanded={isOpen} disabled={isSaving} onClick={() => { if (isOpen) onClose(); else { setQuery(''); setActiveIndex(0); onOpen() } }}>
             <span>{isSaving ? 'Saving…' : selected?.gr_name || 'Unassigned'}</span><span aria-hidden="true">⌄</span>
         </button>
-        {isOpen && createPortal(<div className="jobs-mechanic-menu" ref={menuRef} style={{ top: position.top, left: position.left, width: position.width }}>
+        {isOpen && createPortal(<div className="jobs-mechanic-menu" ref={menuRef} style={{ top: position.top, left: position.left, width: position.width, maxHeight: position.maxHeight }}>
             <input ref={inputRef} type="search" role="combobox" aria-expanded="true" aria-controls="jobs-mechanic-results" placeholder="Search technicians…" value={query} onChange={(event) => { setQuery(event.target.value); setActiveIndex(0) }} onKeyDown={(event) => {
                 if (event.key === 'ArrowDown') { event.preventDefault(); setActiveIndex((current) => Math.min(current + 1, optionCount - 1)) }
                 if (event.key === 'ArrowUp') { event.preventDefault(); setActiveIndex((current) => Math.max(current - 1, 0)) }

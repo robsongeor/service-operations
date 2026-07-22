@@ -1,0 +1,25 @@
+.app-version {
+    display: block;
+    max-width: 100%;
+    margin-top: 0;
+    padding-right: 3px;
+    overflow: hidden;
+    color: #87928c;
+    font-size: 0.62rem;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.25;
+    text-align: right;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sidebar.collapsed .app-version {
+    padding-right: 0;
+    font-size: 0;
+    text-align: center;
+}
+
+.sidebar.collapsed .app-version::after {
+    content: 'v';
+    font-size: 0.62rem;
+}

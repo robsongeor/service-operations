@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
+import SidebarFooter from './SidebarFooter'
 import './Sidebar.css'
 
 const menuItems = [
@@ -11,6 +12,7 @@ const menuItems = [
     { label: 'Scheduling', shortLabel: 'C', path: '/scheduling' },
     { label: 'Quotes', shortLabel: 'Q', path: '/quotes' },
     { label: 'Pricing', shortLabel: '$', path: '/pricing' },
+    { label: 'Job API Test', shortLabel: 'API', path: '/job-api-test' },
 ]
 
 export default function Sidebar() {
@@ -66,6 +68,7 @@ export default function Sidebar() {
                 <span className="sidebar-link-icon sidebar-settings-icon" aria-hidden="true">S</span>
                 <span className="sidebar-link-label">Settings</span>
             </NavLink>
+            <SidebarFooter />
         </aside>
     )
 }

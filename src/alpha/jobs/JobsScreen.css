@@ -26,6 +26,13 @@
     margin: 0;
 }
 
+.jobs-page-header-actions { display: flex; align-items: center; gap: 9px; }
+.jobs-scheduled-settings { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; }
+.jobs-scheduled-settings legend { margin-bottom: 8px; font-size: .82rem; font-weight: 750; }
+.jobs-scheduled-settings label { display: flex; min-height: 42px; align-items: center; gap: 10px; padding: 0 12px; border: 1px solid #dce3df; border-radius: 9px; color: #3d4a44; font-size: .82rem; cursor: pointer; }
+.jobs-scheduled-settings label:has(input:checked) { border-color: #65a091; background: #eef7f4; color: #175f57; font-weight: 700; }
+.jobs-scheduled-settings input { accent-color: #176f66; }
+
 .jobs-create-button {
     min-height: 38px;
     padding: 0 16px;

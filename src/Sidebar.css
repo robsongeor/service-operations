@@ -164,6 +164,14 @@
     flex: 1;
 }
 
+.sidebar-footer { display: grid; gap: 3px; min-width: 0; margin-top: 10px; padding: 10px 3px 0; border-top: 1px solid rgba(129, 148, 139, 0.22); }
+.sidebar-user-info { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 7px; color: #66736d; font-size: 0.68rem; font-weight: 650; }
+.sidebar-user-avatar { display: none; width: 24px; height: 24px; flex: 0 0 24px; place-items: center; border: 1px solid #cbd5d0; border-radius: 50%; background: rgba(255, 255, 255, 0.72); color: #52625b; font-size: 0.62rem; font-weight: 800; }
+.sidebar-user-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar.collapsed .sidebar-footer { justify-items: center; padding-right: 0; padding-left: 0; }
+.sidebar.collapsed .sidebar-user-avatar { display: grid; }
+.sidebar.collapsed .sidebar-user-name { display: none; }
+
 .sidebar.collapsed .sidebar-brand,
 .sidebar.collapsed .sidebar-link-label {
     max-width: 0;

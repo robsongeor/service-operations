@@ -1,16 +1,23 @@
 import { useEffect, useState } from 'react'
+import { useMsal } from '@azure/msal-react'
 import { useJobs } from './hooks/useJobs'
 import JobsTable from './components/JobsTable'
 import JobEditDrawer from './components/JobEditDrawer'
 import JobCreateDrawer from './components/JobCreateDrawer'
 import type { Job } from './types/job.types'
 import type { JobStatus } from './types/jobStatus.types'
-import { JOBS_VIEW_STATE_KEY, restoreJobsViewState, type JobsViewState } from './types/jobsViewState.types'
+import { DEFAULT_JOBS_VIEW_STATE, getJobsViewStateKey, restoreJobsViewState, type JobsViewState, type ScheduledJobsVisibility } from './types/jobsViewState.types'
+import { getSignedInUserInfo } from '../../auth/signedInUser'
+import PageSettingsButton from '../shared/settings/PageSettingsButton'
+import PageSettingsDialog from '../shared/settings/PageSettingsDialog'
 import './JobsScreen.css'
 import { useNavigate } from 'react-router-dom'
 
 export default function JobsScreen() {
     const navigate = useNavigate()
+    const { accounts } = useMsal()
+    const signedInUser = getSignedInUserInfo(accounts[0])
+    const storageKey = signedInUser ? getJobsViewStateKey(signedInUser.storageId) : null
     const {
         jobs, equipmentList, mechanics, sites, customers, siteContacts,
         scheduleOptions,
@@ -31,12 +38,17 @@ export default function JobsScreen() {
     const [editingJob, setEditingJob] = useState<Job | null>(null)
     const [editingInitialTab, setEditingInitialTab] = useState<'details' | 'jobcard'>('details')
     const [isCreatingJob, setIsCreatingJob] = useState(false)
-    const [viewState, setViewState] = useState<JobsViewState>(restoreJobsViewState)
+    const [viewState, setViewState] = useState<JobsViewState>(() => storageKey
+        ? restoreJobsViewState(storageKey, true)
+        : DEFAULT_JOBS_VIEW_STATE)
+    const [settingsOpen, setSettingsOpen] = useState(false)
+    const [draftScheduledVisibility, setDraftScheduledVisibility] = useState<ScheduledJobsVisibility>(viewState.scheduledJobsVisibility)
     const visibleStatuses = viewState.visibleStatuses
 
     useEffect(() => {
-        sessionStorage.setItem(JOBS_VIEW_STATE_KEY, JSON.stringify(viewState))
-    }, [viewState])
+        if (!storageKey) return
+        sessionStorage.setItem(storageKey, JSON.stringify(viewState))
+    }, [storageKey, viewState])
 
     const createQuoteForJob = (jobId: string) => {
         setEditingJob(null)
@@ -58,6 +70,12 @@ export default function JobsScreen() {
     }
 
     const filteredJobs = jobs.filter((job) => visibleStatuses.includes(job.gr_status))
+    const scheduledSettingLabels: Record<ScheduledJobsVisibility, string> = {
+        all: 'All scheduled Jobs',
+        today: 'Scheduled today',
+        'today-tomorrow': 'Scheduled today and tomorrow',
+        'this-week': 'Scheduled this week',
+    }
     const sharedDrawerProps = {
         mechanics,
         equipmentList,
@@ -75,14 +93,21 @@ export default function JobsScreen() {
         <div className="jobs-page">
             <header className="jobs-page-header">
                 <h1>Jobs</h1>
-                <button
-                    className="jobs-create-button"
-                    type="button"
-                    onClick={() => setIsCreatingJob(true)}
-                    disabled={isLoading || Boolean(loadError)}
-                >
-                    + Create job
-                </button>
+                <div className="jobs-page-header-actions">
+                    <PageSettingsButton
+                        active={viewState.scheduledJobsVisibility !== 'all'}
+                        title={viewState.scheduledJobsVisibility === 'all' ? 'Settings' : `Settings: ${scheduledSettingLabels[viewState.scheduledJobsVisibility]}`}
+                        onClick={() => { setDraftScheduledVisibility(viewState.scheduledJobsVisibility); setSettingsOpen(true) }}
+                    />
+                    <button
+                        className="jobs-create-button"
+                        type="button"
+                        onClick={() => setIsCreatingJob(true)}
+                        disabled={isLoading || Boolean(loadError)}
+                    >
+                        + Create job
+                    </button>
+                </div>
             </header>
 
             {isLoading ? (
@@ -124,8 +149,35 @@ export default function JobsScreen() {
                     onEditJob={setEditingJob}
                     mechanics={mechanics}
                     officeUpdates={officeUpdates}
+                    scheduleOptions={scheduleOptions}
                 />
             )}
+
+            <PageSettingsDialog
+                open={settingsOpen}
+                title="Settings"
+                description="Choose which scheduled Jobs appear. Unscheduled Jobs are always shown."
+                onCancel={() => setSettingsOpen(false)}
+                onApply={() => {
+                    setViewState((current) => ({ ...current, scheduledJobsVisibility: draftScheduledVisibility }))
+                    setSettingsOpen(false)
+                }}
+            >
+                <fieldset className="jobs-scheduled-settings">
+                    <legend>Scheduled Jobs Visibility</legend>
+                    {([
+                        ['all', 'All scheduled Jobs'],
+                        ['today', 'Today only'],
+                        ['today-tomorrow', 'Today and tomorrow'],
+                        ['this-week', 'This week (Monday–Sunday)'],
+                    ] as const).map(([value, label]) => (
+                        <label key={value}>
+                            <input type="radio" name="scheduled-jobs-visibility" value={value} checked={draftScheduledVisibility === value} onChange={() => setDraftScheduledVisibility(value)} />
+                            <span>{label}</span>
+                        </label>
+                    ))}
+                </fieldset>
+            </PageSettingsDialog>
 
             {isCreatingJob && (
                 <JobCreateDrawer

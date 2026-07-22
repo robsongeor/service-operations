@@ -10,7 +10,10 @@ import {
 import './JobsTable.css'
 import { getOfficeActionLabel, jobNeedsOfficeAttention, type JobOfficeUpdate } from '../types/officeAction.types'
 import type { JobsViewState } from '../types/jobsViewState.types'
+import type { JobScheduleOption } from '../types/jobSchedule.types'
+import { jobMatchesScheduledVisibility } from '../utils/scheduledJobsVisibility'
 import SearchableMechanicSelect from './SearchableMechanicSelect'
+import JobsTableSortIcon from './JobsTableSortIcon'
 import {
     buildMailtoUrl,
     buildTechnicianEmailBody,
@@ -37,6 +40,7 @@ type Props = {
     onEditJob: (job: Job) => void
     mechanics: Mechanic[]
     officeUpdates: JobOfficeUpdate[]
+    scheduleOptions: JobScheduleOption[]
 }
 
 const createdDateFormatter = new Intl.DateTimeFormat('en-NZ', {
@@ -56,8 +60,9 @@ export default function JobsTable({
     onEditJob,
     mechanics,
     officeUpdates,
+    scheduleOptions,
 }: Props) {
-    const { searchText, selectedJobType, officeAttentionFilter, sort } = viewState
+    const { searchText, selectedJobType, officeAttentionFilter, scheduledJobsVisibility, sort } = viewState
     const [selectedRowId, setSelectedRowId] = useState<string | null>(null)
     const [openMechanicJobId, setOpenMechanicJobId] = useState<string | null>(null)
     const [savingMechanicJobId, setSavingMechanicJobId] = useState<string | null>(null)
@@ -72,6 +77,7 @@ export default function JobsTable({
 
     const jobsForSelectedType = useMemo(() => jobs.filter((job) => {
         if (selectedJobType !== 'all' && job.gr_jobtype !== selectedJobType) return false
+        if (!jobMatchesScheduledVisibility(job.gr_jobid, scheduleOptions, scheduledJobsVisibility)) return false
         const needsAttention = jobNeedsOfficeAttention(job)
         const matchesOfficeActionFilter = officeAttentionFilter === 'all'
             ? true
@@ -79,7 +85,7 @@ export default function JobsTable({
                 ? needsAttention
                 : !needsAttention
         return matchesOfficeActionFilter
-    }), [jobs, officeAttentionFilter, selectedJobType])
+    }), [jobs, officeAttentionFilter, scheduleOptions, scheduledJobsVisibility, selectedJobType])
 
     const matchingJobs = useMemo(() => {
         const search = searchText.trim().toLowerCase()
@@ -119,28 +125,38 @@ export default function JobsTable({
     }, [jobsForSelectedType, latestOfficeUpdates, searchText])
 
     const sortedJobs = useMemo(() => {
+        const collator = new Intl.Collator('en-NZ', { sensitivity: 'base', numeric: true })
+        const compareText = (first?: string | null, second?: string | null) => {
+            const firstValue = first?.trim() ?? ''
+            const secondValue = second?.trim() ?? ''
+            if (!firstValue && !secondValue) return 0
+            if (!firstValue) return 1
+            if (!secondValue) return -1
+            const difference = collator.compare(firstValue, secondValue)
+            return sort.direction === 'ascending' ? difference : -difference
+        }
         return [...matchingJobs].sort((firstJob, secondJob) => {
+            let primaryDifference: number
             if (sort.column === 'status') {
-                const statusDifference =
+                primaryDifference =
                     JOB_STATUS_PRIORITY[firstJob.gr_status] -
                     JOB_STATUS_PRIORITY[secondJob.gr_status]
-
-                if (statusDifference !== 0) {
-                    return sort.direction === 'ascending' ? statusDifference : -statusDifference
-                }
+                if (sort.direction === 'descending') primaryDifference *= -1
+            } else if (sort.column === 'customer') {
+                primaryDifference = compareText(firstJob.gr_Site?.gr_Customer?.gr_name, secondJob.gr_Site?.gr_Customer?.gr_name)
+            } else if (sort.column === 'mechanic') {
+                primaryDifference = compareText(firstJob.gr_Mechanic?.gr_name, secondJob.gr_Mechanic?.gr_name)
+            } else {
+                primaryDifference = new Date(firstJob.createdon).getTime() - new Date(secondJob.createdon).getTime()
+                if (sort.direction === 'descending') primaryDifference *= -1
             }
-
-            const dateDifference =
-                new Date(firstJob.createdon).getTime() -
-                new Date(secondJob.createdon).getTime()
-
-            return sort.direction === 'ascending' && sort.column === 'created'
-                ? dateDifference
-                : -dateDifference
+            if (primaryDifference !== 0) return primaryDifference
+            const createdDifference = new Date(secondJob.createdon).getTime() - new Date(firstJob.createdon).getTime()
+            return createdDifference || collator.compare(secondJob.gr_jobnumber ?? '', firstJob.gr_jobnumber ?? '')
         })
     }, [matchingJobs, sort])
 
-    const toggleSort = (column: 'created' | 'status') => {
+    const toggleSort = (column: JobsViewState['sort']['column']) => {
         const nextSort = sort.column !== column
             ? { column, direction: column === 'created' ? 'descending' as const : 'ascending' as const }
             : { column, direction: sort.direction === 'ascending' ? 'descending' as const : 'ascending' as const }
@@ -181,6 +197,37 @@ export default function JobsTable({
             console.error(error)
             setCopyFeedback({
                 message: 'The row could not be copied. Check clipboard permission and try again.',
+                isError: true,
+            })
+        }
+
+        window.setTimeout(() => setCopyFeedback(null), 2600)
+    }
+
+    const copyJobForSpreadsheet = async (job: Job) => {
+        const jobNumber = spreadsheetCell(job.gr_jobnumber)
+        if (!jobNumber) return
+
+        const mechanic = spreadsheetCell(job.gr_Mechanic?.gr_name)
+        const spreadsheetRow = [
+            mechanic,
+            jobNumber,
+            spreadsheetCell(job.gr_Equipment?.gr_fleet) || 'W/S',
+            spreadsheetCell(job.gr_Site?.gr_Customer?.gr_name),
+            '',
+            mechanic,
+        ].join('\t') + '\n'
+
+        try {
+            await navigator.clipboard.writeText(spreadsheetRow)
+            setCopyFeedback({
+                message: 'Copied Job to clipboard.',
+                isError: false,
+            })
+        } catch (error) {
+            console.error(error)
+            setCopyFeedback({
+                message: 'Unable to copy Job.',
                 isError: true,
             })
         }
@@ -285,34 +332,28 @@ export default function JobsTable({
                                     className="jobs-table-sort"
                                     onClick={() => toggleSort('created')}
                                     title="Sort by created date"
+                                    aria-label="Sort by created date"
                                 >
                                     Created
-                                    <span aria-hidden="true">
-                                        {sort.column === 'created'
-                                            ? sort.direction === 'descending' ? '↓' : '↑'
-                                            : '↕'}
-                                    </span>
+                                    <JobsTableSortIcon active={sort.column === 'created'} direction={sort.direction} />
                                 </button>
                             </th>
                             <th>Type</th>
                             <th>Equipment</th>
-                            <th>Customer / site</th>
+                            <th aria-sort={sort.column === 'customer' ? sort.direction : 'none'}><button type="button" className="jobs-table-sort" onClick={() => toggleSort('customer')} title="Sort by customer" aria-label="Sort by customer">Customer / site <JobsTableSortIcon active={sort.column === 'customer'} direction={sort.direction} /></button></th>
                             <th>Description</th>
                             <th>Contact</th>
-                            <th>Mechanic</th>
+                            <th aria-sort={sort.column === 'mechanic' ? sort.direction : 'none'}><button type="button" className="jobs-table-sort" onClick={() => toggleSort('mechanic')} title="Sort by mechanic" aria-label="Sort by mechanic">Mechanic <JobsTableSortIcon active={sort.column === 'mechanic'} direction={sort.direction} /></button></th>
                             <th aria-sort={sort.column === 'status' ? sort.direction : 'none'}>
                                 <button
                                     type="button"
                                     className="jobs-table-sort"
                                     onClick={() => toggleSort('status')}
                                     title="Sort by status priority"
+                                    aria-label="Sort by status priority"
                                 >
                                     Status
-                                    <span aria-hidden="true">
-                                        {sort.column === 'status'
-                                            ? sort.direction === 'ascending' ? '↓' : '↑'
-                                            : '↕'}
-                                    </span>
+                                    <JobsTableSortIcon active={sort.column === 'status'} direction={sort.direction} />
                                 </button>
                             </th>
                             <th>Order</th>
@@ -325,13 +366,14 @@ export default function JobsTable({
                         {matchingJobs.length === 0 && (
                             <tr>
                                 <td colSpan={13} className="jobs-table-empty">
-                                    {searchText.trim() ? 'No jobs match your search.' : 'No jobs match the selected filters.'}
+                                    No Jobs match the current search, filters, and page settings.
                                 </td>
                             </tr>
                         )}
 
                         {sortedJobs.map((job) => {
                             const latestOfficeUpdate = latestOfficeUpdates[job.gr_jobid]
+                            const canCopyForSpreadsheet = Boolean(job.gr_jobnumber?.trim())
                             const mechanicEmail = job.gr_Mechanic?.gr_email?.trim() ?? ''
                             const canEmailTechnician = Boolean(job.gr_Mechanic) && isValidTechnicianEmail(mechanicEmail)
                             const emailTooltip = !job.gr_Mechanic
@@ -493,6 +535,21 @@ export default function JobsTable({
                                             onClick={() => onEditJob(job)}
                                         >
                                             Edit
+                                        </button>
+                                        <button
+                                            className="jobs-table-action jobs-spreadsheet-copy-action"
+                                            type="button"
+                                            title={canCopyForSpreadsheet
+                                                ? 'Copy for Spreadsheet'
+                                                : 'A Job Number is required before this Job can be copied.'}
+                                            aria-label="Copy Job details for spreadsheet"
+                                            onClick={() => void copyJobForSpreadsheet(job)}
+                                            disabled={!canCopyForSpreadsheet}
+                                        >
+                                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                                <rect x="8" y="8" width="11" height="12" rx="2" />
+                                                <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h2" />
+                                            </svg>
                                         </button>
                                         <button
                                             className="jobs-table-action jobs-technician-email-action"
