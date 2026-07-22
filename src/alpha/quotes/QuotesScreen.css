@@ -31,7 +31,7 @@
     padding: 6px 10px; border-radius: 999px; background: #edf2ef; color: #59665f;
     font-size: .7rem; font-weight: 700;
 }
-.quotes-toolbar { margin-bottom: 12px; }
+.quotes-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .quotes-toolbar label { display: block; width: min(430px,100%); }
 .quotes-toolbar input, .quote-field input, .quote-field select, .quote-field textarea {
     width: 100%; box-sizing: border-box; border: 1px solid #ced7d2; border-radius: 8px;
@@ -41,15 +41,27 @@
 .quotes-toolbar input:focus, .quote-field input:focus, .quote-field select:focus, .quote-field textarea:focus {
     border-color: #43877a; outline: 3px solid rgba(23,111,102,.12);
 }
+.quotes-status-filter { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
+.quotes-status-filter button { min-height: 29px; padding: 0 10px; border: 1px solid #d4dad6; border-radius: 999px; background: #fff; color: #626b66; font: inherit; font-size: .68rem; font-weight: 700; cursor: pointer; }
+.quotes-status-filter button.active { border-color: #559181; background: #edf7f3; color: #176f66; }
+.quotes-status-filter button:focus-visible, .quotes-tabs button:focus-visible { outline: 2px solid #55796d; outline-offset: 2px; }
+.quotes-tabs { display: flex; align-items: flex-end; gap: 2px; padding: 0 12px; border: 1px solid #dfe5e1; border-bottom: 0; border-radius: 13px 13px 0 0; background: #fff; }
+.quotes-tabs button { min-height: 38px; padding: 0 15px; border: 1px solid transparent; border-bottom: 3px solid transparent; border-radius: 8px 8px 0 0; background: transparent; color: #68706b; font: inherit; font-size: .74rem; font-weight: 650; cursor: pointer; }
+.quotes-tabs button.active { border-color: #dfe4e1; border-bottom-color: #202421; background: #f4f5f2; color: #202421; }
+.quotes-tabs + .quotes-table-shell, .quotes-tabs + .quotes-data-state { border-radius: 0 0 13px 13px; }
 
 .quotes-table-shell { overflow: hidden; border: 1px solid #dfe5e1; border-radius: 13px; background: #fff; box-shadow: 0 8px 28px rgba(25,36,30,.06); }
 .quotes-table { width: 100%; border-collapse: collapse; font-size: .76rem; }
 .quotes-table th, .quotes-table td { padding: 13px 14px; border-bottom: 1px solid #e8ece9; text-align: left; }
 .quotes-table th { background: #f6f8f7; color: #68736d; font-size: .65rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.quotes-sort { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
+.quotes-sort .jobs-table-sort-icon { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; }
+.quotes-sort:focus-visible { outline: 2px solid #55796d; outline-offset: 2px; }
 .quotes-table tbody tr { cursor: pointer; }
 .quotes-table tbody tr:hover { background: #f7faf8; }
 .quotes-table tbody tr:last-child td { border-bottom: 0; }
 .quotes-table td strong, .quotes-table td small { display: block; }
+.quotes-table .quote-title { color: #1e3029; font-size: .8rem; font-weight: 800; }
 .quotes-table td small { max-width: 300px; overflow: hidden; margin-top: 3px; color: #7a847e; text-overflow: ellipsis; white-space: nowrap; }
 .quotes-money { text-align: right !important; font-variant-numeric: tabular-nums; }
 .quote-status { display: inline-block; padding: 4px 8px; border-radius: 999px; background: #eef0ef; color: #626b66; font-size: .64rem; font-weight: 750; }
@@ -62,6 +74,7 @@
 .quotes-empty, .quotes-data-state { padding: 42px 28px; text-align: center; }
 .quotes-empty h2, .quotes-data-state h2 { font-size: .95rem; }
 .quotes-empty p, .quotes-data-state p { margin-top: 6px; color: #758079; font-size: .78rem; }
+.quotes-identity-state { min-height: 130px; }
 .quotes-data-state { border: 1px solid #dfe5e1; border-radius: 13px; background: #fff; }
 .quotes-data-state-error { display: flex; align-items: center; justify-content: space-between; gap: 20px; border-color: #efcaca; background: #fffafa; text-align: left; }
 .quotes-data-state-error button { flex: 0 0 auto; padding: 9px 14px; border: 1px solid #176f66; border-radius: 8px; background: #176f66; color: #fff; font-weight: 700; cursor: pointer; }
@@ -135,6 +148,8 @@
 }
 
 @media (max-width: 700px) {
+    .quotes-toolbar { align-items: stretch; flex-direction: column; }
+    .quotes-status-filter { justify-content: flex-start; }
     .quotes-table-shell { overflow-x: auto; }
     .quotes-table { min-width: 800px; }
     .quote-form-grid { grid-template-columns: 1fr; }

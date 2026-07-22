@@ -1,4 +1,6 @@
 import type { PricingCategory } from './pricing.types'
+import type { Customer } from '../../jobs/types/customer.types'
+import type { Equipment } from '../../jobs/types/equipment.types'
 
 export const QUOTE_STATUSES = {
     DRAFT: 122830000,
@@ -17,6 +19,11 @@ export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
     [QUOTE_STATUSES.DECLINED]: 'Declined',
     [QUOTE_STATUSES.EXPIRED]: 'Expired',
 }
+
+export const QUOTE_STATUS_OPTIONS = Object.entries(QUOTE_STATUS_LABELS).map(([value, label]) => ({
+    value: Number(value) as QuoteStatus,
+    label,
+}))
 
 export type QuoteJob = {
     gr_jobid: string
@@ -53,8 +60,18 @@ export type Quote = {
     gr_gst: number
     gr_total: number
     createdon: string
-    _gr_job_value: string
+    _gr_job_value: string | null
+    _gr_customer_value?: string | null
+    _gr_equipment_value?: string | null
+    _createdby_value?: string | null
     gr_Job?: QuoteJob
+    gr_Customer?: Customer
+    gr_Equipment?: Equipment
+    createdby?: {
+        systemuserid: string
+        fullname: string
+        azureactivedirectoryobjectid?: string | null
+    }
 }
 
 export type QuoteLine = {
@@ -87,6 +104,8 @@ export type QuoteLineInput = {
 export type QuoteInput = {
     name: string
     jobId: string
+    customerId: string
+    equipmentId: string
     status: QuoteStatus
     revision: number
     quoteDate: string

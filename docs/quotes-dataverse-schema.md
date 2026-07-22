@@ -4,7 +4,7 @@ This document defines the first version of quotes for Service Operations.
 
 ## Product rules
 
-- Every quote is linked to a job.
+- Every quote is linked to at least one of a job, customer, or equipment item.
 - A job can have multiple quotes and revisions.
 - Quote line prices are exclusive of GST.
 - GST defaults to 15% and is calculated from the subtotal.
@@ -81,7 +81,9 @@ Expected entity set: `gr_quotes`.
 | --- | --- | --- | --- | --- |
 | Name | `gr_name` | Text | Yes | Primary name; can match quote number/title |
 | Quote number | `gr_quotenumber` | Autonumber | Yes | Suggested format `Q-{SEQNUM:5}` |
-| Job | `gr_Job` | Lookup to Job | Yes | Parent job |
+| Job | `gr_Job` | Lookup to Job | No | Optional linked job |
+| Customer | `gr_Customer` | Lookup to Customer | No | Optional direct customer relationship |
+| Equipment | `gr_Equipment` | Lookup to Equipment | No | Optional direct equipment relationship |
 | Quote status | `gr_quotestatus` | Choice | Yes | Default Draft |
 | Revision | `gr_revision` | Whole number | Yes | Default `1` |
 | Quote date | `gr_quotedate` | Date only | Yes | Default current date in the app |
@@ -92,7 +94,26 @@ Expected entity set: `gr_quotes`.
 | GST | `gr_gst` | Currency | Yes | Rounded to two decimals |
 | Total | `gr_total` | Currency | Yes | Subtotal plus GST |
 
-Customer, site, contact, and equipment are displayed from the linked job for the MVP. A later PDF/versioning phase can add snapshot fields if historical documents must remain unchanged after job details are edited.
+Customer, site, contact, and equipment can be selected directly or displayed from the linked job. A later PDF/versioning phase can add snapshot fields if historical documents must remain unchanged after job details are edited.
+
+## Independent quote relationships
+
+| Table | Display name | Recommended schema name | Type | Required | Lookup target | Cardinality | Purpose | Backfill |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Quote (`gr_quote`) | Customer | `gr_Customer` | Lookup | Optional | Customer (`gr_customer`) | Many Quotes to one Customer | Allows a Quote to exist for a Customer without a Job or Equipment | Populate from the linked Job Site Customer where historically accurate |
+| Quote (`gr_quote`) | Equipment | `gr_Equipment` | Lookup | Optional | Equipment (`gr_equipment`) | Many Quotes to one Equipment | Allows a Quote to exist for Equipment without a Job | Populate from the linked Job Equipment where historically accurate |
+
+Change the existing Quote Job lookup (`gr_Job`) from required to optional. Application
+validation must then require at least one of Job, Equipment, or Customer. Existing records
+already have Job and require no relationship backfill to remain valid.
+
+Quote ownership uses the built-in Dataverse Created By relationship. The app matches its
+signed-in Entra object ID (`oid` claim) to Created By's `azureactivedirectoryobjectid`, so it
+does not need a custom Author column or display-name matching. Historical Quotes without a
+matching Created By identity simply do not appear in My Quotes.
+
+Quote list reads select Customer, Equipment, and Created By with minimal expanded fields.
+Create and update payloads bind or clear Customer, Equipment, and Job as selected.
 
 ## Quote lines table
 

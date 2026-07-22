@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
+import { useActiveMsalAccount } from '../../../auth/useActiveMsalAccount'
+import { fetchCustomers } from '../../jobs/services/customersApi'
+import { fetchEquipment } from '../../jobs/services/equipmentApi'
+import type { Customer } from '../../jobs/types/customer.types'
+import type { Equipment } from '../../jobs/types/equipment.types'
 import { fetchPricingItems } from '../services/pricingApi'
 import {
     createQuote as createQuoteApi,
@@ -12,10 +17,12 @@ import type { PricingItem } from '../types/pricing.types'
 import type { Quote, QuoteInput, QuoteJob, QuoteLine } from '../types/quote.types'
 
 export function useQuotes() {
-    const { instance, accounts } = useMsal()
-    const account = accounts[0]
+    const { instance } = useMsal()
+    const account = useActiveMsalAccount()
     const [quotes, setQuotes] = useState<Quote[]>([])
     const [jobs, setJobs] = useState<QuoteJob[]>([])
+    const [customers, setCustomers] = useState<Customer[]>([])
+    const [equipment, setEquipment] = useState<Equipment[]>([])
     const [pricingItems, setPricingItems] = useState<PricingItem[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [loadError, setLoadError] = useState('')
@@ -25,7 +32,7 @@ export function useQuotes() {
     const getAccessToken = useCallback(async () => {
         const response = await instance.acquireTokenSilent({
             scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`],
-            account,
+            account: account ?? undefined,
         })
         return response.accessToken
     }, [account, instance])
@@ -36,14 +43,18 @@ export function useQuotes() {
         setLoadError('')
         try {
             const token = await getAccessToken()
-            const [nextQuotes, nextJobs, nextPricingItems] = await Promise.all([
+            const [nextQuotes, nextJobs, nextPricingItems, nextCustomers, nextEquipment] = await Promise.all([
                 fetchQuotes(token),
                 fetchQuoteJobs(token),
                 fetchPricingItems(token),
+                fetchCustomers(token),
+                fetchEquipment(token),
             ])
             setQuotes(nextQuotes)
             setJobs(nextJobs)
             setPricingItems(nextPricingItems.filter((item) => item.statecode === 0))
+            setCustomers(nextCustomers)
+            setEquipment(nextEquipment.filter((item) => item.statecode !== 1))
         } catch (error) {
             setLoadError(error instanceof Error ? error.message : 'Quotes could not be loaded.')
         } finally {
@@ -59,15 +70,19 @@ export function useQuotes() {
             setLoadError('')
             try {
                 const token = await getAccessToken()
-                const [nextQuotes, nextJobs, nextPricingItems] = await Promise.all([
+                const [nextQuotes, nextJobs, nextPricingItems, nextCustomers, nextEquipment] = await Promise.all([
                     fetchQuotes(token),
                     fetchQuoteJobs(token),
                     fetchPricingItems(token),
+                    fetchCustomers(token),
+                    fetchEquipment(token),
                 ])
                 if (cancelled) return
                 setQuotes(nextQuotes)
                 setJobs(nextJobs)
                 setPricingItems(nextPricingItems.filter((item) => item.statecode === 0))
+                setCustomers(nextCustomers)
+                setEquipment(nextEquipment.filter((item) => item.statecode !== 1))
             } catch (error) {
                 if (!cancelled) {
                     setLoadError(error instanceof Error ? error.message : 'Quotes could not be loaded.')
@@ -108,6 +123,8 @@ export function useQuotes() {
     return {
         quotes,
         jobs,
+        customers,
+        equipment,
         pricingItems,
         isLoading,
         isSaving,

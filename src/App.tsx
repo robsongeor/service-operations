@@ -36,7 +36,7 @@ function App() {
           <Route path="/equipment" element={<EquipmentScreen />} />
           <Route path="/jobs" element={<JobsScreen key={signedInUser?.storageId || 'account-pending'} />} />
           <Route path="/scheduling" element={<SchedulingScreen />} />
-          <Route path="/quotes" element={<QuotesScreen />} />
+          <Route path="/quotes" element={<QuotesScreen key={signedInUser?.storageId || 'account-pending'} />} />
           <Route path="/pricing" element={<PricingScreen />} />
           <Route path="/job-api-test" element={<JobApiTestScreen />} />
         </Routes>

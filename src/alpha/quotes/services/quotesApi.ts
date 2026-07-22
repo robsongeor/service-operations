@@ -44,10 +44,11 @@ export async function fetchQuotes(accessToken: string): Promise<Quote[]> {
     const fields = [
         'gr_quoteid', 'gr_name', 'gr_quotenumber', 'gr_quotestatus', 'gr_revision',
         'gr_quotedate', 'gr_validuntil', 'gr_notes', 'gr_gstrate', 'gr_subtotal',
-        'gr_gst', 'gr_total', 'createdon', '_gr_job_value',
+        'gr_gst', 'gr_total', 'createdon', '_gr_job_value', '_gr_customer_value',
+        '_gr_equipment_value', '_createdby_value',
     ].join(',')
     const response = await fetch(
-        `${API_URL}/gr_quotes?$select=${fields}&$expand=gr_Job($select=gr_jobid,gr_jobnumber,gr_description;$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_serial),gr_Site($select=gr_siteid,gr_name;$expand=gr_Customer($select=gr_customerid,gr_name)))&$orderby=createdon desc`,
+        `${API_URL}/gr_quotes?$select=${fields}&$expand=gr_Job($select=gr_jobid,gr_jobnumber,gr_description;$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_serial),gr_Site($select=gr_siteid,gr_name;$expand=gr_Customer($select=gr_customerid,gr_name))),gr_Customer($select=gr_customerid,gr_name),gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_serial;$expand=gr_Site($select=gr_siteid,gr_name;$expand=gr_Customer($select=gr_customerid,gr_name))),createdby($select=systemuserid,fullname,azureactivedirectoryobjectid)&$orderby=createdon desc`,
         { cache: 'no-store', headers: headers(accessToken) },
     )
     await ensureSuccess(response, 'Failed to load quotes')
@@ -76,7 +77,9 @@ export async function fetchQuoteLines(
 function quotePayload(quote: QuoteInput) {
     return {
         gr_name: quote.name.trim(),
-        'gr_Job@odata.bind': `/gr_jobs(${quote.jobId})`,
+        'gr_Job@odata.bind': quote.jobId ? `/gr_jobs(${quote.jobId})` : null,
+        'gr_Customer@odata.bind': quote.customerId ? `/gr_customers(${quote.customerId})` : null,
+        'gr_Equipment@odata.bind': quote.equipmentId ? `/gr_equipments(${quote.equipmentId})` : null,
         gr_quotestatus: quote.status,
         gr_revision: quote.revision,
         gr_quotedate: quote.quoteDate,

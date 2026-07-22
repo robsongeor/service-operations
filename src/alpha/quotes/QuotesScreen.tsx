@@ -2,13 +2,20 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import QuoteEditorDialog from './components/QuoteEditorDialog'
 import { useQuotes } from './hooks/useQuotes'
-import { QUOTE_STATUS_LABELS, type Quote, type QuoteInput, type QuoteLine } from './types/quote.types'
+import { QUOTE_STATUS_LABELS, QUOTE_STATUS_OPTIONS, type Quote, type QuoteInput, type QuoteLine, type QuoteStatus } from './types/quote.types'
+import { DEFAULT_QUOTES_VIEW_STATE, getQuotesViewStateKey, restoreQuotesViewState, type QuotesViewState } from './types/quotesViewState.types'
+import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
+import { getSignedInUserInfo } from '../../auth/signedInUser'
+import JobsTableSortIcon from '../jobs/components/JobsTableSortIcon'
 import './QuotesScreen.css'
 
 const money = new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' })
 const date = new Intl.DateTimeFormat('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })
 
 export default function QuotesScreen() {
+    const activeAccount = useActiveMsalAccount()
+    const signedInUser = getSignedInUserInfo(activeAccount)
+    const viewStorageKey = signedInUser ? getQuotesViewStateKey(signedInUser.storageId) : null
     const [searchParams, setSearchParams] = useSearchParams()
     const requestedNewJobId = searchParams.get('new') === '1'
         ? searchParams.get('jobId') ?? undefined
@@ -17,6 +24,8 @@ export default function QuotesScreen() {
     const {
         quotes,
         jobs,
+        customers,
+        equipment,
         pricingItems,
         isLoading,
         isSaving,
@@ -34,19 +43,45 @@ export default function QuotesScreen() {
     const [isOpening, setIsOpening] = useState(false)
     const [openError, setOpenError] = useState('')
     const [search, setSearch] = useState('')
+    const [viewState, setViewState] = useState<QuotesViewState>(() => viewStorageKey
+        ? restoreQuotesViewState(viewStorageKey)
+        : DEFAULT_QUOTES_VIEW_STATE)
     const openedQuoteId = useRef<string | null>(null)
+    const myQuotesAvailable = Boolean(signedInUser?.entraObjectId)
 
     const visibleQuotes = useMemo(() => {
         const query = search.trim().toLowerCase()
-        if (!query) return quotes
-        return quotes.filter((quote) => [
-            quote.gr_quotenumber,
-            quote.gr_name,
-            quote.gr_Job?.gr_jobnumber,
-            quote.gr_Job?.gr_Site?.gr_Customer?.gr_name,
-            quote.gr_Job?.gr_Equipment?.gr_fleet,
-        ].some((value) => value?.toLowerCase().includes(query)))
-    }, [quotes, search])
+        const currentUserObjectId = signedInUser?.entraObjectId?.toLowerCase()
+        return quotes
+            .filter((quote) => viewState.tab !== 'mine' || Boolean(currentUserObjectId && quote.createdby?.azureactivedirectoryobjectid?.toLowerCase() === currentUserObjectId))
+            .filter((quote) => viewState.status === 'all' || quote.gr_quotestatus === viewState.status)
+            .filter((quote) => !query || [
+                quote.gr_quotenumber,
+                quote.gr_name,
+                quote.gr_Customer?.gr_name,
+                quote.gr_Equipment?.gr_fleet,
+                quote.gr_Equipment?.gr_serial,
+                quote.gr_Job?.gr_jobnumber,
+                quote.gr_Job?.gr_Site?.gr_Customer?.gr_name,
+                quote.gr_Job?.gr_Equipment?.gr_fleet,
+            ].some((value) => value?.toLowerCase().includes(query)))
+            .sort((left, right) => {
+                const leftTime = left.gr_quotedate ? Date.parse(left.gr_quotedate) : Number.NaN
+                const rightTime = right.gr_quotedate ? Date.parse(right.gr_quotedate) : Number.NaN
+                if (Number.isNaN(leftTime)) return Number.isNaN(rightTime) ? 0 : 1
+                if (Number.isNaN(rightTime)) return -1
+                return viewState.dateSort === 'ascending' ? leftTime - rightTime : rightTime - leftTime
+            })
+    }, [quotes, search, signedInUser?.entraObjectId, viewState])
+
+    useEffect(() => {
+        if (!viewStorageKey) return
+        try {
+            sessionStorage.setItem(viewStorageKey, JSON.stringify(viewState))
+        } catch {
+            // Quotes remains usable when browser storage is unavailable.
+        }
+    }, [viewState, viewStorageKey])
 
     const openNew = () => {
         setSearchParams({})
@@ -131,6 +166,15 @@ export default function QuotesScreen() {
                     <span className="sr-only">Search quotes</span>
                     <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search quote, job, customer or fleet" />
                 </label>
+                <div className="quotes-status-filter" aria-label="Filter quotes by status">
+                    <button type="button" className={viewState.status === 'all' ? 'active' : ''} aria-pressed={viewState.status === 'all'} onClick={() => setViewState((current) => ({ ...current, status: 'all' }))}>All statuses</button>
+                    {QUOTE_STATUS_OPTIONS.map((status) => <button key={status.value} type="button" className={viewState.status === status.value ? 'active' : ''} aria-pressed={viewState.status === status.value} onClick={() => setViewState((current) => ({ ...current, status: status.value as QuoteStatus }))}>{status.label}</button>)}
+                </div>
+            </div>
+
+            <div className="quotes-tabs" role="tablist" aria-label="Quote ownership view">
+                <button type="button" role="tab" aria-selected={viewState.tab === 'all'} className={viewState.tab === 'all' ? 'active' : ''} onClick={() => setViewState((current) => ({ ...current, tab: 'all' }))}>All Quotes</button>
+                <button type="button" role="tab" aria-selected={viewState.tab === 'mine'} className={viewState.tab === 'mine' ? 'active' : ''} onClick={() => setViewState((current) => ({ ...current, tab: 'mine' }))}>My Quotes</button>
             </div>
 
             {openError && <p className="quotes-page-error" role="alert">{openError}</p>}
@@ -143,14 +187,19 @@ export default function QuotesScreen() {
                     <button type="button" onClick={() => void reload()}>Try again</button>
                 </section>
             ) : (
-                <div className="quotes-table-shell">
+                viewState.tab === 'mine' && !myQuotesAvailable ? (
+                    <section className="quotes-data-state quotes-identity-state">
+                        <h2>My Quotes is not available yet</h2>
+                        <p>The signed-in Entra user ID is not available, so Quotes cannot be matched safely to {signedInUser?.displayName ?? 'the signed-in user'}.</p>
+                    </section>
+                ) : <div className="quotes-table-shell">
                     <table className="quotes-table">
-                        <thead><tr><th>Quote</th><th>Job / customer</th><th>Date</th><th>Status</th><th>Revision</th><th className="quotes-money">Total</th></tr></thead>
+                        <thead><tr><th>Quote</th><th>Job / customer</th><th aria-sort={viewState.dateSort}><button type="button" className="quotes-sort" onClick={() => setViewState((current) => ({ ...current, dateSort: current.dateSort === 'ascending' ? 'descending' : 'ascending' }))}>Date <JobsTableSortIcon active direction={viewState.dateSort} /></button></th><th>Status</th><th>Revision</th><th className="quotes-money">Total</th></tr></thead>
                         <tbody>
                             {visibleQuotes.map((quote) => (
                                 <tr key={quote.gr_quoteid} onClick={() => void openExisting(quote)}>
-                                    <td><strong>{quote.gr_quotenumber || 'Pending number'}</strong><small>{quote.gr_name}</small></td>
-                                    <td><strong>{quote.gr_Job?.gr_jobnumber || 'Unknown job'}</strong><small>{quote.gr_Job?.gr_Site?.gr_Customer?.gr_name || quote.gr_Job?.gr_Equipment?.gr_fleet || 'No customer details'}</small></td>
+                                    <td><strong className="quote-title">{quote.gr_name || 'Untitled quote'}</strong><small>{quote.gr_quotenumber || 'Pending number'}</small></td>
+                                    <td><strong>{quote.gr_Job?.gr_jobnumber || quote.gr_Customer?.gr_name || quote.gr_Equipment?.gr_fleet || 'No linked record'}</strong><small>{quote.gr_Customer?.gr_name || quote.gr_Equipment?.gr_fleet || quote.gr_Job?.gr_Site?.gr_Customer?.gr_name || quote.gr_Job?.gr_Equipment?.gr_fleet || 'No customer or equipment details'}</small></td>
                                     <td>{quote.gr_quotedate ? date.format(new Date(`${quote.gr_quotedate.slice(0, 10)}T00:00:00`)) : '—'}</td>
                                     <td><span className={`quote-status status-${quote.gr_quotestatus}`}>{QUOTE_STATUS_LABELS[quote.gr_quotestatus] ?? 'Unknown'}</span></td>
                                     <td>Rev {quote.gr_revision}</td>
@@ -172,6 +221,8 @@ export default function QuotesScreen() {
                     quote={editingQuote}
                     existingLines={editingLines}
                     jobs={jobs}
+                    customers={customers}
+                    equipment={equipment}
                     pricingItems={pricingItems}
                     initialJobId={requestedNewJobId}
                     isSaving={isSaving}

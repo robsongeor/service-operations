@@ -7,7 +7,7 @@ import {
 } from '../types/pricing.types'
 import {
     QUOTE_STATUSES,
-    QUOTE_STATUS_LABELS,
+    QUOTE_STATUS_OPTIONS,
     type Quote,
     type QuoteInput,
     type QuoteJob,
@@ -16,6 +16,9 @@ import {
     type QuoteStatus,
 } from '../types/quote.types'
 import { buildQuoteTableClipboard, copyQuoteTable, isCopyableQuoteLine } from '../utils/quoteTableClipboard'
+import SearchableSelect, { type SearchableSelectOption } from '../../shared/searchable-select/SearchableSelect'
+import type { Customer } from '../../jobs/types/customer.types'
+import type { Equipment } from '../../jobs/types/equipment.types'
 
 type EditableLine = QuoteLineInput & { key: string }
 
@@ -23,6 +26,8 @@ type QuoteEditorDialogProps = {
     quote: Quote | null
     existingLines: QuoteLine[]
     jobs: QuoteJob[]
+    customers: Customer[]
+    equipment: Equipment[]
     pricingItems: PricingItem[]
     initialJobId?: string
     isSaving: boolean
@@ -90,6 +95,8 @@ export default function QuoteEditorDialog({
     quote,
     existingLines,
     jobs,
+    customers,
+    equipment,
     pricingItems,
     initialJobId,
     isSaving,
@@ -102,6 +109,8 @@ export default function QuoteEditorDialog({
         quote?.gr_name ?? (initialJob ? `Quote for ${jobLabel(initialJob)}` : ''),
     )
     const [jobId, setJobId] = useState(quote?._gr_job_value ?? initialJobId ?? '')
+    const [customerId, setCustomerId] = useState(quote?._gr_customer_value ?? '')
+    const [equipmentId, setEquipmentId] = useState(quote?._gr_equipment_value ?? '')
     const [status, setStatus] = useState<QuoteStatus>(quote?.gr_quotestatus ?? QUOTE_STATUSES.DRAFT)
     const [revision, setRevision] = useState(quote?.gr_revision ?? 1)
     const [quoteDate, setQuoteDate] = useState(quote?.gr_quotedate?.slice(0, 10) ?? localDate())
@@ -112,6 +121,23 @@ export default function QuoteEditorDialog({
         ? existingLines.map(existingLine)
         : [newLine(0)])
     const [copyFeedback, setCopyFeedback] = useState<'success' | 'error' | ''>('')
+    const [formError, setFormError] = useState('')
+
+    const jobOptions = useMemo<SearchableSelectOption[]>(() => jobs.map((job) => ({
+        value: job.gr_jobid,
+        label: job.gr_jobnumber || 'Job without number',
+        secondary: [job.gr_Site?.gr_Customer?.gr_name, job.gr_Equipment?.gr_fleet, job.gr_description].filter(Boolean).join(' · '),
+        searchText: jobLabel(job),
+    })), [jobs])
+    const customerOptions = useMemo<SearchableSelectOption[]>(() => customers.map((customer) => ({
+        value: customer.gr_customerid,
+        label: customer.gr_name,
+    })), [customers])
+    const equipmentOptions = useMemo<SearchableSelectOption[]>(() => equipment.map((item) => ({
+        value: item.gr_equipmentid,
+        label: item.gr_fleet || item.gr_serial || 'Equipment without fleet number',
+        secondary: [item.gr_make, item.gr_model, item.gr_serial, item.gr_Site?.gr_Customer?.gr_name].filter(Boolean).join(' · '),
+    })), [equipment])
 
     const totals = useMemo(() => {
         const extended = lines.map((line) => roundMoney(line.quantity * line.unitPrice))
@@ -169,17 +195,39 @@ export default function QuoteEditorDialog({
 
     const selectJob = (nextJobId: string) => {
         setJobId(nextJobId)
-        if (name.trim()) return
         const job = jobs.find((candidate) => candidate.gr_jobid === nextJobId)
-        if (job) setName(`Quote for ${jobLabel(job)}`)
+        if (!job) return
+        if (!name.trim()) setName(`Quote for ${jobLabel(job)}`)
+        setCustomerId(job.gr_Site?.gr_Customer?.gr_customerid ?? '')
+        setEquipmentId(job.gr_Equipment?.gr_equipmentid ?? '')
+    }
+
+    const selectEquipment = (nextEquipmentId: string) => {
+        setEquipmentId(nextEquipmentId)
+        const selectedEquipment = equipment.find((item) => item.gr_equipmentid === nextEquipmentId)
+        if (selectedEquipment) setCustomerId(selectedEquipment.gr_Site?.gr_Customer?.gr_customerid ?? '')
     }
 
     const submit = async (event: FormEvent) => {
         event.preventDefault()
-        if (lines.length === 0) return
+        setFormError('')
+        if (!name.trim()) {
+            setFormError('Enter a quote title before saving the quote.')
+            return
+        }
+        if (!jobId && !customerId && !equipmentId) {
+            setFormError('Select an equipment item, job or customer before creating the quote.')
+            return
+        }
+        if (lines.length === 0 || lines.some((line) => !line.description.trim())) {
+            setFormError('Add at least one complete quote line before saving the quote.')
+            return
+        }
         await onSave({
-            name,
+            name: name.trim(),
             jobId,
+            customerId,
+            equipmentId,
             status,
             revision,
             quoteDate,
@@ -220,17 +268,49 @@ export default function QuoteEditorDialog({
                             <span>Quote title *</span>
                             <input required value={name} onChange={(event) => setName(event.target.value)} />
                         </label>
-                        <label className="quote-field quote-field-wide">
-                            <span>Job *</span>
-                            <select required value={jobId} onChange={(event) => selectJob(event.target.value)}>
-                                <option value="">Select a job</option>
-                                {jobs.map((job) => <option key={job.gr_jobid} value={job.gr_jobid}>{jobLabel(job)}</option>)}
-                            </select>
-                        </label>
+                        <div className="quote-field-wide">
+                            <SearchableSelect
+                                id="quote-job"
+                                label="Job"
+                                value={jobId}
+                                options={jobOptions}
+                                onChange={selectJob}
+                                placeholder="Select a job"
+                                searchPlaceholder="Search job number, customer, fleet or description"
+                                emptyLabel="No matching jobs"
+                                error={formError && !jobId && !customerId && !equipmentId ? formError : ''}
+                            />
+                        </div>
+                        <div className="quote-field-wide">
+                            <SearchableSelect
+                                id="quote-customer"
+                                label="Customer"
+                                value={customerId}
+                                options={customerOptions}
+                                onChange={setCustomerId}
+                                placeholder="Select a customer"
+                                searchPlaceholder="Search customers"
+                                emptyLabel="No matching customers"
+                                error={formError && !jobId && !customerId && !equipmentId ? formError : ''}
+                            />
+                        </div>
+                        <div className="quote-field-wide">
+                            <SearchableSelect
+                                id="quote-equipment"
+                                label="Equipment"
+                                value={equipmentId}
+                                options={equipmentOptions}
+                                onChange={selectEquipment}
+                                placeholder="Select equipment"
+                                searchPlaceholder="Search fleet, serial, make or customer"
+                                emptyLabel="No matching equipment"
+                                error={formError && !jobId && !customerId && !equipmentId ? formError : ''}
+                            />
+                        </div>
                         <label className="quote-field">
                             <span>Status *</span>
                             <select value={status} onChange={(event) => setStatus(Number(event.target.value) as QuoteStatus)}>
-                                {Object.entries(QUOTE_STATUS_LABELS).map(([value, label]) => (
+                                {QUOTE_STATUS_OPTIONS.map(({ value, label }) => (
                                     <option key={value} value={value}>{label}</option>
                                 ))}
                             </select>
@@ -343,7 +423,7 @@ export default function QuoteEditorDialog({
                         </div>
                     </div>
 
-                    {error && <p className="quote-form-error" role="alert">{error}</p>}
+                    {(formError || error) && <p className="quote-form-error" role="alert">{formError || error}</p>}
 
                     <footer>
                         <div className="quote-copy-action">

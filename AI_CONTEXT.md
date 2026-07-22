@@ -831,6 +831,12 @@ The Quote editor can copy its current valid line items and existing calculated S
 GST, and Total to the clipboard as both an inline-styled HTML table and tab-separated
 plain text. Rich clipboard failures fall back to plain text and do not affect Quote save.
 
+The Quotes register supports shared status mappings, persisted All Quotes/My Quotes view
+selection, and Quote Date sorting. My Quotes uses built-in Dataverse Created By matched to
+the signed-in Entra object ID; it must never fall back to display-name matching or return all
+Quotes. The Quote editor uses the shared searchable-select component for Job, Customer, and
+Equipment; application validation requires at least one of those relationships.
+
 Do not independently invent replacement entity names when matching tables and columns already exist in the branch.
 
 Likely future design:
