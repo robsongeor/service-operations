@@ -138,6 +138,17 @@ environment settings. For Azure Functions local development, copy
 development middleware implements the same same-origin endpoint for the normal `npm run dev`
 workflow and reads the same unprefixed values from the ignored root `.env`.
 
+The SPA uses its own MSAL session rather than Azure Static Web Apps `/.auth`. The Job lookup
+therefore requires the caller's Dataverse bearer token and validates it server-side through
+Dataverse `WhoAmI` before reading upstream credentials or making the upstream request.
+`authLevel: anonymous` allows the bearer-authenticated HTTP trigger to be reached; it does
+not make the operation anonymous because the handler rejects missing, invalid and expired
+tokens before any upstream call. Do not replace this with an `allowedRoles: ["authenticated"]`
+route unless the whole application is deliberately migrated to Static Web Apps authentication.
+Production and local API environments require a server-only `DATAVERSE_URL` (the local Vite
+proxy can also use the existing `VITE_DATAVERSE_URL`). Never forward upstream error bodies or
+credential/configuration details to the browser.
+
 `VITE_DATAVERSE_URL` must contain the Dataverse organisation URL only.
 
 Correct example:
@@ -1531,8 +1542,19 @@ Job completion is routed through the generic framework under `src/alpha/jobs/com
 Standard Job types retain direct completion, while Service completion pauses the initiating
 save/status change and opens the shared completion workflow on Jobs, Scheduling, and Customer
 Dashboard. The workflow validates a whole non-decreasing hour reading, warns for increases of
-1000 hours or more, saves the historical Job `gr_hourmeter`, reuses the existing service-plan
-completion helpers, updates Equipment Current Hour Meter, and only then marks the Job Complete.
+1000 hours or more, then reloads the authoritative Job, Equipment and active service plans.
+It confirms that the Job remains an incomplete Service Job linked to the expected Equipment
+and saved Service Type. Job completion fields, Equipment Current Hour Meter, applicable
+A/B/C service-plan values and any pending same-Equipment Job/Site edits are submitted in one
+Dataverse Web API `$batch` change set. Dataverse executes the change set atomically, while
+record ETags reject concurrent edits or a second completion attempt.
+
+A repeated request with the same completed Job and hour meter is treated as an idempotent
+success only when the authoritative Equipment and applicable service plans also show that
+completion. A timeout or failure reloads authoritative state, never reports partial success,
+keeps the completion modal open and preserves its entered reading. All Service completion
+entry points must use `completeServiceJobAtomically`; do not reintroduce separate Job,
+Equipment or service-plan completion writes.
 Existing completed Service Jobs with a null `gr_hourmeter` display “Not recorded”; the current
 Equipment reading is never substituted for historical Job data.
 ## Customer Dashboard, Quotes, and Jobs table preferences

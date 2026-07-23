@@ -2,21 +2,101 @@ const LIFTTRUCKS_API_ORIGIN = 'https://webview.liftrucks.co.nz'
 const LIFTTRUCKS_API_KEY = '500256'
 const LIFTTRUCKS_TIMEOUT_MS = 15_000
 
-function jsonResponse(status, body) {
+function jsonResponse(status, body, headers = {}) {
     return {
         status,
         headers: {
             'Content-Type': 'application/json; charset=utf-8',
             'X-Job-Lookup-Source': 'internal-proxy',
+            ...headers,
         },
         body: JSON.stringify(body),
     }
+}
+
+function requestHeader(request, name) {
+    if (!request.headers) return ''
+    const target = name.toLowerCase()
+    const entry = Object.entries(request.headers).find(([header]) => header.toLowerCase() === target)
+    return typeof entry?.[1] === 'string' ? entry[1].trim() : ''
+}
+
+function dataverseOrigin() {
+    const configured = (process.env.DATAVERSE_URL || process.env.VITE_DATAVERSE_URL || '').trim()
+    if (!configured) return ''
+    try {
+        const url = new URL(configured)
+        if (url.protocol !== 'https:') return ''
+        return url.origin
+    } catch {
+        return ''
+    }
+}
+
+async function validateAuthenticatedUser(request) {
+    const authorization = requestHeader(request, 'authorization')
+    if (!/^Bearer\s+\S+$/i.test(authorization)) {
+        return {
+            error: jsonResponse(401, { error: 'Authentication is required.' }, {
+                'WWW-Authenticate': 'Bearer',
+            }),
+        }
+    }
+
+    const origin = dataverseOrigin()
+    if (!origin) {
+        return {
+            error: jsonResponse(500, { error: 'Authentication validation is not configured.' }),
+        }
+    }
+
+    let identityResponse
+    try {
+        identityResponse = await fetch(`${origin}/api/data/v9.2/WhoAmI`, {
+            headers: {
+                Authorization: authorization,
+                Accept: 'application/json',
+            },
+        })
+    } catch {
+        return {
+            error: jsonResponse(503, { error: 'Authentication could not be validated.' }),
+        }
+    }
+
+    if (!identityResponse.ok) {
+        const status = identityResponse.status === 401 || identityResponse.status === 403 ? 401 : 503
+        return {
+            error: jsonResponse(status, {
+                error: status === 401
+                    ? 'The authenticated session is invalid or expired.'
+                    : 'Authentication could not be validated.',
+            }, status === 401 ? { 'WWW-Authenticate': 'Bearer' } : {}),
+        }
+    }
+
+    try {
+        const identity = await identityResponse.json()
+        if (typeof identity.UserId !== 'string' || !identity.UserId) {
+            return { error: jsonResponse(401, { error: 'The authenticated identity is invalid.' }) }
+        }
+    } catch {
+        return { error: jsonResponse(503, { error: 'Authentication could not be validated.' }) }
+    }
+
+    return { authorization }
 }
 
 module.exports = async function jobLookup(context, request) {
     if (request.method !== 'GET') {
         context.res = jsonResponse(405, { error: 'Method not allowed.', source: 'internal-proxy' })
         context.res.headers.Allow = 'GET'
+        return
+    }
+
+    const authentication = await validateAuthenticatedUser(request)
+    if (authentication.error) {
+        context.res = authentication.error
         return
     }
 
@@ -56,10 +136,18 @@ module.exports = async function jobLookup(context, request) {
             },
             signal: controller.signal,
         })
-        const upstreamBody = Buffer.from(await upstreamResponse.arrayBuffer())
 
+        if (!upstreamResponse.ok) {
+            context.res = jsonResponse(502, {
+                error: 'The Lift Trucks API could not complete the request.',
+                source: 'upstream-service',
+            })
+            return
+        }
+
+        const upstreamBody = Buffer.from(await upstreamResponse.arrayBuffer())
         context.res = {
-            status: upstreamResponse.status,
+            status: 200,
             headers: {
                 'Content-Type': upstreamResponse.headers.get('content-type') || 'application/octet-stream',
                 'X-Job-Lookup-Source': 'upstream-service',
@@ -76,11 +164,16 @@ module.exports = async function jobLookup(context, request) {
         } else {
             context.res = jsonResponse(502, {
                 error: 'The Lift Trucks API could not be reached.',
-                detail: error instanceof Error ? error.message : String(error),
                 source: 'internal-proxy',
             })
         }
     } finally {
         clearTimeout(timeout)
     }
+}
+
+module.exports._test = {
+    dataverseOrigin,
+    requestHeader,
+    validateAuthenticatedUser,
 }

@@ -1,9 +1,7 @@
-import { calculateNextDueHours, getPlansToUpdate } from './servicePlanCalculations'
 import {
     SERVICE_INTERVAL_HOURS,
     type EquipmentServicePlan,
     type PlannedServiceType,
-    type ServicePlanCompletion,
 } from './equipmentServicePlan.types'
 
 const API_URL = `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2`
@@ -19,31 +17,6 @@ export async function fetchEquipmentServicePlans(token: string): Promise<Equipme
     })
     await ensureSuccess(response, 'Failed to fetch equipment service plans')
     return (await response.json()).value ?? []
-}
-
-export async function completeEquipmentServicePlans(
-    token: string,
-    equipmentId: string,
-    plans: EquipmentServicePlan[],
-    completion: ServicePlanCompletion,
-) {
-    const types = new Set(getPlansToUpdate(completion.serviceType))
-    const relevantPlans = plans.filter((plan) =>
-        plan._gr_equipment_value?.toLowerCase() === equipmentId.toLowerCase() && types.has(plan.gr_servicetype),
-    )
-    await Promise.all(relevantPlans.map(async (plan) => {
-        const response = await fetch(`${API_URL}/gr_equipmentserviceplans(${plan.gr_equipmentserviceplanid})`, {
-            method: 'PATCH',
-            headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                gr_lastcompleteddate: completion.completedDate,
-                gr_lastcompletedhours: completion.hourMeter,
-                gr_nextduehours: calculateNextDueHours(plan.gr_servicetype, completion.hourMeter),
-                'gr_LastCompletedJob@odata.bind': `/gr_jobs(${completion.jobId})`,
-            }),
-        })
-        await ensureSuccess(response, 'Failed to update equipment service plan')
-    }))
 }
 
 export type MaintenanceHistoryPlanInput = {

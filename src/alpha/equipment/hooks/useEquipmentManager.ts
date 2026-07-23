@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
+import { useActiveMsalAccount } from '../../../auth/useActiveMsalAccount'
 import { createCustomer as createCustomerApi, fetchCustomers } from '../../jobs/services/customersApi'
 import { fetchJobs } from '../../jobs/services/jobsApi'
 import { createSite as createSiteApi, fetchSites, updateSite as updateSiteApi } from '../../jobs/services/sitesApi'
@@ -23,8 +24,8 @@ import {
 import type { EquipmentServicePlan } from '../servicePlans/equipmentServicePlan.types'
 
 export function useEquipmentManager() {
-    const { instance, accounts } = useMsal()
-    const account = accounts[0]
+    const { instance } = useMsal()
+    const account = useActiveMsalAccount()
     const [equipment, setEquipment] = useState<Equipment[]>([])
     const [customers, setCustomers] = useState<Customer[]>([])
     const [sites, setSites] = useState<Site[]>([])
@@ -36,6 +37,7 @@ export function useEquipmentManager() {
     const [saveError, setSaveError] = useState('')
 
     const getToken = useCallback(async () => {
+        if (!account) throw new Error('No active Microsoft account is available. Sign in again and retry.')
         const response = await instance.acquireTokenSilent({
             scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`],
             account,

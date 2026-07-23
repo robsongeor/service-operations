@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
+import { useActiveMsalAccount } from '../../../auth/useActiveMsalAccount'
 import { fetchJobs } from '../../jobs/services/jobsApi'
 import type { Job } from '../../jobs/types/job.types'
 import type { Mechanic } from '../../jobs/types/mechanic.types'
@@ -14,8 +15,8 @@ import type { QualificationType, TechnicianQualification, TechnicianQualificatio
 import { createTechnicianQualification as createQualificationApi, deactivateTechnicianQualification as deactivateQualificationApi, fetchAllTechnicianQualifications, fetchQualificationTypes, updateTechnicianQualification as updateQualificationApi } from '../../wof/services/qualificationApi'
 
 export function useMechanics() {
-    const { instance, accounts } = useMsal()
-    const account = accounts[0]
+    const { instance } = useMsal()
+    const account = useActiveMsalAccount()
     const [mechanics, setMechanics] = useState<Mechanic[]>([])
     const [jobs, setJobs] = useState<Job[]>([])
     const [qualifications, setQualifications] = useState<TechnicianQualification[]>([])
@@ -26,6 +27,7 @@ export function useMechanics() {
     const [saveError, setSaveError] = useState('')
 
     const getToken = useCallback(async () => {
+        if (!account) throw new Error('No active Microsoft account is available. Sign in again and retry.')
         const response = await instance.acquireTokenSilent({
             scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`],
             account,

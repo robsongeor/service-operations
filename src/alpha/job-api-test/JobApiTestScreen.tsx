@@ -1,4 +1,6 @@
 import { type FormEvent, useState } from 'react'
+import { useMsal } from '@azure/msal-react'
+import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
 import './JobApiTestScreen.css'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -19,6 +21,8 @@ type RequestDiagnostics = {
 }
 
 export default function JobApiTestScreen() {
+    const { instance } = useMsal()
+    const account = useActiveMsalAccount()
     const [jobNumber, setJobNumber] = useState('')
     const [jobCards, setJobCards] = useState<Record<string, unknown>[]>([])
     const [message, setMessage] = useState('Enter a Job Number to view its job card.')
@@ -47,7 +51,14 @@ export default function JobApiTestScreen() {
         const endpoint = `/api/joblookup?${new URLSearchParams({ jobNumber: trimmedJobNumber })}`
 
         try {
-            const apiResponse = await fetch(endpoint)
+            if (!account) throw new Error('No active Microsoft account is available. Sign in again and retry.')
+            const authentication = await instance.acquireTokenSilent({
+                scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`],
+                account,
+            })
+            const apiResponse = await fetch(endpoint, {
+                headers: { Authorization: `Bearer ${authentication.accessToken}` },
+            })
             const body = await apiResponse.text()
             const responseSource = apiResponse.headers.get('x-job-lookup-source') || 'internal endpoint'
 

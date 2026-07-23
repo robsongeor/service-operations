@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
+import { useActiveMsalAccount } from '../../../auth/useActiveMsalAccount'
 import {
     createPricingItem as createPricingItemApi,
     fetchPricingItems as fetchPricingItemsApi,
@@ -9,8 +10,8 @@ import {
 import type { PricingItem, PricingItemInput } from '../types/pricing.types'
 
 export function usePricingItems() {
-    const { instance, accounts } = useMsal()
-    const account = accounts[0]
+    const { instance } = useMsal()
+    const account = useActiveMsalAccount()
     const [items, setItems] = useState<PricingItem[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [loadError, setLoadError] = useState('')
@@ -18,6 +19,7 @@ export function usePricingItems() {
     const [isSaving, setIsSaving] = useState(false)
 
     const getAccessToken = useCallback(async () => {
+        if (!account) throw new Error('No active Microsoft account is available. Sign in again and retry.')
         const response = await instance.acquireTokenSilent({
             scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`],
             account,

@@ -36,6 +36,7 @@ export default function JobCompletionWorkflow({ request, equipment, servicePlans
     if (!request || request.kind !== 'service') return null
 
     const submit = () => {
+        if (isCompleting) return
         const nextError = validateCompletionHourMeter(hourMeter, currentHourMeter)
         setValidationError(nextError)
         if (nextError) return

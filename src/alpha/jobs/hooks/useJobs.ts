@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
+import { useActiveMsalAccount } from '../../../auth/useActiveMsalAccount'
 import type { Job } from '../types/job.types'
 import type { Equipment } from '../types/equipment.types'
 import {
     fetchJobs as fetchJobsApi,
     createJob as createJobApi,
     updateJobStatus as updateJobStatusApi,
-    updateJobCompletionHourMeter,
     updateJobCardStatus as updateJobCardStatusApi,
     updateJobFields as updateJobFieldsApi,
     updateJobOfficeAttention as updateJobOfficeAttentionApi,
@@ -70,17 +70,8 @@ import {
 } from '../services/contactsApi'
 import { fetchQuotes as fetchQuotesApi } from '../../quotes/services/quotesApi'
 import type { Quote } from '../../quotes/types/quote.types'
-import { jobRequiresMaintenance } from '../types/jobType.types'
-import {
-    applyServiceCompletion,
-    calculateIncreasingHourMeter,
-} from '../../equipment/servicePlans/servicePlanCalculations'
-import {
-    completeEquipmentServicePlans,
-    fetchEquipmentServicePlans,
-    updateEquipmentCurrentHourMeter,
-} from '../../equipment/servicePlans/servicePlanApi'
-import { SERVICE_TYPES, type EquipmentServicePlan } from '../../equipment/servicePlans/equipmentServicePlan.types'
+import { fetchEquipmentServicePlans } from '../../equipment/servicePlans/servicePlanApi'
+import type { EquipmentServicePlan } from '../../equipment/servicePlans/equipmentServicePlan.types'
 import {
     getJobCompletionKind,
     resolveCompletionEquipment,
@@ -89,12 +80,13 @@ import {
     validateServiceCompletionContext,
     type JobCompletionRequest,
 } from '../completion/jobCompletion'
+import { completeServiceJobAtomically } from '../completion/serviceCompletionApi'
 
 
 
 export function useJobs() {
-    const { instance, accounts } = useMsal()
-    const account = accounts[0]
+    const { instance } = useMsal()
+    const account = useActiveMsalAccount()
 
     const [jobs, setJobs] = useState<Job[]>([])
     const [equipmentList, setEquipmentList] = useState<Equipment[]>([])
@@ -115,6 +107,7 @@ export function useJobs() {
     const [completionError, setCompletionError] = useState('')
 
     const getAccessToken = async () => {
+        if (!account) throw new Error('No active Microsoft account is available. Sign in again and retry.')
         const response = await instance.acquireTokenSilent({
             scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`],
             account,
@@ -313,35 +306,6 @@ export function useJobs() {
         const token = await getAccessToken()
         const equipment = await fetchEquipmentApi(token)
         setEquipmentList(equipment)
-    }
-
-    const processServiceCompletion = async (token: string, job: Job, completedDate: string) => {
-        if (!jobRequiresMaintenance(job.gr_jobtype)) return
-        if (!job.gr_servicetype || job.gr_servicetype === SERVICE_TYPES.NONE) return
-        if (!job.gr_Equipment?.gr_equipmentid) throw new Error('Select equipment before completing a service job.')
-        if (job.gr_hourmeter == null) throw new Error('Enter the hour meter before completing a service job.')
-
-        const equipment = equipmentList.find((item) => item.gr_equipmentid === job.gr_Equipment?.gr_equipmentid)
-        const completion = {
-            jobId: job.gr_jobid,
-            completedDate,
-            hourMeter: job.gr_hourmeter,
-            serviceType: job.gr_servicetype,
-        }
-        await completeEquipmentServicePlans(token, job.gr_Equipment.gr_equipmentid, servicePlans, completion)
-        setServicePlans((current) => current.map((plan) =>
-            plan._gr_equipment_value?.toLowerCase() === job.gr_Equipment?.gr_equipmentid.toLowerCase()
-                ? applyServiceCompletion([plan], completion)[0]
-                : plan,
-        ))
-
-        const nextCurrentHours = calculateIncreasingHourMeter(equipment?.gr_currenthourmeter, job.gr_hourmeter)
-        if (nextCurrentHours !== (equipment?.gr_currenthourmeter ?? 0)) {
-            await updateEquipmentCurrentHourMeter(token, job.gr_Equipment.gr_equipmentid, nextCurrentHours)
-            setEquipmentList((current) => current.map((item) => item.gr_equipmentid === job.gr_Equipment?.gr_equipmentid
-                ? { ...item, gr_currenthourmeter: nextCurrentHours }
-                : item))
-        }
     }
 
     const fetchJobOfficeUpdates = async () => {
@@ -564,27 +528,13 @@ export function useJobs() {
         setCompletionError('')
         try {
             const token = await getAccessToken()
-            const completedDate = request.job.gr_completeddate ?? new Date().toISOString()
-            if (request.pendingSave) {
-                await updateJobApi(token, request.job.gr_jobid, {
-                    ...request.pendingSave,
-                    status: request.job.gr_status,
-                    hourMeter,
-                    completedDate: undefined,
-                })
-                if (request.pendingSave.equipmentId && request.pendingSave.siteId) {
-                    await updateEquipmentSite(token, request.pendingSave.equipmentId, request.pendingSave.siteId)
-                }
-            } else {
-                await updateJobCompletionHourMeter(token, request.job.gr_jobid, hourMeter)
-            }
-            await processServiceCompletion(token, {
-                ...request.job,
-                gr_Equipment: equipment,
-                gr_servicetype: serviceType,
-                gr_hourmeter: hourMeter,
-            }, completedDate)
-            await updateJobStatusApi(token, request.job.gr_jobid, JOB_STATUSES.COMPLETE, completedDate)
+            await completeServiceJobAtomically(token, {
+                jobId: request.job.gr_jobid,
+                equipmentId: equipment.gr_equipmentid,
+                hourMeter,
+                expectedServiceType: serviceType,
+                pendingSave: request.pendingSave,
+            })
 
             const [nextJobs, nextEquipment, nextPlans] = await Promise.all([
                 fetchJobsApi(token),
@@ -596,6 +546,19 @@ export function useJobs() {
             setServicePlans(nextPlans)
             setCompletionRequest(null)
         } catch (error) {
+            try {
+                const token = await getAccessToken()
+                const [jobsResult, equipmentResult, plansResult] = await Promise.allSettled([
+                    fetchJobsApi(token),
+                    fetchEquipmentApi(token),
+                    fetchEquipmentServicePlans(token),
+                ])
+                if (jobsResult.status === 'fulfilled') setJobs(jobsResult.value)
+                if (equipmentResult.status === 'fulfilled') setEquipmentList(equipmentResult.value)
+                if (plansResult.status === 'fulfilled') setServicePlans(plansResult.value)
+            } catch {
+                // Keep the completion dialog open with the original error when refresh is unavailable.
+            }
             setCompletionError(error instanceof Error ? error.message : 'The Service Job could not be completed.')
         } finally {
             setIsCompletingJob(false)
