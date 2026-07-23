@@ -1,5 +1,6 @@
 import type { SignedInUserInfo } from '../../../auth/signedInUser'
 import type { Equipment } from '../../jobs/types/equipment.types'
+import { EQUIPMENT_COMPLIANCE_STATUSES } from '../compliance/equipmentCompliance'
 import { normalizeEquipmentInput, type EquipmentUpdateInput } from '../types/equipmentManager.types'
 
 export const BULK_EQUIPMENT_IMPORT_EMAIL = 'georger@liftrucks.co.nz'
@@ -187,6 +188,9 @@ export function bulkEquipmentRowInput(
         registrationNumber: row.registrationNumber,
         currentWofExpiry: row.currentWofExpiry,
         regoExpiry: '',
+        complianceStatus: row.registrationNumber.trim()
+            ? EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED
+            : EQUIPMENT_COMPLIANCE_STATUSES.OFF_ROAD,
         wofRequired: Boolean(row.registrationNumber.trim()),
         siteId: siteId.trim(),
     })

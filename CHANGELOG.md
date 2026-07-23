@@ -4,6 +4,7 @@
 
 ### Major Features
 
+- Added Equipment Road Compliance Management with Road Registered, Deregistered, and Off Road states; protected deregistration; guided re-registration; operational WOF filtering; and Road Registered-only dashboard WOF summaries.
 - Added the protected WOF / REGO workflow, including WOF Jobs and Inspection records, internal qualification filtering, external providers, editing, operational due-state views, and protected orphan-Inspection cleanup.
 - Added a shared Job Completion framework with a dedicated Service workflow for immutable completion hour readings, Equipment hour updates, maintenance-plan progression, validation, and large-increase confirmation.
 - Added Customer Dashboard Site bulk Equipment import with immutable Customer/Site context, TSV review, date-only normalization, explicit duplicate overrides, per-row selection, sequential creation, and retry protection.
@@ -38,6 +39,7 @@
 
 ### Known Limitations
 
+- The Equipment `Compliance Status` Dataverse Choice must be provisioned with the documented logical name and numeric values before this feature branch can be deployed.
 - Customer creation and Customer-level information remain local prototypes; only existing and new Site name/address changes are persisted from the Customer drawer.
 - Passing a WOF does not yet update Equipment Current WOF Expiry or Last WOF Completed because the cross-record completion workflow is not transactionally safe.
 - Multi-record Dataverse workflows outside Service Job completion can partially succeed when a later request fails and require live failure-path testing and operational recovery guidance.

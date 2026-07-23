@@ -1,4 +1,9 @@
 import type { Equipment } from '../../jobs/types/equipment.types'
+import {
+    EQUIPMENT_COMPLIANCE_STATUSES,
+    isEquipmentComplianceStatus,
+    type EquipmentComplianceStatus,
+} from '../compliance/equipmentCompliance'
 
 export type EquipmentUpdateInput = {
     fleet: string
@@ -7,6 +12,7 @@ export type EquipmentUpdateInput = {
     serial: string
     siteId: string
     registrationNumber: string
+    complianceStatus: EquipmentComplianceStatus
     wofRequired: boolean
     currentWofExpiry: string
     regoExpiry: string
@@ -36,6 +42,9 @@ export function toEquipmentDateOnlyValue(value?: string | null) {
 }
 
 export function normalizeEquipmentInput(input: EquipmentUpdateInput): EquipmentUpdateInput {
+    if (!isEquipmentComplianceStatus(input.complianceStatus)) {
+        throw new Error('Select a valid Compliance Status.')
+    }
     const registrationNumber = input.registrationNumber.trim()
     const rawCurrentWofExpiry = input.currentWofExpiry.trim()
     const currentWofExpiry = toEquipmentDateOnlyValue(rawCurrentWofExpiry)
@@ -56,7 +65,7 @@ export function normalizeEquipmentInput(input: EquipmentUpdateInput): EquipmentU
         serial: input.serial.trim(),
         siteId: input.siteId.trim(),
         registrationNumber,
-        wofRequired: registrationNumber ? true : input.wofRequired,
+        wofRequired: input.complianceStatus === EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED,
         currentWofExpiry,
         regoExpiry,
     }

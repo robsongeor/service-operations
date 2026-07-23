@@ -6,6 +6,7 @@ import { useEquipmentManager } from '../equipment/hooks/useEquipmentManager'
 import EquipmentDrawer from '../equipment/components/EquipmentDrawer'
 import BulkEquipmentImportDrawer from '../equipment/components/BulkEquipmentImportDrawer'
 import { canUseBulkEquipmentImport } from '../equipment/utils/bulkEquipmentImport'
+import { isRoadRegistered } from '../equipment/compliance/equipmentCompliance'
 import { useJobs } from '../jobs/hooks/useJobs'
 import JobCreateDrawer, { type JobCreateInitialValues } from '../jobs/components/JobCreateDrawer'
 import JobEditDrawer from '../jobs/components/JobEditDrawer'
@@ -23,7 +24,7 @@ import { customerContactsFromSiteLinks, type CustomerContact } from './customerC
 import CustomerOpenJobsTab from './CustomerOpenJobsTab'
 import CustomerQuotesTab from './CustomerQuotesTab'
 import SearchableSelect from '../shared/searchable-select/SearchableSelect'
-import { formatWofDateOnly } from '../wof/utils/wofRules'
+import { formatWofDateOnly, getWofDueStatus } from '../wof/utils/wofRules'
 import './CustomerDashboardScreen.css'
 
 const dateFormatter = new Intl.DateTimeFormat('en-NZ', { dateStyle: 'medium' })
@@ -215,6 +216,13 @@ export default function CustomerDashboardScreen() {
         if (status === 'Overdue' || status === 'Due') counts.overdue += 1
         return counts
     }, { dueSoon: 0, overdue: 0 })
+    const roadComplianceCounts = customerEquipment.filter(isRoadRegistered).reduce((counts, item) => {
+        const status = getWofDueStatus(true, item.gr_currentwofexpiry)
+        if (status === 'expired') counts.expired += 1
+        else if (status === 'due-soon') counts.dueSoon += 1
+        else if (status === 'current') counts.current += 1
+        return counts
+    }, { current: 0, dueSoon: 0, expired: 0 })
 
     const summaryCards = [
         { label: 'Sites', value: customerSites.length },
@@ -222,6 +230,9 @@ export default function CustomerDashboardScreen() {
         { label: 'Open Jobs', value: openJobs.length },
         { label: 'Services Due Soon', value: maintenanceCounts.dueSoon },
         { label: 'Overdue Services', value: maintenanceCounts.overdue },
+        { label: 'WOF Current', value: roadComplianceCounts.current },
+        { label: 'WOF Due Soon', value: roadComplianceCounts.dueSoon },
+        { label: 'WOF Expired', value: roadComplianceCounts.expired },
         { label: 'Last Job Date', value: lastJob ? dateFormatter.format(new Date(lastJob.createdon)) : '-' },
     ]
 

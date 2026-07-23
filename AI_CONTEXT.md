@@ -1557,6 +1557,29 @@ entry points must use `completeServiceJobAtomically`; do not reintroduce separat
 Equipment or service-plan completion writes.
 Existing completed Service Jobs with a null `gr_hourmeter` display “Not recorded”; the current
 Equipment reading is never substituted for historical Job data.
+## Equipment road compliance
+
+Equipment road-compliance participation is owned by the typed domain module at
+`src/alpha/equipment/compliance/equipmentCompliance.ts`. The authoritative Equipment
+field is the local Dataverse Choice `gr_compliancestatus`: Road Registered `122830000`,
+Deregistered `122830001`, and Off Road `122830002`. `gr_wofrequired` remains only as a
+compatibility mirror on writes and a migration fallback on records whose Choice value
+has not yet been backfilled. Do not use it for new operational decisions.
+
+Only Road Registered Equipment participates in the operational WOF screen, new WOF
+selection, and Customer Dashboard WOF summaries. Deregistered and Off Road transitions
+do not clear Registration Number, REGO Expiry, Current WOF Expiry, Jobs, or WOF
+Inspections. The Equipment drawer confirms those transitions and re-registration uses
+a dedicated form requiring the current Registration Number. Existing WOF editing may
+retain a now-ineligible Equipment option so historical records remain readable without
+making that Equipment available to new WOF work.
+
+The schema Choice must be provisioned and existing Equipment backfilled before this
+feature is deployed. The application contract and migration rule are recorded in
+`docs/wof-dataverse-schema.md`. A future registration-history child table can be added
+without changing the current Equipment fields, which deliberately represent only the
+current compliance state.
+
 ## Customer Dashboard, Quotes, and Jobs table preferences
 
 - Customer Dashboard customer selection uses the shared `SearchableSelect`; search and selection are one control.

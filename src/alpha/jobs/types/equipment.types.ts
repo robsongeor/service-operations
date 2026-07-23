@@ -1,3 +1,5 @@
+import type { EquipmentComplianceStatus } from '../../equipment/compliance/equipmentCompliance'
+
 export type Equipment = {
     gr_equipmentid: string
     gr_fleet: string | null
@@ -9,6 +11,7 @@ export type Equipment = {
     gr_currenthourmeter?: number | null
     gr_servicetrackingenabled?: boolean | null
     gr_registrationnumber?: string | null
+    gr_compliancestatus?: EquipmentComplianceStatus | null
     gr_wofrequired?: boolean | null
     gr_currentwofexpiry?: string | null
     gr_lastwofcompleted?: string | null

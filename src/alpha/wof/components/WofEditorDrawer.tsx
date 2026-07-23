@@ -3,6 +3,7 @@ import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation'
 import EditDrawerShell from '../../shared/drawer/EditDrawerShell'
 import SearchableSelect from '../../shared/searchable-select/SearchableSelect'
 import EquipmentDrawer from '../../equipment/components/EquipmentDrawer'
+import { isRoadRegistered } from '../../equipment/compliance/equipmentCompliance'
 import type { EquipmentUpdateInput } from '../../equipment/types/equipmentManager.types'
 import type { Customer } from '../../jobs/types/customer.types'
 import type { Equipment } from '../../jobs/types/equipment.types'
@@ -61,6 +62,9 @@ export default function WofEditorDrawer(props: Props) {
     const eligibleProviders = providers.filter((item) => item.statecode !== 1 && item.gr_active && item.gr_ProviderType?.gr_active && item.gr_ProviderType.gr_code === WOF_PROVIDER_TYPE_CODE)
     const externalOptions = eligibleProviders.map((item) => ({ value: item.gr_serviceproviderid, label: item.gr_name, secondary: item.gr_contactname || undefined })).concat(inspection?.gr_ExternalProvider && !eligibleProviders.some((item) => item.gr_serviceproviderid === inspection.gr_ExternalProvider?.gr_serviceproviderid) ? [{ value: inspection.gr_ExternalProvider.gr_serviceproviderid, label: inspection.gr_ExternalProvider.gr_name, secondary: 'Previously assigned — provider inactive' }] : [])
     const deletionBlockReason = inspection ? getWofDeletionBlockReason(inspection) : null
+    const selectableEquipment = equipment.filter((item) =>
+        isRoadRegistered(item) || item.gr_equipmentid === inspection?.gr_Equipment?.gr_equipmentid,
+    )
 
     const save = async (replaceSnapshots = false) => {
         if (!selectedEquipment) return setError('Select equipment.')
@@ -98,7 +102,7 @@ export default function WofEditorDrawer(props: Props) {
     return <>
         <EditDrawerShell eyebrow="Protected WOF workflow" title={editing ? 'Edit WOF' : 'Create WOF'} busy={busy || deleting} onClose={onClose} footer={<><div className="wof-drawer-footer-status"><span className="wof-drawer-error" role="alert">{error}</span>{editing && <button type="button" className="wof-delete-button" onClick={() => { setDeleteError(''); setConfirmDelete(true) }} disabled={busy || deleting || Boolean(deletionBlockReason)} title={deletionBlockReason || undefined}>Delete WOF</button>}</div><div><button type="button" onClick={onClose} disabled={busy || deleting}>Cancel</button> <button type="button" className="primary" onClick={() => void save()} disabled={busy || deleting}>{busy ? 'Saving…' : editing ? 'Save changes' : 'Create WOF'}</button></div></>}>
             <div className="wof-form">
-                <SearchableSelect id="wof-equipment" label="Equipment" required value={equipmentId} onChange={setEquipmentId} disabled={completed} placeholder="Select equipment" options={equipment.map((item) => ({ value: item.gr_equipmentid, label: item.gr_fleet || item.gr_serial || 'Unnamed equipment', secondary: [item.gr_registrationnumber, item.gr_make, item.gr_model].filter(Boolean).join(' · ') }))} />
+                <SearchableSelect id="wof-equipment" label="Equipment" required value={equipmentId} onChange={setEquipmentId} disabled={completed} placeholder="Select equipment" options={selectableEquipment.map((item) => ({ value: item.gr_equipmentid, label: item.gr_fleet || item.gr_serial || 'Unnamed equipment', secondary: [item.gr_registrationnumber, item.gr_make, item.gr_model].filter(Boolean).join(' · ') }))} />
                 {!editing && <button type="button" className="wof-add-equipment" onClick={() => setCreatingEquipment(true)}>+ Add new equipment</button>}
                 {completed && <p className="wof-protected-note">Equipment cannot be changed after the linked Job is completed.</p>}
                 {selectedEquipment && <div className="wof-equipment-summary"><span>REGO <strong>{selectedEquipment.gr_registrationnumber || 'Not recorded'}</strong></span><span>Current expiry <strong>{selectedEquipment.gr_currentwofexpiry || 'Unknown'}</strong></span><span>Customer <strong>{selectedEquipment.gr_Site?.gr_Customer?.gr_name || 'Not recorded'}</strong></span><span>Site <strong>{selectedEquipment.gr_Site?.gr_name || 'Not recorded'}</strong></span></div>}

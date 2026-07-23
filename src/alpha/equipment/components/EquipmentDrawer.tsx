@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import type { Equipment } from '../../jobs/types/equipment.types'
 import type { Customer } from '../../jobs/types/customer.types'
 import type { Job } from '../../jobs/types/job.types'
@@ -17,6 +17,13 @@ import { calculateHoursRemaining, calculateServiceStatus } from '../servicePlans
 import { normalizeEquipmentInput, toEquipmentDateOnlyValue, type EquipmentCreateInitialValues, type EquipmentUpdateInput } from '../types/equipmentManager.types'
 import { classifyEquipmentIdentifier, deriveSiteNameFromAddress, normalizeCustomerName, parseSpreadsheetRow, type IdentifierClassification, type SpreadsheetRow } from '../utils/equipmentCreateHelpers'
 import SearchableSelect, { type SearchableSelectOption } from '../../shared/searchable-select/SearchableSelect'
+import {
+    EQUIPMENT_COMPLIANCE_STATUSES,
+    EQUIPMENT_COMPLIANCE_STATUS_OPTIONS,
+    getEquipmentComplianceStatus,
+    getEquipmentComplianceStatusLabel,
+    type EquipmentComplianceStatus,
+} from '../compliance/equipmentCompliance'
 
 type SharedProps = {
     customers: Customer[]
@@ -83,7 +90,13 @@ export default function EquipmentDrawer(props: Props) {
         serial: equipment?.gr_serial ?? initialValues?.serial ?? '',
         siteId: equipment?.gr_Site?.gr_siteid ?? initialValues?.siteId ?? '',
         registrationNumber: equipment?.gr_registrationnumber ?? initialValues?.registrationNumber ?? '',
-        wofRequired: equipment?.gr_wofrequired ?? initialValues?.wofRequired ?? false,
+        complianceStatus: equipment
+            ? getEquipmentComplianceStatus(equipment)
+            : initialValues?.complianceStatus
+                ?? (initialValues?.wofRequired || initialValues?.registrationNumber
+                    ? EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED
+                    : EQUIPMENT_COMPLIANCE_STATUSES.OFF_ROAD),
+        wofRequired: equipment ? getEquipmentComplianceStatus(equipment) === EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED : initialValues?.wofRequired ?? false,
         currentWofExpiry: toEquipmentDateOnlyValue(equipment?.gr_currentwofexpiry ?? initialValues?.currentWofExpiry),
         regoExpiry: toEquipmentDateOnlyValue(equipment?.gr_regoexpiry ?? initialValues?.regoExpiry),
     })
@@ -108,7 +121,6 @@ export default function EquipmentDrawer(props: Props) {
     const [sourceContextOpen, setSourceContextOpen] = useState(true)
     const [isReadingClipboard, setIsReadingClipboard] = useState(false)
     const manualPasteRef = useRef<HTMLTextAreaElement>(null)
-    const regoAutoEnabledRef = useRef(false)
     const [activeTab, setActiveTab] = useState<EquipmentDrawerTab>('details')
     const [maintenanceDialogOpen, setMaintenanceDialogOpen] = useState(false)
     const [maintenanceForm, setMaintenanceForm] = useState<MaintenanceHistoryForm>(() => ({
@@ -120,14 +132,15 @@ export default function EquipmentDrawer(props: Props) {
         },
     }))
     const [maintenanceError, setMaintenanceError] = useState('')
-
-    useEffect(() => {
-        if (!isCreate || regoAutoEnabledRef.current || !form.registrationNumber.trim() || form.wofRequired) return
-        regoAutoEnabledRef.current = true
-        setForm((current) => current.registrationNumber.trim() && !current.wofRequired
-            ? { ...current, wofRequired: true }
-            : current)
-    }, [form.registrationNumber, form.wofRequired, isCreate])
+    const [complianceTarget, setComplianceTarget] = useState<EquipmentComplianceStatus | null>(null)
+    const [reRegisterOpen, setReRegisterOpen] = useState(false)
+    const [reRegisterForm, setReRegisterForm] = useState({
+        registrationNumber: equipment?.gr_registrationnumber ?? '',
+        regoExpiry: toEquipmentDateOnlyValue(equipment?.gr_regoexpiry),
+        currentWofExpiry: toEquipmentDateOnlyValue(equipment?.gr_currentwofexpiry),
+    })
+    const [complianceError, setComplianceError] = useState('')
+    const [isComplianceSaving, setIsComplianceSaving] = useState(false)
 
     const history = equipment
         ? jobs
@@ -171,7 +184,7 @@ export default function EquipmentDrawer(props: Props) {
     const matchingEquipment = form.fleet.trim() || form.serial.trim()
         ? props.equipmentList.find((item) => [item.gr_fleet, item.gr_serial].some((value) => value && normalizeCustomerName(value) === normalizeCustomerName(form.fleet.trim() || form.serial.trim())))
         : undefined
-    const busy = isSaving || isDeleting
+    const busy = isSaving || isDeleting || isComplianceSaving
     const equipmentName = equipment ? [equipment.gr_fleet, equipment.gr_make, equipment.gr_model].filter(Boolean).join(' - ') || 'this equipment' : ''
     const plans = isCreate ? [] : props.servicePlans
     const tabs: Array<{ id: EquipmentDrawerTab; label: string; count?: number }> = [
@@ -387,6 +400,10 @@ export default function EquipmentDrawer(props: Props) {
             setFormError('Enter either a fleet number or serial number.')
             return
         }
+        if (isCreate && trimmed.complianceStatus === EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED && !trimmed.registrationNumber) {
+            setFormError('Road Registered equipment requires a Registration Number.')
+            return
+        }
         if (isCreate && matchingEquipment) {
             setFormError(`Equipment ${matchingEquipment.gr_fleet || matchingEquipment.gr_serial || ''} already exists. Change the Fleet Number or Serial Number before creating Equipment.`)
             return
@@ -485,6 +502,46 @@ export default function EquipmentDrawer(props: Props) {
         }
     }
 
+    const saveComplianceStatus = async (status: EquipmentComplianceStatus) => {
+        if (isCreate) return
+        try {
+            setIsComplianceSaving(true)
+            setComplianceError('')
+            const next = normalizeEquipmentInput({ ...form, complianceStatus: status })
+            await props.onSave(next)
+            setForm(next)
+            setComplianceTarget(null)
+        } catch (error) {
+            setComplianceError(error instanceof Error ? error.message : 'The compliance status could not be updated.')
+        } finally {
+            setIsComplianceSaving(false)
+        }
+    }
+
+    const reRegister = async () => {
+        if (isCreate) return
+        if (!reRegisterForm.registrationNumber.trim()) {
+            setComplianceError('Enter the current registration number.')
+            return
+        }
+        try {
+            setIsComplianceSaving(true)
+            setComplianceError('')
+            const next = normalizeEquipmentInput({
+                ...form,
+                ...reRegisterForm,
+                complianceStatus: EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED,
+            })
+            await props.onSave(next)
+            setForm(next)
+            setReRegisterOpen(false)
+        } catch (error) {
+            setComplianceError(error instanceof Error ? error.message : 'The equipment could not be re-registered.')
+        } finally {
+            setIsComplianceSaving(false)
+        }
+    }
+
     const close = () => {
         if (!busy) {
             setShowDeleteConfirm(false)
@@ -493,7 +550,7 @@ export default function EquipmentDrawer(props: Props) {
         }
     }
 
-    const updateField = (field: keyof EquipmentUpdateInput, value: string | boolean) => {
+    const updateField = (field: keyof EquipmentUpdateInput, value: string | boolean | EquipmentComplianceStatus) => {
         setForm((current) => ({ ...current, [field]: value }))
         if (formError) setFormError('')
     }
@@ -572,13 +629,6 @@ export default function EquipmentDrawer(props: Props) {
                             <label>Serial number<input value={form.serial} onChange={(event) => updateField('serial', event.target.value)} /></label>
                             <label>Make<input value={form.make} onChange={(event) => updateField('make', event.target.value)} /></label>
                             <label>Model<input value={form.model} onChange={(event) => updateField('model', event.target.value)} /></label>
-                            <label>Registration Number<input value={form.registrationNumber} onChange={(event) => updateField('registrationNumber', event.target.value)} /></label>
-                            <label>REGO Expiry<input type="date" value={form.regoExpiry} onChange={(event) => updateField('regoExpiry', event.target.value)} /></label>
-                            <label>Current WOF Expiry<input type="date" value={form.currentWofExpiry} onChange={(event) => updateField('currentWofExpiry', event.target.value)} /></label>
-                            <label className="equipment-wof-required"><input type="checkbox" checked={form.wofRequired} onChange={(event) => {
-                                regoAutoEnabledRef.current = true
-                                updateField('wofRequired', event.target.checked)
-                            }} /> WOF Required</label>
                             {isCreate ? <div className="equipment-relationship-fields">
                                 <label>Customer<input value={customerQuery} placeholder="Search or enter customer..." onChange={(event) => {
                                     const value = event.target.value
@@ -622,6 +672,21 @@ export default function EquipmentDrawer(props: Props) {
                                 {relatedError && <p className="equipment-related-error" role="alert">{relatedError}</p>}
                             </div> : <><label>Customer (site filter)<select value={customerId} onChange={(event) => { const next = event.target.value; setCustomerId(next); if (form.siteId && !sites.some((site) => site.gr_siteid === form.siteId && (!next || site.gr_Customer?.gr_customerid === next))) updateField('siteId', '') }}><option value="">All customers</option>{customers.map((customer) => <option key={customer.gr_customerid} value={customer.gr_customerid}>{customer.gr_name}</option>)}</select></label><label>Current Site<select value={form.siteId} onChange={(event) => updateField('siteId', event.target.value)}><option value="">No Site</option>{visibleSites.map((site) => <option key={site.gr_siteid} value={site.gr_siteid}>{siteOptionLabel(site)}</option>)}</select></label></>}
                         </div>
+                    </EditDrawerSection>}
+
+                    {(isCreate || activeTab === 'details') && <EditDrawerSection title="Road compliance" meta={<span className={`equipment-state ${form.complianceStatus === EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED ? 'active' : ''}`}>{getEquipmentComplianceStatusLabel(form.complianceStatus)}</span>}>
+                        <p className="equipment-state-note">Compliance Status controls whether this equipment participates in operational WOF and REGO tracking. Historical records are always retained.</p>
+                        <div className="equipment-form-grid">
+                            {isCreate && <label>Compliance Status<select value={form.complianceStatus} onChange={(event) => updateField('complianceStatus', Number(event.target.value) as EquipmentComplianceStatus)}>{EQUIPMENT_COMPLIANCE_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}
+                            <label>Registration Number<input value={form.registrationNumber} onChange={(event) => updateField('registrationNumber', event.target.value)} /></label>
+                            <label>REGO Expiry<input type="date" value={form.regoExpiry} onChange={(event) => updateField('regoExpiry', event.target.value)} /></label>
+                            <label>Current WOF Expiry<input type="date" value={form.currentWofExpiry} onChange={(event) => updateField('currentWofExpiry', event.target.value)} /></label>
+                        </div>
+                        {!isCreate && <div className="equipment-maintenance-actions">
+                            {form.complianceStatus === EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED
+                                ? <><button type="button" disabled={busy} onClick={() => { setComplianceError(''); setComplianceTarget(EQUIPMENT_COMPLIANCE_STATUSES.DEREGISTERED) }}>Deregister equipment</button><button type="button" disabled={busy} onClick={() => { setComplianceError(''); setComplianceTarget(EQUIPMENT_COMPLIANCE_STATUSES.OFF_ROAD) }}>Mark off road</button></>
+                                : <button type="button" disabled={busy} onClick={() => { setComplianceError(''); setReRegisterForm({ registrationNumber: form.registrationNumber, regoExpiry: form.regoExpiry, currentWofExpiry: form.currentWofExpiry }); setReRegisterOpen(true) }}>Re-register equipment</button>}
+                        </div>}
                     </EditDrawerSection>}
 
                     {isCreate && parsedSpreadsheetRow && <details className="equipment-spreadsheet-source" open={sourceContextOpen} onToggle={(event) => setSourceContextOpen(event.currentTarget.open)}><summary>Spreadsheet source</summary><dl><div><dt>Job Number</dt><dd>{parsedSpreadsheetRow.jobNumber || '-'}</dd></div><div><dt>Date</dt><dd>{parsedSpreadsheetRow.date || '-'}</dd></div><div><dt>Mechanic</dt><dd>{parsedSpreadsheetRow.mechanic || '-'}</dd></div><div><dt>Description</dt><dd>{parsedSpreadsheetRow.description || '-'}</dd></div><div><dt>Contact details</dt><dd>{parsedSpreadsheetRow.contactDetails || '-'}</dd></div><div><dt>Status</dt><dd>{parsedSpreadsheetRow.status || '-'}</dd></div><div><dt>Comments</dt><dd>{parsedSpreadsheetRow.comments || '-'}</dd></div><div><dt>Order number</dt><dd>{parsedSpreadsheetRow.orderNumber || '-'}</dd></div><div><dt>in so</dt><dd>{parsedSpreadsheetRow.inSo || '-'}</dd></div></dl></details>}
@@ -671,6 +736,32 @@ export default function EquipmentDrawer(props: Props) {
             onCancel={() => setShowDeleteConfirm(false)}
             onConfirm={() => void deleteRecord()}
         />}
+
+        {!isCreate && complianceTarget != null && <EditDrawerConfirmation
+            eyebrow="Road compliance"
+            title={`${getEquipmentComplianceStatusLabel(complianceTarget)} this equipment?`}
+            message={<>This removes the equipment from active WOF and REGO views and calculations. Its registration details, current expiry values, jobs, and WOF history will be retained.</>}
+            error={complianceError}
+            isBusy={isComplianceSaving}
+            confirmLabel={isComplianceSaving ? 'Saving...' : complianceTarget === EQUIPMENT_COMPLIANCE_STATUSES.DEREGISTERED ? 'Deregister equipment' : 'Mark off road'}
+            onCancel={() => { setComplianceTarget(null); setComplianceError('') }}
+            onConfirm={() => void saveComplianceStatus(complianceTarget)}
+        />}
+
+        {!isCreate && reRegisterOpen && <EditDrawerFormDialog
+            eyebrow="Road compliance"
+            title="Re-register equipment"
+            error={complianceError}
+            isBusy={isComplianceSaving}
+            submitLabel={isComplianceSaving ? 'Saving...' : 'Re-register equipment'}
+            onCancel={() => { setReRegisterOpen(false); setComplianceError('') }}
+            onSubmit={() => void reRegister()}
+        >
+            <p className="edit-form-dialog-context">Enter the current road-compliance details. Previous jobs and WOF inspections remain unchanged.</p>
+            <label>Registration Number<input required value={reRegisterForm.registrationNumber} onChange={(event) => { setReRegisterForm((current) => ({ ...current, registrationNumber: event.target.value })); setComplianceError('') }} /></label>
+            <label>REGO Expiry<input type="date" value={reRegisterForm.regoExpiry} onChange={(event) => { setReRegisterForm((current) => ({ ...current, regoExpiry: event.target.value })); setComplianceError('') }} /></label>
+            <label>Current WOF Expiry<input type="date" value={reRegisterForm.currentWofExpiry} onChange={(event) => { setReRegisterForm((current) => ({ ...current, currentWofExpiry: event.target.value })); setComplianceError('') }} /></label>
+        </EditDrawerFormDialog>}
 
         {!isCreate && maintenanceDialogOpen && <EditDrawerFormDialog
             eyebrow="Maintenance"

@@ -5,6 +5,7 @@ import PageSettingsButton from '../shared/settings/PageSettingsButton'
 import PageSettingsDialog from '../shared/settings/PageSettingsDialog'
 import WofEditorDrawer from './components/WofEditorDrawer'
 import EquipmentDrawer from '../equipment/components/EquipmentDrawer'
+import { isRoadRegistered } from '../equipment/compliance/equipmentCompliance'
 import type { Equipment } from '../jobs/types/equipment.types'
 import { useWof } from './hooks/useWof'
 import type { WofTab } from './types/wof.types'
@@ -35,15 +36,16 @@ export default function WofScreen({ accountId }: { accountId: string }) {
     const [settingsError, setSettingsError] = useState('')
     const [deleteMessage, setDeleteMessage] = useState('')
 
-    const baseRows = useMemo(() => equipment.filter((item) => item.gr_wofrequired || inspections.some((record) => record.gr_Equipment?.gr_equipmentid === item.gr_equipmentid)).map((item) => {
+    const roadRegisteredEquipment = useMemo(() => equipment.filter(isRoadRegistered), [equipment])
+    const baseRows = useMemo(() => roadRegisteredEquipment.map((item) => {
         const inspection = inspections.filter((record) => record.gr_Equipment?.gr_equipmentid === item.gr_equipmentid).sort((a, b) => (b.gr_inspectiondate || b.gr_name).localeCompare(a.gr_inspectiondate || a.gr_name))[0]
         const jobId = inspection?.gr_Job?.gr_jobid
         const schedule = scheduleOptions.find((option) => option._gr_job_value?.toLowerCase() === jobId?.toLowerCase() && option.gr_confirmed)
             ?? scheduleOptions.find((option) => option._gr_job_value?.toLowerCase() === jobId?.toLowerCase())
         const customer = inspection?.gr_Job?.gr_Site?.gr_Customer?.gr_name || item.gr_Site?.gr_Customer?.gr_name || ''
         const site = inspection?.gr_Job?.gr_Site?.gr_name || item.gr_Site?.gr_name || ''
-        return { equipment: item, inspection, schedule, customer, site, due: getWofDueStatus(item.gr_wofrequired, item.gr_currentwofexpiry, undefined, preferences.dueSoonDays) }
-    }), [equipment, inspections, preferences.dueSoonDays, scheduleOptions])
+        return { equipment: item, inspection, schedule, customer, site, due: getWofDueStatus(true, item.gr_currentwofexpiry, undefined, preferences.dueSoonDays) }
+    }), [inspections, preferences.dueSoonDays, roadRegisteredEquipment, scheduleOptions])
 
     const tabCounts = useMemo(() => ({
         all: baseRows.length,
