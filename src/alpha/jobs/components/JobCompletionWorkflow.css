@@ -1,0 +1,11 @@
+.job-completion-equipment,
+.job-completion-service,
+.job-completion-summary { padding: 12px; border: 1px solid #dce5e0; border-radius: 9px; background: #f7faf8; }
+.job-completion-equipment span,
+.job-completion-service span { display: block; color: #737d77; font-size: .66rem; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.job-completion-equipment strong,
+.job-completion-service strong { display: block; margin-top: 4px; color: #26362f; }
+.job-completion-equipment p { margin: 3px 0 0; color: #68736d; font-size: .76rem; }
+.edit-form-dialog-fields label output { display: block; min-height: 38px; box-sizing: border-box; padding: 9px 10px; border: 1px solid #d8dfdb; border-radius: 7px; background: #f2f5f3; color: #35433c; font-weight: 700; }
+.job-completion-summary strong { color: #35433c; font-size: .76rem; }
+.job-completion-summary ul { display: grid; gap: 5px; margin: 8px 0 0; padding-left: 20px; color: #5d6962; font-size: .74rem; }

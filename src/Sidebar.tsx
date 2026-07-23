@@ -13,7 +13,6 @@ const menuItems = [
     { label: 'Scheduling', shortLabel: 'C', path: '/scheduling' },
     { label: 'Quotes', shortLabel: 'Q', path: '/quotes' },
     { label: 'Pricing', shortLabel: '$', path: '/pricing' },
-    { label: 'Job API Test', shortLabel: 'API', path: '/job-api-test' },
 ]
 
 export default function Sidebar() {
@@ -60,15 +59,6 @@ export default function Sidebar() {
 
             <div className="sidebar-spacer" />
 
-            <NavLink
-                to="/settings"
-                title={isOpen ? undefined : 'Settings'}
-                aria-label="Settings"
-                className={({ isActive }) => isActive ? 'sidebar-link active' : 'sidebar-link'}
-            >
-                <span className="sidebar-link-icon sidebar-settings-icon" aria-hidden="true">S</span>
-                <span className="sidebar-link-label">Settings</span>
-            </NavLink>
             <SidebarFooter />
         </aside>
     )

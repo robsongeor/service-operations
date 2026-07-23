@@ -11,6 +11,7 @@ import { useJobEditor } from '../hooks/useJobEditor'
 import JobCoreFields from './JobCoreFields'
 import JobRelationshipFields from './JobRelationshipFields'
 import JobScheduleFields from './JobScheduleFields'
+import { JOB_STATUSES, UNCONFIRMED_OPERATION_MESSAGE } from '../types/jobStatus.types'
 import JobDrawerShell from './JobDrawerShell'
 import JobQuotesSection from './JobQuotesSection'
 import JobCardFields from './JobCardFields'
@@ -59,7 +60,7 @@ type Props = {
         make?: string
         model?: string
     }) => Promise<string>
-    onSave: (jobId: string, job: JobSaveInput) => Promise<void>
+    onSave: (jobId: string, job: JobSaveInput) => Promise<boolean | void>
     onDelete: (jobId: string) => Promise<void>
     onCreateScheduleOption: (option: JobScheduleOptionInput) => Promise<void>
     onUpdateScheduleOption: (
@@ -187,7 +188,7 @@ export default function JobEditDrawer({
         try {
             setIsSaving(true)
             setSaveError('')
-            await onSave(job.gr_jobid, {
+            const saved = await onSave(job.gr_jobid, {
                 jobNumber: draft.jobNumber.trim(),
                 orderNumber: draft.orderNumber.trim(),
                 description: draft.description.trim(),
@@ -203,7 +204,7 @@ export default function JobEditDrawer({
                 officeActionOwner: officeActionOwner.trim(),
                 officeAttentionRequired,
             })
-            onClose()
+            if (saved !== false) onClose()
         } catch (error) {
             console.error(error)
             setSaveError('Changes could not be saved. Please try again.')
@@ -364,6 +365,10 @@ export default function JobEditDrawer({
                             equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)}
                             servicePlans={servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === draft.equipmentId.toLowerCase())}
                         />}
+                        {job.gr_status === JOB_STATUSES.COMPLETE && jobRequiresMaintenance(job.gr_jobtype) && <div className="job-completion-history job-edit-field-wide">
+                            <span>Hour Meter at Completion</span>
+                            <strong>{job.gr_hourmeter == null ? 'Not recorded' : `${job.gr_hourmeter.toLocaleString('en-NZ')} hours`}</strong>
+                        </div>}
 
                         <JobRelationshipFields
                             editor={editor}
@@ -383,6 +388,7 @@ export default function JobEditDrawer({
                         <JobScheduleFields
                             jobId={job.gr_jobid}
                             scheduleOptions={scheduleOptions}
+                            disabledMessage={draft.status === JOB_STATUSES.UNCONFIRMED ? UNCONFIRMED_OPERATION_MESSAGE : undefined}
                             onCreate={onCreateScheduleOption}
                             onUpdate={onUpdateScheduleOption}
                             onDelete={onDeleteScheduleOption}

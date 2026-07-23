@@ -1081,4 +1081,7 @@
 .job-maintenance-summary-plans article.overdue strong,
 .job-maintenance-summary-plans article .job-maintenance-overdue { color: #a33939; }
 .job-maintenance-summary-plans article span { color: #68736d; font-size: .77rem; }
+.job-completion-history { display: flex; justify-content: space-between; gap: 12px; padding: 11px 12px; border: 1px solid #dfe5e1; border-radius: 8px; background: #f7f9f8; }
+.job-completion-history span { color: #68736d; font-size: .76rem; }
+.job-completion-history strong { color: #344039; font-size: .78rem; }
 @media (max-width: 640px) { .job-maintenance-summary-heading { display: grid; } .job-maintenance-summary-plans { grid-template-columns: 1fr; } }

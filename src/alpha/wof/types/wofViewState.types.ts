@@ -1,4 +1,4 @@
-export type WofSortKey = 'expiry' | 'customer'
+export type WofSortKey = 'expiry' | 'rego-expiry' | 'customer'
 export type WofSortDirection = 'ascending' | 'descending'
 export type WofTablePreferences = { dueSoonDays: number; sort: { key: WofSortKey; direction: WofSortDirection } }
 
@@ -13,7 +13,7 @@ export function loadWofPreferences(accountId: string): WofTablePreferences {
         const direction = parsed.sort?.direction
         return {
             dueSoonDays: Number.isInteger(dueSoonDays) && dueSoonDays >= 1 && dueSoonDays <= 365 ? dueSoonDays : WOF_DUE_SOON_DAYS,
-            sort: { key: sortKey === 'customer' || sortKey === 'expiry' ? sortKey : 'expiry', direction: direction === 'descending' ? 'descending' : 'ascending' },
+            sort: { key: sortKey === 'customer' || sortKey === 'expiry' || sortKey === 'rego-expiry' ? sortKey : 'expiry', direction: direction === 'descending' ? 'descending' : 'ascending' },
         }
     } catch { return DEFAULT_WOF_PREFERENCES }
 }

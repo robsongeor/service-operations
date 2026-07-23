@@ -28,5 +28,6 @@
 .customer-drawer-fields input[aria-invalid="true"] { border-color: #c86b6b; background: #fffafa; }
 .customer-drawer-footer-note { min-width: 0; color: #717a74; font-size: .7rem; }
 .customer-drawer-error { color: #9b3737; font-weight: 700; }
+.customer-drawer-success { color: #176f66; font-weight: 700; }
 .customer-drawer-footer-actions { display: flex; flex: 0 0 auto; gap: 8px; }
 @media (max-width: 560px) { .customer-drawer-fields { grid-template-columns: 1fr; }.customer-drawer-fields label.wide { grid-column: auto; }.edit-drawer-footer { align-items: stretch; flex-direction: column; }.customer-drawer-footer-actions { justify-content: flex-end; } }

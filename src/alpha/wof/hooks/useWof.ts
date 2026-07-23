@@ -7,15 +7,18 @@ import { fetchSites, createSite as createSiteApi } from '../../jobs/services/sit
 import { fetchJobs } from '../../jobs/services/jobsApi'
 import { createJobScheduleOption, deleteJobScheduleOption, fetchJobScheduleOptions, updateJobScheduleOption } from '../../jobs/services/jobScheduleApi'
 import { SCHEDULE_TYPE } from '../../jobs/types/jobSchedule.types'
-import { createEquipment as createEquipmentApi } from '../../equipment/services/equipmentManagerApi'
-import type { EquipmentUpdateInput } from '../../equipment/types/equipmentManager.types'
+import { applyEquipmentUpdate, createEquipment as createEquipmentApi, deleteEquipment as deleteEquipmentApi, updateEquipment as updateEquipmentApi } from '../../equipment/services/equipmentManagerApi'
+import { normalizeEquipmentInput, type EquipmentUpdateInput } from '../../equipment/types/equipmentManager.types'
+import { fetchEquipmentServicePlans, saveEquipmentMaintenanceHistory as saveEquipmentMaintenanceHistoryApi, type MaintenanceHistoryInput } from '../../equipment/servicePlans/servicePlanApi'
+import type { EquipmentServicePlan } from '../../equipment/servicePlans/equipmentServicePlan.types'
 import type { Customer } from '../../jobs/types/customer.types'
 import type { Site } from '../../jobs/types/site.types'
 import { JOB_STATUSES } from '../../jobs/types/jobStatus.types'
 import { JOB_TYPES } from '../../jobs/types/jobType.types'
 import { SERVICE_TYPES } from '../../equipment/servicePlans/equipmentServicePlan.types'
 import type { CreateWofInput, ServiceProvider, TechnicianQualification, UpdateWofInput, WofInspection } from '../types/wof.types'
-import { createWof as createWofApi, fetchTechnicianQualifications, fetchWofInspections, fetchWofProviders, updateWof as updateWofApi } from '../services/wofApi'
+import { createWof as createWofApi, deleteWofInspection, fetchTechnicianQualifications, fetchWofInspection, fetchWofInspections, fetchWofProviders, updateWof as updateWofApi } from '../services/wofApi'
+import { getWofDeletionBlockReason } from '../utils/wofRules'
 
 export function useWof() {
     const { instance } = useMsal()
@@ -28,6 +31,9 @@ export function useWof() {
     const [sites, setSites] = useState<Site[]>([])
     const [jobs, setJobs] = useState<Awaited<ReturnType<typeof fetchJobs>>>([])
     const [scheduleOptions, setScheduleOptions] = useState<Awaited<ReturnType<typeof fetchJobScheduleOptions>>>([])
+    const [servicePlans, setServicePlans] = useState<EquipmentServicePlan[]>([])
+    const [isEquipmentSaving, setIsEquipmentSaving] = useState(false)
+    const [equipmentSaveError, setEquipmentSaveError] = useState('')
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
 
@@ -40,14 +46,15 @@ export function useWof() {
         setLoading(true); setError('')
         try {
             const accessToken = await token()
-            const [equipmentRows, inspectionRows, qualificationRows, providerRows, customerRows, siteRows, jobRows, scheduleRows] = await Promise.all([
+            const [equipmentRows, inspectionRows, qualificationRows, providerRows, customerRows, siteRows, jobRows, scheduleRows, planRows] = await Promise.all([
                 fetchEquipment(accessToken), fetchWofInspections(accessToken), fetchTechnicianQualifications(accessToken), fetchWofProviders(accessToken),
                 fetchCustomers(accessToken), fetchSites(accessToken), fetchJobs(accessToken),
-                fetchJobScheduleOptions(accessToken),
+                fetchJobScheduleOptions(accessToken), fetchEquipmentServicePlans(accessToken),
             ])
             setEquipment(equipmentRows); setInspections(inspectionRows); setQualifications(qualificationRows); setProviders(providerRows)
             setCustomers(customerRows); setSites(siteRows); setJobs(jobRows)
             setScheduleOptions(scheduleRows)
+            setServicePlans(planRows)
         } catch (caught) { setError(caught instanceof Error ? caught.message : 'WOF data could not be loaded.') }
         finally { setLoading(false) }
     }, [account, token])
@@ -83,6 +90,81 @@ export function useWof() {
         await load()
     }
 
+    const loadWofInspection = async (inspectionId: string) =>
+        fetchWofInspection(await token(), inspectionId)
+
+    const loadEquipment = async (equipmentId: string) => {
+        const rows = await fetchEquipment(await token())
+        setEquipment(rows)
+        const record = rows.find((item) => item.gr_equipmentid === equipmentId)
+        if (!record) throw new Error('The selected Equipment record could not be found.')
+        return record
+    }
+
+    const updateEquipment = async (record: typeof equipment[number], input: EquipmentUpdateInput) => {
+        setIsEquipmentSaving(true)
+        setEquipmentSaveError('')
+        try {
+            const normalized = normalizeEquipmentInput(input)
+            await updateEquipmentApi(await token(), record.gr_equipmentid, normalized)
+            const updated = applyEquipmentUpdate(record, normalized, sites.find((site) => site.gr_siteid === normalized.siteId))
+            setEquipment((current) => current.map((item) => item.gr_equipmentid === updated.gr_equipmentid ? updated : item))
+            return updated
+        } catch (caught) {
+            setEquipmentSaveError(caught instanceof Error ? caught.message : 'Equipment could not be saved.')
+            throw caught
+        } finally {
+            setIsEquipmentSaving(false)
+        }
+    }
+
+    const saveEquipmentMaintenanceHistory = async (record: typeof equipment[number], plans: EquipmentServicePlan[], input: MaintenanceHistoryInput) => {
+        setIsEquipmentSaving(true)
+        setEquipmentSaveError('')
+        try {
+            const updatedPlans = await saveEquipmentMaintenanceHistoryApi(await token(), record.gr_equipmentid, plans, input)
+            const updatedEquipment = { ...record, gr_currenthourmeter: input.currentHourMeter }
+            setEquipment((current) => current.map((item) => item.gr_equipmentid === record.gr_equipmentid ? updatedEquipment : item))
+            setServicePlans((current) => [
+                ...current.filter((plan) => plan._gr_equipment_value?.toLowerCase() !== record.gr_equipmentid.toLowerCase()),
+                ...updatedPlans,
+            ])
+            return updatedEquipment
+        } catch (caught) {
+            setEquipmentSaveError(caught instanceof Error ? caught.message : 'Maintenance history could not be saved.')
+            throw caught
+        } finally {
+            setIsEquipmentSaving(false)
+        }
+    }
+
+    const deleteEquipment = async (equipmentId: string) => {
+        setIsEquipmentSaving(true)
+        setEquipmentSaveError('')
+        try {
+            await deleteEquipmentApi(await token(), equipmentId)
+            setEquipment((current) => current.filter((item) => item.gr_equipmentid !== equipmentId))
+        } catch (caught) {
+            setEquipmentSaveError(caught instanceof Error ? caught.message : 'Equipment could not be deleted.')
+            throw caught
+        } finally {
+            setIsEquipmentSaving(false)
+        }
+    }
+
+    const deleteWof = async (inspection: WofInspection) => {
+        const blockedReason = getWofDeletionBlockReason(inspection)
+        if (blockedReason) throw new Error(blockedReason)
+        const accessToken = await token()
+
+        try {
+            await deleteWofInspection(accessToken, inspection.gr_wofinspectionid)
+        } catch (caught) {
+            throw new Error('The WOF Inspection could not be deleted. Check delete permissions or dependent records and try again.', { cause: caught })
+        }
+        await load()
+    }
+
     const createCustomer = async (input: { name: string }) => {
         const id = await createCustomerApi(await token(), input)
         const created = { gr_customerid: id, gr_name: input.name.trim() }
@@ -98,11 +180,14 @@ export function useWof() {
     }
 
     const createEquipment = async (input: EquipmentUpdateInput, resolvedSite?: Site) => {
-        const response = await createEquipmentApi(await token(), input)
-        const created = { ...response, gr_fleet: input.fleet.trim() || null, gr_make: input.make.trim() || null, gr_model: input.model.trim() || null, gr_serial: input.serial.trim() || null, gr_registrationnumber: input.registrationNumber.trim() || null, gr_wofrequired: input.wofRequired, gr_currentwofexpiry: input.currentWofExpiry || null, gr_Site: resolvedSite ?? sites.find((site) => site.gr_siteid === input.siteId) }
-        setEquipment((current) => [...current, created])
+        const normalized = normalizeEquipmentInput(input)
+        const response = await createEquipmentApi(await token(), normalized)
+        const created = { ...response, gr_fleet: normalized.fleet || null, gr_make: normalized.make || null, gr_model: normalized.model || null, gr_serial: normalized.serial || null, gr_registrationnumber: normalized.registrationNumber || null, gr_wofrequired: normalized.wofRequired, gr_currentwofexpiry: normalized.currentWofExpiry || null, gr_regoexpiry: normalized.regoExpiry || null, gr_Site: resolvedSite ?? sites.find((site) => site.gr_siteid === normalized.siteId) }
+        setEquipment((current) => current.some((item) => item.gr_equipmentid === created.gr_equipmentid)
+            ? current.map((item) => item.gr_equipmentid === created.gr_equipmentid ? created : item)
+            : [...current, created])
         return created
     }
 
-    return { equipment, inspections, qualifications, providers, customers, sites, jobs, scheduleOptions, loading, error, reload: load, createWof, updateWof, createCustomer, createSite, createEquipment }
+    return { equipment, inspections, qualifications, providers, customers, sites, jobs, scheduleOptions, servicePlans, loading, error, isEquipmentSaving, equipmentSaveError, reload: load, loadWofInspection, loadEquipment, createWof, updateWof, deleteWof, createCustomer, createSite, createEquipment, updateEquipment, saveEquipmentMaintenanceHistory, deleteEquipment, clearEquipmentSaveError: () => setEquipmentSaveError('') }
 }

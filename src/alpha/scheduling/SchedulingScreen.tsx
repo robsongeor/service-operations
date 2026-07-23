@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useJobs } from '../jobs/hooks/useJobs'
+import { jobIsOperational } from '../jobs/types/jobStatus.types'
 import {
     SCHEDULE_TYPE,
     type JobScheduleOption,
 } from '../jobs/types/jobSchedule.types'
 import type { Job } from '../jobs/types/job.types'
 import JobEditDrawer from '../jobs/components/JobEditDrawer'
+import JobCompletionWorkflow from '../jobs/components/JobCompletionWorkflow'
 import JobTypeTabs from '../jobs/components/JobTypeTabs'
 import '../jobs/components/JobTypeControls.css'
 import './SchedulingScreen.css'
@@ -172,6 +174,7 @@ export default function SchedulingScreen() {
         createScheduleOption,
         updateScheduleOption,
         deleteScheduleOption,
+        completionRequest, isCompletingJob, completionError, completeServiceJob, cancelJobCompletion,
         isLoading,
         loadError,
         retryInitialLoad,
@@ -221,8 +224,10 @@ export default function SchedulingScreen() {
         return optionDate >= dateKey(weekStart) && optionDate <= dateKey(weekEnd)
     })
     const visibleOptionsThisWeek = optionsThisWeek.filter((option) => {
+        const job = jobsById.get(option._gr_job_value?.toLowerCase())
+        if (!job || !jobIsOperational(job.gr_status)) return false
         if (selectedJobType === 'all') return true
-        return jobsById.get(option._gr_job_value?.toLowerCase())?.gr_jobtype === selectedJobType
+        return job.gr_jobtype === selectedJobType
     })
     const flexibleWeekOptions = visibleOptionsThisWeek.filter(
         (option) => option.gr_scheduletype === SCHEDULE_TYPE.WEEK,
@@ -306,7 +311,13 @@ export default function SchedulingScreen() {
             </section>
 
             <div className="scheduling-job-type-filter">
-                <JobTypeTabs selectedJobType={selectedJobType} onChange={setSelectedJobType} ariaLabel="Filter scheduled jobs by type" />
+                <JobTypeTabs
+                    selectedJobType={selectedJobType}
+                    onChange={(jobType) => {
+                        if (jobType !== 'unconfirmed') setSelectedJobType(jobType)
+                    }}
+                    ariaLabel="Filter scheduled jobs by type"
+                />
             </div>
 
             <div className="schedule-board-scroll">
@@ -408,6 +419,16 @@ export default function SchedulingScreen() {
                     onClose={() => setEditingJob(null)}
                 />
             )}
+            <JobCompletionWorkflow
+                key={completionRequest?.job.gr_jobid ?? 'no-completion'}
+                request={completionRequest}
+                equipment={equipmentList}
+                servicePlans={servicePlans}
+                isCompleting={isCompletingJob}
+                error={completionError}
+                onCancel={cancelJobCompletion}
+                onComplete={completeServiceJob}
+            />
         </div>
     )
 }

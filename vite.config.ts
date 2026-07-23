@@ -14,6 +14,53 @@ function sendJson(response: ServerResponse, statusCode: number, body: object) {
 }
 
 function liftTrucksProxy(env: Record<string, string | undefined>): Plugin {
+  const validateAuthenticatedUser = async (request: IncomingMessage, response: ServerResponse) => {
+    const authorization = request.headers.authorization?.trim() ?? ''
+    if (!/^Bearer\s+\S+$/i.test(authorization)) {
+      response.setHeader('WWW-Authenticate', 'Bearer')
+      sendJson(response, 401, { error: 'Authentication is required.' })
+      return false
+    }
+
+    const configuredOrigin = env.DATAVERSE_URL || env.VITE_DATAVERSE_URL
+    let dataverseOrigin = ''
+    try {
+      const url = new URL(configuredOrigin ?? '')
+      if (url.protocol === 'https:') dataverseOrigin = url.origin
+    } catch {
+      // Invalid configuration is handled without exposing server settings.
+    }
+    if (!dataverseOrigin) {
+      sendJson(response, 500, { error: 'Authentication validation is not configured.' })
+      return false
+    }
+
+    try {
+      const identityResponse = await fetch(`${dataverseOrigin}/api/data/v9.2/WhoAmI`, {
+        headers: { Authorization: authorization, Accept: 'application/json' },
+      })
+      if (!identityResponse.ok) {
+        if (identityResponse.status === 401 || identityResponse.status === 403) {
+          response.setHeader('WWW-Authenticate', 'Bearer')
+          sendJson(response, 401, { error: 'The authenticated session is invalid or expired.' })
+        } else {
+          sendJson(response, 503, { error: 'Authentication could not be validated.' })
+        }
+        return false
+      }
+      const identity = await identityResponse.json() as { UserId?: unknown }
+      if (typeof identity.UserId !== 'string' || !identity.UserId) {
+        sendJson(response, 401, { error: 'The authenticated identity is invalid.' })
+        return false
+      }
+    } catch {
+      sendJson(response, 503, { error: 'Authentication could not be validated.' })
+      return false
+    }
+
+    return true
+  }
+
   const handleRequest = async (request: IncomingMessage, response: ServerResponse) => {
     if (!request.url) return false
 
@@ -25,6 +72,8 @@ function liftTrucksProxy(env: Record<string, string | undefined>): Plugin {
       sendJson(response, 405, { error: 'Method not allowed.' })
       return true
     }
+
+    if (!await validateAuthenticatedUser(request, response)) return true
 
     const jobNumber = requestUrl.searchParams.get('jobNumber')?.trim() ?? ''
     if (!jobNumber) {
@@ -65,8 +114,13 @@ function liftTrucksProxy(env: Record<string, string | undefined>): Plugin {
         signal: controller.signal,
       })
 
-      response.statusCode = upstreamResponse.status
-      response.statusMessage = upstreamResponse.statusText
+      if (!upstreamResponse.ok) {
+        response.setHeader('X-Job-Lookup-Source', 'upstream-service')
+        sendJson(response, 502, { error: 'The Lift Trucks API could not complete the request.' })
+        return true
+      }
+
+      response.statusCode = 200
       response.setHeader('X-Job-Lookup-Source', 'upstream-service')
       const contentType = upstreamResponse.headers.get('content-type')
       if (contentType) response.setHeader('Content-Type', contentType)
@@ -77,10 +131,7 @@ function liftTrucksProxy(env: Record<string, string | undefined>): Plugin {
         sendJson(response, 504, { error: 'The Lift Trucks API request timed out.' })
       } else {
         response.setHeader('X-Job-Lookup-Source', 'internal-proxy')
-        sendJson(response, 502, {
-          error: 'The Lift Trucks API could not be reached.',
-          detail: error instanceof Error ? error.message : String(error),
-        })
+        sendJson(response, 502, { error: 'The Lift Trucks API could not be reached.' })
       }
     } finally {
       clearTimeout(timeout)
@@ -94,10 +145,8 @@ function liftTrucksProxy(env: Record<string, string | undefined>): Plugin {
       void handleRequest(request, response).then((handled) => {
         if (!handled) next()
       }).catch((error: unknown) => {
-        sendJson(response, 500, {
-          error: 'The Lift Trucks proxy could not process the request.',
-          detail: error instanceof Error ? error.message : String(error),
-        })
+        void error
+        sendJson(response, 500, { error: 'The Lift Trucks proxy could not process the request.' })
       })
     })
   }

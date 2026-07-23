@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "npm run test:api",
+    "test:api": "node --test tests/joblookup.test.cjs"
   },
   "dependencies": {
     "@azure/msal-browser": "^5.9.0",

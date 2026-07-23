@@ -20,6 +20,7 @@ The schema below was provisioned and published in the `ServiceOperationsNew` sol
 | WOF Required | `gr_wofrequired` | Yes/No | Optional; No | Includes equipment in WOF compliance tracking |
 | Current WOF Expiry | `gr_currentwofexpiry` | Date only | Optional | Current active expiry |
 | Last WOF Completed | `gr_lastwofcompleted` | Date only | Optional | Most recent passed inspection date |
+| REGO Expiry | `gr_regoexpiry` | Date only | Optional | Current registration expiry |
 
 ## New tables
 
@@ -88,3 +89,14 @@ Editing uses the existing Job and WOF Inspection records. The application update
 Job first, then the WOF Inspection, then creates, updates or removes the schedule when needed.
 Each partial failure is reported explicitly, and the screen reloads only when all requested
 steps succeed. No additional Dataverse columns are required for editing.
+
+## Delete consistency
+
+Dataverse cascade behaviour was not explicitly configured by the WOF provisioning script and
+is not assumed by the application. The cleanup workflow only deletes planned, incomplete WOF
+Inspection records whose Job lookup is empty. A WOF Inspection with a linked Job is protected;
+the cleanup does not delete its Job or Job Schedule Options. Equipment registration and WOF
+summary fields are never changed by this workflow.
+
+Users performing this action require Delete privileges for WOF Inspection. No additional
+tables or columns are required.

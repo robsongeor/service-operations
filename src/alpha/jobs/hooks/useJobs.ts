@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
+import { useActiveMsalAccount } from '../../../auth/useActiveMsalAccount'
 import type { Job } from '../types/job.types'
 import type { Equipment } from '../types/equipment.types'
 import {
@@ -13,7 +14,7 @@ import {
     deleteJob as deleteJobApi,
 } from '../services/jobsApi'
 import type { JobSaveInput } from '../types/jobSave.types'
-import type { JobStatus } from '../types/jobStatus.types'
+import { JOB_STATUSES, UNCONFIRMED_OPERATION_MESSAGE, jobIsOperational, type JobStatus } from '../types/jobStatus.types'
 import { JOB_CARD_STATUSES, type JobCardStatus } from '../types/jobCardStatus.types'
 import type { JobAssignmentInput } from '../types/jobAssignment.types'
 import {
@@ -69,24 +70,23 @@ import {
 } from '../services/contactsApi'
 import { fetchQuotes as fetchQuotesApi } from '../../quotes/services/quotesApi'
 import type { Quote } from '../../quotes/types/quote.types'
-import { JOB_STATUSES } from '../types/jobStatus.types'
-import { jobRequiresMaintenance } from '../types/jobType.types'
+import { fetchEquipmentServicePlans } from '../../equipment/servicePlans/servicePlanApi'
+import type { EquipmentServicePlan } from '../../equipment/servicePlans/equipmentServicePlan.types'
 import {
-    applyServiceCompletion,
-    calculateIncreasingHourMeter,
-} from '../../equipment/servicePlans/servicePlanCalculations'
-import {
-    completeEquipmentServicePlans,
-    fetchEquipmentServicePlans,
-    updateEquipmentCurrentHourMeter,
-} from '../../equipment/servicePlans/servicePlanApi'
-import { SERVICE_TYPES, type EquipmentServicePlan } from '../../equipment/servicePlans/equipmentServicePlan.types'
+    getJobCompletionKind,
+    resolveCompletionEquipment,
+    resolveCompletionServiceType,
+    validateCompletionHourMeter,
+    validateServiceCompletionContext,
+    type JobCompletionRequest,
+} from '../completion/jobCompletion'
+import { completeServiceJobAtomically } from '../completion/serviceCompletionApi'
 
 
 
 export function useJobs() {
-    const { instance, accounts } = useMsal()
-    const account = accounts[0]
+    const { instance } = useMsal()
+    const account = useActiveMsalAccount()
 
     const [jobs, setJobs] = useState<Job[]>([])
     const [equipmentList, setEquipmentList] = useState<Equipment[]>([])
@@ -102,8 +102,12 @@ export function useJobs() {
     const [isLoading, setIsLoading] = useState(false)
     const [loadError, setLoadError] = useState('')
     const [reloadKey, setReloadKey] = useState(0)
+    const [completionRequest, setCompletionRequest] = useState<JobCompletionRequest | null>(null)
+    const [isCompletingJob, setIsCompletingJob] = useState(false)
+    const [completionError, setCompletionError] = useState('')
 
     const getAccessToken = async () => {
+        if (!account) throw new Error('No active Microsoft account is available. Sign in again and retry.')
         const response = await instance.acquireTokenSilent({
             scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`],
             account,
@@ -203,8 +207,44 @@ export function useJobs() {
         setScheduleOptions(options)
     }
 
+    const assertJobOperational = async (token: string, jobId: string) => {
+        let job = jobs.find((candidate) => candidate.gr_jobid.toLowerCase() === jobId.toLowerCase())
+        if (!job) {
+            const refreshedJobs = await fetchJobsApi(token)
+            setJobs(refreshedJobs)
+            job = refreshedJobs.find((candidate) => candidate.gr_jobid.toLowerCase() === jobId.toLowerCase())
+        }
+        if (!job) throw new Error('The job could not be found. Refresh the page and try again.')
+        if (!jobIsOperational(job.gr_status)) throw new Error(UNCONFIRMED_OPERATION_MESSAGE)
+        return job
+    }
+
+    const prepareJobForUnconfirmed = async (token: string, job: Job) => {
+        const options = scheduleOptions.filter((option) => option._gr_job_value?.toLowerCase() === job.gr_jobid.toLowerCase())
+        const assignments = jobAssignments.filter((assignment) => assignment._gr_job_value?.toLowerCase() === job.gr_jobid.toLowerCase())
+        if (!job.gr_Mechanic && options.length === 0 && assignments.length === 0) return
+
+        const confirmed = window.confirm(
+            'Move this job to Unconfirmed?\n\n'
+            + 'It is already allocated or scheduled. Continuing will remove its technician allocation, '
+            + 'additional assignments, and schedule options.',
+        )
+        if (!confirmed) throw new Error('The status change was cancelled.')
+
+        await Promise.all([
+            ...options.map((option) => deleteJobScheduleOptionApi(token, option.gr_jobscheduleoptionid)),
+            ...assignments.map((assignment) => deleteJobAssignmentApi(token, assignment.gr_jobassignmentid)),
+            ...(job.gr_Mechanic
+                ? [updateJobFieldsApi(token, job.gr_jobid, { 'gr_Mechanic@odata.bind': null })]
+                : []),
+        ])
+        setScheduleOptions((current) => current.filter((option) => option._gr_job_value?.toLowerCase() !== job.gr_jobid.toLowerCase()))
+        setJobAssignments((current) => current.filter((assignment) => assignment._gr_job_value?.toLowerCase() !== job.gr_jobid.toLowerCase()))
+    }
+
     const createScheduleOption = async (option: JobScheduleOptionInput) => {
         const token = await getAccessToken()
+        await assertJobOperational(token, option.jobId)
 
         if (option.confirmed) {
             const currentlyConfirmed = scheduleOptions.filter(
@@ -228,6 +268,7 @@ export function useJobs() {
 
     const confirmScheduleOption = async (jobId: string, optionId: string) => {
         const token = await getAccessToken()
+        await assertJobOperational(token, jobId)
         const optionsForJob = scheduleOptions.filter(
             (option) => option._gr_job_value?.toLowerCase() === jobId.toLowerCase(),
         )
@@ -248,6 +289,7 @@ export function useJobs() {
         option: JobScheduleOptionInput,
     ) => {
         const token = await getAccessToken()
+        await assertJobOperational(token, option.jobId)
         await updateJobScheduleOptionApi(token, optionId, option)
         await fetchScheduleOptions()
     }
@@ -264,35 +306,6 @@ export function useJobs() {
         const token = await getAccessToken()
         const equipment = await fetchEquipmentApi(token)
         setEquipmentList(equipment)
-    }
-
-    const processServiceCompletion = async (token: string, job: Job, completedDate: string) => {
-        if (!jobRequiresMaintenance(job.gr_jobtype)) return
-        if (!job.gr_servicetype || job.gr_servicetype === SERVICE_TYPES.NONE) return
-        if (!job.gr_Equipment?.gr_equipmentid) throw new Error('Select equipment before completing a service job.')
-        if (job.gr_hourmeter == null) throw new Error('Enter the hour meter before completing a service job.')
-
-        const equipment = equipmentList.find((item) => item.gr_equipmentid === job.gr_Equipment?.gr_equipmentid)
-        const completion = {
-            jobId: job.gr_jobid,
-            completedDate,
-            hourMeter: job.gr_hourmeter,
-            serviceType: job.gr_servicetype,
-        }
-        await completeEquipmentServicePlans(token, job.gr_Equipment.gr_equipmentid, servicePlans, completion)
-        setServicePlans((current) => current.map((plan) =>
-            plan._gr_equipment_value?.toLowerCase() === job.gr_Equipment?.gr_equipmentid.toLowerCase()
-                ? applyServiceCompletion([plan], completion)[0]
-                : plan,
-        ))
-
-        const nextCurrentHours = calculateIncreasingHourMeter(equipment?.gr_currenthourmeter, job.gr_hourmeter)
-        if (nextCurrentHours !== (equipment?.gr_currenthourmeter ?? 0)) {
-            await updateEquipmentCurrentHourMeter(token, job.gr_Equipment.gr_equipmentid, nextCurrentHours)
-            setEquipmentList((current) => current.map((item) => item.gr_equipmentid === job.gr_Equipment?.gr_equipmentid
-                ? { ...item, gr_currenthourmeter: nextCurrentHours }
-                : item))
-        }
     }
 
     const fetchJobOfficeUpdates = async () => {
@@ -317,22 +330,26 @@ export function useJobs() {
     }
 
     const updateJobStatus = async (jobId: string, status: JobStatus) => {
-        const token = await getAccessToken()
         const currentJob = jobs.find((job) => job.gr_jobid === jobId)
-        const isCompleting = status === JOB_STATUSES.COMPLETE && currentJob?.gr_status !== JOB_STATUSES.COMPLETE
+        if (!currentJob) throw new Error('The job could not be found. Refresh the page and try again.')
+        const isCompleting = status === JOB_STATUSES.COMPLETE && currentJob.gr_status !== JOB_STATUSES.COMPLETE
+        if (isCompleting && getJobCompletionKind(currentJob.gr_jobtype) === 'service') {
+            const contextError = validateServiceCompletionContext(currentJob)
+            if (contextError) throw new Error(contextError)
+            setCompletionError('')
+            setCompletionRequest({ kind: 'service', job: currentJob })
+            return false
+        }
+        const token = await getAccessToken()
+        if (status === JOB_STATUSES.UNCONFIRMED && currentJob.gr_status !== JOB_STATUSES.UNCONFIRMED) {
+            await prepareJobForUnconfirmed(token, currentJob)
+        }
         const completedDate = currentJob?.gr_completeddate ?? new Date().toISOString()
-        if (isCompleting && jobRequiresMaintenance(currentJob?.gr_jobtype)) {
-            if (!currentJob?.gr_Equipment) throw new Error('Select equipment before completing a service job.')
-            if (!currentJob.gr_servicetype || currentJob.gr_servicetype === SERVICE_TYPES.NONE) throw new Error('Select a service type before completing a service job.')
-            if (currentJob.gr_hourmeter == null) throw new Error('Enter the hour meter before completing a service job.')
-        }
         await updateJobStatusApi(token, jobId, status, isCompleting ? completedDate : undefined)
-        if (isCompleting && currentJob && jobRequiresMaintenance(currentJob.gr_jobtype)) {
-            await processServiceCompletion(token, currentJob, completedDate)
-        }
         setJobs((current) => current.map((job) => job.gr_jobid === jobId
             ? { ...job, gr_status: status, gr_completeddate: isCompleting ? completedDate : job.gr_completeddate }
             : job))
+        return true
     }
 
     const fetchJobAssignments = async () => {
@@ -343,6 +360,7 @@ export function useJobs() {
 
     const createJobAssignment = async (assignment: JobAssignmentInput) => {
         const token = await getAccessToken()
+        await assertJobOperational(token, assignment.jobId)
         await createJobAssignmentApi(token, assignment)
         await fetchJobAssignments()
     }
@@ -407,9 +425,11 @@ export function useJobs() {
             gr_jobnumber?: string
             gr_description?: string
             gr_ordernumber?: string
+            'gr_Mechanic@odata.bind'?: string | null
         }
     ) => {
         const token = await getAccessToken()
+        if (fields['gr_Mechanic@odata.bind']) await assertJobOperational(token, jobId)
 
         await updateJobFieldsApi(token, jobId, fields)
 
@@ -417,27 +437,27 @@ export function useJobs() {
     }
 
     const updateJob = async (jobId: string, job: JobSaveInput) => {
-        const token = await getAccessToken()
         const currentJob = jobs.find((item) => item.gr_jobid === jobId)
-        const isCompleting = job.status === JOB_STATUSES.COMPLETE && currentJob?.gr_status !== JOB_STATUSES.COMPLETE
-        if (isCompleting && jobRequiresMaintenance(job.jobType)) {
-            if (!job.equipmentId) throw new Error('Select equipment before completing a service job.')
-            if (job.serviceType === SERVICE_TYPES.NONE) throw new Error('Select a service type before completing a service job.')
-            if (job.hourMeter == null) throw new Error('Enter the hour meter before completing a service job.')
+        if (!currentJob) throw new Error('The job could not be found. Refresh the page and try again.')
+        const isCompleting = job.status === JOB_STATUSES.COMPLETE && currentJob.gr_status !== JOB_STATUSES.COMPLETE
+        if (isCompleting && getJobCompletionKind(job.jobType) === 'service') {
+            const contextError = validateServiceCompletionContext(currentJob, job)
+            if (contextError) throw new Error(contextError)
+            setCompletionError('')
+            setCompletionRequest({ kind: 'service', job: currentJob, pendingSave: job })
+            return false
+        }
+        const token = await getAccessToken()
+        if (job.status === JOB_STATUSES.UNCONFIRMED && currentJob.gr_status !== JOB_STATUSES.UNCONFIRMED) {
+            await prepareJobForUnconfirmed(token, currentJob)
+            job = { ...job, mechanicId: undefined }
+        }
+        if (job.status === JOB_STATUSES.UNCONFIRMED && job.mechanicId) {
+            throw new Error(UNCONFIRMED_OPERATION_MESSAGE)
         }
         const completedDate = job.completedDate || (isCompleting ? new Date().toISOString() : undefined)
         const jobWithCompletion = { ...job, completedDate }
         await updateJobApi(token, jobId, jobWithCompletion)
-
-        if (isCompleting && jobRequiresMaintenance(job.jobType)) {
-            const selectedEquipmentForCompletion = equipmentList.find((item) => item.gr_equipmentid === job.equipmentId)
-            await processServiceCompletion(token, {
-                ...currentJob!,
-                gr_Equipment: selectedEquipmentForCompletion,
-                gr_servicetype: job.serviceType,
-                gr_hourmeter: job.hourMeter,
-            }, completedDate!)
-        }
 
         if (job.equipmentId && job.siteId) {
             await updateEquipmentSite(token, job.equipmentId, job.siteId)
@@ -479,9 +499,76 @@ export function useJobs() {
                 }
                 : currentJob,
         ))
+        return true
+    }
+
+    const cancelJobCompletion = () => {
+        if (isCompletingJob) return
+        setCompletionRequest(null)
+        setCompletionError('')
+    }
+
+    const completeServiceJob = async (hourMeter: number) => {
+        const request = completionRequest
+        if (!request || request.kind !== 'service') return
+        const equipment = resolveCompletionEquipment(request, equipmentList)
+        const serviceType = resolveCompletionServiceType(request)
+        const currentHourMeter = equipment?.gr_currenthourmeter ?? 0
+        const validationError = validateCompletionHourMeter(String(hourMeter), currentHourMeter)
+        if (validationError) {
+            setCompletionError(validationError)
+            return
+        }
+        if (!equipment || !serviceType) {
+            setCompletionError(validateServiceCompletionContext(request.job, request.pendingSave))
+            return
+        }
+
+        setIsCompletingJob(true)
+        setCompletionError('')
+        try {
+            const token = await getAccessToken()
+            await completeServiceJobAtomically(token, {
+                jobId: request.job.gr_jobid,
+                equipmentId: equipment.gr_equipmentid,
+                hourMeter,
+                expectedServiceType: serviceType,
+                pendingSave: request.pendingSave,
+            })
+
+            const [nextJobs, nextEquipment, nextPlans] = await Promise.all([
+                fetchJobsApi(token),
+                fetchEquipmentApi(token),
+                fetchEquipmentServicePlans(token),
+            ])
+            setJobs(nextJobs)
+            setEquipmentList(nextEquipment)
+            setServicePlans(nextPlans)
+            setCompletionRequest(null)
+        } catch (error) {
+            try {
+                const token = await getAccessToken()
+                const [jobsResult, equipmentResult, plansResult] = await Promise.allSettled([
+                    fetchJobsApi(token),
+                    fetchEquipmentApi(token),
+                    fetchEquipmentServicePlans(token),
+                ])
+                if (jobsResult.status === 'fulfilled') setJobs(jobsResult.value)
+                if (equipmentResult.status === 'fulfilled') setEquipmentList(equipmentResult.value)
+                if (plansResult.status === 'fulfilled') setServicePlans(plansResult.value)
+            } catch {
+                // Keep the completion dialog open with the original error when refresh is unavailable.
+            }
+            setCompletionError(error instanceof Error ? error.message : 'The Service Job could not be completed.')
+        } finally {
+            setIsCompletingJob(false)
+        }
     }
 
     const createJob = async (job: JobSaveInput) => {
+        if (job.status === JOB_STATUSES.UNCONFIRMED && job.mechanicId) {
+            throw new Error(UNCONFIRMED_OPERATION_MESSAGE)
+        }
         const token = await getAccessToken()
 
         const jobId = await createJobApi(token, job)
@@ -629,6 +716,11 @@ export function useJobs() {
         deleteJobAssignment,
         updateJobFields,
         updateJob,
+        completionRequest,
+        isCompletingJob,
+        completionError,
+        completeServiceJob,
+        cancelJobCompletion,
         deleteJob,
         createScheduleOption,
         confirmScheduleOption,

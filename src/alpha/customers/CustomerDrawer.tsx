@@ -20,11 +20,14 @@ export type CustomerDraft = {
     sites: CustomerSiteDraft[]
 }
 
+export type CustomerDrawerTab = 'info' | 'sites'
+
 type Props = {
     mode: 'create' | 'edit'
     initialValue?: CustomerDraft
+    initialTab?: CustomerDrawerTab
     onClose: () => void
-    onSave: (value: CustomerDraft) => void
+    onSave: (value: CustomerDraft) => Promise<CustomerDraft>
 }
 
 const newSite = (): CustomerSiteDraft => ({
@@ -44,9 +47,13 @@ const emptyCustomer = (): CustomerDraft => ({
     sites: [newSite()],
 })
 
-export default function CustomerDrawer({ mode, initialValue, onClose, onSave }: Props) {
-    const [draft, setDraft] = useState<CustomerDraft>(() => initialValue ?? emptyCustomer())
-    const [activeTab, setActiveTab] = useState<'info' | 'sites'>('info')
+export default function CustomerDrawer({ mode, initialValue, initialTab = 'info', onClose, onSave }: Props) {
+    const [savedDraft, setSavedDraft] = useState<CustomerDraft>(() => initialValue ?? emptyCustomer())
+    const [draft, setDraft] = useState<CustomerDraft>(savedDraft)
+    const [activeTab, setActiveTab] = useState<CustomerDrawerTab>(initialTab)
+    const [isSaving, setIsSaving] = useState(false)
+    const [saveError, setSaveError] = useState('')
+    const [saveSuccess, setSaveSuccess] = useState('')
     const [errors, setErrors] = useState<{
         customerName?: string
         accountsEmail?: string
@@ -67,8 +74,17 @@ export default function CustomerDrawer({ mode, initialValue, onClose, onSave }: 
         }
     }
 
-    const submit = (event: FormEvent<HTMLFormElement>) => {
+    const isDirty = JSON.stringify(draft) !== JSON.stringify(savedDraft)
+
+    const requestClose = () => {
+        if (isSaving) return
+        if (isDirty && !window.confirm('Discard unsaved Customer and Site changes?')) return
+        onClose()
+    }
+
+    const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault()
+        if (isSaving || !isDirty) return
         const name = draft.name.trim()
         const accountsEmail = draft.accountsEmail.trim()
         const nextErrors = {
@@ -94,7 +110,7 @@ export default function CustomerDrawer({ mode, initialValue, onClose, onSave }: 
             return
         }
 
-        onSave({
+        const value = {
             name,
             accountsContact: draft.accountsContact.trim(),
             accountsPhone: draft.accountsPhone.trim(),
@@ -107,7 +123,21 @@ export default function CustomerDrawer({ mode, initialValue, onClose, onSave }: 
                 address: site.address.trim(),
                 operatingHours: site.operatingHours.trim(),
             })),
-        })
+        }
+
+        setIsSaving(true)
+        setSaveError('')
+        setSaveSuccess('')
+        try {
+            const savedValue = await onSave(value)
+            setDraft(savedValue)
+            setSavedDraft(savedValue)
+            setSaveSuccess('Site changes saved to Dataverse.')
+        } catch (caught) {
+            setSaveError(caught instanceof Error ? caught.message : 'Site changes could not be saved. Please try again.')
+        } finally {
+            setIsSaving(false)
+        }
     }
 
     const removeSiteFromPrototype = (siteId: string) => {
@@ -121,25 +151,30 @@ export default function CustomerDrawer({ mode, initialValue, onClose, onSave }: 
     return <EditDrawerShell
         eyebrow={mode === 'create' ? 'Customer workspace' : 'Customer account'}
         title={mode === 'create' ? 'New Customer' : draft.name || 'Edit Customer'}
-        onClose={onClose}
+        busy={isSaving}
+        onClose={requestClose}
         footer={<>
             <div className="customer-drawer-footer-note">
-                {firstError
+                {saveError
+                    ? <span className="customer-drawer-error" role="alert">{saveError}</span>
+                    : firstError
                     ? <span className="customer-drawer-error" role="alert">{firstError}</span>
-                    : <span>Prototype only — changes are not saved to Dataverse.</span>}
+                    : saveSuccess && !isDirty
+                    ? <span className="customer-drawer-success" role="status">{saveSuccess}</span>
+                    : <span>{mode === 'edit' ? 'Site name and address changes save to Dataverse.' : 'New Customer creation remains a prototype.'}</span>}
             </div>
             <div className="customer-drawer-footer-actions">
-                <button type="button" onClick={onClose}>Cancel</button>
-                <button className="primary" type="submit" form="customer-drawer-form">
-                    {mode === 'create' ? 'Create Customer' : 'Save changes'}
+                <button type="button" onClick={requestClose} disabled={isSaving}>Cancel</button>
+                <button className="primary" type="submit" form="customer-drawer-form" disabled={isSaving || !isDirty}>
+                    {isSaving ? 'Saving...' : mode === 'create' ? 'Create Customer' : 'Save changes'}
                 </button>
             </div>
         </>}
     >
         <form id="customer-drawer-form" onSubmit={submit}>
             <div className="customer-drawer-notice">
-                <strong>UI prototype</strong>
-                <span>Customer and site changes exist only until this page is refreshed.</span>
+                <strong>{mode === 'edit' ? 'Site editing' : 'UI prototype'}</strong>
+                <span>{mode === 'edit' ? 'Existing Site name and address changes are saved to Dataverse. Customer information remains page-only.' : 'Customer and Site creation changes exist only until this page is refreshed.'}</span>
             </div>
 
             <nav className="customer-drawer-tabs" aria-label="Customer drawer sections" role="tablist">
@@ -184,12 +219,12 @@ export default function CustomerDrawer({ mode, initialValue, onClose, onSave }: 
                         {draft.sites.map((site, index) => <article key={site.id}>
                             <header>
                                 <strong>Site {index + 1}</strong>
-                                <button type="button" onClick={() => removeSiteFromPrototype(site.id)}>Remove</button>
+                                {(mode === 'create' || site.id.startsWith('prototype-site-')) && <button type="button" onClick={() => removeSiteFromPrototype(site.id)}>Remove</button>}
                             </header>
                             <div className="customer-drawer-fields">
                                 <label>Site name<input aria-invalid={Boolean(errors.siteNames[site.id])} value={site.name} onChange={(event) => updateSite(site.id, 'name', event.target.value)} />{errors.siteNames[site.id] && <span className="customer-drawer-field-error" role="alert">{errors.siteNames[site.id]}</span>}</label>
                                 <label>Address<input value={site.address} onChange={(event) => updateSite(site.id, 'address', event.target.value)} /></label>
-                                <label className="wide">Operating hours<textarea rows={3} placeholder="e.g. Monday–Friday, 7:00 am–5:00 pm" value={site.operatingHours} onChange={(event) => updateSite(site.id, 'operatingHours', event.target.value)} /></label>
+                                {mode === 'create' && <label className="wide">Operating hours<textarea rows={3} placeholder="e.g. Monday–Friday, 7:00 am–5:00 pm" value={site.operatingHours} onChange={(event) => updateSite(site.id, 'operatingHours', event.target.value)} /></label>}
                             </div>
                         </article>)}
                     </div>

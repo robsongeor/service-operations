@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type { Equipment } from '../../jobs/types/equipment.types'
 import type { Customer } from '../../jobs/types/customer.types'
 import type { Job } from '../../jobs/types/job.types'
@@ -14,8 +14,9 @@ import type { EquipmentServicePlan } from '../servicePlans/equipmentServicePlan.
 import { SERVICE_TYPES, SERVICE_TYPE_OPTIONS, type PlannedServiceType } from '../servicePlans/equipmentServicePlan.types'
 import type { MaintenanceHistoryInput } from '../servicePlans/servicePlanApi'
 import { calculateHoursRemaining, calculateServiceStatus } from '../servicePlans/servicePlanStatus'
-import type { EquipmentUpdateInput } from '../types/equipmentManager.types'
+import { normalizeEquipmentInput, toEquipmentDateOnlyValue, type EquipmentCreateInitialValues, type EquipmentUpdateInput } from '../types/equipmentManager.types'
 import { classifyEquipmentIdentifier, deriveSiteNameFromAddress, normalizeCustomerName, parseSpreadsheetRow, type IdentifierClassification, type SpreadsheetRow } from '../utils/equipmentCreateHelpers'
+import SearchableSelect, { type SearchableSelectOption } from '../../shared/searchable-select/SearchableSelect'
 
 type SharedProps = {
     customers: Customer[]
@@ -29,7 +30,7 @@ type SharedProps = {
 
 type CreateProps = SharedProps & {
     mode: 'create'
-    initialValues?: Partial<EquipmentUpdateInput>
+    initialValues?: EquipmentCreateInitialValues
     onCreate: (input: EquipmentUpdateInput, resolvedSite?: Site) => Promise<void>
     onCreateCustomer: (input: { name: string }) => Promise<Customer>
     onCreateSite: (input: { customerId: string; name: string; address?: string }, customer?: Customer) => Promise<Site>
@@ -41,7 +42,7 @@ type EditProps = SharedProps & {
     servicePlans: EquipmentServicePlan[]
     onSave: (input: EquipmentUpdateInput) => Promise<void>
     onSaveMaintenanceHistory: (plans: EquipmentServicePlan[], input: MaintenanceHistoryInput) => Promise<void>
-    onCreateJob: (equipment: Equipment) => void
+    onCreateJob?: (equipment: Equipment) => void
     onDelete: () => Promise<void>
 }
 
@@ -68,6 +69,13 @@ export default function EquipmentDrawer(props: Props) {
     const isCreate = props.mode === 'create'
     const equipment = isCreate ? undefined : props.equipment
     const initialValues = isCreate ? props.initialValues : undefined
+    const initialSite = isCreate && initialValues?.siteId
+        ? sites.find((site) => site.gr_siteid === initialValues.siteId)
+        : undefined
+    const initialCustomer = initialSite?.gr_Customer
+        ?? (initialValues?.customerId
+            ? customers.find((customer) => customer.gr_customerid === initialValues.customerId)
+            : undefined)
     const [form, setForm] = useState<EquipmentUpdateInput>({
         fleet: equipment?.gr_fleet ?? initialValues?.fleet ?? '',
         make: equipment?.gr_make ?? initialValues?.make ?? '',
@@ -76,13 +84,14 @@ export default function EquipmentDrawer(props: Props) {
         siteId: equipment?.gr_Site?.gr_siteid ?? initialValues?.siteId ?? '',
         registrationNumber: equipment?.gr_registrationnumber ?? initialValues?.registrationNumber ?? '',
         wofRequired: equipment?.gr_wofrequired ?? initialValues?.wofRequired ?? false,
-        currentWofExpiry: equipment?.gr_currentwofexpiry ?? initialValues?.currentWofExpiry ?? '',
+        currentWofExpiry: toEquipmentDateOnlyValue(equipment?.gr_currentwofexpiry ?? initialValues?.currentWofExpiry),
+        regoExpiry: toEquipmentDateOnlyValue(equipment?.gr_regoexpiry ?? initialValues?.regoExpiry),
     })
-    const [customerId, setCustomerId] = useState(equipment?.gr_Site?.gr_Customer?.gr_customerid ?? '')
-    const [customerMode, setCustomerMode] = useState<CustomerMode>(equipment ? 'existing' : 'none')
-    const [siteMode, setSiteMode] = useState<SiteMode>(equipment?.gr_Site ? 'existing' : 'none')
-    const [customerQuery, setCustomerQuery] = useState(equipment?.gr_Site?.gr_Customer?.gr_name ?? '')
-    const [siteQuery, setSiteQuery] = useState(equipment?.gr_Site?.gr_name ?? '')
+    const [customerId, setCustomerId] = useState(equipment?.gr_Site?.gr_Customer?.gr_customerid ?? initialCustomer?.gr_customerid ?? '')
+    const [customerMode, setCustomerMode] = useState<CustomerMode>(equipment || initialCustomer ? 'existing' : 'none')
+    const [siteMode, setSiteMode] = useState<SiteMode>(equipment?.gr_Site || initialSite ? 'existing' : 'none')
+    const [customerQuery, setCustomerQuery] = useState(equipment?.gr_Site?.gr_Customer?.gr_name ?? initialCustomer?.gr_name ?? initialValues?.customerName ?? '')
+    const [, setSiteQuery] = useState(equipment?.gr_Site?.gr_name ?? initialSite?.gr_name ?? initialValues?.siteName ?? '')
     const [formError, setFormError] = useState('')
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
     const [isDeleting, setIsDeleting] = useState(false)
@@ -99,6 +108,7 @@ export default function EquipmentDrawer(props: Props) {
     const [sourceContextOpen, setSourceContextOpen] = useState(true)
     const [isReadingClipboard, setIsReadingClipboard] = useState(false)
     const manualPasteRef = useRef<HTMLTextAreaElement>(null)
+    const regoAutoEnabledRef = useRef(false)
     const [activeTab, setActiveTab] = useState<EquipmentDrawerTab>('details')
     const [maintenanceDialogOpen, setMaintenanceDialogOpen] = useState(false)
     const [maintenanceForm, setMaintenanceForm] = useState<MaintenanceHistoryForm>(() => ({
@@ -111,6 +121,14 @@ export default function EquipmentDrawer(props: Props) {
     }))
     const [maintenanceError, setMaintenanceError] = useState('')
 
+    useEffect(() => {
+        if (!isCreate || regoAutoEnabledRef.current || !form.registrationNumber.trim() || form.wofRequired) return
+        regoAutoEnabledRef.current = true
+        setForm((current) => current.registrationNumber.trim() && !current.wofRequired
+            ? { ...current, wofRequired: true }
+            : current)
+    }, [form.registrationNumber, form.wofRequired, isCreate])
+
     const history = equipment
         ? jobs
             .filter((job) => job.gr_Equipment?.gr_equipmentid.toLowerCase() === equipment.gr_equipmentid.toLowerCase())
@@ -120,6 +138,12 @@ export default function EquipmentDrawer(props: Props) {
     const visibleSites = sites
         .filter((site) => site.gr_Customer?.gr_customerid === customerId)
         .sort((a, b) => siteOptionLabel(a).localeCompare(siteOptionLabel(b)))
+    const siteOptions: SearchableSelectOption[] = visibleSites.map((site) => ({
+        value: site.gr_siteid,
+        label: siteOptionLabel(site),
+        secondary: site.gr_address || selectedCustomer?.gr_name,
+        searchText: [site.gr_address, selectedCustomer?.gr_name].filter(Boolean).join(' '),
+    }))
     const normalizedCustomerQuery = normalizeCustomerName(customerQuery)
     const exactCustomerMatch = normalizedCustomerQuery
         ? customers.find((customer) => normalizeCustomerName(customer.gr_name) === normalizedCustomerQuery)
@@ -138,13 +162,6 @@ export default function EquipmentDrawer(props: Props) {
                 return a.gr_name.localeCompare(b.gr_name)
             })
             .slice(0, 5)
-        : []
-    const normalizedSiteQuery = normalizeCustomerName(siteQuery)
-    const exactSiteMatch = normalizedSiteQuery
-        ? visibleSites.find((site) => normalizeCustomerName(site.gr_name) === normalizedSiteQuery)
-        : undefined
-    const siteSuggestions = normalizedSiteQuery.length >= 2 && siteMode !== 'existing'
-        ? visibleSites.filter((site) => normalizeCustomerName(site.gr_name).includes(normalizedSiteQuery) || normalizedSiteQuery.includes(normalizeCustomerName(site.gr_name))).slice(0, 5)
         : []
     const derivedSiteName = deriveSiteNameFromAddress(newSite.address)
     const effectiveNewSiteName = newSite.name.trim() || derivedSiteName
@@ -358,12 +375,13 @@ export default function EquipmentDrawer(props: Props) {
 
     const save = async (event: FormEvent) => {
         event.preventDefault()
-        let trimmed = {
-            ...form,
-            fleet: form.fleet.trim(),
-            make: form.make.trim(),
-            model: form.model.trim(),
-            serial: form.serial.trim(),
+        let trimmed: EquipmentUpdateInput
+        try {
+            trimmed = normalizeEquipmentInput(form)
+            setForm(trimmed)
+        } catch (error) {
+            setFormError(error instanceof Error ? error.message : 'Check the Equipment details and try again.')
+            return
         }
         if (isCreate && !trimmed.fleet && !trimmed.serial) {
             setFormError('Enter either a fleet number or serial number.')
@@ -483,13 +501,14 @@ export default function EquipmentDrawer(props: Props) {
     const selectExistingCustomer = (customer: Customer) => {
         const retainSpreadsheetSite = Boolean(parsedSpreadsheetRow && newSite.address.trim())
         const customerSites = sites.filter((site) => site.gr_Customer?.gr_customerid === customer.gr_customerid)
-        const onlySite = customerSites.length === 1 ? customerSites[0] : undefined
+        const compatibleSite = customerSites.find((site) => site.gr_siteid === form.siteId)
+        const selectedSite = compatibleSite ?? (customerSites.length === 1 ? customerSites[0] : undefined)
         setCustomerId(customer.gr_customerid)
-        updateField('siteId', onlySite?.gr_siteid ?? '')
+        updateField('siteId', selectedSite?.gr_siteid ?? '')
         setCustomerMode('existing')
-        setSiteMode(onlySite ? 'existing' : retainSpreadsheetSite ? 'new' : 'none')
+        setSiteMode(selectedSite ? 'existing' : retainSpreadsheetSite ? 'new' : 'none')
         setCustomerQuery(customer.gr_name)
-        setSiteQuery(onlySite?.gr_name ?? '')
+        setSiteQuery(selectedSite?.gr_name ?? '')
         if (!retainSpreadsheetSite) setNewSite({ name: '', address: '' })
         setRelatedError('')
     }
@@ -500,7 +519,7 @@ export default function EquipmentDrawer(props: Props) {
             title={isCreate ? 'New Equipment' : equipment?.gr_fleet || 'Equipment details'}
             busy={busy}
             onClose={close}
-            headerAction={!isCreate && <button type="button" className="equipment-create-job-button" onClick={() => props.onCreateJob(props.equipment)} disabled={busy}>Create Job</button>}
+            headerAction={!isCreate && props.onCreateJob && <button type="button" className="equipment-create-job-button" onClick={() => props.onCreateJob?.(props.equipment)} disabled={busy}>Create Job</button>}
             footer={<>
                 <div className="equipment-footer-leading">
                     {!isCreate && <button type="button" className="equipment-delete-button" disabled={busy || history.length > 0} onClick={() => { setDeleteError(''); setShowDeleteConfirm(true) }}>Delete equipment</button>}
@@ -554,8 +573,12 @@ export default function EquipmentDrawer(props: Props) {
                             <label>Make<input value={form.make} onChange={(event) => updateField('make', event.target.value)} /></label>
                             <label>Model<input value={form.model} onChange={(event) => updateField('model', event.target.value)} /></label>
                             <label>Registration Number<input value={form.registrationNumber} onChange={(event) => updateField('registrationNumber', event.target.value)} /></label>
+                            <label>REGO Expiry<input type="date" value={form.regoExpiry} onChange={(event) => updateField('regoExpiry', event.target.value)} /></label>
                             <label>Current WOF Expiry<input type="date" value={form.currentWofExpiry} onChange={(event) => updateField('currentWofExpiry', event.target.value)} /></label>
-                            <label className="equipment-wof-required"><input type="checkbox" checked={form.wofRequired} onChange={(event) => updateField('wofRequired', event.target.checked)} /> WOF Required</label>
+                            <label className="equipment-wof-required"><input type="checkbox" checked={form.wofRequired} onChange={(event) => {
+                                regoAutoEnabledRef.current = true
+                                updateField('wofRequired', event.target.checked)
+                            }} /> WOF Required</label>
                             {isCreate ? <div className="equipment-relationship-fields">
                                 <label>Customer<input value={customerQuery} placeholder="Search or enter customer..." onChange={(event) => {
                                     const value = event.target.value
@@ -576,16 +599,24 @@ export default function EquipmentDrawer(props: Props) {
                                 {customerSuggestions.length > 0 && customerMode !== 'existing' && <div className="equipment-autocomplete-menu">{customerSuggestions.map((customer) => <button key={customer.gr_customerid} type="button" onClick={() => selectExistingCustomer(customer)}><strong>{customer.gr_name}</strong><span>{sites.filter((site) => site.gr_Customer?.gr_customerid === customer.gr_customerid).length} sites</span></button>)}</div>}
                                 {customerQuery.trim() && !exactCustomerMatch && customerMode !== 'new' && <button className="equipment-autocomplete-create" type="button" onClick={() => { setCustomerMode('new'); setCustomerId(''); setSiteMode('new'); setSiteQuery(''); setNewSite({ name: '', address: '' }); setRelatedError('') }}>+ Create new customer &quot;{customerQuery.trim()}&quot;</button>}
 
-                                <label>Site<input value={siteQuery} disabled={customerMode === 'none'} placeholder={customerMode === 'none' ? 'Select or enter a Customer first' : 'Search or enter site...'} onChange={(event) => {
-                                    const value = event.target.value
-                                    setSiteQuery(value)
-                                    updateField('siteId', '')
-                                    setSiteMode('none')
-                                    setRelatedError('')
-                                }} onKeyDown={(event) => { if (event.key === 'Enter' && siteSuggestions.length === 1) { event.preventDefault(); const site = siteSuggestions[0]; updateField('siteId', site.gr_siteid); setSiteMode('existing'); setSiteQuery(site.gr_name) } }} /></label>
-                                {customerMode !== 'none' && siteMode !== 'new' && exactSiteMatch && <div className="equipment-customer-duplicate-warning" role="alert"><p>A Site with this name already exists for this Customer. Select it instead.</p><button type="button" onClick={() => { updateField('siteId', exactSiteMatch.gr_siteid); setSiteMode('existing'); setSiteQuery(exactSiteMatch.gr_name); setRelatedError('') }}>Select {exactSiteMatch.gr_name}</button></div>}
-                                {siteSuggestions.length > 0 && siteMode !== 'existing' && <div className="equipment-autocomplete-menu">{siteSuggestions.map((site) => <button key={site.gr_siteid} type="button" onClick={() => { updateField('siteId', site.gr_siteid); setSiteMode('existing'); setSiteQuery(site.gr_name); setRelatedError('') }}><strong>{siteOptionLabel(site)}</strong>{site.gr_address && <span>{site.gr_address}</span>}</button>)}</div>}
-                                {customerMode !== 'none' && siteMode !== 'new' && siteQuery.trim() && !exactSiteMatch && <button className="equipment-autocomplete-create" type="button" onClick={() => { setSiteMode('new'); setNewSite({ name: siteQuery, address: '' }); setRelatedError('') }}>+ Create new site &quot;{siteQuery.trim()}&quot;</button>}
+                                {siteMode !== 'new' && <SearchableSelect
+                                    id="equipment-site"
+                                    label="Site"
+                                    value={form.siteId}
+                                    options={siteOptions}
+                                    onChange={(siteId) => {
+                                        const site = visibleSites.find((candidate) => candidate.gr_siteid === siteId)
+                                        updateField('siteId', siteId)
+                                        setSiteMode(site ? 'existing' : 'none')
+                                        setSiteQuery(site?.gr_name ?? '')
+                                        setRelatedError('')
+                                    }}
+                                    placeholder={selectedCustomer ? 'No Site selected' : 'Select a customer first'}
+                                    searchPlaceholder="Search Site name, address or Customer"
+                                    emptyLabel={selectedCustomer ? 'No matching Sites' : 'Select a customer before choosing a Site.'}
+                                    disabled={!selectedCustomer}
+                                />}
+                                {selectedCustomer && siteMode !== 'new' && <button className="equipment-autocomplete-create" type="button" onClick={() => { updateField('siteId', ''); setSiteMode('new'); setNewSite({ name: '', address: '' }); setRelatedError('') }}>+ Add new site</button>}
                                 {customerMode === 'new' && siteMode !== 'new' && <button className="equipment-autocomplete-create" type="button" onClick={() => { setSiteMode('new'); setNewSite({ name: '', address: '' }) }}>+ Add first site</button>}
                                 {siteMode === 'new' && <div className="equipment-inline-site-fields"><label>Site Name<input value={newSite.name} onChange={(event) => { setNewSite((current) => ({ ...current, name: event.target.value })); setRelatedError('') }} /></label><label>Address<input value={newSite.address} onChange={(event) => { const address = event.target.value; setNewSite((current) => ({ ...current, address, name: current.name.trim() || deriveSiteNameFromAddress(address) })); setRelatedError('') }} /></label>{derivedSiteName && newSite.name === derivedSiteName && <p>Site Name generated from address.</p>}{matchingSiteAddress && <p>Possible existing Site at this address: <button type="button" onClick={() => { updateField('siteId', matchingSiteAddress.gr_siteid); setSiteMode('existing'); setSiteQuery(matchingSiteAddress.gr_name); setRelatedError('') }}>{matchingSiteAddress.gr_name}</button></p>}</div>}
                                 {relatedError && <p className="equipment-related-error" role="alert">{relatedError}</p>}

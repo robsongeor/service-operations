@@ -5,7 +5,7 @@ import JobEditDrawer from './components/JobEditDrawer'
 import JobCreateDrawer from './components/JobCreateDrawer'
 import type { Job } from './types/job.types'
 import { DEFAULT_JOBS_VIEW_STATE, applyJobsDefaultView, getJobsViewStateKey, restoreJobsViewState, type JobsViewState, type ScheduledJobsVisibility } from './types/jobsViewState.types'
-import { JOB_STATUS_OPTIONS, type JobStatus } from './types/jobStatus.types'
+import { JOB_STATUSES, JOB_STATUS_OPTIONS, type JobStatus } from './types/jobStatus.types'
 import { JOB_TYPE_OPTIONS } from './types/jobType.types'
 import { APPLICATION_DEFAULT_JOBS_VIEW, canonicaliseJobStatuses, getJobsDefaultViewKey, restoreJobsDefaultView, saveJobsDefaultView, type JobsDefaultView } from './types/jobsDefaultView.types'
 import { getSignedInUserInfo } from '../../auth/signedInUser'
@@ -14,6 +14,8 @@ import PageSettingsButton from '../shared/settings/PageSettingsButton'
 import PageSettingsDialog from '../shared/settings/PageSettingsDialog'
 import './JobsScreen.css'
 import { useNavigate } from 'react-router-dom'
+import { JOBS_TABLE_COLUMNS, type JobsStickyThroughColumnId } from './types/jobsTableColumns'
+import JobCompletionWorkflow from './components/JobCompletionWorkflow'
 
 export default function JobsScreen() {
     const navigate = useNavigate()
@@ -36,6 +38,7 @@ export default function JobsScreen() {
         createScheduleOption, updateScheduleOption, deleteScheduleOption,
         createJobOfficeUpdate,
         updateJobOfficeAttention,
+        completionRequest, isCompletingJob, completionError, completeServiceJob, cancelJobCompletion,
         isLoading, loadError, retryInitialLoad,
     } = useJobs()
     const [editingJob, setEditingJob] = useState<Job | null>(null)
@@ -184,6 +187,7 @@ export default function JobsScreen() {
                     mechanics={mechanics}
                     officeUpdates={officeUpdates}
                     scheduleOptions={scheduleOptions}
+                    stickyThroughColumnId={defaultView.stickyThroughColumnId}
                 />
             )}
 
@@ -196,7 +200,12 @@ export default function JobsScreen() {
                     setViewState((current) => ({ ...current, scheduledJobsVisibility: draftScheduledVisibility }))
                     const nextDefaultView = {
                         ...draftDefaultView,
-                        visibleStatuses: canonicaliseJobStatuses(draftDefaultView.visibleStatuses),
+                        visibleStatuses: canonicaliseJobStatuses(
+                            draftDefaultView.selectedJobType === 'unconfirmed'
+                                && !draftDefaultView.visibleStatuses.includes(JOB_STATUSES.UNCONFIRMED)
+                                ? [...draftDefaultView.visibleStatuses, JOB_STATUSES.UNCONFIRMED]
+                                : draftDefaultView.visibleStatuses,
+                        ),
                     }
                     if (defaultViewStorageKey && saveJobsDefaultView(defaultViewStorageKey, nextDefaultView)) {
                         setDefaultView(nextDefaultView)
@@ -229,12 +238,33 @@ export default function JobsScreen() {
                             value={draftDefaultView.selectedJobType}
                             onChange={(event) => setDraftDefaultView((current) => ({
                                 ...current,
-                                selectedJobType: event.target.value === 'all' ? 'all' : Number(event.target.value) as JobsDefaultView['selectedJobType'],
+                                selectedJobType: event.target.value === 'all' || event.target.value === 'unconfirmed'
+                                    ? event.target.value
+                                    : Number(event.target.value) as JobsDefaultView['selectedJobType'],
                             }))}
                         >
                             <option value="all">All jobs</option>
                             {JOB_TYPE_OPTIONS.map((jobType) => <option key={jobType.value} value={jobType.value}>{jobType.label}</option>)}
+                            <option value="unconfirmed">Unconfirmed</option>
                         </select>
+                    </label>
+                    <label className="jobs-default-tab">
+                        <span>Freeze columns through</span>
+                        <select
+                            value={draftDefaultView.stickyThroughColumnId ?? ''}
+                            onChange={(event) => setDraftDefaultView((current) => ({
+                                ...current,
+                                stickyThroughColumnId: event.target.value
+                                    ? event.target.value as JobsStickyThroughColumnId
+                                    : null,
+                            }))}
+                        >
+                            <option value="">None</option>
+                            {JOBS_TABLE_COLUMNS.filter((column) => column.selectable).map((column) => (
+                                <option key={column.id} value={column.id}>{column.label}</option>
+                            ))}
+                        </select>
+                        <small>Keeps this column and every column before it visible while scrolling horizontally.</small>
                     </label>
                     <fieldset className="jobs-default-statuses">
                         <legend>Default statuses</legend>
@@ -301,6 +331,16 @@ export default function JobsScreen() {
                     }}
                 />
             )}
+            <JobCompletionWorkflow
+                key={completionRequest?.job.gr_jobid ?? 'no-completion'}
+                request={completionRequest}
+                equipment={equipmentList}
+                servicePlans={servicePlans}
+                isCompleting={isCompletingJob}
+                error={completionError}
+                onCancel={cancelJobCompletion}
+                onComplete={completeServiceJob}
+            />
         </div>
     )
 }

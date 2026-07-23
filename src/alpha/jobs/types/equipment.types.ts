@@ -12,6 +12,7 @@ export type Equipment = {
     gr_wofrequired?: boolean | null
     gr_currentwofexpiry?: string | null
     gr_lastwofcompleted?: string | null
+    gr_regoexpiry?: string | null
     gr_Site?: {
         gr_siteid: string
         gr_name: string

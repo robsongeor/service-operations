@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
+import { useActiveMsalAccount } from '../../../auth/useActiveMsalAccount'
 import { createCustomer as createCustomerApi, fetchCustomers } from '../../jobs/services/customersApi'
 import { fetchJobs } from '../../jobs/services/jobsApi'
-import { createSite as createSiteApi, fetchSites } from '../../jobs/services/sitesApi'
+import { createSite as createSiteApi, fetchSites, updateSite as updateSiteApi } from '../../jobs/services/sitesApi'
 import type { Customer } from '../../jobs/types/customer.types'
 import type { Equipment } from '../../jobs/types/equipment.types'
 import type { Job } from '../../jobs/types/job.types'
-import type { Site } from '../../jobs/types/site.types'
+import type { Site, SiteUpdateInput } from '../../jobs/types/site.types'
 import {
     applyEquipmentUpdate,
     createEquipment as createEquipmentApi,
@@ -14,7 +15,7 @@ import {
     fetchEquipment,
     updateEquipment as updateEquipmentApi,
 } from '../services/equipmentManagerApi'
-import type { EquipmentUpdateInput } from '../types/equipmentManager.types'
+import { normalizeEquipmentInput, type EquipmentUpdateInput } from '../types/equipmentManager.types'
 import {
     fetchEquipmentServicePlans,
     saveEquipmentMaintenanceHistory as saveEquipmentMaintenanceHistoryApi,
@@ -23,8 +24,8 @@ import {
 import type { EquipmentServicePlan } from '../servicePlans/equipmentServicePlan.types'
 
 export function useEquipmentManager() {
-    const { instance, accounts } = useMsal()
-    const account = accounts[0]
+    const { instance } = useMsal()
+    const account = useActiveMsalAccount()
     const [equipment, setEquipment] = useState<Equipment[]>([])
     const [customers, setCustomers] = useState<Customer[]>([])
     const [sites, setSites] = useState<Site[]>([])
@@ -36,6 +37,7 @@ export function useEquipmentManager() {
     const [saveError, setSaveError] = useState('')
 
     const getToken = useCallback(async () => {
+        if (!account) throw new Error('No active Microsoft account is available. Sign in again and retry.')
         const response = await instance.acquireTokenSilent({
             scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`],
             account,
@@ -122,17 +124,24 @@ export function useEquipmentManager() {
         setSaveError('')
         try {
             const token = await getToken()
-            const createdResponse = await createEquipmentApi(token, input)
-            const selectedSite = resolvedSite ?? sites.find((site) => site.gr_siteid === input.siteId)
+            const normalized = normalizeEquipmentInput(input)
+            const createdResponse = await createEquipmentApi(token, normalized)
+            const selectedSite = resolvedSite ?? sites.find((site) => site.gr_siteid === normalized.siteId)
             const created: Equipment = {
                 ...createdResponse,
-                gr_fleet: input.fleet.trim() || null,
-                gr_make: input.make.trim() || null,
-                gr_model: input.model.trim() || null,
-                gr_serial: input.serial.trim() || null,
+                gr_fleet: normalized.fleet || null,
+                gr_make: normalized.make || null,
+                gr_model: normalized.model || null,
+                gr_serial: normalized.serial || null,
+                gr_registrationnumber: normalized.registrationNumber || null,
+                gr_wofrequired: normalized.wofRequired,
+                gr_currentwofexpiry: normalized.currentWofExpiry || null,
+                gr_regoexpiry: normalized.regoExpiry || null,
                 gr_Site: selectedSite,
             }
-            setEquipment((current) => [...current, created])
+            setEquipment((current) => current.some((item) => item.gr_equipmentid === created.gr_equipmentid)
+                ? current.map((item) => item.gr_equipmentid === created.gr_equipmentid ? created : item)
+                : [...current, created])
             return created
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Equipment could not be created.'
@@ -170,6 +179,29 @@ export function useEquipmentManager() {
         }
         setSites((current) => [...current, created])
         return created
+    }
+
+    const updateSites = async (updates: Array<{ siteId: string; input: SiteUpdateInput }>) => {
+        if (updates.length === 0) return
+        setIsSaving(true)
+        setSaveError('')
+        try {
+            const token = await getToken()
+            await Promise.all(updates.map(({ siteId, input }) => updateSiteApi(token, siteId, input)))
+            const updatesById = new Map(updates.map(({ siteId, input }) => [siteId, input]))
+            setSites((current) => current.map((site) => {
+                const input = updatesById.get(site.gr_siteid)
+                return input
+                    ? { ...site, gr_name: input.name.trim(), gr_address: input.address.trim() }
+                    : site
+            }))
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Site changes could not be saved.'
+            setSaveError(message)
+            throw error
+        } finally {
+            setIsSaving(false)
+        }
     }
 
     const deleteEquipment = async (equipmentId: string) => {
@@ -230,6 +262,7 @@ export function useEquipmentManager() {
         clearSaveError: () => setSaveError(''),
         createCustomer,
         createSite,
+        updateSites,
         createEquipment,
         updateEquipment,
         saveEquipmentMaintenanceHistory,

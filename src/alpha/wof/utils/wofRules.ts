@@ -1,8 +1,24 @@
-import type { QualificationStatus, QualificationType, TechnicianQualification, TechnicianQualificationInput } from '../types/wof.types'
+import { WOF_RESULTS, type QualificationStatus, type QualificationType, type TechnicianQualification, type TechnicianQualificationInput, type WofInspection } from '../types/wof.types'
 
 export const WOF_DUE_SOON_DAYS = 30
 export const WOF_QUALIFICATION_CODE = 'WOF_CERTIFIED'
 export const WOF_PROVIDER_TYPE_CODE = 'WOF_INSPECTOR'
+
+export function getWofDeletionBlockReason(inspection: WofInspection): string | null {
+    if (!inspection.gr_wofinspectionid) {
+        return 'This WOF cannot be deleted because its Inspection identifier is missing.'
+    }
+    if (inspection.linkedJobId || inspection.gr_Job) {
+        return 'This WOF has a linked Job and cannot be deleted from the orphan-record cleanup workflow.'
+    }
+    if (inspection.gr_wofresult != null && inspection.gr_wofresult !== WOF_RESULTS.PLANNED) {
+        return 'Only planned WOF records can be deleted. Passed, failed, or cancelled records retain compliance history.'
+    }
+    if (inspection.gr_inspectiondate || inspection.gr_newwofexpiry || inspection.gr_certificatenumber?.trim()) {
+        return 'This WOF contains completed inspection information and cannot be deleted from the normal workflow.'
+    }
+    return null
+}
 
 const localDateOnly = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 const todayDateOnly = () => localDateOnly(new Date())

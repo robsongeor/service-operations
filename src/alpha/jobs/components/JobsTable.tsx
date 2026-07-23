@@ -5,6 +5,7 @@ import { getJobTypeLabel } from '../types/jobType.types'
 import JobTypeBadge from './JobTypeBadge'
 import JobTypeTabs from './JobTypeTabs'
 import {
+    JOB_STATUSES,
     JOB_STATUS_OPTIONS,
     JOB_STATUS_PRIORITY,
     type JobStatus,
@@ -22,6 +23,7 @@ import {
     buildTechnicianEmailSubject,
     isValidTechnicianEmail,
 } from '../utils/technicianMailto'
+import { JOBS_TABLE_COLUMNS, jobsStickyColumnStyle, type JobsStickyThroughColumnId, type JobsTableColumnId } from '../types/jobsTableColumns'
 
 type Props = {
     jobs: Job[]
@@ -31,7 +33,7 @@ type Props = {
     onToggleStatus: (status: JobStatus) => void
     onResetToDefault: () => void
     resetToDefaultDisabled: boolean
-    onStatusChange: (jobId: string, status: JobStatus) => void
+    onStatusChange: (jobId: string, status: JobStatus) => Promise<boolean | void>
     onJobFieldsChange: (
         jobId: string,
         fields: {
@@ -45,6 +47,7 @@ type Props = {
     mechanics: Mechanic[]
     officeUpdates: JobOfficeUpdate[]
     scheduleOptions: JobScheduleOption[]
+    stickyThroughColumnId: JobsStickyThroughColumnId | null
 }
 
 const createdDateFormatter = new Intl.DateTimeFormat('en-NZ', {
@@ -67,6 +70,7 @@ export default function JobsTable({
     mechanics,
     officeUpdates,
     scheduleOptions,
+    stickyThroughColumnId,
 }: Props) {
     const { searchText, selectedJobType, officeAttentionFilter, scheduledJobsVisibility, sort } = viewState
     const [selectedRowId, setSelectedRowId] = useState<string | null>(null)
@@ -76,13 +80,21 @@ export default function JobsTable({
         message: string
         isError: boolean
     } | null>(null)
+    const stickyProps = (columnId: JobsTableColumnId) => {
+        const style = jobsStickyColumnStyle(columnId, stickyThroughColumnId)
+        return style ? {
+            className: `jobs-table-sticky-column${columnId === stickyThroughColumnId ? ' jobs-table-sticky-boundary' : ''}`,
+            style,
+        } : {}
+    }
     const latestOfficeUpdates = useMemo(() => officeUpdates.reduce<Record<string, JobOfficeUpdate>>((current, update) => {
         if (!current[update.jobId] || current[update.jobId].createdAt < update.createdAt) current[update.jobId] = update
         return current
     }, {}), [officeUpdates])
 
     const jobsForSelectedType = useMemo(() => jobs.filter((job) => {
-        if (selectedJobType !== 'all' && job.gr_jobtype !== selectedJobType) return false
+        if (selectedJobType === 'unconfirmed' && job.gr_status !== JOB_STATUSES.UNCONFIRMED) return false
+        if (selectedJobType !== 'all' && selectedJobType !== 'unconfirmed' && job.gr_jobtype !== selectedJobType) return false
         if (!jobMatchesScheduledVisibility(job.gr_jobid, scheduleOptions, scheduledJobsVisibility)) return false
         const needsAttention = jobNeedsOfficeAttention(job)
         const matchesOfficeActionFilter = officeAttentionFilter === 'all'
@@ -274,7 +286,14 @@ export default function JobsTable({
             <div className="jobs-filter-bar">
                 <JobTypeTabs
                     selectedJobType={selectedJobType}
-                    onChange={(jobType) => onViewStateChange({ ...viewState, selectedJobType: jobType })}
+                    includeUnconfirmed
+                    onChange={(jobType) => onViewStateChange({
+                        ...viewState,
+                        selectedJobType: jobType,
+                        visibleStatuses: jobType === 'unconfirmed' && !visibleStatuses.includes(JOB_STATUSES.UNCONFIRMED)
+                            ? [...visibleStatuses, JOB_STATUSES.UNCONFIRMED]
+                            : visibleStatuses,
+                    })}
                 />
                 <div className="jobs-list-toolbar" aria-label="Filter jobs by status">
                     <span>Status</span>
@@ -316,11 +335,14 @@ export default function JobsTable({
                 tabIndex={0}
             >
                 <table className="jobs-table">
+                    <colgroup>
+                        {JOBS_TABLE_COLUMNS.map((column) => <col key={column.id} style={{ width: column.width }} />)}
+                    </colgroup>
                     <thead>
                         <tr>
-                            <th className="jobs-attention-column"><span className="jobs-visually-hidden">Office attention</span></th>
-                            <th>Job</th>
-                            <th aria-sort={sort.column === 'created' ? sort.direction : 'none'}>
+                            <th {...stickyProps('attention')} className={`${stickyProps('attention').className ?? ''} jobs-attention-column`.trim()}><span className="jobs-visually-hidden">Office attention</span></th>
+                            <th {...stickyProps('job')}>Job</th>
+                            <th {...stickyProps('created')} aria-sort={sort.column === 'created' ? sort.direction : 'none'}>
                                 <button
                                     type="button"
                                     className="jobs-table-sort"
@@ -332,13 +354,13 @@ export default function JobsTable({
                                     <JobsTableSortIcon active={sort.column === 'created'} direction={sort.direction} />
                                 </button>
                             </th>
-                            <th>Type</th>
-                            <th>Equipment</th>
-                            <th aria-sort={sort.column === 'customer' ? sort.direction : 'none'}><button type="button" className="jobs-table-sort" onClick={() => toggleSort('customer')} title="Sort by customer" aria-label="Sort by customer">Customer / site <JobsTableSortIcon active={sort.column === 'customer'} direction={sort.direction} /></button></th>
-                            <th>Description</th>
-                            <th>Contact</th>
-                            <th aria-sort={sort.column === 'mechanic' ? sort.direction : 'none'}><button type="button" className="jobs-table-sort" onClick={() => toggleSort('mechanic')} title="Sort by mechanic" aria-label="Sort by mechanic">Mechanic <JobsTableSortIcon active={sort.column === 'mechanic'} direction={sort.direction} /></button></th>
-                            <th aria-sort={sort.column === 'status' ? sort.direction : 'none'}>
+                            <th {...stickyProps('type')}>Type</th>
+                            <th {...stickyProps('equipment')}>Equipment</th>
+                            <th {...stickyProps('customer')} aria-sort={sort.column === 'customer' ? sort.direction : 'none'}><button type="button" className="jobs-table-sort" onClick={() => toggleSort('customer')} title="Sort by customer" aria-label="Sort by customer">Customer / site <JobsTableSortIcon active={sort.column === 'customer'} direction={sort.direction} /></button></th>
+                            <th {...stickyProps('description')}>Description</th>
+                            <th {...stickyProps('contact')}>Contact</th>
+                            <th {...stickyProps('mechanic')} aria-sort={sort.column === 'mechanic' ? sort.direction : 'none'}><button type="button" className="jobs-table-sort" onClick={() => toggleSort('mechanic')} title="Sort by mechanic" aria-label="Sort by mechanic">Mechanic <JobsTableSortIcon active={sort.column === 'mechanic'} direction={sort.direction} /></button></th>
+                            <th {...stickyProps('status')} aria-sort={sort.column === 'status' ? sort.direction : 'none'}>
                                 <button
                                     type="button"
                                     className="jobs-table-sort"
@@ -350,8 +372,8 @@ export default function JobsTable({
                                     <JobsTableSortIcon active={sort.column === 'status'} direction={sort.direction} />
                                 </button>
                             </th>
-                            <th>Order</th>
-                            <th>Latest Update</th>
+                            <th {...stickyProps('order')}>Order</th>
+                            <th {...stickyProps('latestUpdate')}>Latest Update</th>
                             <th className="jobs-table-actions-column" aria-label="Actions" />
                         </tr>
                     </thead>
@@ -392,10 +414,10 @@ export default function JobsTable({
                                     }
                                 }}
                             >
-                                <td className="jobs-attention-column">
+                                <td {...stickyProps('attention')} className={`${stickyProps('attention').className ?? ''} jobs-attention-column`.trim()}>
                                     {jobNeedsOfficeAttention(job) && <span className="jobs-office-indicator" title="Office attention required" aria-label="Office attention required" />}
                                 </td>
-                                <td>
+                                <td {...stickyProps('job')}>
                                     <input
                                         key={`${job.gr_jobid}-number-${job.gr_jobnumber}`}
                                         className="jobs-table-inline jobs-table-job-number"
@@ -411,15 +433,15 @@ export default function JobsTable({
                                     />
                                 </td>
 
-                                <td className="jobs-table-date">
+                                <td {...stickyProps('created')} className={stickyProps('created').className ? `${stickyProps('created').className} jobs-table-date` : 'jobs-table-date'}>
                                     {createdDateFormatter.format(new Date(job.createdon))}
                                 </td>
 
-                                <td>
+                                <td {...stickyProps('type')}>
                                     <JobTypeBadge jobType={job.gr_jobtype} />
                                 </td>
 
-                                <td>
+                                <td {...stickyProps('equipment')}>
                                     {job.gr_Equipment ? (
                                         <div className="jobs-table-summary">
                                             <strong>{job.gr_Equipment.gr_fleet || 'No fleet number'}</strong>
@@ -429,7 +451,7 @@ export default function JobsTable({
                                     ) : <span className="jobs-table-muted">None</span>}
                                 </td>
 
-                                <td>
+                                <td {...stickyProps('customer')}>
                                     {job.gr_Site ? (
                                         <div className="jobs-table-summary">
                                             <strong>{job.gr_Site.gr_Customer?.gr_name ?? 'Unknown customer'}</strong>
@@ -439,7 +461,7 @@ export default function JobsTable({
                                     ) : <span className="jobs-table-muted">No site</span>}
                                 </td>
 
-                                <td>
+                                <td {...stickyProps('description')}>
                                     <textarea
                                         key={`${job.gr_jobid}-description-${job.gr_description}`}
                                         className="jobs-table-inline jobs-table-description"
@@ -455,7 +477,7 @@ export default function JobsTable({
                                     />
                                 </td>
 
-                                <td>
+                                <td {...stickyProps('contact')}>
                                     {job.gr_Contact ? (
                                         <div className="jobs-table-summary">
                                             <strong>{job.gr_Contact.gr_name}</strong>
@@ -464,8 +486,10 @@ export default function JobsTable({
                                     ) : <span className="jobs-table-muted">None</span>}
                                 </td>
 
-                                <td>
-                                    <SearchableMechanicSelect
+                                <td {...stickyProps('mechanic')}>
+                                    {job.gr_status === JOB_STATUSES.UNCONFIRMED ? (
+                                        <span className="jobs-table-muted">Not available</span>
+                                    ) : <SearchableMechanicSelect
                                         mechanics={mechanics}
                                         selectedId={job.gr_Mechanic?.gr_mechanicid ?? ''}
                                         isOpen={openMechanicJobId === job.gr_jobid}
@@ -480,10 +504,10 @@ export default function JobsTable({
                                                 'gr_Mechanic@odata.bind': mechanicId ? `/gr_mechanics(${mechanicId})` : null,
                                             }).catch((error) => window.alert(error instanceof Error ? error.message : 'The technician could not be updated.')).finally(() => setSavingMechanicJobId(null))
                                         }}
-                                    />
+                                    />}
                                 </td>
 
-                                <td>
+                                <td {...stickyProps('status')}>
                                     <select
                                         className="jobs-table-select jobs-table-status"
                                         data-status={job.gr_status}
@@ -500,7 +524,7 @@ export default function JobsTable({
                                     </select>
                                 </td>
 
-                                <td>
+                                <td {...stickyProps('order')}>
                                     <input
                                         key={`${job.gr_jobid}-order-${job.gr_ordernumber}`}
                                         className="jobs-table-inline jobs-table-order"
@@ -517,7 +541,7 @@ export default function JobsTable({
                                     />
                                 </td>
 
-                                <td className="jobs-office-update" title={latestOfficeUpdate?.text || undefined}>{latestOfficeUpdate?.text ? latestOfficeUpdate.text.length > 42 ? `${latestOfficeUpdate.text.slice(0, 42).trimEnd()}...` : latestOfficeUpdate.text : ''}</td>
+                                <td {...stickyProps('latestUpdate')} className={stickyProps('latestUpdate').className ? `${stickyProps('latestUpdate').className} jobs-office-update` : 'jobs-office-update'} title={latestOfficeUpdate?.text || undefined}>{latestOfficeUpdate?.text ? latestOfficeUpdate.text.length > 42 ? `${latestOfficeUpdate.text.slice(0, 42).trimEnd()}...` : latestOfficeUpdate.text : ''}</td>
 
                                 <td className="jobs-table-actions-column">
                                     <div className="jobs-table-actions">

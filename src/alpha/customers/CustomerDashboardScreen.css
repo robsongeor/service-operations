@@ -1,4 +1,5 @@
 .customer-dashboard-page { display: grid; gap: 18px; color: #202421; }
+.customer-dashboard-success { padding: 11px 14px; border: 1px solid #b9d7ca; border-radius: 9px; background: #edf7f2; color: #176f66; font-size: .76rem; font-weight: 700; }
 
 .customer-dashboard-selector,
 .customer-dashboard-header,
@@ -148,9 +149,21 @@
 .customer-section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; }
 .customer-section-heading h3 { margin-top: 3px; font-size: 1rem; }
 .customer-section-heading small { color: #7a827d; font-size: .7rem; }
+.customer-site-expand-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 7px; }
+.customer-site-expand-actions button { padding: 3px 5px; border: 0; background: transparent; color: #3f6b5c; font: inherit; font-size: .68rem; font-weight: 750; cursor: pointer; }
+.customer-site-expand-actions button:hover { text-decoration: underline; }
+.customer-site-expand-actions button:focus-visible { border-radius: 4px; outline: 2px solid #315b4d; outline-offset: 2px; }
 
 .customer-site-card { overflow: hidden; }
 .customer-site-card > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 14px 16px; border-bottom: 1px solid #e3e8e5; background: #f8faf8; }
+.customer-site-card > header:last-child { border-bottom: 0; }
+.customer-site-heading { display: flex; min-width: 0; align-items: flex-start; gap: 9px; }
+.customer-site-heading > div { min-width: 0; }
+.customer-site-expand-button { display: grid; flex: 0 0 auto; width: 28px; height: 28px; padding: 0; place-items: center; border: 1px solid #c8d4ce; border-radius: 7px; background: #fff; color: #3d6557; cursor: pointer; }
+.customer-site-expand-button svg { width: 15px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; transition: transform 120ms ease; }
+.customer-site-expand-button[aria-expanded="true"] svg { transform: rotate(90deg); }
+.customer-site-expand-button:hover { border-color: #7f9f93; background: #eef5f2; }
+.customer-site-expand-button:focus-visible { outline: 2px solid #315b4d; outline-offset: 2px; }
 .customer-site-card h4 { color: #28312c; font-size: .95rem; }
 .customer-site-card p { margin-top: 3px; color: #747d77; font-size: .74rem; }
 .customer-site-meta { display: flex; align-items: flex-start; gap: 22px; }
@@ -158,9 +171,12 @@
 .customer-site-meta small { color: #7a847e; font-size: .62rem; font-weight: 750; letter-spacing: .05em; text-transform: uppercase; }
 .customer-site-meta strong { color: #3f4b45; font-size: .72rem; font-weight: 700; white-space: pre-wrap; }
 .customer-site-meta > span { color: #68736d; font-size: .7rem; font-weight: 750; white-space: nowrap; }
+.customer-site-meta > button { min-height: 32px; padding: 0 10px; border: 1px solid #b9cbc2; border-radius: 7px; background: #fff; color: #285d4d; font: inherit; font-size: .68rem; font-weight: 750; cursor: pointer; white-space: nowrap; }
+.customer-site-meta > button:hover:not(:disabled) { border-color: #73988a; background: #eef6f2; }
+.customer-site-meta > button:disabled { cursor: not-allowed; opacity: .5; }
 
 .customer-equipment-table-wrap { overflow-x: auto; }
-.customer-equipment-table { width: 100%; min-width: 860px; border-collapse: collapse; table-layout: fixed; font-size: .75rem; }
+.customer-equipment-table { width: 100%; min-width: 1120px; border-collapse: collapse; table-layout: fixed; font-size: .75rem; }
 .customer-equipment-table th { padding: 9px 12px; border-bottom: 1px solid #e2e7e4; color: #6b726e; font-size: .64rem; text-align: left; text-transform: uppercase; }
 .customer-equipment-table td { min-height: 46px; padding: 10px 12px; border-bottom: 1px solid #edf0ed; color: #46504a; vertical-align: top; }
 .customer-equipment-table tbody tr { cursor: pointer; transition: background 100ms ease; }
@@ -253,6 +269,7 @@
 .customer-job-status[data-status="122830001"] { border-color: #d0ad4a; color: #705500; }
 .customer-job-status[data-status="122830002"] { border-color: #94b1c4; color: #456d87; }
 .customer-job-status[data-status="122830004"] { border-color: #cbc4e6; color: #604f88; }
+.customer-job-status[data-status="122830005"] { border-color: #d9aa4d; color: #77520b; background: #fff8e7; }
 .customer-quotes-toolbar { display: flex; flex-wrap: wrap; gap: 10px; padding: 12px; border: 1px solid #e1e7e3; border-radius: 10px; background: #f7f9f8; }
 .customer-quotes-toolbar label { display: grid; min-width: 170px; gap: 5px; color: #626e67; font-size: .66rem; font-weight: 750; }
 .customer-quotes-toolbar select { min-height: 36px; padding: 0 28px 0 9px; border: 1px solid #cfd7d2; border-radius: 8px; background: #fff; color: #313b35; font: inherit; }

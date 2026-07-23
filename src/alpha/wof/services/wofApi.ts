@@ -13,14 +13,76 @@ async function getJson<T>(token: string, path: string): Promise<T[]> {
     return (await response.json()).value ?? []
 }
 
-export const fetchWofInspections = (token: string) => getJson<WofInspection>(token,
-    `gr_wofinspections?$select=gr_wofinspectionid,gr_name,gr_registrationnumbersnapshot,gr_previouswofexpiry,gr_inspectiondate,gr_newwofexpiry,gr_wofresult,gr_certificatenumber,gr_notes&$expand=gr_Job($select=gr_jobid,gr_jobnumber,gr_description,gr_status,gr_jobtype;$expand=gr_Equipment($select=gr_equipmentid),gr_Mechanic($select=gr_mechanicid,gr_name,statecode),gr_Site($select=gr_siteid,gr_name;$expand=gr_Customer($select=gr_customerid,gr_name))),gr_Equipment($select=gr_equipmentid,gr_fleet,gr_serial,gr_make,gr_model,gr_registrationnumber,gr_wofrequired,gr_currentwofexpiry,gr_lastwofcompleted;$expand=gr_Site($select=gr_siteid,gr_name;$expand=gr_Customer($select=gr_customerid,gr_name))),gr_InternalInspector($select=gr_mechanicid,gr_name,statecode),gr_ExternalProvider($select=gr_serviceproviderid,gr_name,gr_active,statecode)`)
+type WofInspectionDataverseRow = Omit<WofInspection, 'linkedJobId' | 'equipmentId'> & {
+    _gr_job_value?: string | null
+    _gr_equipment_value?: string | null
+}
+
+const WOF_INSPECTION_SELECT = 'gr_wofinspectionid,gr_name,gr_registrationnumbersnapshot,gr_previouswofexpiry,gr_inspectiondate,gr_newwofexpiry,gr_wofresult,gr_certificatenumber,gr_notes,_gr_job_value,_gr_equipment_value'
+const WOF_INSPECTION_EXPAND = 'gr_Job($select=gr_jobid,gr_jobnumber,gr_description,gr_status,gr_jobtype;$expand=gr_Equipment($select=gr_equipmentid),gr_Mechanic($select=gr_mechanicid,gr_name,statecode),gr_Site($select=gr_siteid,gr_name;$expand=gr_Customer($select=gr_customerid,gr_name))),gr_Equipment($select=gr_equipmentid,gr_fleet,gr_serial,gr_make,gr_model,gr_registrationnumber,gr_wofrequired,gr_currentwofexpiry,gr_lastwofcompleted,gr_regoexpiry;$expand=gr_Site($select=gr_siteid,gr_name;$expand=gr_Customer($select=gr_customerid,gr_name))),gr_InternalInspector($select=gr_mechanicid,gr_name,statecode),gr_ExternalProvider($select=gr_serviceproviderid,gr_name,gr_active,statecode)'
+
+function mapWofInspection(row: WofInspectionDataverseRow): WofInspection {
+    return {
+        ...row,
+        linkedJobId: row._gr_job_value ?? row.gr_Job?.gr_jobid ?? null,
+        equipmentId: row._gr_equipment_value ?? row.gr_Equipment?.gr_equipmentid ?? null,
+        gr_Job: row.gr_Job
+            ? { ...row.gr_Job, gr_jobid: row._gr_job_value ?? row.gr_Job.gr_jobid }
+            : undefined,
+        gr_Equipment: row.gr_Equipment
+            ? { ...row.gr_Equipment, gr_equipmentid: row._gr_equipment_value ?? row.gr_Equipment.gr_equipmentid }
+            : undefined,
+    }
+}
+
+export async function fetchWofInspections(token: string): Promise<WofInspection[]> {
+    const rows = await getJson<WofInspectionDataverseRow>(token,
+        `gr_wofinspections?$select=${WOF_INSPECTION_SELECT}&$expand=${WOF_INSPECTION_EXPAND}`)
+    return rows.map(mapWofInspection)
+}
+
+export async function fetchWofInspection(token: string, inspectionId: string): Promise<WofInspection> {
+    const response = await fetch(
+        `${API_URL}/gr_wofinspections(${inspectionId})?$select=${WOF_INSPECTION_SELECT}&$expand=${WOF_INSPECTION_EXPAND}`,
+        { cache: 'no-store', headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } },
+    )
+    if (!response.ok) throw new Error(`The WOF Inspection could not be loaded: ${await response.text()}`)
+    return mapWofInspection(await response.json() as WofInspectionDataverseRow)
+}
 
 export const fetchTechnicianQualifications = (token: string) => getJson<TechnicianQualification>(token,
     `gr_technicianqualifications?$select=gr_technicianqualificationid,gr_name,gr_certificatenumber,gr_validfrom,gr_expirydate,gr_active&$expand=gr_Technician($select=gr_mechanicid,gr_name,gr_email,statecode),gr_QualificationType($select=gr_qualificationtypeid,gr_name,gr_code,gr_active)`)
 
 export const fetchWofProviders = (token: string) => getJson<ServiceProvider>(token,
     `gr_serviceproviders?$select=gr_serviceproviderid,gr_name,gr_contactname,gr_phone,gr_email,gr_active,statecode&$expand=gr_ProviderType($select=gr_serviceprovidertypeid,gr_name,gr_code,gr_active)`)
+
+async function hasRelatedRecord(token: string, entitySet: string, idField: string, jobId: string): Promise<boolean> {
+    const rows = await getJson<Record<string, string>>(token, `${entitySet}?$select=${idField}&$filter=_gr_job_value eq ${jobId}&$top=1`)
+    return rows.length > 0
+}
+
+export async function assertWofJobHasNoHistoricalDependants(token: string, jobId: string): Promise<void> {
+    const checks = await Promise.all([
+        hasRelatedRecord(token, 'gr_jobassignments', 'gr_jobassignmentid', jobId),
+        hasRelatedRecord(token, 'gr_emaildispatches', 'gr_emaildispatchid', jobId),
+        hasRelatedRecord(token, 'gr_jobofficeupdates', 'gr_jobofficeupdateid', jobId),
+        hasRelatedRecord(token, 'gr_quotes', 'gr_quoteid', jobId),
+    ])
+    if (checks.some(Boolean)) {
+        throw new Error('This WOF cannot be deleted because its linked Job has assignment, dispatch, office-update, or quote history. Cancel the WOF instead or contact an administrator.')
+    }
+}
+
+export async function deleteWofInspection(token: string, inspectionId: string): Promise<void> {
+    const response = await fetch(`${API_URL}/gr_wofinspections(${inspectionId})`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    })
+    if (!response.ok && response.status !== 404) {
+        const detail = await response.text()
+        throw new Error(`The WOF Inspection could not be deleted: ${detail || `${response.status} ${response.statusText}`}`)
+    }
+}
 
 async function createInspection(token: string, input: CreateWofInput, jobId: string) {
     const performer = input.assignmentMode === 'internal'

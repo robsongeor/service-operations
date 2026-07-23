@@ -3,6 +3,7 @@
   "Values": {
     "AzureWebJobsStorage": "",
     "FUNCTIONS_WORKER_RUNTIME": "node",
+    "DATAVERSE_URL": "https://your-environment.crm.dynamics.com",
     "LIFTTRUCKS_API_USERNAME": "your-lifttrucks-api-username",
     "LIFTTRUCKS_API_PASSWORD": "your-lifttrucks-api-password"
   }

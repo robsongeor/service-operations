@@ -124,7 +124,7 @@ export async function deleteJobScheduleOption(
         },
     })
 
-    if (!response.ok) {
+    if (!response.ok && response.status !== 404) {
         const error = await response.text()
         throw new Error(`Failed to delete job schedule option: ${error}`)
     }

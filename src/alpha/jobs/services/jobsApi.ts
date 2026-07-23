@@ -150,6 +150,7 @@ export async function updateJobFields(
         gr_jobnumber?: string
         gr_description?: string
         gr_ordernumber?: string
+        'gr_Mechanic@odata.bind'?: string | null
     }
 ) {
     const response = await fetch(
@@ -196,6 +197,28 @@ export async function updateJob(
     jobId: string,
     job: JobSaveInput,
 ) {
+    const fields = buildJobUpdateFields(job)
+
+    const response = await fetch(
+        `${DATAVERSE_URL}/api/data/v9.2/gr_jobs(${jobId})`,
+        {
+            method: 'PATCH',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+            },
+            body: JSON.stringify(fields),
+        },
+    )
+
+    if (!response.ok) {
+        const error = await response.text()
+        throw new Error(`Failed to update job: ${error}`)
+    }
+}
+
+export function buildJobUpdateFields(job: JobSaveInput): Record<string, string | number | boolean | null> {
     const fields: Record<string, string | number | boolean | null> = {
         gr_jobnumber: job.jobNumber,
         gr_ordernumber: job.orderNumber,
@@ -221,24 +244,7 @@ export async function updateJob(
             : null,
     }
     if (job.completedDate) fields.gr_completeddate = job.completedDate
-
-    const response = await fetch(
-        `${DATAVERSE_URL}/api/data/v9.2/gr_jobs(${jobId})`,
-        {
-            method: 'PATCH',
-            headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-            },
-            body: JSON.stringify(fields),
-        },
-    )
-
-    if (!response.ok) {
-        const error = await response.text()
-        throw new Error(`Failed to update job: ${error}`)
-    }
+    return fields
 }
 
 export async function deleteJob(token: string, jobId: string) {
@@ -253,7 +259,7 @@ export async function deleteJob(token: string, jobId: string) {
         },
     )
 
-    if (!response.ok) {
+    if (!response.ok && response.status !== 404) {
         const error = await response.text()
         throw new Error(`Failed to delete job: ${error}`)
     }
