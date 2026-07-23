@@ -8,6 +8,8 @@ export const JOB_TYPES = {
 export type JobType =
     typeof JOB_TYPES[keyof typeof JOB_TYPES]
 
+export type JobTypeFilter = JobType | 'all' | 'unconfirmed'
+
 export const JOB_TYPE_OPTIONS: { label: string; value: JobType }[] = [
     { label: 'Breakdown', value: JOB_TYPES.BREAKDOWN },
     { label: 'Service', value: JOB_TYPES.SERVICE },

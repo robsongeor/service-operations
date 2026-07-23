@@ -334,19 +334,24 @@
     border-bottom: 0;
 }
 
-.jobs-table th:nth-child(1) { width: 20px; }
-.jobs-table th:nth-child(2) { width: 64px; }
-.jobs-table th:nth-child(3) { width: 74px; }
-.jobs-table th:nth-child(4) { width: 76px; }
-.jobs-table th:nth-child(5) { width: 116px; }
-.jobs-table th:nth-child(6) { width: 150px; }
-.jobs-table th:nth-child(7) { width: 165px; }
-.jobs-table th:nth-child(8) { width: 105px; }
-.jobs-table th:nth-child(9) { width: 140px; }
-.jobs-table th:nth-child(10) { width: 128px; }
-.jobs-table th:nth-child(11) { width: 80px; }
-.jobs-table th:nth-child(12) { width: 110px; }
-.jobs-table th:nth-child(13) { width: 112px; }
+.jobs-table .jobs-table-sticky-column {
+    position: sticky;
+    z-index: 2;
+    background: #fff;
+}
+
+.jobs-table th.jobs-table-sticky-column {
+    z-index: 4;
+    background: #f4f5f2;
+}
+
+.jobs-table tbody tr:hover .jobs-table-sticky-column {
+    background: #f8faf9;
+}
+
+.jobs-table .jobs-table-sticky-boundary {
+    box-shadow: 7px 0 12px rgba(28, 38, 32, 0.08), 1px 0 0 #d9dfdb;
+}
 
 .jobs-table .jobs-table-actions-column {
     position: sticky;
@@ -510,6 +515,14 @@
 .jobs-table tbody tr[data-status="122830004"]:hover { background: #f4f1ff; }
 .jobs-table tbody tr[data-status="122830004"] td:first-child { box-shadow: inset 3px 0 0 #8d78bd; }
 .jobs-table-status[data-status="122830004"] { border-color: #cbc4e6; background: #f0edfb; color: #604f88; }
+.status-filter[data-status="122830005"] { border-color: #d9aa4d; color: #77520b; }
+.status-filter[data-status="122830005"].active { background: #fff0c2; color: #654306; }
+.jobs-table tbody tr[data-status="122830005"] { background: #fffaf0; }
+.jobs-table tbody tr[data-status="122830005"]:hover { background: #fff3d5; }
+.jobs-table tbody tr[data-status="122830005"] td:first-child { box-shadow: inset 3px 0 0 #d59b2b; }
+.jobs-table tbody tr[data-status="122830005"] td.jobs-table-actions-column { background: #fffaf0; }
+.jobs-table tbody tr[data-status="122830005"]:hover td.jobs-table-actions-column { background: #fff3d5; }
+.jobs-table-status[data-status="122830005"] { border-color: #e1bd70; background: #fff0c2; color: #704b08; }
 
 
 .jobs-table-action {

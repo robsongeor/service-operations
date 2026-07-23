@@ -1,24 +1,33 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
+import { getSignedInUserInfo } from '../../auth/signedInUser'
 import { useEquipmentManager } from '../equipment/hooks/useEquipmentManager'
 import EquipmentDrawer from '../equipment/components/EquipmentDrawer'
+import BulkEquipmentImportDrawer from '../equipment/components/BulkEquipmentImportDrawer'
+import { canUseBulkEquipmentImport } from '../equipment/utils/bulkEquipmentImport'
 import { useJobs } from '../jobs/hooks/useJobs'
 import JobCreateDrawer, { type JobCreateInitialValues } from '../jobs/components/JobCreateDrawer'
 import JobEditDrawer from '../jobs/components/JobEditDrawer'
+import JobCompletionWorkflow from '../jobs/components/JobCompletionWorkflow'
 import type { Job } from '../jobs/types/job.types'
 import { isOpenJob } from '../jobs/types/jobOpen'
 import type { Equipment } from '../jobs/types/equipment.types'
+import type { EquipmentCreateInitialValues } from '../equipment/types/equipmentManager.types'
 import type { Customer } from '../jobs/types/customer.types'
 import type { Site } from '../jobs/types/site.types'
 import { calculateHoursRemaining, calculatePrimaryNextService, calculateServiceStatus } from '../equipment/servicePlans/servicePlanStatus'
 import { SERVICE_TYPE_OPTIONS } from '../equipment/servicePlans/equipmentServicePlan.types'
-import CustomerDrawer, { type CustomerDraft } from './CustomerDrawer'
+import CustomerDrawer, { type CustomerDraft, type CustomerDrawerTab } from './CustomerDrawer'
 import { customerContactsFromSiteLinks, type CustomerContact } from './customerContact.types'
 import CustomerOpenJobsTab from './CustomerOpenJobsTab'
 import CustomerQuotesTab from './CustomerQuotesTab'
+import SearchableSelect from '../shared/searchable-select/SearchableSelect'
+import { formatWofDateOnly } from '../wof/utils/wofRules'
 import './CustomerDashboardScreen.css'
 
 const dateFormatter = new Intl.DateTimeFormat('en-NZ', { dateStyle: 'medium' })
+const CUSTOMER_DASHBOARD_AUTO_EXPAND_EQUIPMENT_LIMIT = 10
 
 function text(value?: string | null) {
     return value?.trim().toLowerCase() ?? ''
@@ -30,6 +39,9 @@ function display(value?: string | number | null) {
 
 export default function CustomerDashboardScreen() {
     const navigate = useNavigate()
+    const activeAccount = useActiveMsalAccount()
+    const signedInUser = getSignedInUserInfo(activeAccount)
+    const bulkImportAllowed = canUseBulkEquipmentImport(signedInUser)
     const {
         equipment,
         customers,
@@ -42,7 +54,11 @@ export default function CustomerDashboardScreen() {
         saveError,
         reload,
         clearSaveError,
+        updateSites,
         updateEquipment,
+        createEquipment: createDashboardEquipment,
+        createCustomer: createDashboardCustomer,
+        createSite: createDashboardSite,
         saveEquipmentMaintenanceHistory,
         deleteEquipment,
     } = useEquipmentManager()
@@ -75,17 +91,26 @@ export default function CustomerDashboardScreen() {
         deleteJobAssignment,
         createJobOfficeUpdate,
         updateJobOfficeAttention,
+        completionRequest,
+        isCompletingJob,
+        completionError,
+        completeServiceJob,
+        cancelJobCompletion,
         isLoading: isJobsLoading,
         loadError: jobsLoadError,
     } = useJobs()
 
-    const [search, setSearch] = useState('')
     const [selectedCustomerId, setSelectedCustomerId] = useState('')
     const [editingEquipment, setEditingEquipment] = useState<Equipment | null>(null)
+    const [creatingEquipmentInitialValues, setCreatingEquipmentInitialValues] = useState<EquipmentCreateInitialValues | null>(null)
+    const [bulkImportSite, setBulkImportSite] = useState<Site | null>(null)
+    const [bulkImportSuccess, setBulkImportSuccess] = useState('')
+    const [expandedSitesByCustomer, setExpandedSitesByCustomer] = useState<Record<string, Record<string, boolean>>>({})
     const [creatingJobInitialValues, setCreatingJobInitialValues] = useState<JobCreateInitialValues | null>(null)
     const [editingJob, setEditingJob] = useState<Job | null>(null)
     const [activeTab, setActiveTab] = useState<'sites' | 'open-jobs' | 'quotes' | 'contacts' | 'info'>('sites')
     const [customerDrawerMode, setCustomerDrawerMode] = useState<'create' | 'edit' | null>(null)
+    const [customerDrawerInitialTab, setCustomerDrawerInitialTab] = useState<CustomerDrawerTab>('info')
     const [localCustomers, setLocalCustomers] = useState<Customer[]>([])
     const [customerDrafts, setCustomerDrafts] = useState<Record<string, CustomerDraft>>({})
 
@@ -107,11 +132,10 @@ export default function CustomerDashboardScreen() {
     }, [customerDrafts, sites])
 
     const customerOptions = useMemo(() => {
-        const query = search.trim().toLowerCase()
         return allCustomers
-            .filter((customer) => !query || customer.gr_name.toLowerCase().includes(query))
             .sort((a, b) => a.gr_name.localeCompare(b.gr_name))
-    }, [allCustomers, search])
+            .map((customer) => ({ value: customer.gr_customerid, label: customer.gr_name }))
+    }, [allCustomers])
 
     const selectedCustomer = allCustomers.find((customer) => customer.gr_customerid === selectedCustomerId)
     const customerSites = allSites
@@ -133,6 +157,45 @@ export default function CustomerDashboardScreen() {
     const customerEquipment = equipment.filter((item) =>
         item.gr_Site?.gr_Customer?.gr_customerid === selectedCustomerId,
     )
+    const sitesExpandByDefault = customerSites.length === 1
+        || customerEquipment.length <= CUSTOMER_DASHBOARD_AUTO_EXPAND_EQUIPMENT_LIMIT
+    const selectedCustomerSiteState = expandedSitesByCustomer[selectedCustomerId] ?? {}
+    const siteIsExpanded = (siteId: string, equipmentCount: number) =>
+        selectedCustomerSiteState[siteId] ?? (equipmentCount === 0 || sitesExpandByDefault)
+    const setSiteExpanded = (siteId: string, expanded: boolean) => {
+        if (!selectedCustomerId) return
+        setExpandedSitesByCustomer((current) => ({
+            ...current,
+            [selectedCustomerId]: {
+                ...current[selectedCustomerId],
+                [siteId]: expanded,
+            },
+        }))
+    }
+    const setAllSitesExpanded = (expanded: boolean) => {
+        if (!selectedCustomerId) return
+        setExpandedSitesByCustomer((current) => ({
+            ...current,
+            [selectedCustomerId]: Object.fromEntries(customerSites.map((site) => [site.gr_siteid, expanded])),
+        }))
+    }
+    const initialiseCustomerSiteState = (customerId: string) => {
+        if (!customerId) return
+        setExpandedSitesByCustomer((current) => {
+            if (current[customerId]) return current
+            const nextSites = allSites.filter((site) => site.gr_Customer?.gr_customerid === customerId)
+            const nextEquipment = equipment.filter((item) => item.gr_Site?.gr_Customer?.gr_customerid === customerId)
+            const expandByDefault = nextSites.length === 1
+                || nextEquipment.length <= CUSTOMER_DASHBOARD_AUTO_EXPAND_EQUIPMENT_LIMIT
+            return {
+                ...current,
+                [customerId]: Object.fromEntries(nextSites.map((site) => [
+                    site.gr_siteid,
+                    expandByDefault || !nextEquipment.some((item) => item.gr_Site?.gr_siteid === site.gr_siteid),
+                ])),
+            }
+        })
+    }
     const customerJobs = operationalJobs.filter((job) =>
         job.gr_Site?.gr_Customer?.gr_customerid === selectedCustomerId,
     )
@@ -192,17 +255,67 @@ export default function CustomerDashboardScreen() {
         })),
     } : undefined
 
-    const saveCustomerDraft = (draft: CustomerDraft) => {
+    const saveCustomerDraft = async (draft: CustomerDraft) => {
         if (customerDrawerMode === 'create') {
             const customerId = `prototype-customer-${crypto.randomUUID()}`
             setLocalCustomers((current) => [...current, { gr_customerid: customerId, gr_name: draft.name }])
             setCustomerDrafts((current) => ({ ...current, [customerId]: draft }))
+            setExpandedSitesByCustomer((current) => ({
+                ...current,
+                [customerId]: Object.fromEntries(draft.sites.map((site) => [site.id, true])),
+            }))
             setSelectedCustomerId(customerId)
             setActiveTab('sites')
+            setCustomerDrawerMode(null)
+            return draft
         } else if (selectedCustomer) {
-            setCustomerDrafts((current) => ({ ...current, [selectedCustomer.gr_customerid]: draft }))
+            const existingSites = new Map(sites.map((site) => [site.gr_siteid, site]))
+            const siteUpdates = draft.sites
+                .filter((site) => existingSites.has(site.id))
+                .filter((site) => {
+                    const current = existingSites.get(site.id)!
+                    return site.name.trim() !== current.gr_name.trim()
+                        || site.address.trim() !== (current.gr_address ?? '').trim()
+                })
+                .map((site) => ({
+                    siteId: site.id,
+                    input: { name: site.name, address: site.address },
+                }))
+            const newSiteDrafts = draft.sites.filter((site) => site.id.startsWith('prototype-site-'))
+            const [, createdSites] = await Promise.all([
+                updateSites(siteUpdates),
+                Promise.all(newSiteDrafts.map((site) => createDashboardSite({
+                    customerId: selectedCustomer.gr_customerid,
+                    name: site.name,
+                    address: site.address,
+                }, selectedCustomer))),
+            ])
+            const createdSitesByPrototypeId = new Map(newSiteDrafts.map((site, index) => [site.id, createdSites[index]]))
+            const persistedDraft = {
+                ...draft,
+                sites: draft.sites.map((site) => {
+                    const created = createdSitesByPrototypeId.get(site.id)
+                    return created ? {
+                        ...site,
+                        id: created.gr_siteid,
+                        name: created.gr_name,
+                        address: created.gr_address ?? '',
+                    } : site
+                }),
+            }
+            setCustomerDrafts((current) => ({ ...current, [selectedCustomer.gr_customerid]: persistedDraft }))
+            if (createdSites.length > 0) {
+                setExpandedSitesByCustomer((current) => ({
+                    ...current,
+                    [selectedCustomer.gr_customerid]: {
+                        ...current[selectedCustomer.gr_customerid],
+                        ...Object.fromEntries(createdSites.map((site) => [site.gr_siteid, true])),
+                    },
+                }))
+            }
+            return persistedDraft
         }
-        setCustomerDrawerMode(null)
+        throw new Error('Select a Customer before saving Site changes.')
     }
 
     return <main className="customer-dashboard-page">
@@ -212,17 +325,16 @@ export default function CustomerDashboardScreen() {
                 <h1>Customer Dashboard</h1>
                 <button type="button" onClick={() => setCustomerDrawerMode('create')}>+ Create Customer</button>
             </div>
-            <label>
-                <span>Search customer</span>
-                <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Type customer name" />
-            </label>
-            <label>
-                <span>Select customer</span>
-                <select value={selectedCustomerId} onChange={(event) => { setSelectedCustomerId(event.target.value); setActiveTab('sites') }}>
-                    <option value="">Select a customer</option>
-                    {customerOptions.map((customer) => <option key={customer.gr_customerid} value={customer.gr_customerid}>{customer.gr_name}</option>)}
-                </select>
-            </label>
+            <SearchableSelect
+                id="customer-dashboard-customer"
+                label="Customer"
+                value={selectedCustomerId}
+                options={customerOptions}
+                onChange={(customerId) => { initialiseCustomerSiteState(customerId); setSelectedCustomerId(customerId); setActiveTab('sites') }}
+                placeholder="Select a customer"
+                searchPlaceholder="Search customers"
+                emptyLabel="No matching customers"
+            />
         </header>
 
         {isLoading ? <section className="customer-dashboard-state">Loading customer data...</section> : loadError ? (
@@ -236,6 +348,7 @@ export default function CustomerDashboardScreen() {
                 <p>Choose a customer above to view sites, equipment, jobs, and the dashboard foundation for future service history and reporting.</p>
             </section>
         ) : <>
+            {bulkImportSuccess && <div className="customer-dashboard-success" role="status">{bulkImportSuccess}</div>}
             <section className="customer-dashboard-header">
                 <div>
                     <span>Customer account</span>
@@ -248,8 +361,8 @@ export default function CustomerDashboardScreen() {
                         title={selectedCustomer.gr_customerid.startsWith('prototype-customer-') ? 'Save this Customer to Dataverse before creating Jobs.' : undefined}
                         onClick={() => setCreatingJobInitialValues(initialJobValuesForCustomer(selectedCustomer))}
                     >Create Job</button>
-                    <button type="button" onClick={() => setCustomerDrawerMode('edit')}>Add Site</button>
-                    <button type="button" onClick={() => setCustomerDrawerMode('edit')}>Edit Customer</button>
+                    <button type="button" onClick={() => { setCustomerDrawerInitialTab('sites'); setCustomerDrawerMode('edit') }}>Add Site</button>
+                    <button type="button" onClick={() => { setCustomerDrawerInitialTab('info'); setCustomerDrawerMode('edit') }}>Edit Customer</button>
                 </div>
             </section>
 
@@ -274,25 +387,77 @@ export default function CustomerDashboardScreen() {
                         <span>Current section</span>
                         <h3>Sites and Equipment</h3>
                     </div>
-                    <small>Future sections: Overview, Jobs, Service History, Contacts, Documents, Audit Reporting</small>
+                    <div className="customer-site-expand-actions">
+                        {customerSites.length > 1 && <>
+                            <button type="button" onClick={() => setAllSitesExpanded(true)}>Expand all</button>
+                            <button type="button" onClick={() => setAllSitesExpanded(false)}>Collapse all</button>
+                        </>}
+                        <small>Future sections: Overview, Jobs, Service History, Contacts, Documents, Audit Reporting</small>
+                    </div>
                 </div>
 
                 {customerSites.length === 0 ? <div className="customer-dashboard-empty compact">No sites have been recorded for this customer yet.</div> : customerSites.map((site) => {
                     const rows = equipmentForSite(site)
                     const operatingHours = customerDrafts[selectedCustomer.gr_customerid]?.sites.find((item) => item.id === site.gr_siteid)?.operatingHours
+                    const expanded = siteIsExpanded(site.gr_siteid, rows.length)
+                    const equipmentRegionId = `customer-site-equipment-${site.gr_siteid}`
                     return <article className="customer-site-card" key={site.gr_siteid}>
                         <header>
-                            <div><h4>{site.gr_name || 'Unnamed Site'}</h4><p>{site.gr_address || 'No address recorded'}</p></div>
+                            <div className="customer-site-heading">
+                                <button
+                                    type="button"
+                                    className="customer-site-expand-button"
+                                    aria-expanded={expanded}
+                                    aria-controls={equipmentRegionId}
+                                    aria-label={`${expanded ? 'Collapse' : 'Expand'} equipment for ${site.gr_name || 'Unnamed Site'}`}
+                                    onClick={() => setSiteExpanded(site.gr_siteid, !expanded)}
+                                >
+                                    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4 6 6-6 6" /></svg>
+                                </button>
+                                <div><h4>{site.gr_name || 'Unnamed Site'}</h4><p>{site.gr_address || 'No address recorded'}</p></div>
+                            </div>
                             <div className="customer-site-meta">
                                 <div><small>Operating hours</small><strong>{operatingHours || 'Not recorded'}</strong></div>
-                                <span>{rows.length} {rows.length === 1 ? 'equipment' : 'equipment'}</span>
+                                <span>{rows.length} Equipment</span>
+                                <button
+                                    type="button"
+                                    disabled={site.gr_siteid.startsWith('prototype-site-') || selectedCustomer.gr_customerid.startsWith('prototype-customer-')}
+                                    title={site.gr_siteid.startsWith('prototype-site-') ? 'Save this Site to Dataverse before creating Equipment.' : 'Create Equipment at this Site'}
+                                    onClick={() => {
+                                        clearSaveError()
+                                        setSiteExpanded(site.gr_siteid, true)
+                                        setCreatingEquipmentInitialValues({
+                                            customerId: selectedCustomer.gr_customerid,
+                                            customerName: selectedCustomer.gr_name,
+                                            siteId: site.gr_siteid,
+                                            siteName: site.gr_name,
+                                        })
+                                    }}
+                                >
+                                    New Equipment
+                                </button>
+                                {bulkImportAllowed
+                                    && !site.gr_siteid.startsWith('prototype-site-')
+                                    && !selectedCustomer.gr_customerid.startsWith('prototype-customer-')
+                                    && <button
+                                        type="button"
+                                        title={`Bulk add Equipment to ${site.gr_name}`}
+                                        onClick={() => {
+                                            clearSaveError()
+                                            setSiteExpanded(site.gr_siteid, true)
+                                            setBulkImportSuccess('')
+                                            setBulkImportSite(site)
+                                        }}
+                                    >
+                                        Bulk Add Equipment
+                                    </button>}
                             </div>
                         </header>
-                        <div className="customer-equipment-table-wrap">
+                        {expanded && <div className="customer-equipment-table-wrap" id={equipmentRegionId}>
                             <table className="customer-equipment-table">
-                                <thead><tr><th>Fleet Number</th><th>Make</th><th>Model</th><th>Last Known Hour Meter</th><th>Next Service</th><th>Maintenance Status</th></tr></thead>
+                                <thead><tr><th>Fleet Number</th><th>Make</th><th>Model</th><th>Registration</th><th>WOF Expiry</th><th>Last Known Hour Meter</th><th>Next Service</th><th>Maintenance Status</th></tr></thead>
                                 <tbody>
-                                    {rows.length === 0 ? <tr><td colSpan={6}>No equipment recorded for this site.</td></tr> : rows.map((item) => {
+                                    {rows.length === 0 ? <tr><td colSpan={8}>No equipment recorded for this site.</td></tr> : rows.map((item) => {
                                         const plans = servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === item.gr_equipmentid.toLowerCase())
                                         const primary = calculatePrimaryNextService(plans)
                                         const remaining = primary ? calculateHoursRemaining(item.gr_currenthourmeter ?? 0, primary.gr_nextduehours) : null
@@ -308,6 +473,8 @@ export default function CustomerDashboardScreen() {
                                             <td><strong>{display(item.gr_fleet)}</strong></td>
                                             <td>{display(item.gr_make)}</td>
                                             <td>{display(item.gr_model)}</td>
+                                            <td>{display(item.gr_registrationnumber)}</td>
+                                            <td>{display(formatWofDateOnly(item.gr_currentwofexpiry))}</td>
                                             <td>{display(item.gr_currenthourmeter)}</td>
                                             <td>{primary ? `${serviceLabel} @ ${primary.gr_nextduehours}` : 'Not Configured'}{remaining != null && <small>{Math.abs(remaining)} hrs {remaining < 0 ? 'overdue' : 'remaining'}</small>}</td>
                                             <td><span className={`customer-maintenance-status status-${status?.toLowerCase().replace(' ', '-') ?? 'unknown'}`}>{status ?? 'Unknown'}</span></td>
@@ -315,7 +482,7 @@ export default function CustomerDashboardScreen() {
                                     })}
                                 </tbody>
                             </table>
-                        </div>
+                        </div>}
                     </article>
                 })}
             </section> : activeTab === 'open-jobs' ? <CustomerOpenJobsTab
@@ -368,7 +535,7 @@ export default function CustomerDashboardScreen() {
             </section> : <section className="customer-info-panel" role="tabpanel">
                 <header>
                     <div><span>Customer information</span><h3>{selectedCustomer.gr_name}</h3></div>
-                    <button type="button" onClick={() => setCustomerDrawerMode('edit')}>Edit information</button>
+                    <button type="button" onClick={() => { setCustomerDrawerInitialTab('info'); setCustomerDrawerMode('edit') }}>Edit information</button>
                 </header>
                 <dl className="customer-info-summary">
                     <div><dt>Name</dt><dd>{selectedCustomer.gr_name}</dd></div>
@@ -402,6 +569,41 @@ export default function CustomerDashboardScreen() {
             onSaveMaintenanceHistory={async (plans, input) => { const updated = await saveEquipmentMaintenanceHistory(editingEquipment, plans, input); setEditingEquipment(updated.equipment) }}
             onCreateJob={(record) => { setEditingEquipment(null); setCreatingJobInitialValues(initialJobValuesForEquipment(record)) }}
             onDelete={async () => { await deleteEquipment(editingEquipment.gr_equipmentid); setEditingEquipment(null) }}
+        />}
+
+        {creatingEquipmentInitialValues && <EquipmentDrawer
+            mode="create"
+            initialValues={creatingEquipmentInitialValues}
+            equipmentList={equipment}
+            customers={customers}
+            sites={sites}
+            jobs={equipmentJobs}
+            isSaving={isSaving}
+            saveError={saveError}
+            onClose={() => setCreatingEquipmentInitialValues(null)}
+            onCreateCustomer={createDashboardCustomer}
+            onCreateSite={createDashboardSite}
+            onCreate={async (input, resolvedSite) => {
+                await createDashboardEquipment(input, resolvedSite)
+                setCreatingEquipmentInitialValues(null)
+            }}
+        />}
+
+        {bulkImportSite && bulkImportAllowed && selectedCustomer && <BulkEquipmentImportDrawer
+            key={bulkImportSite.gr_siteid}
+            user={signedInUser}
+            customerId={selectedCustomer.gr_customerid}
+            customerName={selectedCustomer.gr_name}
+            siteId={bulkImportSite.gr_siteid}
+            siteName={bulkImportSite.gr_name}
+            sites={sites}
+            equipment={equipment}
+            onCreate={(input) => createDashboardEquipment(input, bulkImportSite)}
+            onComplete={(createdCount) => {
+                setBulkImportSuccess(`${createdCount} Equipment record${createdCount === 1 ? '' : 's'} added to ${bulkImportSite.gr_name}.`)
+                setBulkImportSite(null)
+            }}
+            onClose={() => setBulkImportSite(null)}
         />}
 
         {creatingJobInitialValues && <JobCreateDrawer
@@ -458,9 +660,21 @@ export default function CustomerDashboardScreen() {
             onClose={() => setEditingJob(null)}
         />}
 
+        <JobCompletionWorkflow
+            key={completionRequest?.job.gr_jobid ?? 'no-completion'}
+            request={completionRequest}
+            equipment={jobEquipmentList}
+            servicePlans={jobServicePlans}
+            isCompleting={isCompletingJob}
+            error={completionError}
+            onCancel={cancelJobCompletion}
+            onComplete={completeServiceJob}
+        />
+
         {customerDrawerMode && <CustomerDrawer
             key={`${customerDrawerMode}-${selectedCustomerId}`}
             mode={customerDrawerMode}
+            initialTab={customerDrawerInitialTab}
             initialValue={customerDrawerMode === 'edit' ? customerDrawerInitialValue : undefined}
             onClose={() => setCustomerDrawerMode(null)}
             onSave={saveCustomerDraft}

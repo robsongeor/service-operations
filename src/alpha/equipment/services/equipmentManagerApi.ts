@@ -1,10 +1,25 @@
 import { fetchEquipment } from '../../jobs/services/equipmentApi'
 import type { Equipment } from '../../jobs/types/equipment.types'
-import type { EquipmentUpdateInput } from '../types/equipmentManager.types'
+import { normalizeEquipmentInput, type EquipmentUpdateInput } from '../types/equipmentManager.types'
 
 const API_URL = `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2`
 
 export { fetchEquipment }
+
+function equipmentPayload(input: EquipmentUpdateInput) {
+    const normalized = normalizeEquipmentInput(input)
+    return {
+        gr_fleet: normalized.fleet || null,
+        gr_make: normalized.make || null,
+        gr_model: normalized.model || null,
+        gr_serial: normalized.serial || null,
+        gr_registrationnumber: normalized.registrationNumber || null,
+        gr_wofrequired: normalized.wofRequired,
+        gr_currentwofexpiry: normalized.currentWofExpiry || null,
+        gr_regoexpiry: normalized.regoExpiry || null,
+        'gr_Site@odata.bind': normalized.siteId ? `/gr_sites(${normalized.siteId})` : null,
+    }
+}
 
 export async function createEquipment(
     token: string,
@@ -18,16 +33,7 @@ export async function createEquipment(
             'Content-Type': 'application/json',
             Prefer: 'return=representation',
         },
-        body: JSON.stringify({
-            gr_fleet: input.fleet.trim() || null,
-            gr_make: input.make.trim() || null,
-            gr_model: input.model.trim() || null,
-            gr_serial: input.serial.trim() || null,
-            gr_registrationnumber: input.registrationNumber.trim() || null,
-            gr_wofrequired: input.wofRequired,
-            gr_currentwofexpiry: input.currentWofExpiry || null,
-            'gr_Site@odata.bind': input.siteId ? `/gr_sites(${input.siteId})` : null,
-        }),
+        body: JSON.stringify(equipmentPayload(input)),
     })
     if (!response.ok) {
         const detail = await response.text()
@@ -49,16 +55,7 @@ export async function updateEquipment(
             Accept: 'application/json',
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-            gr_fleet: input.fleet.trim() || null,
-            gr_make: input.make.trim() || null,
-            gr_model: input.model.trim() || null,
-            gr_serial: input.serial.trim() || null,
-            gr_registrationnumber: input.registrationNumber.trim() || null,
-            gr_wofrequired: input.wofRequired,
-            gr_currentwofexpiry: input.currentWofExpiry || null,
-            'gr_Site@odata.bind': input.siteId ? `/gr_sites(${input.siteId})` : null,
-        }),
+        body: JSON.stringify(equipmentPayload(input)),
     })
 
     if (!response.ok) {
@@ -83,15 +80,17 @@ export function applyEquipmentUpdate(
     input: EquipmentUpdateInput,
     site: Equipment['gr_Site'],
 ): Equipment {
+    const normalized = normalizeEquipmentInput(input)
     return {
         ...equipment,
-        gr_fleet: input.fleet.trim() || null,
-        gr_make: input.make.trim() || null,
-        gr_model: input.model.trim() || null,
-        gr_serial: input.serial.trim() || null,
-        gr_registrationnumber: input.registrationNumber.trim() || null,
-        gr_wofrequired: input.wofRequired,
-        gr_currentwofexpiry: input.currentWofExpiry || null,
+        gr_fleet: normalized.fleet || null,
+        gr_make: normalized.make || null,
+        gr_model: normalized.model || null,
+        gr_serial: normalized.serial || null,
+        gr_registrationnumber: normalized.registrationNumber || null,
+        gr_wofrequired: normalized.wofRequired,
+        gr_currentwofexpiry: normalized.currentWofExpiry || null,
+        gr_regoexpiry: normalized.regoExpiry || null,
         gr_Site: site,
     }
 }

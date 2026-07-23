@@ -60,6 +60,8 @@ export type ServiceProvider = {
 
 export type WofInspection = {
     gr_wofinspectionid: string
+    linkedJobId: string | null
+    equipmentId: string | null
     gr_name: string
     gr_registrationnumbersnapshot?: string | null
     gr_previouswofexpiry?: string | null

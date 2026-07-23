@@ -318,11 +318,23 @@ Current job statuses:
 | Waiting for parts | `122830002` | 3 |
 | Allocated | `122830000` | 4 |
 | Unallocated | `122830001` | 5 |
+| Unconfirmed | `122830005` | 6 |
 
 The current default table order follows the operational workflow above.
 
 Completion Review is a non-complete operational state. It does not set Completed Date or
 run equipment maintenance completion. Only Complete triggers those workflows.
+
+Unconfirmed Jobs represent work that has been recorded but is not yet committed to proceed.
+They are excluded from technician allocation and Scheduling until moved to Unallocated.
+Unconfirmed is not the same as Unallocated: Unallocated is confirmed work ready to be
+allocated. Unconfirmed Jobs remain visible in Customer and Equipment history, global Job
+search, and Quote linking. They may be linked to a Quote but do not require one.
+
+Job `gr_status` uses the global Dataverse choice displayed as `Status`. Its confirmed
+Unconfirmed option value is `122830005`. Moving an allocated or scheduled Job to
+Unconfirmed requires confirmation and removes primary/additional technician allocation and
+all schedule options through the existing APIs before the status is changed.
 
 Do not assume the numeric Dataverse values are sequential in workflow order.
 
@@ -560,11 +572,41 @@ Qualification records whose Qualification Type stable code is `WOF_CERTIFIED`; e
 providers remain separate and use provider type code `WOF_INSPECTOR`. Internal and external
 primary performers are mutually exclusive.
 
+Shared Equipment creation accepts stable Customer and Site initial IDs, including the
+Customer Dashboard Site action. Existing Sites are selected through the shared searchable
+selector and remain filtered to the selected Customer. A non-empty trimmed REGO requires
+`gr_wofrequired = true`. Current WOF Expiry uses the same validated `YYYY-MM-DD` date-only
+mapping for create and update through `gr_currentwofexpiry`; it is never converted to a UTC
+timestamp.
+The shared Equipment drawer also normalises a loaded Dataverse date-prefixed expiry to the
+exact `YYYY-MM-DD` value required by HTML date inputs before form state is created. Equipment
+Manager and Customer Dashboard both pass complete records from the same shared Equipment
+query; neither uses a partial dashboard-specific edit model.
+
+Customer Dashboard Site bulk paste import is client-visible only to the signed-in username
+`georger@liftrucks.co.nz`, using a trimmed case-insensitive comparison rather than display
+name. Review and submit handlers repeat the authorization and selected Customer/Site checks.
+Customer and Site are immutable launch context rather than pasted columns, and every bulk row
+reuses the normal Equipment create mapping with the selected Site lookup. Pasted dates are
+normalized to date-only values and a non-empty REGO implies WOF Required.
+Bulk import keeps pasted values immutable and stores review decisions separately. Every row
+must be explicitly selected before creation. Existing Fleet Number and Serial Number conflicts
+remain blocked unless that specific field is explicitly ignored; ignored identifiers are blank
+in the effective create input, and at least one Fleet Number or Serial Number must remain.
+Within-batch duplicates and Registration Number duplicates remain hard validation errors.
+Successful rows cannot be retried, while failed and skipped rows retain their review decisions.
+
 WOF due-state calculations are centralised in `src/alpha/wof/utils/wofRules.ts`; Due Soon is
 user-configurable per signed-in account with a validated 30-day default. WOF table preferences
 use the same account-scoped `sessionStorage` architecture as Jobs. Missing expiry is Unknown,
 and date-only values remain `YYYY-MM-DD` strings. Create WOF reuses the shared Equipment drawer;
 its nested creation passes a WOF Required default without changing normal Equipment defaults.
+The WOF Equipment cell opens the shared Equipment edit drawer by Equipment Dataverse ID after
+refreshing the authoritative shared Equipment query. Equipment saves update WOF table master
+values in local state without resetting WOF filters or sorting. Equipment REGO Expiry is the
+confirmed optional Date Only Dataverse field `gr_equipment.gr_regoexpiry`. The shared Equipment
+drawer owns its edit mapping, and the WOF table displays and sorts that current master value.
+Blank REGO expiry values remain last in either sort direction.
 Create and edit use the shared `WofEditorDrawer`. Table Customer and Site values prefer the
 linked Job's historical Site/Customer and fall back to the Equipment's current relationship.
 Editing updates the linked Job, then its WOF Inspection, then its schedule; partial failures are
@@ -573,6 +615,19 @@ cannot be changed once the linked Job is completed.
 Equipment expiry is updated
 only after a passed WOF. Transactionally safe WOF completion automation is deferred in the
 initial screen rather than coupling an unsafe sequence of Job and Equipment updates.
+
+Only orphaned planned WOF Inspection records with no linked Job and no completed compliance
+information may be permanently deleted. The cleanup deletes only the WOF Inspection. Any WOF
+with a linked Job remains protected; the client never deletes that Job or Scheduler records
+through this cleanup workflow. Passed, failed, cancelled, and inspection-outcome records
+remain protected history. Deleting an orphan never changes Equipment registration or WOF
+summary fields.
+Opening an existing WOF now uses its list-row `gr_wofinspectionid` only to request the
+authoritative Inspection detail. Both WOF list and detail queries select the raw confirmed
+`_gr_job_value` and `_gr_equipment_value` lookups as well as their expansions. The typed
+Inspection model retains these as `linkedJobId` and `equipmentId`; edit and delete operations
+never rely on a partial table row. The retained lookup ID distinguishes protected operational
+WOFs from orphan Inspection records eligible for cleanup.
 
 Technician qualifications are managed through Technician Qualification records from the
 Mechanics workflow; no qualification flags are stored directly on Mechanic. Qualification
@@ -1471,3 +1526,21 @@ module centralises that decision for drawer visibility and completion validation
 manager-facing Job drawer, office staff choose A, B, or C Service while planning. Hour
 Meter and Completed Date belong to the future technician completion workflow and are not
 editable there. Completed Date remains set by the completion workflow.
+
+Job completion is routed through the generic framework under `src/alpha/jobs/completion/`.
+Standard Job types retain direct completion, while Service completion pauses the initiating
+save/status change and opens the shared completion workflow on Jobs, Scheduling, and Customer
+Dashboard. The workflow validates a whole non-decreasing hour reading, warns for increases of
+1000 hours or more, saves the historical Job `gr_hourmeter`, reuses the existing service-plan
+completion helpers, updates Equipment Current Hour Meter, and only then marks the Job Complete.
+Existing completed Service Jobs with a null `gr_hourmeter` display “Not recorded”; the current
+Equipment reading is never substituted for historical Job data.
+## Customer Dashboard, Quotes, and Jobs table preferences
+
+- Customer Dashboard customer selection uses the shared `SearchableSelect`; search and selection are one control.
+- Customer Dashboard Site Equipment sections are collapsible. A single Site, an empty Site, or a Customer with no more than 10 total Equipment records expands by default; larger multi-Site Customers default to collapsed. Session component state is scoped by Customer ID and keyed by Site Dataverse ID so local Equipment and Site mutations preserve unrelated disclosure choices.
+- Customer drawer accepts an optional typed initial tab. Customer Dashboard Add Site opens it on Sites, while other entry points retain Info. Edit-mode saves PATCH existing Sites and POST new prototype Sites, replacing temporary IDs in local draft state after success.
+- Customer Dashboard Site equipment rows show the already-loaded Equipment `gr_registrationnumber` and current summary `gr_currentwofexpiry`; expiry rendering uses `formatWofDateOnly` and never historical inspection snapshots.
+- The Quotes register displays Equipment, Job, Customer, and Author separately. These values come from the existing single Dataverse query and its lookup expansions; do not add per-row lookup requests.
+- Quote Author is the immutable built-in Dataverse `createdby` relationship. New Quotes require a signed-in Entra object ID, and existing Quotes display their saved creator. Never infer author identity from a display-name match.
+- Jobs table sticky columns are a user-specific “Freeze columns through” preference stored with the account-scoped Jobs default-view payload. Column order, labels, widths, and calculated left offsets share `jobsTableColumns.ts`; do not introduce hard-coded per-column sticky offsets.

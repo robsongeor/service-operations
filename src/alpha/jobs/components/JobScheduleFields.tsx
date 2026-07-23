@@ -15,6 +15,7 @@ type Props = {
     onCreate?: (option: JobScheduleOptionInput) => Promise<void>
     onUpdate?: (optionId: string, option: JobScheduleOptionInput) => Promise<void>
     onDelete?: (optionId: string) => Promise<void>
+    disabledMessage?: string
 }
 
 type DisplayOption = {
@@ -114,6 +115,7 @@ export default function JobScheduleFields({
     onCreate,
     onUpdate,
     onDelete,
+    disabledMessage,
 }: Props) {
     const [scheduleType, setScheduleType] = useState<ScheduleType>(
         SCHEDULE_TYPE.EXACT_TIME,
@@ -246,6 +248,17 @@ export default function JobScheduleFields({
         } finally {
             setDeletingOptionId('')
         }
+    }
+
+    if (disabledMessage) {
+        return (
+            <section className="job-edit-divider job-schedule-section">
+                <div>
+                    <h3>Scheduling</h3>
+                    <p className="job-schedule-error" role="status">{disabledMessage}</p>
+                </div>
+            </section>
+        )
     }
 
     return (

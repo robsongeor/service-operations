@@ -34,6 +34,8 @@ type QuoteEditorDialogProps = {
     error: string
     onClose: () => void
     onSave: (input: QuoteInput) => Promise<void>
+    authorName: string
+    authorIdentityAvailable: boolean
 }
 
 const money = new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' })
@@ -103,6 +105,8 @@ export default function QuoteEditorDialog({
     error,
     onClose,
     onSave,
+    authorName,
+    authorIdentityAvailable,
 }: QuoteEditorDialogProps) {
     const initialJob = jobs.find((job) => job.gr_jobid === initialJobId)
     const [name, setName] = useState(
@@ -211,6 +215,10 @@ export default function QuoteEditorDialog({
     const submit = async (event: FormEvent) => {
         event.preventDefault()
         setFormError('')
+        if (!quote && !authorIdentityAvailable) {
+            setFormError('The signed-in user identity is unavailable, so the Quote Author cannot be recorded safely.')
+            return
+        }
         if (!name.trim()) {
             setFormError('Enter a quote title before saving the quote.')
             return
@@ -264,6 +272,10 @@ export default function QuoteEditorDialog({
 
                 <form onSubmit={(event) => void submit(event)}>
                     <div className="quote-form-grid">
+                        <label className="quote-field">
+                            <span>Author</span>
+                            <input readOnly value={quote?.createdby?.fullname || authorName} />
+                        </label>
                         <label className="quote-field quote-field-wide">
                             <span>Quote title *</span>
                             <input required value={name} onChange={(event) => setName(event.target.value)} />

@@ -200,6 +200,7 @@ Add-Text 'gr_equipment' 'gr_RegistrationNumber' 'Registration Number' 100
 Add-Boolean 'gr_equipment' 'gr_WOFRequired' 'WOF Required' $false
 Add-DateOnly 'gr_equipment' 'gr_CurrentWOFExpiry' 'Current WOF Expiry'
 Add-DateOnly 'gr_equipment' 'gr_LastWOFCompleted' 'Last WOF Completed'
+Add-DateOnly 'gr_equipment' 'gr_REGOExpiry' 'REGO Expiry'
 Add-WofJobType
 
 Add-Table 'gr_QualificationType' 'Qualification Type' 'Qualification Types' 'Reusable technician qualification definition.'

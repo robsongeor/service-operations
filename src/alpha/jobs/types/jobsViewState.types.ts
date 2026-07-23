@@ -1,5 +1,5 @@
 import { JOB_STATUSES, type JobStatus } from './jobStatus.types'
-import { JOB_TYPES, type JobType } from './jobType.types'
+import { JOB_TYPES, type JobTypeFilter } from './jobType.types'
 import type { JobsDefaultView } from './jobsDefaultView.types'
 
 export const LEGACY_JOBS_VIEW_STATE_KEY = 'service-operations.jobs-view-state.v1'
@@ -10,7 +10,7 @@ export type JobsSortColumn = 'created' | 'status' | 'customer' | 'mechanic'
 
 export type JobsViewState = {
     visibleStatuses: JobStatus[]
-    selectedJobType: JobType | 'all'
+    selectedJobType: JobTypeFilter
     officeAttentionFilter: 'all' | 'required' | 'none'
     searchText: string
     scheduledJobsVisibility: ScheduledJobsVisibility
@@ -41,12 +41,17 @@ function parseJobsViewState(raw: string | null): JobsViewState | null {
         if (!raw) return null
         const value = JSON.parse(raw) as Partial<JobsViewState>
         if (!value || typeof value !== 'object') return null
-        const visibleStatuses = Array.isArray(value.visibleStatuses)
+        let visibleStatuses = Array.isArray(value.visibleStatuses)
             ? value.visibleStatuses.filter((status): status is JobStatus => typeof status === 'number' && jobStatuses.has(status))
             : DEFAULT_JOBS_VIEW_STATE.visibleStatuses
-        const selectedJobType = value.selectedJobType === 'all' || (typeof value.selectedJobType === 'number' && jobTypes.has(value.selectedJobType))
-            ? value.selectedJobType as JobType | 'all'
+        const selectedJobType = value.selectedJobType === 'all'
+            || value.selectedJobType === 'unconfirmed'
+            || (typeof value.selectedJobType === 'number' && jobTypes.has(value.selectedJobType))
+            ? value.selectedJobType as JobTypeFilter
             : DEFAULT_JOBS_VIEW_STATE.selectedJobType
+        if (selectedJobType === 'unconfirmed' && !visibleStatuses.includes(JOB_STATUSES.UNCONFIRMED)) {
+            visibleStatuses = [...visibleStatuses, JOB_STATUSES.UNCONFIRMED]
+        }
         const officeAttentionFilter = value.officeAttentionFilter === 'required' || value.officeAttentionFilter === 'none'
             ? value.officeAttentionFilter
             : 'all'

@@ -111,6 +111,26 @@ export async function updateJobStatus(
     }
 }
 
+export async function updateJobCompletionHourMeter(
+    token: string,
+    jobId: string,
+    hourMeter: number,
+) {
+    const response = await fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobs(${jobId})`, {
+        method: 'PATCH',
+        headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+        },
+        body: JSON.stringify({ gr_hourmeter: hourMeter }),
+    })
+    if (!response.ok) {
+        const error = await response.text()
+        throw new Error(`Failed to save Hour Meter at Completion: ${error}`)
+    }
+}
+
 export async function updateJobCardStatus(
     token: string,
     jobId: string,
@@ -150,6 +170,7 @@ export async function updateJobFields(
         gr_jobnumber?: string
         gr_description?: string
         gr_ordernumber?: string
+        'gr_Mechanic@odata.bind'?: string | null
     }
 ) {
     const response = await fetch(
@@ -253,7 +274,7 @@ export async function deleteJob(token: string, jobId: string) {
         },
     )
 
-    if (!response.ok) {
+    if (!response.ok && response.status !== 404) {
         const error = await response.text()
         throw new Error(`Failed to delete job: ${error}`)
     }

@@ -5,7 +5,7 @@ import type { Site } from '../types/site.types'
 import type { Customer } from '../types/customer.types'
 import type { SiteContact } from '../types/siteContact.types'
 import type { JobType } from '../types/jobType.types'
-import { JOB_STATUSES } from '../types/jobStatus.types'
+import { JOB_STATUSES, UNCONFIRMED_OPERATION_MESSAGE } from '../types/jobStatus.types'
 import type { JobSaveInput } from '../types/jobSave.types'
 import { useJobEditor } from '../hooks/useJobEditor'
 import JobDrawerShell from './JobDrawerShell'
@@ -106,7 +106,8 @@ export default function JobCreateDrawer({
             createdJob = true
             setJobWasCreated(true)
 
-            await Promise.all(scheduleDrafts.map((option) =>
+            const scheduleOptionsToCreate = draft.status === JOB_STATUSES.UNCONFIRMED ? [] : scheduleDrafts
+            await Promise.all(scheduleOptionsToCreate.map((option) =>
                 onCreateScheduleOption({
                     jobId,
                     scheduleType: option.scheduleType,
@@ -165,6 +166,7 @@ export default function JobCreateDrawer({
                 <JobScheduleFields
                     draftOptions={scheduleDrafts}
                     onDraftOptionsChange={setScheduleDrafts}
+                    disabledMessage={draft.status === JOB_STATUSES.UNCONFIRMED ? UNCONFIRMED_OPERATION_MESSAGE : undefined}
                 />
             </div>
         </JobDrawerShell>

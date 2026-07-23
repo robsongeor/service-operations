@@ -3,7 +3,7 @@ import type { Mechanic } from '../types/mechanic.types'
 import { JOB_TYPE_OPTIONS, type JobType } from '../types/jobType.types'
 import { jobRequiresMaintenance } from '../types/jobType.types'
 import type { JobEditorDraft } from '../hooks/useJobEditor'
-import { JOB_STATUS_OPTIONS, type JobStatus } from '../types/jobStatus.types'
+import { JOB_STATUSES, JOB_STATUS_OPTIONS, UNCONFIRMED_OPERATION_MESSAGE, type JobStatus } from '../types/jobStatus.types'
 import { SERVICE_TYPES, SERVICE_TYPE_OPTIONS, type ServiceType } from '../../equipment/servicePlans/equipmentServicePlan.types'
 import SearchableMechanicSelect from './SearchableMechanicSelect'
 
@@ -42,10 +42,14 @@ export default function JobCoreFields({ draft, setDraft, mechanics, allowEmptyJo
                 <span>Status</span>
                 <select
                     value={draft.status}
-                    onChange={(event) => setDraft((current) => ({
-                        ...current,
-                    status: Number(event.target.value) as JobStatus,
-                    }))}
+                    onChange={(event) => {
+                        const status = Number(event.target.value) as JobStatus
+                        setDraft((current) => ({
+                            ...current,
+                            status,
+                            mechanicId: status === JOB_STATUSES.UNCONFIRMED ? '' : current.mechanicId,
+                        }))
+                    }}
                 >
                     {JOB_STATUS_OPTIONS.map((option) => (
                         <option key={option.value} value={option.value}>{option.label}</option>
@@ -89,7 +93,9 @@ export default function JobCoreFields({ draft, setDraft, mechanics, allowEmptyJo
 
             <label className="job-edit-field job-edit-field-wide">
                 <span>Mechanic</span>
-                <SearchableMechanicSelect
+                {draft.status === JOB_STATUSES.UNCONFIRMED ? (
+                    <span className="job-edit-field-note">{UNCONFIRMED_OPERATION_MESSAGE}</span>
+                ) : <SearchableMechanicSelect
                     mechanics={mechanics}
                     selectedId={draft.mechanicId}
                     isOpen={mechanicSelectOpen}
@@ -101,7 +107,7 @@ export default function JobCoreFields({ draft, setDraft, mechanics, allowEmptyJo
                         setDraft((current) => ({ ...current, mechanicId }))
                         setMechanicSelectOpen(false)
                     }}
-                />
+                />}
             </label>
 
             {jobRequiresMaintenance(draft.jobType) && <>

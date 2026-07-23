@@ -7,3 +7,8 @@ export type Site = {
         gr_name: string
     }
 }
+
+export type SiteUpdateInput = {
+    name: string
+    address: string
+}

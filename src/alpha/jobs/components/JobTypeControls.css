@@ -2,6 +2,8 @@
 .job-type-tab { min-height: 38px; padding: 0 15px; border: 1px solid transparent; border-bottom: 3px solid transparent; border-radius: 8px 8px 0 0; background: transparent; color: #68706b; font: inherit; font-size: .74rem; font-weight: 650; cursor: pointer; transition: background 120ms ease, border-color 120ms ease, color 120ms ease; }
 .job-type-tab:hover { background: #f2f4f1; color: #292e2b; }
 .job-type-tab.active { border-color: #dfe4e1; border-bottom-color: #202421; background: #f4f5f2; color: #202421; }
+.job-type-tab.job-status-tab { border-color: #e1bd70; color: #77520b; }
+.job-type-tab.job-status-tab.active { border-bottom-color: #b77a0d; background: #fff0c2; color: #654306; }
 .job-type-tab:focus-visible { outline: 2px solid #55796d; outline-offset: -2px; }
 .job-type-colour { --job-type-border: #d8ddd9; --job-type-background: #eceeeb; --job-type-text: #4f5652; }
 .job-type-colour[data-job-type="122830000"] { --job-type-border: #e5aaa0; --job-type-background: #f8d9d3; --job-type-text: #87382d; }

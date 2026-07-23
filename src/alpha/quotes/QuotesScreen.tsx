@@ -64,6 +64,7 @@ export default function QuotesScreen() {
                 quote.gr_Job?.gr_jobnumber,
                 quote.gr_Job?.gr_Site?.gr_Customer?.gr_name,
                 quote.gr_Job?.gr_Equipment?.gr_fleet,
+                quote.createdby?.fullname,
             ].some((value) => value?.toLowerCase().includes(query)))
             .sort((left, right) => {
                 const leftTime = left.gr_quotedate ? Date.parse(left.gr_quotedate) : Number.NaN
@@ -194,12 +195,15 @@ export default function QuotesScreen() {
                     </section>
                 ) : <div className="quotes-table-shell">
                     <table className="quotes-table">
-                        <thead><tr><th>Quote</th><th>Job / customer</th><th aria-sort={viewState.dateSort}><button type="button" className="quotes-sort" onClick={() => setViewState((current) => ({ ...current, dateSort: current.dateSort === 'ascending' ? 'descending' : 'ascending' }))}>Date <JobsTableSortIcon active direction={viewState.dateSort} /></button></th><th>Status</th><th>Revision</th><th className="quotes-money">Total</th></tr></thead>
+                        <thead><tr><th>Quote</th><th>Equipment</th><th>Job</th><th>Customer</th><th>Author</th><th aria-sort={viewState.dateSort}><button type="button" className="quotes-sort" onClick={() => setViewState((current) => ({ ...current, dateSort: current.dateSort === 'ascending' ? 'descending' : 'ascending' }))}>Date <JobsTableSortIcon active direction={viewState.dateSort} /></button></th><th>Status</th><th>Revision</th><th className="quotes-money">Total</th></tr></thead>
                         <tbody>
                             {visibleQuotes.map((quote) => (
                                 <tr key={quote.gr_quoteid} onClick={() => void openExisting(quote)}>
                                     <td><strong className="quote-title">{quote.gr_name || 'Untitled quote'}</strong><small>{quote.gr_quotenumber || 'Pending number'}</small></td>
-                                    <td><strong>{quote.gr_Job?.gr_jobnumber || quote.gr_Customer?.gr_name || quote.gr_Equipment?.gr_fleet || 'No linked record'}</strong><small>{quote.gr_Customer?.gr_name || quote.gr_Equipment?.gr_fleet || quote.gr_Job?.gr_Site?.gr_Customer?.gr_name || quote.gr_Job?.gr_Equipment?.gr_fleet || 'No customer or equipment details'}</small></td>
+                                    <td><strong>{quote.gr_Equipment?.gr_fleet || quote.gr_Job?.gr_Equipment?.gr_fleet || '—'}</strong><small>{quote.gr_Equipment?.gr_serial || quote.gr_Job?.gr_Equipment?.gr_serial || ''}</small></td>
+                                    <td><strong>{quote.gr_Job?.gr_jobnumber || '—'}</strong><small>{quote.gr_Job?.gr_description || ''}</small></td>
+                                    <td><strong>{quote.gr_Customer?.gr_name || quote.gr_Job?.gr_Site?.gr_Customer?.gr_name || quote.gr_Equipment?.gr_Site?.gr_Customer?.gr_name || '—'}</strong></td>
+                                    <td><strong>{quote.createdby?.fullname || 'Unknown'}</strong></td>
                                     <td>{quote.gr_quotedate ? date.format(new Date(`${quote.gr_quotedate.slice(0, 10)}T00:00:00`)) : '—'}</td>
                                     <td><span className={`quote-status status-${quote.gr_quotestatus}`}>{QUOTE_STATUS_LABELS[quote.gr_quotestatus] ?? 'Unknown'}</span></td>
                                     <td>Rev {quote.gr_revision}</td>
@@ -232,6 +236,8 @@ export default function QuotesScreen() {
                         setSearchParams({})
                     }}
                     onSave={saveQuote}
+                    authorName={editingQuote?.createdby?.fullname || signedInUser?.displayName || ''}
+                    authorIdentityAvailable={Boolean(editingQuote?.createdby?.systemuserid || signedInUser?.entraObjectId)}
                 />
             )}
         </div>
