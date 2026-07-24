@@ -49,7 +49,7 @@ export default function EquipmentTable({ equipment, servicePlans, sortKey, sortD
                     {equipment.length === 0 ? (
                         <tr><td className="equipment-empty" colSpan={9}>No equipment matches the current search and filters.</td></tr>
                     ) : equipment.map((item) => {
-                        const primary = calculatePrimaryNextService(servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === item.gr_equipmentid.toLowerCase()))
+                        const primary = calculatePrimaryNextService(servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === item.gr_equipmentid.toLowerCase()), item)
                         const remaining = primary ? calculateHoursRemaining(item.gr_currenthourmeter ?? 0, primary.gr_nextduehours) : null
                         const label = primary ? SERVICE_TYPE_OPTIONS.find((option) => option.value === primary.gr_servicetype)?.label.replace(' Service', '') : null
                         return (

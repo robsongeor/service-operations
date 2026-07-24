@@ -1,6 +1,7 @@
 import type { SignedInUserInfo } from '../../../auth/signedInUser'
 import type { Equipment } from '../../jobs/types/equipment.types'
 import { EQUIPMENT_COMPLIANCE_STATUSES } from '../compliance/equipmentCompliance'
+import { MAINTENANCE_PROFILES, POWER_TYPES, SERVICE_PROGRAMMES } from '../servicePlans/maintenanceConfiguration'
 import { normalizeEquipmentInput, type EquipmentUpdateInput } from '../types/equipmentManager.types'
 
 export const BULK_EQUIPMENT_IMPORT_EMAIL = 'georger@liftrucks.co.nz'
@@ -193,5 +194,14 @@ export function bulkEquipmentRowInput(
             : EQUIPMENT_COMPLIANCE_STATUSES.OFF_ROAD,
         wofRequired: Boolean(row.registrationNumber.trim()),
         siteId: siteId.trim(),
+        powerType: POWER_TYPES.OTHER_UNKNOWN,
+        serviceProgramme: SERVICE_PROGRAMMES.ICE_STANDARD,
+        maintenanceProfile: MAINTENANCE_PROFILES.STANDARD,
+        customAEnabled: true,
+        customBEnabled: false,
+        customCEnabled: true,
+        customAIntervalDays: '',
+        customBIntervalDays: '',
+        customCIntervalDays: '',
     })
 }

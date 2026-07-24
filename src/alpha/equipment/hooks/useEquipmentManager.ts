@@ -18,6 +18,7 @@ import {
 import { normalizeEquipmentInput, type EquipmentUpdateInput } from '../types/equipmentManager.types'
 import {
     fetchEquipmentServicePlans,
+    syncEquipmentServiceProgramme,
     saveEquipmentMaintenanceHistory as saveEquipmentMaintenanceHistoryApi,
     type MaintenanceHistoryInput,
 } from '../servicePlans/servicePlanApi'
@@ -106,6 +107,9 @@ export function useEquipmentManager() {
             await updateEquipmentApi(token, record.gr_equipmentid, input)
             const selectedSite = sites.find((site) => site.gr_siteid === input.siteId)
             const updated = applyEquipmentUpdate(record, input, selectedSite)
+            const recordPlans = servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === record.gr_equipmentid.toLowerCase())
+            const syncedPlans = await syncEquipmentServiceProgramme(token, updated, recordPlans)
+            setServicePlans((current) => [...current.filter((plan) => plan._gr_equipment_value?.toLowerCase() !== record.gr_equipmentid.toLowerCase()), ...syncedPlans])
             setEquipment((current) => current.map((item) =>
                 item.gr_equipmentid === updated.gr_equipmentid ? updated : item,
             ))
@@ -229,7 +233,7 @@ export function useEquipmentManager() {
         setSaveError('')
         try {
             const token = await getToken()
-            const updatedPlans = await saveEquipmentMaintenanceHistoryApi(token, record.gr_equipmentid, existingPlans, input)
+            const updatedPlans = await saveEquipmentMaintenanceHistoryApi(token, record.gr_equipmentid, record, existingPlans, input)
             setEquipment((current) => current.map((item) =>
                 item.gr_equipmentid === record.gr_equipmentid
                     ? { ...item, gr_currenthourmeter: input.currentHourMeter }

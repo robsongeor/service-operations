@@ -9,7 +9,7 @@ import { createJobScheduleOption, deleteJobScheduleOption, fetchJobScheduleOptio
 import { SCHEDULE_TYPE } from '../../jobs/types/jobSchedule.types'
 import { applyEquipmentUpdate, createEquipment as createEquipmentApi, deleteEquipment as deleteEquipmentApi, updateEquipment as updateEquipmentApi } from '../../equipment/services/equipmentManagerApi'
 import { normalizeEquipmentInput, type EquipmentUpdateInput } from '../../equipment/types/equipmentManager.types'
-import { fetchEquipmentServicePlans, saveEquipmentMaintenanceHistory as saveEquipmentMaintenanceHistoryApi, type MaintenanceHistoryInput } from '../../equipment/servicePlans/servicePlanApi'
+import { fetchEquipmentServicePlans, saveEquipmentMaintenanceHistory as saveEquipmentMaintenanceHistoryApi, syncEquipmentServiceProgramme, type MaintenanceHistoryInput } from '../../equipment/servicePlans/servicePlanApi'
 import type { EquipmentServicePlan } from '../../equipment/servicePlans/equipmentServicePlan.types'
 import type { Customer } from '../../jobs/types/customer.types'
 import type { Site } from '../../jobs/types/site.types'
@@ -106,8 +106,12 @@ export function useWof() {
         setEquipmentSaveError('')
         try {
             const normalized = normalizeEquipmentInput(input)
-            await updateEquipmentApi(await token(), record.gr_equipmentid, normalized)
+            const accessToken = await token()
+            await updateEquipmentApi(accessToken, record.gr_equipmentid, normalized)
             const updated = applyEquipmentUpdate(record, normalized, sites.find((site) => site.gr_siteid === normalized.siteId))
+            const recordPlans = servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === record.gr_equipmentid.toLowerCase())
+            const syncedPlans = await syncEquipmentServiceProgramme(accessToken, updated, recordPlans)
+            setServicePlans((current) => [...current.filter((plan) => plan._gr_equipment_value?.toLowerCase() !== record.gr_equipmentid.toLowerCase()), ...syncedPlans])
             setEquipment((current) => current.map((item) => item.gr_equipmentid === updated.gr_equipmentid ? updated : item))
             return updated
         } catch (caught) {
@@ -122,7 +126,7 @@ export function useWof() {
         setIsEquipmentSaving(true)
         setEquipmentSaveError('')
         try {
-            const updatedPlans = await saveEquipmentMaintenanceHistoryApi(await token(), record.gr_equipmentid, plans, input)
+            const updatedPlans = await saveEquipmentMaintenanceHistoryApi(await token(), record.gr_equipmentid, record, plans, input)
             const updatedEquipment = { ...record, gr_currenthourmeter: input.currentHourMeter }
             setEquipment((current) => current.map((item) => item.gr_equipmentid === record.gr_equipmentid ? updatedEquipment : item))
             setServicePlans((current) => [

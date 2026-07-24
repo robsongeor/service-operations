@@ -210,8 +210,8 @@ export default function CustomerDashboardScreen() {
         const plans = servicePlans.filter((plan) =>
             plan._gr_equipment_value?.toLowerCase() === item.gr_equipmentid.toLowerCase(),
         )
-        const primary = calculatePrimaryNextService(plans)
-        const status = primary ? calculateServiceStatus(item.gr_currenthourmeter ?? 0, primary.gr_nextduehours) : null
+        const primary = calculatePrimaryNextService(plans, item)
+        const status = primary ? calculateServiceStatus(item.gr_currenthourmeter ?? 0, primary.gr_nextduehours, primary.gr_nextduedate) : null
         if (status === 'Due Soon') counts.dueSoon += 1
         if (status === 'Overdue' || status === 'Due') counts.overdue += 1
         return counts
@@ -470,7 +470,7 @@ export default function CustomerDashboardScreen() {
                                 <tbody>
                                     {rows.length === 0 ? <tr><td colSpan={8}>No equipment recorded for this site.</td></tr> : rows.map((item) => {
                                         const plans = servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === item.gr_equipmentid.toLowerCase())
-                                        const primary = calculatePrimaryNextService(plans)
+                                        const primary = calculatePrimaryNextService(plans, item)
                                         const remaining = primary ? calculateHoursRemaining(item.gr_currenthourmeter ?? 0, primary.gr_nextduehours) : null
                                         const status = primary ? calculateServiceStatus(item.gr_currenthourmeter ?? 0, primary.gr_nextduehours) : null
                                         const serviceLabel = primary ? SERVICE_TYPE_OPTIONS.find((option) => option.value === primary.gr_servicetype)?.label : null

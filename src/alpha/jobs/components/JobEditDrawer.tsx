@@ -26,6 +26,7 @@ import type { JobCardStatus } from '../types/jobCardStatus.types'
 import type { JobAssignment, JobAssignmentInput } from '../types/jobAssignment.types'
 import { SERVICE_TYPES, type EquipmentServicePlan } from '../../equipment/servicePlans/equipmentServicePlan.types'
 import JobMaintenanceSummary from './JobMaintenanceSummary'
+import { isServiceTypeEnabled } from '../../equipment/servicePlans/maintenanceConfiguration'
 import { JOB_CARD_STATUSES, getJobCardStatus } from '../types/jobCardStatus.types'
 import { JOB_NUMBER_REQUIRED_EMAIL_MESSAGE, jobHasEmailableJobNumber } from '../services/jobEmailRules'
 import { OFFICE_ACTIONS, type JobOfficeUpdate } from '../types/officeAction.types'
@@ -179,6 +180,13 @@ export default function JobEditDrawer({
         if (draft.customerId && !draft.siteId) {
             setSaveError('Select a site for the chosen customer before saving.')
             return
+        }
+        const selectedEquipment = equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)
+        const historicalServiceSelection = draft.serviceType === job.gr_servicetype
+            && draft.equipmentId === job.gr_Equipment?.gr_equipmentid
+        if (jobRequiresMaintenance(draft.jobType) && draft.serviceType !== SERVICE_TYPES.NONE
+            && !historicalServiceSelection && !isServiceTypeEnabled(selectedEquipment, draft.serviceType)) {
+            return setSaveError('The selected Service Type is not active for this Equipment programme.')
         }
         if (draft.status === 122830003 && jobRequiresMaintenance(draft.jobType)) {
             if (!draft.equipmentId) return setSaveError('Select equipment before completing a service job.')
@@ -359,6 +367,7 @@ export default function JobEditDrawer({
                             draft={draft}
                             setDraft={setDraft}
                             mechanics={mechanics}
+                            equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)}
                         />
 
                         {jobRequiresMaintenance(draft.jobType) && <JobMaintenanceSummary

@@ -8,8 +8,9 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "npm run test:api",
-    "test:api": "node --test tests/joblookup.test.cjs"
+    "test": "npm run test:api && npm run test:maintenance",
+    "test:api": "node --test tests/joblookup.test.cjs",
+    "test:maintenance": "node --experimental-strip-types --test tests/maintenanceServicePlans.test.ts"
   },
   "dependencies": {
     "@azure/msal-browser": "^5.9.0",

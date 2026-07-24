@@ -21,6 +21,7 @@ import { SERVICE_TYPES } from '../../equipment/servicePlans/equipmentServicePlan
 import type { EquipmentServicePlan } from '../../equipment/servicePlans/equipmentServicePlan.types'
 import { jobRequiresMaintenance, STANDARD_JOB_TYPE_OPTIONS } from '../types/jobType.types'
 import JobMaintenanceSummary from './JobMaintenanceSummary'
+import { isServiceTypeEnabled } from '../../equipment/servicePlans/maintenanceConfiguration'
 
 export type JobCreateInitialValues = {
     equipmentId?: string
@@ -84,6 +85,12 @@ export default function JobCreateDrawer({
         }
         if (!draft.description.trim()) return setSaveError('Enter a job description before creating the job.')
         if (draft.customerId && !draft.siteId) return setSaveError('Select a site for the chosen customer.')
+        const selectedEquipment = equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)
+        if (jobRequiresMaintenance(draft.jobType)) {
+            if (!selectedEquipment) return setSaveError('Select equipment before creating a Service Job.')
+            if (draft.serviceType === SERVICE_TYPES.NONE) return setSaveError('Select a service type before creating a Service Job.')
+            if (!isServiceTypeEnabled(selectedEquipment, draft.serviceType)) return setSaveError('The selected Service Type is not active for this Equipment programme.')
+        }
 
         let createdJob = false
 
@@ -150,7 +157,7 @@ export default function JobCreateDrawer({
             </>}
         >
             <div className="job-edit-grid">
-                <JobCoreFields draft={draft} setDraft={setDraft} mechanics={mechanics} allowEmptyJobType jobTypeError={jobTypeError} jobTypeOptions={STANDARD_JOB_TYPE_OPTIONS} />
+                <JobCoreFields draft={draft} setDraft={setDraft} mechanics={mechanics} equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)} allowEmptyJobType jobTypeError={jobTypeError} jobTypeOptions={STANDARD_JOB_TYPE_OPTIONS} />
                 {jobRequiresMaintenance(draft.jobType) && <JobMaintenanceSummary
                     equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)}
                     servicePlans={servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === draft.equipmentId.toLowerCase())}

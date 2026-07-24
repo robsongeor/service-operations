@@ -17,6 +17,7 @@ import { calculateHoursRemaining, calculateServiceStatus } from '../servicePlans
 import { normalizeEquipmentInput, toEquipmentDateOnlyValue, type EquipmentCreateInitialValues, type EquipmentUpdateInput } from '../types/equipmentManager.types'
 import { classifyEquipmentIdentifier, deriveSiteNameFromAddress, normalizeCustomerName, parseSpreadsheetRow, type IdentifierClassification, type SpreadsheetRow } from '../utils/equipmentCreateHelpers'
 import SearchableSelect, { type SearchableSelectOption } from '../../shared/searchable-select/SearchableSelect'
+import { formatMaintenanceInterval, MAINTENANCE_PROFILES, POWER_TYPES, resolveMaintenanceConfiguration, SERVICE_PROGRAMMES, type MaintenanceProfile, type PowerType, type ServiceProgramme } from '../servicePlans/maintenanceConfiguration'
 import {
     EQUIPMENT_COMPLIANCE_STATUSES,
     EQUIPMENT_COMPLIANCE_STATUS_OPTIONS,
@@ -99,6 +100,15 @@ export default function EquipmentDrawer(props: Props) {
         wofRequired: equipment ? getEquipmentComplianceStatus(equipment) === EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED : initialValues?.wofRequired ?? false,
         currentWofExpiry: toEquipmentDateOnlyValue(equipment?.gr_currentwofexpiry ?? initialValues?.currentWofExpiry),
         regoExpiry: toEquipmentDateOnlyValue(equipment?.gr_regoexpiry ?? initialValues?.regoExpiry),
+        powerType: equipment?.gr_powertype ?? initialValues?.powerType ?? POWER_TYPES.OTHER_UNKNOWN,
+        serviceProgramme: equipment?.gr_serviceprogramme ?? initialValues?.serviceProgramme ?? SERVICE_PROGRAMMES.ICE_STANDARD,
+        maintenanceProfile: equipment?.gr_maintenanceprofile ?? initialValues?.maintenanceProfile ?? MAINTENANCE_PROFILES.STANDARD,
+        customAEnabled: equipment?.gr_customaenabled ?? initialValues?.customAEnabled ?? true,
+        customBEnabled: equipment?.gr_custombenabled ?? initialValues?.customBEnabled ?? false,
+        customCEnabled: equipment?.gr_customcenabled ?? initialValues?.customCEnabled ?? true,
+        customAIntervalDays: String(equipment?.gr_customaintervaldays ?? initialValues?.customAIntervalDays ?? ''),
+        customBIntervalDays: String(equipment?.gr_custombintervaldays ?? initialValues?.customBIntervalDays ?? ''),
+        customCIntervalDays: String(equipment?.gr_customcintervaldays ?? initialValues?.customCIntervalDays ?? ''),
     })
     const [customerId, setCustomerId] = useState(equipment?.gr_Site?.gr_Customer?.gr_customerid ?? initialCustomer?.gr_customerid ?? '')
     const [customerMode, setCustomerMode] = useState<CustomerMode>(equipment || initialCustomer ? 'existing' : 'none')
@@ -121,6 +131,8 @@ export default function EquipmentDrawer(props: Props) {
     const [sourceContextOpen, setSourceContextOpen] = useState(true)
     const [isReadingClipboard, setIsReadingClipboard] = useState(false)
     const manualPasteRef = useRef<HTMLTextAreaElement>(null)
+    const equipmentFormRef = useRef<HTMLFormElement>(null)
+    const programmeChangeConfirmedRef = useRef(false)
     const [activeTab, setActiveTab] = useState<EquipmentDrawerTab>('details')
     const [maintenanceDialogOpen, setMaintenanceDialogOpen] = useState(false)
     const [maintenanceForm, setMaintenanceForm] = useState<MaintenanceHistoryForm>(() => ({
@@ -141,6 +153,7 @@ export default function EquipmentDrawer(props: Props) {
     })
     const [complianceError, setComplianceError] = useState('')
     const [isComplianceSaving, setIsComplianceSaving] = useState(false)
+    const [showProgrammeChangeConfirm, setShowProgrammeChangeConfirm] = useState(false)
 
     const history = equipment
         ? jobs
@@ -187,6 +200,7 @@ export default function EquipmentDrawer(props: Props) {
     const busy = isSaving || isDeleting || isComplianceSaving
     const equipmentName = equipment ? [equipment.gr_fleet, equipment.gr_make, equipment.gr_model].filter(Boolean).join(' - ') || 'this equipment' : ''
     const plans = isCreate ? [] : props.servicePlans
+    const maintenanceConfiguration = resolveMaintenanceConfiguration(equipment)
     const tabs: Array<{ id: EquipmentDrawerTab; label: string; count?: number }> = [
         { id: 'details', label: 'Details' },
         { id: 'maintenance', label: 'Maintenance' },
@@ -430,6 +444,11 @@ export default function EquipmentDrawer(props: Props) {
                 return
             }
         }
+        const originalProgramme = equipment?.gr_serviceprogramme ?? SERVICE_PROGRAMMES.ICE_STANDARD
+        if (!isCreate && history.length > 0 && trimmed.serviceProgramme !== originalProgramme && !programmeChangeConfirmedRef.current) {
+            setShowProgrammeChangeConfirm(true)
+            return
+        }
         try {
             setFormError('')
             setRelatedError('')
@@ -480,7 +499,10 @@ export default function EquipmentDrawer(props: Props) {
                     throw error
                 }
             }
-            else await props.onSave(trimmed)
+            else {
+                await props.onSave(trimmed)
+                programmeChangeConfirmedRef.current = false
+            }
         } catch (error) {
             if (isCreate) {
                 setFormError(error instanceof Error ? error.message : 'Equipment could not be created. Please try again.')
@@ -550,7 +572,7 @@ export default function EquipmentDrawer(props: Props) {
         }
     }
 
-    const updateField = (field: keyof EquipmentUpdateInput, value: string | boolean | EquipmentComplianceStatus) => {
+    const updateField = (field: keyof EquipmentUpdateInput, value: string | boolean | number) => {
         setForm((current) => ({ ...current, [field]: value }))
         if (formError) setFormError('')
     }
@@ -588,7 +610,7 @@ export default function EquipmentDrawer(props: Props) {
                 <div className="equipment-footer-actions"><button type="button" disabled={busy} onClick={close}>Cancel</button><button className="primary" type="submit" form="equipment-edit-form" disabled={busy}>{isSaving ? (isCreate ? 'Creating...' : 'Saving...') : isCreate ? 'Create Equipment' : 'Save changes'}</button></div>
             </>}
         >
-            <form id="equipment-edit-form" onSubmit={(event) => void save(event)}>
+            <form ref={equipmentFormRef} id="equipment-edit-form" onSubmit={(event) => void save(event)}>
                 {isCreate && <div className="equipment-spreadsheet-tools">
                     <button type="button" className="equipment-spreadsheet-toggle" disabled={isReadingClipboard} onClick={() => void handleQuickPaste()}>{isReadingClipboard ? 'Reading clipboard...' : 'Paste from spreadsheet'}</button>
                     {spreadsheetOpen && <section className="equipment-spreadsheet-panel">
@@ -629,6 +651,12 @@ export default function EquipmentDrawer(props: Props) {
                             <label>Serial number<input value={form.serial} onChange={(event) => updateField('serial', event.target.value)} /></label>
                             <label>Make<input value={form.make} onChange={(event) => updateField('make', event.target.value)} /></label>
                             <label>Model<input value={form.model} onChange={(event) => updateField('model', event.target.value)} /></label>
+                            {isCreate && <><label>Power Type<select value={form.powerType} onChange={(event) => {
+                                const powerType = Number(event.target.value) as PowerType
+                                setForm((current) => ({ ...current, powerType, serviceProgramme: current.serviceProgramme === SERVICE_PROGRAMMES.CUSTOM ? current.serviceProgramme : powerType === POWER_TYPES.ELECTRIC ? SERVICE_PROGRAMMES.ELECTRIC_STANDARD : SERVICE_PROGRAMMES.ICE_STANDARD }))
+                            }}><option value={POWER_TYPES.ICE}>ICE</option><option value={POWER_TYPES.ELECTRIC}>Electric</option><option value={POWER_TYPES.OTHER_UNKNOWN}>Other / Unknown</option></select></label><label>Service Programme<select value={form.serviceProgramme} onChange={(event) => updateField('serviceProgramme', Number(event.target.value) as ServiceProgramme)}><option value={SERVICE_PROGRAMMES.ICE_STANDARD}>ICE Standard — A/B/C</option><option value={SERVICE_PROGRAMMES.ELECTRIC_STANDARD}>Electric Standard — A/C</option><option value={SERVICE_PROGRAMMES.CUSTOM}>Custom</option></select></label><label>Maintenance Profile<select value={form.maintenanceProfile} onChange={(event) => updateField('maintenanceProfile', Number(event.target.value) as MaintenanceProfile)}><option value={MAINTENANCE_PROFILES.HIGH_USAGE}>High Usage</option><option value={MAINTENANCE_PROFILES.STANDARD}>Standard</option><option value={MAINTENANCE_PROFILES.LOW_USAGE}>Low Usage</option><option value={MAINTENANCE_PROFILES.CUSTOM}>Custom</option></select></label></>}
+                            {isCreate && form.serviceProgramme === SERVICE_PROGRAMMES.CUSTOM && <>{([['A', 'customAEnabled'], ['B', 'customBEnabled'], ['C', 'customCEnabled']] as const).map(([label, field]) => <label className="equipment-wof-required" key={field}><input type="checkbox" checked={form[field]} onChange={(event) => updateField(field, event.target.checked)} /> {label} Service enabled</label>)}</>}
+                            {isCreate && form.maintenanceProfile === MAINTENANCE_PROFILES.CUSTOM && <>{form.customAEnabled && <label>Custom A interval (days)<input type="number" min="1" value={form.customAIntervalDays} onChange={(event) => updateField('customAIntervalDays', event.target.value)} /></label>}{form.customBEnabled && form.serviceProgramme === SERVICE_PROGRAMMES.CUSTOM && <label>Custom B interval (days)<input type="number" min="1" value={form.customBIntervalDays} onChange={(event) => updateField('customBIntervalDays', event.target.value)} /></label>}{form.customCEnabled && <label>Custom C interval (days)<input type="number" min="1" value={form.customCIntervalDays} onChange={(event) => updateField('customCIntervalDays', event.target.value)} /></label>}</>}
                             {isCreate ? <div className="equipment-relationship-fields">
                                 <label>Customer<input value={customerQuery} placeholder="Search or enter customer..." onChange={(event) => {
                                     const value = event.target.value
@@ -692,18 +720,34 @@ export default function EquipmentDrawer(props: Props) {
                     {isCreate && parsedSpreadsheetRow && <details className="equipment-spreadsheet-source" open={sourceContextOpen} onToggle={(event) => setSourceContextOpen(event.currentTarget.open)}><summary>Spreadsheet source</summary><dl><div><dt>Job Number</dt><dd>{parsedSpreadsheetRow.jobNumber || '-'}</dd></div><div><dt>Date</dt><dd>{parsedSpreadsheetRow.date || '-'}</dd></div><div><dt>Mechanic</dt><dd>{parsedSpreadsheetRow.mechanic || '-'}</dd></div><div><dt>Description</dt><dd>{parsedSpreadsheetRow.description || '-'}</dd></div><div><dt>Contact details</dt><dd>{parsedSpreadsheetRow.contactDetails || '-'}</dd></div><div><dt>Status</dt><dd>{parsedSpreadsheetRow.status || '-'}</dd></div><div><dt>Comments</dt><dd>{parsedSpreadsheetRow.comments || '-'}</dd></div><div><dt>Order number</dt><dd>{parsedSpreadsheetRow.orderNumber || '-'}</dd></div><div><dt>in so</dt><dd>{parsedSpreadsheetRow.inSo || '-'}</dd></div></dl></details>}
 
                     {!isCreate && activeTab === 'maintenance' && <EditDrawerSection title="Maintenance" meta={<span>Last Known Hour Meter: {equipment?.gr_currenthourmeter ?? '-'}</span>}>
+                        <div className="equipment-form-grid">
+                            <label>Power Type<select value={form.powerType} onChange={(event) => {
+                                const powerType = Number(event.target.value) as PowerType
+                                setForm((current) => ({ ...current, powerType, serviceProgramme: current.serviceProgramme === SERVICE_PROGRAMMES.CUSTOM ? current.serviceProgramme : powerType === POWER_TYPES.ELECTRIC ? SERVICE_PROGRAMMES.ELECTRIC_STANDARD : SERVICE_PROGRAMMES.ICE_STANDARD }))
+                            }}><option value={POWER_TYPES.ICE}>ICE</option><option value={POWER_TYPES.ELECTRIC}>Electric</option><option value={POWER_TYPES.OTHER_UNKNOWN}>Other / Unknown</option></select></label>
+                            <label>Service Programme<select value={form.serviceProgramme} onChange={(event) => updateField('serviceProgramme', Number(event.target.value) as ServiceProgramme)}><option value={SERVICE_PROGRAMMES.ICE_STANDARD}>ICE Standard — A/B/C</option><option value={SERVICE_PROGRAMMES.ELECTRIC_STANDARD}>Electric Standard — A/C</option><option value={SERVICE_PROGRAMMES.CUSTOM}>Custom</option></select></label>
+                            <label>Maintenance Profile<select value={form.maintenanceProfile} onChange={(event) => updateField('maintenanceProfile', Number(event.target.value) as MaintenanceProfile)}><option value={MAINTENANCE_PROFILES.HIGH_USAGE}>High Usage</option><option value={MAINTENANCE_PROFILES.STANDARD}>Standard</option><option value={MAINTENANCE_PROFILES.LOW_USAGE}>Low Usage</option><option value={MAINTENANCE_PROFILES.CUSTOM}>Custom</option></select></label>
+                        </div>
+                        {form.serviceProgramme === SERVICE_PROGRAMMES.CUSTOM && <div className="equipment-form-grid">{([['A', 'customAEnabled'], ['B', 'customBEnabled'], ['C', 'customCEnabled']] as const).map(([label, field]) => <label className="equipment-wof-required" key={field}><input type="checkbox" checked={form[field]} onChange={(event) => updateField(field, event.target.checked)} /> {label} Service enabled</label>)}</div>}
+                        {form.maintenanceProfile === MAINTENANCE_PROFILES.CUSTOM && <div className="equipment-form-grid">
+                            {form.customAEnabled && <label>Custom A interval (days)<input type="number" min="1" value={form.customAIntervalDays} onChange={(event) => updateField('customAIntervalDays', event.target.value)} /></label>}
+                            {form.customBEnabled && form.serviceProgramme === SERVICE_PROGRAMMES.CUSTOM && <label>Custom B interval (days)<input type="number" min="1" value={form.customBIntervalDays} onChange={(event) => updateField('customBIntervalDays', event.target.value)} /></label>}
+                            {form.customCEnabled && <label>Custom C interval (days)<input type="number" min="1" value={form.customCIntervalDays} onChange={(event) => updateField('customCIntervalDays', event.target.value)} /></label>}
+                        </div>}
                         <div className="equipment-maintenance-actions">
                             <button type="button" onClick={openMaintenanceDialog} disabled={busy}>Edit Maintenance History</button>
                         </div>
                         <div className="equipment-maintenance-plans">
-                            {PLANNED_SERVICE_TYPES.map((serviceType) => {
+                            {maintenanceConfiguration.activeServiceTypes.map((serviceType) => {
                                 const plan = plans.find((item) => item.gr_servicetype === serviceType)
                                 const remaining = plan ? calculateHoursRemaining(equipment?.gr_currenthourmeter ?? 0, plan.gr_nextduehours) : null
-                                const status = plan ? calculateServiceStatus(equipment?.gr_currenthourmeter ?? 0, plan.gr_nextduehours) : null
+                                const status = plan ? calculateServiceStatus(equipment?.gr_currenthourmeter ?? 0, plan.gr_nextduehours, plan.gr_nextduedate) : null
                                 return <article key={serviceType}>
                                     <div><strong>{SERVICE_TYPE_OPTIONS.find((option) => option.value === serviceType)?.label}</strong><span className={`equipment-maintenance-status status-${status?.toLowerCase().replace(' ', '-') ?? 'unknown'}`}>{status ?? 'Not Configured'}</span></div>
                                     <dl>
                                         <div><dt>Due Hour</dt><dd>{plan?.gr_nextduehours ?? '-'}</dd></div>
+                                        <div><dt>Interval</dt><dd>{maintenanceConfiguration.serviceLevels[serviceType]?.hours} hours or {formatMaintenanceInterval(maintenanceConfiguration.serviceLevels[serviceType]!.timeInterval)}</dd></div>
+                                        <div><dt>Due Date</dt><dd>{plan?.gr_nextduedate ? formatDate(plan.gr_nextduedate) : '-'}</dd></div>
                                         <div><dt>Hours Remaining</dt><dd>{remaining == null ? '-' : remaining < 0 ? `${Math.abs(remaining)} overdue` : remaining}</dd></div>
                                         <div><dt>Last Completed Date</dt><dd>{plan?.gr_lastcompleteddate ? formatDate(plan.gr_lastcompleteddate) : '-'}</dd></div>
                                         <div><dt>Last Completed Hours</dt><dd>{plan?.gr_lastcompletedhours ?? '-'}</dd></div>
@@ -735,6 +779,20 @@ export default function EquipmentDrawer(props: Props) {
             confirmLabel={isDeleting ? 'Deleting...' : 'Delete equipment'}
             onCancel={() => setShowDeleteConfirm(false)}
             onConfirm={() => void deleteRecord()}
+        />}
+
+        {!isCreate && showProgrammeChangeConfirm && <EditDrawerConfirmation
+            eyebrow="Service programme"
+            title="Change this Equipment's service programme?"
+            message="Current plan applicability will be recalculated. Inactive service-plan history and all historical Service Jobs will be retained; no completion will be invented."
+            isBusy={isSaving}
+            confirmLabel="Change programme"
+            onCancel={() => setShowProgrammeChangeConfirm(false)}
+            onConfirm={() => {
+                programmeChangeConfirmedRef.current = true
+                setShowProgrammeChangeConfirm(false)
+                window.setTimeout(() => equipmentFormRef.current?.requestSubmit(), 0)
+            }}
         />}
 
         {!isCreate && complianceTarget != null && <EditDrawerConfirmation

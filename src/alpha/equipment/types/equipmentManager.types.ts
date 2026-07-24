@@ -4,6 +4,8 @@ import {
     isEquipmentComplianceStatus,
     type EquipmentComplianceStatus,
 } from '../compliance/equipmentCompliance'
+import type { MaintenanceProfile, PowerType, ServiceProgramme } from '../servicePlans/maintenanceConfiguration'
+import { MAINTENANCE_PROFILES, SERVICE_PROGRAMMES } from '../servicePlans/maintenanceConfiguration'
 
 export type EquipmentUpdateInput = {
     fleet: string
@@ -16,6 +18,15 @@ export type EquipmentUpdateInput = {
     wofRequired: boolean
     currentWofExpiry: string
     regoExpiry: string
+    powerType: PowerType
+    serviceProgramme: ServiceProgramme
+    maintenanceProfile: MaintenanceProfile
+    customAEnabled: boolean
+    customBEnabled: boolean
+    customCEnabled: boolean
+    customAIntervalDays: string
+    customBIntervalDays: string
+    customCIntervalDays: string
 }
 
 export type EquipmentCreateInitialValues = Partial<EquipmentUpdateInput> & {
@@ -56,6 +67,16 @@ export function normalizeEquipmentInput(input: EquipmentUpdateInput): EquipmentU
     if (rawRegoExpiry && !regoExpiry) {
         throw new Error('REGO Expiry must be a valid date.')
     }
+    const enabled = input.serviceProgramme === SERVICE_PROGRAMMES.CUSTOM
+        ? [input.customAEnabled, input.customBEnabled, input.customCEnabled]
+        : input.serviceProgramme === SERVICE_PROGRAMMES.ICE_STANDARD ? [true, true, true] : [true, false, true]
+    if (!enabled.some(Boolean)) throw new Error('At least one service level must remain enabled.')
+    if (input.maintenanceProfile === MAINTENANCE_PROFILES.CUSTOM) {
+        const intervals = [input.customAIntervalDays, input.customBIntervalDays, input.customCIntervalDays]
+        if (enabled.some((isEnabled, index) => isEnabled && (!Number.isInteger(Number(intervals[index])) || Number(intervals[index]) <= 0))) {
+            throw new Error('Enter a positive whole-day custom interval for every enabled service level.')
+        }
+    }
 
     return {
         ...input,
@@ -68,6 +89,9 @@ export function normalizeEquipmentInput(input: EquipmentUpdateInput): EquipmentU
         wofRequired: input.complianceStatus === EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED,
         currentWofExpiry,
         regoExpiry,
+        customAIntervalDays: input.customAIntervalDays.trim(),
+        customBIntervalDays: input.customBIntervalDays.trim(),
+        customCIntervalDays: input.customCIntervalDays.trim(),
     }
 }
 

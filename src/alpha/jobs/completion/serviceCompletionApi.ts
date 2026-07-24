@@ -1,4 +1,4 @@
-import { calculateNextDueHours, getPlansToUpdate } from '../../equipment/servicePlans/servicePlanCalculations'
+import { calculateNextDueHours, selectSatisfiedServicePlans } from '../../equipment/servicePlans/servicePlanCalculations'
 import {
     SERVICE_TYPES,
     type PlannedServiceType,
@@ -8,6 +8,8 @@ import type { JobSaveInput } from '../types/jobSave.types'
 import { JOB_STATUSES } from '../types/jobStatus.types'
 import { JOB_TYPES } from '../types/jobType.types'
 import { validateCompletionHourMeter } from './jobCompletion'
+import { calculateNextDueDate, isServiceTypeEnabled, resolveMaintenanceConfiguration } from '../../equipment/servicePlans/maintenanceConfiguration'
+import type { MaintenanceProfile, ServiceProgramme } from '../../equipment/servicePlans/maintenanceConfiguration'
 
 const API_URL = `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2`
 
@@ -28,6 +30,14 @@ type CompletionJob = DataverseRecord & {
 type CompletionEquipment = DataverseRecord & {
     gr_equipmentid: string
     gr_currenthourmeter?: number | null
+    gr_serviceprogramme?: ServiceProgramme | null
+    gr_maintenanceprofile?: MaintenanceProfile | null
+    gr_customaenabled?: boolean | null
+    gr_custombenabled?: boolean | null
+    gr_customcenabled?: boolean | null
+    gr_customaintervaldays?: number | null
+    gr_custombintervaldays?: number | null
+    gr_customcintervaldays?: number | null
 }
 
 type CompletionPlan = DataverseRecord & {
@@ -113,11 +123,11 @@ async function loadCompletionContext(
         throw new Error('The Job Equipment changed. Refresh the Job before completing it.')
     }
 
-    const planFilter = encodeURIComponent(`_gr_equipment_value eq ${expectedEquipmentId} and gr_active eq true`)
+    const planFilter = encodeURIComponent(`_gr_equipment_value eq ${expectedEquipmentId}`)
     const [equipment, plansResponse] = await Promise.all([
         dataverseJson<CompletionEquipment>(
             token,
-            `gr_equipments(${expectedEquipmentId})?$select=gr_equipmentid,gr_currenthourmeter`,
+            `gr_equipments(${expectedEquipmentId})?$select=gr_equipmentid,gr_currenthourmeter,gr_serviceprogramme,gr_maintenanceprofile,gr_customaenabled,gr_custombenabled,gr_customcenabled,gr_customaintervaldays,gr_custombintervaldays,gr_customcintervaldays`,
             'The authoritative Equipment record could not be loaded.',
         ),
         dataverseJson<{ value?: CompletionPlan[] }>(
@@ -140,6 +150,10 @@ function validateContext(context: CompletionContext, input: AtomicServiceComplet
     }
     if (context.job.gr_servicetype !== input.expectedServiceType) {
         throw new Error('The Service Type changed. Save or refresh the Job before completing it.')
+    }
+    if (!isServiceTypeEnabled(context.equipment, input.expectedServiceType)) {
+        const historicalPlan = context.plans.find((plan) => plan.gr_servicetype === input.expectedServiceType)
+        if (!historicalPlan) throw new Error('This Service Type is not active for the Equipment programme.')
     }
     if (input.pendingSave) {
         if (input.pendingSave.jobType !== JOB_TYPES.SERVICE) {
@@ -166,10 +180,8 @@ function completionAlreadyCommitted(context: CompletionContext, input: AtomicSer
     if (!sameId(context.job._gr_equipment_value, input.equipmentId)) return false
     if ((context.equipment.gr_currenthourmeter ?? 0) < input.hourMeter) return false
 
-    const requiredTypes = new Set(getPlansToUpdate(input.expectedServiceType))
-    return context.plans
-        .filter((plan) => requiredTypes.has(plan.gr_servicetype))
-        .every((plan) =>
+    const requiredPlans = selectSatisfiedServicePlans(context.plans, input.expectedServiceType, context.equipment)
+    return requiredPlans.every((plan) =>
             sameId(plan._gr_lastcompletedjob_value, input.jobId)
             && plan.gr_lastcompletedhours === input.hourMeter
             && plan.gr_nextduehours === calculateNextDueHours(plan.gr_servicetype, input.hourMeter),
@@ -279,16 +291,16 @@ function completionRequests(
         },
     ]
 
-    const requiredTypes = new Set(getPlansToUpdate(input.expectedServiceType))
-    context.plans
-        .filter((plan) => requiredTypes.has(plan.gr_servicetype))
-        .forEach((plan) => requests.push({
+    const configuration = resolveMaintenanceConfiguration(context.equipment)
+    const requiredPlans = selectSatisfiedServicePlans(context.plans, input.expectedServiceType, context.equipment)
+    requiredPlans.forEach((plan) => requests.push({
             entityPath: `gr_equipmentserviceplans(${recordId(plan.gr_equipmentserviceplanid, 'Service plan identifier')})`,
             etag: requireEtag(plan, 'A service plan'),
             fields: {
                 gr_lastcompleteddate: completedDate,
                 gr_lastcompletedhours: input.hourMeter,
                 gr_nextduehours: calculateNextDueHours(plan.gr_servicetype, input.hourMeter),
+                gr_nextduedate: calculateNextDueDate(completedDate, configuration.serviceLevels[plan.gr_servicetype]?.timeInterval ?? { unit: 'months', value: 12 }),
                 'gr_LastCompletedJob@odata.bind': `/gr_jobs(${input.jobId})`,
             },
         }))

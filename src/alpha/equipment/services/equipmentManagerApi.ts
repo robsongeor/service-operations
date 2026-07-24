@@ -18,6 +18,15 @@ function equipmentPayload(input: EquipmentUpdateInput) {
         gr_wofrequired: normalized.wofRequired,
         gr_currentwofexpiry: normalized.currentWofExpiry || null,
         gr_regoexpiry: normalized.regoExpiry || null,
+        gr_powertype: normalized.powerType,
+        gr_serviceprogramme: normalized.serviceProgramme,
+        gr_maintenanceprofile: normalized.maintenanceProfile,
+        gr_customaenabled: normalized.customAEnabled,
+        gr_custombenabled: normalized.customBEnabled,
+        gr_customcenabled: normalized.customCEnabled,
+        gr_customaintervaldays: normalized.customAIntervalDays ? Number(normalized.customAIntervalDays) : null,
+        gr_custombintervaldays: normalized.customBIntervalDays ? Number(normalized.customBIntervalDays) : null,
+        gr_customcintervaldays: normalized.customCIntervalDays ? Number(normalized.customCIntervalDays) : null,
         'gr_Site@odata.bind': normalized.siteId ? `/gr_sites(${normalized.siteId})` : null,
     }
 }
@@ -93,6 +102,15 @@ export function applyEquipmentUpdate(
         gr_wofrequired: normalized.wofRequired,
         gr_currentwofexpiry: normalized.currentWofExpiry || null,
         gr_regoexpiry: normalized.regoExpiry || null,
+        gr_powertype: normalized.powerType,
+        gr_serviceprogramme: normalized.serviceProgramme,
+        gr_maintenanceprofile: normalized.maintenanceProfile,
+        gr_customaenabled: normalized.customAEnabled,
+        gr_custombenabled: normalized.customBEnabled,
+        gr_customcenabled: normalized.customCEnabled,
+        gr_customaintervaldays: normalized.customAIntervalDays ? Number(normalized.customAIntervalDays) : null,
+        gr_custombintervaldays: normalized.customBIntervalDays ? Number(normalized.customBIntervalDays) : null,
+        gr_customcintervaldays: normalized.customCIntervalDays ? Number(normalized.customCIntervalDays) : null,
         gr_Site: site,
     }
 }
