@@ -23,8 +23,8 @@ The schema below was provisioned and published in the `ServiceOperationsNew` sol
 | Last WOF Completed | `gr_lastwofcompleted` | Date only | Optional | Most recent passed inspection date |
 | REGO Expiry | `gr_regoexpiry` | Date only | Optional | Current registration expiry |
 
-`gr_compliancestatus` is the required schema addition for Equipment Road Compliance
-Management and must be provisioned before deploying that feature. Its values are:
+`gr_compliancestatus` was provisioned and published on 24 July 2026 for Equipment Road
+Compliance Management. Its values are:
 
 | Label | Value |
 |---|---:|
@@ -32,12 +32,18 @@ Management and must be provisioned before deploying that feature. Its values are
 | Deregistered | `122830001` |
 | Off Road | `122830002` |
 
-The logical name and values above are the application contract; confirm them in the
-solution before deployment. Existing records should be backfilled to Road Registered
-when `gr_wofrequired` is Yes and Off Road otherwise. During migration the application
-uses that same fallback when a loaded record has no Choice value. New writes keep
+The logical name and values above are the application contract. All 189 existing
+Equipment records were backfilled on 24 July 2026: 24 Road Registered from
+`gr_wofrequired = Yes`, and 165 Off Road where no road-compliance data existed. No
+ambiguous records required manual classification. The application retains the same
+fallback for defensive compatibility. New writes keep
 `gr_wofrequired` synchronized for compatibility, but all operational participation
 decisions use Compliance Status.
+
+The idempotent provisioning, audit, and safe-backfill workflow is implemented by
+`scripts/setup-equipment-compliance-schema.ps1`. Records with WOF Required disabled but
+existing registration or expiry data are deliberately exported for manual review rather
+than guessed.
 
 ## New tables
 

@@ -1574,9 +1574,12 @@ a dedicated form requiring the current Registration Number. Existing WOF editing
 retain a now-ineligible Equipment option so historical records remain readable without
 making that Equipment available to new WOF work.
 
-The schema Choice must be provisioned and existing Equipment backfilled before this
-feature is deployed. The application contract and migration rule are recorded in
-`docs/wof-dataverse-schema.md`. A future registration-history child table can be added
+The schema Choice was provisioned and published on 24 July 2026. All 189 existing
+Equipment records were backfilled (24 Road Registered and 165 Off Road), and a
+post-write audit confirmed no unclassified or ambiguous records. The idempotent
+provisioning/audit script and migration rule are recorded in
+`scripts/setup-equipment-compliance-schema.ps1` and `docs/wof-dataverse-schema.md`.
+A future registration-history child table can be added
 without changing the current Equipment fields, which deliberately represent only the
 current compliance state.
 

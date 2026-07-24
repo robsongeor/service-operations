@@ -13,6 +13,7 @@
 
 ### Improvements
 
+- Provisioned the Equipment Compliance Status Choice and safely backfilled all 189 existing Equipment records (24 Road Registered, 165 Off Road) with no ambiguous records.
 - Made WOF table Equipment values open the shared authoritative Equipment drawer and added the confirmed `gr_regoexpiry` field to shared editing, display, and persistent sorting.
 - Added accessible collapsible Customer Dashboard Site sections with smart defaults, per-Customer/Site state, and Expand All/Collapse All controls.
 - Improved shared Equipment creation with REGO/WOF normalization, searchable Customer-filtered Sites, Customer Dashboard Site actions, and date-only WOF expiry persistence.
@@ -38,8 +39,6 @@
 - Replaced raw upstream error forwarding with non-sensitive proxy errors and added automated anonymous, invalid-token, authenticated, configuration, and upstream-error tests.
 
 ### Known Limitations
-
-- The Equipment `Compliance Status` Dataverse Choice must be provisioned with the documented logical name and numeric values before this feature branch can be deployed.
 - Customer creation and Customer-level information remain local prototypes; only existing and new Site name/address changes are persisted from the Customer drawer.
 - Passing a WOF does not yet update Equipment Current WOF Expiry or Last WOF Completed because the cross-record completion workflow is not transactionally safe.
 - Multi-record Dataverse workflows outside Service Job completion can partially succeed when a later request fails and require live failure-path testing and operational recovery guidance.
