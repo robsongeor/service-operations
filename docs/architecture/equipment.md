@@ -18,13 +18,16 @@ second relationship.
 - Site belongs to Customer; Equipment Customer is therefore derived.
 - Jobs may reference Equipment.
 - Equipment Service Plans are children of Equipment.
-- WOF inspections and registration fields preserve compliance history and current state.
+- WOF inspections preserve compliance history. Registration fields represent current state
+  and are cleared after a confirmed On-road to Off-road transition.
 
 ## Shared Components and APIs
 
 Equipment editing uses the shared drawer shell, sections, confirmation UI, form dialog, and
 searchable selectors. Maintenance calculations and road-compliance eligibility live in
 typed domain helpers consumed across features.
+Equipment lists reuse the feature-owned data-quality evaluator and accessible indicator so
+identity, On-road compliance, and missing maintenance history are calculated consistently.
 
 ## Important Business Rules
 

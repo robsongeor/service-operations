@@ -4,7 +4,9 @@ import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
 import { getSignedInUserInfo } from '../../auth/signedInUser'
 import { useEquipmentManager } from '../equipment/hooks/useEquipmentManager'
 import EquipmentDrawer from '../equipment/components/EquipmentDrawer'
+import EquipmentDataQualityIndicator from '../equipment/components/EquipmentDataQualityIndicator'
 import BulkEquipmentImportDrawer from '../equipment/components/BulkEquipmentImportDrawer'
+import EquipmentTransferDrawer from './EquipmentTransferDrawer'
 import { canUseBulkEquipmentImport } from '../equipment/utils/bulkEquipmentImport'
 import { isRoadRegistered } from '../equipment/compliance/equipmentCompliance'
 import { useJobs } from '../jobs/hooks/useJobs'
@@ -24,10 +26,13 @@ import { customerContactsFromSiteLinks, type CustomerContact } from './customerC
 import CustomerOpenJobsTab from './CustomerOpenJobsTab'
 import CustomerQuotesTab from './CustomerQuotesTab'
 import SearchableSelect from '../shared/searchable-select/SearchableSelect'
+import MetricStrip, { type MetricStripItem } from '../shared/metric-strip/MetricStrip'
+import PageHeader from '../shared/page-header/PageHeader'
 import { formatWofDateOnly, getWofDueStatus } from '../wof/utils/wofRules'
 import './CustomerDashboardScreen.css'
 
 const dateFormatter = new Intl.DateTimeFormat('en-NZ', { dateStyle: 'medium' })
+const CUSTOMER_DASHBOARD_AUTO_EXPAND_SITE_LIMIT = 2
 const CUSTOMER_DASHBOARD_AUTO_EXPAND_EQUIPMENT_LIMIT = 10
 
 function text(value?: string | null) {
@@ -56,6 +61,7 @@ export default function CustomerDashboardScreen() {
         reload,
         clearSaveError,
         updateSites,
+        transferEquipment,
         updateEquipment,
         createEquipment: createDashboardEquipment,
         createCustomer: createDashboardCustomer,
@@ -96,6 +102,7 @@ export default function CustomerDashboardScreen() {
         isCompletingJob,
         completionError,
         completeServiceJob,
+        completeWofJob,
         cancelJobCompletion,
         isLoading: isJobsLoading,
         loadError: jobsLoadError,
@@ -106,12 +113,16 @@ export default function CustomerDashboardScreen() {
     const [creatingEquipmentInitialValues, setCreatingEquipmentInitialValues] = useState<EquipmentCreateInitialValues | null>(null)
     const [bulkImportSite, setBulkImportSite] = useState<Site | null>(null)
     const [bulkImportSuccess, setBulkImportSuccess] = useState('')
+    const [transferSite, setTransferSite] = useState<Site | null>(null)
+    const [transferSuccess, setTransferSuccess] = useState('')
     const [expandedSitesByCustomer, setExpandedSitesByCustomer] = useState<Record<string, Record<string, boolean>>>({})
     const [creatingJobInitialValues, setCreatingJobInitialValues] = useState<JobCreateInitialValues | null>(null)
     const [editingJob, setEditingJob] = useState<Job | null>(null)
     const [activeTab, setActiveTab] = useState<'sites' | 'open-jobs' | 'quotes' | 'contacts' | 'info'>('sites')
     const [customerDrawerMode, setCustomerDrawerMode] = useState<'create' | 'edit' | null>(null)
     const [customerDrawerInitialTab, setCustomerDrawerInitialTab] = useState<CustomerDrawerTab>('info')
+    const [editingSiteId, setEditingSiteId] = useState('')
+    const [siteSuccess, setSiteSuccess] = useState('')
     const [localCustomers, setLocalCustomers] = useState<Customer[]>([])
     const [customerDrafts, setCustomerDrafts] = useState<Record<string, CustomerDraft>>({})
 
@@ -158,11 +169,8 @@ export default function CustomerDashboardScreen() {
     const customerEquipment = equipment.filter((item) =>
         item.gr_Site?.gr_Customer?.gr_customerid === selectedCustomerId,
     )
-    const sitesExpandByDefault = customerSites.length === 1
-        || customerEquipment.length <= CUSTOMER_DASHBOARD_AUTO_EXPAND_EQUIPMENT_LIMIT
     const selectedCustomerSiteState = expandedSitesByCustomer[selectedCustomerId] ?? {}
-    const siteIsExpanded = (siteId: string, equipmentCount: number) =>
-        selectedCustomerSiteState[siteId] ?? (equipmentCount === 0 || sitesExpandByDefault)
+    const siteIsExpanded = (siteId: string) => selectedCustomerSiteState[siteId] ?? false
     const setSiteExpanded = (siteId: string, expanded: boolean) => {
         if (!selectedCustomerId) return
         setExpandedSitesByCustomer((current) => ({
@@ -185,15 +193,14 @@ export default function CustomerDashboardScreen() {
         setExpandedSitesByCustomer((current) => {
             if (current[customerId]) return current
             const nextSites = allSites.filter((site) => site.gr_Customer?.gr_customerid === customerId)
-            const nextEquipment = equipment.filter((item) => item.gr_Site?.gr_Customer?.gr_customerid === customerId)
-            const expandByDefault = nextSites.length === 1
-                || nextEquipment.length <= CUSTOMER_DASHBOARD_AUTO_EXPAND_EQUIPMENT_LIMIT
+            const nextEquipment = equipment.filter((item) =>
+                item.gr_Site?.gr_Customer?.gr_customerid === customerId,
+            )
+            const expandByDefault = nextSites.length <= CUSTOMER_DASHBOARD_AUTO_EXPAND_SITE_LIMIT
+                && nextEquipment.length <= CUSTOMER_DASHBOARD_AUTO_EXPAND_EQUIPMENT_LIMIT
             return {
                 ...current,
-                [customerId]: Object.fromEntries(nextSites.map((site) => [
-                    site.gr_siteid,
-                    expandByDefault || !nextEquipment.some((item) => item.gr_Site?.gr_siteid === site.gr_siteid),
-                ])),
+                [customerId]: Object.fromEntries(nextSites.map((site) => [site.gr_siteid, expandByDefault])),
             }
         })
     }
@@ -224,15 +231,15 @@ export default function CustomerDashboardScreen() {
         return counts
     }, { current: 0, dueSoon: 0, expired: 0 })
 
-    const summaryCards = [
+    const summaryMetrics: MetricStripItem[] = [
         { label: 'Sites', value: customerSites.length },
         { label: 'Equipment', value: customerEquipment.length },
         { label: 'Open Jobs', value: openJobs.length },
-        { label: 'Services Due Soon', value: maintenanceCounts.dueSoon },
-        { label: 'Overdue Services', value: maintenanceCounts.overdue },
+        { label: 'Services Due Soon', value: maintenanceCounts.dueSoon, tone: 'warning' },
+        { label: 'Overdue Services', value: maintenanceCounts.overdue, tone: 'danger' },
         { label: 'WOF Current', value: roadComplianceCounts.current },
-        { label: 'WOF Due Soon', value: roadComplianceCounts.dueSoon },
-        { label: 'WOF Expired', value: roadComplianceCounts.expired },
+        { label: 'WOF Due Soon', value: roadComplianceCounts.dueSoon, tone: 'warning' },
+        { label: 'WOF Expired', value: roadComplianceCounts.expired, tone: 'danger' },
         { label: 'Last Job Date', value: lastJob ? dateFormatter.format(new Date(lastJob.createdon)) : '-' },
     ]
 
@@ -330,23 +337,24 @@ export default function CustomerDashboardScreen() {
     }
 
     return <main className="customer-dashboard-page">
-        <header className="customer-dashboard-selector">
-            <div className="customer-dashboard-title">
-                <p>Customers</p>
-                <h1>Customer Dashboard</h1>
-                <button type="button" onClick={() => setCustomerDrawerMode('create')}>+ Create Customer</button>
-            </div>
+        <PageHeader
+            eyebrow="Customers"
+            title="Customer Dashboard"
+            subtitle="Manage customer sites, equipment, jobs, and service activity from one workspace."
+            actions={<button className="page-header-primary-action" type="button" onClick={() => setCustomerDrawerMode('create')}>+ Create Customer</button>}
+        />
+        <section className="customer-dashboard-selector" aria-label="Customer selection">
             <SearchableSelect
                 id="customer-dashboard-customer"
                 label="Customer"
                 value={selectedCustomerId}
                 options={customerOptions}
-                onChange={(customerId) => { initialiseCustomerSiteState(customerId); setSelectedCustomerId(customerId); setActiveTab('sites') }}
+                onChange={(customerId) => { initialiseCustomerSiteState(customerId); setSelectedCustomerId(customerId); setActiveTab('sites'); setSiteSuccess('') }}
                 placeholder="Select a customer"
                 searchPlaceholder="Search customers"
                 emptyLabel="No matching customers"
             />
-        </header>
+        </section>
 
         {isLoading ? <section className="customer-dashboard-state">Loading customer data...</section> : loadError ? (
             <section className="customer-dashboard-state error">
@@ -359,7 +367,7 @@ export default function CustomerDashboardScreen() {
                 <p>Choose a customer above to view sites, equipment, jobs, and the dashboard foundation for future service history and reporting.</p>
             </section>
         ) : <>
-            {bulkImportSuccess && <div className="customer-dashboard-success" role="status">{bulkImportSuccess}</div>}
+            {(bulkImportSuccess || transferSuccess || siteSuccess) && <div className="customer-dashboard-success" role="status">{siteSuccess || transferSuccess || bulkImportSuccess}</div>}
             <section className="customer-dashboard-header">
                 <div>
                     <span>Customer account</span>
@@ -377,12 +385,7 @@ export default function CustomerDashboardScreen() {
                 </div>
             </section>
 
-            <section className="customer-summary-grid" aria-label="Customer summary">
-                {summaryCards.map((card) => <article key={card.label}>
-                    <span>{card.label}</span>
-                    <strong>{card.value}</strong>
-                </article>)}
-            </section>
+            <MetricStrip items={summaryMetrics} ariaLabel="Customer summary" />
 
             <nav className="customer-dashboard-tabs" aria-label="Customer sections" role="tablist">
                 <button type="button" role="tab" aria-selected={activeTab === 'sites'} className={activeTab === 'sites' ? 'active' : ''} onClick={() => setActiveTab('sites')}>Sites <span>{customerSites.length}</span></button>
@@ -410,26 +413,44 @@ export default function CustomerDashboardScreen() {
                 {customerSites.length === 0 ? <div className="customer-dashboard-empty compact">No sites have been recorded for this customer yet.</div> : customerSites.map((site) => {
                     const rows = equipmentForSite(site)
                     const operatingHours = customerDrafts[selectedCustomer.gr_customerid]?.sites.find((item) => item.id === site.gr_siteid)?.operatingHours
-                    const expanded = siteIsExpanded(site.gr_siteid, rows.length)
+                    const expanded = siteIsExpanded(site.gr_siteid)
                     const equipmentRegionId = `customer-site-equipment-${site.gr_siteid}`
                     return <article className="customer-site-card" key={site.gr_siteid}>
-                        <header>
-                            <div className="customer-site-heading">
-                                <button
-                                    type="button"
-                                    className="customer-site-expand-button"
-                                    aria-expanded={expanded}
-                                    aria-controls={equipmentRegionId}
-                                    aria-label={`${expanded ? 'Collapse' : 'Expand'} equipment for ${site.gr_name || 'Unnamed Site'}`}
-                                    onClick={() => setSiteExpanded(site.gr_siteid, !expanded)}
-                                >
-                                    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4 6 6-6 6" /></svg>
-                                </button>
-                                <div><h4>{site.gr_name || 'Unnamed Site'}</h4><p>{site.gr_address || 'No address recorded'}</p></div>
-                            </div>
-                            <div className="customer-site-meta">
-                                <div><small>Operating hours</small><strong>{operatingHours || 'Not recorded'}</strong></div>
-                                <span>{rows.length} Equipment</span>
+                        <header onClick={() => setSiteExpanded(site.gr_siteid, !expanded)}>
+                            <button
+                                type="button"
+                                className="customer-site-header-toggle"
+                                aria-expanded={expanded}
+                                aria-controls={equipmentRegionId}
+                                onClick={(event) => {
+                                    event.stopPropagation()
+                                    setSiteExpanded(site.gr_siteid, !expanded)
+                                }}
+                            >
+                                <span className="customer-site-chevron" aria-hidden="true">
+                                    <svg viewBox="0 0 20 20"><path d="m7 4 6 6-6 6" /></svg>
+                                </span>
+                                <span className="customer-site-heading"><span><strong>{site.gr_name || 'Unnamed Site'}</strong><small>{site.gr_address || 'No address recorded'}</small></span></span>
+                                <span className="customer-site-header-summary">
+                                    <span><small>Operating hours</small><strong>{operatingHours || 'Not recorded'}</strong></span>
+                                    <span>{rows.length} Equipment</span>
+                                </span>
+                            </button>
+                            <div className="customer-site-meta" onClick={(event) => event.stopPropagation()}>
+                                {!site.gr_siteid.startsWith('prototype-site-')
+                                    && !selectedCustomer.gr_customerid.startsWith('prototype-customer-')
+                                    && <button
+                                        type="button"
+                                        title={`Edit ${site.gr_name}`}
+                                        onClick={() => {
+                                            setSiteSuccess('')
+                                            setEditingSiteId(site.gr_siteid)
+                                            setCustomerDrawerInitialTab('sites')
+                                            setCustomerDrawerMode('edit')
+                                        }}
+                                    >
+                                        Edit Site
+                                    </button>}
                                 <button
                                     type="button"
                                     disabled={site.gr_siteid.startsWith('prototype-site-') || selectedCustomer.gr_customerid.startsWith('prototype-customer-')}
@@ -462,13 +483,26 @@ export default function CustomerDashboardScreen() {
                                     >
                                         Bulk Add Equipment
                                     </button>}
+                                {!site.gr_siteid.startsWith('prototype-site-')
+                                    && !selectedCustomer.gr_customerid.startsWith('prototype-customer-')
+                                    && <button
+                                        type="button"
+                                        title={`Transfer existing Equipment to ${site.gr_name}`}
+                                        onClick={() => {
+                                            clearSaveError()
+                                            setTransferSuccess('')
+                                            setTransferSite(site)
+                                        }}
+                                    >
+                                        Transfer Existing Equipment
+                                    </button>}
                             </div>
                         </header>
-                        {expanded && <div className="customer-equipment-table-wrap" id={equipmentRegionId}>
+                        <div className="customer-equipment-table-wrap" id={equipmentRegionId} hidden={!expanded}>
                             <table className="customer-equipment-table">
-                                <thead><tr><th>Fleet Number</th><th>Make</th><th>Model</th><th>Registration</th><th>WOF Expiry</th><th>Last Known Hour Meter</th><th>Next Service</th><th>Maintenance Status</th></tr></thead>
+                                <thead><tr><th>Fleet Number</th><th>Make</th><th>Model</th><th>Registration</th><th>WOF Expiry</th><th>Last Known Hour Meter</th><th>Next Service</th><th>Maintenance Status</th><th className="customer-equipment-data-quality-heading"><span className="customer-visually-hidden">Data status</span></th></tr></thead>
                                 <tbody>
-                                    {rows.length === 0 ? <tr><td colSpan={8}>No equipment recorded for this site.</td></tr> : rows.map((item) => {
+                                    {rows.length === 0 ? <tr><td colSpan={9}>No equipment recorded for this site.</td></tr> : rows.map((item) => {
                                         const plans = servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === item.gr_equipmentid.toLowerCase())
                                         const primary = calculatePrimaryNextService(plans, item)
                                         const remaining = primary ? calculateHoursRemaining(item.gr_currenthourmeter ?? 0, primary.gr_nextduehours) : null
@@ -489,11 +523,12 @@ export default function CustomerDashboardScreen() {
                                             <td>{display(item.gr_currenthourmeter)}</td>
                                             <td>{primary ? `${serviceLabel} @ ${primary.gr_nextduehours}` : 'Not Configured'}{remaining != null && <small>{Math.abs(remaining)} hrs {remaining < 0 ? 'overdue' : 'remaining'}</small>}</td>
                                             <td><span className={`customer-maintenance-status status-${status?.toLowerCase().replace(' ', '-') ?? 'unknown'}`}>{status ?? 'Unknown'}</span></td>
+                                            <td className="customer-equipment-data-quality"><EquipmentDataQualityIndicator equipment={item} servicePlans={plans} /></td>
                                         </tr>
                                     })}
                                 </tbody>
                             </table>
-                        </div>}
+                        </div>
                     </article>
                 })}
             </section> : activeTab === 'open-jobs' ? <CustomerOpenJobsTab
@@ -617,6 +652,21 @@ export default function CustomerDashboardScreen() {
             onClose={() => setBulkImportSite(null)}
         />}
 
+        {transferSite && selectedCustomer && <EquipmentTransferDrawer
+            key={transferSite.gr_siteid}
+            customer={selectedCustomer}
+            site={transferSite}
+            equipment={equipment}
+            busy={isSaving}
+            onTransfer={transferEquipment}
+            onComplete={(transferredCount) => {
+                setSiteExpanded(transferSite.gr_siteid, true)
+                setTransferSuccess(`${transferredCount} Equipment record${transferredCount === 1 ? '' : 's'} transferred to ${transferSite.gr_name}.`)
+                setTransferSite(null)
+            }}
+            onClose={() => setTransferSite(null)}
+        />}
+
         {creatingJobInitialValues && <JobCreateDrawer
             mechanics={mechanics}
             equipmentList={jobEquipmentList}
@@ -679,16 +729,26 @@ export default function CustomerDashboardScreen() {
             isCompleting={isCompletingJob}
             error={completionError}
             onCancel={cancelJobCompletion}
-            onComplete={completeServiceJob}
+            onCompleteService={completeServiceJob}
+            onCompleteWof={completeWofJob}
         />
 
         {customerDrawerMode && <CustomerDrawer
-            key={`${customerDrawerMode}-${selectedCustomerId}`}
+            key={`${customerDrawerMode}-${selectedCustomerId}-${editingSiteId}`}
             mode={customerDrawerMode}
             initialTab={customerDrawerInitialTab}
+            initialSiteId={editingSiteId || undefined}
             initialValue={customerDrawerMode === 'edit' ? customerDrawerInitialValue : undefined}
-            onClose={() => setCustomerDrawerMode(null)}
-            onSave={saveCustomerDraft}
+            onClose={() => { setCustomerDrawerMode(null); setEditingSiteId('') }}
+            onSave={async (draft) => {
+                const savedDraft = await saveCustomerDraft(draft)
+                if (editingSiteId) {
+                    setCustomerDrawerMode(null)
+                    setEditingSiteId('')
+                    setSiteSuccess('Site updated successfully.')
+                }
+                return savedDraft
+            }}
         />}
     </main>
 }

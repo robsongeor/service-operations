@@ -3,6 +3,7 @@ import type { EquipmentSortKey, SortDirection } from '../types/equipmentManager.
 import type { EquipmentServicePlan } from '../servicePlans/equipmentServicePlan.types'
 import { SERVICE_TYPE_OPTIONS } from '../servicePlans/equipmentServicePlan.types'
 import { calculateHoursRemaining, calculatePrimaryNextService } from '../servicePlans/servicePlanStatus'
+import EquipmentDataQualityIndicator from './EquipmentDataQualityIndicator'
 
 type Props = {
     equipment: Equipment[]
@@ -42,14 +43,16 @@ export default function EquipmentTable({ equipment, servicePlans, sortKey, sortD
                         ))}
                         <th>State</th>
                         <th>Next service</th>
+                        <th className="equipment-data-quality-heading"><span className="equipment-visually-hidden">Data status</span></th>
                         <th><span className="equipment-visually-hidden">Actions</span></th>
                     </tr>
                 </thead>
                 <tbody>
                     {equipment.length === 0 ? (
-                        <tr><td className="equipment-empty" colSpan={9}>No equipment matches the current search and filters.</td></tr>
+                        <tr><td className="equipment-empty" colSpan={10}>No equipment matches the current search and filters.</td></tr>
                     ) : equipment.map((item) => {
-                        const primary = calculatePrimaryNextService(servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === item.gr_equipmentid.toLowerCase()), item)
+                        const itemServicePlans = servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === item.gr_equipmentid.toLowerCase())
+                        const primary = calculatePrimaryNextService(itemServicePlans, item)
                         const remaining = primary ? calculateHoursRemaining(item.gr_currenthourmeter ?? 0, primary.gr_nextduehours) : null
                         const label = primary ? SERVICE_TYPE_OPTIONS.find((option) => option.value === primary.gr_servicetype)?.label.replace(' Service', '') : null
                         return (
@@ -72,6 +75,7 @@ export default function EquipmentTable({ equipment, servicePlans, sortKey, sortD
                             <td>{valueOrDash(item.gr_serial)}</td>
                             <td><span className={item.statecode === 0 ? 'equipment-state active' : 'equipment-state'}>{item.statecode === 0 ? 'Active' : 'Inactive'}</span></td>
                             <td>{primary ? <span className="equipment-maintenance-summary"><strong>{label} @ {primary.gr_nextduehours}</strong><small>{remaining != null ? `${Math.abs(remaining)} hrs ${remaining < 0 ? 'overdue' : 'remaining'}` : 'Due hours unavailable'}</small></span> : 'Not Configured'}</td>
+                            <td className="equipment-data-quality-cell"><EquipmentDataQualityIndicator equipment={item} servicePlans={itemServicePlans} /></td>
                             <td>
                                 <button
                                     className="equipment-edit-action"

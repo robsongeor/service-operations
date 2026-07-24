@@ -4,6 +4,13 @@
 
 ### Major Features
 
+- Added multi-machine Equipment transfers to Customer Dashboard Sites with searchable
+  cross-customer multi-selection, a persistent removable selection summary, explicit
+  confirmation, partial-failure reporting, and safe retries that preserve historical Job
+  locations.
+- Turned WOF / REGO into an operational WOF Management queue with lifecycle statuses,
+  contextual Job actions, in-place shared Job creation and editing drawers, scheduling
+  visibility, office expiry administration, and active-Job duplicate protection.
 - Added configurable Equipment Maintenance Profiles and ICE, Electric, and Custom Service Programmes with fixed hour intervals, shared time intervals, programme-aware due calculations and completion cascades, Electric A/C scheduling, and preserved historical B records.
 - Added Equipment Road Compliance Management with Road Registered, Deregistered, and Off Road states; protected deregistration; guided re-registration; operational WOF filtering; and Road Registered-only dashboard WOF summaries.
 - Added the protected WOF / REGO workflow, including WOF Jobs and Inspection records, internal qualification filtering, external providers, editing, operational due-state views, and protected orphan-Inspection cleanup.

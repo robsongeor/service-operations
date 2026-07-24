@@ -1,0 +1,24 @@
+.equipment-transfer-destination { display: grid; gap: 4px; margin-bottom: 18px; padding: 14px; border-radius: 9px; background: #eef5f1; }
+.equipment-transfer-destination span { color: #718078; font-size: .65rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.equipment-transfer-destination strong { color: #26382f; font-size: .92rem; }
+.equipment-transfer-destination p { margin: 0; color: #5f6c65; font-size: .74rem; }
+.equipment-transfer-selected { display: grid; gap: 9px; margin-top: 16px; }
+.equipment-transfer-selected > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.equipment-transfer-selected h3 { margin: 0; color: #35443c; font-size: .78rem; }
+.equipment-transfer-selected h3 span { color: #6d7972; }
+.equipment-transfer-selected > div > button { padding: 0; border: 0; background: transparent; color: #176f66; font: inherit; font-size: .68rem; font-weight: 750; cursor: pointer; }
+.equipment-transfer-selected > p { margin: 0; padding: 18px 12px; border: 1px dashed #d4ddd8; border-radius: 8px; color: #758079; font-size: .72rem; text-align: center; }
+.equipment-transfer-selected ul { display: grid; gap: 7px; max-height: 38vh; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.equipment-transfer-selected li { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 10px 11px; border: 1px solid #dfe5e1; border-radius: 8px; background: #f8faf9; }
+.equipment-transfer-selected li > div { display: grid; min-width: 0; gap: 3px; }
+.equipment-transfer-selected small,.equipment-transfer-selected em { color: #707b75; font-size: .68rem; font-style: normal; }
+.equipment-transfer-selected em { color: #49675a; }
+.equipment-transfer-selected li > button { flex: 0 0 auto; padding: 4px 7px; border: 1px solid #d7c4c4; border-radius: 6px; background: #fff; color: #8d4242; font: inherit; font-size: .65rem; font-weight: 750; cursor: pointer; }
+.equipment-transfer-footer-actions { display: flex; gap: 8px; }
+.equipment-transfer-success { margin-bottom: 12px; padding: 10px; border: 1px solid #b9d7ca; border-radius: 8px; background: #edf7f2; color: #176f66; font-size: .72rem; font-weight: 750; }
+.equipment-transfer-failures,.equipment-transfer-error { margin-bottom: 12px; padding: 10px; border-radius: 8px; background: #faeded; color: #8f3636; font-size: .72rem; }
+.equipment-transfer-failures ul,.equipment-transfer-confirmation ul { display: grid; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; }
+.equipment-transfer-failures li,.equipment-transfer-confirmation li { display: grid; gap: 2px; }
+.equipment-transfer-failures li span,.equipment-transfer-confirmation li span { color: #6e7772; font-size: .68rem; }
+.equipment-transfer-confirmation p { margin: 0; }
+.equipment-transfer-confirmation ul { max-height: 240px; overflow-y: auto; }

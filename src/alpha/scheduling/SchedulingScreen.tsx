@@ -174,7 +174,7 @@ export default function SchedulingScreen() {
         createScheduleOption,
         updateScheduleOption,
         deleteScheduleOption,
-        completionRequest, isCompletingJob, completionError, completeServiceJob, cancelJobCompletion,
+        completionRequest, isCompletingJob, completionError, completeServiceJob, completeWofJob, cancelJobCompletion,
         isLoading,
         loadError,
         retryInitialLoad,
@@ -427,7 +427,8 @@ export default function SchedulingScreen() {
                 isCompleting={isCompletingJob}
                 error={completionError}
                 onCancel={cancelJobCompletion}
-                onComplete={completeServiceJob}
+                onCompleteService={completeServiceJob}
+                onCompleteWof={completeWofJob}
             />
         </div>
     )

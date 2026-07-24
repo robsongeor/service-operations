@@ -5,6 +5,9 @@ import { fetchEquipment } from '../../jobs/services/equipmentApi'
 import { fetchCustomers, createCustomer as createCustomerApi } from '../../jobs/services/customersApi'
 import { fetchSites, createSite as createSiteApi } from '../../jobs/services/sitesApi'
 import { fetchJobs } from '../../jobs/services/jobsApi'
+import { createEquipment as createJobEquipmentApi } from '../../jobs/services/equipmentApi'
+import { createContact as createContactApi, createSiteContact as createSiteContactApi } from '../../jobs/services/contactsApi'
+import { fetchSiteContacts } from '../../jobs/services/siteContactsApi'
 import { createJobScheduleOption, deleteJobScheduleOption, fetchJobScheduleOptions, updateJobScheduleOption } from '../../jobs/services/jobScheduleApi'
 import { SCHEDULE_TYPE } from '../../jobs/types/jobSchedule.types'
 import { applyEquipmentUpdate, createEquipment as createEquipmentApi, deleteEquipment as deleteEquipmentApi, updateEquipment as updateEquipmentApi } from '../../equipment/services/equipmentManagerApi'
@@ -13,11 +16,14 @@ import { fetchEquipmentServicePlans, saveEquipmentMaintenanceHistory as saveEqui
 import type { EquipmentServicePlan } from '../../equipment/servicePlans/equipmentServicePlan.types'
 import type { Customer } from '../../jobs/types/customer.types'
 import type { Site } from '../../jobs/types/site.types'
+import type { Mechanic } from '../../jobs/types/mechanic.types'
+import type { SiteContact } from '../../jobs/types/siteContact.types'
+import type { JobSaveInput } from '../../jobs/types/jobSave.types'
 import { JOB_STATUSES } from '../../jobs/types/jobStatus.types'
 import { JOB_TYPES } from '../../jobs/types/jobType.types'
 import { SERVICE_TYPES } from '../../equipment/servicePlans/equipmentServicePlan.types'
 import type { CreateWofInput, ServiceProvider, TechnicianQualification, UpdateWofInput, WofInspection } from '../types/wof.types'
-import { createWof as createWofApi, deleteWofInspection, fetchTechnicianQualifications, fetchWofInspection, fetchWofInspections, fetchWofProviders, updateWof as updateWofApi } from '../services/wofApi'
+import { createWof as createWofApi, createWofJobFromJobDrawer, deleteWofInspection, fetchTechnicianQualifications, fetchWofInspection, fetchWofInspections, fetchWofProviders, updateWof as updateWofApi } from '../services/wofApi'
 import { getWofDeletionBlockReason } from '../utils/wofRules'
 
 export function useWof() {
@@ -29,6 +35,8 @@ export function useWof() {
     const [providers, setProviders] = useState<ServiceProvider[]>([])
     const [customers, setCustomers] = useState<Customer[]>([])
     const [sites, setSites] = useState<Site[]>([])
+    const [mechanics, setMechanics] = useState<Mechanic[]>([])
+    const [siteContacts, setSiteContacts] = useState<SiteContact[]>([])
     const [jobs, setJobs] = useState<Awaited<ReturnType<typeof fetchJobs>>>([])
     const [scheduleOptions, setScheduleOptions] = useState<Awaited<ReturnType<typeof fetchJobScheduleOptions>>>([])
     const [servicePlans, setServicePlans] = useState<EquipmentServicePlan[]>([])
@@ -46,15 +54,23 @@ export function useWof() {
         setLoading(true); setError('')
         try {
             const accessToken = await token()
-            const [equipmentRows, inspectionRows, qualificationRows, providerRows, customerRows, siteRows, jobRows, scheduleRows, planRows] = await Promise.all([
+            const mechanicsRequest = fetch(`${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2/gr_mechanics?$select=gr_mechanicid,gr_name,gr_phone,gr_email,gr_camnumber,gr_rego,gr_region`, {
+                headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+            }).then(async (response) => {
+                if (!response.ok) throw new Error(`Failed to fetch mechanics: ${await response.text()}`)
+                return response.json() as Promise<{ value?: Mechanic[] }>
+            })
+            const [equipmentRows, inspectionRows, qualificationRows, providerRows, customerRows, siteRows, jobRows, scheduleRows, planRows, contactRows, mechanicRows] = await Promise.all([
                 fetchEquipment(accessToken), fetchWofInspections(accessToken), fetchTechnicianQualifications(accessToken), fetchWofProviders(accessToken),
                 fetchCustomers(accessToken), fetchSites(accessToken), fetchJobs(accessToken),
-                fetchJobScheduleOptions(accessToken), fetchEquipmentServicePlans(accessToken),
+                fetchJobScheduleOptions(accessToken), fetchEquipmentServicePlans(accessToken), fetchSiteContacts(accessToken), mechanicsRequest,
             ])
             setEquipment(equipmentRows); setInspections(inspectionRows); setQualifications(qualificationRows); setProviders(providerRows)
             setCustomers(customerRows); setSites(siteRows); setJobs(jobRows)
             setScheduleOptions(scheduleRows)
             setServicePlans(planRows)
+            setSiteContacts(contactRows)
+            setMechanics(mechanicRows.value ?? [])
         } catch (caught) { setError(caught instanceof Error ? caught.message : 'WOF data could not be loaded.') }
         finally { setLoading(false) }
     }, [account, token])
@@ -77,6 +93,17 @@ export function useWof() {
         await load()
     }
 
+    const createWofJob = async (equipmentRecord: typeof equipment[number], job: JobSaveInput) => {
+        const jobId = await createWofJobFromJobDrawer(await token(), equipmentRecord, job)
+        await load()
+        return jobId
+    }
+
+    const createWofScheduleOption = async (input: Parameters<typeof createJobScheduleOption>[1]) => {
+        await createJobScheduleOption(await token(), input)
+        await load()
+    }
+
     const updateWof = async (input: UpdateWofInput) => {
         const accessToken = await token()
         await updateWofApi(accessToken, input)
@@ -92,6 +119,18 @@ export function useWof() {
 
     const loadWofInspection = async (inspectionId: string) =>
         fetchWofInspection(await token(), inspectionId)
+
+    const refreshWorkflowData = async () => {
+        const accessToken = await token()
+        const [inspectionRows, jobRows, scheduleRows] = await Promise.all([
+            fetchWofInspections(accessToken),
+            fetchJobs(accessToken),
+            fetchJobScheduleOptions(accessToken),
+        ])
+        setInspections(inspectionRows)
+        setJobs(jobRows)
+        setScheduleOptions(scheduleRows)
+    }
 
     const loadEquipment = async (equipmentId: string) => {
         const rows = await fetchEquipment(await token())
@@ -183,6 +222,20 @@ export function useWof() {
         return created
     }
 
+    const createContact = async (input: { siteId: string; name: string; phone?: string; email?: string }) => {
+        const accessToken = await token()
+        const contactId = await createContactApi(accessToken, input)
+        await createSiteContactApi(accessToken, input.siteId, contactId)
+        setSiteContacts(await fetchSiteContacts(accessToken))
+        return contactId
+    }
+
+    const createJobEquipment = async (input: { fleet: string; serial: string; make?: string; model?: string }) => {
+        const equipmentId = await createJobEquipmentApi(await token(), input)
+        await load()
+        return equipmentId
+    }
+
     const createEquipment = async (input: EquipmentUpdateInput, resolvedSite?: Site) => {
         const normalized = normalizeEquipmentInput(input)
         const response = await createEquipmentApi(await token(), normalized)
@@ -193,5 +246,5 @@ export function useWof() {
         return created
     }
 
-    return { equipment, inspections, qualifications, providers, customers, sites, jobs, scheduleOptions, servicePlans, loading, error, isEquipmentSaving, equipmentSaveError, reload: load, loadWofInspection, loadEquipment, createWof, updateWof, deleteWof, createCustomer, createSite, createEquipment, updateEquipment, saveEquipmentMaintenanceHistory, deleteEquipment, clearEquipmentSaveError: () => setEquipmentSaveError('') }
+    return { equipment, inspections, qualifications, providers, customers, sites, mechanics, siteContacts, jobs, scheduleOptions, servicePlans, loading, error, isEquipmentSaving, equipmentSaveError, reload: load, refreshWorkflowData, loadWofInspection, loadEquipment, createWof, createWofJob, createWofScheduleOption, updateWof, deleteWof, createCustomer, createSite, createContact, createJobEquipment, createEquipment, updateEquipment, saveEquipmentMaintenanceHistory, deleteEquipment, clearEquipmentSaveError: () => setEquipmentSaveError('') }
 }

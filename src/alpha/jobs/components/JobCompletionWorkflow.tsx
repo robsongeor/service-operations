@@ -9,10 +9,12 @@ import {
     resolveCompletionEquipment,
     resolveCompletionServiceType,
     validateCompletionHourMeter,
+    validateWofCompletionExpiry,
     type JobCompletionRequest,
 } from '../completion/jobCompletion'
 import type { Equipment } from '../types/equipment.types'
 import JobMaintenanceSummary from './JobMaintenanceSummary'
+import { formatWofDateOnly } from '../../wof/utils/wofRules'
 import './JobCompletionWorkflow.css'
 
 type Props = {
@@ -22,18 +24,71 @@ type Props = {
     isCompleting: boolean
     error: string
     onCancel: () => void
-    onComplete: (hourMeter: number) => Promise<void>
+    onCompleteService: (hourMeter: number) => Promise<void>
+    onCompleteWof: (newExpiry: string) => Promise<void>
 }
 
-export default function JobCompletionWorkflow({ request, equipment, servicePlans, isCompleting, error, onCancel, onComplete }: Props) {
+export default function JobCompletionWorkflow({ request, equipment, servicePlans, isCompleting, error, onCancel, onCompleteService, onCompleteWof }: Props) {
     const selectedEquipment = request ? resolveCompletionEquipment(request, equipment) : undefined
     const serviceType = request ? resolveCompletionServiceType(request) : null
     const currentHourMeter = selectedEquipment?.gr_currenthourmeter ?? 0
     const [hourMeter, setHourMeter] = useState('')
+    const [wofExpiry, setWofExpiry] = useState('')
     const [validationError, setValidationError] = useState('')
     const [showLargeIncreaseWarning, setShowLargeIncreaseWarning] = useState(false)
 
-    if (!request || request.kind !== 'service') return null
+    if (!request || request.kind === 'standard') return null
+
+    if (request.kind === 'wof') {
+        const completionDate = request.job.gr_completeddate ?? new Date().toISOString()
+        const submitWof = () => {
+            if (isCompleting) return
+            const nextError = validateWofCompletionExpiry(
+                wofExpiry,
+                selectedEquipment?.gr_currentwofexpiry,
+                completionDate,
+            )
+            setValidationError(nextError)
+            if (!nextError) void onCompleteWof(wofExpiry)
+        }
+        return <EditDrawerFormDialog
+            eyebrow="Job completion"
+            title="Complete WOF Job"
+            error={validationError || error}
+            isBusy={isCompleting}
+            submitLabel={isCompleting ? 'Completingâ€¦' : 'Complete WOF Job'}
+            onCancel={onCancel}
+            onSubmit={submitWof}
+        >
+            <div className="job-completion-equipment">
+                <span>Equipment</span>
+                <strong>{selectedEquipment?.gr_fleet || 'No fleet number'}</strong>
+                <p>{[selectedEquipment?.gr_make, selectedEquipment?.gr_model].filter(Boolean).join(' ') || 'Make and model not recorded'}</p>
+            </div>
+            <label>
+                Current WOF expiry
+                <output>{formatWofDateOnly(selectedEquipment?.gr_currentwofexpiry) || 'Not recorded'}</output>
+            </label>
+            <label>
+                New WOF expiry *
+                <input
+                    type="date"
+                    required
+                    value={wofExpiry}
+                    onChange={(event) => { setWofExpiry(event.target.value); setValidationError('') }}
+                    autoFocus
+                />
+            </label>
+            <div className="job-completion-summary">
+                <strong>This will update:</strong>
+                <ul>
+                    <li>WOF Inspection history</li>
+                    <li>Equipment current WOF expiry</li>
+                    <li>Job status</li>
+                </ul>
+            </div>
+        </EditDrawerFormDialog>
+    }
 
     const submit = () => {
         if (isCompleting) return
@@ -45,7 +100,7 @@ export default function JobCompletionWorkflow({ request, equipment, servicePlans
             setShowLargeIncreaseWarning(true)
             return
         }
-        void onComplete(reading)
+        void onCompleteService(reading)
     }
 
     const affectedServices = serviceType == null
@@ -110,7 +165,7 @@ export default function JobCompletionWorkflow({ request, equipment, servicePlans
             isBusy={isCompleting}
             confirmLabel="Continue"
             onCancel={() => setShowLargeIncreaseWarning(false)}
-            onConfirm={() => void onComplete(Number(hourMeter))}
+            onConfirm={() => void onCompleteService(Number(hourMeter))}
         />}
     </>
 }

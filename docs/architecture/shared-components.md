@@ -5,6 +5,9 @@
 Shared components provide consistent presentation and interaction patterns without taking
 ownership of feature state or business rules.
 
+Consult the [Reusable Components](reusable-components.md) inventory before implementing UI.
+It records the current component names, locations, and feature-owned canonical workflows.
+
 ## Architecture
 
 Feature screens compose tables, drawers, and page controls. Components render values and
@@ -18,7 +21,9 @@ Feature-specific forms, mappings, and workflows remain with their owning feature
 
 - Shared drawer shell, sections, confirmation, and small form dialog provide consistent
   panel and modal presentation.
-- `SearchableSelect` combines search and selection for related records.
+- `SearchableSelect` combines search and selection for related records. Its optional
+  backward-compatible multi-select mode adds unique values while consumers retain ownership
+  of selected-item summaries and removal controls.
 - Account helpers provide one source of truth for signed-in identity and preference keys.
 - Domain calculation, Date Only, validation, and compliance helpers are reused wherever the
   same rule appears.

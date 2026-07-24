@@ -76,11 +76,14 @@ import {
     getJobCompletionKind,
     resolveCompletionEquipment,
     resolveCompletionServiceType,
+    runWofCompletion,
     validateCompletionHourMeter,
     validateServiceCompletionContext,
+    validateWofCompletionExpiry,
     type JobCompletionRequest,
 } from '../completion/jobCompletion'
 import { completeServiceJobAtomically } from '../completion/serviceCompletionApi'
+import { updateWofExpiryForCompletion } from '../../wof/services/wofApi'
 
 
 
@@ -333,11 +336,18 @@ export function useJobs() {
         const currentJob = jobs.find((job) => job.gr_jobid === jobId)
         if (!currentJob) throw new Error('The job could not be found. Refresh the page and try again.')
         const isCompleting = status === JOB_STATUSES.COMPLETE && currentJob.gr_status !== JOB_STATUSES.COMPLETE
-        if (isCompleting && getJobCompletionKind(currentJob.gr_jobtype) === 'service') {
+        const completionKind = getJobCompletionKind(currentJob.gr_jobtype)
+        if (isCompleting && completionKind === 'service') {
             const contextError = validateServiceCompletionContext(currentJob)
             if (contextError) throw new Error(contextError)
             setCompletionError('')
             setCompletionRequest({ kind: 'service', job: currentJob })
+            return false
+        }
+        if (isCompleting && completionKind === 'wof') {
+            if (!currentJob.gr_Equipment?.gr_equipmentid) throw new Error('Select Equipment before completing this WOF Job.')
+            setCompletionError('')
+            setCompletionRequest({ kind: 'wof', job: currentJob })
             return false
         }
         const token = await getAccessToken()
@@ -440,11 +450,18 @@ export function useJobs() {
         const currentJob = jobs.find((item) => item.gr_jobid === jobId)
         if (!currentJob) throw new Error('The job could not be found. Refresh the page and try again.')
         const isCompleting = job.status === JOB_STATUSES.COMPLETE && currentJob.gr_status !== JOB_STATUSES.COMPLETE
-        if (isCompleting && getJobCompletionKind(job.jobType) === 'service') {
+        const completionKind = getJobCompletionKind(job.jobType)
+        if (isCompleting && completionKind === 'service') {
             const contextError = validateServiceCompletionContext(currentJob, job)
             if (contextError) throw new Error(contextError)
             setCompletionError('')
             setCompletionRequest({ kind: 'service', job: currentJob, pendingSave: job })
+            return false
+        }
+        if (isCompleting && completionKind === 'wof') {
+            if (!job.equipmentId) throw new Error('Select Equipment before completing this WOF Job.')
+            setCompletionError('')
+            setCompletionRequest({ kind: 'wof', job: currentJob, pendingSave: job })
             return false
         }
         const token = await getAccessToken()
@@ -560,6 +577,57 @@ export function useJobs() {
                 // Keep the completion dialog open with the original error when refresh is unavailable.
             }
             setCompletionError(error instanceof Error ? error.message : 'The Service Job could not be completed.')
+        } finally {
+            setIsCompletingJob(false)
+        }
+    }
+
+    const completeWofJob = async (newExpiry: string) => {
+        const request = completionRequest
+        if (!request || request.kind !== 'wof') return
+        const equipment = resolveCompletionEquipment(request, equipmentList)
+        const completionDate = request.pendingSave?.completedDate || request.job.gr_completeddate || new Date().toISOString()
+        const validationError = validateWofCompletionExpiry(
+            newExpiry,
+            equipment?.gr_currentwofexpiry,
+            completionDate,
+        )
+        if (validationError) {
+            setCompletionError(validationError)
+            return
+        }
+        if (!equipment) {
+            setCompletionError('The linked Equipment could not be loaded. The Job was not completed.')
+            return
+        }
+
+        setIsCompletingJob(true)
+        setCompletionError('')
+        try {
+            const token = await getAccessToken()
+            await runWofCompletion(
+                () => updateWofExpiryForCompletion(token, {
+                    jobId: request.job.gr_jobid,
+                    equipmentId: equipment.gr_equipmentid,
+                    newExpiry,
+                    completionDate,
+                }),
+                () => request.pendingSave
+                    ? updateJobApi(token, request.job.gr_jobid, {
+                        ...request.pendingSave,
+                        completedDate: completionDate,
+                    })
+                    : updateJobStatusApi(token, request.job.gr_jobid, JOB_STATUSES.COMPLETE, completionDate),
+            )
+            const [nextJobs, nextEquipment] = await Promise.all([
+                fetchJobsApi(token),
+                fetchEquipmentApi(token),
+            ])
+            setJobs(nextJobs)
+            setEquipmentList(nextEquipment)
+            setCompletionRequest(null)
+        } catch (error) {
+            setCompletionError(`${error instanceof Error ? error.message : 'The WOF Job could not be completed.'} Refresh before retrying if the expiry was already saved.`)
         } finally {
             setIsCompletingJob(false)
         }
@@ -720,6 +788,7 @@ export function useJobs() {
         isCompletingJob,
         completionError,
         completeServiceJob,
+        completeWofJob,
         cancelJobCompletion,
         deleteJob,
         createScheduleOption,

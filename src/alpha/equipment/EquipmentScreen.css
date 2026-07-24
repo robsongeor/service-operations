@@ -22,6 +22,9 @@
 .equipment-table tbody tr:hover { background: #f3f5f2; }
 .equipment-table tbody tr:focus-visible { outline: 2px solid #315b4d; outline-offset: -2px; }
 .equipment-table th:last-child, .equipment-table td:last-child { width: 68px; }
+.equipment-table .equipment-data-quality-heading,
+.equipment-table .equipment-data-quality-cell { width: 42px; padding-right: 5px; padding-left: 5px; text-align: center; }
+.equipment-table .equipment-data-quality-cell { overflow: visible; }
 .equipment-state { display: inline-flex; padding: 4px 8px; border: 1px solid #c8ceca; border-radius: 999px; background: #f0f2f0; color: #606762; font-size: .68rem; font-weight: 700; }
 .equipment-state.active { border-color: #9bc5a7; background: #e3f1e7; color: #326d43; }
 .equipment-edit-action { padding: 5px 9px; border: 1px solid #cfd4d0; border-radius: 999px; background: transparent; color: #333936; font-size: .68rem; font-weight: 700; cursor: pointer; }

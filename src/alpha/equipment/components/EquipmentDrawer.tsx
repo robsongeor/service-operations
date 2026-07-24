@@ -10,6 +10,7 @@ import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation'
 import EditDrawerFormDialog from '../../shared/drawer/EditDrawerFormDialog'
 import EditDrawerSection from '../../shared/drawer/EditDrawerSection'
 import EditDrawerShell from '../../shared/drawer/EditDrawerShell'
+import FormSwitch from '../../shared/form-switch/FormSwitch'
 import type { EquipmentServicePlan } from '../servicePlans/equipmentServicePlan.types'
 import { SERVICE_TYPES, SERVICE_TYPE_OPTIONS, type PlannedServiceType } from '../servicePlans/equipmentServicePlan.types'
 import type { MaintenanceHistoryInput } from '../servicePlans/servicePlanApi'
@@ -20,10 +21,7 @@ import SearchableSelect, { type SearchableSelectOption } from '../../shared/sear
 import { formatMaintenanceInterval, MAINTENANCE_PROFILES, POWER_TYPES, resolveMaintenanceConfiguration, SERVICE_PROGRAMMES, type MaintenanceProfile, type PowerType, type ServiceProgramme } from '../servicePlans/maintenanceConfiguration'
 import {
     EQUIPMENT_COMPLIANCE_STATUSES,
-    EQUIPMENT_COMPLIANCE_STATUS_OPTIONS,
     getEquipmentComplianceStatus,
-    getEquipmentComplianceStatusLabel,
-    type EquipmentComplianceStatus,
 } from '../compliance/equipmentCompliance'
 
 type SharedProps = {
@@ -144,13 +142,7 @@ export default function EquipmentDrawer(props: Props) {
         },
     }))
     const [maintenanceError, setMaintenanceError] = useState('')
-    const [complianceTarget, setComplianceTarget] = useState<EquipmentComplianceStatus | null>(null)
-    const [reRegisterOpen, setReRegisterOpen] = useState(false)
-    const [reRegisterForm, setReRegisterForm] = useState({
-        registrationNumber: equipment?.gr_registrationnumber ?? '',
-        regoExpiry: toEquipmentDateOnlyValue(equipment?.gr_regoexpiry),
-        currentWofExpiry: toEquipmentDateOnlyValue(equipment?.gr_currentwofexpiry),
-    })
+    const [showDeregisterConfirm, setShowDeregisterConfirm] = useState(false)
     const [complianceError, setComplianceError] = useState('')
     const [isComplianceSaving, setIsComplianceSaving] = useState(false)
     const [showProgrammeChangeConfirm, setShowProgrammeChangeConfirm] = useState(false)
@@ -170,25 +162,20 @@ export default function EquipmentDrawer(props: Props) {
         secondary: site.gr_address || selectedCustomer?.gr_name,
         searchText: [site.gr_address, selectedCustomer?.gr_name].filter(Boolean).join(' '),
     }))
+    const customerOptions: SearchableSelectOption[] = [...customers]
+        .sort((a, b) => a.gr_name.localeCompare(b.gr_name))
+        .map((customer) => {
+            const siteCount = sites.filter((site) => site.gr_Customer?.gr_customerid === customer.gr_customerid).length
+            return {
+                value: customer.gr_customerid,
+                label: customer.gr_name,
+                secondary: `${siteCount} ${siteCount === 1 ? 'site' : 'sites'}`,
+            }
+        })
     const normalizedCustomerQuery = normalizeCustomerName(customerQuery)
     const exactCustomerMatch = normalizedCustomerQuery
         ? customers.find((customer) => normalizeCustomerName(customer.gr_name) === normalizedCustomerQuery)
         : undefined
-    const customerSuggestions = normalizedCustomerQuery.length >= 2 && customerMode !== 'existing'
-        ? customers
-            .filter((customer) => {
-                const normalizedCustomer = normalizeCustomerName(customer.gr_name)
-                return normalizedCustomer.includes(normalizedCustomerQuery)
-                    || normalizedCustomerQuery.includes(normalizedCustomer)
-            })
-            .sort((a, b) => {
-                const aExact = normalizeCustomerName(a.gr_name) === normalizedCustomerQuery
-                const bExact = normalizeCustomerName(b.gr_name) === normalizedCustomerQuery
-                if (aExact !== bExact) return aExact ? -1 : 1
-                return a.gr_name.localeCompare(b.gr_name)
-            })
-            .slice(0, 5)
-        : []
     const derivedSiteName = deriveSiteNameFromAddress(newSite.address)
     const effectiveNewSiteName = newSite.name.trim() || derivedSiteName
     const matchingSiteAddress = newSite.address.trim()
@@ -414,8 +401,13 @@ export default function EquipmentDrawer(props: Props) {
             setFormError('Enter either a fleet number or serial number.')
             return
         }
-        if (isCreate && trimmed.complianceStatus === EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED && !trimmed.registrationNumber) {
-            setFormError('Road Registered equipment requires a Registration Number.')
+        const wasRoadRegistered = equipment
+            ? getEquipmentComplianceStatus(equipment) === EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED
+            : false
+        if (trimmed.complianceStatus === EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED
+            && !trimmed.registrationNumber
+            && (isCreate || !wasRoadRegistered)) {
+            setFormError('On-road equipment requires a Registration Number.')
             return
         }
         if (isCreate && matchingEquipment) {
@@ -524,41 +516,23 @@ export default function EquipmentDrawer(props: Props) {
         }
     }
 
-    const saveComplianceStatus = async (status: EquipmentComplianceStatus) => {
+    const deregisterEquipment = async () => {
         if (isCreate) return
-        try {
-            setIsComplianceSaving(true)
-            setComplianceError('')
-            const next = normalizeEquipmentInput({ ...form, complianceStatus: status })
-            await props.onSave(next)
-            setForm(next)
-            setComplianceTarget(null)
-        } catch (error) {
-            setComplianceError(error instanceof Error ? error.message : 'The compliance status could not be updated.')
-        } finally {
-            setIsComplianceSaving(false)
-        }
-    }
-
-    const reRegister = async () => {
-        if (isCreate) return
-        if (!reRegisterForm.registrationNumber.trim()) {
-            setComplianceError('Enter the current registration number.')
-            return
-        }
         try {
             setIsComplianceSaving(true)
             setComplianceError('')
             const next = normalizeEquipmentInput({
                 ...form,
-                ...reRegisterForm,
-                complianceStatus: EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED,
+                complianceStatus: EQUIPMENT_COMPLIANCE_STATUSES.OFF_ROAD,
+                registrationNumber: '',
+                regoExpiry: '',
+                currentWofExpiry: '',
             })
             await props.onSave(next)
             setForm(next)
-            setReRegisterOpen(false)
+            setShowDeregisterConfirm(false)
         } catch (error) {
-            setComplianceError(error instanceof Error ? error.message : 'The equipment could not be re-registered.')
+            setComplianceError(error instanceof Error ? error.message : 'The equipment could not be de-registered.')
         } finally {
             setIsComplianceSaving(false)
         }
@@ -658,24 +632,42 @@ export default function EquipmentDrawer(props: Props) {
                             {isCreate && form.serviceProgramme === SERVICE_PROGRAMMES.CUSTOM && <>{([['A', 'customAEnabled'], ['B', 'customBEnabled'], ['C', 'customCEnabled']] as const).map(([label, field]) => <label className="equipment-wof-required" key={field}><input type="checkbox" checked={form[field]} onChange={(event) => updateField(field, event.target.checked)} /> {label} Service enabled</label>)}</>}
                             {isCreate && form.maintenanceProfile === MAINTENANCE_PROFILES.CUSTOM && <>{form.customAEnabled && <label>Custom A interval (days)<input type="number" min="1" value={form.customAIntervalDays} onChange={(event) => updateField('customAIntervalDays', event.target.value)} /></label>}{form.customBEnabled && form.serviceProgramme === SERVICE_PROGRAMMES.CUSTOM && <label>Custom B interval (days)<input type="number" min="1" value={form.customBIntervalDays} onChange={(event) => updateField('customBIntervalDays', event.target.value)} /></label>}{form.customCEnabled && <label>Custom C interval (days)<input type="number" min="1" value={form.customCIntervalDays} onChange={(event) => updateField('customCIntervalDays', event.target.value)} /></label>}</>}
                             {isCreate ? <div className="equipment-relationship-fields">
-                                <label>Customer<input value={customerQuery} placeholder="Search or enter customer..." onChange={(event) => {
-                                    const value = event.target.value
-                                    setCustomerQuery(value)
+                                <SearchableSelect
+                                    id="equipment-customer"
+                                    label="Customer"
+                                    value={customerMode === 'existing' ? customerId : ''}
+                                    options={customerOptions}
+                                    onChange={(nextCustomerId) => {
+                                        const customer = customers.find((candidate) => candidate.gr_customerid === nextCustomerId)
+                                        if (customer) {
+                                            selectExistingCustomer(customer)
+                                            return
+                                        }
+                                        setCustomerId('')
+                                        setCustomerMode('none')
+                                        setCustomerQuery('')
+                                        updateField('siteId', '')
+                                        setSiteMode('none')
+                                        setSiteQuery('')
+                                        setNewSite({ name: '', address: '' })
+                                        setRelatedError('')
+                                    }}
+                                    placeholder="Select a customer"
+                                    searchPlaceholder="Search customers"
+                                    emptyLabel="No matching customers"
+                                />
+                                {customerMode !== 'new' && <button className="equipment-autocomplete-create" type="button" onClick={() => {
+                                    if (customerMode === 'existing') setCustomerQuery('')
+                                    setCustomerMode('new')
                                     setCustomerId('')
                                     updateField('siteId', '')
-                                    setSiteMode('none')
+                                    setSiteMode('new')
                                     setSiteQuery('')
                                     setNewSite({ name: '', address: '' })
-                                    setCustomerMode(value.trim() ? 'none' : 'none')
                                     setRelatedError('')
-                                }} onKeyDown={(event) => {
-                                    if (event.key === 'Escape') { setCustomerQuery(selectedCustomer?.gr_name ?? ''); if (selectedCustomer) setCustomerMode('existing') }
-                                    if (event.key === 'Enter' && customerSuggestions.length === 1) { event.preventDefault(); selectExistingCustomer(customerSuggestions[0]) }
-                                }} /></label>
-                                {customerMode === 'existing' && <button className="equipment-autocomplete-clear" type="button" onClick={() => { setCustomerId(''); setCustomerMode('none'); setCustomerQuery(''); updateField('siteId', ''); setSiteMode('none'); setSiteQuery('') }}>Change Customer</button>}
-                                {exactCustomerMatch && customerMode !== 'existing' && <div className="equipment-customer-duplicate-warning" role="alert"><p>A Customer with this name already exists. Select the existing Customer.</p><button type="button" onClick={() => selectExistingCustomer(exactCustomerMatch)}>Select {exactCustomerMatch.gr_name}</button></div>}
-                                {customerSuggestions.length > 0 && customerMode !== 'existing' && <div className="equipment-autocomplete-menu">{customerSuggestions.map((customer) => <button key={customer.gr_customerid} type="button" onClick={() => selectExistingCustomer(customer)}><strong>{customer.gr_name}</strong><span>{sites.filter((site) => site.gr_Customer?.gr_customerid === customer.gr_customerid).length} sites</span></button>)}</div>}
-                                {customerQuery.trim() && !exactCustomerMatch && customerMode !== 'new' && <button className="equipment-autocomplete-create" type="button" onClick={() => { setCustomerMode('new'); setCustomerId(''); setSiteMode('new'); setSiteQuery(''); setNewSite({ name: '', address: '' }); setRelatedError('') }}>+ Create new customer &quot;{customerQuery.trim()}&quot;</button>}
+                                }}>+ Add new customer</button>}
+                                {customerMode === 'new' && <label>New Customer Name<input value={customerQuery} placeholder="Enter customer name" onChange={(event) => { setCustomerQuery(event.target.value); setRelatedError('') }} /></label>}
+                                {exactCustomerMatch && customerMode === 'new' && <div className="equipment-customer-duplicate-warning" role="alert"><p>A Customer with this name already exists. Select the existing Customer.</p><button type="button" onClick={() => selectExistingCustomer(exactCustomerMatch)}>Select {exactCustomerMatch.gr_name}</button></div>}
 
                                 {siteMode !== 'new' && <SearchableSelect
                                     id="equipment-site"
@@ -702,18 +694,33 @@ export default function EquipmentDrawer(props: Props) {
                         </div>
                     </EditDrawerSection>}
 
-                    {(isCreate || activeTab === 'details') && <EditDrawerSection title="Road compliance" meta={<span className={`equipment-state ${form.complianceStatus === EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED ? 'active' : ''}`}>{getEquipmentComplianceStatusLabel(form.complianceStatus)}</span>}>
-                        <p className="equipment-state-note">Compliance Status controls whether this equipment participates in operational WOF and REGO tracking. Historical records are always retained.</p>
-                        <div className="equipment-form-grid">
-                            {isCreate && <label>Compliance Status<select value={form.complianceStatus} onChange={(event) => updateField('complianceStatus', Number(event.target.value) as EquipmentComplianceStatus)}>{EQUIPMENT_COMPLIANCE_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}
-                            <label>Registration Number<input value={form.registrationNumber} onChange={(event) => updateField('registrationNumber', event.target.value)} /></label>
-                            <label>REGO Expiry<input type="date" value={form.regoExpiry} onChange={(event) => updateField('regoExpiry', event.target.value)} /></label>
-                            <label>Current WOF Expiry<input type="date" value={form.currentWofExpiry} onChange={(event) => updateField('currentWofExpiry', event.target.value)} /></label>
-                        </div>
-                        {!isCreate && <div className="equipment-maintenance-actions">
-                            {form.complianceStatus === EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED
-                                ? <><button type="button" disabled={busy} onClick={() => { setComplianceError(''); setComplianceTarget(EQUIPMENT_COMPLIANCE_STATUSES.DEREGISTERED) }}>Deregister equipment</button><button type="button" disabled={busy} onClick={() => { setComplianceError(''); setComplianceTarget(EQUIPMENT_COMPLIANCE_STATUSES.OFF_ROAD) }}>Mark off road</button></>
-                                : <button type="button" disabled={busy} onClick={() => { setComplianceError(''); setReRegisterForm({ registrationNumber: form.registrationNumber, regoExpiry: form.regoExpiry, currentWofExpiry: form.currentWofExpiry }); setReRegisterOpen(true) }}>Re-register equipment</button>}
+                    {(isCreate || activeTab === 'details') && <EditDrawerSection
+                        title="Road compliance"
+                        meta={<FormSwitch
+                            label="Road use"
+                            checked={form.complianceStatus === EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED}
+                            disabled={busy}
+                            onChange={(onRoad) => {
+                                if (onRoad) {
+                                    updateField('complianceStatus', EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED)
+                                    return
+                                }
+                                const wasRoadRegistered = !isCreate
+                                    && equipment
+                                    && getEquipmentComplianceStatus(equipment) === EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED
+                                if (wasRoadRegistered && form.complianceStatus === EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED) {
+                                    setComplianceError('')
+                                    setShowDeregisterConfirm(true)
+                                } else {
+                                    updateField('complianceStatus', EQUIPMENT_COMPLIANCE_STATUSES.OFF_ROAD)
+                                }
+                            }}
+                        />}
+                    >
+                        {form.complianceStatus === EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED && <div className="equipment-form-grid">
+                                <label>Registration Number<input value={form.registrationNumber} onChange={(event) => updateField('registrationNumber', event.target.value)} /></label>
+                                <label>REGO Expiry<input type="date" value={form.regoExpiry} onChange={(event) => updateField('regoExpiry', event.target.value)} /></label>
+                                <label>Current WOF Expiry<input type="date" value={form.currentWofExpiry} onChange={(event) => updateField('currentWofExpiry', event.target.value)} /></label>
                         </div>}
                     </EditDrawerSection>}
 
@@ -795,31 +802,16 @@ export default function EquipmentDrawer(props: Props) {
             }}
         />}
 
-        {!isCreate && complianceTarget != null && <EditDrawerConfirmation
+        {!isCreate && showDeregisterConfirm && <EditDrawerConfirmation
             eyebrow="Road compliance"
-            title={`${getEquipmentComplianceStatusLabel(complianceTarget)} this equipment?`}
-            message={<>This removes the equipment from active WOF and REGO views and calculations. Its registration details, current expiry values, jobs, and WOF history will be retained.</>}
+            title="De-register this equipment?"
+            message={<>Its registration number, REGO expiry, and WOF expiry will be cleared, and it will be removed from road-compliance monitoring. Jobs and WOF inspection history will be retained.</>}
             error={complianceError}
             isBusy={isComplianceSaving}
-            confirmLabel={isComplianceSaving ? 'Saving...' : complianceTarget === EQUIPMENT_COMPLIANCE_STATUSES.DEREGISTERED ? 'Deregister equipment' : 'Mark off road'}
-            onCancel={() => { setComplianceTarget(null); setComplianceError('') }}
-            onConfirm={() => void saveComplianceStatus(complianceTarget)}
+            confirmLabel={isComplianceSaving ? 'Saving...' : 'De-register equipment'}
+            onCancel={() => { setShowDeregisterConfirm(false); setComplianceError('') }}
+            onConfirm={() => void deregisterEquipment()}
         />}
-
-        {!isCreate && reRegisterOpen && <EditDrawerFormDialog
-            eyebrow="Road compliance"
-            title="Re-register equipment"
-            error={complianceError}
-            isBusy={isComplianceSaving}
-            submitLabel={isComplianceSaving ? 'Saving...' : 'Re-register equipment'}
-            onCancel={() => { setReRegisterOpen(false); setComplianceError('') }}
-            onSubmit={() => void reRegister()}
-        >
-            <p className="edit-form-dialog-context">Enter the current road-compliance details. Previous jobs and WOF inspections remain unchanged.</p>
-            <label>Registration Number<input required value={reRegisterForm.registrationNumber} onChange={(event) => { setReRegisterForm((current) => ({ ...current, registrationNumber: event.target.value })); setComplianceError('') }} /></label>
-            <label>REGO Expiry<input type="date" value={reRegisterForm.regoExpiry} onChange={(event) => { setReRegisterForm((current) => ({ ...current, regoExpiry: event.target.value })); setComplianceError('') }} /></label>
-            <label>Current WOF Expiry<input type="date" value={reRegisterForm.currentWofExpiry} onChange={(event) => { setReRegisterForm((current) => ({ ...current, currentWofExpiry: event.target.value })); setComplianceError('') }} /></label>
-        </EditDrawerFormDialog>}
 
         {!isCreate && maintenanceDialogOpen && <EditDrawerFormDialog
             eyebrow="Maintenance"

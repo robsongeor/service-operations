@@ -1,9 +1,14 @@
 import type { JobSaveInput } from '../../jobs/types/jobSave.types'
 import { createJob } from '../../jobs/services/jobsApi'
+import { JOB_STATUSES } from '../../jobs/types/jobStatus.types'
+import { JOB_TYPES } from '../../jobs/types/jobType.types'
+import type { Equipment } from '../../jobs/types/equipment.types'
 import { createJobScheduleOption } from '../../jobs/services/jobScheduleApi'
 import { SCHEDULE_TYPE } from '../../jobs/types/jobSchedule.types'
 import type { CreateWofInput, ServiceProvider, TechnicianQualification, UpdateWofInput, WofInspection } from '../types/wof.types'
 import { WOF_RESULTS } from '../types/wof.types'
+import { verifyWofExpiryWithRetry, wofDatesMatch } from '../utils/wofRules'
+import { newZealandDateOnly } from '../../shared/dates/dateOnly'
 
 const API_URL = `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2`
 
@@ -18,7 +23,7 @@ type WofInspectionDataverseRow = Omit<WofInspection, 'linkedJobId' | 'equipmentI
     _gr_equipment_value?: string | null
 }
 
-const WOF_INSPECTION_SELECT = 'gr_wofinspectionid,gr_name,gr_registrationnumbersnapshot,gr_previouswofexpiry,gr_inspectiondate,gr_newwofexpiry,gr_wofresult,gr_certificatenumber,gr_notes,_gr_job_value,_gr_equipment_value'
+const WOF_INSPECTION_SELECT = 'gr_wofinspectionid,createdon,gr_name,gr_registrationnumbersnapshot,gr_previouswofexpiry,gr_inspectiondate,gr_newwofexpiry,gr_wofresult,gr_certificatenumber,gr_notes,_gr_job_value,_gr_equipment_value'
 const WOF_INSPECTION_EXPAND = 'gr_Job($select=gr_jobid,gr_jobnumber,gr_description,gr_status,gr_jobtype;$expand=gr_Equipment($select=gr_equipmentid),gr_Mechanic($select=gr_mechanicid,gr_name,statecode),gr_Site($select=gr_siteid,gr_name;$expand=gr_Customer($select=gr_customerid,gr_name))),gr_Equipment($select=gr_equipmentid,gr_fleet,gr_serial,gr_make,gr_model,gr_registrationnumber,gr_compliancestatus,gr_wofrequired,gr_currentwofexpiry,gr_lastwofcompleted,gr_regoexpiry;$expand=gr_Site($select=gr_siteid,gr_name;$expand=gr_Customer($select=gr_customerid,gr_name))),gr_InternalInspector($select=gr_mechanicid,gr_name,statecode),gr_ExternalProvider($select=gr_serviceproviderid,gr_name,gr_active,statecode)'
 
 function mapWofInspection(row: WofInspectionDataverseRow): WofInspection {
@@ -85,9 +90,11 @@ export async function deleteWofInspection(token: string, inspectionId: string): 
 }
 
 async function createInspection(token: string, input: CreateWofInput, jobId: string) {
-    const performer = input.assignmentMode === 'internal'
+    const performer = input.assignmentMode === 'internal' && input.internalInspectorId
         ? { 'gr_InternalInspector@odata.bind': `/gr_mechanics(${input.internalInspectorId})` }
-        : { 'gr_ExternalProvider@odata.bind': `/gr_serviceproviders(${input.externalProviderId})` }
+        : input.assignmentMode === 'external' && input.externalProviderId
+            ? { 'gr_ExternalProvider@odata.bind': `/gr_serviceproviders(${input.externalProviderId})` }
+            : {}
     const response = await fetch(`${API_URL}/gr_wofinspections`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' },
@@ -104,7 +111,41 @@ async function createInspection(token: string, input: CreateWofInput, jobId: str
     if (!response.ok) throw new Error(`The WOF Job was created, but its Inspection record failed: ${await response.text()}`)
 }
 
+async function assertNoActiveWofJob(token: string, equipment: Equipment) {
+    const activeJobs = await getJson<{ gr_jobid: string; gr_jobnumber?: string | null }>(token,
+        `gr_jobs?$select=gr_jobid,gr_jobnumber&$filter=_gr_equipment_value eq ${equipment.gr_equipmentid} and gr_jobtype eq ${JOB_TYPES.WOF} and gr_status ne ${JOB_STATUSES.COMPLETE}&$orderby=createdon desc&$top=1`)
+    if (activeJobs[0]) {
+        throw new Error(`An active WOF Job${activeJobs[0].gr_jobnumber ? ` (${activeJobs[0].gr_jobnumber})` : ''} already exists for this Equipment. Open the existing Job instead.`)
+    }
+    const records = await getJson<WofInspectionDataverseRow>(token,
+        `gr_wofinspections?$select=${WOF_INSPECTION_SELECT}&$expand=${WOF_INSPECTION_EXPAND}&$filter=_gr_equipment_value eq ${equipment.gr_equipmentid}&$orderby=createdon desc&$top=1`)
+    const latest = records[0] && mapWofInspection(records[0])
+    if (!latest?.gr_Job) return
+
+    const completedCycle = latest.gr_wofresult === WOF_RESULTS.CANCELLED || latest.gr_Job.gr_status === JOB_STATUSES.COMPLETE
+        && Boolean(latest.gr_newwofexpiry)
+        && latest.gr_newwofexpiry === equipment.gr_currentwofexpiry
+    if (!completedCycle) {
+        throw new Error(`An active WOF Job${latest.gr_Job.gr_jobnumber ? ` (${latest.gr_Job.gr_jobnumber})` : ''} already exists for this Equipment. Open the existing Job instead.`)
+    }
+}
+
+export async function createWofJobFromJobDrawer(token: string, equipment: Equipment, job: JobSaveInput) {
+    await assertNoActiveWofJob(token, equipment)
+    const jobId = await createJob(token, job, 'wof')
+    await createInspection(token, {
+        equipment,
+        jobNumber: job.jobNumber,
+        description: job.description,
+        scheduledDate: '',
+        assignmentMode: 'internal',
+        internalInspectorId: job.mechanicId,
+    }, jobId)
+    return jobId
+}
+
 export async function createWof(token: string, input: CreateWofInput, job: JobSaveInput) {
+    await assertNoActiveWofJob(token, input.equipment)
     const jobId = await createJob(token, job, 'wof')
     await createInspection(token, input, jobId)
     if (input.scheduledDate) await createJobScheduleOption(token, { jobId, scheduleType: SCHEDULE_TYPE.ANY_TIME, scheduleDate: input.scheduledDate, confirmed: true })
@@ -141,4 +182,64 @@ export async function updateWof(token: string, input: UpdateWofInput) {
     } catch (error) {
         throw new Error(`The linked Job was updated, but the WOF Inspection was not. Retry after reviewing the current values. ${error instanceof Error ? error.message : ''}`, { cause: error })
     }
+    if (input.result === WOF_RESULTS.PASSED && input.newWofExpiry) {
+        await patch(token, `gr_equipments(${input.equipment.gr_equipmentid})`, {
+            gr_currentwofexpiry: input.newWofExpiry,
+            gr_lastwofcompleted: input.inspectionDate || null,
+        }, 'The Inspection was saved, but the Equipment WOF expiry could not be updated')
+    }
+}
+
+export async function updateWofExpiryForCompletion(
+    token: string,
+    input: { jobId: string; equipmentId: string; newExpiry: string; completionDate: string },
+) {
+    const records = await getJson<WofInspectionDataverseRow>(
+        token,
+        `gr_wofinspections?$select=${WOF_INSPECTION_SELECT}&$filter=_gr_job_value eq ${input.jobId}&$top=2`,
+    )
+    if (records.length !== 1) {
+        throw new Error(records.length === 0
+            ? 'The linked WOF Inspection could not be found. The Job was not completed.'
+            : 'More than one WOF Inspection is linked to this Job. The Job was not completed.')
+    }
+    const inspection = records[0]
+    if (inspection._gr_equipment_value?.toLowerCase() !== input.equipmentId.toLowerCase()) {
+        throw new Error('The linked WOF Inspection does not reference the Job Equipment. The Job was not completed.')
+    }
+
+    const readSavedExpiries = async () => {
+        const [savedInspection] = await getJson<WofInspectionDataverseRow>(
+            token,
+            `gr_wofinspections?$select=gr_wofinspectionid,gr_newwofexpiry,_gr_equipment_value&$filter=gr_wofinspectionid eq ${inspection.gr_wofinspectionid}&$top=1`,
+        )
+        const equipmentResponse = await fetch(
+            `${API_URL}/gr_equipments(${input.equipmentId})?$select=gr_currentwofexpiry`,
+            { cache: 'no-store', headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', 'Cache-Control': 'no-cache' } },
+        )
+        if (!equipmentResponse.ok) throw new Error('The Equipment WOF expiry could not be verified. The Job was not completed.')
+        const savedEquipment = await equipmentResponse.json() as { gr_currentwofexpiry?: string | null }
+        return [savedInspection?.gr_newwofexpiry, savedEquipment.gr_currentwofexpiry]
+    }
+
+    const existingExpiries = await readSavedExpiries()
+    if (wofDatesMatch(existingExpiries[1], input.newExpiry) && !wofDatesMatch(existingExpiries[0], input.newExpiry)) {
+        throw new Error('The new WOF expiry must be later than the current expiry.')
+    }
+    if (existingExpiries.every((value) => wofDatesMatch(value, input.newExpiry))) return
+
+    const completionDateOnly = newZealandDateOnly(input.completionDate)
+    if (!completionDateOnly) throw new Error('The Job completion date could not be resolved in New Zealand time.')
+
+    await patch(token, `gr_wofinspections(${inspection.gr_wofinspectionid})`, {
+        gr_inspectiondate: completionDateOnly,
+        gr_newwofexpiry: input.newExpiry,
+        gr_wofresult: WOF_RESULTS.PASSED,
+    }, 'The WOF Inspection expiry could not be updated')
+    await patch(token, `gr_equipments(${input.equipmentId})`, {
+        gr_currentwofexpiry: input.newExpiry,
+        gr_lastwofcompleted: completionDateOnly,
+    }, 'The Equipment WOF expiry could not be updated')
+
+    await verifyWofExpiryWithRetry(readSavedExpiries, input.newExpiry)
 }

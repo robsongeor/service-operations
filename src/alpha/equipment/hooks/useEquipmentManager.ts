@@ -3,6 +3,7 @@ import { useMsal } from '@azure/msal-react'
 import { useActiveMsalAccount } from '../../../auth/useActiveMsalAccount'
 import { createCustomer as createCustomerApi, fetchCustomers } from '../../jobs/services/customersApi'
 import { fetchJobs } from '../../jobs/services/jobsApi'
+import { updateEquipmentSite } from '../../jobs/services/equipmentApi'
 import { createSite as createSiteApi, fetchSites, updateSite as updateSiteApi } from '../../jobs/services/sitesApi'
 import type { Customer } from '../../jobs/types/customer.types'
 import type { Equipment } from '../../jobs/types/equipment.types'
@@ -208,6 +209,45 @@ export function useEquipmentManager() {
         }
     }
 
+    const transferEquipment = async (equipmentIds: string[], destinationSiteId: string) => {
+        const uniqueIds = [...new Set(equipmentIds)].filter((equipmentId) =>
+            equipment.some((item) => item.gr_equipmentid === equipmentId && item.gr_Site?.gr_siteid !== destinationSiteId),
+        )
+        if (uniqueIds.length === 0) return { succeeded: [] as string[], failures: [] as Array<{ equipmentId: string; message: string }> }
+
+        setIsSaving(true)
+        setSaveError('')
+        try {
+            const token = await getToken()
+            const authoritativeSites = await fetchSites(token)
+            const destination = authoritativeSites.find((site) => site.gr_siteid === destinationSiteId)
+            if (!destination) throw new Error('The destination Site no longer exists. Refresh the dashboard and try again.')
+            const settled = await Promise.allSettled(uniqueIds.map(async (equipmentId) => {
+                await updateEquipmentSite(token, equipmentId, destinationSiteId)
+                return equipmentId
+            }))
+            const succeeded: string[] = []
+            const failures: Array<{ equipmentId: string; message: string }> = []
+            settled.forEach((result, index) => {
+                const equipmentId = uniqueIds[index]
+                if (result.status === 'fulfilled') succeeded.push(equipmentId)
+                else failures.push({
+                    equipmentId,
+                    message: result.reason instanceof Error ? result.reason.message : 'Dataverse did not accept the Site update.',
+                })
+            })
+            if (succeeded.length > 0) {
+                const succeededIds = new Set(succeeded)
+                setEquipment((current) => current.map((item) =>
+                    succeededIds.has(item.gr_equipmentid) ? { ...item, gr_Site: destination } : item,
+                ))
+            }
+            return { succeeded, failures }
+        } finally {
+            setIsSaving(false)
+        }
+    }
+
     const deleteEquipment = async (equipmentId: string) => {
         setIsSaving(true)
         setSaveError('')
@@ -267,6 +307,7 @@ export function useEquipmentManager() {
         createCustomer,
         createSite,
         updateSites,
+        transferEquipment,
         createEquipment,
         updateEquipment,
         saveEquipmentMaintenanceHistory,

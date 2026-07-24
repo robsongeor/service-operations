@@ -38,7 +38,7 @@ export default function JobsScreen() {
         createScheduleOption, updateScheduleOption, deleteScheduleOption,
         createJobOfficeUpdate,
         updateJobOfficeAttention,
-        completionRequest, isCompletingJob, completionError, completeServiceJob, cancelJobCompletion,
+        completionRequest, isCompletingJob, completionError, completeServiceJob, completeWofJob, cancelJobCompletion,
         isLoading, loadError, retryInitialLoad,
     } = useJobs()
     const [editingJob, setEditingJob] = useState<Job | null>(null)
@@ -339,7 +339,8 @@ export default function JobsScreen() {
                 isCompleting={isCompletingJob}
                 error={completionError}
                 onCancel={cancelJobCompletion}
-                onComplete={completeServiceJob}
+                onCompleteService={completeServiceJob}
+                onCompleteWof={completeWofJob}
             />
         </div>
     )

@@ -8,9 +8,11 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "npm run test:api && npm run test:maintenance",
+    "test": "npm run test:api && npm run test:maintenance && npm run test:wof && npm run test:equipment",
     "test:api": "node --test tests/joblookup.test.cjs",
-    "test:maintenance": "node --experimental-strip-types --test tests/maintenanceServicePlans.test.ts"
+    "test:maintenance": "node --experimental-strip-types --test tests/maintenanceServicePlans.test.ts",
+    "test:wof": "node --experimental-strip-types --test tests/wofWorkflow.test.ts",
+    "test:equipment": "node --experimental-strip-types --test tests/equipmentDataQuality.test.ts"
   },
   "dependencies": {
     "@azure/msal-browser": "^5.9.0",

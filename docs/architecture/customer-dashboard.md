@@ -24,6 +24,12 @@ Customer selection uses the shared searchable selector. Customer and Site editin
 shared drawer presentation while retaining Customer-owned forms and services. Embedded Job
 and Equipment actions delegate to their feature workflows.
 
+Each persisted Site section can transfer multiple existing Equipment records to that Site.
+The transfer uses the shared drawer and confirmation presentation, displays each machine's
+current Customer and Site, and delegates the narrow Site-lookup mutation to the Equipment
+workflow. Successful moves update the dashboard projection immediately; failures remain
+selected for an individual retry.
+
 ## Important Business Rules
 
 - Site Equipment is grouped by the actual Site relationship.
@@ -33,6 +39,8 @@ and Equipment actions delegate to their feature workflows.
 - Date Only values use shared WOF formatting.
 - Disclosure and view state is keyed by durable Dataverse IDs and scoped to the selected
   Customer so local mutations do not reset unrelated sections.
+- Equipment transfer changes only the current Equipment Site lookup. It never rewrites the
+  Site relationship retained on historical Jobs or other operational history.
 
 ## Extension Points
 

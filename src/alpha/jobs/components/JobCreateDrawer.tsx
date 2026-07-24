@@ -29,6 +29,7 @@ export type JobCreateInitialValues = {
     customerId?: string
     contactId?: string
     jobType?: JobType
+    description?: string
 }
 
 type Props = {
@@ -45,18 +46,19 @@ type Props = {
     onCreateJob: (job: JobSaveInput) => Promise<string>
     onCreateScheduleOption: (option: JobScheduleOptionInput) => Promise<void>
     initialValues?: JobCreateInitialValues
+    jobTypeOptions?: { label: string; value: JobType }[]
     onClose: () => void
 }
 
 export default function JobCreateDrawer({
     mechanics, equipmentList, sites, customers, siteContacts, servicePlans,
     onCreateCustomer, onCreateSite, onCreateContact, onCreateEquipment,
-    onCreateJob, onCreateScheduleOption, initialValues, onClose,
+    onCreateJob, onCreateScheduleOption, initialValues, jobTypeOptions = STANDARD_JOB_TYPE_OPTIONS, onClose,
 }: Props) {
     const initialCustomer = customers.find((customer) => customer.gr_customerid === initialValues?.customerId)
     const editor = useJobEditor({
         initialDraft: {
-            jobNumber: '', orderNumber: '', description: '',
+            jobNumber: '', orderNumber: '', description: initialValues?.description ?? '',
             jobType: initialValues?.jobType ?? '',
             status: JOB_STATUSES.UNALLOCATED,
             mechanicId: '',
@@ -129,7 +131,7 @@ export default function JobCreateDrawer({
             console.error(error)
             setSaveError(createdJob
                 ? 'The job was created, but its schedule could not be saved. Close this drawer and add it from Edit Job.'
-                : 'The job could not be created. Please try again.')
+                : error instanceof Error ? error.message : 'The job could not be created. Please try again.')
         } finally { setIsSaving(false) }
     }
 
@@ -157,7 +159,7 @@ export default function JobCreateDrawer({
             </>}
         >
             <div className="job-edit-grid">
-                <JobCoreFields draft={draft} setDraft={setDraft} mechanics={mechanics} equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)} allowEmptyJobType jobTypeError={jobTypeError} jobTypeOptions={STANDARD_JOB_TYPE_OPTIONS} />
+                <JobCoreFields draft={draft} setDraft={setDraft} mechanics={mechanics} equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)} allowEmptyJobType jobTypeError={jobTypeError} jobTypeOptions={jobTypeOptions} />
                 {jobRequiresMaintenance(draft.jobType) && <JobMaintenanceSummary
                     equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)}
                     servicePlans={servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === draft.equipmentId.toLowerCase())}

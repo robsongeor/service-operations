@@ -100,9 +100,14 @@ See [Dataverse architecture](docs/architecture/dataverse.md).
 
 ## Shared UI Architecture
 
+Before implementing UI, consult the
+[Reusable components inventory](docs/architecture/reusable-components.md) for the current
+canonical components, feature-owned workflows, and shared business-rule owners.
+
 Reuse the shared drawer shell, sections, confirmation, and small form dialog under
 `src/alpha/shared/drawer/`. Feature-owned state, services, and actions remain in the feature.
 Use the shared `SearchableSelect` rather than building separate search and selection inputs.
+Use the shared `FormSwitch` for compact boolean settings.
 
 Keep tables compact and operationally scannable. Loading, empty, failure, validation, and
 destructive-confirmation states must be explicit. After a successful Dataverse mutation,
@@ -210,11 +215,11 @@ The typed road-compliance domain is
   backfilled. Do not use it for new operational decisions.
 - Only Road Registered Equipment participates in operational WOF selection, the WOF screen,
   and Customer Dashboard WOF summaries.
-- Deregistering or marking Equipment Off Road must not erase registration number, REGO
-  expiry, WOF expiry, Jobs, or inspections.
+- Confirmed On-road to Off-road changes clear the Equipment registration number, REGO
+  expiry, and WOF expiry. Jobs and inspections remain preserved.
 - Existing WOF records may retain now-ineligible Equipment so history remains readable, but
   that Equipment must not become selectable for new WOF work.
-- Re-registration requires the current registration number.
+- Returning Off-road Equipment to On-road requires the current registration number.
 - Date Only fields must use the shared WOF Date Only parsing and formatting helpers and must
   not be shifted through local timezone conversion.
 

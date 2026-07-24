@@ -1,0 +1,17 @@
+.equipment-data-quality { position: relative; display: inline-block; overflow: visible; }
+.equipment-data-quality summary { display: inline-grid; width: 26px; height: 26px; box-sizing: border-box; place-items: center; padding: 0; border: 1px solid; border-radius: 50%; list-style: none; cursor: pointer; }
+.equipment-data-quality summary::-webkit-details-marker { display: none; }
+.equipment-data-quality summary > span { display: inline-grid; width: 15px; height: 15px; place-items: center; border-radius: 50%; color: #fff; font-size: .62rem; }
+.equipment-data-quality.critical summary { border-color: #efaaaa; background: #fee2e2; color: #991b1b; }
+.equipment-data-quality.critical summary > span { background: #b42318; }
+.equipment-data-quality.warning summary { border-color: #e6c568; background: #fef3c7; color: #854d0e; }
+.equipment-data-quality.warning summary > span { background: #b7791f; }
+.equipment-data-quality summary:focus-visible { outline: 3px solid rgba(49,91,77,.2); outline-offset: 2px; }
+.equipment-data-quality-popover { position: absolute; z-index: 60; top: calc(100% + 6px); right: 0; display: none; width: max-content; max-width: 280px; padding: 10px 12px; border: 1px solid #d7ddd9; border-radius: 8px; background: #fff; color: #303833; box-shadow: 0 10px 28px rgba(25,38,31,.2); white-space: normal; }
+.equipment-data-quality[open] .equipment-data-quality-popover,
+.equipment-data-quality:hover .equipment-data-quality-popover,
+.equipment-data-quality:focus-within .equipment-data-quality-popover { display: grid; gap: 9px; }
+.equipment-data-quality-popover section { display: grid; gap: 4px; }
+.equipment-data-quality-popover strong { font-size: .68rem; }
+.equipment-data-quality-popover ul { display: grid; gap: 3px; margin: 0; padding-left: 17px; }
+.equipment-data-quality-popover li { font-size: .68rem; line-height: 1.35; }

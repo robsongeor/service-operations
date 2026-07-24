@@ -4,19 +4,24 @@ This file is intentionally temporary working context. Update or replace it as ac
 blockers, Dataverse readiness, and the recommended next task change. Do not move this state
 into `AI_CONTEXT.md`.
 
-Branch: `codex/equipment-road-compliance`
+Branch: `codex/wof-rego-improvements-and-bug-fixes`
 
 ## Active work
 
-- Equipment Maintenance Profiles and Service Programmes are implemented in the working
-  tree but are not committed.
-- The work spans Equipment configuration and plan calculations, Job creation/editing and
-  completion, Customer Dashboard Equipment data, and WOF Equipment integration.
-- Related documentation and the idempotent provisioning script are:
-  `docs/maintenance-programmes-dataverse.md` and
-  `scripts/setup-maintenance-programmes-schema.ps1`.
-- `AI_CONTEXT.md` and `CHANGELOG.md` also have uncommitted edits. Preserve all current
-  working-tree changes.
+- WOF Management is implemented in the working tree and is not committed.
+- The WOF screen now derives a lifecycle status for each road-registered Equipment record,
+  opens the shared Job creation drawer with WOF context prefilled, opens existing work in
+  the manager-facing Job drawer without leaving WOF Management, and exposes the office
+  expiry-update action.
+- WOF creation performs a final Dataverse duplicate check so only one unfinished cycle can
+  exist for an Equipment record.
+- Saving a new WOF expiry now updates the authoritative Equipment expiry and returns the
+  record to normal monitoring.
+- Customer Dashboard Site sections can transfer multiple existing Equipment records using
+  the shared drawer and confirmation patterns. Transfers update only the current Equipment
+  Site, report partial failures, and retain failed machines for retry. The shared searchable
+  selector supports multi-selection and the drawer keeps a removable Equipment summary
+  visible before confirmation.
 
 ## Dataverse state
 
@@ -37,13 +42,10 @@ Branch: `codex/equipment-road-compliance`
 
 ## Current blockers
 
-- Authoritative Power Type data is required before classifying existing Equipment as
-  Electric. Do not infer it from names, makes, models, descriptions, or meter data.
-- End-to-end smoke testing against the provisioned Dataverse environment is still required
-  before deployment.
+- End-to-end smoke testing against the live Dataverse environment is still required,
+  including duplicate protection and in-place Job drawer saves from WOF Management.
 
 ## Next task
 
-Validate the current maintenance-programme implementation, run focused Dataverse smoke
-tests, then run the repository test, build, lint, diff-check, and status checks. Review the
-result before committing or deploying.
+Smoke test the WOF lifecycle against Dataverse, review the resulting UI with office users,
+then commit only when explicitly requested.

@@ -26,6 +26,7 @@ type Props = {
     mode: 'create' | 'edit'
     initialValue?: CustomerDraft
     initialTab?: CustomerDrawerTab
+    initialSiteId?: string
     onClose: () => void
     onSave: (value: CustomerDraft) => Promise<CustomerDraft>
 }
@@ -47,7 +48,7 @@ const emptyCustomer = (): CustomerDraft => ({
     sites: [newSite()],
 })
 
-export default function CustomerDrawer({ mode, initialValue, initialTab = 'info', onClose, onSave }: Props) {
+export default function CustomerDrawer({ mode, initialValue, initialTab = 'info', initialSiteId, onClose, onSave }: Props) {
     const [savedDraft, setSavedDraft] = useState<CustomerDraft>(() => initialValue ?? emptyCustomer())
     const [draft, setDraft] = useState<CustomerDraft>(savedDraft)
     const [activeTab, setActiveTab] = useState<CustomerDrawerTab>(initialTab)
@@ -87,6 +88,7 @@ export default function CustomerDrawer({ mode, initialValue, initialTab = 'info'
         if (isSaving || !isDirty) return
         const name = draft.name.trim()
         const accountsEmail = draft.accountsEmail.trim()
+        const normalizedSiteNames = draft.sites.map((site) => site.name.trim().replace(/\s+/g, ' ').toLowerCase())
         const nextErrors = {
             customerName: name ? undefined : 'Enter a Customer name.',
             accountsEmail: accountsEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(accountsEmail)
@@ -95,9 +97,13 @@ export default function CustomerDrawer({ mode, initialValue, initialTab = 'info'
             siteRequirement: mode === 'create' && draft.sites.length === 0
                 ? 'Add the first Site before creating this Customer.'
                 : undefined,
-            siteNames: Object.fromEntries(draft.sites
-                .filter((site) => !site.name.trim())
-                .map((site) => [site.id, 'Enter a Site name or remove this Site.'])),
+            siteNames: Object.fromEntries(draft.sites.flatMap((site, index) => {
+                if (!site.name.trim()) return [[site.id, 'Enter a Site name or remove this Site.']]
+                const duplicate = normalizedSiteNames.some((name, otherIndex) =>
+                    otherIndex !== index && name === normalizedSiteNames[index],
+                )
+                return duplicate ? [[site.id, 'A Site with this name already exists for this Customer.']] : []
+            })),
         }
         setErrors(nextErrors)
 
@@ -222,7 +228,7 @@ export default function CustomerDrawer({ mode, initialValue, initialTab = 'info'
                                 {(mode === 'create' || site.id.startsWith('prototype-site-')) && <button type="button" onClick={() => removeSiteFromPrototype(site.id)}>Remove</button>}
                             </header>
                             <div className="customer-drawer-fields">
-                                <label>Site name<input aria-invalid={Boolean(errors.siteNames[site.id])} value={site.name} onChange={(event) => updateSite(site.id, 'name', event.target.value)} />{errors.siteNames[site.id] && <span className="customer-drawer-field-error" role="alert">{errors.siteNames[site.id]}</span>}</label>
+                                <label>Site name<input autoFocus={site.id === initialSiteId} aria-invalid={Boolean(errors.siteNames[site.id])} value={site.name} onChange={(event) => updateSite(site.id, 'name', event.target.value)} />{errors.siteNames[site.id] && <span className="customer-drawer-field-error" role="alert">{errors.siteNames[site.id]}</span>}</label>
                                 <label>Address<input value={site.address} onChange={(event) => updateSite(site.id, 'address', event.target.value)} /></label>
                                 {mode === 'create' && <label className="wide">Operating hours<textarea rows={3} placeholder="e.g. Monday–Friday, 7:00 am–5:00 pm" value={site.operatingHours} onChange={(event) => updateSite(site.id, 'operatingHours', event.target.value)} /></label>}
                             </div>
