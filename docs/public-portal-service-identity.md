@@ -74,15 +74,18 @@ Created and assigned on 25 July 2026:
 - Assigned Application User: `4322873e-ce87-f111-ab10-0022489917ff`
 - Other roles assigned to the Application User: none
 
-| Table | Read | Write | All other privileges | Reason |
-| --- | --- | --- | --- | --- |
-| Job | Organization | Organization | None | Find by token hash and persist submission fields |
-| Equipment | Organization | None | None | Return make/model/fleet and validate current meter |
-| Site | Organization | None | None | Return minimal Site name |
-| Customer | Organization | None | None | Return minimal Customer name |
+| Table | Read | Create | Write | Append / Append To | Reason |
+| --- | --- | --- | --- | --- | --- |
+| Job | Organization | None | Organization | Append To | Find by token hash, persist submission fields, and receive child relationships |
+| Equipment | Organization | None | None | None | Return make/model/fleet and validate current meter |
+| Site | Organization | None | None | None | Return minimal Site name |
+| Customer | Organization | None | None | None | Return minimal Customer name |
+| Job Card Submission Time Entry | Organization | Organization | Organization | Append | Persist submitted time and travel |
+| Job Material | Organization | Organization | Organization | Append | Persist submitted Parts as generic materials |
+| Job Photo | Organization | Organization | Organization | Append | Persist photo metadata and File content |
 
-No other Phase 1 table privileges are required. Specifically grant no Create, Delete,
-Assign, Share, Append, or Append To.
+No Delete, Assign, or Share privilege is granted on these business tables. Dataverse
+requires child Append and parent Job Append To to create the prepared lookup relationships.
 
 Dataverse automatically added its platform minimum privileges when the custom role was
 created. These cover SDK/plugin metadata and SharePoint integration internals:
@@ -109,6 +112,13 @@ Dataverse roles grant Write at table level, not to a seven-column allowlist. The
 Authenticated office link generation writes token hash, created, expiry, and used state
 through the office user's delegated identity.
 
+The management application requests a fresh link immediately before preparing an existing
+technician email. The endpoint returns the raw token once; the browser uses it only to build
+the email URL and does not place it in browser storage. Generating another link replaces the
+stored hash, refreshes creation and expiry, resets the used flag for the new token, and
+therefore invalidates the previous unused link. The UI confirms this replacement when the
+loaded Job metadata indicates that an active unused link already exists.
+
 If Dataverse-enforced column restrictions are required, enable column security and introduce
 a dedicated Field Security Profile as a separate reviewed change.
 
@@ -131,6 +141,12 @@ Authenticated client-credential smoke testing on 25 July 2026 confirmed:
    already used.
 8. Operational Job Status, Completed Date, Equipment and Site relationships remained
    unchanged, and all temporary submission fields were restored after testing.
+
+Expanded submission verification on 25 July 2026 also confirmed that the Application User
+can create and read Time Entry, Job Material, and Job Photo children, upload and download
+the Job Photo File value, and commit the final Job submission state in one change set.
+Delete, Assign, and Share remain unavailable. Job Write is necessarily table-scoped, so the
+fixed server-side payload remains the column-level security boundary.
 
 Live Job Create, Assign, and Share actions were not attempted because doing so against an
 operational record would be unsafe. Their absence was verified directly from the assigned

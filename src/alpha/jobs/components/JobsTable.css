@@ -641,3 +641,21 @@
         padding-bottom: 10px;
     }
 }
+.jobs-submission-indicator {
+    padding: 4px 7px;
+    border: 1px solid #dfc38f;
+    border-radius: 999px;
+    background: #fff5e3;
+    color: #7c5924;
+    font: inherit;
+    font-size: 0.58rem;
+    font-weight: 750;
+    cursor: pointer;
+}
+
+.jobs-submission-indicator:hover,
+.jobs-submission-indicator:focus-visible {
+    border-color: #b9924d;
+    outline: none;
+    box-shadow: 0 0 0 2px #f5dfb8;
+}

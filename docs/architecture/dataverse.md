@@ -58,3 +58,10 @@ Confirm logical names, entity-set names, lookups, and Choice values from metadat
 schema documentation. Use named constants, explicit null handling, minimal field selection,
 and correct OData bindings. Do not provision or migrate Dataverse as an incidental coding
 step.
+
+## Related Files and Documents
+
+- [Knowledge base schema map](../README.md#feature-architecture)
+- [Shared services](shared-services.md)
+- [Security](security.md)
+- [`../../scripts`](../../scripts)

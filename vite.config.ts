@@ -1,7 +1,16 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { Buffer } from 'node:buffer'
+import { createRequire } from 'node:module'
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
+
+const require = createRequire(import.meta.url)
+const jobSubmissionService = require('./api/services/jobSubmissionService') as {
+  generate: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
+  handlePublicGet: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
+  handlePublicPost: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
+  jsonResponse: (status: number, body: object, headers?: Record<string, string>) => LocalFunctionResponse
+}
 
 const LIFTTRUCKS_API_ORIGIN = 'https://webview.liftrucks.co.nz'
 const LIFTTRUCKS_API_KEY = '500256'
@@ -11,6 +20,81 @@ function sendJson(response: ServerResponse, statusCode: number, body: object) {
   response.statusCode = statusCode
   response.setHeader('Content-Type', 'application/json; charset=utf-8')
   response.end(JSON.stringify(body))
+}
+
+type LocalFunctionRequest = {
+  method?: string
+  headers: Record<string, string | string[] | undefined>
+  query?: Record<string, string>
+  body?: Record<string, unknown>
+}
+
+type LocalFunctionResponse = {
+  status: number
+  headers?: Record<string, string>
+  body?: string
+}
+
+async function readJsonBody(request: IncomingMessage) {
+  const chunks: Buffer[] = []
+  for await (const chunk of request) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+  if (chunks.length === 0) return {}
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
+
+function sendFunctionResponse(response: ServerResponse, result: LocalFunctionResponse) {
+  response.statusCode = result.status
+  Object.entries(result.headers ?? {}).forEach(([name, value]) => response.setHeader(name, value))
+  response.end(result.body ?? '')
+}
+
+function jobSubmissionProxy(): Plugin {
+  const installMiddleware = (middlewares: { use: (handler: (request: IncomingMessage, response: ServerResponse, next: () => void) => void) => void }) => {
+    middlewares.use((request, response, next) => {
+      if (!request.url) return next()
+      const requestUrl = new URL(request.url, 'http://localhost')
+      if (requestUrl.pathname !== '/api/jobsubmission') return next()
+
+      void (async () => {
+        try {
+          const body = request.method === 'POST' ? await readJsonBody(request) : {}
+          if (body === null) {
+            return sendFunctionResponse(response, jobSubmissionService.jsonResponse(400, { error: 'The request body is invalid.' }))
+          }
+          const localRequest: LocalFunctionRequest = {
+            method: request.method,
+            headers: request.headers,
+            query: Object.fromEntries(requestUrl.searchParams),
+            body,
+          }
+          let result: LocalFunctionResponse
+          if (request.method === 'GET') result = await jobSubmissionService.handlePublicGet(localRequest)
+          else if (request.method === 'POST' && body.action === 'generate') result = await jobSubmissionService.generate(localRequest)
+          else if (request.method === 'POST') result = await jobSubmissionService.handlePublicPost(localRequest)
+          else result = jobSubmissionService.jsonResponse(405, { error: 'Method not allowed.' }, { Allow: 'GET, POST' })
+          sendFunctionResponse(response, result)
+        } catch {
+          sendFunctionResponse(response, jobSubmissionService.jsonResponse(503, {
+            code: 'temporary',
+            error: 'The job card service is temporarily unavailable.',
+          }))
+        }
+      })()
+    })
+  }
+  return {
+    name: 'job-submission-api-proxy',
+    configureServer(server) {
+      installMiddleware(server.middlewares)
+    },
+    configurePreviewServer(server) {
+      installMiddleware(server.middlewares)
+    },
+  }
 }
 
 function liftTrucksProxy(env: Record<string, string | undefined>): Plugin {
@@ -168,6 +252,6 @@ export default defineConfig(({ mode }) => {
 
   return {
     root: import.meta.dirname,
-    plugins: [react(), liftTrucksProxy(env)],
+    plugins: [react(), liftTrucksProxy(env), jobSubmissionProxy()],
   }
 })

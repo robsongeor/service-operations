@@ -1,8 +1,14 @@
 # Changelog
 
-## Unreleased
+## v1.3.0 — 25 July 2026
 
 ### Major Features
+
+- Added secure Technician Job Card submissions with expiring one-time links, public
+  mobile-first entry, time and travel, Job Materials, Further Work, Safety Issues, generic
+  Job Photos, read-only manager review, and replay protection.
+- Reorganised project documentation into a modular architecture knowledge base with a
+  standard Codex pre-prompt and subsystem-specific reading routes.
 
 - Added multi-machine Equipment transfers to Customer Dashboard Sites with searchable
   cross-customer multi-selection, a persistent removable selection summary, explicit

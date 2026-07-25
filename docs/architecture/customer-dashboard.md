@@ -61,3 +61,12 @@ expansions. New editing actions should open the owning feature workflow.
 
 Avoid per-row requests when related values can be loaded through the parent query. Do not
 copy domain calculations into dashboard components or use temporary UI IDs as durable keys.
+
+## Related Files and Documents
+
+- [`../../src/alpha/customers/CustomerDashboardScreen.tsx`](../../src/alpha/customers/CustomerDashboardScreen.tsx)
+- [`../../src/alpha/customers/CustomerDrawer.tsx`](../../src/alpha/customers/CustomerDrawer.tsx)
+- [`../../src/alpha/customers/EquipmentTransferDrawer.tsx`](../../src/alpha/customers/EquipmentTransferDrawer.tsx)
+- [Equipment](equipment.md)
+- [Jobs](jobs.md)
+- [Shared components](shared-components.md)

@@ -652,6 +652,28 @@
     gap: 24px;
 }
 
+.technician-submission-section { display: grid; gap: 12px; padding-top: 18px; border-top: 1px solid #dde4e0; }
+.technician-submission-content, .technician-submission-empty { display: grid; gap: 12px; }
+.technician-submission-summary { display: flex; align-items: center; gap: 10px; color: #69736e; font-size: 0.7rem; }
+.technician-submission-details { display: grid; gap: 14px; margin: 0; }
+.technician-submission-details > div { display: grid; gap: 4px; }
+.technician-submission-details dt { color: #78817c; font-size: 0.63rem; font-weight: 750; letter-spacing: 0.04em; text-transform: uppercase; }
+.technician-submission-details dd { margin: 0; color: #2f3b35; font-size: 0.78rem; }
+.technician-submission-story { white-space: pre-wrap; line-height: 1.55; }
+.technician-submission-list, .technician-submission-parts { display: grid; gap: 7px; margin: 0; padding-left: 18px; }
+.technician-submission-list li { display: flex; justify-content: space-between; gap: 12px; }
+.technician-submission-list span { color: #68736d; white-space: nowrap; }
+.manager-job-photo-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+.manager-job-photo-grid button { display: grid; gap: 5px; min-width: 0; padding: 0; border: 0; background: transparent; color: #65716b; font: inherit; cursor: pointer; text-align: left; }
+.manager-job-photo-grid img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; background: #edf2ef; }
+.manager-job-photo-grid span { overflow: hidden; font-size: .62rem; text-overflow: ellipsis; white-space: nowrap; }
+.job-photo-preview { position: fixed; z-index: 1200; inset: 0; display: grid; place-items: center; padding: 48px 20px; background: rgba(12, 22, 18, .86); }
+.job-photo-preview img { max-width: min(100%, 1100px); max-height: calc(100vh - 110px); object-fit: contain; }
+.job-photo-preview > button { position: absolute; top: 18px; right: 22px; border: 0; background: transparent; color: #fff; font-size: 2rem; cursor: pointer; }
+.job-photo-preview > span { color: #fff; font-size: .75rem; }
+.technician-submission-empty { padding: 14px; border-radius: 9px; background: #f4f6f5; color: #56615b; }
+.technician-submission-empty p { margin: 0; font-size: 0.7rem; line-height: 1.45; }
+
 .overall-job-card-section {
     order: -1;
 }

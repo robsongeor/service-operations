@@ -41,3 +41,13 @@ Quote identity and revision model while coordinating explicitly with Jobs.
 
 Avoid per-row Dataverse lookup requests. Preserve creator and revision history. Keep
 commercial state distinct from operational Job and Job Card state.
+
+## Related Files and Documents
+
+- [`../../src/alpha/quotes/QuotesScreen.tsx`](../../src/alpha/quotes/QuotesScreen.tsx)
+- [`../../src/alpha/quotes/PricingScreen.tsx`](../../src/alpha/quotes/PricingScreen.tsx)
+- [`../../src/alpha/quotes/services/quotesApi.ts`](../../src/alpha/quotes/services/quotesApi.ts)
+- [`../../src/alpha/quotes/services/pricingApi.ts`](../../src/alpha/quotes/services/pricingApi.ts)
+- [Quotes Dataverse schema](../quotes-dataverse-schema.md)
+- [Jobs](jobs.md)
+- [Dataverse](dataverse.md)

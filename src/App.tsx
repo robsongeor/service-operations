@@ -20,8 +20,11 @@ function App() {
   const activeAccount = useActiveMsalAccount()
   const signedInUser = getSignedInUserInfo(activeAccount)
 
-  if (location.pathname.startsWith('/portal/job/')) {
-    return <Routes><Route path="/portal/job/:token" element={<TechnicianJobSubmissionPage />} /></Routes>
+  if (location.pathname === '/portal/job' || location.pathname.startsWith('/portal/job/')) {
+    return <Routes>
+      <Route path="/portal/job/:token" element={<TechnicianJobSubmissionPage />} />
+      <Route path="/portal/job" element={<TechnicianJobSubmissionPage />} />
+    </Routes>
   }
 
   if (accounts.length === 0) {

@@ -60,3 +60,12 @@ replace seeded choices provided consumers continue receiving the same resolved c
 Never split atomic Service completion into separate writes. Use ETags for concurrency and
 verify authoritative state before treating a retry as idempotent success. Never substitute
 the current Equipment reading for a missing historical Job reading.
+
+## Related Files and Documents
+
+- [`../../src/alpha/equipment/servicePlans/maintenanceConfiguration.ts`](../../src/alpha/equipment/servicePlans/maintenanceConfiguration.ts)
+- [`../../src/alpha/equipment/servicePlans/servicePlanCalculations.ts`](../../src/alpha/equipment/servicePlans/servicePlanCalculations.ts)
+- [`../../src/alpha/jobs/completion/serviceCompletionApi.ts`](../../src/alpha/jobs/completion/serviceCompletionApi.ts)
+- [Equipment](equipment.md)
+- [Jobs](jobs.md)
+- [Maintenance Dataverse schema](../maintenance-programmes-dataverse.md)

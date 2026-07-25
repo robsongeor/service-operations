@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useParams } from 'react-router-dom'
 import { fetchPublicJobSubmission, JobSubmissionError, submitPublicJobCard } from './jobSubmissionApi'
-import type { PublicJobSubmissionDetails, PublicSubmissionErrorCode } from './jobSubmission.types'
+import type { JobCardTimeEntryInput, PublicJobSubmissionDetails, PublicSubmissionErrorCode } from './jobSubmission.types'
 import './TechnicianJobSubmissionPage.css'
+import { MAX_JOB_PHOTOS, prepareJobPhoto, removePendingJobPhoto, type PendingJobPhoto } from './jobPhoto'
 
 const errorMessages: Record<PublicSubmissionErrorCode, string> = {
     invalid: 'This job card link is invalid.',
@@ -12,12 +13,26 @@ const errorMessages: Record<PublicSubmissionErrorCode, string> = {
     temporary: 'The job card service is temporarily unavailable. Please try again.',
 }
 
+const today = () => {
+    const date = new Date()
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+const newTimeEntry = (): JobCardTimeEntryInput => ({ date: today(), hours: 0, kilometres: 0 })
+
 export default function TechnicianJobSubmissionPage() {
     const { token = '' } = useParams()
     const [job, setJob] = useState<PublicJobSubmissionDetails | null>(null)
     const [loadError, setLoadError] = useState<PublicSubmissionErrorCode | null>(null)
     const [story, setStory] = useState('')
     const [hourMeter, setHourMeter] = useState('')
+    const [timeEntries, setTimeEntries] = useState<JobCardTimeEntryInput[]>([])
+    const [parts, setParts] = useState<string[]>([])
+    const [furtherWorkRequired, setFurtherWorkRequired] = useState(false)
+    const [furtherWorkDetails, setFurtherWorkDetails] = useState('')
+    const [safetyIssueIdentified, setSafetyIssueIdentified] = useState(false)
+    const [safetyIssueDetails, setSafetyIssueDetails] = useState('')
+    const [photos, setPhotos] = useState<PendingJobPhoto[]>([])
     const [validation, setValidation] = useState('')
     const [busy, setBusy] = useState(false)
     const [submitted, setSubmitted] = useState(false)
@@ -40,10 +55,27 @@ export default function TechnicianJobSubmissionPage() {
         if (hourMeter && (!/^\d+$/.test(hourMeter) || Number(hourMeter) < (job?.currentHourMeter ?? 0))) {
             return setValidation(`Hour meter must be a whole number${job?.currentHourMeter != null ? ` of at least ${job.currentHourMeter}` : ''}.`)
         }
+        if (timeEntries.some((entry) => !entry.date || !Number.isFinite(entry.hours) || entry.hours < 0 || entry.hours > 24
+            || !Number.isSafeInteger(entry.kilometres) || entry.kilometres < 0)) {
+            return setValidation('Check each time entry. Hours must be between 0 and 24 and kilometres must be a whole number.')
+        }
+        if (parts.some((part) => !part.trim())) return setValidation('Enter a description for each part or remove the empty row.')
+        if (furtherWorkRequired && !furtherWorkDetails.trim()) return setValidation('Enter the further work details.')
+        if (safetyIssueIdentified && !safetyIssueDetails.trim()) return setValidation('Enter the safety issue details.')
         setBusy(true)
         setValidation('')
         try {
-            await submitPublicJobCard(token, trimmedStory, hourMeter ? Number(hourMeter) : undefined)
+            await submitPublicJobCard(token, {
+                story: trimmedStory,
+                hourMeter: hourMeter ? Number(hourMeter) : undefined,
+                timeEntries,
+                parts: parts.map((part) => part.trim()),
+                furtherWorkRequired,
+                furtherWorkDetails: furtherWorkRequired ? furtherWorkDetails.trim() : undefined,
+                safetyIssueIdentified,
+                safetyIssueDetails: safetyIssueIdentified ? safetyIssueDetails.trim() : undefined,
+                photos: photos.map(({ fileName, mimeType, size, data }) => ({ fileName, mimeType, size, data })),
+            })
             setSubmitted(true)
         } catch (error) {
             setValidation(error instanceof JobSubmissionError ? errorMessages[error.code] : errorMessages.temporary)
@@ -84,6 +116,65 @@ export default function TechnicianJobSubmissionPage() {
                 <label>Job Story / Work Completed *
                     <textarea rows={7} value={story} onChange={(event) => setStory(event.target.value)} required />
                 </label>
+                <fieldset className="technician-repeatable">
+                    <legend>Time &amp; Travel</legend>
+                    {timeEntries.map((entry, index) => <div className="technician-repeatable-row time-entry" key={index}>
+                        <label>Date<input type="date" value={entry.date} onChange={(event) => setTimeEntries((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, date: event.target.value } : item))} required /></label>
+                        <label>Total Hours<input type="number" min="0" max="24" step="0.25" inputMode="decimal" value={entry.hours} onChange={(event) => setTimeEntries((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, hours: Number(event.target.value) } : item))} required /></label>
+                        <label>Kilometres<input type="number" min="0" step="1" inputMode="numeric" value={entry.kilometres} onChange={(event) => setTimeEntries((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, kilometres: Number(event.target.value) } : item))} required /></label>
+                        <button type="button" className="technician-remove-row" onClick={() => setTimeEntries((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Remove</button>
+                    </div>)}
+                    <button type="button" className="technician-add-row" onClick={() => setTimeEntries((current) => [...current, newTimeEntry()])}>+ Add time entry</button>
+                </fieldset>
+                <fieldset className="technician-repeatable">
+                    <legend>Parts</legend>
+                    {parts.map((part, index) => <div className="technician-repeatable-row part-entry" key={index}>
+                        <label>Part<input type="text" maxLength={500} value={part} onChange={(event) => setParts((current) => current.map((item, itemIndex) => itemIndex === index ? event.target.value : item))} required /></label>
+                        <button type="button" className="technician-remove-row" onClick={() => setParts((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Remove</button>
+                    </div>)}
+                    <button type="button" className="technician-add-row" onClick={() => setParts((current) => [...current, ''])}>+ Add part</button>
+                </fieldset>
+                <div className="technician-conditional">
+                    <label className="technician-checkbox"><input type="checkbox" checked={furtherWorkRequired} onChange={(event) => setFurtherWorkRequired(event.target.checked)} />Further work required</label>
+                    {furtherWorkRequired && <label>Further work details *<textarea rows={4} value={furtherWorkDetails} onChange={(event) => setFurtherWorkDetails(event.target.value)} required /></label>}
+                </div>
+                <fieldset className="technician-repeatable technician-photos">
+                    <legend>Photos</legend>
+                    <p>Add up to 20 photos from your camera or photo library.</p>
+                    {photos.length > 0 && <div className="technician-photo-grid">
+                        {photos.map((photo) => <figure key={photo.id}>
+                            <img src={photo.previewUrl} alt={photo.fileName} />
+                            <figcaption>{photo.fileName}</figcaption>
+                            <button type="button" className="technician-remove-row" onClick={() => setPhotos((current) => removePendingJobPhoto(current, photo.id))}>Remove</button>
+                        </figure>)}
+                    </div>}
+                    <label className="technician-photo-picker">
+                        + Add Photo
+                        <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/heic,image/heif,.jpg,.jpeg,.png,.heic,.heif"
+                            capture="environment"
+                            multiple
+                            disabled={photos.length >= MAX_JOB_PHOTOS}
+                            onChange={(event) => {
+                                const files = Array.from(event.target.files ?? [])
+                                event.target.value = ''
+                                if (photos.length + files.length > MAX_JOB_PHOTOS) {
+                                    setValidation('A maximum of 20 photos may be attached.')
+                                    return
+                                }
+                                void Promise.all(files.map(prepareJobPhoto)).then((prepared) => {
+                                    setPhotos((current) => [...current, ...prepared])
+                                    setValidation('')
+                                }).catch((error: unknown) => setValidation(error instanceof Error ? error.message : 'A photo could not be added.'))
+                            }}
+                        />
+                    </label>
+                </fieldset>
+                <div className="technician-conditional">
+                    <label className="technician-checkbox"><input type="checkbox" checked={safetyIssueIdentified} onChange={(event) => setSafetyIssueIdentified(event.target.checked)} />Safety issue identified</label>
+                    {safetyIssueIdentified && <label>Safety issue details *<textarea rows={4} value={safetyIssueDetails} onChange={(event) => setSafetyIssueDetails(event.target.value)} required /></label>}
+                </div>
                 {validation && <p className="technician-portal-error" role="alert">{validation}</p>}
                 <button type="submit" disabled={busy}>{busy ? 'Submitting…' : 'Submit Job Card'}</button>
             </form>

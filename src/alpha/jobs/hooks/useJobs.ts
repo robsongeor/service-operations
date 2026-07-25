@@ -5,6 +5,7 @@ import type { Job } from '../types/job.types'
 import type { Equipment } from '../types/equipment.types'
 import {
     fetchJobs as fetchJobsApi,
+    fetchJobPhotos as fetchJobPhotosApi,
     createJob as createJobApi,
     updateJobStatus as updateJobStatusApi,
     updateJobCardStatus as updateJobCardStatusApi,
@@ -27,6 +28,13 @@ import type { JobAssignment } from '../types/jobAssignment.types'
 import { createEmailDispatch, waitForEmailDispatch } from '../services/emailDispatchApi'
 import { buildAssignmentJobEmail, buildPrimaryJobEmail } from '../services/jobEmail'
 import { assertJobHasEmailableJobNumber } from '../services/jobEmailRules'
+import { generateJobSubmissionLink } from '../services/jobSubmissionLinkApi'
+import {
+    buildMailtoUrl,
+    buildTechnicianEmailBody,
+    buildTechnicianEmailSubject,
+    isValidTechnicianEmail,
+} from '../utils/technicianMailto'
 import type {
     JobScheduleOption,
     JobScheduleOptionInput,
@@ -202,6 +210,18 @@ export function useJobs() {
         const token = await getAccessToken()
         const jobs = await fetchJobsApi(token)
         setJobs(jobs)
+        return jobs
+    }
+
+    const fetchJobForDrawer = async (jobId: string) => {
+        const token = await getAccessToken()
+        const [nextJobs, photos] = await Promise.all([
+            fetchJobsApi(token),
+            fetchJobPhotosApi(token, jobId),
+        ])
+        const merged = nextJobs.map((job) => job.gr_jobid === jobId ? { ...job, jobPhotos: photos } : job)
+        setJobs(merged)
+        return merged.find((job) => job.gr_jobid === jobId)
     }
 
     const fetchScheduleOptions = async () => {
@@ -386,8 +406,12 @@ export function useJobs() {
 
     const sendPrimaryJobEmail = async (job: Job) => {
         assertJobHasEmailableJobNumber(job)
+        if (!isValidTechnicianEmail(job.gr_Mechanic?.gr_email)) {
+            throw new Error('The primary technician needs an email address before the job can be sent.')
+        }
         const token = await getAccessToken()
-        const email = buildPrimaryJobEmail(job)
+        const submissionLink = await generateJobSubmissionLink(token, job.gr_jobid)
+        const email = buildPrimaryJobEmail(job, submissionLink.url)
         const dispatchId = await createEmailDispatch(token, {
             jobId: job.gr_jobid,
             ...email,
@@ -399,8 +423,12 @@ export function useJobs() {
 
     const sendAssignmentJobEmail = async (job: Job, assignment: JobAssignment) => {
         assertJobHasEmailableJobNumber(job)
+        if (!isValidTechnicianEmail(assignment.gr_Mechanic?.gr_email)) {
+            throw new Error('This technician needs an email address before the job can be sent.')
+        }
         const token = await getAccessToken()
-        const email = buildAssignmentJobEmail(job, assignment)
+        const submissionLink = await generateJobSubmissionLink(token, job.gr_jobid)
+        const email = buildAssignmentJobEmail(job, assignment, submissionLink.url)
         const dispatchId = await createEmailDispatch(token, {
             jobId: job.gr_jobid,
             assignmentId: assignment.gr_jobassignmentid,
@@ -413,6 +441,21 @@ export function useJobs() {
             JOB_CARD_STATUSES.SENT,
         )
         await fetchJobAssignments()
+    }
+
+    const prepareTechnicianJobEmail = async (job: Job) => {
+        assertJobHasEmailableJobNumber(job)
+        const mechanic = job.gr_Mechanic
+        if (!mechanic || !isValidTechnicianEmail(mechanic.gr_email)) {
+            throw new Error('The allocated technician does not have an email address.')
+        }
+        const token = await getAccessToken()
+        const submissionLink = await generateJobSubmissionLink(token, job.gr_jobid)
+        return buildMailtoUrl({
+            recipient: mechanic.gr_email,
+            subject: buildTechnicianEmailSubject(job),
+            body: buildTechnicianEmailBody(job, mechanic.gr_name, submissionLink.url),
+        })
     }
 
     const deleteJobAssignment = async (assignmentId: string) => {
@@ -763,6 +806,7 @@ export function useJobs() {
         sites,
         customers,
         fetchJobs,
+        fetchJobForDrawer,
         fetchScheduleOptions,
         fetchEquipment,
         fetchJobOfficeUpdates,
@@ -779,6 +823,7 @@ export function useJobs() {
         updateJobCardStatus,
         sendPrimaryJobEmail,
         sendAssignmentJobEmail,
+        prepareTechnicianJobEmail,
         createJobAssignment,
         updateJobAssignmentStatus,
         deleteJobAssignment,

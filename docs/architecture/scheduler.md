@@ -41,3 +41,11 @@ consume the same schedule and assignment contracts.
 Do not duplicate Job validation or completion logic in board components. Preserve schedule
 record identity and history, use existing APIs for coordinated transitions, and keep local
 board state consistent after Dataverse mutations.
+
+## Related Files and Documents
+
+- [`../../src/alpha/scheduling/SchedulingScreen.tsx`](../../src/alpha/scheduling/SchedulingScreen.tsx)
+- [`../../src/alpha/jobs/services/jobScheduleApi.ts`](../../src/alpha/jobs/services/jobScheduleApi.ts)
+- [`../../src/alpha/jobs/components/JobScheduleFields.tsx`](../../src/alpha/jobs/components/JobScheduleFields.tsx)
+- [Jobs](jobs.md)
+- [Shared components](shared-components.md)

@@ -84,6 +84,103 @@ test('submission validation requires story and valid service hour meter', () => 
     assert.equal(submission._test.validateSubmission(job, { story: 'Done', hourMeter: 2500 }), '')
 })
 
+test('submission validation accepts multiple time entries, decimal hours, and parts', () => {
+    const result = submission._test.validateSubmission(baseJob(), {
+        story: 'Completed service',
+        hourMeter: 2500,
+        timeEntries: [
+            { date: '2026-07-25', hours: 1.25, kilometres: 12 },
+            { date: '2026-07-26', hours: 2.5, kilometres: 0 },
+        ],
+        parts: ['Oil Filter', 'Grease'],
+        furtherWorkRequired: false,
+        safetyIssueIdentified: false,
+    })
+    assert.equal(result, '')
+})
+
+test('further work and safety details are required only when selected', () => {
+    const common = { story: 'Completed', hourMeter: 2500, timeEntries: [], parts: [] }
+    assert.match(submission._test.validateSubmission(baseJob(), {
+        ...common, furtherWorkRequired: true, furtherWorkDetails: '', safetyIssueIdentified: false,
+    }), /further work/i)
+    assert.match(submission._test.validateSubmission(baseJob(), {
+        ...common, furtherWorkRequired: false, safetyIssueIdentified: true, safetyIssueDetails: '',
+    }), /safety issue/i)
+    assert.equal(submission._test.validateSubmission(baseJob(), {
+        ...common,
+        furtherWorkRequired: true,
+        furtherWorkDetails: 'Return with replacement hose',
+        safetyIssueIdentified: true,
+        safetyIssueDetails: 'Isolate until repaired',
+    }), '')
+})
+
+test('expanded submission uses one change set and does not change operational Job fields', () => {
+    const request = submission._test.batchRequest(baseJob(), 'W/"10"', {
+        story: 'Completed',
+        hourMeter: 2510,
+        timeEntries: [{ date: '2026-07-25', hours: 1.5, kilometres: 16 }],
+        parts: ['Hydraulic Hose'],
+        furtherWorkRequired: true,
+        furtherWorkDetails: 'Inspect mast rollers',
+        safetyIssueIdentified: false,
+    }, '2026-07-25T04:00:00.000Z')
+    assert.match(request.payload, /POST gr_jobcardsubmissiontimeentries/)
+    assert.match(request.payload, /Content-ID: 1/)
+    assert.match(request.payload, /Content-ID: 2/)
+    assert.match(request.payload, /Content-ID: 3/)
+    assert.match(request.payload, /"gr_totalhours":1\.5/)
+    assert.match(request.payload, /POST gr_jobmaterials/)
+    assert.match(request.payload, /"gr_material":"Hydraulic Hose"/)
+    assert.match(request.payload, /PATCH gr_jobs\(/)
+    assert.match(request.payload, /If-Match: W\/"10"/)
+    assert.doesNotMatch(request.payload, /"gr_status"/)
+    assert.doesNotMatch(request.payload, /"gr_completeddate"/)
+    assert.doesNotMatch(request.payload, /"gr_hourmeter"/)
+})
+
+test('photo validation enforces type, size, count, and encoded byte length', () => {
+    const common = {
+        story: 'Completed', hourMeter: 2500, timeEntries: [], parts: [],
+        furtherWorkRequired: false, safetyIssueIdentified: false,
+    }
+    assert.equal(submission._test.validateSubmission(baseJob(), {
+        ...common,
+        photos: [{ fileName: 'mast.jpg', mimeType: 'image/jpeg', size: 3, data: 'YWJj' }],
+    }), '')
+    assert.match(submission._test.validateSubmission(baseJob(), {
+        ...common,
+        photos: [{ fileName: 'mast.gif', mimeType: 'image/gif', size: 3, data: 'YWJj' }],
+    }), /invalid/i)
+    assert.match(submission._test.validateSubmission(baseJob(), {
+        ...common,
+        photos: [{ fileName: 'mast.jpg', mimeType: 'image/jpeg', size: 4, data: 'YWJj' }],
+    }), /invalid/i)
+})
+
+test('photo persistence creates generic rows, uploads binary, and reuses upload identity', { concurrency: false }, async () => {
+    configure()
+    const calls = []
+    global.fetch = async (url, options = {}) => {
+        const value = String(url)
+        calls.push({ value, options })
+        if (value.includes('/gr_jobphotos?')) return Response.json({ value: [] })
+        if (value.endsWith('/gr_jobphotos')) return Response.json({ gr_jobphotoid: 'photo-id' }, { status: 201 })
+        if (value.includes('/gr_jobphotos(photo-id)/gr_photo')) return new Response(null, { status: 204 })
+        throw new Error(`Unexpected request: ${value}`)
+    }
+    await submission._test.persistPhotos('t'.repeat(43), baseJob(), [{
+        fileName: 'mast.jpg', mimeType: 'image/jpeg', size: 3, data: 'YWJj',
+    }], 'Bearer app-token', '2026-07-25T04:00:00.000Z')
+    assert.equal(calls.length, 3)
+    const metadata = JSON.parse(calls[1].options.body)
+    assert.equal(metadata.gr_filename, 'mast.jpg')
+    assert.equal(metadata.gr_displayorder, 0)
+    assert.equal(calls[2].options.method, 'PATCH')
+    assert.equal(Buffer.from(calls[2].options.body).toString(), 'abc')
+})
+
 test('invalid token does not reveal Job data', { concurrency: false }, async () => {
     configure()
     mockPublic(null)
@@ -145,4 +242,64 @@ test('concurrent repeat submission is rejected by ETag', { concurrency: false },
     })
     assert.equal(response.status, 410)
     assert.match(response.body, /already been submitted/i)
+})
+
+test('link generation requires an authenticated office user', { concurrency: false }, async () => {
+    configure()
+    global.fetch = async () => new Response(null, { status: 401 })
+    const response = await invoke({
+        method: 'POST',
+        headers: {},
+        body: { action: 'generate', jobId: '00000000-0000-4000-8000-000000000001' },
+    })
+    assert.equal(response.status, 401)
+    assert.match(response.body, /authentication/i)
+})
+
+test('link generation replaces the stored hash without changing Job workflows', { concurrency: false }, async () => {
+    configure()
+    let patch
+    global.fetch = async (url, options = {}) => {
+        const value = String(url)
+        if (value.endsWith('/WhoAmI')) return Response.json({ UserId: 'office-user' })
+        if (value.includes('/gr_jobs(') && options.method === 'PATCH') {
+            patch = JSON.parse(options.body)
+            return new Response(null, { status: 204 })
+        }
+        throw new Error(`Unexpected request: ${value}`)
+    }
+    const response = await invoke({
+        method: 'POST',
+        headers: { Authorization: 'Bearer office-token' },
+        body: { action: 'generate', jobId: '00000000-0000-4000-8000-000000000001' },
+    })
+    assert.equal(response.status, 201)
+    const result = JSON.parse(response.body)
+    assert.match(result.path, /^\/portal\/job\/[A-Za-z0-9_-]{43}$/)
+    assert.match(patch.gr_techniciansubmissiontokenhash, /^[a-f0-9]{64}$/)
+    assert.equal(patch.gr_techniciansubmissiontokenused, false)
+    assert.equal(patch.gr_status, undefined)
+    assert.equal(patch.gr_jobcardstatus, undefined)
+    assert.equal(JSON.stringify(patch).includes(result.path.slice('/portal/job/'.length)), false)
+})
+
+test('link generation accepts opaque Dataverse GUIDs without RFC version bits', { concurrency: false }, async () => {
+    configure()
+    let requestedUrl = ''
+    global.fetch = async (url, options = {}) => {
+        const value = String(url)
+        if (value.endsWith('/WhoAmI')) return Response.json({ UserId: 'office-user' })
+        if (value.includes('/gr_jobs(') && options.method === 'PATCH') {
+            requestedUrl = value
+            return new Response(null, { status: 204 })
+        }
+        throw new Error(`Unexpected request: ${value}`)
+    }
+    const response = await invoke({
+        method: 'POST',
+        headers: { Authorization: 'Bearer office-token' },
+        body: { action: 'generate', jobId: 'df9a3779-4e83-f111-ab0f-0022489917ff' },
+    })
+    assert.equal(response.status, 201)
+    assert.match(requestedUrl, /gr_jobs\(df9a3779-4e83-f111-ab0f-0022489917ff\)$/)
 })

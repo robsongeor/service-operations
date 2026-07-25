@@ -1,5 +1,6 @@
 import type { Job } from '../types/job.types'
 import type { JobAssignment } from '../types/jobAssignment.types'
+import { buildTechnicianEmailBody, buildTechnicianEmailSubject } from '../utils/technicianMailto'
 
 export type JobEmail = {
     recipientEmail: string
@@ -8,22 +9,7 @@ export type JobEmail = {
     body: string
 }
 
-function jobDetails(job: Job) {
-    return `Job: ${job.gr_jobnumber ?? 'Unnumbered'}
-
-Description:
-${job.gr_description ?? 'No description'}
-
-Equipment:
-${job.gr_Equipment
-        ? `${job.gr_Equipment.gr_fleet} - ${job.gr_Equipment.gr_make} ${job.gr_Equipment.gr_model}`
-        : 'N/A'}
-
-Site:
-${job.gr_Site?.gr_name ?? 'N/A'}`
-}
-
-export function buildPrimaryJobEmail(job: Job): JobEmail {
+export function buildPrimaryJobEmail(job: Job, submissionUrl: string): JobEmail {
     if (!job.gr_Mechanic?.gr_email) {
         throw new Error('The primary technician needs an email address before the job can be sent.')
     }
@@ -31,16 +17,12 @@ export function buildPrimaryJobEmail(job: Job): JobEmail {
     return {
         recipientEmail: job.gr_Mechanic.gr_email,
         recipientName: job.gr_Mechanic.gr_name,
-        subject: `Job ${job.gr_jobnumber ?? 'Unnumbered'}`,
-        body: `Hi ${job.gr_Mechanic.gr_name},
-
-You have been assigned the following job.
-
-${jobDetails(job)}`,
+        subject: buildTechnicianEmailSubject(job),
+        body: buildTechnicianEmailBody(job, job.gr_Mechanic.gr_name, submissionUrl),
     }
 }
 
-export function buildAssignmentJobEmail(job: Job, assignment: JobAssignment): JobEmail {
+export function buildAssignmentJobEmail(job: Job, assignment: JobAssignment, submissionUrl: string): JobEmail {
     const mechanic = assignment.gr_Mechanic
     if (!mechanic?.gr_email) {
         throw new Error('This technician needs an email address before the job can be sent.')
@@ -49,11 +31,7 @@ export function buildAssignmentJobEmail(job: Job, assignment: JobAssignment): Jo
     return {
         recipientEmail: mechanic.gr_email,
         recipientName: mechanic.gr_name,
-        subject: `Job ${job.gr_jobnumber ?? 'Unnumbered'}`,
-        body: `Hi ${mechanic.gr_name},
-
-You have been added to the following job.
-
-${jobDetails(job)}`,
+        subject: buildTechnicianEmailSubject(job),
+        body: buildTechnicianEmailBody(job, mechanic.gr_name, submissionUrl),
     }
 }

@@ -64,3 +64,13 @@ typed eligibility domain.
 Use the authoritative compliance Choice for decisions. Compatibility fields may mirror
 writes or support unmigrated records but must not become new sources of truth. Never run
 Date Only values through local timezone conversion.
+
+## Related Files and Documents
+
+- [`../../src/alpha/wof/WofScreen.tsx`](../../src/alpha/wof/WofScreen.tsx)
+- [`../../src/alpha/wof/hooks/useWof.ts`](../../src/alpha/wof/hooks/useWof.ts)
+- [`../../src/alpha/wof/services/wofApi.ts`](../../src/alpha/wof/services/wofApi.ts)
+- [`../../src/alpha/wof/utils/wofRules.ts`](../../src/alpha/wof/utils/wofRules.ts)
+- [WOF Dataverse schema](../wof-dataverse-schema.md)
+- [Jobs](jobs.md)
+- [Equipment](equipment.md)

@@ -4,9 +4,43 @@ import { assertJobTypeAllowedForCreation, type JobCreationSource } from '../type
 
 const DATAVERSE_URL = import.meta.env.VITE_DATAVERSE_URL
 
+function blobDataUrl(blob: Blob) {
+    return new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(String(reader.result))
+        reader.onerror = () => reject(new Error('A Job photo could not be read.'))
+        reader.readAsDataURL(blob)
+    })
+}
+
+export async function fetchJobPhotos(accessToken: string, jobId: string): Promise<NonNullable<Job['jobPhotos']>> {
+    const headers = { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' }
+    const metadata = await fetch(
+        `${DATAVERSE_URL}/api/data/v9.2/gr_jobphotos?$select=gr_jobphotoid,gr_filename,gr_uploadedon,gr_displayorder,_gr_job_value&$filter=_gr_job_value eq ${jobId}&$orderby=gr_displayorder asc`,
+        { cache: 'no-store', headers },
+    )
+    if (!metadata.ok) return []
+    const rows = (await metadata.json()).value ?? []
+    return Promise.all(rows.map(async (row: Record<string, unknown>) => {
+        const id = String(row.gr_jobphotoid)
+        const response = await fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobphotos(${id})/gr_photo/$value`, {
+            cache: 'no-store',
+            headers,
+        })
+        if (!response.ok) throw new Error('A Job photo could not be loaded.')
+        return {
+            id,
+            fileName: String(row.gr_filename || 'Job photo'),
+            uploadedOn: String(row.gr_uploadedon || ''),
+            displayOrder: Number(row.gr_displayorder || 0),
+            previewUrl: await blobDataUrl(await response.blob()),
+        }
+    }))
+}
+
 export async function fetchJobs(accessToken: string): Promise<Job[]> {
     const result = await fetch(
-        `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=gr_jobid,createdon,gr_jobnumber,gr_status,gr_ordernumber,gr_description,gr_jobtype,gr_jobcardstatus,gr_jobcardsenton,gr_jobcardsubmittedon,gr_jobcardclosedon,gr_hourmeter,gr_completeddate,gr_servicetype,gr_currentofficeaction,gr_officeactionowner,gr_officeattentionrequired&$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_serial,gr_currenthourmeter,gr_currenthourmeterrecordeddate,gr_servicetrackingenabled),gr_Mechanic($select=gr_mechanicid,gr_name,gr_phone,gr_email),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name,gr_phone,gr_email)`,
+        `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=gr_jobid,createdon,gr_jobnumber,gr_status,gr_ordernumber,gr_description,gr_jobtype,gr_jobcardstatus,gr_jobcardsenton,gr_jobcardsubmittedon,gr_jobcardclosedon,gr_hourmeter,gr_completeddate,gr_servicetype,gr_currentofficeaction,gr_officeactionowner,gr_officeattentionrequired,gr_techniciansubmissiontokenhash,gr_techniciansubmissiontokencreatedon,gr_techniciansubmissiontokenexpireson,gr_techniciansubmissiontokenused,gr_techniciansubmissionsubmittedon,gr_techniciansubmissionhourmeter,gr_techniciansubmissionstory&$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_serial,gr_currenthourmeter,gr_currenthourmeterrecordeddate,gr_servicetrackingenabled),gr_Mechanic($select=gr_mechanicid,gr_name,gr_phone,gr_email),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name,gr_phone,gr_email)`,
         {
             cache: 'no-store',
             headers: {
@@ -23,7 +57,47 @@ export async function fetchJobs(accessToken: string): Promise<Job[]> {
     }
 
     const data = await result.json()
-    return data.value ?? []
+    const jobs = (data.value ?? []) as Job[]
+    const headers = {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/json',
+        'Cache-Control': 'no-cache',
+    }
+    const [metadataResult, timeResult, partsResult] = await Promise.allSettled([
+        fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=gr_jobid,gr_techniciansubmissionfurtherworkrequired,gr_techniciansubmissionfurtherworkdetails,gr_techniciansubmissionsafetyissueidentified,gr_techniciansubmissionsafetyissuedetails`, { cache: 'no-store', headers }),
+        fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobcardsubmissiontimeentries?$select=gr_jobcardsubmissiontimeentryid,gr_entrydate,gr_totalhours,gr_kilometres,_gr_job_value&$orderby=gr_entrydate asc`, { cache: 'no-store', headers }),
+        fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobmaterials?$select=gr_jobmaterialid,gr_material,_gr_job_value&$orderby=gr_displayorder asc`, { cache: 'no-store', headers }),
+    ])
+    const readValues = async (settled: PromiseSettledResult<Response>) => {
+        if (settled.status !== 'fulfilled' || !settled.value.ok) return []
+        return (await settled.value.json()).value ?? []
+    }
+    const [metadata, timeEntries, parts] = await Promise.all([
+        readValues(metadataResult),
+        readValues(timeResult),
+        readValues(partsResult),
+    ])
+    const metadataByJob = new Map<string, Partial<Job>>(
+        metadata.map((item: Record<string, unknown>) => [String(item.gr_jobid), item as Partial<Job>]),
+    )
+    return jobs.map((job) => ({
+        ...job,
+        ...metadataByJob.get(job.gr_jobid),
+        technicianSubmissionTimeEntries: timeEntries
+            .filter((item: Record<string, unknown>) => String(item._gr_job_value).toLowerCase() === job.gr_jobid.toLowerCase())
+            .map((item: Record<string, unknown>) => ({
+                id: String(item.gr_jobcardsubmissiontimeentryid),
+                date: String(item.gr_entrydate),
+                hours: Number(item.gr_totalhours),
+                kilometres: Number(item.gr_kilometres),
+            })),
+        technicianSubmissionParts: parts
+            .filter((item: Record<string, unknown>) => String(item._gr_job_value).toLowerCase() === job.gr_jobid.toLowerCase())
+            .map((item: Record<string, unknown>) => ({
+                id: String(item.gr_jobmaterialid),
+                part: String(item.gr_material),
+            })),
+    }))
 }
 
 export async function createJob(

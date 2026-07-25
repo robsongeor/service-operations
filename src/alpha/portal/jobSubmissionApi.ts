@@ -1,4 +1,4 @@
-import type { PublicJobSubmissionDetails, PublicSubmissionError } from './jobSubmission.types'
+import type { JobCardSubmissionInput, PublicJobSubmissionDetails, PublicSubmissionError } from './jobSubmission.types'
 
 export class JobSubmissionError extends Error {
     readonly code: PublicSubmissionError['code']
@@ -25,11 +25,11 @@ export async function fetchPublicJobSubmission(token: string): Promise<PublicJob
     return readResponse<PublicJobSubmissionDetails>(response)
 }
 
-export async function submitPublicJobCard(token: string, story: string, hourMeter?: number): Promise<void> {
+export async function submitPublicJobCard(token: string, submission: JobCardSubmissionInput): Promise<void> {
     const response = await fetch('/api/jobsubmission', {
         method: 'POST',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, story, hourMeter }),
+        body: JSON.stringify({ token, ...submission }),
     })
     await readResponse<{ submitted: true }>(response)
 }

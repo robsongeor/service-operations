@@ -56,3 +56,13 @@ meaning of the current-state Equipment fields.
 Do not add redundant Customer lookups or infer asset classification from free text. Confirm
 Dataverse schema before adding fields. Apply Equipment changes through feature services and
 keep dependent screens synchronized.
+
+## Related Files and Documents
+
+- [`../../src/alpha/equipment/EquipmentScreen.tsx`](../../src/alpha/equipment/EquipmentScreen.tsx)
+- [`../../src/alpha/equipment/components/EquipmentDrawer.tsx`](../../src/alpha/equipment/components/EquipmentDrawer.tsx)
+- [`../../src/alpha/equipment/services/equipmentManagerApi.ts`](../../src/alpha/equipment/services/equipmentManagerApi.ts)
+- [Maintenance](maintenance.md)
+- [Customer Dashboard](customer-dashboard.md)
+- [WOF/REGO](wof.md)
+- [Dataverse](dataverse.md)

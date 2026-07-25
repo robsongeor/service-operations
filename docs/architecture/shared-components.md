@@ -49,3 +49,10 @@ feature-owned data.
 Do not create a universal component that couples unrelated feature workflows. Reuse existing
 CSS and interaction patterns. Keep accessibility, keyboard behavior, and destructive
 confirmation consistent across consumers.
+
+## Related Files and Documents
+
+- [Reusable component inventory](reusable-components.md)
+- [`../../src/alpha/shared`](../../src/alpha/shared)
+- [Shared services](shared-services.md)
+- [Development workflow](development-workflow.md)
