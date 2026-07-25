@@ -4,7 +4,7 @@ Audit date: 23 July 2026
 
 Audited branch: `codex/wof-management`
 
-Audit basis: static code inspection plus local production build and lint. No live Dataverse records were created, edited, completed, or deleted during this audit.
+Audit basis: static code inspection, local validation, an Azure Static Web Apps pull-request preview, and live Dataverse smoke testing. All temporary Dataverse records created for the smoke test were deleted afterward.
 
 ## Proposed Version
 
@@ -19,7 +19,7 @@ The two code blockers identified by the audit have been resolved:
 1. Job Lookup now requires a Dataverse bearer token that the API validates through `WhoAmI` before it reads upstream credentials or calls the upstream service.
 2. Service Job completion now reloads authoritative Job, Equipment, and service-plan state and submits all completion writes in one atomic Dataverse `$batch` change set with ETag concurrency checks and idempotent retry verification.
 
-The application must not be tagged or deployed as `v1.2.0` until both changes are exercised live. In particular, the Dataverse target must confirm atomic change-set behavior, ETag conflict handling, timeout recovery, and A/B/C plan results. Five automated proxy security tests now pass, but there is still no browser, integration, or Service-completion unit test framework.
+Normal A, B, and C Service completion paths pass in the live Developer Dataverse environment, and the preview Job Lookup endpoint safely rejected anonymous and invalid-token requests. The user subsequently approved production promotion and the `v1.2.0` tag despite the documented residual risks. Production is deployed and tagged, while valid authenticated Job Lookup, forced atomic rollback, stale two-session concurrency, and timeout/retry recovery remain outstanding. Five automated proxy security tests pass, but there is still no browser, integration, or Service-completion unit test framework.
 
 ## Git State
 
@@ -180,6 +180,130 @@ Use a test environment with representative records and both operational and mana
 - Technicians: create/edit/deactivate, qualification overlap boundaries, expired/future/inactive states, WOF eligibility refresh, and least-privilege self-grant denial.
 - Accessibility/responsive: keyboard-only searchable selects, focus order/trapping/restoration, sortable headers, validation announcements, color-independent statuses, horizontal tables, sticky-column bounds, drawers, and action overlap.
 - Production infrastructure: configure server-only `DATAVERSE_URL`, run the Job Lookup authorization tests against the deployed Function, verify Static Web App/API runtime settings, deep links, and Power Automate/email dispatch behavior.
+
+## Live Candidate Test Run — 23 July 2026
+
+Overall result: **Ready pending live Dataverse smoke testing**
+
+This run exercised the exact source tree from candidate commit `6f04044` in Azure Static Web Apps pull-request preview environment 2. Azure built the PR merge ref as `95f88e0`; its Git tree was verified identical to `6f04044`. Production was not deployed or modified.
+
+### Deployment
+
+| Item | Result | Evidence |
+| --- | --- | --- |
+| Candidate source | Passed | Branch `codex/wof-management`; commit `6f0404474d23d4990f044b229d752895ae137a5a`. |
+| Preview deployment | Passed | GitHub Actions run `29999210443`, PR #2, Azure preview environment 2. Deployment completed successfully on 23 July 2026. |
+| Preview URL | Passed | `https://yellow-cliff-068680700-2.eastasia.7.azurestaticapps.net` |
+| Production isolation | Passed | Preview environment only; `v1-deployment` production traffic and deployment were unchanged. |
+| Dataverse environment | Passed with limitation | George Robson's Developer environment at `org0d4246d7.crm6.dynamics.com`; this is the sole available Dataverse environment and is not a Production-type environment. |
+| API configuration | Passed | Preview-only `DATAVERSE_URL` and Lift Trucks server settings were configured without exposing values, then removed after testing. |
+
+### Pre-deployment and application smoke tests
+
+| Test | Result | Observation |
+| --- | --- | --- |
+| `npm test` | Passed | 5/5 Job Lookup proxy tests passed. |
+| `npm run build` | Passed | 303 modules; existing Vite chunk-size advisory only. |
+| `npm run lint` | Passed | No lint errors. |
+| `git diff --check` | Passed | No whitespace errors. |
+| Application/authentication | Passed | Microsoft sign-in completed against the preview redirect URI. |
+| Navigation | Passed | Authenticated shell and primary navigation loaded. |
+| Jobs | Passed | 97 existing records loaded during the initial smoke check. |
+| Equipment | Passed | Equipment table loaded live Dataverse records. |
+| Customer Dashboard | Passed | Screen loaded without a data-load error. |
+| WOF / REGO | Passed | Table loaded without the empty-state refresh regression. |
+| Scheduling | Passed | Weekly schedule loaded. |
+| Browser runtime errors | Passed | No console errors were observed across the primary smoke routes. |
+
+### `/api/joblookup` authentication
+
+| Test | Result | Observation and residual risk |
+| --- | --- | --- |
+| No Authorization header | Passed | HTTP 401 with a safe expired/invalid-session response; no credential, stack, or upstream response details leaked. Static Web Apps supplied an identity-shaped bearer before the Function, but the Function rejected it through Dataverse validation. |
+| Invalid bearer token | Passed | HTTP 401 with the same safe response; no sensitive details leaked. |
+| Valid authenticated user and upstream lookup | Not tested | The temporary diagnostic route is intentionally removed, and the browser automation boundary did not provide a safe token-bearing request mechanism. Release gate remains open. |
+| Authenticated invalid/missing input | Not tested | Same authenticated-caller limitation. Automated handler coverage passes locally, but that is not a live deployed result. |
+| Missing server configuration | Not tested | Preview configuration was not deliberately broken while other live tests were using it. Residual risk is limited by the passing automated safe-error test. |
+| Upstream failure redaction | Not tested | No safe upstream failure was forced. Automated redaction coverage passes locally, but deployed behavior remains unverified. |
+
+### Test-data worksheet
+
+All names below were temporary and contained no customer-sensitive content. The existing Air Care Sheet Metals / Penrose relationship was used only as the required parent lookup; its records were not edited.
+
+| Record | Initial state | Test use | Cleanup |
+| --- | --- | --- | --- |
+| Equipment `CODEX-V120-PLAN` | Meter 100; A due 350; B/C initially unconfigured, then baselined at meter 120 | A, C, and B completion boundary checks | Deleted after all linked test Jobs were deleted. |
+| Equipment `CODEX-V120-NOPLAN` | No meter and no configured maintenance schedule | Completion with no configured plan | Deleted after its linked test Job was deleted. |
+| Job `CODEX-V120-A` | A Service, incomplete, meter unset | A completion at 120 | Deleted. |
+| Job `CODEX-V120-B` | C Service, incomplete, meter unset | C completion at 150 | Deleted. |
+| Job `CODEX-V120-B-SVC` | B Service, incomplete, meter unset | B completion at 175 | Deleted. |
+| Job `CODEX-V120-C` | A Service against no-plan Equipment | No-plan completion at 75 | Deleted. |
+
+### Service completion
+
+| Test | Result | Authoritative before/after result |
+| --- | --- | --- |
+| A Service | Passed | Meter 100 → 120. Job became Complete with historical meter 120. Equipment became 120. A became last completed 120, due 370, linked to `CODEX-V120-A`; B and C remained unconfigured. |
+| C Service | Passed | Meter 120 → 150. Job became Complete with historical meter 150. Equipment became 150. A/B/C all linked to `CODEX-V120-B` with due hours 400/1150/2150. No partial UI state or duplicate advancement was observed. |
+| B Service | Passed | Meter 150 → 175. Job became Complete with historical meter 175. Equipment became 175. A/B advanced to due 425/1175 and linked to `CODEX-V120-B-SVC`; C remained at last completed 150 and due 2150. |
+| No configured plan | Passed | Meter 0 → 75 and Job became Complete. A/B/C remained Not Configured with no completion values or linked Job. |
+
+### Validation, failure, and recovery tests
+
+| Test | Result | Reason / residual risk |
+| --- | --- | --- |
+| Blank hour meter | Not tested | No separate incomplete validation Job was retained. Covered only by local rule inspection; no live write attempt was made. |
+| Lower-than-current meter | Not tested | No separate incomplete validation Job was retained. |
+| Invalid numeric value | Not tested | Number-input and local validation exist, but no live confirmation was recorded. |
+| Missing Equipment | Not tested | No intentionally malformed Dataverse Job was created. |
+| Missing Service Type | Not tested | No intentionally malformed Dataverse Job was created. |
+| Already-completed retry | Not tested | A duplicate submission/response-loss sequence was not safely induced. |
+| Mismatched Equipment context | Not tested | No stale or forged completion request was issued. |
+| Forced Job/Equipment/A/B/C write failure and rollback | Not tested | No reversible failpoint exists in the preview UI, and deliberately corrupting schema or permissions was not considered safe. This is a critical remaining release risk. |
+| Two-session stale concurrency | Not tested | A second independent authenticated context was not established before the test records were cleaned up. Critical release risk remains. |
+| Timeout-after-submit and exact retry | Not tested | Client response loss could not be safely induced. Critical release risk remains. |
+
+### Regression and cleanup
+
+| Test | Result | Observation |
+| --- | --- | --- |
+| Jobs table and Service modal | Passed | Jobs loaded, temporary Jobs were created, and the Service completion modal opened and refreshed authoritative results. |
+| Equipment drawer/schedule | Passed | Meter, A/B/C schedule, completed Job references, and Job History counts refreshed from Dataverse. |
+| Scheduler | Passed | Scheduler loaded; completed test Jobs were not retained for a longer assignment-specific check. |
+| Customer Dashboard | Passed | Screen loaded; a post-completion linked-equipment value check was not separately recorded. |
+| WOF / REGO | Passed | Page and table loaded after the completion changes. |
+| Test Dataverse records | Passed | Four temporary Jobs and both temporary Equipment records were deleted; searching `CODEX-V120` returned no Equipment matches. |
+| Local CLI authentication | Passed | Temporary `v120-smoke` Power Platform CLI profile was deleted. |
+| Preview environment configuration | Passed | The three preview-only server settings and temporary Entra SPA redirect URI were removed after testing. Production settings and redirect URIs were retained. |
+
+### Release decision
+
+Normal deployed A/B/C completion behavior is verified, but the original B2 blocker specifically concerns atomic failure boundaries, concurrency, and retry recovery. Those critical tests remain **Not tested**. Valid authenticated `/api/joblookup` and its deployed upstream path also remain **Not tested**.
+
+The candidate therefore remains:
+
+```text
+Ready pending live Dataverse smoke testing
+```
+
+Production and the `v1.2.0` tag were subsequently approved explicitly by the user despite the remaining release-gate risks.
+
+## Production Promotion — 23 July 2026
+
+The user explicitly approved making the candidate live after reviewing the pending-test result.
+
+| Item | Result | Observation |
+| --- | --- | --- |
+| Production merge | Passed | PR #2 merged `codex/wof-management` into `v1-deployment`; merge commit `f9bcb55a7799081f7a14446f954c656f8ce3e040`. |
+| Production deployment | Passed | Azure Static Web Apps workflow run `30001947232` completed successfully in 1m 26s. |
+| Live URL | Passed | `https://yellow-cliff-068680700.7.azurestaticapps.net` |
+| Authentication | Passed | Microsoft sign-in completed against the existing production redirect URI. |
+| Live data | Passed | Jobs loaded 97 records; Customers, Equipment, WOF / REGO, and Scheduling loaded without data errors. |
+| Browser runtime | Passed | No console errors were observed across the production smoke routes. |
+| Job Lookup production settings | Failed / configuration blocked | Azure reports the signed-in account has Reader access on the production Static Web App. Production `DATAVERSE_URL` and Lift Trucks server settings could not be added. `/api/joblookup` must be treated as unavailable until an authorized Azure user configures those settings. |
+| Release tag | Passed | Annotated tag `v1.2.0` (`Release v1.2.0`) was created and pushed; its peeled target is production merge commit `f9bcb55a7799081f7a14446f954c656f8ce3e040`. Production workflow run `30001947232` was rerun successfully as attempt 2 so the live bundle now displays `v1.2.0` rather than `Unreleased`. |
+
+Current production state is operational for the primary Dataverse screens, with the Job Lookup configuration limitation above. Atomic rollback, concurrency, timeout/retry, and valid authenticated Job Lookup remain open release risks.
 
 ## Deployment Checklist
 

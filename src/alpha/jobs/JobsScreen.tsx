@@ -32,14 +32,14 @@ export default function JobsScreen() {
         officeUpdates,
         createJob, updateJob, deleteJob, updateJobStatus, updateJobFields,
         updateJobCardStatus,
-        sendPrimaryJobEmail, sendAssignmentJobEmail,
+        sendPrimaryJobEmail, sendAssignmentJobEmail, prepareTechnicianJobEmail,
         createJobAssignment, deleteJobAssignment,
         createContactForSite, createEquipment, createSite, createCustomer,
         createScheduleOption, updateScheduleOption, deleteScheduleOption,
         createJobOfficeUpdate,
         updateJobOfficeAttention,
-        completionRequest, isCompletingJob, completionError, completeServiceJob, cancelJobCompletion,
-        isLoading, loadError, retryInitialLoad,
+        completionRequest, isCompletingJob, completionError, completeServiceJob, completeWofJob, cancelJobCompletion,
+        isLoading, loadError, retryInitialLoad, fetchJobForDrawer,
     } = useJobs()
     const [editingJob, setEditingJob] = useState<Job | null>(null)
     const [editingInitialTab, setEditingInitialTab] = useState<'details' | 'jobcard'>('details')
@@ -81,6 +81,17 @@ export default function JobsScreen() {
                 ? current.visibleStatuses.filter((currentStatus) => currentStatus !== status)
                 : [...current.visibleStatuses, status],
         }))
+    }
+
+    const openJob = (job: Job, tab: 'details' | 'jobcard' = 'details') => {
+        setEditingInitialTab(tab)
+        setEditingJob(job)
+        void fetchJobForDrawer(job.gr_jobid).then((refreshedJob) => {
+            if (!refreshedJob) return
+            setEditingJob((current) => current?.gr_jobid === job.gr_jobid ? refreshedJob : current)
+        }).catch(() => {
+            // The already-loaded Job remains available if the background refresh fails.
+        })
     }
 
     const currentMatchesDefault = viewState.selectedJobType === defaultView.selectedJobType
@@ -183,7 +194,9 @@ export default function JobsScreen() {
                     resetToDefaultDisabled={currentMatchesDefault}
                     onStatusChange={updateJobStatus}
                     onJobFieldsChange={updateJobFields}
-                    onEditJob={setEditingJob}
+                    onEmailTechnician={prepareTechnicianJobEmail}
+                    onEditJob={(job) => openJob(job)}
+                    onOpenJobCard={(job) => openJob(job, 'jobcard')}
                     mechanics={mechanics}
                     officeUpdates={officeUpdates}
                     scheduleOptions={scheduleOptions}
@@ -339,7 +352,8 @@ export default function JobsScreen() {
                 isCompleting={isCompletingJob}
                 error={completionError}
                 onCancel={cancelJobCompletion}
-                onComplete={completeServiceJob}
+                onCompleteService={completeServiceJob}
+                onCompleteWof={completeWofJob}
             />
         </div>
     )

@@ -3,6 +3,7 @@ import { useMsal } from '@azure/msal-react'
 import { useActiveMsalAccount } from '../../../auth/useActiveMsalAccount'
 import { createCustomer as createCustomerApi, fetchCustomers } from '../../jobs/services/customersApi'
 import { fetchJobs } from '../../jobs/services/jobsApi'
+import { updateEquipmentSite } from '../../jobs/services/equipmentApi'
 import { createSite as createSiteApi, fetchSites, updateSite as updateSiteApi } from '../../jobs/services/sitesApi'
 import type { Customer } from '../../jobs/types/customer.types'
 import type { Equipment } from '../../jobs/types/equipment.types'
@@ -13,15 +14,25 @@ import {
     createEquipment as createEquipmentApi,
     deleteEquipment as deleteEquipmentApi,
     fetchEquipment,
+    updateEquipmentMaintenanceProfile,
     updateEquipment as updateEquipmentApi,
 } from '../services/equipmentManagerApi'
 import { normalizeEquipmentInput, type EquipmentUpdateInput } from '../types/equipmentManager.types'
 import {
     fetchEquipmentServicePlans,
+    syncEquipmentServiceProgramme,
     saveEquipmentMaintenanceHistory as saveEquipmentMaintenanceHistoryApi,
     type MaintenanceHistoryInput,
 } from '../servicePlans/servicePlanApi'
 import type { EquipmentServicePlan } from '../servicePlans/equipmentServicePlan.types'
+import type { MaintenanceProfile } from '../servicePlans/maintenanceConfiguration'
+import { updateEquipmentCurrentHourMeter } from '../servicePlans/servicePlanApi'
+import type { SignedInUserInfo } from '../../../auth/signedInUser'
+import {
+    canUseEquipmentCsvTools,
+    equipmentInputFromCsvPatch,
+    type EquipmentCsvReviewRow,
+} from '../utils/equipmentCsv'
 
 export function useEquipmentManager() {
     const { instance } = useMsal()
@@ -106,6 +117,9 @@ export function useEquipmentManager() {
             await updateEquipmentApi(token, record.gr_equipmentid, input)
             const selectedSite = sites.find((site) => site.gr_siteid === input.siteId)
             const updated = applyEquipmentUpdate(record, input, selectedSite)
+            const recordPlans = servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === record.gr_equipmentid.toLowerCase())
+            const syncedPlans = await syncEquipmentServiceProgramme(token, updated, recordPlans)
+            setServicePlans((current) => [...current.filter((plan) => plan._gr_equipment_value?.toLowerCase() !== record.gr_equipmentid.toLowerCase()), ...syncedPlans])
             setEquipment((current) => current.map((item) =>
                 item.gr_equipmentid === updated.gr_equipmentid ? updated : item,
             ))
@@ -204,6 +218,95 @@ export function useEquipmentManager() {
         }
     }
 
+    const transferEquipment = async (equipmentIds: string[], destinationSiteId: string, adoptDestinationProfile = false) => {
+        const uniqueIds = [...new Set(equipmentIds)].filter((equipmentId) =>
+            equipment.some((item) => item.gr_equipmentid === equipmentId && item.gr_Site?.gr_siteid !== destinationSiteId),
+        )
+        if (uniqueIds.length === 0) return { succeeded: [] as string[], failures: [] as Array<{ equipmentId: string; message: string }> }
+
+        setIsSaving(true)
+        setSaveError('')
+        try {
+            const token = await getToken()
+            const authoritativeSites = await fetchSites(token)
+            const destination = authoritativeSites.find((site) => site.gr_siteid === destinationSiteId)
+            if (!destination) throw new Error('The destination Site no longer exists. Refresh the dashboard and try again.')
+            const settled = await Promise.allSettled(uniqueIds.map(async (equipmentId) => {
+                await updateEquipmentSite(
+                    token,
+                    equipmentId,
+                    destinationSiteId,
+                    adoptDestinationProfile ? destination.gr_defaultmaintenanceprofile : undefined,
+                )
+                return equipmentId
+            }))
+            const succeeded: string[] = []
+            const failures: Array<{ equipmentId: string; message: string }> = []
+            settled.forEach((result, index) => {
+                const equipmentId = uniqueIds[index]
+                if (result.status === 'fulfilled') succeeded.push(equipmentId)
+                else failures.push({
+                    equipmentId,
+                    message: result.reason instanceof Error ? result.reason.message : 'Dataverse did not accept the Site update.',
+                })
+            })
+            if (succeeded.length > 0) {
+                const succeededIds = new Set(succeeded)
+                setEquipment((current) => current.map((item) =>
+                    succeededIds.has(item.gr_equipmentid) ? {
+                        ...item,
+                        gr_Site: destination,
+                        ...(adoptDestinationProfile && destination.gr_defaultmaintenanceprofile != null
+                            ? { gr_maintenanceprofile: destination.gr_defaultmaintenanceprofile }
+                            : {}),
+                    } : item,
+                ))
+            }
+            return { succeeded, failures }
+        } finally {
+            setIsSaving(false)
+        }
+    }
+
+    const updateSiteMaintenanceSettings = async (
+        site: Site,
+        defaultMaintenanceProfile: MaintenanceProfile,
+        equipmentIds: string[],
+    ) => {
+        setIsSaving(true)
+        setSaveError('')
+        try {
+            const token = await getToken()
+            await updateSiteApi(token, site.gr_siteid, {
+                name: site.gr_name,
+                address: site.gr_address,
+                defaultMaintenanceProfile,
+            })
+            await Promise.all(equipmentIds.map((equipmentId) =>
+                updateEquipmentMaintenanceProfile(token, equipmentId, defaultMaintenanceProfile),
+            ))
+            setSites((current) => current.map((item) =>
+                item.gr_siteid === site.gr_siteid
+                    ? { ...item, gr_defaultmaintenanceprofile: defaultMaintenanceProfile }
+                    : item,
+            ))
+            if (equipmentIds.length) {
+                const selected = new Set(equipmentIds)
+                setEquipment((current) => current.map((item) =>
+                    selected.has(item.gr_equipmentid)
+                        ? { ...item, gr_maintenanceprofile: defaultMaintenanceProfile }
+                        : item,
+                ))
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Site maintenance settings could not be saved.'
+            setSaveError(message)
+            throw error
+        } finally {
+            setIsSaving(false)
+        }
+    }
+
     const deleteEquipment = async (equipmentId: string) => {
         setIsSaving(true)
         setSaveError('')
@@ -229,10 +332,14 @@ export function useEquipmentManager() {
         setSaveError('')
         try {
             const token = await getToken()
-            const updatedPlans = await saveEquipmentMaintenanceHistoryApi(token, record.gr_equipmentid, existingPlans, input)
+            const updatedPlans = await saveEquipmentMaintenanceHistoryApi(token, record.gr_equipmentid, record, existingPlans, input)
             setEquipment((current) => current.map((item) =>
                 item.gr_equipmentid === record.gr_equipmentid
-                    ? { ...item, gr_currenthourmeter: input.currentHourMeter }
+                    ? {
+                        ...item,
+                        gr_currenthourmeter: input.currentHourMeter,
+                        gr_currenthourmeterrecordeddate: input.readingRecordedDate,
+                    }
                     : item,
             ))
             setServicePlans((current) => {
@@ -244,13 +351,63 @@ export function useEquipmentManager() {
                 return [...retained, ...updatedPlans]
             })
             return {
-                equipment: { ...record, gr_currenthourmeter: input.currentHourMeter },
+                equipment: {
+                    ...record,
+                    gr_currenthourmeter: input.currentHourMeter,
+                    gr_currenthourmeterrecordeddate: input.readingRecordedDate,
+                },
                 servicePlans: updatedPlans,
             }
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Maintenance history could not be saved.'
             setSaveError(message)
             throw error
+        } finally {
+            setIsSaving(false)
+        }
+    }
+
+    const applyEquipmentCsvUpdates = async (user: SignedInUserInfo | null, reviewRows: EquipmentCsvReviewRow[]) => {
+        if (!canUseEquipmentCsvTools(user)) throw new Error('You are not authorised to import Equipment data.')
+        const rows = reviewRows.filter((row) => row.status === 'changed' && row.equipment)
+        const succeeded: string[] = []
+        const failures: Array<{ equipmentId: string; message: string }> = []
+        setIsSaving(true)
+        setSaveError('')
+        try {
+            const token = await getToken()
+            for (const row of rows) {
+                if (!canUseEquipmentCsvTools(user)) throw new Error('You are not authorised to import Equipment data.')
+                const record = row.equipment!
+                try {
+                    const input = equipmentInputFromCsvPatch(record, row.patch)
+                    await updateEquipmentApi(token, record.gr_equipmentid, input)
+                    const selectedSite = sites.find((site) => site.gr_siteid === input.siteId)
+                    const updated = applyEquipmentUpdate(record, input, selectedSite)
+                    const recordPlans = servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === record.gr_equipmentid.toLowerCase())
+                    const syncedPlans = await syncEquipmentServiceProgramme(token, updated, recordPlans)
+                    if (row.patch.currentHourMeter !== undefined || row.patch.readingRecordedDate !== undefined) {
+                        await updateEquipmentCurrentHourMeter(
+                            token,
+                            record.gr_equipmentid,
+                            row.patch.currentHourMeter ?? record.gr_currenthourmeter ?? 0,
+                            row.patch.readingRecordedDate ?? record.gr_currenthourmeterrecordeddate!,
+                        )
+                    }
+                    setServicePlans((current) => [
+                        ...current.filter((plan) => plan._gr_equipment_value?.toLowerCase() !== record.gr_equipmentid.toLowerCase()),
+                        ...syncedPlans,
+                    ])
+                    succeeded.push(record.gr_equipmentid)
+                } catch (error) {
+                    failures.push({
+                        equipmentId: record.gr_equipmentid,
+                        message: error instanceof Error ? error.message : 'Dataverse rejected the Equipment update.',
+                    })
+                }
+            }
+            if (succeeded.length) await load()
+            return { succeeded, failures }
         } finally {
             setIsSaving(false)
         }
@@ -263,9 +420,12 @@ export function useEquipmentManager() {
         createCustomer,
         createSite,
         updateSites,
+        updateSiteMaintenanceSettings,
+        transferEquipment,
         createEquipment,
         updateEquipment,
         saveEquipmentMaintenanceHistory,
+        applyEquipmentCsvUpdates,
         deleteEquipment,
     }
 }

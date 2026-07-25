@@ -26,10 +26,12 @@ import type { JobCardStatus } from '../types/jobCardStatus.types'
 import type { JobAssignment, JobAssignmentInput } from '../types/jobAssignment.types'
 import { SERVICE_TYPES, type EquipmentServicePlan } from '../../equipment/servicePlans/equipmentServicePlan.types'
 import JobMaintenanceSummary from './JobMaintenanceSummary'
+import { isServiceTypeEnabled } from '../../equipment/servicePlans/maintenanceConfiguration'
 import { JOB_CARD_STATUSES, getJobCardStatus } from '../types/jobCardStatus.types'
 import { JOB_NUMBER_REQUIRED_EMAIL_MESSAGE, jobHasEmailableJobNumber } from '../services/jobEmailRules'
 import { OFFICE_ACTIONS, type JobOfficeUpdate } from '../types/officeAction.types'
 import JobOfficeFields from './JobOfficeFields'
+import { jobHasActiveSubmissionLink } from '../services/jobSubmissionLinkApi'
 
 type Props = {
     job: Job
@@ -141,6 +143,7 @@ export default function JobEditDrawer({
     const [isDeleting, setIsDeleting] = useState(false)
     const [deleteError, setDeleteError] = useState('')
     const [isEmailing, setIsEmailing] = useState(false)
+    const [showEmailLinkConfirm, setShowEmailLinkConfirm] = useState(false)
     const [activeTab, setActiveTab] = useState<'details' | 'office' | 'scheduling' | 'jobcard' | 'quotes'>(initialTab)
     const [officeAction, setOfficeAction] = useState(job.gr_currentofficeaction ?? OFFICE_ACTIONS.NONE)
     const [officeActionOwner, setOfficeActionOwner] = useState(job.gr_officeactionowner ?? '')
@@ -179,6 +182,13 @@ export default function JobEditDrawer({
         if (draft.customerId && !draft.siteId) {
             setSaveError('Select a site for the chosen customer before saving.')
             return
+        }
+        const selectedEquipment = equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)
+        const historicalServiceSelection = draft.serviceType === job.gr_servicetype
+            && draft.equipmentId === job.gr_Equipment?.gr_equipmentid
+        if (jobRequiresMaintenance(draft.jobType) && draft.serviceType !== SERVICE_TYPES.NONE
+            && !historicalServiceSelection && !isServiceTypeEnabled(selectedEquipment, draft.serviceType)) {
+            return setSaveError('The selected Service Type is not active for this Equipment programme.')
         }
         if (draft.status === 122830003 && jobRequiresMaintenance(draft.jobType)) {
             if (!draft.equipmentId) return setSaveError('Select equipment before completing a service job.')
@@ -228,7 +238,7 @@ export default function JobEditDrawer({
         }
     }
 
-    const emailJob = async () => {
+    const emailJob = async (confirmedReplacement = false) => {
         if (!hasJobNumber) {
             setSaveError(JOB_NUMBER_REQUIRED_EMAIL_MESSAGE)
             return
@@ -237,10 +247,15 @@ export default function JobEditDrawer({
             setSaveError('Assign a technician before emailing this job.')
             return
         }
+        if (!confirmedReplacement && jobHasActiveSubmissionLink(job)) {
+            setShowEmailLinkConfirm(true)
+            return
+        }
 
         try {
             setIsEmailing(true)
             setSaveError('')
+            setShowEmailLinkConfirm(false)
             await onSendPrimary(job)
         } catch (error) {
             setSaveError(error instanceof Error ? error.message : 'The job email flow did not complete.')
@@ -359,6 +374,7 @@ export default function JobEditDrawer({
                             draft={draft}
                             setDraft={setDraft}
                             mechanics={mechanics}
+                            equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)}
                         />
 
                         {jobRequiresMaintenance(draft.jobType) && <JobMaintenanceSummary
@@ -430,6 +446,15 @@ export default function JobEditDrawer({
             confirmLabel={isDeleting ? 'Deleting...' : 'Delete job'}
             onCancel={() => setShowDeleteConfirm(false)}
             onConfirm={() => void deleteJob()}
+        />}
+        {showEmailLinkConfirm && <EditDrawerConfirmation
+            eyebrow="Replace secure link"
+            title="Generate a new technician submission link?"
+            message="Generating a new link will invalidate the previous technician submission link for this Job."
+            isBusy={isEmailing}
+            confirmLabel={isEmailing ? 'Generating...' : 'Generate and email'}
+            onCancel={() => setShowEmailLinkConfirm(false)}
+            onConfirm={() => void emailJob(true)}
         />}
         </>
     )

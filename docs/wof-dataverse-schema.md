@@ -17,10 +17,33 @@ The schema below was provisioned and published in the `ServiceOperationsNew` sol
 | Display name | Logical name | Type | Required/default | Purpose |
 |---|---|---|---|---|
 | Registration Number | `gr_registrationnumber` | Text (100) | Optional | Current equipment REGO |
-| WOF Required | `gr_wofrequired` | Yes/No | Optional; No | Includes equipment in WOF compliance tracking |
+| Compliance Status | `gr_compliancestatus` | Local Choice | Optional; Off Road | Authoritative road-compliance participation state |
+| WOF Required | `gr_wofrequired` | Yes/No | Optional; No | Compatibility mirror; no longer an application source of truth |
 | Current WOF Expiry | `gr_currentwofexpiry` | Date only | Optional | Current active expiry |
 | Last WOF Completed | `gr_lastwofcompleted` | Date only | Optional | Most recent passed inspection date |
 | REGO Expiry | `gr_regoexpiry` | Date only | Optional | Current registration expiry |
+
+`gr_compliancestatus` was provisioned and published on 24 July 2026 for Equipment Road
+Compliance Management. Its values are:
+
+| Label | Value |
+|---|---:|
+| Road Registered | `122830000` |
+| Deregistered | `122830001` |
+| Off Road | `122830002` |
+
+The logical name and values above are the application contract. All 189 existing
+Equipment records were backfilled on 24 July 2026: 24 Road Registered from
+`gr_wofrequired = Yes`, and 165 Off Road where no road-compliance data existed. No
+ambiguous records required manual classification. The application retains the same
+fallback for defensive compatibility. New writes keep
+`gr_wofrequired` synchronized for compatibility, but all operational participation
+decisions use Compliance Status.
+
+The idempotent provisioning, audit, and safe-backfill workflow is implemented by
+`scripts/setup-equipment-compliance-schema.ps1`. Records with WOF Required disabled but
+existing registration or expiry data are deliberately exported for manual review rather
+than guessed.
 
 ## New tables
 
@@ -63,13 +86,13 @@ Provider Type contains required `gr_code`, `gr_active`, and seed `WOF_INSPECTOR`
 
 ## Security roles required
 
-Operational users require read on Qualification Type, Technician Qualification, Service Provider Type and Service Provider; read/create/update on WOF Inspection; read/update of the four Equipment WOF fields; and their existing Job privileges. Managers need create/update privileges for qualifications and providers. Technicians should not receive permission to grant their own qualifications.
+Operational users require read on Qualification Type, Technician Qualification, Service Provider Type and Service Provider; read/create/update on WOF Inspection; read/update of the Equipment compliance fields; and their existing Job privileges. Managers need create/update privileges for qualifications and providers. Technicians should not receive permission to grant their own qualifications.
 
 ## Data setup
 
 1. Assign `WOF_CERTIFIED` Technician Qualification records to eligible Mechanics.
 2. Create Service Provider records linked to `WOF_INSPECTOR`.
-3. Backfill Equipment Registration Number, WOF Required and Current WOF Expiry.
+3. Backfill Equipment Compliance Status, Registration Number, WOF Required and Current WOF Expiry.
 4. Review role privileges, publish security changes, and test with a non-administrator account.
 
 Passed-WOF completion automation remains deferred until its cross-record update can be made transactionally safe. Current creation already reports when the Job succeeds but the Inspection or schedule step fails.

@@ -9,6 +9,13 @@ import {
     type JobCardStatus,
 } from '../types/jobCardStatus.types'
 import { JOB_NUMBER_REQUIRED_EMAIL_MESSAGE, jobHasEmailableJobNumber } from '../services/jobEmailRules'
+import { jobHasActiveSubmissionLink } from '../services/jobSubmissionLinkApi'
+import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation'
+import {
+    formatTechnicianSubmissionHourMeter,
+    formatTechnicianSubmissionTimestamp,
+    hasTechnicianSubmission,
+} from '../types/technicianSubmission'
 
 type Props = {
     job: Job
@@ -36,6 +43,11 @@ const timestamp = new Intl.DateTimeFormat('en-NZ', {
 
 function formatTimestamp(value?: string | null) {
     return value ? timestamp.format(new Date(value)) : 'Not recorded'
+}
+
+function formatEntryDate(value: string) {
+    const [year, month, day] = value.slice(0, 10).split('-')
+    return year && month && day ? `${day}/${month}/${year}` : value
 }
 
 type TechnicianCardProps = {
@@ -123,6 +135,8 @@ export default function JobCardFields({
     const [showAssignmentForm, setShowAssignmentForm] = useState(false)
     const [mechanicId, setMechanicId] = useState('')
     const [error, setError] = useState('')
+    const [pendingEmail, setPendingEmail] = useState<'primary' | JobAssignment | null>(null)
+    const [previewPhotoId, setPreviewPhotoId] = useState('')
     const hasJobNumber = jobHasEmailableJobNumber(job)
 
     const changeStatus = async (nextStatus: JobCardStatus) => {
@@ -170,7 +184,7 @@ export default function JobCardFields({
         }
     }
 
-    const sendAssignment = async (assignment: JobAssignment) => {
+    const sendAssignment = async (assignment: JobAssignment, confirmedReplacement = false) => {
         if (!hasJobNumber) {
             setError(JOB_NUMBER_REQUIRED_EMAIL_MESSAGE)
             return
@@ -180,9 +194,14 @@ export default function JobCardFields({
             setError('This technician needs an email address before the job can be sent.')
             return
         }
+        if (!confirmedReplacement && jobHasActiveSubmissionLink(job)) {
+            setPendingEmail(assignment)
+            return
+        }
 
         setUpdatingAssignmentId(assignment.gr_jobassignmentid)
         setError('')
+        setPendingEmail(null)
         try {
             await onSendAssignment(job, assignment)
         } catch (sendError) {
@@ -194,7 +213,7 @@ export default function JobCardFields({
         }
     }
 
-    const sendPrimaryTechnician = async () => {
+    const sendPrimaryTechnician = async (confirmedReplacement = false) => {
         if (!hasJobNumber) {
             setError(JOB_NUMBER_REQUIRED_EMAIL_MESSAGE)
             return
@@ -204,9 +223,14 @@ export default function JobCardFields({
             setError('The primary technician needs an email address before the job can be sent.')
             return
         }
+        if (!confirmedReplacement && jobHasActiveSubmissionLink(job)) {
+            setPendingEmail('primary')
+            return
+        }
 
         setIsUpdating(true)
         setError('')
+        setPendingEmail(null)
         try {
             await onSendPrimary(job)
             setStatus(JOB_CARD_STATUSES.SENT)
@@ -235,7 +259,7 @@ export default function JobCardFields({
         }
     }
 
-    return (
+    return (<>
         <div className="job-card-layout">
             <section className="job-card-section overall-job-card-section">
                 <div className="job-card-heading">
@@ -349,9 +373,109 @@ export default function JobCardFields({
                         <div><strong>Closed</strong><small>{formatTimestamp(closedOn)}</small></div>
                     </div>
                 </div>
+
+                <section className="technician-submission-section" aria-labelledby="technician-submission-heading">
+                    <div className="job-card-heading">
+                        <div>
+                            <span>Original technician record</span>
+                            <h3 id="technician-submission-heading">Technician submission</h3>
+                        </div>
+                    </div>
+                    {hasTechnicianSubmission(job) ? (
+                        <div className="technician-submission-content">
+                            <div className="technician-submission-summary">
+                                <span className={`job-card-current status-${JOB_CARD_STATUSES.SUBMITTED}`}>Submitted</span>
+                                <time dateTime={job.gr_techniciansubmissionsubmittedon ?? undefined}>
+                                    {formatTechnicianSubmissionTimestamp(job.gr_techniciansubmissionsubmittedon)}
+                                </time>
+                            </div>
+                            <dl className="technician-submission-details">
+                                <div>
+                                    <dt>Hour meter</dt>
+                                    <dd>{formatTechnicianSubmissionHourMeter(job.gr_techniciansubmissionhourmeter)}</dd>
+                                </div>
+                                <div>
+                                    <dt>Job story</dt>
+                                    <dd className="technician-submission-story">{job.gr_techniciansubmissionstory?.trim() || 'Not supplied'}</dd>
+                                </div>
+                                <div>
+                                    <dt>Time &amp; Travel</dt>
+                                    <dd>{job.technicianSubmissionTimeEntries?.length ? (
+                                        <ul className="technician-submission-list">
+                                            {job.technicianSubmissionTimeEntries.map((entry) => (
+                                                <li key={entry.id}>
+                                                    <strong>{formatEntryDate(entry.date)}</strong>
+                                                    <span>{entry.hours.toLocaleString('en-NZ')} h · {entry.kilometres.toLocaleString('en-NZ')} km</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    ) : 'None recorded'}</dd>
+                                </div>
+                                <div>
+                                    <dt>Parts</dt>
+                                    <dd>{job.technicianSubmissionParts?.length ? (
+                                        <ul className="technician-submission-parts">
+                                            {job.technicianSubmissionParts.map((part) => <li key={part.id}>{part.part}</li>)}
+                                        </ul>
+                                    ) : 'None recorded'}</dd>
+                                </div>
+                                <div>
+                                    <dt>Further Work Required</dt>
+                                    <dd className="technician-submission-story">{job.gr_techniciansubmissionfurtherworkrequired
+                                        ? job.gr_techniciansubmissionfurtherworkdetails?.trim() || 'Details not supplied'
+                                        : 'No'}</dd>
+                                </div>
+                                <div>
+                                    <dt>Safety Issue</dt>
+                                    <dd className="technician-submission-story">{job.gr_techniciansubmissionsafetyissueidentified
+                                        ? job.gr_techniciansubmissionsafetyissuedetails?.trim() || 'Details not supplied'
+                                        : 'No'}</dd>
+                                </div>
+                                <div>
+                                    <dt>Photos</dt>
+                                    <dd>{job.jobPhotos?.length ? (
+                                        <div className="manager-job-photo-grid">
+                                            {job.jobPhotos.map((photo) => (
+                                                <button type="button" key={photo.id} onClick={() => setPreviewPhotoId(photo.id)}>
+                                                    <img src={photo.previewUrl} alt={photo.fileName} />
+                                                    <span>{photo.fileName}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    ) : 'None recorded'}</dd>
+                                </div>
+                            </dl>
+                        </div>
+                    ) : (
+                        <div className="technician-submission-empty">
+                            <strong>Not yet submitted</strong>
+                            <p>The technician has not submitted an hour meter or job story for this Job.</p>
+                        </div>
+                    )}
+                </section>
             </section>
 
             {error && <p className="job-card-error" role="alert">{error}</p>}
         </div>
-    )
+        {pendingEmail && <EditDrawerConfirmation
+            eyebrow="Replace secure link"
+            title="Generate a new technician submission link?"
+            message="Generating a new link will invalidate the previous technician submission link for this Job."
+            isBusy={isUpdating || Boolean(updatingAssignmentId)}
+            confirmLabel={isUpdating || updatingAssignmentId ? 'Generating...' : 'Generate and email'}
+            onCancel={() => setPendingEmail(null)}
+            onConfirm={() => {
+                if (pendingEmail === 'primary') void sendPrimaryTechnician(true)
+                else void sendAssignment(pendingEmail, true)
+            }}
+        />}
+        {previewPhotoId && (() => {
+            const photo = job.jobPhotos?.find((item) => item.id === previewPhotoId)
+            return photo ? <div className="job-photo-preview" role="dialog" aria-modal="true" aria-label={photo.fileName} onClick={() => setPreviewPhotoId('')}>
+                <button type="button" aria-label="Close photo preview" onClick={() => setPreviewPhotoId('')}>×</button>
+                <img src={photo.previewUrl} alt={photo.fileName} onClick={(event) => event.stopPropagation()} />
+                <span>{photo.fileName}</span>
+            </div> : null
+        })()}
+    </>)
 }

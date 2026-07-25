@@ -29,6 +29,7 @@ export function buildTechnicianEmailSubject(job: Job) {
 export function buildTechnicianEmailBody(
     job: Job,
     technicianName: string,
+    submissionUrl: string,
 ) {
     const equipment = job.gr_Equipment
     const equipmentDetails = [
@@ -59,6 +60,13 @@ export function buildTechnicianEmailBody(
         section('CUSTOMER / SITE', customerSiteDetails),
         section('SITE CONTACT', contactDetails),
         section('ORDER NUMBER', [collapseWhitespace(job.gr_ordernumber) || 'Not supplied']),
+        section('COMPLETE JOB CARD', [
+            'Use the secure link below to enter the current hour meter and Job story:',
+            '',
+            `Open Job Card: ${submissionUrl}`,
+            '',
+            'This link is unique to this Job and may only be submitted once.',
+        ]),
         'Thanks',
     ].filter(Boolean)
 

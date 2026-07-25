@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { Equipment } from '../types/equipment.types'
+import { SERVICE_TYPES } from '../../equipment/servicePlans/equipmentServicePlan.types'
+import { isServiceTypeEnabled } from '../../equipment/servicePlans/maintenanceConfiguration'
 import type { useJobEditor } from '../hooks/useJobEditor'
 import { deriveSiteNameFromAddress } from '../../shared/siteName'
 
@@ -74,7 +76,11 @@ export default function JobRelationshipFields({
     }
 
     const selectEquipment = (item: Equipment) => {
-        setDraft((current) => ({ ...current, equipmentId: item.gr_equipmentid }))
+        setDraft((current) => ({
+            ...current,
+            equipmentId: item.gr_equipmentid,
+            serviceType: isServiceTypeEnabled(item, current.serviceType) ? current.serviceType : SERVICE_TYPES.NONE,
+        }))
         setEquipmentSearch(equipmentLabel(item).identifier)
         setEquipmentSearchOpen(false)
         const site = item.gr_Site

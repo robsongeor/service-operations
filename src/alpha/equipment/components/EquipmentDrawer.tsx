@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import type { Equipment } from '../../jobs/types/equipment.types'
 import type { Customer } from '../../jobs/types/customer.types'
 import type { Job } from '../../jobs/types/job.types'
@@ -10,6 +10,7 @@ import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation'
 import EditDrawerFormDialog from '../../shared/drawer/EditDrawerFormDialog'
 import EditDrawerSection from '../../shared/drawer/EditDrawerSection'
 import EditDrawerShell from '../../shared/drawer/EditDrawerShell'
+import FormSwitch from '../../shared/form-switch/FormSwitch'
 import type { EquipmentServicePlan } from '../servicePlans/equipmentServicePlan.types'
 import { SERVICE_TYPES, SERVICE_TYPE_OPTIONS, type PlannedServiceType } from '../servicePlans/equipmentServicePlan.types'
 import type { MaintenanceHistoryInput } from '../servicePlans/servicePlanApi'
@@ -17,6 +18,12 @@ import { calculateHoursRemaining, calculateServiceStatus } from '../servicePlans
 import { normalizeEquipmentInput, toEquipmentDateOnlyValue, type EquipmentCreateInitialValues, type EquipmentUpdateInput } from '../types/equipmentManager.types'
 import { classifyEquipmentIdentifier, deriveSiteNameFromAddress, normalizeCustomerName, parseSpreadsheetRow, type IdentifierClassification, type SpreadsheetRow } from '../utils/equipmentCreateHelpers'
 import SearchableSelect, { type SearchableSelectOption } from '../../shared/searchable-select/SearchableSelect'
+import { formatMaintenanceInterval, MAINTENANCE_PROFILES, POWER_TYPES, resolveMaintenanceConfiguration, SERVICE_PROGRAMMES, type MaintenanceProfile, type PowerType, type ServiceProgramme } from '../servicePlans/maintenanceConfiguration'
+import {
+    EQUIPMENT_COMPLIANCE_STATUSES,
+    getEquipmentComplianceStatus,
+} from '../compliance/equipmentCompliance'
+import { currentNewZealandDateOnly } from '../../shared/dates/dateOnly'
 
 type SharedProps = {
     customers: Customer[]
@@ -50,6 +57,7 @@ type Props = CreateProps | EditProps
 type EquipmentDrawerTab = 'details' | 'maintenance' | 'history'
 type MaintenanceHistoryForm = {
     currentHourMeter: string
+    readingRecordedDate: string
     plans: Record<PlannedServiceType, { lastCompletedDate: string; lastCompletedHours: string }>
 }
 type CustomerMode = 'none' | 'existing' | 'new'
@@ -83,10 +91,29 @@ export default function EquipmentDrawer(props: Props) {
         serial: equipment?.gr_serial ?? initialValues?.serial ?? '',
         siteId: equipment?.gr_Site?.gr_siteid ?? initialValues?.siteId ?? '',
         registrationNumber: equipment?.gr_registrationnumber ?? initialValues?.registrationNumber ?? '',
-        wofRequired: equipment?.gr_wofrequired ?? initialValues?.wofRequired ?? false,
+        complianceStatus: equipment
+            ? getEquipmentComplianceStatus(equipment)
+            : initialValues?.complianceStatus
+                ?? (initialValues?.wofRequired || initialValues?.registrationNumber
+                    ? EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED
+                    : EQUIPMENT_COMPLIANCE_STATUSES.OFF_ROAD),
+        wofRequired: equipment ? getEquipmentComplianceStatus(equipment) === EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED : initialValues?.wofRequired ?? false,
         currentWofExpiry: toEquipmentDateOnlyValue(equipment?.gr_currentwofexpiry ?? initialValues?.currentWofExpiry),
         regoExpiry: toEquipmentDateOnlyValue(equipment?.gr_regoexpiry ?? initialValues?.regoExpiry),
+        powerType: equipment?.gr_powertype ?? initialValues?.powerType ?? POWER_TYPES.OTHER_UNKNOWN,
+        serviceProgramme: equipment?.gr_serviceprogramme ?? initialValues?.serviceProgramme ?? SERVICE_PROGRAMMES.ICE_STANDARD,
+        maintenanceProfile: equipment?.gr_maintenanceprofile
+            ?? initialValues?.maintenanceProfile
+            ?? initialSite?.gr_defaultmaintenanceprofile
+            ?? MAINTENANCE_PROFILES.STANDARD,
+        customAEnabled: equipment?.gr_customaenabled ?? initialValues?.customAEnabled ?? true,
+        customBEnabled: equipment?.gr_custombenabled ?? initialValues?.customBEnabled ?? false,
+        customCEnabled: equipment?.gr_customcenabled ?? initialValues?.customCEnabled ?? true,
+        customAIntervalDays: String(equipment?.gr_customaintervaldays ?? initialValues?.customAIntervalDays ?? ''),
+        customBIntervalDays: String(equipment?.gr_custombintervaldays ?? initialValues?.customBIntervalDays ?? ''),
+        customCIntervalDays: String(equipment?.gr_customcintervaldays ?? initialValues?.customCIntervalDays ?? ''),
     })
+    const maintenanceProfileTouched = useRef(false)
     const [customerId, setCustomerId] = useState(equipment?.gr_Site?.gr_Customer?.gr_customerid ?? initialCustomer?.gr_customerid ?? '')
     const [customerMode, setCustomerMode] = useState<CustomerMode>(equipment || initialCustomer ? 'existing' : 'none')
     const [siteMode, setSiteMode] = useState<SiteMode>(equipment?.gr_Site || initialSite ? 'existing' : 'none')
@@ -108,11 +135,13 @@ export default function EquipmentDrawer(props: Props) {
     const [sourceContextOpen, setSourceContextOpen] = useState(true)
     const [isReadingClipboard, setIsReadingClipboard] = useState(false)
     const manualPasteRef = useRef<HTMLTextAreaElement>(null)
-    const regoAutoEnabledRef = useRef(false)
+    const equipmentFormRef = useRef<HTMLFormElement>(null)
+    const programmeChangeConfirmedRef = useRef(false)
     const [activeTab, setActiveTab] = useState<EquipmentDrawerTab>('details')
     const [maintenanceDialogOpen, setMaintenanceDialogOpen] = useState(false)
     const [maintenanceForm, setMaintenanceForm] = useState<MaintenanceHistoryForm>(() => ({
         currentHourMeter: String(equipment?.gr_currenthourmeter ?? 0),
+        readingRecordedDate: equipment?.gr_currenthourmeterrecordeddate?.slice(0, 10) ?? currentNewZealandDateOnly(),
         plans: {
             [SERVICE_TYPES.A]: { lastCompletedDate: '', lastCompletedHours: '' },
             [SERVICE_TYPES.B]: { lastCompletedDate: '', lastCompletedHours: '' },
@@ -120,14 +149,10 @@ export default function EquipmentDrawer(props: Props) {
         },
     }))
     const [maintenanceError, setMaintenanceError] = useState('')
-
-    useEffect(() => {
-        if (!isCreate || regoAutoEnabledRef.current || !form.registrationNumber.trim() || form.wofRequired) return
-        regoAutoEnabledRef.current = true
-        setForm((current) => current.registrationNumber.trim() && !current.wofRequired
-            ? { ...current, wofRequired: true }
-            : current)
-    }, [form.registrationNumber, form.wofRequired, isCreate])
+    const [showDeregisterConfirm, setShowDeregisterConfirm] = useState(false)
+    const [complianceError, setComplianceError] = useState('')
+    const [isComplianceSaving, setIsComplianceSaving] = useState(false)
+    const [showProgrammeChangeConfirm, setShowProgrammeChangeConfirm] = useState(false)
 
     const history = equipment
         ? jobs
@@ -144,25 +169,20 @@ export default function EquipmentDrawer(props: Props) {
         secondary: site.gr_address || selectedCustomer?.gr_name,
         searchText: [site.gr_address, selectedCustomer?.gr_name].filter(Boolean).join(' '),
     }))
+    const customerOptions: SearchableSelectOption[] = [...customers]
+        .sort((a, b) => a.gr_name.localeCompare(b.gr_name))
+        .map((customer) => {
+            const siteCount = sites.filter((site) => site.gr_Customer?.gr_customerid === customer.gr_customerid).length
+            return {
+                value: customer.gr_customerid,
+                label: customer.gr_name,
+                secondary: `${siteCount} ${siteCount === 1 ? 'site' : 'sites'}`,
+            }
+        })
     const normalizedCustomerQuery = normalizeCustomerName(customerQuery)
     const exactCustomerMatch = normalizedCustomerQuery
         ? customers.find((customer) => normalizeCustomerName(customer.gr_name) === normalizedCustomerQuery)
         : undefined
-    const customerSuggestions = normalizedCustomerQuery.length >= 2 && customerMode !== 'existing'
-        ? customers
-            .filter((customer) => {
-                const normalizedCustomer = normalizeCustomerName(customer.gr_name)
-                return normalizedCustomer.includes(normalizedCustomerQuery)
-                    || normalizedCustomerQuery.includes(normalizedCustomer)
-            })
-            .sort((a, b) => {
-                const aExact = normalizeCustomerName(a.gr_name) === normalizedCustomerQuery
-                const bExact = normalizeCustomerName(b.gr_name) === normalizedCustomerQuery
-                if (aExact !== bExact) return aExact ? -1 : 1
-                return a.gr_name.localeCompare(b.gr_name)
-            })
-            .slice(0, 5)
-        : []
     const derivedSiteName = deriveSiteNameFromAddress(newSite.address)
     const effectiveNewSiteName = newSite.name.trim() || derivedSiteName
     const matchingSiteAddress = newSite.address.trim()
@@ -171,9 +191,10 @@ export default function EquipmentDrawer(props: Props) {
     const matchingEquipment = form.fleet.trim() || form.serial.trim()
         ? props.equipmentList.find((item) => [item.gr_fleet, item.gr_serial].some((value) => value && normalizeCustomerName(value) === normalizeCustomerName(form.fleet.trim() || form.serial.trim())))
         : undefined
-    const busy = isSaving || isDeleting
+    const busy = isSaving || isDeleting || isComplianceSaving
     const equipmentName = equipment ? [equipment.gr_fleet, equipment.gr_make, equipment.gr_model].filter(Boolean).join(' - ') || 'this equipment' : ''
     const plans = isCreate ? [] : props.servicePlans
+    const maintenanceConfiguration = resolveMaintenanceConfiguration(equipment)
     const tabs: Array<{ id: EquipmentDrawerTab; label: string; count?: number }> = [
         { id: 'details', label: 'Details' },
         { id: 'maintenance', label: 'Maintenance' },
@@ -184,6 +205,7 @@ export default function EquipmentDrawer(props: Props) {
         if (isCreate) return
         setMaintenanceForm({
             currentHourMeter: String(equipment?.gr_currenthourmeter ?? 0),
+            readingRecordedDate: equipment?.gr_currenthourmeterrecordeddate?.slice(0, 10) ?? currentNewZealandDateOnly(),
             plans: {
                 [SERVICE_TYPES.A]: {
                     lastCompletedDate: plans.find((plan) => plan.gr_servicetype === SERVICE_TYPES.A)?.gr_lastcompleteddate?.slice(0, 10) ?? '',
@@ -221,8 +243,16 @@ export default function EquipmentDrawer(props: Props) {
             setMaintenanceError('Last Known Hour Meter cannot be negative.')
             return
         }
+        if (!maintenanceForm.readingRecordedDate) {
+            setMaintenanceError('Reading recorded date is required.')
+            return
+        }
 
-        const today = new Date().toISOString().slice(0, 10)
+        const today = currentNewZealandDateOnly()
+        if (maintenanceForm.readingRecordedDate > today) {
+            setMaintenanceError('Reading recorded date cannot be in the future.')
+            return
+        }
         const nextPlans: MaintenanceHistoryInput['plans'] = []
         for (const serviceType of PLANNED_SERVICE_TYPES) {
             const values = maintenanceForm.plans[serviceType]
@@ -250,6 +280,7 @@ export default function EquipmentDrawer(props: Props) {
             setMaintenanceError('')
             await props.onSaveMaintenanceHistory(plans, {
                 currentHourMeter,
+                readingRecordedDate: maintenanceForm.readingRecordedDate,
                 plans: nextPlans,
             })
             setMaintenanceDialogOpen(false)
@@ -387,6 +418,15 @@ export default function EquipmentDrawer(props: Props) {
             setFormError('Enter either a fleet number or serial number.')
             return
         }
+        const wasRoadRegistered = equipment
+            ? getEquipmentComplianceStatus(equipment) === EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED
+            : false
+        if (trimmed.complianceStatus === EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED
+            && !trimmed.registrationNumber
+            && (isCreate || !wasRoadRegistered)) {
+            setFormError('On-road equipment requires a Registration Number.')
+            return
+        }
         if (isCreate && matchingEquipment) {
             setFormError(`Equipment ${matchingEquipment.gr_fleet || matchingEquipment.gr_serial || ''} already exists. Change the Fleet Number or Serial Number before creating Equipment.`)
             return
@@ -412,6 +452,11 @@ export default function EquipmentDrawer(props: Props) {
                 setRelatedError('Select a Site belonging to the selected Customer.')
                 return
             }
+        }
+        const originalProgramme = equipment?.gr_serviceprogramme ?? SERVICE_PROGRAMMES.ICE_STANDARD
+        if (!isCreate && history.length > 0 && trimmed.serviceProgramme !== originalProgramme && !programmeChangeConfirmedRef.current) {
+            setShowProgrammeChangeConfirm(true)
+            return
         }
         try {
             setFormError('')
@@ -463,7 +508,10 @@ export default function EquipmentDrawer(props: Props) {
                     throw error
                 }
             }
-            else await props.onSave(trimmed)
+            else {
+                await props.onSave(trimmed)
+                programmeChangeConfirmedRef.current = false
+            }
         } catch (error) {
             if (isCreate) {
                 setFormError(error instanceof Error ? error.message : 'Equipment could not be created. Please try again.')
@@ -485,6 +533,28 @@ export default function EquipmentDrawer(props: Props) {
         }
     }
 
+    const deregisterEquipment = async () => {
+        if (isCreate) return
+        try {
+            setIsComplianceSaving(true)
+            setComplianceError('')
+            const next = normalizeEquipmentInput({
+                ...form,
+                complianceStatus: EQUIPMENT_COMPLIANCE_STATUSES.OFF_ROAD,
+                registrationNumber: '',
+                regoExpiry: '',
+                currentWofExpiry: '',
+            })
+            await props.onSave(next)
+            setForm(next)
+            setShowDeregisterConfirm(false)
+        } catch (error) {
+            setComplianceError(error instanceof Error ? error.message : 'The equipment could not be de-registered.')
+        } finally {
+            setIsComplianceSaving(false)
+        }
+    }
+
     const close = () => {
         if (!busy) {
             setShowDeleteConfirm(false)
@@ -493,7 +563,7 @@ export default function EquipmentDrawer(props: Props) {
         }
     }
 
-    const updateField = (field: keyof EquipmentUpdateInput, value: string | boolean) => {
+    const updateField = (field: keyof EquipmentUpdateInput, value: string | boolean | number) => {
         setForm((current) => ({ ...current, [field]: value }))
         if (formError) setFormError('')
     }
@@ -504,7 +574,13 @@ export default function EquipmentDrawer(props: Props) {
         const compatibleSite = customerSites.find((site) => site.gr_siteid === form.siteId)
         const selectedSite = compatibleSite ?? (customerSites.length === 1 ? customerSites[0] : undefined)
         setCustomerId(customer.gr_customerid)
-        updateField('siteId', selectedSite?.gr_siteid ?? '')
+        setForm((current) => ({
+            ...current,
+            siteId: selectedSite?.gr_siteid ?? '',
+            ...(!maintenanceProfileTouched.current && selectedSite?.gr_defaultmaintenanceprofile != null
+                ? { maintenanceProfile: selectedSite.gr_defaultmaintenanceprofile }
+                : {}),
+        }))
         setCustomerMode('existing')
         setSiteMode(selectedSite ? 'existing' : retainSpreadsheetSite ? 'new' : 'none')
         setCustomerQuery(customer.gr_name)
@@ -531,7 +607,7 @@ export default function EquipmentDrawer(props: Props) {
                 <div className="equipment-footer-actions"><button type="button" disabled={busy} onClick={close}>Cancel</button><button className="primary" type="submit" form="equipment-edit-form" disabled={busy}>{isSaving ? (isCreate ? 'Creating...' : 'Saving...') : isCreate ? 'Create Equipment' : 'Save changes'}</button></div>
             </>}
         >
-            <form id="equipment-edit-form" onSubmit={(event) => void save(event)}>
+            <form ref={equipmentFormRef} id="equipment-edit-form" onSubmit={(event) => void save(event)}>
                 {isCreate && <div className="equipment-spreadsheet-tools">
                     <button type="button" className="equipment-spreadsheet-toggle" disabled={isReadingClipboard} onClick={() => void handleQuickPaste()}>{isReadingClipboard ? 'Reading clipboard...' : 'Paste from spreadsheet'}</button>
                     {spreadsheetOpen && <section className="equipment-spreadsheet-panel">
@@ -572,32 +648,49 @@ export default function EquipmentDrawer(props: Props) {
                             <label>Serial number<input value={form.serial} onChange={(event) => updateField('serial', event.target.value)} /></label>
                             <label>Make<input value={form.make} onChange={(event) => updateField('make', event.target.value)} /></label>
                             <label>Model<input value={form.model} onChange={(event) => updateField('model', event.target.value)} /></label>
-                            <label>Registration Number<input value={form.registrationNumber} onChange={(event) => updateField('registrationNumber', event.target.value)} /></label>
-                            <label>REGO Expiry<input type="date" value={form.regoExpiry} onChange={(event) => updateField('regoExpiry', event.target.value)} /></label>
-                            <label>Current WOF Expiry<input type="date" value={form.currentWofExpiry} onChange={(event) => updateField('currentWofExpiry', event.target.value)} /></label>
-                            <label className="equipment-wof-required"><input type="checkbox" checked={form.wofRequired} onChange={(event) => {
-                                regoAutoEnabledRef.current = true
-                                updateField('wofRequired', event.target.checked)
-                            }} /> WOF Required</label>
+                            {isCreate && <><label>Power Type<select value={form.powerType} onChange={(event) => {
+                                const powerType = Number(event.target.value) as PowerType
+                                setForm((current) => ({ ...current, powerType, serviceProgramme: current.serviceProgramme === SERVICE_PROGRAMMES.CUSTOM ? current.serviceProgramme : powerType === POWER_TYPES.ELECTRIC ? SERVICE_PROGRAMMES.ELECTRIC_STANDARD : SERVICE_PROGRAMMES.ICE_STANDARD }))
+                            }}><option value={POWER_TYPES.ICE}>ICE</option><option value={POWER_TYPES.ELECTRIC}>Electric</option><option value={POWER_TYPES.OTHER_UNKNOWN}>Other / Unknown</option></select></label><label>Service Programme<select value={form.serviceProgramme} onChange={(event) => updateField('serviceProgramme', Number(event.target.value) as ServiceProgramme)}><option value={SERVICE_PROGRAMMES.ICE_STANDARD}>ICE Standard — A/B/C</option><option value={SERVICE_PROGRAMMES.ELECTRIC_STANDARD}>Electric Standard — A/C</option><option value={SERVICE_PROGRAMMES.CUSTOM}>Custom</option></select></label><label>Maintenance Profile<select value={form.maintenanceProfile} onChange={(event) => { maintenanceProfileTouched.current = true; updateField('maintenanceProfile', Number(event.target.value) as MaintenanceProfile) }}><option value={MAINTENANCE_PROFILES.HIGH_USAGE}>High Usage</option><option value={MAINTENANCE_PROFILES.STANDARD}>Standard</option><option value={MAINTENANCE_PROFILES.LOW_USAGE}>Low Usage</option><option value={MAINTENANCE_PROFILES.CUSTOM}>Custom</option></select></label></>}
+                            {isCreate && form.serviceProgramme === SERVICE_PROGRAMMES.CUSTOM && <>{([['A', 'customAEnabled'], ['B', 'customBEnabled'], ['C', 'customCEnabled']] as const).map(([label, field]) => <label className="equipment-wof-required" key={field}><input type="checkbox" checked={form[field]} onChange={(event) => updateField(field, event.target.checked)} /> {label} Service enabled</label>)}</>}
+                            {isCreate && form.maintenanceProfile === MAINTENANCE_PROFILES.CUSTOM && <>{form.customAEnabled && <label>Custom A interval (days)<input type="number" min="1" value={form.customAIntervalDays} onChange={(event) => updateField('customAIntervalDays', event.target.value)} /></label>}{form.customBEnabled && form.serviceProgramme === SERVICE_PROGRAMMES.CUSTOM && <label>Custom B interval (days)<input type="number" min="1" value={form.customBIntervalDays} onChange={(event) => updateField('customBIntervalDays', event.target.value)} /></label>}{form.customCEnabled && <label>Custom C interval (days)<input type="number" min="1" value={form.customCIntervalDays} onChange={(event) => updateField('customCIntervalDays', event.target.value)} /></label>}</>}
                             {isCreate ? <div className="equipment-relationship-fields">
-                                <label>Customer<input value={customerQuery} placeholder="Search or enter customer..." onChange={(event) => {
-                                    const value = event.target.value
-                                    setCustomerQuery(value)
+                                <SearchableSelect
+                                    id="equipment-customer"
+                                    label="Customer"
+                                    value={customerMode === 'existing' ? customerId : ''}
+                                    options={customerOptions}
+                                    onChange={(nextCustomerId) => {
+                                        const customer = customers.find((candidate) => candidate.gr_customerid === nextCustomerId)
+                                        if (customer) {
+                                            selectExistingCustomer(customer)
+                                            return
+                                        }
+                                        setCustomerId('')
+                                        setCustomerMode('none')
+                                        setCustomerQuery('')
+                                        updateField('siteId', '')
+                                        setSiteMode('none')
+                                        setSiteQuery('')
+                                        setNewSite({ name: '', address: '' })
+                                        setRelatedError('')
+                                    }}
+                                    placeholder="Select a customer"
+                                    searchPlaceholder="Search customers"
+                                    emptyLabel="No matching customers"
+                                />
+                                {customerMode !== 'new' && <button className="equipment-autocomplete-create" type="button" onClick={() => {
+                                    if (customerMode === 'existing') setCustomerQuery('')
+                                    setCustomerMode('new')
                                     setCustomerId('')
                                     updateField('siteId', '')
-                                    setSiteMode('none')
+                                    setSiteMode('new')
                                     setSiteQuery('')
                                     setNewSite({ name: '', address: '' })
-                                    setCustomerMode(value.trim() ? 'none' : 'none')
                                     setRelatedError('')
-                                }} onKeyDown={(event) => {
-                                    if (event.key === 'Escape') { setCustomerQuery(selectedCustomer?.gr_name ?? ''); if (selectedCustomer) setCustomerMode('existing') }
-                                    if (event.key === 'Enter' && customerSuggestions.length === 1) { event.preventDefault(); selectExistingCustomer(customerSuggestions[0]) }
-                                }} /></label>
-                                {customerMode === 'existing' && <button className="equipment-autocomplete-clear" type="button" onClick={() => { setCustomerId(''); setCustomerMode('none'); setCustomerQuery(''); updateField('siteId', ''); setSiteMode('none'); setSiteQuery('') }}>Change Customer</button>}
-                                {exactCustomerMatch && customerMode !== 'existing' && <div className="equipment-customer-duplicate-warning" role="alert"><p>A Customer with this name already exists. Select the existing Customer.</p><button type="button" onClick={() => selectExistingCustomer(exactCustomerMatch)}>Select {exactCustomerMatch.gr_name}</button></div>}
-                                {customerSuggestions.length > 0 && customerMode !== 'existing' && <div className="equipment-autocomplete-menu">{customerSuggestions.map((customer) => <button key={customer.gr_customerid} type="button" onClick={() => selectExistingCustomer(customer)}><strong>{customer.gr_name}</strong><span>{sites.filter((site) => site.gr_Customer?.gr_customerid === customer.gr_customerid).length} sites</span></button>)}</div>}
-                                {customerQuery.trim() && !exactCustomerMatch && customerMode !== 'new' && <button className="equipment-autocomplete-create" type="button" onClick={() => { setCustomerMode('new'); setCustomerId(''); setSiteMode('new'); setSiteQuery(''); setNewSite({ name: '', address: '' }); setRelatedError('') }}>+ Create new customer &quot;{customerQuery.trim()}&quot;</button>}
+                                }}>+ Add new customer</button>}
+                                {customerMode === 'new' && <label>New Customer Name<input value={customerQuery} placeholder="Enter customer name" onChange={(event) => { setCustomerQuery(event.target.value); setRelatedError('') }} /></label>}
+                                {exactCustomerMatch && customerMode === 'new' && <div className="equipment-customer-duplicate-warning" role="alert"><p>A Customer with this name already exists. Select the existing Customer.</p><button type="button" onClick={() => selectExistingCustomer(exactCustomerMatch)}>Select {exactCustomerMatch.gr_name}</button></div>}
 
                                 {siteMode !== 'new' && <SearchableSelect
                                     id="equipment-site"
@@ -606,7 +699,13 @@ export default function EquipmentDrawer(props: Props) {
                                     options={siteOptions}
                                     onChange={(siteId) => {
                                         const site = visibleSites.find((candidate) => candidate.gr_siteid === siteId)
-                                        updateField('siteId', siteId)
+                                        setForm((current) => ({
+                                            ...current,
+                                            siteId,
+                                            ...(!maintenanceProfileTouched.current && site?.gr_defaultmaintenanceprofile != null
+                                                ? { maintenanceProfile: site.gr_defaultmaintenanceprofile }
+                                                : {}),
+                                        }))
                                         setSiteMode(site ? 'existing' : 'none')
                                         setSiteQuery(site?.gr_name ?? '')
                                         setRelatedError('')
@@ -624,21 +723,78 @@ export default function EquipmentDrawer(props: Props) {
                         </div>
                     </EditDrawerSection>}
 
+                    {(isCreate || activeTab === 'details') && <EditDrawerSection
+                        title="Road compliance"
+                        meta={<FormSwitch
+                            label="Road use"
+                            checked={form.complianceStatus === EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED}
+                            disabled={busy}
+                            onChange={(onRoad) => {
+                                if (onRoad) {
+                                    updateField('complianceStatus', EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED)
+                                    return
+                                }
+                                const wasRoadRegistered = !isCreate
+                                    && equipment
+                                    && getEquipmentComplianceStatus(equipment) === EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED
+                                if (wasRoadRegistered && form.complianceStatus === EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED) {
+                                    setComplianceError('')
+                                    setShowDeregisterConfirm(true)
+                                } else {
+                                    updateField('complianceStatus', EQUIPMENT_COMPLIANCE_STATUSES.OFF_ROAD)
+                                }
+                            }}
+                        />}
+                    >
+                        {form.complianceStatus === EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED && <div className="equipment-form-grid">
+                                <label>Registration Number<input value={form.registrationNumber} onChange={(event) => updateField('registrationNumber', event.target.value)} /></label>
+                                <label>REGO Expiry<input type="date" value={form.regoExpiry} onChange={(event) => updateField('regoExpiry', event.target.value)} /></label>
+                                <label>Current WOF Expiry<input type="date" value={form.currentWofExpiry} onChange={(event) => updateField('currentWofExpiry', event.target.value)} /></label>
+                        </div>}
+                    </EditDrawerSection>}
+
                     {isCreate && parsedSpreadsheetRow && <details className="equipment-spreadsheet-source" open={sourceContextOpen} onToggle={(event) => setSourceContextOpen(event.currentTarget.open)}><summary>Spreadsheet source</summary><dl><div><dt>Job Number</dt><dd>{parsedSpreadsheetRow.jobNumber || '-'}</dd></div><div><dt>Date</dt><dd>{parsedSpreadsheetRow.date || '-'}</dd></div><div><dt>Mechanic</dt><dd>{parsedSpreadsheetRow.mechanic || '-'}</dd></div><div><dt>Description</dt><dd>{parsedSpreadsheetRow.description || '-'}</dd></div><div><dt>Contact details</dt><dd>{parsedSpreadsheetRow.contactDetails || '-'}</dd></div><div><dt>Status</dt><dd>{parsedSpreadsheetRow.status || '-'}</dd></div><div><dt>Comments</dt><dd>{parsedSpreadsheetRow.comments || '-'}</dd></div><div><dt>Order number</dt><dd>{parsedSpreadsheetRow.orderNumber || '-'}</dd></div><div><dt>in so</dt><dd>{parsedSpreadsheetRow.inSo || '-'}</dd></div></dl></details>}
 
-                    {!isCreate && activeTab === 'maintenance' && <EditDrawerSection title="Maintenance" meta={<span>Last Known Hour Meter: {equipment?.gr_currenthourmeter ?? '-'}</span>}>
-                        <div className="equipment-maintenance-actions">
-                            <button type="button" onClick={openMaintenanceDialog} disabled={busy}>Edit Maintenance History</button>
+                    {!isCreate && activeTab === 'maintenance' && <EditDrawerSection title="Maintenance">
+                        <div className="equipment-form-grid">
+                            <label>Power Type<select value={form.powerType} onChange={(event) => {
+                                const powerType = Number(event.target.value) as PowerType
+                                setForm((current) => ({ ...current, powerType, serviceProgramme: current.serviceProgramme === SERVICE_PROGRAMMES.CUSTOM ? current.serviceProgramme : powerType === POWER_TYPES.ELECTRIC ? SERVICE_PROGRAMMES.ELECTRIC_STANDARD : SERVICE_PROGRAMMES.ICE_STANDARD }))
+                            }}><option value={POWER_TYPES.ICE}>ICE</option><option value={POWER_TYPES.ELECTRIC}>Electric</option><option value={POWER_TYPES.OTHER_UNKNOWN}>Other / Unknown</option></select></label>
+                            <label>Service Programme<select value={form.serviceProgramme} onChange={(event) => updateField('serviceProgramme', Number(event.target.value) as ServiceProgramme)}><option value={SERVICE_PROGRAMMES.ICE_STANDARD}>ICE Standard — A/B/C</option><option value={SERVICE_PROGRAMMES.ELECTRIC_STANDARD}>Electric Standard — A/C</option><option value={SERVICE_PROGRAMMES.CUSTOM}>Custom</option></select></label>
+                            <label>Maintenance Profile<select value={form.maintenanceProfile} onChange={(event) => updateField('maintenanceProfile', Number(event.target.value) as MaintenanceProfile)}><option value={MAINTENANCE_PROFILES.HIGH_USAGE}>High Usage</option><option value={MAINTENANCE_PROFILES.STANDARD}>Standard</option><option value={MAINTENANCE_PROFILES.LOW_USAGE}>Low Usage</option><option value={MAINTENANCE_PROFILES.CUSTOM}>Custom</option></select></label>
                         </div>
+                        {form.serviceProgramme === SERVICE_PROGRAMMES.CUSTOM && <div className="equipment-form-grid">{([['A', 'customAEnabled'], ['B', 'customBEnabled'], ['C', 'customCEnabled']] as const).map(([label, field]) => <label className="equipment-wof-required" key={field}><input type="checkbox" checked={form[field]} onChange={(event) => updateField(field, event.target.checked)} /> {label} Service enabled</label>)}</div>}
+                        {form.maintenanceProfile === MAINTENANCE_PROFILES.CUSTOM && <div className="equipment-form-grid">
+                            {form.customAEnabled && <label>Custom A interval (days)<input type="number" min="1" value={form.customAIntervalDays} onChange={(event) => updateField('customAIntervalDays', event.target.value)} /></label>}
+                            {form.customBEnabled && form.serviceProgramme === SERVICE_PROGRAMMES.CUSTOM && <label>Custom B interval (days)<input type="number" min="1" value={form.customBIntervalDays} onChange={(event) => updateField('customBIntervalDays', event.target.value)} /></label>}
+                            {form.customCEnabled && <label>Custom C interval (days)<input type="number" min="1" value={form.customCIntervalDays} onChange={(event) => updateField('customCIntervalDays', event.target.value)} /></label>}
+                        </div>}
                         <div className="equipment-maintenance-plans">
-                            {PLANNED_SERVICE_TYPES.map((serviceType) => {
+                            <article className="equipment-hour-meter-card">
+                                <div className="equipment-hour-meter-heading">
+                                    <strong>Last Known Hour Meter</strong>
+                                    <button type="button" onClick={openMaintenanceDialog} disabled={busy}>Edit history</button>
+                                </div>
+                                {equipment?.gr_currenthourmeter == null
+                                    ? <p className="equipment-hour-meter-empty">No hour-meter reading recorded</p>
+                                    : <div className="equipment-hour-meter-reading">
+                                        <strong>{equipment.gr_currenthourmeter.toLocaleString('en-NZ')} <small>h</small></strong>
+                                        <span>{equipment.gr_currenthourmeterrecordeddate
+                                            ? `Recorded ${formatDate(equipment.gr_currenthourmeterrecordeddate)}`
+                                            : 'Recorded date unavailable'}</span>
+                                    </div>}
+                            </article>
+                            {maintenanceConfiguration.activeServiceTypes.map((serviceType) => {
                                 const plan = plans.find((item) => item.gr_servicetype === serviceType)
                                 const remaining = plan ? calculateHoursRemaining(equipment?.gr_currenthourmeter ?? 0, plan.gr_nextduehours) : null
-                                const status = plan ? calculateServiceStatus(equipment?.gr_currenthourmeter ?? 0, plan.gr_nextduehours) : null
+                                const status = plan ? calculateServiceStatus(equipment?.gr_currenthourmeter ?? 0, plan.gr_nextduehours, plan.gr_nextduedate) : null
                                 return <article key={serviceType}>
                                     <div><strong>{SERVICE_TYPE_OPTIONS.find((option) => option.value === serviceType)?.label}</strong><span className={`equipment-maintenance-status status-${status?.toLowerCase().replace(' ', '-') ?? 'unknown'}`}>{status ?? 'Not Configured'}</span></div>
                                     <dl>
                                         <div><dt>Due Hour</dt><dd>{plan?.gr_nextduehours ?? '-'}</dd></div>
+                                        <div><dt>Interval</dt><dd>{maintenanceConfiguration.serviceLevels[serviceType]?.hours} hours or {formatMaintenanceInterval(maintenanceConfiguration.serviceLevels[serviceType]!.timeInterval)}</dd></div>
+                                        <div><dt>Due Date</dt><dd>{plan?.gr_nextduedate ? formatDate(plan.gr_nextduedate) : '-'}</dd></div>
                                         <div><dt>Hours Remaining</dt><dd>{remaining == null ? '-' : remaining < 0 ? `${Math.abs(remaining)} overdue` : remaining}</dd></div>
                                         <div><dt>Last Completed Date</dt><dd>{plan?.gr_lastcompleteddate ? formatDate(plan.gr_lastcompleteddate) : '-'}</dd></div>
                                         <div><dt>Last Completed Hours</dt><dd>{plan?.gr_lastcompletedhours ?? '-'}</dd></div>
@@ -672,6 +828,31 @@ export default function EquipmentDrawer(props: Props) {
             onConfirm={() => void deleteRecord()}
         />}
 
+        {!isCreate && showProgrammeChangeConfirm && <EditDrawerConfirmation
+            eyebrow="Service programme"
+            title="Change this Equipment's service programme?"
+            message="Current plan applicability will be recalculated. Inactive service-plan history and all historical Service Jobs will be retained; no completion will be invented."
+            isBusy={isSaving}
+            confirmLabel="Change programme"
+            onCancel={() => setShowProgrammeChangeConfirm(false)}
+            onConfirm={() => {
+                programmeChangeConfirmedRef.current = true
+                setShowProgrammeChangeConfirm(false)
+                window.setTimeout(() => equipmentFormRef.current?.requestSubmit(), 0)
+            }}
+        />}
+
+        {!isCreate && showDeregisterConfirm && <EditDrawerConfirmation
+            eyebrow="Road compliance"
+            title="De-register this equipment?"
+            message={<>Its registration number, REGO expiry, and WOF expiry will be cleared, and it will be removed from road-compliance monitoring. Jobs and WOF inspection history will be retained.</>}
+            error={complianceError}
+            isBusy={isComplianceSaving}
+            confirmLabel={isComplianceSaving ? 'Saving...' : 'De-register equipment'}
+            onCancel={() => { setShowDeregisterConfirm(false); setComplianceError('') }}
+            onConfirm={() => void deregisterEquipment()}
+        />}
+
         {!isCreate && maintenanceDialogOpen && <EditDrawerFormDialog
             eyebrow="Maintenance"
             title="Edit Maintenance History"
@@ -682,7 +863,11 @@ export default function EquipmentDrawer(props: Props) {
             onSubmit={() => void saveMaintenanceHistory()}
         >
             <p className="edit-form-dialog-context">Update the last known meter reading and historical service completions. Next due hours are calculated automatically.</p>
-            <label>Last Known Hour Meter<input type="number" min="0" value={maintenanceForm.currentHourMeter} onChange={(event) => { setMaintenanceForm((current) => ({ ...current, currentHourMeter: event.target.value })); setMaintenanceError('') }} /></label>
+            <fieldset className="equipment-maintenance-history-group hour-meter">
+                <legend>Last Known Hour Meter</legend>
+                <label>Hour Meter<input type="number" min="0" value={maintenanceForm.currentHourMeter} onChange={(event) => { setMaintenanceForm((current) => ({ ...current, currentHourMeter: event.target.value })); setMaintenanceError('') }} /></label>
+                <label>Reading recorded date<input type="date" required value={maintenanceForm.readingRecordedDate} onChange={(event) => { setMaintenanceForm((current) => ({ ...current, readingRecordedDate: event.target.value })); setMaintenanceError('') }} /></label>
+            </fieldset>
             {PLANNED_SERVICE_TYPES.map((serviceType) => {
                 const label = SERVICE_TYPE_OPTIONS.find((option) => option.value === serviceType)?.label
                 return <fieldset className="equipment-maintenance-history-group" key={serviceType}>

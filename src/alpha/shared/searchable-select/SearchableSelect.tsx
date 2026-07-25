@@ -20,6 +20,9 @@ type Props = {
     disabled?: boolean
     required?: boolean
     error?: string
+    multiple?: boolean
+    values?: string[]
+    onValuesChange?: (values: string[]) => void
 }
 
 const normalize = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase()
@@ -36,6 +39,9 @@ export default function SearchableSelect({
     disabled = false,
     required = false,
     error = '',
+    multiple = false,
+    values = [],
+    onValuesChange,
 }: Props) {
     const rootRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLInputElement>(null)
@@ -43,11 +49,15 @@ export default function SearchableSelect({
     const [query, setQuery] = useState('')
     const [activeIndex, setActiveIndex] = useState(0)
     const selected = options.find((option) => option.value === value)
+    const selectedValueSet = useMemo(() => new Set(values), [values])
     const results = useMemo(() => {
         const search = normalize(query)
-        return options.filter((option) => !search || normalize(`${option.label} ${option.secondary ?? ''} ${option.searchText ?? ''}`).includes(search))
-    }, [options, query])
-    const optionCount = results.length + 1
+        return options
+            .filter((option) => !multiple || !selectedValueSet.has(option.value))
+            .filter((option) => !search || normalize(`${option.label} ${option.secondary ?? ''} ${option.searchText ?? ''}`).includes(search))
+    }, [multiple, options, query, selectedValueSet])
+    const optionOffset = multiple ? 0 : 1
+    const optionCount = results.length + optionOffset
     const listboxId = `${id}-results`
     const errorId = `${id}-error`
 
@@ -62,6 +72,12 @@ export default function SearchableSelect({
     }, [open])
 
     const choose = (nextValue: string) => {
+        if (multiple) {
+            if (nextValue && !selectedValueSet.has(nextValue)) onValuesChange?.([...values, nextValue])
+            setQuery('')
+            setActiveIndex(0)
+            return
+        }
         onChange(nextValue)
         setOpen(false)
         setQuery('')
@@ -69,53 +85,64 @@ export default function SearchableSelect({
     }
 
     const chooseActive = () => {
-        if (activeIndex === 0) choose('')
-        else if (results[activeIndex - 1]) choose(results[activeIndex - 1].value)
+        if (!multiple && activeIndex === 0) choose('')
+        else if (results[activeIndex - optionOffset]) choose(results[activeIndex - optionOffset].value)
     }
 
     return (
-        <div className={error ? 'searchable-select error' : 'searchable-select'} ref={rootRef}>
+        <div
+            className={error ? 'searchable-select error' : 'searchable-select'}
+            ref={rootRef}
+            onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false)
+            }}
+            onKeyDownCapture={(event) => {
+                if (open && event.key === 'Tab') setOpen(false)
+            }}
+        >
             <label id={`${id}-label`}>{label}{required ? ' *' : ''}</label>
-            <button
+            {open ? <input
+                id={id}
+                ref={inputRef}
+                className="searchable-select-input"
+                type="search"
+                role="combobox"
+                aria-labelledby={`${id}-label`}
+                aria-expanded="true"
+                aria-controls={listboxId}
+                aria-activedescendant={`${listboxId}-${activeIndex}`}
+                aria-describedby={error ? errorId : undefined}
+                autoComplete="off"
+                placeholder={searchPlaceholder}
+                value={query}
+                onChange={(event) => { setQuery(event.target.value); setActiveIndex(0) }}
+                onKeyDown={(event) => {
+                    if (event.key === 'ArrowDown') { event.preventDefault(); setActiveIndex((current) => Math.min(current + 1, Math.max(optionCount - 1, 0))) }
+                    if (event.key === 'ArrowUp') { event.preventDefault(); setActiveIndex((current) => Math.max(current - 1, 0)) }
+                    if (event.key === 'Enter') { event.preventDefault(); chooseActive() }
+                    if (event.key === 'Escape') { setOpen(false); setQuery('') }
+                }}
+            /> : <button
                 id={id}
                 type="button"
                 className="searchable-select-trigger"
                 aria-labelledby={`${id}-label ${id}`}
                 aria-haspopup="listbox"
-                aria-expanded={open}
+                aria-expanded="false"
                 aria-describedby={error ? errorId : undefined}
                 disabled={disabled}
-                onClick={() => { setOpen((current) => !current); setQuery(''); setActiveIndex(0) }}
+                onClick={() => { setOpen(true); setQuery(''); setActiveIndex(0) }}
             >
-                <span>{selected?.label ?? placeholder}</span><span aria-hidden="true">⌄</span>
-            </button>
+                <span>{multiple && values.length > 0 ? `${values.length} selected` : selected?.label ?? placeholder}</span><span aria-hidden="true">⌄</span>
+            </button>}
             {open && (
                 <div className="searchable-select-menu">
-                    <input
-                        ref={inputRef}
-                        type="search"
-                        role="combobox"
-                        aria-label={`Search ${label}`}
-                        aria-expanded="true"
-                        aria-controls={listboxId}
-                        aria-activedescendant={`${listboxId}-${activeIndex}`}
-                        autoComplete="off"
-                        placeholder={searchPlaceholder}
-                        value={query}
-                        onChange={(event) => { setQuery(event.target.value); setActiveIndex(0) }}
-                        onKeyDown={(event) => {
-                            if (event.key === 'ArrowDown') { event.preventDefault(); setActiveIndex((current) => Math.min(current + 1, optionCount - 1)) }
-                            if (event.key === 'ArrowUp') { event.preventDefault(); setActiveIndex((current) => Math.max(current - 1, 0)) }
-                            if (event.key === 'Enter') { event.preventDefault(); chooseActive() }
-                            if (event.key === 'Escape') setOpen(false)
-                        }}
-                    />
-                    <div id={listboxId} className="searchable-select-results" role="listbox" aria-labelledby={`${id}-label`}>
-                        <button id={`${listboxId}-0`} type="button" role="option" aria-selected={activeIndex === 0} className={activeIndex === 0 ? 'active' : ''} onMouseEnter={() => setActiveIndex(0)} onClick={() => choose('')}>
+                    <div id={listboxId} className="searchable-select-results" role="listbox" aria-multiselectable={multiple || undefined} aria-labelledby={`${id}-label`}>
+                        {!multiple && <button id={`${listboxId}-0`} type="button" role="option" aria-selected={activeIndex === 0} className={activeIndex === 0 ? 'active' : ''} onMouseEnter={() => setActiveIndex(0)} onClick={() => choose('')}>
                             <strong>{placeholder}</strong><small>Clear selection</small>
-                        </button>
+                        </button>}
                         {results.map((option, index) => (
-                            <button id={`${listboxId}-${index + 1}`} key={option.value} type="button" role="option" aria-selected={activeIndex === index + 1} className={activeIndex === index + 1 ? 'active' : ''} onMouseEnter={() => setActiveIndex(index + 1)} onClick={() => choose(option.value)}>
+                            <button id={`${listboxId}-${index + optionOffset}`} key={option.value} type="button" role="option" aria-selected={activeIndex === index + optionOffset} className={activeIndex === index + optionOffset ? 'active' : ''} onMouseEnter={() => setActiveIndex(index + optionOffset)} onClick={() => choose(option.value)}>
                                 <strong>{option.label}</strong>{option.secondary && <small>{option.secondary}</small>}
                             </button>
                         ))}

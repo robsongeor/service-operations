@@ -16,6 +16,34 @@ export type Job = {
     gr_jobcardsenton?: string | null
     gr_jobcardsubmittedon?: string | null
     gr_jobcardclosedon?: string | null
+    gr_techniciansubmissiontokenhash?: string | null
+    gr_techniciansubmissiontokencreatedon?: string | null
+    gr_techniciansubmissiontokenexpireson?: string | null
+    gr_techniciansubmissiontokenused?: boolean | null
+    gr_techniciansubmissionsubmittedon?: string | null
+    gr_techniciansubmissionhourmeter?: number | null
+    gr_techniciansubmissionstory?: string | null
+    gr_techniciansubmissionfurtherworkrequired?: boolean | null
+    gr_techniciansubmissionfurtherworkdetails?: string | null
+    gr_techniciansubmissionsafetyissueidentified?: boolean | null
+    gr_techniciansubmissionsafetyissuedetails?: string | null
+    technicianSubmissionTimeEntries?: {
+        id: string
+        date: string
+        hours: number
+        kilometres: number
+    }[]
+    technicianSubmissionParts?: {
+        id: string
+        part: string
+    }[]
+    jobPhotos?: {
+        id: string
+        fileName: string
+        uploadedOn: string
+        displayOrder: number
+        previewUrl: string
+    }[]
     gr_hourmeter?: number | null
     gr_completeddate?: string | null
     gr_servicetype?: ServiceType | null

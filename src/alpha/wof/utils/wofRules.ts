@@ -1,8 +1,39 @@
-import { WOF_RESULTS, type QualificationStatus, type QualificationType, type TechnicianQualification, type TechnicianQualificationInput, type WofInspection } from '../types/wof.types'
+import type { JobScheduleOption } from '../../jobs/types/jobSchedule.types'
+import { JOB_STATUSES } from '../../jobs/types/jobStatus.types.ts'
+import type { Equipment } from '../../jobs/types/equipment.types'
+import { WOF_RESULTS, type QualificationStatus, type QualificationType, type TechnicianQualification, type TechnicianQualificationInput, type WofInspection, type WofWorkflowStatus } from '../types/wof.types.ts'
 
 export const WOF_DUE_SOON_DAYS = 30
 export const WOF_QUALIFICATION_CODE = 'WOF_CERTIFIED'
 export const WOF_PROVIDER_TYPE_CODE = 'WOF_INSPECTOR'
+
+export function normalizeWofDateOnly(value?: string | null) {
+    if (!value) return ''
+    const iso = /^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/.exec(value.trim())
+    if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`
+    const display = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value.trim())
+    return display ? `${display[3]}-${display[2]}-${display[1]}` : ''
+}
+
+export function wofDatesMatch(left?: string | null, right?: string | null) {
+    const leftDate = normalizeWofDateOnly(left)
+    return Boolean(leftDate) && leftDate === normalizeWofDateOnly(right)
+}
+
+export async function verifyWofExpiryWithRetry(
+    readValues: () => Promise<Array<string | null | undefined>>,
+    expected: string,
+    attempts = 3,
+    wait: (milliseconds: number) => Promise<void> = (milliseconds) =>
+        new Promise((resolve) => setTimeout(resolve, milliseconds)),
+) {
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+        const values = await readValues()
+        if (values.length > 0 && values.every((value) => wofDatesMatch(value, expected))) return
+        if (attempt < attempts - 1) await wait(100)
+    }
+    throw new Error('Dataverse did not confirm the new WOF expiry. The Job was not completed.')
+}
 
 export function getWofDeletionBlockReason(inspection: WofInspection): string | null {
     if (!inspection.gr_wofinspectionid) {
@@ -32,9 +63,57 @@ export function getWofDueStatus(required?: boolean | null, expiry?: string | nul
     return expiry <= localDateOnly(threshold) ? 'due-soon' as const : 'current' as const
 }
 
+export function getLatestWofInspection(inspections: WofInspection[], equipmentId: string) {
+    return inspections
+        .filter((inspection) => inspection.equipmentId?.toLowerCase() === equipmentId.toLowerCase())
+        .sort((left, right) => (right.createdon || right.gr_inspectiondate || '').localeCompare(left.createdon || left.gr_inspectiondate || ''))[0]
+}
+
+export function getWofWorkflowStatus(
+    equipment: Equipment,
+    inspection: WofInspection | undefined,
+    schedule: JobScheduleOption | undefined,
+    dueSoonDays = WOF_DUE_SOON_DAYS,
+): WofWorkflowStatus {
+    if (!inspection?.gr_Job) return getWofDueStatus(true, equipment.gr_currentwofexpiry, undefined, dueSoonDays) as WofWorkflowStatus
+    if (inspection.gr_wofresult === WOF_RESULTS.CANCELLED) {
+        return getWofDueStatus(true, equipment.gr_currentwofexpiry, undefined, dueSoonDays) as WofWorkflowStatus
+    }
+
+    const administrationComplete = inspection.gr_wofresult === WOF_RESULTS.PASSED
+        && Boolean(inspection.gr_inspectiondate)
+        && wofDatesMatch(equipment.gr_currentwofexpiry, inspection.gr_newwofexpiry)
+    if (administrationComplete) {
+        return getWofDueStatus(true, normalizeWofDateOnly(equipment.gr_currentwofexpiry), undefined, dueSoonDays) as WofWorkflowStatus
+    }
+    if (inspection.gr_Job.gr_status === JOB_STATUSES.COMPLETE) {
+        return inspection.gr_wofresult === WOF_RESULTS.PLANNED ? 'inspection-complete' : 'ready-to-issue'
+    }
+    if (inspection.gr_wofresult != null && inspection.gr_wofresult !== WOF_RESULTS.PLANNED) return 'ready-to-issue'
+    if (schedule?.gr_scheduledate) return 'scheduled'
+    return 'job-created'
+}
+
+export const WOF_WORKFLOW_LABELS: Record<WofWorkflowStatus, string> = {
+    current: 'Current',
+    'due-soon': 'Due Soon',
+    expired: 'Expired',
+    unknown: 'Expiry Not Recorded',
+    'job-created': 'Job Created',
+    scheduled: 'Scheduled',
+    'inspection-complete': 'Inspection Complete',
+    'ready-to-issue': 'Ready to Issue WOF',
+    completed: 'Completed',
+}
+
+export function wofNeedsAdministration(status: WofWorkflowStatus) {
+    return status === 'inspection-complete' || status === 'ready-to-issue'
+}
+
 export function formatWofDateOnly(value?: string | null) {
-    if (!value || !/^\d{4}-\d{2}-\d{2}/.test(value)) return ''
-    const [year, month, day] = value.slice(0, 10).split('-')
+    const normalized = normalizeWofDateOnly(value)
+    if (!normalized) return ''
+    const [year, month, day] = normalized.split('-')
     return `${day}/${month}/${year}`
 }
 

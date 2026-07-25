@@ -1,0 +1,6 @@
+.drawer-tabs { position: sticky; z-index: 3; top: 0; display: flex; overflow-x: auto; gap: 4px; margin: 0 -24px 14px; padding: 0 24px; border-bottom: 1px solid #dfe5e1; background: rgba(253,253,251,.97); backdrop-filter: blur(8px); }
+.drawer-tabs button { display: inline-flex; min-width: max-content; min-height: 42px; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #707a74; font: inherit; font-size: .7rem; font-weight: 750; cursor: pointer; }
+.drawer-tabs button:hover { color: #263a32; }
+.drawer-tabs button.active { border-bottom-color: #176f66; color: #155f56; }
+.drawer-tabs button:focus-visible { outline: 2px solid #315b4d; outline-offset: -4px; }
+.drawer-tab-error { display: grid; width: 17px; height: 17px; place-items: center; border-radius: 999px; background: #a53b3b; color: #fff; font-size: .6rem; }

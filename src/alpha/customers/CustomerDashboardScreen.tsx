@@ -4,8 +4,13 @@ import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
 import { getSignedInUserInfo } from '../../auth/signedInUser'
 import { useEquipmentManager } from '../equipment/hooks/useEquipmentManager'
 import EquipmentDrawer from '../equipment/components/EquipmentDrawer'
+import EquipmentDataQualityIndicator from '../equipment/components/EquipmentDataQualityIndicator'
+import { compareEquipmentDataQuality } from '../equipment/dataQuality/equipmentDataQuality'
 import BulkEquipmentImportDrawer from '../equipment/components/BulkEquipmentImportDrawer'
+import EquipmentTransferDrawer from './EquipmentTransferDrawer'
+import SiteMaintenanceSettingsDrawer from './SiteMaintenanceSettingsDrawer'
 import { canUseBulkEquipmentImport } from '../equipment/utils/bulkEquipmentImport'
+import { isRoadRegistered } from '../equipment/compliance/equipmentCompliance'
 import { useJobs } from '../jobs/hooks/useJobs'
 import JobCreateDrawer, { type JobCreateInitialValues } from '../jobs/components/JobCreateDrawer'
 import JobEditDrawer from '../jobs/components/JobEditDrawer'
@@ -18,20 +23,23 @@ import type { Customer } from '../jobs/types/customer.types'
 import type { Site } from '../jobs/types/site.types'
 import { calculateHoursRemaining, calculatePrimaryNextService, calculateServiceStatus } from '../equipment/servicePlans/servicePlanStatus'
 import { SERVICE_TYPE_OPTIONS } from '../equipment/servicePlans/equipmentServicePlan.types'
+import { MAINTENANCE_PROFILES } from '../equipment/servicePlans/maintenanceConfiguration'
 import CustomerDrawer, { type CustomerDraft, type CustomerDrawerTab } from './CustomerDrawer'
 import { customerContactsFromSiteLinks, type CustomerContact } from './customerContact.types'
 import CustomerOpenJobsTab from './CustomerOpenJobsTab'
 import CustomerQuotesTab from './CustomerQuotesTab'
 import SearchableSelect from '../shared/searchable-select/SearchableSelect'
-import { formatWofDateOnly } from '../wof/utils/wofRules'
+import MetricStrip, { type MetricStripItem } from '../shared/metric-strip/MetricStrip'
+import PageHeader from '../shared/page-header/PageHeader'
+import { formatWofDateOnly, getWofDueStatus } from '../wof/utils/wofRules'
 import './CustomerDashboardScreen.css'
 
 const dateFormatter = new Intl.DateTimeFormat('en-NZ', { dateStyle: 'medium' })
+const CUSTOMER_DASHBOARD_AUTO_EXPAND_SITE_LIMIT = 2
 const CUSTOMER_DASHBOARD_AUTO_EXPAND_EQUIPMENT_LIMIT = 10
-
-function text(value?: string | null) {
-    return value?.trim().toLowerCase() ?? ''
-}
+type SiteEquipmentSortKey = 'fleet' | 'wofExpiry' | 'dataStatus'
+type SiteEquipmentSort = { key: SiteEquipmentSortKey; direction: 'asc' | 'desc' }
+const DEFAULT_SITE_EQUIPMENT_SORT: SiteEquipmentSort = { key: 'fleet', direction: 'asc' }
 
 function display(value?: string | number | null) {
     return value == null || value === '' ? '-' : value
@@ -55,6 +63,8 @@ export default function CustomerDashboardScreen() {
         reload,
         clearSaveError,
         updateSites,
+        updateSiteMaintenanceSettings,
+        transferEquipment,
         updateEquipment,
         createEquipment: createDashboardEquipment,
         createCustomer: createDashboardCustomer,
@@ -95,6 +105,7 @@ export default function CustomerDashboardScreen() {
         isCompletingJob,
         completionError,
         completeServiceJob,
+        completeWofJob,
         cancelJobCompletion,
         isLoading: isJobsLoading,
         loadError: jobsLoadError,
@@ -105,12 +116,18 @@ export default function CustomerDashboardScreen() {
     const [creatingEquipmentInitialValues, setCreatingEquipmentInitialValues] = useState<EquipmentCreateInitialValues | null>(null)
     const [bulkImportSite, setBulkImportSite] = useState<Site | null>(null)
     const [bulkImportSuccess, setBulkImportSuccess] = useState('')
+    const [transferSite, setTransferSite] = useState<Site | null>(null)
+    const [maintenanceSettingsSite, setMaintenanceSettingsSite] = useState<Site | null>(null)
+    const [transferSuccess, setTransferSuccess] = useState('')
     const [expandedSitesByCustomer, setExpandedSitesByCustomer] = useState<Record<string, Record<string, boolean>>>({})
+    const [equipmentSortBySite, setEquipmentSortBySite] = useState<Record<string, SiteEquipmentSort>>({})
     const [creatingJobInitialValues, setCreatingJobInitialValues] = useState<JobCreateInitialValues | null>(null)
     const [editingJob, setEditingJob] = useState<Job | null>(null)
     const [activeTab, setActiveTab] = useState<'sites' | 'open-jobs' | 'quotes' | 'contacts' | 'info'>('sites')
     const [customerDrawerMode, setCustomerDrawerMode] = useState<'create' | 'edit' | null>(null)
     const [customerDrawerInitialTab, setCustomerDrawerInitialTab] = useState<CustomerDrawerTab>('info')
+    const [editingSiteId, setEditingSiteId] = useState('')
+    const [siteSuccess, setSiteSuccess] = useState('')
     const [localCustomers, setLocalCustomers] = useState<Customer[]>([])
     const [customerDrafts, setCustomerDrafts] = useState<Record<string, CustomerDraft>>({})
 
@@ -122,10 +139,11 @@ export default function CustomerDashboardScreen() {
     const allSites = useMemo(() => {
         const customersWithDrafts = new Set(Object.keys(customerDrafts))
         const unchangedSites = sites.filter((site) => !site.gr_Customer?.gr_customerid || !customersWithDrafts.has(site.gr_Customer.gr_customerid))
-        const draftSites = Object.entries(customerDrafts).flatMap(([customerId, draft]) => draft.sites.map((site) => ({
+        const draftSites: Site[] = Object.entries(customerDrafts).flatMap(([customerId, draft]) => draft.sites.map((site) => ({
             gr_siteid: site.id,
             gr_name: site.name,
             gr_address: site.address,
+            gr_defaultmaintenanceprofile: null,
             gr_Customer: { gr_customerid: customerId, gr_name: draft.name },
         })))
         return [...unchangedSites, ...draftSites]
@@ -157,11 +175,8 @@ export default function CustomerDashboardScreen() {
     const customerEquipment = equipment.filter((item) =>
         item.gr_Site?.gr_Customer?.gr_customerid === selectedCustomerId,
     )
-    const sitesExpandByDefault = customerSites.length === 1
-        || customerEquipment.length <= CUSTOMER_DASHBOARD_AUTO_EXPAND_EQUIPMENT_LIMIT
     const selectedCustomerSiteState = expandedSitesByCustomer[selectedCustomerId] ?? {}
-    const siteIsExpanded = (siteId: string, equipmentCount: number) =>
-        selectedCustomerSiteState[siteId] ?? (equipmentCount === 0 || sitesExpandByDefault)
+    const siteIsExpanded = (siteId: string) => selectedCustomerSiteState[siteId] ?? false
     const setSiteExpanded = (siteId: string, expanded: boolean) => {
         if (!selectedCustomerId) return
         setExpandedSitesByCustomer((current) => ({
@@ -184,15 +199,14 @@ export default function CustomerDashboardScreen() {
         setExpandedSitesByCustomer((current) => {
             if (current[customerId]) return current
             const nextSites = allSites.filter((site) => site.gr_Customer?.gr_customerid === customerId)
-            const nextEquipment = equipment.filter((item) => item.gr_Site?.gr_Customer?.gr_customerid === customerId)
-            const expandByDefault = nextSites.length === 1
-                || nextEquipment.length <= CUSTOMER_DASHBOARD_AUTO_EXPAND_EQUIPMENT_LIMIT
+            const nextEquipment = equipment.filter((item) =>
+                item.gr_Site?.gr_Customer?.gr_customerid === customerId,
+            )
+            const expandByDefault = nextSites.length <= CUSTOMER_DASHBOARD_AUTO_EXPAND_SITE_LIMIT
+                && nextEquipment.length <= CUSTOMER_DASHBOARD_AUTO_EXPAND_EQUIPMENT_LIMIT
             return {
                 ...current,
-                [customerId]: Object.fromEntries(nextSites.map((site) => [
-                    site.gr_siteid,
-                    expandByDefault || !nextEquipment.some((item) => item.gr_Site?.gr_siteid === site.gr_siteid),
-                ])),
+                [customerId]: Object.fromEntries(nextSites.map((site) => [site.gr_siteid, expandByDefault])),
             }
         })
     }
@@ -209,25 +223,68 @@ export default function CustomerDashboardScreen() {
         const plans = servicePlans.filter((plan) =>
             plan._gr_equipment_value?.toLowerCase() === item.gr_equipmentid.toLowerCase(),
         )
-        const primary = calculatePrimaryNextService(plans)
-        const status = primary ? calculateServiceStatus(item.gr_currenthourmeter ?? 0, primary.gr_nextduehours) : null
+        const primary = calculatePrimaryNextService(plans, item)
+        const status = primary ? calculateServiceStatus(item.gr_currenthourmeter ?? 0, primary.gr_nextduehours, primary.gr_nextduedate) : null
         if (status === 'Due Soon') counts.dueSoon += 1
         if (status === 'Overdue' || status === 'Due') counts.overdue += 1
         return counts
     }, { dueSoon: 0, overdue: 0 })
+    const roadComplianceCounts = customerEquipment.filter(isRoadRegistered).reduce((counts, item) => {
+        const status = getWofDueStatus(true, item.gr_currentwofexpiry)
+        if (status === 'expired') counts.expired += 1
+        else if (status === 'due-soon') counts.dueSoon += 1
+        else if (status === 'current') counts.current += 1
+        return counts
+    }, { current: 0, dueSoon: 0, expired: 0 })
 
-    const summaryCards = [
+    const summaryMetrics: MetricStripItem[] = [
         { label: 'Sites', value: customerSites.length },
         { label: 'Equipment', value: customerEquipment.length },
         { label: 'Open Jobs', value: openJobs.length },
-        { label: 'Services Due Soon', value: maintenanceCounts.dueSoon },
-        { label: 'Overdue Services', value: maintenanceCounts.overdue },
+        { label: 'Services Due Soon', value: maintenanceCounts.dueSoon, tone: 'warning' },
+        { label: 'Overdue Services', value: maintenanceCounts.overdue, tone: 'danger' },
+        { label: 'WOF Current', value: roadComplianceCounts.current },
+        { label: 'WOF Due Soon', value: roadComplianceCounts.dueSoon, tone: 'warning' },
+        { label: 'WOF Expired', value: roadComplianceCounts.expired, tone: 'danger' },
         { label: 'Last Job Date', value: lastJob ? dateFormatter.format(new Date(lastJob.createdon)) : '-' },
     ]
 
-    const equipmentForSite = (site: Site) => customerEquipment
-        .filter((item) => item.gr_Site?.gr_siteid === site.gr_siteid)
-        .sort((a, b) => text(a.gr_fleet).localeCompare(text(b.gr_fleet), undefined, { numeric: true }))
+    const equipmentForSite = (site: Site) => {
+        const sort = equipmentSortBySite[site.gr_siteid] ?? DEFAULT_SITE_EQUIPMENT_SORT
+        return customerEquipment
+            .filter((item) => item.gr_Site?.gr_siteid === site.gr_siteid)
+            .sort((left, right) => {
+                if (sort.key === 'dataStatus') {
+                    const plansFor = (item: Equipment) => servicePlans.filter((plan) =>
+                        plan._gr_equipment_value?.toLowerCase() === item.gr_equipmentid.toLowerCase(),
+                    )
+                    return compareEquipmentDataQuality(left, plansFor(left), right, plansFor(right), sort.direction)
+                }
+                const leftValue = sort.key === 'fleet' ? left.gr_fleet : left.gr_currentwofexpiry
+                const rightValue = sort.key === 'fleet' ? right.gr_fleet : right.gr_currentwofexpiry
+                const leftEmpty = !leftValue
+                const rightEmpty = !rightValue
+                if (leftEmpty !== rightEmpty) return leftEmpty ? 1 : -1
+                if (leftEmpty && rightEmpty) return 0
+                const comparison = sort.key === 'fleet'
+                    ? leftValue!.localeCompare(rightValue!, undefined, { numeric: true, sensitivity: 'base' })
+                    : leftValue!.localeCompare(rightValue!)
+                return comparison * (sort.direction === 'asc' ? 1 : -1)
+            })
+    }
+
+    const changeEquipmentSort = (siteId: string, key: SiteEquipmentSortKey) => {
+        setEquipmentSortBySite((current) => {
+            const existing = current[siteId] ?? DEFAULT_SITE_EQUIPMENT_SORT
+            return {
+                ...current,
+                [siteId]: {
+                    key,
+                    direction: existing.key === key && existing.direction === 'asc' ? 'desc' : 'asc',
+                },
+            }
+        })
+    }
 
     const initialJobValuesForCustomer = (customer: Customer): JobCreateInitialValues => {
         const onlySite = customerSites.length === 1 ? customerSites[0] : undefined
@@ -319,23 +376,24 @@ export default function CustomerDashboardScreen() {
     }
 
     return <main className="customer-dashboard-page">
-        <header className="customer-dashboard-selector">
-            <div className="customer-dashboard-title">
-                <p>Customers</p>
-                <h1>Customer Dashboard</h1>
-                <button type="button" onClick={() => setCustomerDrawerMode('create')}>+ Create Customer</button>
-            </div>
-            <SearchableSelect
-                id="customer-dashboard-customer"
-                label="Customer"
-                value={selectedCustomerId}
-                options={customerOptions}
-                onChange={(customerId) => { initialiseCustomerSiteState(customerId); setSelectedCustomerId(customerId); setActiveTab('sites') }}
-                placeholder="Select a customer"
-                searchPlaceholder="Search customers"
-                emptyLabel="No matching customers"
-            />
-        </header>
+        <PageHeader
+            eyebrow="Customers"
+            title="Customer Dashboard"
+            subtitle="Manage customer sites, equipment, jobs, and service activity from one workspace."
+            actions={<div className="customer-dashboard-header-actions">
+                <SearchableSelect
+                    id="customer-dashboard-customer"
+                    label="Customer"
+                    value={selectedCustomerId}
+                    options={customerOptions}
+                    onChange={(customerId) => { initialiseCustomerSiteState(customerId); setSelectedCustomerId(customerId); setActiveTab('sites'); setSiteSuccess('') }}
+                    placeholder="Select a customer"
+                    searchPlaceholder="Search customers"
+                    emptyLabel="No matching customers"
+                />
+                <button className="page-header-primary-action" type="button" onClick={() => setCustomerDrawerMode('create')}>+ Create Customer</button>
+            </div>}
+        />
 
         {isLoading ? <section className="customer-dashboard-state">Loading customer data...</section> : loadError ? (
             <section className="customer-dashboard-state error">
@@ -348,7 +406,7 @@ export default function CustomerDashboardScreen() {
                 <p>Choose a customer above to view sites, equipment, jobs, and the dashboard foundation for future service history and reporting.</p>
             </section>
         ) : <>
-            {bulkImportSuccess && <div className="customer-dashboard-success" role="status">{bulkImportSuccess}</div>}
+            {(bulkImportSuccess || transferSuccess || siteSuccess) && <div className="customer-dashboard-success" role="status">{siteSuccess || transferSuccess || bulkImportSuccess}</div>}
             <section className="customer-dashboard-header">
                 <div>
                     <span>Customer account</span>
@@ -366,12 +424,7 @@ export default function CustomerDashboardScreen() {
                 </div>
             </section>
 
-            <section className="customer-summary-grid" aria-label="Customer summary">
-                {summaryCards.map((card) => <article key={card.label}>
-                    <span>{card.label}</span>
-                    <strong>{card.value}</strong>
-                </article>)}
-            </section>
+            <MetricStrip items={summaryMetrics} ariaLabel="Customer summary" />
 
             <nav className="customer-dashboard-tabs" aria-label="Customer sections" role="tablist">
                 <button type="button" role="tab" aria-selected={activeTab === 'sites'} className={activeTab === 'sites' ? 'active' : ''} onClick={() => setActiveTab('sites')}>Sites <span>{customerSites.length}</span></button>
@@ -398,27 +451,46 @@ export default function CustomerDashboardScreen() {
 
                 {customerSites.length === 0 ? <div className="customer-dashboard-empty compact">No sites have been recorded for this customer yet.</div> : customerSites.map((site) => {
                     const rows = equipmentForSite(site)
+                    const equipmentSort = equipmentSortBySite[site.gr_siteid] ?? DEFAULT_SITE_EQUIPMENT_SORT
                     const operatingHours = customerDrafts[selectedCustomer.gr_customerid]?.sites.find((item) => item.id === site.gr_siteid)?.operatingHours
-                    const expanded = siteIsExpanded(site.gr_siteid, rows.length)
+                    const expanded = siteIsExpanded(site.gr_siteid)
                     const equipmentRegionId = `customer-site-equipment-${site.gr_siteid}`
                     return <article className="customer-site-card" key={site.gr_siteid}>
-                        <header>
-                            <div className="customer-site-heading">
-                                <button
-                                    type="button"
-                                    className="customer-site-expand-button"
-                                    aria-expanded={expanded}
-                                    aria-controls={equipmentRegionId}
-                                    aria-label={`${expanded ? 'Collapse' : 'Expand'} equipment for ${site.gr_name || 'Unnamed Site'}`}
-                                    onClick={() => setSiteExpanded(site.gr_siteid, !expanded)}
-                                >
-                                    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4 6 6-6 6" /></svg>
-                                </button>
-                                <div><h4>{site.gr_name || 'Unnamed Site'}</h4><p>{site.gr_address || 'No address recorded'}</p></div>
-                            </div>
-                            <div className="customer-site-meta">
-                                <div><small>Operating hours</small><strong>{operatingHours || 'Not recorded'}</strong></div>
-                                <span>{rows.length} Equipment</span>
+                        <header onClick={() => setSiteExpanded(site.gr_siteid, !expanded)}>
+                            <button
+                                type="button"
+                                className="customer-site-header-toggle"
+                                aria-expanded={expanded}
+                                aria-controls={equipmentRegionId}
+                                onClick={(event) => {
+                                    event.stopPropagation()
+                                    setSiteExpanded(site.gr_siteid, !expanded)
+                                }}
+                            >
+                                <span className="customer-site-chevron" aria-hidden="true">
+                                    <svg viewBox="0 0 20 20"><path d="m7 4 6 6-6 6" /></svg>
+                                </span>
+                                <span className="customer-site-heading"><span><strong>{site.gr_name || 'Unnamed Site'}</strong><small>{site.gr_address || 'No address recorded'}</small></span></span>
+                                <span className="customer-site-header-summary">
+                                    <span><small>Operating hours</small><strong>{operatingHours || 'Not recorded'}</strong></span>
+                                    <span>{rows.length} Equipment</span>
+                                </span>
+                            </button>
+                            <div className="customer-site-meta" onClick={(event) => event.stopPropagation()}>
+                                {!site.gr_siteid.startsWith('prototype-site-')
+                                    && !selectedCustomer.gr_customerid.startsWith('prototype-customer-')
+                                    && <button
+                                        type="button"
+                                        title={`Edit ${site.gr_name}`}
+                                        onClick={() => {
+                                            setSiteSuccess('')
+                                            setEditingSiteId(site.gr_siteid)
+                                            setCustomerDrawerInitialTab('sites')
+                                            setCustomerDrawerMode('edit')
+                                        }}
+                                    >
+                                        Edit Site
+                                    </button>}
                                 <button
                                     type="button"
                                     disabled={site.gr_siteid.startsWith('prototype-site-') || selectedCustomer.gr_customerid.startsWith('prototype-customer-')}
@@ -431,6 +503,7 @@ export default function CustomerDashboardScreen() {
                                             customerName: selectedCustomer.gr_name,
                                             siteId: site.gr_siteid,
                                             siteName: site.gr_name,
+                                            maintenanceProfile: site.gr_defaultmaintenanceprofile ?? MAINTENANCE_PROFILES.STANDARD,
                                         })
                                     }}
                                 >
@@ -451,15 +524,55 @@ export default function CustomerDashboardScreen() {
                                     >
                                         Bulk Add Equipment
                                     </button>}
+                                {!site.gr_siteid.startsWith('prototype-site-')
+                                    && !selectedCustomer.gr_customerid.startsWith('prototype-customer-')
+                                    && <button
+                                        type="button"
+                                        title={`Configure maintenance defaults for ${site.gr_name}`}
+                                        onClick={() => {
+                                            clearSaveError()
+                                            setMaintenanceSettingsSite(site)
+                                        }}
+                                    >
+                                        Site Settings
+                                    </button>}
+                                {!site.gr_siteid.startsWith('prototype-site-')
+                                    && !selectedCustomer.gr_customerid.startsWith('prototype-customer-')
+                                    && <button
+                                        type="button"
+                                        title={`Transfer existing Equipment to ${site.gr_name}`}
+                                        onClick={() => {
+                                            clearSaveError()
+                                            setTransferSuccess('')
+                                            setTransferSite(site)
+                                        }}
+                                    >
+                                        Transfer Equipment
+                                    </button>}
                             </div>
                         </header>
-                        {expanded && <div className="customer-equipment-table-wrap" id={equipmentRegionId}>
+                        <div className="customer-equipment-table-wrap" id={equipmentRegionId} hidden={!expanded}>
                             <table className="customer-equipment-table">
-                                <thead><tr><th>Fleet Number</th><th>Make</th><th>Model</th><th>Registration</th><th>WOF Expiry</th><th>Last Known Hour Meter</th><th>Next Service</th><th>Maintenance Status</th></tr></thead>
+                                <thead><tr>
+                                    <th aria-sort={equipmentSort.key === 'fleet' ? (equipmentSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                                        <button type="button" className="customer-equipment-sort" onClick={() => changeEquipmentSort(site.gr_siteid, 'fleet')}>Fleet Number <span aria-hidden="true">{equipmentSort.key === 'fleet' ? (equipmentSort.direction === 'asc' ? '↑' : '↓') : ''}</span></button>
+                                    </th>
+                                    <th>Make</th><th>Model</th><th>Registration</th>
+                                    <th aria-sort={equipmentSort.key === 'wofExpiry' ? (equipmentSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                                        <button type="button" className="customer-equipment-sort" onClick={() => changeEquipmentSort(site.gr_siteid, 'wofExpiry')}>WOF Expiry <span aria-hidden="true">{equipmentSort.key === 'wofExpiry' ? (equipmentSort.direction === 'asc' ? '↑' : '↓') : ''}</span></button>
+                                    </th>
+                                    <th>Last Known Hour Meter</th><th>Next Service</th><th>Maintenance Status</th>
+                                    <th className="customer-equipment-data-quality-heading" aria-sort={equipmentSort.key === 'dataStatus' ? (equipmentSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                                        <button type="button" className="customer-equipment-sort" onClick={() => changeEquipmentSort(site.gr_siteid, 'dataStatus')} aria-label="Sort by Data status">
+                                            <span className="customer-visually-hidden">Data status</span>
+                                            <span aria-hidden="true">{equipmentSort.key === 'dataStatus' ? (equipmentSort.direction === 'asc' ? '↑' : '↓') : '↕'}</span>
+                                        </button>
+                                    </th>
+                                </tr></thead>
                                 <tbody>
-                                    {rows.length === 0 ? <tr><td colSpan={8}>No equipment recorded for this site.</td></tr> : rows.map((item) => {
+                                    {rows.length === 0 ? <tr><td colSpan={9}>No equipment recorded for this site.</td></tr> : rows.map((item) => {
                                         const plans = servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === item.gr_equipmentid.toLowerCase())
-                                        const primary = calculatePrimaryNextService(plans)
+                                        const primary = calculatePrimaryNextService(plans, item)
                                         const remaining = primary ? calculateHoursRemaining(item.gr_currenthourmeter ?? 0, primary.gr_nextduehours) : null
                                         const status = primary ? calculateServiceStatus(item.gr_currenthourmeter ?? 0, primary.gr_nextduehours) : null
                                         const serviceLabel = primary ? SERVICE_TYPE_OPTIONS.find((option) => option.value === primary.gr_servicetype)?.label : null
@@ -475,14 +588,17 @@ export default function CustomerDashboardScreen() {
                                             <td>{display(item.gr_model)}</td>
                                             <td>{display(item.gr_registrationnumber)}</td>
                                             <td>{display(formatWofDateOnly(item.gr_currentwofexpiry))}</td>
-                                            <td>{display(item.gr_currenthourmeter)}</td>
+                                            <td>{display(item.gr_currenthourmeter)}
+                                                {item.gr_currenthourmeterrecordeddate && <small>Recorded {formatWofDateOnly(item.gr_currenthourmeterrecordeddate)}</small>}
+                                            </td>
                                             <td>{primary ? `${serviceLabel} @ ${primary.gr_nextduehours}` : 'Not Configured'}{remaining != null && <small>{Math.abs(remaining)} hrs {remaining < 0 ? 'overdue' : 'remaining'}</small>}</td>
                                             <td><span className={`customer-maintenance-status status-${status?.toLowerCase().replace(' ', '-') ?? 'unknown'}`}>{status ?? 'Unknown'}</span></td>
+                                            <td className="customer-equipment-data-quality"><EquipmentDataQualityIndicator equipment={item} servicePlans={plans} /></td>
                                         </tr>
                                     })}
                                 </tbody>
                             </table>
-                        </div>}
+                        </div>
                     </article>
                 })}
             </section> : activeTab === 'open-jobs' ? <CustomerOpenJobsTab
@@ -606,6 +722,35 @@ export default function CustomerDashboardScreen() {
             onClose={() => setBulkImportSite(null)}
         />}
 
+        {transferSite && selectedCustomer && <EquipmentTransferDrawer
+            key={transferSite.gr_siteid}
+            customer={selectedCustomer}
+            site={transferSite}
+            equipment={equipment}
+            busy={isSaving}
+            onTransfer={transferEquipment}
+            onComplete={(transferredCount) => {
+                setSiteExpanded(transferSite.gr_siteid, true)
+                setTransferSuccess(`${transferredCount} Equipment record${transferredCount === 1 ? '' : 's'} transferred to ${transferSite.gr_name}.`)
+                setTransferSite(null)
+            }}
+            onClose={() => setTransferSite(null)}
+        />}
+
+        {maintenanceSettingsSite && <SiteMaintenanceSettingsDrawer
+            key={maintenanceSettingsSite.gr_siteid}
+            site={maintenanceSettingsSite}
+            equipment={equipmentForSite(maintenanceSettingsSite)}
+            busy={isSaving}
+            error={saveError}
+            onSave={(profile, equipmentIds) => updateSiteMaintenanceSettings(maintenanceSettingsSite, profile, equipmentIds)}
+            onComplete={() => {
+                setSiteSuccess(`${maintenanceSettingsSite.gr_name} maintenance settings updated.`)
+                setMaintenanceSettingsSite(null)
+            }}
+            onClose={() => setMaintenanceSettingsSite(null)}
+        />}
+
         {creatingJobInitialValues && <JobCreateDrawer
             mechanics={mechanics}
             equipmentList={jobEquipmentList}
@@ -668,16 +813,26 @@ export default function CustomerDashboardScreen() {
             isCompleting={isCompletingJob}
             error={completionError}
             onCancel={cancelJobCompletion}
-            onComplete={completeServiceJob}
+            onCompleteService={completeServiceJob}
+            onCompleteWof={completeWofJob}
         />
 
         {customerDrawerMode && <CustomerDrawer
-            key={`${customerDrawerMode}-${selectedCustomerId}`}
+            key={`${customerDrawerMode}-${selectedCustomerId}-${editingSiteId}`}
             mode={customerDrawerMode}
             initialTab={customerDrawerInitialTab}
+            initialSiteId={editingSiteId || undefined}
             initialValue={customerDrawerMode === 'edit' ? customerDrawerInitialValue : undefined}
-            onClose={() => setCustomerDrawerMode(null)}
-            onSave={saveCustomerDraft}
+            onClose={() => { setCustomerDrawerMode(null); setEditingSiteId('') }}
+            onSave={async (draft) => {
+                const savedDraft = await saveCustomerDraft(draft)
+                if (editingSiteId) {
+                    setCustomerDrawerMode(null)
+                    setEditingSiteId('')
+                    setSiteSuccess('Site updated successfully.')
+                }
+                return savedDraft
+            }}
         />}
     </main>
 }

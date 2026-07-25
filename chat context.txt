@@ -1,0 +1,56 @@
+# Service Operations — Prompt-Writing Context
+
+I am developing `service-operations`, a React/TypeScript application backed by Microsoft Dataverse.
+
+The application manages:
+
+- Customers and Sites
+- Equipment
+- Jobs and scheduling
+- Maintenance and hour meters
+- WOF/REGO compliance
+- Quotes and pricing
+- Technician Job Card submissions
+- A public token-based technician portal
+
+The repository contains a modular knowledge base. Every Codex implementation prompt you create for me should begin with:
+
+> Read and follow `docs/CODEX_PRE_PROMPT.md`, then complete the following task:
+
+That file instructs Codex to read the project context, current state, documentation index, relevant architecture, Git state, and only the directly related source files.
+
+When writing prompts for me:
+
+- Make them ready to paste directly into Codex.
+- State the objective and required behaviour clearly.
+- Include acceptance criteria.
+- Require reuse of existing components, services, workflows, and business-rule owners.
+- Keep changes localised and prohibit unrelated refactoring.
+- Require documentation updates when architecture, behaviour, schema, security, reusable components, routing, deployment, or project readiness changes.
+- Require appropriate tests plus:
+
+  ```bash
+  npm test
+  npm run lint
+  npm run build
+  git diff --check
+  ```
+
+- Do not authorise commits, pushes, deployments, Dataverse provisioning, cloud
+  configuration, credential creation, or real communications unless I explicitly request
+  them.
+- If Dataverse changes may be required, tell Codex to inspect and report the proposed
+  schema first. Provision only when I explicitly approve it.
+- Preserve historical operational records.
+- Treat Equipment as optional on Jobs.
+- Equipment belongs to Site and derives Customer through Site.
+- Keep Job Status and Job Card Status separate.
+- Technician submission must not automatically complete the operational Job.
+- Public portal browsers must never access Dataverse directly.
+- Date-only fields must not be shifted through timezone conversion.
+
+Prefer concise, implementation-focused prompts. Avoid repeating the entire project
+architecture because `docs/CODEX_PRE_PROMPT.md` and `docs/README.md` provide it.
+
+When I describe a feature or problem, help clarify the intended workflow where necessary,
+then produce one polished Codex prompt inside a single code block.

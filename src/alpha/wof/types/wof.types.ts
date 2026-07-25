@@ -11,7 +11,7 @@ export const WOF_RESULTS = {
 export type WofResult = typeof WOF_RESULTS[keyof typeof WOF_RESULTS]
 
 export type WofDueStatus = 'expired' | 'due-soon' | 'current' | 'unknown' | 'not-required'
-export type WofTab = 'all' | 'due-soon' | 'expired' | 'scheduled' | 'completed'
+export type WofTab = 'all' | 'due-soon' | 'expired' | 'in-progress' | 'ready'
 export type WofAssignmentMode = 'internal' | 'external'
 
 export type QualificationType = {
@@ -60,6 +60,7 @@ export type ServiceProvider = {
 
 export type WofInspection = {
     gr_wofinspectionid: string
+    createdon?: string
     linkedJobId: string | null
     equipmentId: string | null
     gr_name: string
@@ -75,6 +76,17 @@ export type WofInspection = {
     gr_InternalInspector?: Mechanic
     gr_ExternalProvider?: ServiceProvider
 }
+
+export type WofWorkflowStatus =
+    | 'current'
+    | 'due-soon'
+    | 'expired'
+    | 'unknown'
+    | 'job-created'
+    | 'scheduled'
+    | 'inspection-complete'
+    | 'ready-to-issue'
+    | 'completed'
 
 export type CreateWofInput = {
     equipment: Equipment

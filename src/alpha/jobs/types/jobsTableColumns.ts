@@ -11,7 +11,7 @@ export const JOBS_TABLE_COLUMNS = [
     { id: 'status', label: 'Status', width: 148, selectable: true },
     { id: 'order', label: 'Order', width: 100, selectable: true },
     { id: 'latestUpdate', label: 'Latest Update', width: 130, selectable: true },
-    { id: 'actions', label: 'Actions', width: 132, selectable: false },
+    { id: 'actions', label: 'Actions', width: 190, selectable: false },
 ] as const
 
 export type JobsTableColumnId = typeof JOBS_TABLE_COLUMNS[number]['id']

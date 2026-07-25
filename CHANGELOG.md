@@ -1,9 +1,24 @@
 # Changelog
 
-## Unreleased
+## v1.3.0 — 25 July 2026
 
 ### Major Features
 
+- Added secure Technician Job Card submissions with expiring one-time links, public
+  mobile-first entry, time and travel, Job Materials, Further Work, Safety Issues, generic
+  Job Photos, read-only manager review, and replay protection.
+- Reorganised project documentation into a modular architecture knowledge base with a
+  standard Codex pre-prompt and subsystem-specific reading routes.
+
+- Added multi-machine Equipment transfers to Customer Dashboard Sites with searchable
+  cross-customer multi-selection, a persistent removable selection summary, explicit
+  confirmation, partial-failure reporting, and safe retries that preserve historical Job
+  locations.
+- Turned WOF / REGO into an operational WOF Management queue with lifecycle statuses,
+  contextual Job actions, in-place shared Job creation and editing drawers, scheduling
+  visibility, office expiry administration, and active-Job duplicate protection.
+- Added configurable Equipment Maintenance Profiles and ICE, Electric, and Custom Service Programmes with fixed hour intervals, shared time intervals, programme-aware due calculations and completion cascades, Electric A/C scheduling, and preserved historical B records.
+- Added Equipment Road Compliance Management with Road Registered, Deregistered, and Off Road states; protected deregistration; guided re-registration; operational WOF filtering; and Road Registered-only dashboard WOF summaries.
 - Added the protected WOF / REGO workflow, including WOF Jobs and Inspection records, internal qualification filtering, external providers, editing, operational due-state views, and protected orphan-Inspection cleanup.
 - Added a shared Job Completion framework with a dedicated Service workflow for immutable completion hour readings, Equipment hour updates, maintenance-plan progression, validation, and large-increase confirmation.
 - Added Customer Dashboard Site bulk Equipment import with immutable Customer/Site context, TSV review, date-only normalization, explicit duplicate overrides, per-row selection, sequential creation, and retry protection.
@@ -12,6 +27,7 @@
 
 ### Improvements
 
+- Provisioned the Equipment Compliance Status Choice and safely backfilled all 189 existing Equipment records (24 Road Registered, 165 Off Road) with no ambiguous records.
 - Made WOF table Equipment values open the shared authoritative Equipment drawer and added the confirmed `gr_regoexpiry` field to shared editing, display, and persistent sorting.
 - Added accessible collapsible Customer Dashboard Site sections with smart defaults, per-Customer/Site state, and Expand All/Collapse All controls.
 - Improved shared Equipment creation with REGO/WOF normalization, searchable Customer-filtered Sites, Customer Dashboard Site actions, and date-only WOF expiry persistence.
@@ -24,6 +40,8 @@
 
 ### Bug Fixes
 
+- Fixed cumulative maintenance completion so higher-level Services atomically reset every
+  satisfied active plan and stale lower-level due or overdue state is cleared.
 - Replaced separate Service completion writes with one authoritative Dataverse `$batch` change set so Job, Equipment, and service-plan updates commit atomically with ETag concurrency protection and idempotent retry checks.
 - Fixed Edit WOF cleanup by loading the authoritative Inspection detail and allowing only planned Inspection records with no linked Job or compliance outcome to be deleted.
 - Fixed shared Equipment edit initialization so Current WOF Expiry remains visible and is preserved when Equipment is edited from Customer Dashboard Sites.
@@ -37,7 +55,6 @@
 - Replaced raw upstream error forwarding with non-sensitive proxy errors and added automated anonymous, invalid-token, authenticated, configuration, and upstream-error tests.
 
 ### Known Limitations
-
 - Customer creation and Customer-level information remain local prototypes; only existing and new Site name/address changes are persisted from the Customer drawer.
 - Passing a WOF does not yet update Equipment Current WOF Expiry or Last WOF Completed because the cross-record completion workflow is not transactionally safe.
 - Multi-record Dataverse workflows outside Service Job completion can partially succeed when a later request fails and require live failure-path testing and operational recovery guidance.

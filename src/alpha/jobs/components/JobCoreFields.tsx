@@ -6,6 +6,8 @@ import type { JobEditorDraft } from '../hooks/useJobEditor'
 import { JOB_STATUSES, JOB_STATUS_OPTIONS, UNCONFIRMED_OPERATION_MESSAGE, type JobStatus } from '../types/jobStatus.types'
 import { SERVICE_TYPES, SERVICE_TYPE_OPTIONS, type ServiceType } from '../../equipment/servicePlans/equipmentServicePlan.types'
 import SearchableMechanicSelect from './SearchableMechanicSelect'
+import type { Equipment } from '../types/equipment.types'
+import { isServiceTypeEnabled, resolveMaintenanceConfiguration } from '../../equipment/servicePlans/maintenanceConfiguration'
 
 type Props = {
     draft: JobEditorDraft
@@ -14,9 +16,10 @@ type Props = {
     allowEmptyJobType?: boolean
     jobTypeError?: string
     jobTypeOptions?: typeof JOB_TYPE_OPTIONS
+    equipment?: Equipment
 }
 
-export default function JobCoreFields({ draft, setDraft, mechanics, allowEmptyJobType = false, jobTypeError = '', jobTypeOptions = JOB_TYPE_OPTIONS }: Props) {
+export default function JobCoreFields({ draft, setDraft, mechanics, equipment, allowEmptyJobType = false, jobTypeError = '', jobTypeOptions = JOB_TYPE_OPTIONS }: Props) {
     const [mechanicSelectOpen, setMechanicSelectOpen] = useState(false)
 
     return (
@@ -122,10 +125,11 @@ export default function JobCoreFields({ draft, setDraft, mechanics, allowEmptyJo
                         serviceType: Number(event.target.value) as ServiceType,
                     }))}>
                         <option value={SERVICE_TYPES.NONE}>Select service type</option>
-                        {SERVICE_TYPE_OPTIONS.filter((option) => option.value !== SERVICE_TYPES.NONE).map((option) => (
+                        {SERVICE_TYPE_OPTIONS.filter((option) => option.value !== SERVICE_TYPES.NONE && isServiceTypeEnabled(equipment, option.value)).map((option) => (
                             <option key={option.value} value={option.value}>{option.label}</option>
                         ))}
                     </select>
+                    {equipment && <small>{resolveMaintenanceConfiguration(equipment).activeServiceTypes.length === 2 ? 'Electric programme: A and C services' : 'Service types follow the Equipment programme'}</small>}
                 </label>
             </>}
         </>

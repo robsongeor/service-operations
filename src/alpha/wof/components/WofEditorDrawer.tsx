@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
 import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation'
 import EditDrawerShell from '../../shared/drawer/EditDrawerShell'
+import DrawerTabs from '../../shared/drawer/DrawerTabs'
 import SearchableSelect from '../../shared/searchable-select/SearchableSelect'
 import EquipmentDrawer from '../../equipment/components/EquipmentDrawer'
+import { isRoadRegistered } from '../../equipment/compliance/equipmentCompliance'
 import type { EquipmentUpdateInput } from '../../equipment/types/equipmentManager.types'
 import type { Customer } from '../../jobs/types/customer.types'
 import type { Equipment } from '../../jobs/types/equipment.types'
@@ -47,6 +49,8 @@ export default function WofEditorDrawer(props: Props) {
     const [notes, setNotes] = useState(inspection?.gr_notes || '')
     const [busy, setBusy] = useState(false)
     const [error, setError] = useState('')
+    const [activeTab, setActiveTab] = useState<'details' | 'inspection'>('details')
+    const [errorTab, setErrorTab] = useState<'details' | 'inspection' | null>(null)
     const [creatingEquipment, setCreatingEquipment] = useState(false)
     const [equipmentSaving, setEquipmentSaving] = useState(false)
     const [equipmentError, setEquipmentError] = useState('')
@@ -61,17 +65,25 @@ export default function WofEditorDrawer(props: Props) {
     const eligibleProviders = providers.filter((item) => item.statecode !== 1 && item.gr_active && item.gr_ProviderType?.gr_active && item.gr_ProviderType.gr_code === WOF_PROVIDER_TYPE_CODE)
     const externalOptions = eligibleProviders.map((item) => ({ value: item.gr_serviceproviderid, label: item.gr_name, secondary: item.gr_contactname || undefined })).concat(inspection?.gr_ExternalProvider && !eligibleProviders.some((item) => item.gr_serviceproviderid === inspection.gr_ExternalProvider?.gr_serviceproviderid) ? [{ value: inspection.gr_ExternalProvider.gr_serviceproviderid, label: inspection.gr_ExternalProvider.gr_name, secondary: 'Previously assigned — provider inactive' }] : [])
     const deletionBlockReason = inspection ? getWofDeletionBlockReason(inspection) : null
+    const selectableEquipment = equipment.filter((item) =>
+        isRoadRegistered(item) || item.gr_equipmentid === inspection?.gr_Equipment?.gr_equipmentid,
+    )
 
     const save = async (replaceSnapshots = false) => {
-        if (!selectedEquipment) return setError('Select equipment.')
-        if (!description.trim()) return setError('Enter the work description.')
-        if (!performerId) return setError(`Select an ${mode === 'internal' ? 'eligible technician' : 'eligible external provider'}.`)
-        if (inspection && !inspection.linkedJobId) return setError('This WOF has no linked Job identifier. This is a data-integrity issue and the record cannot be updated.')
-        if (mode === 'internal' && !internalOptions.some((item) => item.value === performerId && !item.secondary?.startsWith('Previously assigned'))) return setError('The technician is not qualified on the scheduled date.')
-        if (mode === 'external' && !eligibleProviders.some((item) => item.gr_serviceproviderid === performerId)) return setError('The external provider is not currently eligible.')
+        const fail = (message: string, tab: 'details' | 'inspection') => {
+            setError(message); setErrorTab(tab); setActiveTab(tab)
+        }
+        if (!selectedEquipment) return fail('Select equipment.', 'details')
+        if (!description.trim()) return fail('Enter the work description.', 'details')
+        if (!performerId) return fail(`Select an ${mode === 'internal' ? 'eligible technician' : 'eligible external provider'}.`, 'inspection')
+        if (inspection && !inspection.linkedJobId) return fail('This WOF has no linked Job identifier. This is a data-integrity issue and the record cannot be updated.', 'details')
+        if (inspection && result === WOF_RESULTS.PASSED && !inspectionDate) return fail('Enter the inspection date before recording a passed WOF.', 'inspection')
+        if (inspection && result === WOF_RESULTS.PASSED && !newExpiry) return fail('Enter the new WOF expiry before recording a passed WOF.', 'inspection')
+        if (mode === 'internal' && !internalOptions.some((item) => item.value === performerId && !item.secondary?.startsWith('Previously assigned'))) return fail('The technician is not qualified on the scheduled date.', 'inspection')
+        if (mode === 'external' && !eligibleProviders.some((item) => item.gr_serviceproviderid === performerId)) return fail('The external provider is not currently eligible.', 'inspection')
         if (equipmentChanged && (registrationSnapshot || previousExpiry) && !replaceSnapshots) { setConfirmEquipmentChange(true); return }
         try {
-            setBusy(true); setError('')
+            setBusy(true); setError(''); setErrorTab(null)
             const common: CreateWofInput = { equipment: selectedEquipment, jobNumber, description, scheduledDate, assignmentMode: mode, internalInspectorId: mode === 'internal' ? performerId : undefined, externalProviderId: mode === 'external' ? performerId : undefined }
             if (!inspection) await onCreate(common)
             else await onUpdate({ ...common, inspectionId: inspection.gr_wofinspectionid, jobId: inspection.linkedJobId!, registrationNumberSnapshot: equipmentChanged ? selectedEquipment.gr_registrationnumber || '' : registrationSnapshot, previousWofExpiry: equipmentChanged ? selectedEquipment.gr_currentwofexpiry || '' : previousExpiry, inspectionDate, newWofExpiry: newExpiry, result, certificateNumber: certificate, notes, scheduleOptionId: schedule?.gr_jobscheduleoptionid })
@@ -97,18 +109,27 @@ export default function WofEditorDrawer(props: Props) {
 
     return <>
         <EditDrawerShell eyebrow="Protected WOF workflow" title={editing ? 'Edit WOF' : 'Create WOF'} busy={busy || deleting} onClose={onClose} footer={<><div className="wof-drawer-footer-status"><span className="wof-drawer-error" role="alert">{error}</span>{editing && <button type="button" className="wof-delete-button" onClick={() => { setDeleteError(''); setConfirmDelete(true) }} disabled={busy || deleting || Boolean(deletionBlockReason)} title={deletionBlockReason || undefined}>Delete WOF</button>}</div><div><button type="button" onClick={onClose} disabled={busy || deleting}>Cancel</button> <button type="button" className="primary" onClick={() => void save()} disabled={busy || deleting}>{busy ? 'Saving…' : editing ? 'Save changes' : 'Create WOF'}</button></div></>}>
+            <DrawerTabs ariaLabel="WOF sections" activeTab={activeTab} onChange={setActiveTab} tabs={[
+                { id: 'details', label: 'Details', hasError: errorTab === 'details' },
+                { id: 'inspection', label: 'Inspection Details', hasError: errorTab === 'inspection' },
+            ]} />
             <div className="wof-form">
-                <SearchableSelect id="wof-equipment" label="Equipment" required value={equipmentId} onChange={setEquipmentId} disabled={completed} placeholder="Select equipment" options={equipment.map((item) => ({ value: item.gr_equipmentid, label: item.gr_fleet || item.gr_serial || 'Unnamed equipment', secondary: [item.gr_registrationnumber, item.gr_make, item.gr_model].filter(Boolean).join(' · ') }))} />
+                {activeTab === 'details' && <div id="drawer-tab-panel-details" className="wof-form-tab" role="tabpanel" aria-labelledby="drawer-tab-details">
+                <SearchableSelect id="wof-equipment" label="Equipment" required value={equipmentId} onChange={setEquipmentId} disabled={completed} placeholder="Select equipment" options={selectableEquipment.map((item) => ({ value: item.gr_equipmentid, label: item.gr_fleet || item.gr_serial || 'Unnamed equipment', secondary: [item.gr_registrationnumber, item.gr_make, item.gr_model].filter(Boolean).join(' · ') }))} />
                 {!editing && <button type="button" className="wof-add-equipment" onClick={() => setCreatingEquipment(true)}>+ Add new equipment</button>}
                 {completed && <p className="wof-protected-note">Equipment cannot be changed after the linked Job is completed.</p>}
                 {selectedEquipment && <div className="wof-equipment-summary"><span>REGO <strong>{selectedEquipment.gr_registrationnumber || 'Not recorded'}</strong></span><span>Current expiry <strong>{selectedEquipment.gr_currentwofexpiry || 'Unknown'}</strong></span><span>Customer <strong>{selectedEquipment.gr_Site?.gr_Customer?.gr_name || 'Not recorded'}</strong></span><span>Site <strong>{selectedEquipment.gr_Site?.gr_name || 'Not recorded'}</strong></span></div>}
                 <label>Job number<input value={jobNumber} onChange={(event) => setJobNumber(event.target.value)} /></label>
                 <label>Work description *<textarea rows={3} value={description} onChange={(event) => setDescription(event.target.value)} /></label>
                 <label>Scheduled date<input type="date" value={scheduledDate} onChange={(event) => { setScheduledDate(event.target.value); if (!editing) setPerformerId('') }} /></label>
+                {editing && deletionBlockReason && <p className="wof-protected-note">{deletionBlockReason}</p>}
+                </div>}
+                {activeTab === 'inspection' && <div id="drawer-tab-panel-inspection" className="wof-form-tab" role="tabpanel" aria-labelledby="drawer-tab-inspection">
                 <fieldset><legend>Assignment type</legend><label><input type="radio" checked={mode === 'internal'} onChange={() => { setMode('internal'); setPerformerId('') }} /> Internal technician</label><label><input type="radio" checked={mode === 'external'} onChange={() => { setMode('external'); setPerformerId('') }} /> External provider</label></fieldset>
                 <SearchableSelect id="wof-performer" label={mode === 'internal' ? 'Qualified technician' : 'WOF provider'} required value={performerId} onChange={setPerformerId} placeholder={`Select ${mode === 'internal' ? 'technician' : 'provider'}`} options={mode === 'internal' ? internalOptions : externalOptions} emptyLabel={mode === 'internal' ? 'No technicians are qualified for this date' : 'No active WOF providers'} />
                 {editing && <><div className="wof-form-section"><strong>Inspection details</strong><span>Snapshot values are historical; current Equipment values are shown above.</span></div><label>Registration Number Snapshot<input value={registrationSnapshot} onChange={(event) => setRegistrationSnapshot(event.target.value)} /></label><label>Previous WOF Expiry<input type="date" value={previousExpiry} onChange={(event) => setPreviousExpiry(event.target.value)} /></label><label>Inspection Date<input type="date" value={inspectionDate} onChange={(event) => setInspectionDate(event.target.value)} /></label><label>New WOF Expiry<input type="date" value={newExpiry} onChange={(event) => setNewExpiry(event.target.value)} /></label><label>WOF Result<select value={result} onChange={(event) => setResult(Number(event.target.value) as WofResult)}><option value={WOF_RESULTS.PLANNED}>Planned</option><option value={WOF_RESULTS.PASSED}>Passed</option><option value={WOF_RESULTS.FAILED}>Failed</option><option value={WOF_RESULTS.CANCELLED}>Cancelled</option></select></label><label>Certificate Number<input value={certificate} onChange={(event) => setCertificate(event.target.value)} /></label><label>WOF Notes<textarea rows={4} value={notes} onChange={(event) => setNotes(event.target.value)} /></label></>}
-                {editing && deletionBlockReason && <p className="wof-protected-note">{deletionBlockReason}</p>}
+                {!editing && <p className="wof-protected-note">Inspection results can be recorded after the WOF and linked Job have been created.</p>}
+                </div>}
             </div>
         </EditDrawerShell>
         {creatingEquipment && <EquipmentDrawer mode="create" initialValues={{ wofRequired: true }} customers={customers} sites={sites} equipmentList={equipment} jobs={jobs} isSaving={equipmentSaving} saveError={equipmentError} onClose={() => { if (!equipmentSaving) setCreatingEquipment(false) }} onCreateCustomer={onCreateCustomer} onCreateSite={onCreateSite} onCreate={async (input, resolvedSite) => { try { setEquipmentSaving(true); setEquipmentError(''); const created = await onCreateEquipment(input, resolvedSite); setEquipmentId(created.gr_equipmentid); setCreatingEquipment(false) } catch (caught) { setEquipmentError(caught instanceof Error ? caught.message : 'Equipment could not be created.'); throw caught } finally { setEquipmentSaving(false) } }} />}

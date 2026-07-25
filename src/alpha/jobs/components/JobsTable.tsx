@@ -17,13 +17,11 @@ import type { JobScheduleOption } from '../types/jobSchedule.types'
 import { jobMatchesScheduledVisibility } from '../utils/scheduledJobsVisibility'
 import SearchableMechanicSelect from './SearchableMechanicSelect'
 import JobsTableSortIcon from './JobsTableSortIcon'
-import {
-    buildMailtoUrl,
-    buildTechnicianEmailBody,
-    buildTechnicianEmailSubject,
-    isValidTechnicianEmail,
-} from '../utils/technicianMailto'
+import { isValidTechnicianEmail } from '../utils/technicianMailto'
 import { JOBS_TABLE_COLUMNS, jobsStickyColumnStyle, type JobsStickyThroughColumnId, type JobsTableColumnId } from '../types/jobsTableColumns'
+import { jobHasActiveSubmissionLink } from '../services/jobSubmissionLinkApi'
+import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation'
+import { hasTechnicianSubmission } from '../types/technicianSubmission'
 
 type Props = {
     jobs: Job[]
@@ -43,7 +41,9 @@ type Props = {
             'gr_Mechanic@odata.bind'?: string | null
         }
     ) => Promise<void>
+    onEmailTechnician: (job: Job) => Promise<string>
     onEditJob: (job: Job) => void
+    onOpenJobCard: (job: Job) => void
     mechanics: Mechanic[]
     officeUpdates: JobOfficeUpdate[]
     scheduleOptions: JobScheduleOption[]
@@ -66,7 +66,9 @@ export default function JobsTable({
     resetToDefaultDisabled,
     onStatusChange,
     onJobFieldsChange,
+    onEmailTechnician,
     onEditJob,
+    onOpenJobCard,
     mechanics,
     officeUpdates,
     scheduleOptions,
@@ -76,6 +78,8 @@ export default function JobsTable({
     const [selectedRowId, setSelectedRowId] = useState<string | null>(null)
     const [openMechanicJobId, setOpenMechanicJobId] = useState<string | null>(null)
     const [savingMechanicJobId, setSavingMechanicJobId] = useState<string | null>(null)
+    const [emailingJobId, setEmailingJobId] = useState<string | null>(null)
+    const [pendingEmailJob, setPendingEmailJob] = useState<Job | null>(null)
     const [copyFeedback, setCopyFeedback] = useState<{
         message: string
         isError: boolean
@@ -91,6 +95,24 @@ export default function JobsTable({
         if (!current[update.jobId] || current[update.jobId].createdAt < update.createdAt) current[update.jobId] = update
         return current
     }, {}), [officeUpdates])
+
+    const prepareEmail = async (job: Job) => {
+        if (emailingJobId) return
+        setEmailingJobId(job.gr_jobid)
+        setCopyFeedback(null)
+        try {
+            const mailtoUrl = await onEmailTechnician(job)
+            window.location.href = mailtoUrl
+        } catch {
+            setCopyFeedback({
+                message: 'The secure Job Card link could not be created. Please try again.',
+                isError: true,
+            })
+        } finally {
+            setEmailingJobId(null)
+            setPendingEmailJob(null)
+        }
+    }
 
     const jobsForSelectedType = useMemo(() => jobs.filter((job) => {
         if (selectedJobType === 'unconfirmed' && job.gr_status !== JOB_STATUSES.UNCONFIRMED) return false
@@ -258,7 +280,7 @@ export default function JobsTable({
             target.closest('button, input, select, textarea, a, label'),
         )
 
-    return (
+    return (<>
         <section className="jobs-list-card">
             <div className="jobs-list-header">
                 <div>
@@ -545,6 +567,18 @@ export default function JobsTable({
 
                                 <td className="jobs-table-actions-column">
                                     <div className="jobs-table-actions">
+                                        {hasTechnicianSubmission(job) && (
+                                            <button
+                                                className="jobs-submission-indicator"
+                                                type="button"
+                                                onClick={(event) => {
+                                                    event.stopPropagation()
+                                                    onOpenJobCard(job)
+                                                }}
+                                            >
+                                                Submitted
+                                            </button>
+                                        )}
                                         <button
                                             className="jobs-table-action"
                                             type="button"
@@ -574,20 +608,13 @@ export default function JobsTable({
                                             aria-label="Email job details to technician"
                                             onClick={() => {
                                                 if (!job.gr_Mechanic || !canEmailTechnician) return
-                                                try {
-                                                    window.location.href = buildMailtoUrl({
-                                                        recipient: mechanicEmail,
-                                                        subject: buildTechnicianEmailSubject(job),
-                                                        body: buildTechnicianEmailBody(
-                                                            job,
-                                                            job.gr_Mechanic.gr_name,
-                                                        ),
-                                                    })
-                                                } catch {
-                                                    window.alert('Unable to open an email for this technician.')
+                                                if (jobHasActiveSubmissionLink(job)) {
+                                                    setPendingEmailJob(job)
+                                                    return
                                                 }
+                                                void prepareEmail(job)
                                             }}
-                                            disabled={!canEmailTechnician}
+                                            disabled={!canEmailTechnician || Boolean(emailingJobId)}
                                         >
                                             <svg viewBox="0 0 24 24" aria-hidden="true">
                                                 <path d="M3 6.5h18v11H3z" />
@@ -613,5 +640,14 @@ export default function JobsTable({
             )}
 
         </section>
-    )
+        {pendingEmailJob && <EditDrawerConfirmation
+            eyebrow="Replace secure link"
+            title="Generate a new technician submission link?"
+            message="Generating a new link will invalidate the previous technician submission link for this Job."
+            isBusy={emailingJobId === pendingEmailJob.gr_jobid}
+            confirmLabel={emailingJobId === pendingEmailJob.gr_jobid ? 'Generating...' : 'Generate new link'}
+            onCancel={() => setPendingEmailJob(null)}
+            onConfirm={() => void prepareEmail(pendingEmailJob)}
+        />}
+    </>)
 }
