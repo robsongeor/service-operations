@@ -1,6 +1,6 @@
 # Current State
 
-Branch: `tech-job-cards-submission`
+Branch: `v1-deployment`
 
 ## Deployment status
 
@@ -29,4 +29,5 @@ and fixed the required Dataverse change-set `Content-ID` headers.
 ## Next task
 
 Verify the production server settings and run the production-safe smoke test. Do not expose
-the client secret through Vite or browser configuration.
+the client secret through Vite or browser configuration. See `TODO.md` for the prioritised
+backlog beyond this immediate release task.

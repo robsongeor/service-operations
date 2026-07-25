@@ -78,6 +78,7 @@ See [Authentication](docs/architecture/authentication.md) and
 - `AI_CONTEXT.md`: durable project-wide rules and routing only.
 - `CURRENT_STATE.md`: active branch, deployment status, unfinished work, blockers, and a
   short recent milestone.
+- `TODO.md`: authoritative prioritised backlog.
 - `docs/architecture/`: authoritative subsystem and cross-cutting architecture.
 - `docs/*.md`: detailed Dataverse schemas and operational references.
 - `CHANGELOG.md` and Git history: completed release history.

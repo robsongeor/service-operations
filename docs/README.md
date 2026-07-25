@@ -11,6 +11,7 @@ by scanning the repository.
 | Standard instructions for every Codex task | [`CODEX_PRE_PROMPT.md`](CODEX_PRE_PROMPT.md) |
 | Project rules and document routing | [`../AI_CONTEXT.md`](../AI_CONTEXT.md) |
 | Active branch, blockers, and deployment readiness | [`../CURRENT_STATE.md`](../CURRENT_STATE.md) |
+| Prioritised product and technical backlog | [`../TODO.md`](../TODO.md) |
 | System boundaries and document map | [`architecture/README.md`](architecture/README.md) |
 | Dataverse conventions and relationships | [`architecture/dataverse.md`](architecture/dataverse.md) |
 | Reusable UI and business-rule owners | [`architecture/reusable-components.md`](architecture/reusable-components.md) |
@@ -45,8 +46,9 @@ by scanning the repository.
 
 Architecture documents describe purpose, boundaries, workflows, data ownership, services,
 UI, business rules, extension points, and related files. Detailed logical names and field
-definitions belong in schema documents. Temporary progress belongs in `CURRENT_STATE.md`;
-release history belongs in `CHANGELOG.md` or Git history.
+definitions belong in schema documents. Prioritised future work belongs in `TODO.md`,
+temporary progress belongs in `CURRENT_STATE.md`, and release history belongs in
+`CHANGELOG.md` or Git history.
 
 When architecture changes:
 

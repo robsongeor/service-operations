@@ -41,6 +41,8 @@ architecture changes:
 
 - `AI_CONTEXT.md`: durable project-wide rules or boundaries only.
 - `CURRENT_STATE.md`: branch, readiness, unfinished work, blockers, and next task.
+- `TODO.md`: prioritised backlog; update when agreed work is added, completed, reprioritised,
+  or removed.
 - `docs/architecture/<subsystem>.md`: workflows, UI, services, rules, security, or extension
   points.
 - `docs/architecture/reusable-components.md`: reusable components or business-rule owners.
