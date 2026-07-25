@@ -7,13 +7,28 @@ import JobCreateDrawer, { type JobCreateInitialValues } from '../jobs/components
 import type { Equipment } from '../jobs/types/equipment.types'
 import type { EquipmentSortKey, SortDirection } from './types/equipmentManager.types'
 import './EquipmentScreen.css'
+import { compareEquipmentDataQuality } from './dataQuality/equipmentDataQuality'
+import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
+import { getSignedInUserInfo } from '../../auth/signedInUser'
+import PageSettingsButton from '../shared/settings/PageSettingsButton'
+import PageSettingsDialog from '../shared/settings/PageSettingsDialog'
+import EquipmentCsvImportDrawer from './components/EquipmentCsvImportDrawer'
+import {
+    canUseEquipmentCsvTools,
+    equipmentCsvText,
+    reviewEquipmentCsv,
+    type EquipmentCsvReviewRow,
+} from './utils/equipmentCsv'
 
 type StateFilter = 'all' | 'active' | 'inactive'
 
 const text = (value?: string | null) => value?.trim().toLocaleLowerCase() ?? ''
 
 export default function EquipmentScreen() {
-    const { equipment, customers, sites, jobs, servicePlans, isLoading, isSaving, loadError, saveError, reload, clearSaveError, createCustomer, createSite, createEquipment, updateEquipment, saveEquipmentMaintenanceHistory, deleteEquipment } = useEquipmentManager()
+    const activeAccount = useActiveMsalAccount()
+    const signedInUser = getSignedInUserInfo(activeAccount)
+    const csvToolsAllowed = canUseEquipmentCsvTools(signedInUser)
+    const { equipment, customers, sites, jobs, servicePlans, isLoading, isSaving, loadError, saveError, reload, clearSaveError, createCustomer, createSite, createEquipment, updateEquipment, saveEquipmentMaintenanceHistory, applyEquipmentCsvUpdates, deleteEquipment } = useEquipmentManager()
     const {
         equipmentList: jobEquipmentList,
         mechanics,
@@ -37,22 +52,38 @@ export default function EquipmentScreen() {
     const [stateFilter, setStateFilter] = useState<StateFilter>('all')
     const [sortKey, setSortKey] = useState<EquipmentSortKey>('fleet')
     const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+    const [settingsOpen, setSettingsOpen] = useState(false)
+    const [csvError, setCsvError] = useState('')
+    const [csvImport, setCsvImport] = useState<{ filename: string; rows: EquipmentCsvReviewRow[] } | null>(null)
 
     const siteOptions = sites.filter((site) => !customerId || site.gr_Customer?.gr_customerid === customerId)
     const rows = useMemo(() => {
         const query = search.trim().toLocaleLowerCase()
-        const sortValue = (item: Equipment) => ({
-            fleet: item.gr_fleet, customer: item.gr_Site?.gr_Customer?.gr_name, site: item.gr_Site?.gr_name,
-            make: item.gr_make, model: item.gr_model, serial: item.gr_serial,
-        }[sortKey] ?? '')
+        const sortValue = (item: Equipment) => {
+            if (sortKey === 'fleet') return item.gr_fleet
+            if (sortKey === 'customer') return item.gr_Site?.gr_Customer?.gr_name
+            if (sortKey === 'site') return item.gr_Site?.gr_name
+            if (sortKey === 'make') return item.gr_make
+            if (sortKey === 'model') return item.gr_model
+            if (sortKey === 'serial') return item.gr_serial
+            return ''
+        }
         return equipment.filter((item) => {
             if (customerId && item.gr_Site?.gr_Customer?.gr_customerid !== customerId) return false
             if (siteId && item.gr_Site?.gr_siteid !== siteId) return false
             if (stateFilter === 'active' && item.statecode !== 0) return false
             if (stateFilter === 'inactive' && item.statecode === 0) return false
             return !query || [item.gr_fleet, item.gr_serial, item.gr_make, item.gr_model, item.gr_Site?.gr_name, item.gr_Site?.gr_Customer?.gr_name].some((value) => text(value).includes(query))
-        }).sort((a, b) => text(sortValue(a)).localeCompare(text(sortValue(b)), undefined, { numeric: true }) * (sortDirection === 'asc' ? 1 : -1))
-    }, [customerId, equipment, search, siteId, sortDirection, sortKey, stateFilter])
+        }).sort((a, b) => {
+            if (sortKey === 'dataStatus') {
+                const plansFor = (item: Equipment) => servicePlans.filter((plan) =>
+                    plan._gr_equipment_value?.toLowerCase() === item.gr_equipmentid.toLowerCase(),
+                )
+                return compareEquipmentDataQuality(a, plansFor(a), b, plansFor(b), sortDirection)
+            }
+            return text(sortValue(a)).localeCompare(text(sortValue(b)), undefined, { numeric: true }) * (sortDirection === 'asc' ? 1 : -1)
+        })
+    }, [customerId, equipment, search, servicePlans, siteId, sortDirection, sortKey, stateFilter])
 
     const changeSort = (key: EquipmentSortKey) => {
         if (key === sortKey) setSortDirection((current) => current === 'asc' ? 'desc' : 'asc')
@@ -80,10 +111,42 @@ export default function EquipmentScreen() {
         setCreatingJobForEquipment(null)
         if (record) setEditingEquipment(record)
     }
+    const exportEquipmentCsv = () => {
+        if (!canUseEquipmentCsvTools(signedInUser)) {
+            setCsvError('You are not authorised to export Equipment data.')
+            return
+        }
+        const blob = new Blob([equipmentCsvText(equipment)], { type: 'text/csv;charset=utf-8' })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `equipment-export-${new Date().toISOString().slice(0, 10)}.csv`
+        link.click()
+        URL.revokeObjectURL(url)
+    }
+    const importEquipmentCsv = async (file?: File) => {
+        if (!canUseEquipmentCsvTools(signedInUser)) {
+            setCsvError('You are not authorised to import Equipment data.')
+            return
+        }
+        if (!file) return
+        if (!file.name.toLowerCase().endsWith('.csv')) {
+            setCsvError('Choose a CSV file exported by Equipment Manager.')
+            return
+        }
+        try {
+            const review = reviewEquipmentCsv(await file.text(), equipment, sites)
+            setCsvError('')
+            setSettingsOpen(false)
+            setCsvImport({ filename: file.name, rows: review.rows })
+        } catch (error) {
+            setCsvError(error instanceof Error ? error.message : 'The CSV could not be read.')
+        }
+    }
 
     return (
         <main className="equipment-page">
-            <header className="equipment-page-header"><div><p>Operations</p><h1>Equipment Manager</h1></div><div className="equipment-page-header-actions"><span>{equipment.length} records</span><button type="button" className="equipment-create-button" onClick={() => { clearSaveError(); setEditingEquipment(null); setIsCreatingEquipment(true) }}>New Equipment</button></div></header>
+            <header className="equipment-page-header"><div><p>Operations</p><h1>Equipment Manager</h1></div><div className="equipment-page-header-actions"><span>{equipment.length} records</span>{csvToolsAllowed && <PageSettingsButton onClick={() => { setCsvError(''); setSettingsOpen(true) }} />}<button type="button" className="equipment-create-button" onClick={() => { clearSaveError(); setEditingEquipment(null); setIsCreatingEquipment(true) }}>New Equipment</button></div></header>
             {isLoading ? <div className="equipment-data-state">Loading equipment…</div> : loadError ? (
                 <div className="equipment-data-state error"><div><strong>Equipment could not be loaded.</strong><p>{loadError}</p></div><button type="button" onClick={() => void reload()}>Try again</button></div>
             ) : <section className="equipment-list-card">
@@ -117,6 +180,28 @@ export default function EquipmentScreen() {
                 }}
                 onCreateScheduleOption={createScheduleOption}
                 onClose={closeEquipmentJobCreate}
+            />}
+            <PageSettingsDialog
+                open={settingsOpen && csvToolsAllowed}
+                title="Equipment Settings"
+                description="Administrative tools for maintaining Equipment master data."
+                onCancel={() => setSettingsOpen(false)}
+                onApply={() => setSettingsOpen(false)}
+                applyLabel="Done"
+            >
+                <section className="equipment-csv-settings" aria-labelledby="equipment-csv-settings-heading">
+                    <div><h3 id="equipment-csv-settings-heading">Equipment data tools</h3><p>Export all Equipment records, edit supported values in Excel, then upload the file for review.</p></div>
+                    <button type="button" onClick={exportEquipmentCsv}>Export Equipment CSV</button>
+                    <label className="equipment-csv-upload">Import Equipment CSV<input type="file" accept=".csv,text/csv" onChange={(event) => { void importEquipmentCsv(event.target.files?.[0]); event.target.value = '' }} /></label>
+                    {csvError && <p className="equipment-csv-error" role="alert">{csvError}</p>}
+                </section>
+            </PageSettingsDialog>
+            {csvImport && <EquipmentCsvImportDrawer
+                filename={csvImport.filename}
+                rows={csvImport.rows}
+                busy={isSaving}
+                onApply={(reviewRows) => applyEquipmentCsvUpdates(signedInUser, reviewRows)}
+                onClose={() => setCsvImport(null)}
             />}
         </main>
     )

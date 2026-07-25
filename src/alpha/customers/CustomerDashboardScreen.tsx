@@ -5,8 +5,10 @@ import { getSignedInUserInfo } from '../../auth/signedInUser'
 import { useEquipmentManager } from '../equipment/hooks/useEquipmentManager'
 import EquipmentDrawer from '../equipment/components/EquipmentDrawer'
 import EquipmentDataQualityIndicator from '../equipment/components/EquipmentDataQualityIndicator'
+import { compareEquipmentDataQuality } from '../equipment/dataQuality/equipmentDataQuality'
 import BulkEquipmentImportDrawer from '../equipment/components/BulkEquipmentImportDrawer'
 import EquipmentTransferDrawer from './EquipmentTransferDrawer'
+import SiteMaintenanceSettingsDrawer from './SiteMaintenanceSettingsDrawer'
 import { canUseBulkEquipmentImport } from '../equipment/utils/bulkEquipmentImport'
 import { isRoadRegistered } from '../equipment/compliance/equipmentCompliance'
 import { useJobs } from '../jobs/hooks/useJobs'
@@ -21,6 +23,7 @@ import type { Customer } from '../jobs/types/customer.types'
 import type { Site } from '../jobs/types/site.types'
 import { calculateHoursRemaining, calculatePrimaryNextService, calculateServiceStatus } from '../equipment/servicePlans/servicePlanStatus'
 import { SERVICE_TYPE_OPTIONS } from '../equipment/servicePlans/equipmentServicePlan.types'
+import { MAINTENANCE_PROFILES } from '../equipment/servicePlans/maintenanceConfiguration'
 import CustomerDrawer, { type CustomerDraft, type CustomerDrawerTab } from './CustomerDrawer'
 import { customerContactsFromSiteLinks, type CustomerContact } from './customerContact.types'
 import CustomerOpenJobsTab from './CustomerOpenJobsTab'
@@ -34,10 +37,9 @@ import './CustomerDashboardScreen.css'
 const dateFormatter = new Intl.DateTimeFormat('en-NZ', { dateStyle: 'medium' })
 const CUSTOMER_DASHBOARD_AUTO_EXPAND_SITE_LIMIT = 2
 const CUSTOMER_DASHBOARD_AUTO_EXPAND_EQUIPMENT_LIMIT = 10
-
-function text(value?: string | null) {
-    return value?.trim().toLowerCase() ?? ''
-}
+type SiteEquipmentSortKey = 'fleet' | 'wofExpiry' | 'dataStatus'
+type SiteEquipmentSort = { key: SiteEquipmentSortKey; direction: 'asc' | 'desc' }
+const DEFAULT_SITE_EQUIPMENT_SORT: SiteEquipmentSort = { key: 'fleet', direction: 'asc' }
 
 function display(value?: string | number | null) {
     return value == null || value === '' ? '-' : value
@@ -61,6 +63,7 @@ export default function CustomerDashboardScreen() {
         reload,
         clearSaveError,
         updateSites,
+        updateSiteMaintenanceSettings,
         transferEquipment,
         updateEquipment,
         createEquipment: createDashboardEquipment,
@@ -114,8 +117,10 @@ export default function CustomerDashboardScreen() {
     const [bulkImportSite, setBulkImportSite] = useState<Site | null>(null)
     const [bulkImportSuccess, setBulkImportSuccess] = useState('')
     const [transferSite, setTransferSite] = useState<Site | null>(null)
+    const [maintenanceSettingsSite, setMaintenanceSettingsSite] = useState<Site | null>(null)
     const [transferSuccess, setTransferSuccess] = useState('')
     const [expandedSitesByCustomer, setExpandedSitesByCustomer] = useState<Record<string, Record<string, boolean>>>({})
+    const [equipmentSortBySite, setEquipmentSortBySite] = useState<Record<string, SiteEquipmentSort>>({})
     const [creatingJobInitialValues, setCreatingJobInitialValues] = useState<JobCreateInitialValues | null>(null)
     const [editingJob, setEditingJob] = useState<Job | null>(null)
     const [activeTab, setActiveTab] = useState<'sites' | 'open-jobs' | 'quotes' | 'contacts' | 'info'>('sites')
@@ -134,10 +139,11 @@ export default function CustomerDashboardScreen() {
     const allSites = useMemo(() => {
         const customersWithDrafts = new Set(Object.keys(customerDrafts))
         const unchangedSites = sites.filter((site) => !site.gr_Customer?.gr_customerid || !customersWithDrafts.has(site.gr_Customer.gr_customerid))
-        const draftSites = Object.entries(customerDrafts).flatMap(([customerId, draft]) => draft.sites.map((site) => ({
+        const draftSites: Site[] = Object.entries(customerDrafts).flatMap(([customerId, draft]) => draft.sites.map((site) => ({
             gr_siteid: site.id,
             gr_name: site.name,
             gr_address: site.address,
+            gr_defaultmaintenanceprofile: null,
             gr_Customer: { gr_customerid: customerId, gr_name: draft.name },
         })))
         return [...unchangedSites, ...draftSites]
@@ -243,9 +249,42 @@ export default function CustomerDashboardScreen() {
         { label: 'Last Job Date', value: lastJob ? dateFormatter.format(new Date(lastJob.createdon)) : '-' },
     ]
 
-    const equipmentForSite = (site: Site) => customerEquipment
-        .filter((item) => item.gr_Site?.gr_siteid === site.gr_siteid)
-        .sort((a, b) => text(a.gr_fleet).localeCompare(text(b.gr_fleet), undefined, { numeric: true }))
+    const equipmentForSite = (site: Site) => {
+        const sort = equipmentSortBySite[site.gr_siteid] ?? DEFAULT_SITE_EQUIPMENT_SORT
+        return customerEquipment
+            .filter((item) => item.gr_Site?.gr_siteid === site.gr_siteid)
+            .sort((left, right) => {
+                if (sort.key === 'dataStatus') {
+                    const plansFor = (item: Equipment) => servicePlans.filter((plan) =>
+                        plan._gr_equipment_value?.toLowerCase() === item.gr_equipmentid.toLowerCase(),
+                    )
+                    return compareEquipmentDataQuality(left, plansFor(left), right, plansFor(right), sort.direction)
+                }
+                const leftValue = sort.key === 'fleet' ? left.gr_fleet : left.gr_currentwofexpiry
+                const rightValue = sort.key === 'fleet' ? right.gr_fleet : right.gr_currentwofexpiry
+                const leftEmpty = !leftValue
+                const rightEmpty = !rightValue
+                if (leftEmpty !== rightEmpty) return leftEmpty ? 1 : -1
+                if (leftEmpty && rightEmpty) return 0
+                const comparison = sort.key === 'fleet'
+                    ? leftValue!.localeCompare(rightValue!, undefined, { numeric: true, sensitivity: 'base' })
+                    : leftValue!.localeCompare(rightValue!)
+                return comparison * (sort.direction === 'asc' ? 1 : -1)
+            })
+    }
+
+    const changeEquipmentSort = (siteId: string, key: SiteEquipmentSortKey) => {
+        setEquipmentSortBySite((current) => {
+            const existing = current[siteId] ?? DEFAULT_SITE_EQUIPMENT_SORT
+            return {
+                ...current,
+                [siteId]: {
+                    key,
+                    direction: existing.key === key && existing.direction === 'asc' ? 'desc' : 'asc',
+                },
+            }
+        })
+    }
 
     const initialJobValuesForCustomer = (customer: Customer): JobCreateInitialValues => {
         const onlySite = customerSites.length === 1 ? customerSites[0] : undefined
@@ -341,20 +380,20 @@ export default function CustomerDashboardScreen() {
             eyebrow="Customers"
             title="Customer Dashboard"
             subtitle="Manage customer sites, equipment, jobs, and service activity from one workspace."
-            actions={<button className="page-header-primary-action" type="button" onClick={() => setCustomerDrawerMode('create')}>+ Create Customer</button>}
+            actions={<div className="customer-dashboard-header-actions">
+                <SearchableSelect
+                    id="customer-dashboard-customer"
+                    label="Customer"
+                    value={selectedCustomerId}
+                    options={customerOptions}
+                    onChange={(customerId) => { initialiseCustomerSiteState(customerId); setSelectedCustomerId(customerId); setActiveTab('sites'); setSiteSuccess('') }}
+                    placeholder="Select a customer"
+                    searchPlaceholder="Search customers"
+                    emptyLabel="No matching customers"
+                />
+                <button className="page-header-primary-action" type="button" onClick={() => setCustomerDrawerMode('create')}>+ Create Customer</button>
+            </div>}
         />
-        <section className="customer-dashboard-selector" aria-label="Customer selection">
-            <SearchableSelect
-                id="customer-dashboard-customer"
-                label="Customer"
-                value={selectedCustomerId}
-                options={customerOptions}
-                onChange={(customerId) => { initialiseCustomerSiteState(customerId); setSelectedCustomerId(customerId); setActiveTab('sites'); setSiteSuccess('') }}
-                placeholder="Select a customer"
-                searchPlaceholder="Search customers"
-                emptyLabel="No matching customers"
-            />
-        </section>
 
         {isLoading ? <section className="customer-dashboard-state">Loading customer data...</section> : loadError ? (
             <section className="customer-dashboard-state error">
@@ -412,6 +451,7 @@ export default function CustomerDashboardScreen() {
 
                 {customerSites.length === 0 ? <div className="customer-dashboard-empty compact">No sites have been recorded for this customer yet.</div> : customerSites.map((site) => {
                     const rows = equipmentForSite(site)
+                    const equipmentSort = equipmentSortBySite[site.gr_siteid] ?? DEFAULT_SITE_EQUIPMENT_SORT
                     const operatingHours = customerDrafts[selectedCustomer.gr_customerid]?.sites.find((item) => item.id === site.gr_siteid)?.operatingHours
                     const expanded = siteIsExpanded(site.gr_siteid)
                     const equipmentRegionId = `customer-site-equipment-${site.gr_siteid}`
@@ -463,6 +503,7 @@ export default function CustomerDashboardScreen() {
                                             customerName: selectedCustomer.gr_name,
                                             siteId: site.gr_siteid,
                                             siteName: site.gr_name,
+                                            maintenanceProfile: site.gr_defaultmaintenanceprofile ?? MAINTENANCE_PROFILES.STANDARD,
                                         })
                                     }}
                                 >
@@ -487,6 +528,18 @@ export default function CustomerDashboardScreen() {
                                     && !selectedCustomer.gr_customerid.startsWith('prototype-customer-')
                                     && <button
                                         type="button"
+                                        title={`Configure maintenance defaults for ${site.gr_name}`}
+                                        onClick={() => {
+                                            clearSaveError()
+                                            setMaintenanceSettingsSite(site)
+                                        }}
+                                    >
+                                        Site Settings
+                                    </button>}
+                                {!site.gr_siteid.startsWith('prototype-site-')
+                                    && !selectedCustomer.gr_customerid.startsWith('prototype-customer-')
+                                    && <button
+                                        type="button"
                                         title={`Transfer existing Equipment to ${site.gr_name}`}
                                         onClick={() => {
                                             clearSaveError()
@@ -494,13 +547,28 @@ export default function CustomerDashboardScreen() {
                                             setTransferSite(site)
                                         }}
                                     >
-                                        Transfer Existing Equipment
+                                        Transfer Equipment
                                     </button>}
                             </div>
                         </header>
                         <div className="customer-equipment-table-wrap" id={equipmentRegionId} hidden={!expanded}>
                             <table className="customer-equipment-table">
-                                <thead><tr><th>Fleet Number</th><th>Make</th><th>Model</th><th>Registration</th><th>WOF Expiry</th><th>Last Known Hour Meter</th><th>Next Service</th><th>Maintenance Status</th><th className="customer-equipment-data-quality-heading"><span className="customer-visually-hidden">Data status</span></th></tr></thead>
+                                <thead><tr>
+                                    <th aria-sort={equipmentSort.key === 'fleet' ? (equipmentSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                                        <button type="button" className="customer-equipment-sort" onClick={() => changeEquipmentSort(site.gr_siteid, 'fleet')}>Fleet Number <span aria-hidden="true">{equipmentSort.key === 'fleet' ? (equipmentSort.direction === 'asc' ? '↑' : '↓') : ''}</span></button>
+                                    </th>
+                                    <th>Make</th><th>Model</th><th>Registration</th>
+                                    <th aria-sort={equipmentSort.key === 'wofExpiry' ? (equipmentSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                                        <button type="button" className="customer-equipment-sort" onClick={() => changeEquipmentSort(site.gr_siteid, 'wofExpiry')}>WOF Expiry <span aria-hidden="true">{equipmentSort.key === 'wofExpiry' ? (equipmentSort.direction === 'asc' ? '↑' : '↓') : ''}</span></button>
+                                    </th>
+                                    <th>Last Known Hour Meter</th><th>Next Service</th><th>Maintenance Status</th>
+                                    <th className="customer-equipment-data-quality-heading" aria-sort={equipmentSort.key === 'dataStatus' ? (equipmentSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                                        <button type="button" className="customer-equipment-sort" onClick={() => changeEquipmentSort(site.gr_siteid, 'dataStatus')} aria-label="Sort by Data status">
+                                            <span className="customer-visually-hidden">Data status</span>
+                                            <span aria-hidden="true">{equipmentSort.key === 'dataStatus' ? (equipmentSort.direction === 'asc' ? '↑' : '↓') : '↕'}</span>
+                                        </button>
+                                    </th>
+                                </tr></thead>
                                 <tbody>
                                     {rows.length === 0 ? <tr><td colSpan={9}>No equipment recorded for this site.</td></tr> : rows.map((item) => {
                                         const plans = servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === item.gr_equipmentid.toLowerCase())
@@ -520,7 +588,9 @@ export default function CustomerDashboardScreen() {
                                             <td>{display(item.gr_model)}</td>
                                             <td>{display(item.gr_registrationnumber)}</td>
                                             <td>{display(formatWofDateOnly(item.gr_currentwofexpiry))}</td>
-                                            <td>{display(item.gr_currenthourmeter)}</td>
+                                            <td>{display(item.gr_currenthourmeter)}
+                                                {item.gr_currenthourmeterrecordeddate && <small>Recorded {formatWofDateOnly(item.gr_currenthourmeterrecordeddate)}</small>}
+                                            </td>
                                             <td>{primary ? `${serviceLabel} @ ${primary.gr_nextduehours}` : 'Not Configured'}{remaining != null && <small>{Math.abs(remaining)} hrs {remaining < 0 ? 'overdue' : 'remaining'}</small>}</td>
                                             <td><span className={`customer-maintenance-status status-${status?.toLowerCase().replace(' ', '-') ?? 'unknown'}`}>{status ?? 'Unknown'}</span></td>
                                             <td className="customer-equipment-data-quality"><EquipmentDataQualityIndicator equipment={item} servicePlans={plans} /></td>
@@ -665,6 +735,20 @@ export default function CustomerDashboardScreen() {
                 setTransferSite(null)
             }}
             onClose={() => setTransferSite(null)}
+        />}
+
+        {maintenanceSettingsSite && <SiteMaintenanceSettingsDrawer
+            key={maintenanceSettingsSite.gr_siteid}
+            site={maintenanceSettingsSite}
+            equipment={equipmentForSite(maintenanceSettingsSite)}
+            busy={isSaving}
+            error={saveError}
+            onSave={(profile, equipmentIds) => updateSiteMaintenanceSettings(maintenanceSettingsSite, profile, equipmentIds)}
+            onComplete={() => {
+                setSiteSuccess(`${maintenanceSettingsSite.gr_name} maintenance settings updated.`)
+                setMaintenanceSettingsSite(null)
+            }}
+            onClose={() => setMaintenanceSettingsSite(null)}
         />}
 
         {creatingJobInitialValues && <JobCreateDrawer

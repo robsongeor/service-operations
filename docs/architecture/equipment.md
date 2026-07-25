@@ -39,6 +39,11 @@ identity, On-road compliance, and missing maintenance history are calculated con
 - Current Hour Meter is presented as “Last Known Hour Meter”; the stored contract remains
   unchanged.
 - Road compliance determines whether Equipment can participate in new WOF work.
+- Equipment CSV maintenance is restricted to the explicitly authorised administrator.
+  Imports match only by Equipment Dataverse ID, ignore blank cells by default, validate
+  stable Site IDs and typed values, and require review plus confirmation before updating
+  current master fields. They never create or delete Equipment or rewrite operational
+  history.
 
 ## Extension Points
 

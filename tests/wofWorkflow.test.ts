@@ -4,7 +4,11 @@ import test from 'node:test'
 import { JOB_STATUSES } from '../src/alpha/jobs/types/jobStatus.types.ts'
 import { JOB_TYPES } from '../src/alpha/jobs/types/jobType.types.ts'
 import { getJobCompletionKind, runWofCompletion, validateWofCompletionExpiry } from '../src/alpha/jobs/completion/jobCompletion.ts'
-import { newZealandDateOnly } from '../src/alpha/shared/dates/dateOnly.ts'
+import {
+    addCalendarYearsDateOnly,
+    defaultWofExpiryDate,
+    newZealandDateOnly,
+} from '../src/alpha/shared/dates/dateOnly.ts'
 import type { Equipment } from '../src/alpha/jobs/types/equipment.types.ts'
 import { WOF_RESULTS, type WofInspection } from '../src/alpha/wof/types/wof.types.ts'
 import {
@@ -156,6 +160,16 @@ test('WOF completion uses Pacific Auckland daylight saving rather than a fixed o
     assert.equal(newZealandDateOnly('2026-01-01T10:30:00Z'), '2026-01-01')
     assert.equal(newZealandDateOnly('2026-01-01T11:30:00Z'), '2026-01-02')
     assert.equal(validateWofCompletionExpiry('2026-01-02', '2025-12-01', '2026-01-01T11:30:00Z'), '')
+})
+
+test('WOF completion defaults to NZ today plus one calendar year', () => {
+    assert.equal(defaultWofExpiryDate(new Date('2026-07-24T12:30:00Z')), '2027-07-25')
+    assert.equal(defaultWofExpiryDate(new Date('2026-03-01T00:00:00Z')), '2027-03-01')
+})
+
+test('calendar-year addition clamps leap day safely', () => {
+    assert.equal(addCalendarYearsDateOnly('2024-02-29', 1), '2025-02-28')
+    assert.equal(addCalendarYearsDateOnly('2024-02-29', 4), '2028-02-29')
 })
 
 test('non-WOF completion kinds remain unchanged', () => {

@@ -10,6 +10,7 @@ import { JOB_TYPES } from '../types/jobType.types'
 import { validateCompletionHourMeter } from './jobCompletion'
 import { calculateNextDueDate, isServiceTypeEnabled, resolveMaintenanceConfiguration } from '../../equipment/servicePlans/maintenanceConfiguration'
 import type { MaintenanceProfile, ServiceProgramme } from '../../equipment/servicePlans/maintenanceConfiguration'
+import { newZealandDateOnly } from '../../shared/dates/dateOnly'
 
 const API_URL = `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2`
 
@@ -273,6 +274,7 @@ function completionRequests(
 
     const equipmentFields: Record<string, string | number | boolean | null> = {
         gr_currenthourmeter: Math.max(context.equipment.gr_currenthourmeter ?? 0, input.hourMeter),
+        gr_currenthourmeterrecordeddate: newZealandDateOnly(completedDate),
     }
     if (input.pendingSave?.siteId) {
         equipmentFields['gr_Site@odata.bind'] = `/gr_sites(${recordId(input.pendingSave.siteId, 'Site identifier')})`

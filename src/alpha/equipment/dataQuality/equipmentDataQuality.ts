@@ -10,6 +10,12 @@ export type EquipmentDataQuality = {
     warningIssues: string[]
 }
 
+export const EQUIPMENT_DATA_QUALITY_SEVERITY_RANK: Record<EquipmentDataQualitySeverity, number> = {
+    critical: 0,
+    warning: 1,
+    none: 2,
+}
+
 const missing = (value?: string | null) => !value?.trim()
 
 export function evaluateEquipmentDataQuality(
@@ -42,4 +48,24 @@ export function evaluateEquipmentDataQuality(
         criticalIssues,
         warningIssues,
     }
+}
+
+function compareFleetNumber(left?: string | null, right?: string | null) {
+    const leftValue = left?.trim() ?? ''
+    const rightValue = right?.trim() ?? ''
+    if (Boolean(leftValue) !== Boolean(rightValue)) return leftValue ? -1 : 1
+    return leftValue.localeCompare(rightValue, undefined, { numeric: true, sensitivity: 'base' })
+}
+
+export function compareEquipmentDataQuality(
+    left: Equipment,
+    leftPlans: EquipmentServicePlan[],
+    right: Equipment,
+    rightPlans: EquipmentServicePlan[],
+    direction: 'asc' | 'desc',
+) {
+    const leftRank = EQUIPMENT_DATA_QUALITY_SEVERITY_RANK[evaluateEquipmentDataQuality(left, leftPlans).severity]
+    const rightRank = EQUIPMENT_DATA_QUALITY_SEVERITY_RANK[evaluateEquipmentDataQuality(right, rightPlans).severity]
+    const severityComparison = (leftRank - rightRank) * (direction === 'asc' ? 1 : -1)
+    return severityComparison || compareFleetNumber(left.gr_fleet, right.gr_fleet)
 }

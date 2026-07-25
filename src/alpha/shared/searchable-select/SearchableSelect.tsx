@@ -101,40 +101,42 @@ export default function SearchableSelect({
             }}
         >
             <label id={`${id}-label`}>{label}{required ? ' *' : ''}</label>
-            <button
+            {open ? <input
+                id={id}
+                ref={inputRef}
+                className="searchable-select-input"
+                type="search"
+                role="combobox"
+                aria-labelledby={`${id}-label`}
+                aria-expanded="true"
+                aria-controls={listboxId}
+                aria-activedescendant={`${listboxId}-${activeIndex}`}
+                aria-describedby={error ? errorId : undefined}
+                autoComplete="off"
+                placeholder={searchPlaceholder}
+                value={query}
+                onChange={(event) => { setQuery(event.target.value); setActiveIndex(0) }}
+                onKeyDown={(event) => {
+                    if (event.key === 'ArrowDown') { event.preventDefault(); setActiveIndex((current) => Math.min(current + 1, Math.max(optionCount - 1, 0))) }
+                    if (event.key === 'ArrowUp') { event.preventDefault(); setActiveIndex((current) => Math.max(current - 1, 0)) }
+                    if (event.key === 'Enter') { event.preventDefault(); chooseActive() }
+                    if (event.key === 'Escape') { setOpen(false); setQuery('') }
+                }}
+            /> : <button
                 id={id}
                 type="button"
                 className="searchable-select-trigger"
                 aria-labelledby={`${id}-label ${id}`}
                 aria-haspopup="listbox"
-                aria-expanded={open}
+                aria-expanded="false"
                 aria-describedby={error ? errorId : undefined}
                 disabled={disabled}
-                onClick={() => { setOpen((current) => !current); setQuery(''); setActiveIndex(0) }}
+                onClick={() => { setOpen(true); setQuery(''); setActiveIndex(0) }}
             >
                 <span>{multiple && values.length > 0 ? `${values.length} selected` : selected?.label ?? placeholder}</span><span aria-hidden="true">⌄</span>
-            </button>
+            </button>}
             {open && (
                 <div className="searchable-select-menu">
-                    <input
-                        ref={inputRef}
-                        type="search"
-                        role="combobox"
-                        aria-label={`Search ${label}`}
-                        aria-expanded="true"
-                        aria-controls={listboxId}
-                        aria-activedescendant={`${listboxId}-${activeIndex}`}
-                        autoComplete="off"
-                        placeholder={searchPlaceholder}
-                        value={query}
-                        onChange={(event) => { setQuery(event.target.value); setActiveIndex(0) }}
-                        onKeyDown={(event) => {
-                            if (event.key === 'ArrowDown') { event.preventDefault(); setActiveIndex((current) => Math.min(current + 1, Math.max(optionCount - 1, 0))) }
-                            if (event.key === 'ArrowUp') { event.preventDefault(); setActiveIndex((current) => Math.max(current - 1, 0)) }
-                            if (event.key === 'Enter') { event.preventDefault(); chooseActive() }
-                            if (event.key === 'Escape') setOpen(false)
-                        }}
-                    />
                     <div id={listboxId} className="searchable-select-results" role="listbox" aria-multiselectable={multiple || undefined} aria-labelledby={`${id}-label`}>
                         {!multiple && <button id={`${listboxId}-0`} type="button" role="option" aria-selected={activeIndex === 0} className={activeIndex === 0 ? 'active' : ''} onMouseEnter={() => setActiveIndex(0)} onClick={() => choose('')}>
                             <strong>{placeholder}</strong><small>Clear selection</small>

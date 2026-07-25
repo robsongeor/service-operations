@@ -30,6 +30,13 @@ current Customer and Site, and delegates the narrow Site-lookup mutation to the 
 workflow. Successful moves update the dashboard projection immediately; failures remain
 selected for an individual retry.
 
+Each persisted Site also owns an optional `gr_defaultmaintenanceprofile` Choice using the
+same numeric values as Equipment `gr_maintenanceprofile`. Site Settings can save that
+default and, only after explicit selection and confirmation, apply it to existing Equipment.
+New Equipment inherits the selected Site default unless the user explicitly chooses another
+profile. Transfers may explicitly adopt the destination default; otherwise the existing
+Equipment profile is preserved.
+
 ## Important Business Rules
 
 - Site Equipment is grouped by the actual Site relationship.
@@ -39,8 +46,11 @@ selected for an individual retry.
 - Date Only values use shared WOF formatting.
 - Disclosure and view state is keyed by durable Dataverse IDs and scoped to the selected
   Customer so local mutations do not reset unrelated sections.
-- Equipment transfer changes only the current Equipment Site lookup. It never rewrites the
-  Site relationship retained on historical Jobs or other operational history.
+- Equipment transfer changes the current Equipment Site lookup and may explicitly adopt the
+  destination maintenance default. It never rewrites historical Jobs, service plans, or
+  maintenance history.
+- The Last Known Hour Meter recorded date is derived from the latest already-loaded completed
+  Job containing an hour-meter reading, avoiding per-row Dataverse requests.
 
 ## Extension Points
 

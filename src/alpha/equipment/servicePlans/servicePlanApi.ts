@@ -29,6 +29,7 @@ export type MaintenanceHistoryPlanInput = {
 
 export type MaintenanceHistoryInput = {
     currentHourMeter: number
+    readingRecordedDate: string
     plans: MaintenanceHistoryPlanInput[]
 }
 
@@ -44,7 +45,7 @@ export async function saveEquipmentMaintenanceHistory(
     existingPlans: EquipmentServicePlan[],
     input: MaintenanceHistoryInput,
 ): Promise<EquipmentServicePlan[]> {
-    await updateEquipmentCurrentHourMeter(token, equipmentId, input.currentHourMeter)
+    await updateEquipmentCurrentHourMeter(token, equipmentId, input.currentHourMeter, input.readingRecordedDate)
     const configuration = resolveMaintenanceConfiguration(equipment)
 
     const nextPlans = await Promise.all(input.plans.map(async (planInput) => {
@@ -115,11 +116,14 @@ export async function saveEquipmentMaintenanceHistory(
     return nextPlans
 }
 
-export async function updateEquipmentCurrentHourMeter(token: string, equipmentId: string, hourMeter: number) {
+export async function updateEquipmentCurrentHourMeter(token: string, equipmentId: string, hourMeter: number, readingRecordedDate: string) {
     const response = await fetch(`${API_URL}/gr_equipments(${equipmentId})`, {
         method: 'PATCH',
         headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gr_currenthourmeter: hourMeter }),
+        body: JSON.stringify({
+            gr_currenthourmeter: hourMeter,
+            gr_currenthourmeterrecordeddate: readingRecordedDate,
+        }),
     })
     await ensureSuccess(response, 'Failed to update equipment current hour meter')
 }

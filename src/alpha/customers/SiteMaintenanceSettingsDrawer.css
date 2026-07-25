@@ -1,0 +1,80 @@
+.site-maintenance-setting,
+.site-maintenance-bulk {
+    display: grid;
+    gap: .65rem;
+}
+
+.site-maintenance-setting label,
+.site-maintenance-section-heading h3 {
+    font-weight: 700;
+}
+
+.site-maintenance-setting select {
+    min-height: 2.75rem;
+    border: 1px solid var(--border-color, #ccd5cf);
+    border-radius: .5rem;
+    padding: 0 .75rem;
+    background: white;
+}
+
+.site-maintenance-setting p,
+.site-maintenance-section-heading p {
+    margin: 0;
+    color: #5f6d66;
+    font-size: .86rem;
+}
+
+.site-maintenance-section-heading {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: start;
+}
+
+.site-maintenance-section-heading h3 {
+    margin: 0 0 .25rem;
+}
+
+.site-maintenance-section-heading > div:last-child,
+.site-maintenance-footer-actions {
+    display: flex;
+    gap: .5rem;
+}
+
+.site-maintenance-selected {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: .45rem;
+}
+
+.site-maintenance-selected li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    border: 1px solid #dce4df;
+    border-radius: .5rem;
+    padding: .6rem .7rem;
+}
+
+.site-maintenance-selected span,
+.site-maintenance-selected small {
+    display: block;
+}
+
+.site-maintenance-selected small {
+    color: #66736c;
+    margin-top: .15rem;
+}
+
+.site-maintenance-error {
+    color: #a52b2b;
+}
+
+@media (max-width: 560px) {
+    .site-maintenance-section-heading {
+        display: grid;
+    }
+}

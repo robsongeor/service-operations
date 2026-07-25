@@ -22,3 +22,11 @@
 .equipment-transfer-failures li span,.equipment-transfer-confirmation li span { color: #6e7772; font-size: .68rem; }
 .equipment-transfer-confirmation p { margin: 0; }
 .equipment-transfer-confirmation ul { max-height: 240px; overflow-y: auto; }
+.equipment-transfer-adopt-profile {
+    display: flex;
+    align-items: flex-start;
+    gap: .55rem;
+    padding: .75rem;
+    border: 1px solid #dce4df;
+    border-radius: .5rem;
+}

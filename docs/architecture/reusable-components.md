@@ -56,6 +56,7 @@ Business rules must have one owner even when several screens display the result.
 | Service-plan calculations | `src/alpha/equipment/servicePlans/servicePlanCalculations.ts` | Service-plan calculations. |
 | Service-plan status | `src/alpha/equipment/servicePlans/servicePlanStatus.ts` | Maintenance/service-plan status derivation. |
 | Job completion | `src/alpha/jobs/completion/` | Job completion orchestration and completion-side effects. |
+| Equipment CSV tools | `src/alpha/equipment/utils/equipmentCsv.ts` | Admin authorization, UTF-8 CSV serialization/parsing, stable-ID matching, blank-safe comparison, and staged Equipment change review. |
 
 Use feature hooks and services for loading and mutations. Components render values and raise
 actions; they do not duplicate Dataverse calls or domain calculations.

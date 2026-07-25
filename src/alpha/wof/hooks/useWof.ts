@@ -166,7 +166,11 @@ export function useWof() {
         setEquipmentSaveError('')
         try {
             const updatedPlans = await saveEquipmentMaintenanceHistoryApi(await token(), record.gr_equipmentid, record, plans, input)
-            const updatedEquipment = { ...record, gr_currenthourmeter: input.currentHourMeter }
+            const updatedEquipment = {
+                ...record,
+                gr_currenthourmeter: input.currentHourMeter,
+                gr_currenthourmeterrecordeddate: input.readingRecordedDate,
+            }
             setEquipment((current) => current.map((item) => item.gr_equipmentid === record.gr_equipmentid ? updatedEquipment : item))
             setServicePlans((current) => [
                 ...current.filter((plan) => plan._gr_equipment_value?.toLowerCase() !== record.gr_equipmentid.toLowerCase()),

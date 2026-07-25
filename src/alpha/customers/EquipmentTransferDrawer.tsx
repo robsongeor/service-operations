@@ -17,7 +17,7 @@ type Props = {
     site: Site
     equipment: Equipment[]
     busy: boolean
-    onTransfer: (equipmentIds: string[], destinationSiteId: string) => Promise<TransferResult>
+    onTransfer: (equipmentIds: string[], destinationSiteId: string, adoptDestinationProfile: boolean) => Promise<TransferResult>
     onComplete: (count: number) => void
     onClose: () => void
 }
@@ -31,6 +31,7 @@ export default function EquipmentTransferDrawer({ customer, site, equipment, bus
     const [failures, setFailures] = useState<Array<{ equipmentId: string; message: string }>>([])
     const [transferredCount, setTransferredCount] = useState(0)
     const [submitError, setSubmitError] = useState('')
+    const [adoptDestinationProfile, setAdoptDestinationProfile] = useState(site.gr_defaultmaintenanceprofile != null)
 
     const candidates = useMemo(() => equipment
         .filter((item) => item.gr_Site?.gr_siteid !== site.gr_siteid)
@@ -50,7 +51,7 @@ export default function EquipmentTransferDrawer({ customer, site, equipment, bus
         if (selectedIds.length === 0) return
         setSubmitError('')
         try {
-            const result = await onTransfer(selectedIds, site.gr_siteid)
+            const result = await onTransfer(selectedIds, site.gr_siteid, adoptDestinationProfile)
             const nextTransferredCount = transferredCount + result.succeeded.length
             setTransferredCount(nextTransferredCount)
             setConfirming(false)
@@ -127,12 +128,22 @@ export default function EquipmentTransferDrawer({ customer, site, equipment, bus
                     <button type="button" onClick={() => changeSelection(selectedIds.filter((equipmentId) => equipmentId !== item.gr_equipmentid))} disabled={busy} aria-label={`Remove ${equipmentLabel(item)} from transfer`}>Remove</button>
                 </li>)}</ul>}
             </section>
+            {site.gr_defaultmaintenanceprofile != null && <label className="equipment-transfer-adopt-profile">
+                <input
+                    type="checkbox"
+                    checked={adoptDestinationProfile}
+                    onChange={(event) => setAdoptDestinationProfile(event.target.checked)}
+                    disabled={busy}
+                />
+                Apply the destination Site's default Maintenance Profile
+            </label>}
         </EditDrawerShell>
         {confirming && <EditDrawerConfirmation
             eyebrow="Confirm Equipment transfer"
             title={`Transfer ${selected.length} machine${selected.length === 1 ? '' : 's'} to ${site.gr_name}?`}
             message={<div className="equipment-transfer-confirmation">
                 <p>The Equipment’s current Site will change to <strong>{site.gr_name}</strong>. Historical Jobs will not be changed.</p>
+                {adoptDestinationProfile && <p>The destination Site's default Maintenance Profile will also be applied. Other maintenance configuration and history will remain unchanged.</p>}
                 <ul>{selected.map((item) => <li key={item.gr_equipmentid}><strong>{equipmentLabel(item)}</strong><span>{item.gr_Site?.gr_Customer?.gr_name || 'No customer'} · {item.gr_Site?.gr_name || 'No Site'}</span></li>)}</ul>
             </div>}
             error={submitError}

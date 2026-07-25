@@ -43,7 +43,12 @@ export default function EquipmentTable({ equipment, servicePlans, sortKey, sortD
                         ))}
                         <th>State</th>
                         <th>Next service</th>
-                        <th className="equipment-data-quality-heading"><span className="equipment-visually-hidden">Data status</span></th>
+                        <th className="equipment-data-quality-heading" aria-sort={sortKey === 'dataStatus' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                            <button type="button" onClick={() => onSort('dataStatus')} aria-label="Sort by Data status">
+                                <span className="equipment-visually-hidden">Data status</span>
+                                <span aria-hidden="true">{sortKey === 'dataStatus' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕'}</span>
+                            </button>
+                        </th>
                         <th><span className="equipment-visually-hidden">Actions</span></th>
                     </tr>
                 </thead>

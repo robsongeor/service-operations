@@ -15,6 +15,7 @@ import {
 import type { Equipment } from '../types/equipment.types'
 import JobMaintenanceSummary from './JobMaintenanceSummary'
 import { formatWofDateOnly } from '../../wof/utils/wofRules'
+import { defaultWofExpiryDate } from '../../shared/dates/dateOnly'
 import './JobCompletionWorkflow.css'
 
 type Props = {
@@ -33,13 +34,16 @@ export default function JobCompletionWorkflow({ request, equipment, servicePlans
     const serviceType = request ? resolveCompletionServiceType(request) : null
     const currentHourMeter = selectedEquipment?.gr_currenthourmeter ?? 0
     const [hourMeter, setHourMeter] = useState('')
-    const [wofExpiry, setWofExpiry] = useState('')
+    const [wofExpiryInput, setWofExpiryInput] = useState({ jobId: '', value: '' })
     const [validationError, setValidationError] = useState('')
     const [showLargeIncreaseWarning, setShowLargeIncreaseWarning] = useState(false)
 
     if (!request || request.kind === 'standard') return null
 
     if (request.kind === 'wof') {
+        const wofExpiry = wofExpiryInput.jobId === request.job.gr_jobid
+            ? wofExpiryInput.value
+            : defaultWofExpiryDate()
         const completionDate = request.job.gr_completeddate ?? new Date().toISOString()
         const submitWof = () => {
             if (isCompleting) return
@@ -75,7 +79,10 @@ export default function JobCompletionWorkflow({ request, equipment, servicePlans
                     type="date"
                     required
                     value={wofExpiry}
-                    onChange={(event) => { setWofExpiry(event.target.value); setValidationError('') }}
+                    onChange={(event) => {
+                        setWofExpiryInput({ jobId: request.job.gr_jobid, value: event.target.value })
+                        setValidationError('')
+                    }}
                     autoFocus
                 />
             </label>

@@ -19,6 +19,8 @@ plan updates atomically.
 ## Major Dataverse Relationships
 
 - Equipment owns its maintenance configuration and current hour reading.
+- Equipment stores the Date Only value `gr_currenthourmeterrecordeddate` alongside its
+  current hour reading. The two values are saved together; `modifiedon` is not a substitute.
 - Equipment Service Plan records represent A, B, and C state.
 - Service Jobs reference Equipment and save their Service Type and completion reading.
 - Historical Jobs and inactive plans remain readable.
@@ -45,6 +47,8 @@ helpers feed Equipment, Jobs, and Customer views. All Service completion entry p
 - Programme changes never delete history or invent a completion.
 - A Service completion requires the expected Equipment, saved Service Type, and a whole,
   non-decreasing hour reading.
+- Manual Maintenance History edits require a reading date. New manual readings default to
+  the current New Zealand calendar date, while existing saved dates remain unchanged.
 
 ## Extension Points
 

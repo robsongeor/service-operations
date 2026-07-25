@@ -10,6 +10,7 @@ export type Equipment = {
     statecode?: number
     statuscode?: number
     gr_currenthourmeter?: number | null
+    gr_currenthourmeterrecordeddate?: string | null
     gr_servicetrackingenabled?: boolean | null
     gr_registrationnumber?: string | null
     gr_compliancestatus?: EquipmentComplianceStatus | null

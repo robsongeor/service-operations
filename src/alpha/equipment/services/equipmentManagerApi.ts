@@ -1,6 +1,7 @@
 import { fetchEquipment } from '../../jobs/services/equipmentApi'
 import type { Equipment } from '../../jobs/types/equipment.types'
 import { normalizeEquipmentInput, type EquipmentUpdateInput } from '../types/equipmentManager.types'
+import type { MaintenanceProfile } from '../servicePlans/maintenanceConfiguration'
 
 const API_URL = `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2`
 
@@ -71,6 +72,26 @@ export async function updateEquipment(
     if (!response.ok) {
         const detail = await response.text()
         throw new Error(`Failed to update equipment: ${detail || `${response.status} ${response.statusText}`}`)
+    }
+}
+
+export async function updateEquipmentMaintenanceProfile(
+    token: string,
+    equipmentId: string,
+    maintenanceProfile: MaintenanceProfile,
+): Promise<void> {
+    const response = await fetch(`${API_URL}/gr_equipments(${equipmentId})`, {
+        method: 'PATCH',
+        headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ gr_maintenanceprofile: maintenanceProfile }),
+    })
+    if (!response.ok) {
+        const detail = await response.text()
+        throw new Error(`Failed to update Equipment maintenance profile: ${detail || `${response.status} ${response.statusText}`}`)
     }
 }
 

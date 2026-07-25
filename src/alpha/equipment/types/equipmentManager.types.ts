@@ -3,9 +3,9 @@ import {
     EQUIPMENT_COMPLIANCE_STATUSES,
     isEquipmentComplianceStatus,
     type EquipmentComplianceStatus,
-} from '../compliance/equipmentCompliance'
-import type { MaintenanceProfile, PowerType, ServiceProgramme } from '../servicePlans/maintenanceConfiguration'
-import { MAINTENANCE_PROFILES, SERVICE_PROGRAMMES } from '../servicePlans/maintenanceConfiguration'
+} from '../compliance/equipmentCompliance.ts'
+import type { MaintenanceProfile, PowerType, ServiceProgramme } from '../servicePlans/maintenanceConfiguration.ts'
+import { MAINTENANCE_PROFILES, SERVICE_PROGRAMMES } from '../servicePlans/maintenanceConfiguration.ts'
 
 export type EquipmentUpdateInput = {
     fleet: string
@@ -95,7 +95,7 @@ export function normalizeEquipmentInput(input: EquipmentUpdateInput): EquipmentU
     }
 }
 
-export type EquipmentSortKey = 'fleet' | 'customer' | 'site' | 'make' | 'model' | 'serial'
+export type EquipmentSortKey = 'fleet' | 'customer' | 'site' | 'make' | 'model' | 'serial' | 'dataStatus'
 export type SortDirection = 'asc' | 'desc'
 
 export type EquipmentRecord = Equipment
