@@ -37,6 +37,12 @@ New Equipment inherits the selected Site default unless the user explicitly choo
 profile. Transfers may explicitly adopt the destination default; otherwise the existing
 Equipment profile is preserved.
 
+Persisted Sites expose one settings-icon entry point for management. The combined Site
+Settings drawer keeps Details and Settings form state mounted while switching tabs. Bulk Add
+Equipment is launched from its tab with the current Customer and Site supplied automatically;
+the existing bulk-import workflow remains responsible for parsing, review, validation,
+correction, and creation.
+
 ## Important Business Rules
 
 - Site Equipment is grouped by the actual Site relationship.
@@ -66,6 +72,7 @@ copy domain calculations into dashboard components or use temporary UI IDs as du
 
 - [`../../src/alpha/customers/CustomerDashboardScreen.tsx`](../../src/alpha/customers/CustomerDashboardScreen.tsx)
 - [`../../src/alpha/customers/CustomerDrawer.tsx`](../../src/alpha/customers/CustomerDrawer.tsx)
+- [`../../src/alpha/customers/SiteSettingsDrawer.tsx`](../../src/alpha/customers/SiteSettingsDrawer.tsx)
 - [`../../src/alpha/customers/EquipmentTransferDrawer.tsx`](../../src/alpha/customers/EquipmentTransferDrawer.tsx)
 - [Equipment](equipment.md)
 - [Jobs](jobs.md)

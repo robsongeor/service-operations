@@ -6,10 +6,11 @@ type Props = {
     active?: boolean
     visibleLabel?: string
     title?: string
+    ariaLabel?: string
 }
 
 const PageSettingsButton = forwardRef<HTMLButtonElement, Props>(function PageSettingsButton(
-    { onClick, active = false, visibleLabel, title = 'Settings' },
+    { onClick, active = false, visibleLabel, title = 'Settings', ariaLabel = 'Open page settings' },
     ref,
 ) {
     return (
@@ -17,7 +18,7 @@ const PageSettingsButton = forwardRef<HTMLButtonElement, Props>(function PageSet
             ref={ref}
             className={active ? 'page-settings-button active' : 'page-settings-button'}
             type="button"
-            aria-label="Open page settings"
+            aria-label={ariaLabel}
             aria-pressed={active}
             title={title}
             onClick={onClick}

@@ -13,7 +13,7 @@ export type JobsDefaultView = {
 export const APPLICATION_DEFAULT_JOBS_VIEW: JobsDefaultView = {
     selectedJobType: 'all',
     visibleStatuses: JOB_STATUS_OPTIONS.map((status) => status.value),
-    stickyThroughColumnId: 'job',
+    stickyThroughColumnId: null,
 }
 
 const validJobTypes = new Set<number>(JOB_TYPE_OPTIONS.map((jobType) => jobType.value))

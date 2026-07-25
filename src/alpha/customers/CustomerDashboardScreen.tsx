@@ -8,7 +8,7 @@ import EquipmentDataQualityIndicator from '../equipment/components/EquipmentData
 import { compareEquipmentDataQuality } from '../equipment/dataQuality/equipmentDataQuality'
 import BulkEquipmentImportDrawer from '../equipment/components/BulkEquipmentImportDrawer'
 import EquipmentTransferDrawer from './EquipmentTransferDrawer'
-import SiteMaintenanceSettingsDrawer from './SiteMaintenanceSettingsDrawer'
+import SiteSettingsDrawer from './SiteSettingsDrawer'
 import { canUseBulkEquipmentImport } from '../equipment/utils/bulkEquipmentImport'
 import { isRoadRegistered } from '../equipment/compliance/equipmentCompliance'
 import { useJobs } from '../jobs/hooks/useJobs'
@@ -31,6 +31,7 @@ import CustomerQuotesTab from './CustomerQuotesTab'
 import SearchableSelect from '../shared/searchable-select/SearchableSelect'
 import MetricStrip, { type MetricStripItem } from '../shared/metric-strip/MetricStrip'
 import PageHeader from '../shared/page-header/PageHeader'
+import PageSettingsButton from '../shared/settings/PageSettingsButton'
 import { formatWofDateOnly, getWofDueStatus } from '../wof/utils/wofRules'
 import './CustomerDashboardScreen.css'
 
@@ -117,7 +118,7 @@ export default function CustomerDashboardScreen() {
     const [bulkImportSite, setBulkImportSite] = useState<Site | null>(null)
     const [bulkImportSuccess, setBulkImportSuccess] = useState('')
     const [transferSite, setTransferSite] = useState<Site | null>(null)
-    const [maintenanceSettingsSite, setMaintenanceSettingsSite] = useState<Site | null>(null)
+    const [siteSettingsSite, setSiteSettingsSite] = useState<Site | null>(null)
     const [transferSuccess, setTransferSuccess] = useState('')
     const [expandedSitesByCustomer, setExpandedSitesByCustomer] = useState<Record<string, Record<string, boolean>>>({})
     const [equipmentSortBySite, setEquipmentSortBySite] = useState<Record<string, SiteEquipmentSort>>({})
@@ -477,20 +478,6 @@ export default function CustomerDashboardScreen() {
                                 </span>
                             </button>
                             <div className="customer-site-meta" onClick={(event) => event.stopPropagation()}>
-                                {!site.gr_siteid.startsWith('prototype-site-')
-                                    && !selectedCustomer.gr_customerid.startsWith('prototype-customer-')
-                                    && <button
-                                        type="button"
-                                        title={`Edit ${site.gr_name}`}
-                                        onClick={() => {
-                                            setSiteSuccess('')
-                                            setEditingSiteId(site.gr_siteid)
-                                            setCustomerDrawerInitialTab('sites')
-                                            setCustomerDrawerMode('edit')
-                                        }}
-                                    >
-                                        Edit Site
-                                    </button>}
                                 <button
                                     type="button"
                                     disabled={site.gr_siteid.startsWith('prototype-site-') || selectedCustomer.gr_customerid.startsWith('prototype-customer-')}
@@ -509,33 +496,17 @@ export default function CustomerDashboardScreen() {
                                 >
                                     New Equipment
                                 </button>
-                                {bulkImportAllowed
-                                    && !site.gr_siteid.startsWith('prototype-site-')
-                                    && !selectedCustomer.gr_customerid.startsWith('prototype-customer-')
-                                    && <button
-                                        type="button"
-                                        title={`Bulk add Equipment to ${site.gr_name}`}
-                                        onClick={() => {
-                                            clearSaveError()
-                                            setSiteExpanded(site.gr_siteid, true)
-                                            setBulkImportSuccess('')
-                                            setBulkImportSite(site)
-                                        }}
-                                    >
-                                        Bulk Add Equipment
-                                    </button>}
                                 {!site.gr_siteid.startsWith('prototype-site-')
                                     && !selectedCustomer.gr_customerid.startsWith('prototype-customer-')
-                                    && <button
-                                        type="button"
-                                        title={`Configure maintenance defaults for ${site.gr_name}`}
+                                    && <PageSettingsButton
+                                        title="Site settings"
+                                        ariaLabel={`Site settings for ${site.gr_name}`}
                                         onClick={() => {
                                             clearSaveError()
-                                            setMaintenanceSettingsSite(site)
+                                            setSiteSuccess('')
+                                            setSiteSettingsSite(site)
                                         }}
-                                    >
-                                        Site Settings
-                                    </button>}
+                                    />}
                                 {!site.gr_siteid.startsWith('prototype-site-')
                                     && !selectedCustomer.gr_customerid.startsWith('prototype-customer-')
                                     && <button
@@ -737,18 +708,32 @@ export default function CustomerDashboardScreen() {
             onClose={() => setTransferSite(null)}
         />}
 
-        {maintenanceSettingsSite && <SiteMaintenanceSettingsDrawer
-            key={maintenanceSettingsSite.gr_siteid}
-            site={maintenanceSettingsSite}
-            equipment={equipmentForSite(maintenanceSettingsSite)}
+        {siteSettingsSite && selectedCustomer && <SiteSettingsDrawer
+            key={siteSettingsSite.gr_siteid}
+            site={siteSettingsSite}
+            equipment={equipmentForSite(siteSettingsSite)}
             busy={isSaving}
             error={saveError}
-            onSave={(profile, equipmentIds) => updateSiteMaintenanceSettings(maintenanceSettingsSite, profile, equipmentIds)}
-            onComplete={() => {
-                setSiteSuccess(`${maintenanceSettingsSite.gr_name} maintenance settings updated.`)
-                setMaintenanceSettingsSite(null)
+            bulkImportAllowed={bulkImportAllowed}
+            onSaveDetails={(name, address) => updateSites([{
+                siteId: siteSettingsSite.gr_siteid,
+                input: { name, address },
+            }])}
+            onSaveSettings={(profile, equipmentIds) => updateSiteMaintenanceSettings(siteSettingsSite, profile, equipmentIds)}
+            onDetailsComplete={(name) => {
+                setSiteSuccess(`${name} updated successfully.`)
             }}
-            onClose={() => setMaintenanceSettingsSite(null)}
+            onSettingsComplete={() => {
+                setSiteSuccess(`${siteSettingsSite.gr_name} maintenance settings updated.`)
+                setSiteSettingsSite(null)
+            }}
+            onOpenBulkImport={() => {
+                setSiteExpanded(siteSettingsSite.gr_siteid, true)
+                setBulkImportSuccess('')
+                setBulkImportSite(siteSettingsSite)
+                setSiteSettingsSite(null)
+            }}
+            onClose={() => setSiteSettingsSite(null)}
         />}
 
         {creatingJobInitialValues && <JobCreateDrawer

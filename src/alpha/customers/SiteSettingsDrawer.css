@@ -1,0 +1,37 @@
+.site-settings-fields {
+    display: grid;
+    gap: 14px;
+}
+
+.site-settings-fields label {
+    display: grid;
+    gap: 6px;
+    color: #405049;
+    font-size: .78rem;
+    font-weight: 700;
+}
+
+.site-settings-fields input {
+    min-height: 42px;
+    box-sizing: border-box;
+    border: 1px solid #ccd5d0;
+    border-radius: 8px;
+    padding: 0 11px;
+    background: #fff;
+    color: #26332d;
+    font: inherit;
+}
+
+.site-settings-bulk-launch {
+    padding: 8px 0;
+}
+
+.site-settings-bulk-launch h3 {
+    margin: 0 0 8px;
+}
+
+.site-settings-bulk-launch p {
+    margin: 0;
+    color: #5f6d66;
+    line-height: 1.55;
+}

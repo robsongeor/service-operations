@@ -184,25 +184,38 @@
     background: #e2e6e3;
 }
 
+.jobs-table-header-scroll,
 .jobs-table-scroll {
     width: 100%;
     min-width: 0;
     max-width: 100%;
-    overflow: visible;
+}
+
+.jobs-table-header-scroll {
+    position: sticky;
+    z-index: 8;
+    top: var(--jobs-page-header-height, 72px);
+    overflow: hidden;
+    background: #f4f5f2;
+}
+
+.jobs-table-scroll {
+    overflow-x: auto;
+    overflow-y: visible;
+    overscroll-behavior-x: contain;
 }
 
 .jobs-table {
     width: 100%;
-    min-width: 1320px;
     border-collapse: collapse;
     table-layout: fixed;
     font-size: 0.75rem;
 }
 
 .jobs-table th {
-    position: sticky;
-    top: var(--jobs-page-header-height, 72px);
+    position: static;
     z-index: 3;
+    box-sizing: border-box;
     padding: 9px 10px;
     border-bottom: 1px solid #dfe4e1;
     background: #f4f5f2;
@@ -249,6 +262,7 @@
 
 .jobs-table td {
     height: 58px;
+    box-sizing: border-box;
     padding: 7px 10px;
     border-bottom: 2px solid #d5dbd7;
     color: #202421;
@@ -283,7 +297,7 @@
 }
 
 .jobs-table tbody tr[data-status="122830000"] td:first-child {
-    border-left: 4px solid #4d9663;
+    box-shadow: inset 4px 0 #4d9663;
 }
 
 .jobs-table tbody tr[data-status="122830001"] {
@@ -295,7 +309,7 @@
 }
 
 .jobs-table tbody tr[data-status="122830001"] td:first-child {
-    border-left: 4px solid #c99418;
+    box-shadow: inset 4px 0 #c99418;
 }
 
 .jobs-table tbody tr[data-status="122830002"] {
@@ -307,18 +321,7 @@
 }
 
 .jobs-table tbody tr[data-status="122830002"] td:first-child {
-    border-left: 4px solid #628ba7;
-}
-
-@container (max-width: 1320px) {
-    .jobs-table-scroll {
-        overflow-x: auto;
-        overscroll-behavior-x: contain;
-    }
-
-    .jobs-table th {
-        top: 0;
-    }
+    box-shadow: inset 4px 0 #628ba7;
 }
 
 .jobs-table tbody tr[data-status="122830003"] { background: #f3f4f3; opacity: .68; }
@@ -328,7 +331,7 @@
 .jobs-table tbody tr[data-status="122830003"] .jobs-table-summary small,
 .jobs-table tbody tr[data-status="122830003"] .jobs-table-muted,
 .jobs-table tbody tr[data-status="122830003"] .jobs-office-update { color: #8a918d !important; }
-.jobs-table tbody tr[data-status="122830003"] td:first-child { border-left: 4px solid #aeb5b1; }
+.jobs-table tbody tr[data-status="122830003"] td:first-child { box-shadow: inset 4px 0 #aeb5b1; }
 
 .jobs-table tbody tr:last-child td {
     border-bottom: 0;
@@ -337,16 +340,13 @@
 .jobs-table .jobs-table-sticky-column {
     position: sticky;
     z-index: 2;
-    background: #fff;
+    box-sizing: border-box;
+    background: inherit;
 }
 
 .jobs-table th.jobs-table-sticky-column {
     z-index: 4;
     background: #f4f5f2;
-}
-
-.jobs-table tbody tr:hover .jobs-table-sticky-column {
-    background: #f8faf9;
 }
 
 .jobs-table .jobs-table-sticky-boundary {
@@ -356,6 +356,11 @@
 .jobs-table .jobs-table-actions-column {
     position: sticky;
     right: 0;
+    width: var(--jobs-table-actions-width);
+    min-width: var(--jobs-table-actions-width);
+    max-width: var(--jobs-table-actions-width);
+    box-sizing: border-box;
+    white-space: nowrap;
     box-shadow: -1px 0 0 #d9dfdb, -7px 0 12px rgba(28, 38, 32, 0.05);
 }
 
@@ -539,8 +544,13 @@
 
 .jobs-table-actions {
     display: flex;
+    flex-wrap: nowrap;
     justify-content: flex-end;
     gap: 4px;
+}
+
+.jobs-table-actions > * {
+    flex: 0 0 auto;
 }
 .jobs-table-action:hover:not(:disabled) {
     border-color: #1d211e;

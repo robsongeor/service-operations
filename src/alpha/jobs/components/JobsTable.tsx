@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import type { Job } from '../types/job.types'
 import type { Mechanic } from '../types/mechanic.types'
 import { getJobTypeLabel } from '../types/jobType.types'
@@ -18,7 +18,7 @@ import { jobMatchesScheduledVisibility } from '../utils/scheduledJobsVisibility'
 import SearchableMechanicSelect from './SearchableMechanicSelect'
 import JobsTableSortIcon from './JobsTableSortIcon'
 import { isValidTechnicianEmail } from '../utils/technicianMailto'
-import { JOBS_TABLE_COLUMNS, jobsStickyColumnStyle, type JobsStickyThroughColumnId, type JobsTableColumnId } from '../types/jobsTableColumns'
+import { getJobsTableColumnWidths, JOBS_TABLE_ACTIONS_WIDTH, JOBS_TABLE_COLUMNS, JOBS_TABLE_WIDTH, jobsStickyColumnStyle, type JobsStickyThroughColumnId, type JobsTableColumnId } from '../types/jobsTableColumns'
 import { jobHasActiveSubmissionLink } from '../services/jobSubmissionLinkApi'
 import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation'
 import { hasTechnicianSubmission } from '../types/technicianSubmission'
@@ -80,12 +80,16 @@ export default function JobsTable({
     const [savingMechanicJobId, setSavingMechanicJobId] = useState<string | null>(null)
     const [emailingJobId, setEmailingJobId] = useState<string | null>(null)
     const [pendingEmailJob, setPendingEmailJob] = useState<Job | null>(null)
+    const tableHeaderScrollRef = useRef<HTMLDivElement>(null)
+    const tableBodyScrollRef = useRef<HTMLDivElement>(null)
+    const [tableWidth, setTableWidth] = useState(JOBS_TABLE_WIDTH)
+    const columnWidths = useMemo(() => getJobsTableColumnWidths(tableWidth), [tableWidth])
     const [copyFeedback, setCopyFeedback] = useState<{
         message: string
         isError: boolean
     } | null>(null)
     const stickyProps = (columnId: JobsTableColumnId) => {
-        const style = jobsStickyColumnStyle(columnId, stickyThroughColumnId)
+        const style = jobsStickyColumnStyle(columnId, stickyThroughColumnId, columnWidths)
         return style ? {
             className: `jobs-table-sticky-column${columnId === stickyThroughColumnId ? ' jobs-table-sticky-boundary' : ''}`,
             style,
@@ -95,6 +99,20 @@ export default function JobsTable({
         if (!current[update.jobId] || current[update.jobId].createdAt < update.createdAt) current[update.jobId] = update
         return current
     }, {}), [officeUpdates])
+
+    useLayoutEffect(() => {
+        const bodyScroll = tableBodyScrollRef.current
+        if (!bodyScroll) return
+
+        const updateTableWidth = () => {
+            setTableWidth(Math.max(bodyScroll.clientWidth, JOBS_TABLE_WIDTH))
+        }
+        updateTableWidth()
+
+        const resizeObserver = new ResizeObserver(updateTableWidth)
+        resizeObserver.observe(bodyScroll)
+        return () => resizeObserver.disconnect()
+    }, [])
 
     const prepareEmail = async (job: Job) => {
         if (emailingJobId) return
@@ -350,15 +368,19 @@ export default function JobsTable({
                 </button>
             </div>
 
-            <div
-                className="jobs-table-scroll"
-                role="region"
-                aria-label="Jobs table"
-                tabIndex={0}
-            >
-                <table className="jobs-table">
+            <div className="jobs-table-header-scroll" ref={tableHeaderScrollRef}>
+                <table
+                    className="jobs-table jobs-table-header"
+                    style={{
+                        width: tableWidth,
+                        minWidth: JOBS_TABLE_WIDTH,
+                        '--jobs-table-actions-width': `${JOBS_TABLE_ACTIONS_WIDTH}px`,
+                    } as CSSProperties}
+                >
                     <colgroup>
-                        {JOBS_TABLE_COLUMNS.map((column) => <col key={column.id} style={{ width: column.width }} />)}
+                        {JOBS_TABLE_COLUMNS.map((column) => (
+                            <col key={column.id} style={{ width: columnWidths[column.id] }} />
+                        ))}
                     </colgroup>
                     <thead>
                         <tr>
@@ -399,7 +421,34 @@ export default function JobsTable({
                             <th className="jobs-table-actions-column" aria-label="Actions" />
                         </tr>
                     </thead>
+                </table>
+            </div>
 
+            <div
+                className="jobs-table-scroll"
+                ref={tableBodyScrollRef}
+                role="region"
+                aria-label="Jobs table rows"
+                tabIndex={0}
+                onScroll={(event) => {
+                    if (tableHeaderScrollRef.current) {
+                        tableHeaderScrollRef.current.scrollLeft = event.currentTarget.scrollLeft
+                    }
+                }}
+            >
+                <table
+                    className="jobs-table jobs-table-body"
+                    style={{
+                        width: tableWidth,
+                        minWidth: JOBS_TABLE_WIDTH,
+                        '--jobs-table-actions-width': `${JOBS_TABLE_ACTIONS_WIDTH}px`,
+                    } as CSSProperties}
+                >
+                    <colgroup>
+                        {JOBS_TABLE_COLUMNS.map((column) => (
+                            <col key={column.id} style={{ width: columnWidths[column.id] }} />
+                        ))}
+                    </colgroup>
                     <tbody>
                         {matchingJobs.length === 0 && (
                             <tr>
