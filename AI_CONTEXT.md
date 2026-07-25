@@ -153,6 +153,13 @@ screen components.
   email as sent in advance.
 - Technician submission must not automatically close the operational Job; office completion
   remains authoritative.
+- Anonymous technician Job Card submission uses `/portal/job/:token` and a server-side
+  Dataverse application identity. Store only a cryptographic token hash. Submission moves
+  Job Card Status to Submitted while leaving operational Job Status, Completed Date,
+  Equipment hour meter, and maintenance unchanged.
+- Public portal endpoints must delegate token validation, minimal record projection,
+  submission validation, and persistence to a server-side submission service boundary.
+  Public browsers never call Dataverse directly.
 - Schedule options are child records. Preserve their type, date/time, notes, and technician
   relationship according to the existing scheduling services.
 

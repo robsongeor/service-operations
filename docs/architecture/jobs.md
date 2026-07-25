@@ -47,6 +47,12 @@ through the completion framework rather than screen-specific writes.
 - Dispatch state changes only after successful dispatch.
 - Technician submission does not close the operational Job; office completion is
   authoritative.
+- The public technician Job Card route is `/portal/job/:token`. It validates a random token
+  through the server API and returns a deliberately minimal Job projection. The browser
+  never receives Dataverse credentials or direct anonymous Dataverse access.
+- Technician Job Card submission stores pending story/hour-meter information and moves the
+  Job Card Status to `Submitted`. It does not change operational Job Status, Completed Date,
+  Equipment hour meter, maintenance state, or assignments.
 - Historical Jobs and their relationships are preserved.
 
 ## Extension Points

@@ -1,6 +1,6 @@
 import { useMsal } from '@azure/msal-react'
 import LoginScreen from './alpha/LoginScreen'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import JobsScreen from './alpha/jobs/JobsScreen'
 import SchedulingScreen from './alpha/scheduling/SchedulingScreen'
@@ -12,11 +12,17 @@ import CustomerDashboardScreen from './alpha/customers/CustomerDashboardScreen'
 import WofScreen from './alpha/wof/WofScreen'
 import { getSignedInUserInfo } from './auth/signedInUser'
 import { useActiveMsalAccount } from './auth/useActiveMsalAccount'
+import TechnicianJobSubmissionPage from './alpha/portal/TechnicianJobSubmissionPage'
 
 function App() {
   const { accounts } = useMsal()
+  const location = useLocation()
   const activeAccount = useActiveMsalAccount()
   const signedInUser = getSignedInUserInfo(activeAccount)
+
+  if (location.pathname.startsWith('/portal/job/')) {
+    return <Routes><Route path="/portal/job/:token" element={<TechnicianJobSubmissionPage />} /></Routes>
+  }
 
   if (accounts.length === 0) {
     return <LoginScreen />

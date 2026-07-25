@@ -12,6 +12,11 @@ feature services. Components do not issue ad hoc Dataverse requests. Multi-recor
 transitions use workflow services and atomic batch change sets where consistency requires
 it.
 
+Anonymous public-portal requests terminate at the server API. `JobSubmissionService` owns
+token validation, minimal public Job lookup, validation, and submission persistence. It uses
+a dedicated least-privilege Dataverse Application User; the public browser never receives
+Dataverse access or server credentials.
+
 The durable relationship chain is Customer → Site → Contact/Equipment → Job, with schedules,
 assignments, Job Cards, Quotes, WOF inspections, and service plans attached to their owning
 records.
