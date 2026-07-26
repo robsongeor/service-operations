@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Inspect', 'Provision', 'Verify', 'AuditSecurity', 'ProvisionSecurity', 'PurgeData')]
+    [ValidateSet('Inspect', 'Provision', 'ProvisionAvailability', 'Verify', 'AuditSecurity', 'ProvisionSecurity', 'PurgeOccurrences', 'PurgeData')]
     [string]$Mode = 'Inspect',
 
     [string]$EnvironmentUrl = 'https://org0d4246d7.crm6.dynamics.com',
@@ -58,13 +58,25 @@ $expectedEntities = @(
             'gr_equipment'
         )
     }
+    @{
+        LogicalName = 'gr_sitecheckequipmentexclusion'
+        RequiredAttributes = @(
+            'gr_sitecheckequipmentexclusionid',
+            'gr_name',
+            'gr_sitecheck',
+            'gr_equipment',
+            'gr_availabilitysnapshot'
+        )
+    }
 )
 
 $choiceAttributes = @(
     @{ Entity = 'gr_equipment'; Attribute = 'gr_ownershiptype' },
+    @{ Entity = 'gr_equipment'; Attribute = 'gr_sitecheckavailability' },
     @{ Entity = 'gr_job'; Attribute = 'gr_jobtype' },
     @{ Entity = 'gr_job'; Attribute = 'gr_status' },
     @{ Entity = 'gr_job'; Attribute = 'gr_jobcardstatus' }
+    @{ Entity = 'gr_sitecheckequipmentexclusion'; Attribute = 'gr_availabilitysnapshot' }
 )
 
 function Assert-InspectionDefinition {
@@ -772,6 +784,7 @@ function Publish-SiteChecksSchema {
     <entity>gr_equipment</entity>
     <entity>gr_sitecheckschedule</entity>
     <entity>gr_sitecheckscheduleequipment</entity>
+    <entity>gr_sitecheckequipmentexclusion</entity>
     <entity>gr_sitecheck</entity>
     <entity>gr_job</entity>
   </entities>
@@ -805,7 +818,11 @@ function Invoke-SiteChecksProvisioning {
         @{ Label = 'Liftrucks Rentals Only'; Value = 122830001 },
         @{ Label = 'Manual Selection'; Value = 122830002 }
     )
-
+    $availabilityOptions = @(
+        @{ Label = 'Available at Site'; Value = 122830000 },
+        @{ Label = 'Temporarily Off-site'; Value = 122830001 },
+        @{ Label = 'In Workshop'; Value = 122830002 }
+    )
     Ensure-Table $Service 'gr_SiteCheckSchedule' 'Site Check Schedule' 'Site Check Schedules' `
         'Recurring Site Check configuration for one Site.'
     Ensure-Table $Service 'gr_SiteCheck' 'Site Check' 'Site Checks' `
@@ -813,6 +830,9 @@ function Invoke-SiteChecksProvisioning {
     Ensure-Table $Service 'gr_SiteCheckScheduleEquipment' 'Site Check Schedule Equipment' `
         'Site Check Schedule Equipment' `
         'One manually selected Equipment record for a Site Check Schedule.'
+    Ensure-Table $Service 'gr_SiteCheckEquipmentExclusion' 'Site Check Equipment Exclusion' `
+        'Site Check Equipment Exclusions' `
+        'Immutable reason an Equipment record was excluded from one Site Check occurrence.'
 
     Ensure-Boolean $Service 'gr_sitecheckschedule' 'gr_Enabled' 'Enabled' $false $true
     Ensure-Choice $Service 'gr_sitecheckschedule' 'gr_Frequency' 'Frequency' $frequencyOptions
@@ -825,6 +845,10 @@ function Invoke-SiteChecksProvisioning {
 
     Ensure-Choice $Service 'gr_equipment' 'gr_OwnershipType' 'Equipment Ownership' `
         $equipmentOwnershipOptions
+    Ensure-Choice $Service 'gr_equipment' 'gr_SiteCheckAvailability' `
+        'Site Check Availability' $availabilityOptions
+    Ensure-Choice $Service 'gr_sitecheckequipmentexclusion' 'gr_AvailabilitySnapshot' `
+        'Availability Snapshot' $availabilityOptions $null $true
 
     Ensure-Choice $Service 'gr_sitecheck' 'gr_Status' 'Status' $statusOptions 122830000 $true
     Ensure-DateTime $Service 'gr_sitecheck' 'gr_StartedOn' 'Started On' $true
@@ -856,6 +880,12 @@ function Invoke-SiteChecksProvisioning {
     Ensure-Lookup $Service 'gr_sitecheckscheduleequipment' 'gr_Equipment' 'Equipment' `
         'gr_equipment' 'gr_sitecheckscheduleequipment_Equipment_gr_equipment' `
         'gr_equipment_sitecheckschedules' $true
+    Ensure-Lookup $Service 'gr_sitecheckequipmentexclusion' 'gr_SiteCheck' 'Site Check' `
+        'gr_sitecheck' 'gr_sitecheckequipmentexclusion_SiteCheck_gr_sitecheck' `
+        'gr_sitecheck_equipmentexclusions' $true
+    Ensure-Lookup $Service 'gr_sitecheckequipmentexclusion' 'gr_Equipment' 'Equipment' `
+        'gr_equipment' 'gr_sitecheckequipmentexclusion_Equipment_gr_equipment' `
+        'gr_equipment_sitecheckexclusions' $true
 
     Ensure-JobType $Service
     Publish-SiteChecksSchema $Service
@@ -867,6 +897,9 @@ function Invoke-SiteChecksProvisioning {
     Ensure-Key $Service 'gr_sitecheckscheduleequipment' `
         'gr_SiteCheckScheduleEquipment_ScheduleEquipment_Key' `
         'Site Check Schedule Equipment Key' @('gr_sitecheckschedule', 'gr_equipment')
+    Ensure-Key $Service 'gr_sitecheckequipmentexclusion' `
+        'gr_SiteCheckEquipmentExclusion_SiteCheckEquipment_Key' `
+        'Site Check Equipment Exclusion Key' @('gr_sitecheck', 'gr_equipment')
 }
 
 function Assert-SiteChecksSchema {
@@ -892,14 +925,21 @@ function Assert-SiteChecksSchema {
         @{ Label = 'Liftrucks Rentals Only'; Value = 122830001 },
         @{ Label = 'Manual Selection'; Value = 122830002 }
     )
+    $availabilityOptions = @(
+        @{ Label = 'Available at Site'; Value = 122830000 },
+        @{ Label = 'Temporarily Off-site'; Value = 122830001 },
+        @{ Label = 'In Workshop'; Value = 122830002 }
+    )
 
     $schedule = Get-EntityMetadata $Service 'gr_sitecheckschedule'
     $siteCheck = Get-EntityMetadata $Service 'gr_sitecheck'
     $scheduleEquipment = Get-EntityMetadata $Service 'gr_sitecheckscheduleequipment'
-    if ($null -eq $schedule -or $null -eq $siteCheck -or $null -eq $scheduleEquipment) {
-        throw 'Site Check Schedule, Site Check, and Site Check Schedule Equipment tables must exist.'
+    $equipmentExclusion = Get-EntityMetadata $Service 'gr_sitecheckequipmentexclusion'
+    if ($null -eq $schedule -or $null -eq $siteCheck -or $null -eq $scheduleEquipment `
+        -or $null -eq $equipmentExclusion) {
+        throw 'Site Check Schedule, Site Check, selection, and exclusion tables must exist.'
     }
-    foreach ($entity in @($schedule, $siteCheck, $scheduleEquipment)) {
+    foreach ($entity in @($schedule, $siteCheck, $scheduleEquipment, $equipmentExclusion)) {
         if ($entity.OwnershipType -ne [Microsoft.Xrm.Sdk.Metadata.OwnershipTypes]::OrganizationOwned `
             -or $entity.IsActivity -or $entity.PrimaryNameAttribute -ne 'gr_name') {
             throw "Verification failed: $($entity.LogicalName) has incompatible table metadata."
@@ -925,8 +965,12 @@ function Assert-SiteChecksSchema {
         @{ Entity = 'gr_sitecheck'; Name = 'gr_site'; Type = 'Lookup' },
         @{ Entity = 'gr_sitecheck'; Name = 'gr_assignedtechnician'; Type = 'Lookup' },
         @{ Entity = 'gr_equipment'; Name = 'gr_ownershiptype'; Type = 'Picklist'; Options = $equipmentOwnershipOptions },
+        @{ Entity = 'gr_equipment'; Name = 'gr_sitecheckavailability'; Type = 'Picklist'; Options = $availabilityOptions },
         @{ Entity = 'gr_sitecheckscheduleequipment'; Name = 'gr_sitecheckschedule'; Type = 'Lookup' },
         @{ Entity = 'gr_sitecheckscheduleequipment'; Name = 'gr_equipment'; Type = 'Lookup' },
+        @{ Entity = 'gr_sitecheckequipmentexclusion'; Name = 'gr_sitecheck'; Type = 'Lookup' },
+        @{ Entity = 'gr_sitecheckequipmentexclusion'; Name = 'gr_equipment'; Type = 'Lookup' },
+        @{ Entity = 'gr_sitecheckequipmentexclusion'; Name = 'gr_availabilitysnapshot'; Type = 'Picklist'; Options = $availabilityOptions },
         @{ Entity = 'gr_job'; Name = 'gr_sitecheck'; Type = 'Lookup' }
     )
     foreach ($expected in $expectedAttributes) {
@@ -948,6 +992,8 @@ function Assert-SiteChecksSchema {
         @{ Entity = $siteCheck; Name = 'gr_sitecheck_AssignedTechnician_gr_mechanic' },
         @{ Entity = $scheduleEquipment; Name = 'gr_sitecheckscheduleequipment_SiteCheckSchedule_gr_sitecheckschedule' },
         @{ Entity = $scheduleEquipment; Name = 'gr_sitecheckscheduleequipment_Equipment_gr_equipment' },
+        @{ Entity = $equipmentExclusion; Name = 'gr_sitecheckequipmentexclusion_SiteCheck_gr_sitecheck' },
+        @{ Entity = $equipmentExclusion; Name = 'gr_sitecheckequipmentexclusion_Equipment_gr_equipment' },
         @{ Entity = (Get-EntityMetadata $Service 'gr_job'); Name = 'gr_job_SiteCheck_gr_sitecheck' }
     )) {
         $actual = @($relationship.Entity.ManyToOneRelationships | Where-Object SchemaName -EQ $relationship.Name)
@@ -980,6 +1026,18 @@ function Assert-SiteChecksSchema {
     }
     if ($RequireActiveKeys -and [string]$selectionKey[0].EntityKeyIndexStatus -ne 'Active') {
         throw "Verification pending: $($selectionKey[0].LogicalName) is $($selectionKey[0].EntityKeyIndexStatus), not Active."
+    }
+    $exclusionKey = @($equipmentExclusion.Keys | Where-Object LogicalName -EQ `
+        'gr_sitecheckequipmentexclusion_sitecheckequipment_key')
+    $exclusionKeyAttributes = if ($exclusionKey.Count -eq 1) {
+        @($exclusionKey[0].KeyAttributes | Sort-Object)
+    } else { @() }
+    if ($exclusionKey.Count -ne 1 -or
+        ($exclusionKeyAttributes -join ',') -ne 'gr_equipment,gr_sitecheck') {
+        throw 'Verification failed: Site Check Equipment Exclusion composite key is missing or incompatible.'
+    }
+    if ($RequireActiveKeys -and [string]$exclusionKey[0].EntityKeyIndexStatus -ne 'Active') {
+        throw "Verification pending: $($exclusionKey[0].LogicalName) is $($exclusionKey[0].EntityKeyIndexStatus), not Active."
     }
 
     $jobType = Get-AttributeMetadata $Service 'gr_job' 'gr_jobtype'
@@ -1115,6 +1173,11 @@ function Ensure-SiteChecksSecurityRole {
         'prvDeletegr_SiteCheckScheduleEquipment',
         'prvAppendgr_SiteCheckScheduleEquipment',
         'prvAppendTogr_SiteCheckScheduleEquipment'
+        'prvCreategr_SiteCheckEquipmentExclusion',
+        'prvReadgr_SiteCheckEquipmentExclusion',
+        'prvDeletegr_SiteCheckEquipmentExclusion',
+        'prvAppendgr_SiteCheckEquipmentExclusion',
+        'prvAppendTogr_SiteCheckEquipmentExclusion'
     )
     $privilegeQuery = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new('privilege')
     $privilegeQuery.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new('name')
@@ -1229,17 +1292,24 @@ function Invoke-SiteChecksDataPurge {
     $selectionQuery.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new(
         'gr_sitecheckscheduleequipmentid'
     )
+    $exclusionQuery = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new(
+        'gr_sitecheckequipmentexclusion'
+    )
+    $exclusionQuery.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new(
+        'gr_sitecheckequipmentexclusionid'
+    )
 
     $jobs = @(Get-AllRecords $Service $jobQuery)
     $siteChecks = @(Get-AllRecords $Service $siteCheckQuery)
     $schedules = @(Get-AllRecords $Service $scheduleQuery)
     $selections = @(Get-AllRecords $Service $selectionQuery)
+    $exclusions = @(Get-AllRecords $Service $exclusionQuery)
     $activeSchedules = @($schedules | Where-Object {
         $_.Attributes.ContainsKey('gr_activesitecheck')
     })
 
-    Write-Output "Resolved purge targets: $($schedules.Count) Schedules, $($siteChecks.Count) Site Checks, $($jobs.Count) Site Check Jobs, $($selections.Count) manual selections; $($activeSchedules.Count) active pointers."
-    if (($jobs.Count + $siteChecks.Count + $schedules.Count + $selections.Count) -eq 0) {
+    Write-Output "Resolved purge targets: $($schedules.Count) Schedules, $($siteChecks.Count) Site Checks, $($jobs.Count) Site Check Jobs, $($selections.Count) manual selections, $($exclusions.Count) exclusions; $($activeSchedules.Count) active pointers."
+    if (($jobs.Count + $siteChecks.Count + $schedules.Count + $selections.Count + $exclusions.Count) -eq 0) {
         Write-Output 'No Site Checks data exists. Nothing was deleted.'
         return
     }
@@ -1258,6 +1328,13 @@ function Invoke-SiteChecksDataPurge {
     foreach ($job in $jobs) {
         $request = [Microsoft.Xrm.Sdk.Messages.DeleteRequest]::new()
         $request.Target = [Microsoft.Xrm.Sdk.EntityReference]::new('gr_job', $job.Id)
+        $transaction.Requests.Add($request)
+    }
+    foreach ($exclusion in $exclusions) {
+        $request = [Microsoft.Xrm.Sdk.Messages.DeleteRequest]::new()
+        $request.Target = [Microsoft.Xrm.Sdk.EntityReference]::new(
+            'gr_sitecheckequipmentexclusion', $exclusion.Id
+        )
         $transaction.Requests.Add($request)
     }
     foreach ($siteCheck in $siteChecks) {
@@ -1288,11 +1365,99 @@ function Invoke-SiteChecksDataPurge {
     $remainingSiteChecks = @(Get-AllRecords $Service $siteCheckQuery)
     $remainingSchedules = @(Get-AllRecords $Service $scheduleQuery)
     $remainingSelections = @(Get-AllRecords $Service $selectionQuery)
+    $remainingExclusions = @(Get-AllRecords $Service $exclusionQuery)
     if ($remainingJobs.Count -or $remainingSiteChecks.Count -or
-        $remainingSchedules.Count -or $remainingSelections.Count) {
-        throw "Purge verification failed: $($remainingSchedules.Count) Schedules, $($remainingSiteChecks.Count) Site Checks, $($remainingJobs.Count) Site Check Jobs, and $($remainingSelections.Count) manual selections remain."
+        $remainingSchedules.Count -or $remainingSelections.Count -or $remainingExclusions.Count) {
+        throw "Purge verification failed: $($remainingSchedules.Count) Schedules, $($remainingSiteChecks.Count) Site Checks, $($remainingJobs.Count) Site Check Jobs, $($remainingSelections.Count) manual selections, and $($remainingExclusions.Count) exclusions remain."
     }
-    Write-Output "Atomic purge verified: deleted $($schedules.Count) Schedules, $($siteChecks.Count) Site Checks, $($jobs.Count) Site Check Jobs, and $($selections.Count) manual selections."
+    Write-Output "Atomic purge verified: deleted $($schedules.Count) Schedules, $($siteChecks.Count) Site Checks, $($jobs.Count) Site Check Jobs, $($selections.Count) manual selections, and $($exclusions.Count) exclusions."
+}
+
+function Invoke-SiteCheckOccurrencePurge {
+    param([Parameter(Mandatory)]$Service)
+
+    $jobQuery = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new('gr_job')
+    $jobQuery.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new(
+        'gr_jobid', 'gr_sitecheck', 'gr_jobtype'
+    )
+    $jobQuery.Criteria.FilterOperator = [Microsoft.Xrm.Sdk.Query.LogicalOperator]::Or
+    $jobQuery.Criteria.AddCondition(
+        'gr_sitecheck', [Microsoft.Xrm.Sdk.Query.ConditionOperator]::NotNull
+    )
+    $jobQuery.Criteria.AddCondition(
+        'gr_jobtype', [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal, 122830004
+    )
+    $siteCheckQuery = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new('gr_sitecheck')
+    $siteCheckQuery.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new('gr_sitecheckid')
+    $scheduleQuery = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new('gr_sitecheckschedule')
+    $scheduleQuery.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new(
+        'gr_sitecheckscheduleid', 'gr_activesitecheck'
+    )
+    $exclusionQuery = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new(
+        'gr_sitecheckequipmentexclusion'
+    )
+    $exclusionQuery.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new(
+        'gr_sitecheckequipmentexclusionid'
+    )
+
+    $jobs = @(Get-AllRecords $Service $jobQuery)
+    $siteChecks = @(Get-AllRecords $Service $siteCheckQuery)
+    $schedules = @(Get-AllRecords $Service $scheduleQuery)
+    $exclusions = @(Get-AllRecords $Service $exclusionQuery)
+    $activeSchedules = @($schedules | Where-Object {
+        $_.Attributes.ContainsKey('gr_activesitecheck')
+    })
+
+    Write-Output "Resolved occurrence purge targets: $($siteChecks.Count) Site Checks, $($jobs.Count) Site Check Jobs, $($exclusions.Count) exclusions, and $($activeSchedules.Count) active Schedule pointers. $($schedules.Count) Schedules will be preserved."
+    if (($jobs.Count + $siteChecks.Count + $exclusions.Count + $activeSchedules.Count) -eq 0) {
+        Write-Output 'No Site Check occurrences or generated Jobs exist. Nothing was deleted.'
+        return
+    }
+
+    $transaction = [Microsoft.Xrm.Sdk.Messages.ExecuteTransactionRequest]::new()
+    $transaction.ReturnResponses = $false
+    $transaction.Requests = [Microsoft.Xrm.Sdk.OrganizationRequestCollection]::new()
+    foreach ($schedule in $activeSchedules) {
+        $target = [Microsoft.Xrm.Sdk.Entity]::new('gr_sitecheckschedule', $schedule.Id)
+        $target['gr_activesitecheck'] = $null
+        $request = [Microsoft.Xrm.Sdk.Messages.UpdateRequest]::new()
+        $request.Target = $target
+        $transaction.Requests.Add($request)
+    }
+    foreach ($job in $jobs) {
+        $request = [Microsoft.Xrm.Sdk.Messages.DeleteRequest]::new()
+        $request.Target = [Microsoft.Xrm.Sdk.EntityReference]::new('gr_job', $job.Id)
+        $transaction.Requests.Add($request)
+    }
+    foreach ($exclusion in $exclusions) {
+        $request = [Microsoft.Xrm.Sdk.Messages.DeleteRequest]::new()
+        $request.Target = [Microsoft.Xrm.Sdk.EntityReference]::new(
+            'gr_sitecheckequipmentexclusion', $exclusion.Id
+        )
+        $transaction.Requests.Add($request)
+    }
+    foreach ($siteCheck in $siteChecks) {
+        $request = [Microsoft.Xrm.Sdk.Messages.DeleteRequest]::new()
+        $request.Target = [Microsoft.Xrm.Sdk.EntityReference]::new('gr_sitecheck', $siteCheck.Id)
+        $transaction.Requests.Add($request)
+    }
+    $Service.Execute($transaction) | Out-Null
+
+    $remainingJobs = @(Get-AllRecords $Service $jobQuery)
+    $remainingSiteChecks = @(Get-AllRecords $Service $siteCheckQuery)
+    $remainingSchedules = @(Get-AllRecords $Service $scheduleQuery)
+    $remainingExclusions = @(Get-AllRecords $Service $exclusionQuery)
+    $remainingActiveSchedules = @($remainingSchedules | Where-Object {
+        $_.Attributes.ContainsKey('gr_activesitecheck')
+    })
+    if ($remainingJobs.Count -or $remainingSiteChecks.Count -or $remainingExclusions.Count `
+        -or $remainingActiveSchedules.Count) {
+        throw "Occurrence purge verification failed: $($remainingSiteChecks.Count) Site Checks, $($remainingJobs.Count) Site Check Jobs, $($remainingExclusions.Count) exclusions, and $($remainingActiveSchedules.Count) active pointers remain."
+    }
+    if ($remainingSchedules.Count -ne $schedules.Count) {
+        throw "Occurrence purge changed the Schedule count from $($schedules.Count) to $($remainingSchedules.Count)."
+    }
+    Write-Output "Atomic occurrence purge verified: deleted $($siteChecks.Count) Site Checks, $($jobs.Count) Site Check Jobs, and $($exclusions.Count) exclusions; cleared $($activeSchedules.Count) active pointers; preserved $($remainingSchedules.Count) Schedules."
 }
 
 $toolsPath = Get-PacToolsPath
@@ -1342,11 +1507,23 @@ if ($Mode -eq 'PurgeData') {
     Invoke-SiteChecksDataPurge -Service $service
     return
 }
+if ($Mode -eq 'PurgeOccurrences') {
+    Invoke-SiteCheckOccurrencePurge -Service $service
+    return
+}
 
 if ($Mode -eq 'Provision') {
     Invoke-SiteChecksProvisioning -Service $service
     Assert-SiteChecksSchema -Service $service
     Write-Output 'Provision mode completed. Run Verify later if either alternate key is still Pending.'
+    return
+}
+
+if ($Mode -eq 'ProvisionAvailability') {
+    Invoke-SiteChecksProvisioning -Service $service
+    Assert-SiteChecksSchema -Service $service
+    Ensure-SiteChecksSecurityRole -Service $service
+    Write-Output 'Availability schema, publishing, structural verification, and approved security grants completed in one connection. Run Verify later if the new alternate key is still Pending.'
     return
 }
 

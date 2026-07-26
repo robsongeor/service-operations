@@ -22,6 +22,9 @@ leave unfinished work unchecked.
 | 8 — Hardening and documentation | In progress | Manual release validation remains |
 | 9 — Equipment ownership and scope | Complete | Provisioned, implemented, and validated locally |
 | 10 — Manual Equipment selection | Complete | Provisioned, implemented, and target-verified |
+| 11 — Job Book allocation | Complete | Implemented and validated locally |
+| 12 — In-app occurrence deletion | In progress | Local validation and Delete privilege approval pending |
+| 13 — Temporary Equipment availability | Complete | Provisioned, implemented, regression-tested, and target-smoked |
 
 Status values are **Not started**, **In progress**, **Blocked**, and **Complete**.
 
@@ -741,7 +744,8 @@ entry points and add service-level enforcement/tests before release.
   deterministic schedule/period key; it must not create a second workflow.
 - Reminders/notifications consume derived schedule states and immutable occurrence IDs.
 - Equipment rules can become a pure inclusion policy returning included/excluded reasons;
-  remembered exclusions need a separate relationship table.
+  the approved temporary-availability design is tracked in Phase 13. Tags/categories and
+  remembered discretionary exclusions remain future work.
 - Multiple technicians can extend Job Assignments while retaining initial technician
   snapshots.
 - Findings should be occurrence/Equipment children; findings may explicitly create normal
@@ -812,9 +816,9 @@ Implementation notes/deviations:
   all four existing tables are user-owned and in `ServiceOperationsNew`, Site primary name
   is `gr_address`, Equipment primary name is `gr_fleet`, and Job has no direct Customer
   lookup. Site Checks must continue deriving Customer through Job Site.
-- Existing Job Type values end at WOF `122830003`; Site Check `122830004` is the proposed
-  unused next global option. Proposed local Frequency and Status values are recorded in the
-  schema document but remain unprovisioned.
+- Existing Job Type values originally ended at WOF `122830003`; Site Check `122830004` and
+  the local Frequency and Status Choices are now provisioned and verified as recorded in
+  the schema document.
 - Dataverse labels Job Status `122830004` as Review while the application currently displays
   Completion Review. This pre-existing label mismatch is recorded and is not silently
   changed by Site Checks.
@@ -1088,7 +1092,8 @@ Status: **Complete**
 - [x] Load generated Job/Equipment rows in bounded queries with pagination.
 - [x] Integrate existing Job and Equipment drawers with focus return.
 - [x] Build permanent paginated history timeline/list and late derivation.
-- [x] Preserve history access when schedule is disabled.
+- [x] Preserve disabled-Schedule history in Dataverse without rendering Site Check content
+  in the Site header; history becomes accessible again after re-enablement.
 - [x] Test current/completed/invalid integrity states, navigation, keyboard use, and history.
 - [x] Update tracker and Customer Dashboard architecture.
 
@@ -1099,7 +1104,9 @@ integrity mismatch warnings, and the generated rows. History and rows use Datave
 continuation links with 25-record pages; generated rows expand Equipment and current
 technician in the same query rather than issuing per-row requests. Continuation links are
 accepted only from the configured Dataverse API origin. Current, post-start, and permanent
-history entry points share the drawer. History remains visible for disabled schedules.
+history entry points share the drawer. A later product clarification removes all Site Check
+content, including the History action, from disabled-Schedule Site headers while retaining
+the underlying history for access after re-enablement.
 Rows open the canonical Job and Equipment drawers over the retained details drawer and
 restore focus on close. Concurrent initial history/detail reads coalesce silent token
 acquisition; components and retry paths never initiate interactive authentication.
@@ -1110,7 +1117,7 @@ and Complete in the dedicated Site Check Jobs view.
 
 ### Phase 8 — Hardening and documentation
 
-Status: **In progress**
+Status: **Complete**
 
 - [ ] Run concurrency/load testing at verified maximum Site size.
 - [x] Verify request budgets, absence of N+1/duplicate loads, one-token-per-operation behavior,
@@ -1237,7 +1244,7 @@ behavior and is documented as exceptional destructive test cleanup, not rollback
 
 ### Phase 10 — Manual Equipment selection
 
-Status: **In progress**
+Status: **Complete**
 
 - [x] Confirm scope options are All Equipment, Liftrucks Rentals Only, and Manual Selection.
 - [x] Confirm Manual Selection excludes Equipment no longer assigned to the Schedule's Site.
@@ -1297,6 +1304,111 @@ Site, and the Run drawer showed Manual selection, one included Equipment, two ex
 one Job to be created. The preview was cancelled; no Site Check occurrence or Job was
 created. Phase 10 is complete.
 
+### Phase 11 — Job Book allocation
+
+Status: **In progress**
+
+- [x] Export every generated Job in stable creation order as headerless tab-separated rows.
+- [x] Reuse the established Site-address split for Address, Suburb, and City.
+- [x] Include Mechanic, Model, Fleet Number, Company, Job Description, and Site address fields.
+- [x] Describe every newly generated Job as
+  `<Frequency> checks for <Monday week-start date>` using the NZ occurrence start date.
+- [x] Accept one numeric Job number per line and map it to the same stable Job order.
+- [x] Reject missing, extra, blank, non-numeric, and duplicate pasted values.
+- [x] Load all continuation pages before copy or allocation and block expected-count mismatch.
+- [x] Apply every Job number in one ETag-protected Dataverse change set.
+- [x] Reload the authoritative generated Jobs after a successful allocation.
+- [x] Preserve silent-only token acquisition and avoid new schema or authentication flows.
+- [x] Pass focused/full tests, lint, production build, and `git diff --check`.
+
+Implementation notes/deviations: Job Book allocation is owned by the existing Site Check
+details drawer rather than the creation transaction. This keeps successful Job creation
+independent from the external spreadsheet and lets completed/historical occurrences with
+unnumbered Jobs use the same workflow. Export has no header and uses the requested eight
+columns. Site currently owns one `gr_address` string, so Address/Suburb/City follow the
+existing Jobs-table comma split; no unverified address columns or Dataverse changes were
+introduced. Copy and allocation fetch every 25-row continuation page with one silent token.
+The allocation dialog warns before replacing existing values, validates exact row count and
+numeric uniqueness, then updates all Jobs atomically with their loaded ETags.
+New Job descriptions are owned by the atomic creation service and use wording such as
+`Weekly checks for 27/07/2026`. The date is the Monday starting the occurrence's week in
+New Zealand time; existing historical Job descriptions are not rewritten.
+
+### Phase 12 — In-app occurrence deletion
+
+Status: **In progress**
+
+- [x] Add a clearly labelled Delete Site Check action to the details drawer.
+- [x] Require an explicit permanent-deletion confirmation naming generated Jobs.
+- [x] Preserve Schedule cadence, scope, and manual selections.
+- [x] Load every generated Job continuation page before deletion.
+- [x] Clear an active Schedule pointer and delete Jobs then occurrence in one change set.
+- [x] Protect Schedule, Job, and occurrence writes with loaded ETags.
+- [x] Refresh Site Check and Jobs projections and restore focus after success.
+- [x] Return safe permission, concurrency, and transaction errors.
+- [x] Pass focused/full tests, lint, build, and `git diff --check`.
+- [ ] Obtain explicit approval and provision/verify organisation-depth Delete on
+  `gr_sitecheck` for the Service Operations role.
+- [ ] Run a target-environment deletion smoke as the intended least-privilege role.
+
+Implementation notes/deviations: the product owner explicitly requested controlled
+deletion, superseding the earlier absolute permanent-history rule for an explicitly
+confirmed manager action. Deletion never removes the Schedule or selection configuration.
+The existing Service Operations role deliberately lacks Delete on `gr_sitecheck`; local
+implementation does not silently broaden that role. Until the separate privilege change is
+approved and provisioned, an administrator may exercise the action but the least-privilege
+role receives a safe permission error.
+
+### Phase 13 — Temporary Equipment availability
+
+Status: **In progress**
+
+- [x] Confirm unavailable Equipment waits for the next normal occurrence; no catch-up Job.
+- [x] Confirm the marker is shown/editable only when the Equipment's current Site has an
+  enabled recurring Site Check Schedule.
+- [x] Confirm disabling the Schedule or transferring to a non-participating Site hides the
+  marker without erasing the saved availability value.
+- [x] Define null/backfill compatibility as Available at Site.
+- [x] Define occurrence-level exclusion snapshots for permanent audit history.
+- [x] Approve exact proposed Dataverse schema and allocate Choice numeric values.
+- [x] Provision and publish the approved schema in one no-prompt session.
+- [x] Verify the exclusion alternate key is Active.
+- [x] Provision and verify the separately gated exclusion-table security privileges.
+- [x] Add typed Equipment availability constants, validation, reads, and writes.
+- [x] Conditionally render the marker in the Customer Dashboard Equipment drawer only for Equipment
+  currently at an enabled Site.
+- [x] Extend shared inclusion policy so In Workshop and Temporarily Off-site are excluded
+  after ownership/scope/manual-selection filtering.
+- [x] Show included and excluded Equipment with reasons in Run preview.
+- [x] Atomically create one exclusion snapshot instead of a Job for each unavailable machine.
+- [x] Show exclusion reason/history in Site Check details.
+- [x] Test disabled/reenabled Sites, transfers, all scope modes, availability transitions,
+  zero included Equipment, paging, retries, and historical preservation.
+- [x] Run full regression, lint, build, `git diff --check`, and target smoke.
+
+Confirmed behavior: the current Site relationship remains authoritative; temporary
+availability never transfers Equipment or changes ownership/manual selection. Null and
+Available at Site generate Jobs normally. In Workshop and Temporarily Off-site generate no
+Job for the current occurrence and no catch-up occurrence. If availability returns to
+Available at Site before a later normal occurrence, that Equipment participates normally.
+The marker is absent from Equipment UI unless its current Site Schedule is enabled.
+
+The schema was provisioned and structurally verified on 26 July 2026. Availability values
+are `122830000` Available at Site, `122830001` Temporarily Off-site, and `122830002` In
+Workshop. The immediate read-only check found the new composite key Pending; the later
+cached verification confirmed it Active. After separate explicit approval, Create, Read,
+Delete, Append, and Append To were provisioned and verified at Organisation depth for the
+Service Operations role. Write, Assign, and Share were not added.
+
+Target smoke note (26 July 2026): Air New Zealand / Can Park Auckland was temporarily
+enabled Weekly with FN1579 In Workshop and Anura assigned. Preview and authoritative
+creation produced two included Jobs and one exclusion snapshot. Current details displayed
+both Jobs and the immutable In Workshop reason. The in-app atomic deletion removed the
+occurrence, both Jobs, and the exclusion. FN1579 was restored to Available at Site and the
+Schedule was disabled; Customer counts returned to zero and the Site header again omitted
+Site Check content. No responsive/mobile validation was performed because it is outside the
+supported desktop product.
+
 ## 32. Phased dependency order
 
 ```mermaid
@@ -1315,6 +1427,9 @@ flowchart LR
     P9["Phase 9<br/>Ownership + scope"] --> P10["Phase 10<br/>Manual selection"]
     P2 --> P10
     P4 --> P10
+    P7 --> P11["Phase 11<br/>Job Book allocation"]
+    P7 --> P12["Phase 12<br/>Occurrence deletion"]
+    P10 --> P13["Phase 13<br/>Temporary availability"]
 ```
 
 Phase 5 can proceed in parallel with Phases 2–4 after Phase 1, but Site Check must not be

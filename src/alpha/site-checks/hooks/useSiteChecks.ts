@@ -7,12 +7,20 @@ import {
     type SiteChecksSnapshot,
 } from '../services/siteChecksCoordinator'
 import {
+    allocateSiteCheckJobNumbers,
+    deleteSiteCheckOccurrence,
     fetchSiteCheckDetailJobsPage,
+    fetchSiteCheckEquipmentExclusionsPage,
     fetchSiteCheckHistoryPage,
     saveSiteCheckScheduleConfiguration,
 } from '../services/siteChecksApi'
 import { startSiteCheckWorkflow, type StartSiteCheckWorkflowInput } from '../services/siteCheckCreationWorkflow'
-import type { SiteCheckScheduleSaveInput } from '../types/siteCheck.types'
+import type {
+    SiteCheck,
+    SiteCheckDetailJob,
+    SiteCheckEquipmentExclusion,
+    SiteCheckScheduleSaveInput,
+} from '../types/siteCheck.types'
 
 const EMPTY_SNAPSHOT: SiteChecksSnapshot = {
     schedules: [],
@@ -178,6 +186,74 @@ export function useSiteChecks(siteIds: readonly string[]) {
         return fetchSiteCheckDetailJobsPage(accessToken, siteCheckId, nextLink)
     }, [acquireAccessToken])
 
+    const loadAllDetailJobs = useCallback(async (siteCheckId: string) => {
+        const accessToken = await acquireAccessToken()
+        const records: SiteCheckDetailJob[] = []
+        let nextLink: string | undefined
+        do {
+            const page = await fetchSiteCheckDetailJobsPage(accessToken, siteCheckId, nextLink)
+            records.push(...page.records)
+            nextLink = page.nextLink
+        } while (nextLink)
+        return records
+    }, [acquireAccessToken])
+
+    const loadAllEquipmentExclusions = useCallback(async (siteCheckId: string) => {
+        const accessToken = await acquireAccessToken()
+        const records: SiteCheckEquipmentExclusion[] = []
+        let nextLink: string | undefined
+        do {
+            const page = await fetchSiteCheckEquipmentExclusionsPage(
+                accessToken,
+                siteCheckId,
+                nextLink,
+            )
+            records.push(...page.records)
+            nextLink = page.nextLink
+        } while (nextLink)
+        return records
+    }, [acquireAccessToken])
+
+    const allocateJobNumbers = useCallback(async (
+        allocations: readonly { job: SiteCheckDetailJob; jobNumber: string }[],
+    ) => {
+        const accessToken = await acquireAccessToken()
+        await allocateSiteCheckJobNumbers(accessToken, allocations)
+    }, [acquireAccessToken])
+
+    const deleteOccurrence = useCallback(async (occurrence: SiteCheck) => {
+        const accessToken = await acquireAccessToken()
+        const jobs: SiteCheckDetailJob[] = []
+        const exclusions: SiteCheckEquipmentExclusion[] = []
+        let nextLink: string | undefined
+        do {
+            const page = await fetchSiteCheckDetailJobsPage(
+                accessToken,
+                occurrence.gr_sitecheckid,
+                nextLink,
+            )
+            jobs.push(...page.records)
+            nextLink = page.nextLink
+        } while (nextLink)
+        nextLink = undefined
+        do {
+            const page = await fetchSiteCheckEquipmentExclusionsPage(
+                accessToken,
+                occurrence.gr_sitecheckid,
+                nextLink,
+            )
+            exclusions.push(...page.records)
+            nextLink = page.nextLink
+        } while (nextLink)
+        const schedule = snapshot.schedules.find((item) =>
+            item.gr_sitecheckscheduleid.toLowerCase()
+            === occurrence._gr_sitecheckschedule_value.toLowerCase())
+        await deleteSiteCheckOccurrence(accessToken, occurrence, jobs, exclusions, schedule)
+        const next = await coordinator.loadSiteChecks(siteScope.split(','), accessToken)
+        setSnapshot(next)
+        return jobs.length
+    }, [acquireAccessToken, coordinator, siteScope, snapshot.schedules])
+
     return {
         ...snapshot,
         isLoading,
@@ -193,5 +269,9 @@ export function useSiteChecks(siteIds: readonly string[]) {
         clearStartError: () => setStartError(''),
         loadHistoryPage,
         loadDetailJobsPage,
+        loadAllDetailJobs,
+        loadAllEquipmentExclusions,
+        allocateJobNumbers,
+        deleteOccurrence,
     }
 }

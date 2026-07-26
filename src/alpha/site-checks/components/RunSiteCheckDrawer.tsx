@@ -5,7 +5,12 @@ import SearchableMechanicSelect from '../../jobs/components/SearchableMechanicSe
 import EditDrawerSection from '../../shared/drawer/EditDrawerSection'
 import EditDrawerShell from '../../shared/drawer/EditDrawerShell'
 import { formatWofDateOnly } from '../../wof/utils/wofRules'
-import { filterSiteCheckEquipment, validateSiteCheckStart } from '../domain/siteCheckCalculations'
+import {
+    filterSiteCheckEquipment,
+    siteCheckUnavailableEquipment,
+    validateSiteCheckStart,
+} from '../domain/siteCheckCalculations'
+import { EQUIPMENT_SITE_CHECK_AVAILABILITY_OPTIONS } from '../../equipment/types/equipmentSiteCheckAvailability.types'
 import {
     resolveSiteCheckEquipmentScope,
     SITE_CHECK_EQUIPMENT_SCOPE_OPTIONS,
@@ -66,6 +71,11 @@ export default function RunSiteCheckDrawer({
         selectedEquipmentIds,
     )
     const excludedCount = equipment.length - includedEquipment.length
+    const unavailableEquipment = siteCheckUnavailableEquipment(
+        equipment,
+        schedule?.gr_equipmentscope,
+        selectedEquipmentIds,
+    )
     const inactiveCount = includedEquipment.filter((item) => item.statecode === 1).length
     const scope = SITE_CHECK_EQUIPMENT_SCOPE_OPTIONS.find(
         (option) => option.value === resolveSiteCheckEquipmentScope(schedule?.gr_equipmentscope),
@@ -156,5 +166,19 @@ export default function RunSiteCheckDrawer({
                 {includedEquipment.length === 0 && <li className="empty">No Equipment matches this Site Check scope.</li>}
             </ul>
         </EditDrawerSection>
+        {unavailableEquipment.length > 0 && <EditDrawerSection
+            title="Unavailable Equipment"
+            meta={<span>{unavailableEquipment.length} waiting for next occurrence</span>}
+        >
+            <p>No Job will be created for this occurrence. These machines will be considered again at the next normal Site Check.</p>
+            <ul className="run-site-check-equipment">
+                {unavailableEquipment.map((item) => <li key={item.gr_equipmentid}>
+                    <span><strong>{equipmentName(item)}</strong><small>{[item.gr_make, item.gr_model].filter(Boolean).join(' · ')}</small></span>
+                    <em>{EQUIPMENT_SITE_CHECK_AVAILABILITY_OPTIONS.find(
+                        (option) => option.value === item.gr_sitecheckavailability,
+                    )?.label ?? 'Unavailable'}</em>
+                </li>)}
+            </ul>
+        </EditDrawerSection>}
     </EditDrawerShell>
 }

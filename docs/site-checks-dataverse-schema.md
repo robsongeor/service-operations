@@ -291,6 +291,48 @@ historical occurrences and it does not replace the parent lookup on generated Jo
 The provisioning tool inserts/verifies labels and values idempotently and reads them back
 after publish. Application constants use this verified result.
 
+## Confirmed temporary Equipment availability extension
+
+Approved, provisioned, published, and structurally verified on 26 July 2026. A later cached
+read-only verification confirmed the alternate key Active. The separately approved
+Service Operations grants were provisioned and verified at Organisation depth.
+
+### Confirmed Equipment column
+
+| Business purpose | Display name | Confirmed schema/logical name | Type | Required/default | Relationships/indexing | Security | Migration/backfill |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Record whether Equipment is physically available for its next Site Check | Site Check Availability | `gr_SiteCheckAvailability` / `gr_sitecheckavailability` | Local Choice: Available at Site `122830000`; Temporarily Off-site `122830001`; In Workshop `122830002` | Optional; null resolves to Available at Site | No relationship or alternate key; include in existing Site Equipment projection | Uses existing Equipment Read/Write boundary; field is exposed only when current Site has an enabled Schedule | No backfill; existing null values remain eligible |
+
+The value is current Equipment master data, not Site configuration. UI visibility is
+conditional: show/edit it only when the Equipment's current Site has an enabled recurring
+Site Check Schedule. Hiding the field after disable or transfer does not clear it.
+
+### Confirmed exclusion snapshot table
+
+| Property | Confirmed value |
+| --- | --- |
+| Display name | Site Check Equipment Exclusion |
+| Schema/logical name | `gr_SiteCheckEquipmentExclusion` / `gr_sitecheckequipmentexclusion` |
+| Entity set | `gr_sitecheckequipmentexclusions` |
+| Ownership | Organisation-owned |
+| Primary ID | `gr_sitecheckequipmentexclusionid` |
+| Primary name | `gr_name` |
+
+| Business purpose | Display name | Confirmed schema/logical name | Type | Required/default | Relationships/indexing | Security | Migration/backfill |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Parent occurrence | Site Check | `gr_SiteCheck` / `gr_sitecheck` | Lookup → Site Check | Required | Restrict; alternate key component | Organisation-depth Create/Read/Append/Append To required; Delete only if approved occurrence deletion must remove snapshots | None |
+| Excluded asset | Equipment | `gr_Equipment` / `gr_equipment` | Lookup → Equipment | Required | Restrict; alternate key component | Same table privileges; existing Equipment Read/Append To | None |
+| Immutable reason | Availability Snapshot | `gr_AvailabilitySnapshot` / `gr_availabilitysnapshot` | Local Choice using the same labels and allocated numeric values as Equipment availability | Required | Queryable with occurrence | Same table privileges | None |
+| Display label | Name | `gr_Name` / `gr_name` | Text 200 | Required/generated | Not a business key | Same table privileges | None |
+
+Composite alternate key:
+`gr_sitecheckequipmentexclusion_sitecheckequipment_key` on Site Check + Equipment. It
+prevents retry duplication. Starting an occurrence creates either one Job or one exclusion
+snapshot per in-scope Equipment in the same existing transaction, so operation-count growth
+remains one child operation per candidate. No catch-up record or Job is created later. The
+key is Active. Application creation writes each occurrence, its generated Jobs, and these
+snapshots in one atomic change set.
+
 ## Indexes, alternate keys, and query support
 
 - Schedule: alternate key on Site; index/query support for Enabled + Next Due Date and Active
@@ -359,6 +401,11 @@ After explicit approval, `ProvisionSecurity` ran once on 26 July 2026 using one 
 connection with no prompt. It added the ten grants and verified every grant at organisation
 depth in the same invocation. It did not add Delete, Assign, or Share and made no user
 assignment changes. The mode remains idempotent for future verification/recovery.
+
+The later in-app occurrence deletion workflow requires organisation-depth Delete on
+`gr_sitecheck`. That privilege is **not provisioned** for Service Operations and remains a
+separate explicit approval gate. Existing Job Delete access must also be confirmed in the
+same read-only audit before provisioning; do not infer it from Create/Read/Write access.
 
 ## Migration and data preservation
 

@@ -13,6 +13,7 @@ import {
     getSiteCheckScheduleState,
     isValidDateOnly,
     isValidSiteCheckRequestKey,
+    siteCheckJobDescription,
     validateSiteCheckSchedule,
     validateSiteCheckStart,
     wasSiteCheckCompletedLate,
@@ -22,7 +23,10 @@ import {
     SITE_CHECK_FREQUENCIES,
 } from '../src/alpha/site-checks/types/siteCheck.types.ts'
 import { EQUIPMENT_OWNERSHIP_TYPES } from '../src/alpha/equipment/types/equipmentOwnership.types.ts'
+import { EQUIPMENT_SITE_CHECK_AVAILABILITIES } from '../src/alpha/equipment/types/equipmentSiteCheckAvailability.types.ts'
 import {
+    allocateSiteCheckJobNumbers,
+    deleteSiteCheckOccurrence,
     fetchSiteCheckJobs,
     fetchSiteCheckDetailJobsPage,
     fetchSiteCheckHistoryPage,
@@ -31,6 +35,10 @@ import {
     saveSiteCheckSchedule,
     saveSiteCheckScheduleConfiguration,
 } from '../src/alpha/site-checks/services/siteChecksApi.ts'
+import {
+    buildSiteCheckJobBookRows,
+    parseSiteCheckJobNumbers,
+} from '../src/alpha/site-checks/domain/siteCheckJobBook.ts'
 import { createSiteChecksDataCoordinator } from '../src/alpha/site-checks/services/siteChecksCoordinator.ts'
 import { buildSiteCheckDashboardProjection } from '../src/alpha/site-checks/domain/siteCheckDashboard.ts'
 import {
@@ -48,6 +56,129 @@ const IDS = {
     technician: '44444444-4444-4444-4444-444444444444',
     job: '55555555-5555-5555-5555-555555555555',
 }
+
+test('Site Check Job Book export and number allocation preserve one deterministic row order', async () => {
+    const jobs = [
+        {
+            gr_jobid: IDS.job,
+            gr_status: JOB_STATUSES.ALLOCATED,
+            _gr_sitecheck_value: IDS.siteCheck,
+            gr_description: 'Release brake error',
+            gr_Equipment: {
+                gr_equipmentid: '77777777-7777-7777-7777-777777777777',
+                gr_model: 'RX60',
+                gr_fleet: 'FN2219',
+            },
+            gr_Mechanic: { gr_mechanicid: IDS.technician, gr_name: 'George R' },
+            '@odata.etag': 'W/"1"',
+        },
+        {
+            gr_jobid: '55555555-5555-5555-5555-555555555556',
+            gr_status: JOB_STATUSES.ALLOCATED,
+            _gr_sitecheck_value: IDS.siteCheck,
+            gr_description: 'Site check',
+            gr_Equipment: {
+                gr_equipmentid: '77777777-7777-7777-7777-777777777778',
+                gr_model: '8FG',
+                gr_fleet: 'FN2220',
+            },
+            gr_Mechanic: { gr_mechanicid: IDS.technician, gr_name: 'George R' },
+            '@odata.etag': 'W/"2"',
+        },
+    ]
+    assert.equal(
+        buildSiteCheckJobBookRows(jobs, 'Opal Tauranga', '1 Test Road, Mount Maunganui, Tauranga'),
+        [
+            'George R\tRX60\tFN2219\tOpal Tauranga\tRelease brake error\t1 Test Road\tMount Maunganui\tTauranga',
+            'George R\t8FG\tFN2220\tOpal Tauranga\tSite check\t1 Test Road\tMount Maunganui\tTauranga',
+        ].join('\n'),
+    )
+    const allocations = parseSiteCheckJobNumbers('145410\r\n145411\r\n', jobs)
+    assert.deepEqual(allocations.map((item) => item.jobNumber), ['145410', '145411'])
+    assert.equal(allocations[0].job.gr_jobid, IDS.job)
+    assert.throws(() => parseSiteCheckJobNumbers('145410', jobs), /exactly 2/)
+    assert.throws(() => parseSiteCheckJobNumbers('145410\n145410', jobs), /unique/)
+    assert.throws(() => parseSiteCheckJobNumbers('145410\nABC', jobs), /digits only/)
+
+    let requestBody = ''
+    await allocateSiteCheckJobNumbers('token', allocations, {
+        apiUrl: 'https://example.test',
+        fetcher: (async (_input, init) => {
+            requestBody = String(init?.body)
+            return new Response(
+                'HTTP/1.1 204 No Content\r\nHTTP/1.1 204 No Content\r\n',
+                { status: 200 },
+            )
+        }) as typeof fetch,
+    })
+    assert.match(requestBody, /PATCH \/api\/data\/v9\.2\/gr_jobs\(55555555-5555-5555-5555-555555555555\)/)
+    assert.match(requestBody, /If-Match: W\/"1"/)
+    assert.match(requestBody, /"gr_jobnumber":"145410"/)
+})
+
+test('Site Check deletion atomically clears an active pointer and deletes Jobs before occurrence', async () => {
+    const occurrence = {
+        gr_sitecheckid: IDS.siteCheck,
+        gr_name: 'Site Check',
+        gr_status: 122830000,
+        gr_startedon: '2026-07-26T01:00:00.000Z',
+        gr_frequencysnapshot: SITE_CHECK_FREQUENCIES.WEEKLY,
+        gr_duedatesnapshot: '2026-07-26',
+        gr_expectedjobcount: 1,
+        gr_creationrequestkey: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        _gr_sitecheckschedule_value: IDS.schedule,
+        _gr_site_value: IDS.site,
+        _gr_assignedtechnician_value: IDS.technician,
+        '@odata.etag': 'W/"20"',
+    } as const
+    const jobs = [{
+        gr_jobid: IDS.job,
+        gr_status: JOB_STATUSES.ALLOCATED,
+        _gr_sitecheck_value: IDS.siteCheck,
+        '@odata.etag': 'W/"21"',
+    }]
+    const schedule = {
+        gr_sitecheckscheduleid: IDS.schedule,
+        gr_name: 'Schedule',
+        gr_enabled: true,
+        gr_frequency: SITE_CHECK_FREQUENCIES.WEEKLY,
+        gr_nextduedate: '2026-07-26',
+        _gr_site_value: IDS.site,
+        _gr_activesitecheck_value: IDS.siteCheck,
+        '@odata.etag': 'W/"22"',
+    } as const
+    const exclusions = [{
+        gr_sitecheckequipmentexclusionid: '66666666-6666-6666-6666-666666666666',
+        gr_name: 'FN100 unavailable',
+        gr_availabilitysnapshot: EQUIPMENT_SITE_CHECK_AVAILABILITIES.IN_WORKSHOP,
+        _gr_sitecheck_value: IDS.siteCheck,
+        _gr_equipment_value: '77777777-7777-7777-7777-777777777777',
+        '@odata.etag': 'W/"23"',
+    }] as const
+    let body = ''
+    await deleteSiteCheckOccurrence('token', occurrence, jobs, exclusions, schedule, {
+        apiUrl: 'https://example.test',
+        fetcher: (async (_input, init) => {
+            body = String(init?.body)
+            return new Response(
+                'HTTP/1.1 204 No Content\r\n'.repeat(4),
+                { status: 200 },
+            )
+        }) as typeof fetch,
+    })
+    const scheduleIndex = body.indexOf(`PATCH /api/data/v9.2/gr_sitecheckschedules(${IDS.schedule})`)
+    const jobIndex = body.indexOf(`DELETE /api/data/v9.2/gr_jobs(${IDS.job})`)
+    const exclusionIndex = body.indexOf(
+        `DELETE /api/data/v9.2/gr_sitecheckequipmentexclusions(${exclusions[0].gr_sitecheckequipmentexclusionid})`,
+    )
+    const occurrenceIndex = body.indexOf(`DELETE /api/data/v9.2/gr_sitechecks(${IDS.siteCheck})`)
+    assert.ok(scheduleIndex >= 0)
+    assert.ok(jobIndex > scheduleIndex)
+    assert.ok(exclusionIndex > jobIndex)
+    assert.ok(occurrenceIndex > exclusionIndex)
+    assert.match(body, /"gr_ActiveSiteCheck@odata.bind":null/)
+    assert.match(body, /If-Match: W\/"21"/)
+})
 
 test('dashboard projection excludes disabled and invalid schedules from reportable totals', () => {
     const projection = buildSiteCheckDashboardProjection({
@@ -99,6 +230,29 @@ test('rental-only scope excludes Customer-owned and Not classified Equipment', (
         [equipment[2]],
     )
     assert.deepEqual(filterSiteCheckEquipment(equipment, null), equipment)
+})
+
+test('unavailable Equipment waits for the next occurrence while unclassified availability is included', () => {
+    const equipment = [
+        { id: 'legacy', gr_sitecheckavailability: null },
+        {
+            id: 'available',
+            gr_sitecheckavailability: EQUIPMENT_SITE_CHECK_AVAILABILITIES.AVAILABLE_AT_SITE,
+        },
+        {
+            id: 'offsite',
+            gr_sitecheckavailability: EQUIPMENT_SITE_CHECK_AVAILABILITIES.TEMPORARILY_OFF_SITE,
+        },
+        {
+            id: 'workshop',
+            gr_sitecheckavailability: EQUIPMENT_SITE_CHECK_AVAILABILITIES.IN_WORKSHOP,
+        },
+    ]
+
+    assert.deepEqual(
+        filterSiteCheckEquipment(equipment, SITE_CHECK_EQUIPMENT_SCOPES.ALL_EQUIPMENT),
+        equipment.slice(0, 2),
+    )
 })
 
 test('manual scope includes only explicitly selected current-Site Equipment', () => {
@@ -206,7 +360,53 @@ test('22-Equipment creation fits one atomic 24-operation change set', () => {
     assert.match(batch.body, /"gr_ActiveSiteCheck@odata.bind":"\$1"/)
     assert.equal((batch.body.match(/POST \/api\/data\/v9\.2\/gr_jobs HTTP\/1\.1/g) ?? []).length, 22)
     assert.equal((batch.body.match(/"gr_SiteCheck@odata.bind":"\$1"/g) ?? []).length, 22)
-    assert.match(batch.body, /Site Check — FLT-1/)
+    assert.match(batch.body, /Weekly checks for 20\/07\/2026/)
+})
+
+test('atomic creation snapshots unavailable Equipment without creating a Job for it', () => {
+    const input = creationInput(1)
+    const excludedEquipment = [{
+        gr_equipmentid: '70000000-0000-0000-0000-000000000001',
+        gr_fleet: 'FLT-OFFSITE',
+        gr_sitecheckavailability: EQUIPMENT_SITE_CHECK_AVAILABILITIES.TEMPORARILY_OFF_SITE,
+    }] as const
+    const batch = buildSiteCheckCreationChangeSet({ ...input, excludedEquipment })
+
+    assert.equal(batch.operationCount, 4)
+    assert.equal((batch.body.match(/POST \/api\/data\/v9\.2\/gr_jobs HTTP\/1\.1/g) ?? []).length, 1)
+    assert.equal(
+        (batch.body.match(/POST \/api\/data\/v9\.2\/gr_sitecheckequipmentexclusions HTTP\/1\.1/g) ?? []).length,
+        1,
+    )
+    assert.match(
+        batch.body,
+        new RegExp(`"gr_availabilitysnapshot":${EQUIPMENT_SITE_CHECK_AVAILABILITIES.TEMPORARILY_OFF_SITE}`),
+    )
+    assert.match(batch.body, /"gr_Equipment@odata.bind":"\/gr_equipments\(70000000-0000-0000-0000-000000000001\)"/)
+})
+
+test('Site Check Job descriptions use frequency and the Monday of the NZ start week', () => {
+    assert.equal(
+        siteCheckJobDescription(
+            SITE_CHECK_FREQUENCIES.WEEKLY,
+            '2026-07-26T13:30:00.000Z',
+        ),
+        'Weekly checks for 27/07/2026',
+    )
+    assert.equal(
+        siteCheckJobDescription(
+            SITE_CHECK_FREQUENCIES.FORTNIGHTLY,
+            '2026-07-26T01:00:00.000Z',
+        ),
+        'Fortnightly checks for 20/07/2026',
+    )
+    assert.equal(
+        siteCheckJobDescription(
+            SITE_CHECK_FREQUENCIES.MONTHLY,
+            '2026-07-29T01:00:00.000Z',
+        ),
+        'Monthly checks for 27/07/2026',
+    )
 })
 
 test('Site Check Job Type is protected from standard and WOF creation sources', () => {
@@ -1206,6 +1406,7 @@ test('history and generated Job detail reads are bounded, expanded, and continua
     assert.match(requests[0], /\$orderby=gr_startedon desc/)
     assert.match(requests[0], /\$top=25/)
     assert.match(requests[1], /\$expand=gr_Equipment/)
+    assert.match(requests[1], /\$orderby=createdon asc,gr_jobid asc/)
     assert.match(requests[1], /\$top=25/)
     assert.equal(history.nextLink, `${apiUrl}/gr_sitechecks?$skiptoken=history`)
     assert.equal(details.records[0].gr_Equipment?.gr_fleet, 'LT-7')

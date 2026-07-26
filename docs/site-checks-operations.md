@@ -26,6 +26,12 @@ stop and arrange one deliberate user-owned authentication session.
 
 ## Destructive test-data cleanup
 
+`manage-site-checks-schema.ps1 -Mode PurgeOccurrences -LoginPrompt Never` is the narrow
+cleanup for deleting every Site Check occurrence and every Job linked to a Site Check or
+classified as Job Type Site Check. One transaction clears active Schedule pointers, deletes
+Jobs, then deletes occurrences. It verifies those targets are empty and that the Schedule
+count is unchanged. Schedule configuration and manual Equipment selections are preserved.
+
 `manage-site-checks-schema.ps1 -Mode PurgeData -LoginPrompt Never` is an exceptional,
 explicitly authorised cleanup mode. It is not a rollback step. It resolves all Schedules,
 occurrences, Jobs with a Site Check parent, and Jobs whose Job Type is Site Check; then one

@@ -41,6 +41,11 @@ identity, On-road compliance, and missing maintenance history are calculated con
 - Equipment Ownership is explicit current master data: Not classified, Customer owned, or
   Liftrucks rental. Not classified is stored as null; ownership is never inferred from
   identifiers, Customer, Site, or free text.
+- Proposed Site Check Availability is separate current master data. Its marker is exposed
+  only while the Equipment's current Site has an enabled recurring Site Check Schedule.
+  Hidden values survive Schedule disablement and Site transfers; null means Available at
+  Site for backward compatibility. The Customer Dashboard Equipment drawer supplies the
+  enabled-Site scope and is the Site Check availability management surface.
 - Road compliance determines whether Equipment can participate in new WOF work.
 - Equipment CSV maintenance is restricted to the explicitly authorised administrator.
   Imports match only by Equipment Dataverse ID, ignore blank cells by default, validate

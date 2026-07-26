@@ -118,6 +118,7 @@ export default function CustomerDashboardScreen() {
         cancelJobCompletion,
         isLoading: isJobsLoading,
         loadError: jobsLoadError,
+        fetchJobs,
     } = useJobs()
 
     const [selectedCustomerId, setSelectedCustomerId] = useState('')
@@ -189,6 +190,9 @@ export default function CustomerDashboardScreen() {
         jobs: siteChecks.jobs,
         today: currentNewZealandDateOnly(),
     })
+    const siteCheckEnabledSiteIds = siteChecks.schedules
+        .filter((schedule) => schedule.gr_enabled)
+        .map((schedule) => schedule._gr_site_value)
     const siteCheckBySite = new Map(siteCheckDashboard.items.map((item) => [item.siteId, item]))
     const visibleCustomerSites = siteCheckFilter === 'all'
         ? customerSites
@@ -612,7 +616,7 @@ export default function CustomerDashboardScreen() {
                                 >
                                     View Current Site Check
                                 </button>}
-                                {siteCheck?.schedule && <button
+                                {siteCheck?.schedule.gr_enabled && <button
                                     type="button"
                                     onClick={(event) => {
                                         siteCheckDetailsTriggerRef.current = event.currentTarget
@@ -795,6 +799,7 @@ export default function CustomerDashboardScreen() {
             key={`${siteCheckDetails.site.gr_siteid}-${siteCheckDetails.check?.gr_sitecheckid ?? 'history'}`}
             customerName={selectedCustomer.gr_name}
             siteName={siteCheckDetails.site.gr_name}
+            siteAddress={siteCheckDetails.site.gr_address}
             siteId={siteCheckDetails.site.gr_siteid}
             initialSiteCheck={siteCheckDetails.check}
             initialTab={siteCheckDetails.tab}
@@ -803,6 +808,18 @@ export default function CustomerDashboardScreen() {
             )?.gr_name ?? 'Technician unavailable'}
             loadHistoryPage={siteChecks.loadHistoryPage}
             loadJobsPage={siteChecks.loadDetailJobsPage}
+            loadAllJobs={siteChecks.loadAllDetailJobs}
+            loadAllEquipmentExclusions={siteChecks.loadAllEquipmentExclusions}
+            allocateJobNumbers={siteChecks.allocateJobNumbers}
+            onDelete={async (check) => {
+                await siteChecks.deleteOccurrence(check)
+                await fetchJobs()
+                const trigger = siteCheckDetailsTriggerRef.current
+                siteCheckNestedTriggerRef.current = null
+                siteCheckDetailsTriggerRef.current = null
+                setSiteCheckDetails(null)
+                window.setTimeout(() => trigger?.focus(), 0)
+            }}
             onOpenJob={(jobId, trigger) => {
                 const job = operationalJobs.find((item) => item.gr_jobid.toLowerCase() === jobId.toLowerCase())
                 if (!job) return
@@ -834,6 +851,7 @@ export default function CustomerDashboardScreen() {
             jobs={equipmentJobs}
             isSaving={isSaving}
             saveError={saveError}
+            siteCheckEnabledSiteIds={siteCheckEnabledSiteIds}
             onClose={() => {
                 const trigger = siteCheckNestedTriggerRef.current
                 siteCheckNestedTriggerRef.current = null
@@ -855,6 +873,7 @@ export default function CustomerDashboardScreen() {
             jobs={equipmentJobs}
             isSaving={isSaving}
             saveError={saveError}
+            siteCheckEnabledSiteIds={siteCheckEnabledSiteIds}
             onClose={() => setCreatingEquipmentInitialValues(null)}
             onCreateCustomer={createDashboardCustomer}
             onCreateSite={createDashboardSite}

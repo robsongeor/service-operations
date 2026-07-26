@@ -10,6 +10,10 @@ import {
     isEquipmentOwnershipType,
     type EquipmentOwnershipType,
 } from './equipmentOwnership.types.ts'
+import {
+    isEquipmentSiteCheckAvailability,
+    type EquipmentSiteCheckAvailability,
+} from './equipmentSiteCheckAvailability.types.ts'
 
 export type EquipmentUpdateInput = {
     fleet: string
@@ -26,6 +30,7 @@ export type EquipmentUpdateInput = {
     serviceProgramme: ServiceProgramme
     maintenanceProfile: MaintenanceProfile
     ownershipType: EquipmentOwnershipType | null
+    siteCheckAvailability: EquipmentSiteCheckAvailability | null
     customAEnabled: boolean
     customBEnabled: boolean
     customCEnabled: boolean
@@ -63,6 +68,10 @@ export function normalizeEquipmentInput(input: EquipmentUpdateInput): EquipmentU
     }
     if (input.ownershipType != null && !isEquipmentOwnershipType(input.ownershipType)) {
         throw new Error('Select a valid Equipment Ownership.')
+    }
+    if (input.siteCheckAvailability != null
+        && !isEquipmentSiteCheckAvailability(input.siteCheckAvailability)) {
+        throw new Error('Select a valid Site Check Availability.')
     }
     const registrationNumber = input.registrationNumber.trim()
     const rawCurrentWofExpiry = input.currentWofExpiry.trim()

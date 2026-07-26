@@ -1,5 +1,11 @@
 import { JOB_STATUSES } from '../../jobs/types/jobStatus.types.ts'
 import { EQUIPMENT_OWNERSHIP_TYPES } from '../../equipment/types/equipmentOwnership.types.ts'
+import { newZealandDateOnly } from '../../shared/dates/dateOnly.ts'
+import {
+    EQUIPMENT_SITE_CHECK_AVAILABILITIES,
+    resolveEquipmentSiteCheckAvailability,
+    type EquipmentSiteCheckAvailability,
+} from '../../equipment/types/equipmentSiteCheckAvailability.types.ts'
 import {
     SITE_CHECK_FREQUENCIES,
     SITE_CHECK_EQUIPMENT_SCOPES,
@@ -18,6 +24,7 @@ import {
 type SiteCheckEquipmentCandidate = {
     gr_equipmentid?: string
     gr_ownershiptype?: number | null
+    gr_sitecheckavailability?: EquipmentSiteCheckAvailability | null
 }
 
 export function equipmentIsIncludedInSiteCheck(
@@ -41,7 +48,20 @@ export function filterSiteCheckEquipment<T extends SiteCheckEquipmentCandidate>(
     selectedEquipmentIds: readonly string[] = [],
 ) {
     return equipment.filter((item) =>
-        equipmentIsIncludedInSiteCheck(item, scope, selectedEquipmentIds))
+        equipmentIsIncludedInSiteCheck(item, scope, selectedEquipmentIds)
+        && resolveEquipmentSiteCheckAvailability(item.gr_sitecheckavailability)
+            === EQUIPMENT_SITE_CHECK_AVAILABILITIES.AVAILABLE_AT_SITE)
+}
+
+export function siteCheckUnavailableEquipment<T extends SiteCheckEquipmentCandidate>(
+    equipment: readonly T[],
+    scope?: SiteCheckEquipmentScope | null,
+    selectedEquipmentIds: readonly string[] = [],
+) {
+    return equipment.filter((item) =>
+        equipmentIsIncludedInSiteCheck(item, scope, selectedEquipmentIds)
+        && resolveEquipmentSiteCheckAvailability(item.gr_sitecheckavailability)
+            !== EQUIPMENT_SITE_CHECK_AVAILABILITIES.AVAILABLE_AT_SITE)
 }
 
 const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/
@@ -93,6 +113,29 @@ export function addCalendarMonthsDateOnly(value: string, months: number) {
     const lastDay = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate()
 
     return formatDateOnly(targetYear, targetMonth + 1, Math.min(parsed.day, lastDay))
+}
+
+export function siteCheckJobDescription(
+    frequency: SiteCheckFrequency,
+    startedOn: string,
+) {
+    const startedDate = newZealandDateOnly(startedOn)
+    const parsed = parseDateOnly(startedDate)
+    if (!parsed) throw new Error('A valid Site Check start time is required.')
+    const weekStart = addCalendarDaysDateOnly(
+        startedDate,
+        -((parsed.date.getUTCDay() + 6) % 7),
+    )
+    const [year, month, day] = weekStart.split('-')
+    const frequencyLabel = frequency === SITE_CHECK_FREQUENCIES.WEEKLY
+        ? 'Weekly'
+        : frequency === SITE_CHECK_FREQUENCIES.FORTNIGHTLY
+            ? 'Fortnightly'
+            : frequency === SITE_CHECK_FREQUENCIES.MONTHLY
+                ? 'Monthly'
+                : ''
+    if (!frequencyLabel) throw new Error('A valid Site Check frequency is required.')
+    return `${frequencyLabel} checks for ${day}/${month}/${year}`
 }
 
 export function calculateNextSiteCheckDueDate(

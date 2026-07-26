@@ -311,6 +311,7 @@ export function equipmentInputFromCsvPatch(record: Equipment, patch: EquipmentCs
         serviceProgramme: patch.serviceProgramme ?? record.gr_serviceprogramme ?? SERVICE_PROGRAMMES.ICE_STANDARD,
         maintenanceProfile: patch.maintenanceProfile ?? record.gr_maintenanceprofile ?? MAINTENANCE_PROFILES.STANDARD,
         ownershipType: record.gr_ownershiptype ?? null,
+        siteCheckAvailability: record.gr_sitecheckavailability ?? null,
         customAEnabled: record.gr_customaenabled ?? true,
         customBEnabled: record.gr_custombenabled ?? false,
         customCEnabled: record.gr_customcenabled ?? true,

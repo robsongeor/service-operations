@@ -1,6 +1,6 @@
 # Current State
 
-Branch: `codex/site-checks`
+Branch: `codex/site-checks-polish`
 
 ## Deployment status
 
@@ -14,6 +14,9 @@ Branch: `codex/site-checks`
 
 ## Unfinished work
 
+- Approve and provision the minimum Site Check deletion privileges, then smoke-test the
+  in-app occurrence deletion action as the intended Service Operations role.
+
 - Run a Site Checks Site Settings smoke test as an assigned non-admin Service Operations user.
 - Run the combined Site Checks Phase 8 target-environment validation: verified maximum-Site
   request observation, non-admin creation/completion, manual accessibility, and rollback
@@ -23,6 +26,53 @@ Branch: `codex/site-checks`
 - Run a production-safe Technician Job Card smoke test.
 
 ## Recent milestone
+
+Phase 13 temporary Equipment availability is implemented locally. The Equipment marker is
+available from the Customer Dashboard Equipment drawer only when the current Site has an
+enabled recurring Schedule. In Workshop and Temporarily Off-site Equipment are excluded
+after Schedule scope filtering, snapshotted in the same atomic occurrence transaction, and
+reconsidered only at the next normal occurrence after returning; no catch-up Job is created.
+The schema is provisioned and published, its composite key is Active, and the approved
+Service Operations Create/Read/Delete/Append/Append To privileges are verified at
+Organisation depth. Run preview and occurrence history expose exclusion reasons.
+
+A signed-in desktop target smoke on Air New Zealand / Can Park Auckland passed on 26 July
+2026 without another authentication prompt. With a temporary Weekly Schedule, FN1579 marked
+In Workshop, and Anura assigned, preview showed two included machines and one unavailable
+machine. Creation produced exactly two Jobs and one immutable FN1579 exclusion snapshot;
+the details drawer showed `0/2`, both Jobs, and the In Workshop reason. The in-app atomic
+delete then removed the occurrence, two Jobs, and exclusion. FN1579 was restored to Available
+at Site and the temporary Schedule was disabled, returning all Customer summary counts to
+zero and removing Site Check content from the Site header.
+
+Disabled Site Check Schedules now render no Site Check summary or actions in the Site header,
+including History. Stored occurrences and Jobs remain unchanged and become accessible again
+if the Schedule is re-enabled.
+
+Controlled in-app Site Check deletion is implemented locally. The details drawer confirms
+the permanent action, loads all generated Jobs, then atomically clears an active pointer and
+deletes Jobs before the occurrence using ETags. Schedule cadence, scope, and manual
+selections remain. Service Operations does not currently have Site Check Delete privilege;
+provisioning remains a separate explicit approval gate.
+
+At the user's explicit request, the current Site Check test occurrence and its generated
+Jobs were permanently removed on 26 July 2026. One cached, no-prompt transaction cleared
+one active Schedule pointer, deleted one Site Check occurrence and three Site Check Jobs,
+and verified zero occurrences and Site Check Jobs remained while preserving the existing
+Schedule. The administration tool now has a narrow `PurgeOccurrences` mode so future
+occurrence cleanup cannot inadvertently delete Schedule settings or manual selections.
+A later repeat cleanup removed one newly created occurrence with no generated Jobs, cleared
+its active pointer, and again verified zero occurrences and Site Check Jobs while preserving
+the Schedule.
+
+Site Check Job Book allocation is implemented locally. The details drawer loads every
+generated Job in stable creation order, copies the requested eight headerless TSV columns,
+accepts one numeric Job number per line, validates the exact mapping, and writes every
+number in one ETag-protected atomic change set before authoritative reload. It reuses the
+existing comma-separated Site address convention, silent authentication, and generated-Job
+query; no schema or sign-in flow changed. Newly generated Jobs use the shared occurrence
+description `<Frequency> checks for <Monday week-start date>` calculated from the start time
+in New Zealand.
 
 The approved Manual Site Check Equipment selection schema was provisioned and published on
 26 July 2026 using one cached `LoginPrompt=Never` connection. Schedule Equipment Scope now

@@ -75,3 +75,9 @@ test('due Sites open the shared-pattern Run Site Check drawer with stable retry 
     assert.match(runDrawerSource, /role="alert"/)
     assert.match(runDrawerSource, /Inactive/)
 })
+
+test('disabled Site Check schedules render no Site Check controls in the Site header', () => {
+    assert.match(dashboardSource, /siteCheck\?\.schedule\.gr_enabled && <span className="customer-site-check-summary"/)
+    assert.match(dashboardSource, /siteCheck\?\.schedule\.gr_enabled && <button[\s\S]*?Site Check History/)
+    assert.doesNotMatch(dashboardSource, /\{siteCheck\?\.schedule && <button/)
+})

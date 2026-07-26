@@ -1,14 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import EditDrawerFormDialog from '../../shared/drawer/EditDrawerFormDialog'
+import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation'
 import EditDrawerSection from '../../shared/drawer/EditDrawerSection'
 import EditDrawerShell from '../../shared/drawer/EditDrawerShell'
 import DrawerTabs from '../../shared/drawer/DrawerTabs'
 import { JOB_STATUS_OPTIONS } from '../../jobs/types/jobStatus.types'
+import { EQUIPMENT_SITE_CHECK_AVAILABILITY_OPTIONS } from '../../equipment/types/equipmentSiteCheckAvailability.types'
 import { calculateSiteCheckProgress, wasSiteCheckCompletedLate } from '../domain/siteCheckCalculations'
+import { buildSiteCheckJobBookRows, parseSiteCheckJobNumbers } from '../domain/siteCheckJobBook'
 import {
     SITE_CHECK_FREQUENCY_OPTIONS,
     SITE_CHECK_STATUSES,
     type SiteCheck,
     type SiteCheckDetailJob,
+    type SiteCheckEquipmentExclusion,
     type SiteCheckPage,
 } from '../types/siteCheck.types'
 import './SiteCheckDetailsDrawer.css'
@@ -18,12 +23,20 @@ type Tab = 'summary' | 'jobs' | 'history'
 type Props = {
     customerName: string
     siteName: string
+    siteAddress?: string | null
     siteId: string
     initialSiteCheck?: SiteCheck | null
     initialTab?: Tab
     technicianName: (id: string) => string
     loadHistoryPage: (siteId: string, nextLink?: string) => Promise<SiteCheckPage<SiteCheck>>
     loadJobsPage: (siteCheckId: string, nextLink?: string) => Promise<SiteCheckPage<SiteCheckDetailJob>>
+    loadAllJobs: (siteCheckId: string) => Promise<SiteCheckDetailJob[]>
+    loadAllEquipmentExclusions: (siteCheckId: string) => Promise<SiteCheckEquipmentExclusion[]>
+    allocateJobNumbers: (allocations: readonly {
+        job: SiteCheckDetailJob
+        jobNumber: string
+    }[]) => Promise<void>
+    onDelete: (siteCheck: SiteCheck) => Promise<void>
     onOpenJob: (jobId: string, trigger: HTMLButtonElement) => void
     onOpenEquipment: (equipmentId: string, trigger: HTMLButtonElement) => void
     onClose: () => void
@@ -54,15 +67,34 @@ function equipmentLabel(job: SiteCheckDetailJob) {
         || 'Equipment unavailable'
 }
 
+function excludedEquipmentLabel(exclusion: SiteCheckEquipmentExclusion) {
+    const equipment = exclusion.gr_Equipment
+    return equipment?.gr_fleet?.trim()
+        || equipment?.gr_serial?.trim()
+        || [equipment?.gr_make, equipment?.gr_model].filter(Boolean).join(' ')
+        || exclusion.gr_name
+}
+
+function availabilityLabel(exclusion: SiteCheckEquipmentExclusion) {
+    return EQUIPMENT_SITE_CHECK_AVAILABILITY_OPTIONS.find(
+        (option) => option.value === exclusion.gr_availabilitysnapshot,
+    )?.label ?? 'Unavailable'
+}
+
 export default function SiteCheckDetailsDrawer({
     customerName,
     siteName,
+    siteAddress,
     siteId,
     initialSiteCheck,
     initialTab = 'summary',
     technicianName,
     loadHistoryPage,
     loadJobsPage,
+    loadAllJobs,
+    loadAllEquipmentExclusions,
+    allocateJobNumbers,
+    onDelete,
     onOpenJob,
     onOpenEquipment,
     onClose,
@@ -73,11 +105,21 @@ export default function SiteCheckDetailsDrawer({
     const [historyNext, setHistoryNext] = useState<string>()
     const [jobs, setJobs] = useState<SiteCheckDetailJob[]>([])
     const [jobsNext, setJobsNext] = useState<string>()
+    const [exclusions, setExclusions] = useState<SiteCheckEquipmentExclusion[]>([])
     const [historyLoading, setHistoryLoading] = useState(false)
     const [jobsLoading, setJobsLoading] = useState(false)
     const [error, setError] = useState('')
+    const [jobBookFeedback, setJobBookFeedback] = useState('')
+    const [jobBookBusy, setJobBookBusy] = useState(false)
+    const [showJobNumberDialog, setShowJobNumberDialog] = useState(false)
+    const [pastedJobNumbers, setPastedJobNumbers] = useState('')
+    const [jobNumberError, setJobNumberError] = useState('')
+    const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false)
+    const [deleteBusy, setDeleteBusy] = useState(false)
+    const [deleteError, setDeleteError] = useState('')
     const selectedId = selected?.gr_sitecheckid
     const loadedJobsFor = useRef('')
+    const loadedExclusionsFor = useRef('')
 
     const appendHistory = async (nextLink?: string) => {
         setHistoryLoading(true)
@@ -130,17 +172,124 @@ export default function SiteCheckDetailsDrawer({
         return () => window.clearTimeout(timer)
     }, [selectedId]) // eslint-disable-line react-hooks/exhaustive-deps
 
+    useEffect(() => {
+        if (!selectedId || loadedExclusionsFor.current === selectedId) return
+        const timer = window.setTimeout(() => {
+            setExclusions([])
+            void loadAllEquipmentExclusions(selectedId)
+                .then((records) => {
+                    setExclusions(records)
+                    loadedExclusionsFor.current = selectedId
+                })
+                .catch((cause) => setError(cause instanceof Error
+                    ? cause.message
+                    : 'Excluded Equipment could not be loaded.'))
+        }, 0)
+        return () => window.clearTimeout(timer)
+    }, [loadAllEquipmentExclusions, selectedId])
+
     const progress = useMemo(
         () => calculateSiteCheckProgress(jobs, selected?.gr_expectedjobcount ?? 0),
         [jobs, selected?.gr_expectedjobcount],
     )
     const status = selected?.gr_status === SITE_CHECK_STATUSES.COMPLETE ? 'Complete' : 'In progress'
 
+    const loadCompleteOrderedJobs = async () => {
+        if (!selectedId) throw new Error('Select a Site Check first.')
+        const completeJobs = await loadAllJobs(selectedId)
+        const expected = selected?.gr_expectedjobcount ?? 0
+        if (completeJobs.length !== expected) {
+            throw new Error(
+                `Expected ${expected} generated Jobs but found ${completeJobs.length}. Job Book actions are blocked until this is repaired.`,
+            )
+        }
+        setJobs(completeJobs)
+        setJobsNext(undefined)
+        loadedJobsFor.current = selectedId
+        return completeJobs
+    }
+
+    const copyForJobBook = async () => {
+        setJobBookBusy(true)
+        setJobBookFeedback('')
+        setError('')
+        try {
+            const completeJobs = await loadCompleteOrderedJobs()
+            await navigator.clipboard.writeText(
+                buildSiteCheckJobBookRows(completeJobs, customerName, siteAddress),
+            )
+            setJobBookFeedback(`${completeJobs.length} Job Book rows copied in allocation order.`)
+        } catch (cause) {
+            setError(cause instanceof Error ? cause.message : 'The Job Book rows could not be copied.')
+        } finally {
+            setJobBookBusy(false)
+        }
+    }
+
+    const openJobNumberDialog = async () => {
+        setJobBookBusy(true)
+        setJobBookFeedback('')
+        setError('')
+        try {
+            await loadCompleteOrderedJobs()
+            setPastedJobNumbers('')
+            setJobNumberError('')
+            setShowJobNumberDialog(true)
+        } catch (cause) {
+            setError(cause instanceof Error ? cause.message : 'The generated Jobs could not be loaded.')
+        } finally {
+            setJobBookBusy(false)
+        }
+    }
+
+    const applyJobNumbers = async () => {
+        setJobNumberError('')
+        setJobBookBusy(true)
+        try {
+            await allocateJobNumbers(parseSiteCheckJobNumbers(pastedJobNumbers, jobs))
+            const refreshedJobs = await loadCompleteOrderedJobs()
+            setShowJobNumberDialog(false)
+            setPastedJobNumbers('')
+            setJobBookFeedback(`${refreshedJobs.length} Job numbers were allocated.`)
+        } catch (cause) {
+            setJobNumberError(cause instanceof Error ? cause.message : 'The Job numbers could not be allocated.')
+        } finally {
+            setJobBookBusy(false)
+        }
+    }
+
+    const deleteSelectedSiteCheck = async () => {
+        if (!selected) return
+        setDeleteBusy(true)
+        setDeleteError('')
+        try {
+            await onDelete(selected)
+        } catch (cause) {
+            setDeleteError(cause instanceof Error ? cause.message : 'The Site Check could not be deleted.')
+        } finally {
+            setDeleteBusy(false)
+        }
+    }
+
     return <EditDrawerShell
         eyebrow="Site Checks"
         title={selected?.gr_name ?? `${siteName} history`}
+        busy={deleteBusy}
         onClose={onClose}
-        footer={<button type="button" onClick={onClose}>Close</button>}
+        footer={<>
+            {selected && <button
+                type="button"
+                className="danger"
+                disabled={deleteBusy}
+                onClick={() => {
+                    setDeleteError('')
+                    setShowDeleteConfirmation(true)
+                }}
+            >
+                Delete Site Check
+            </button>}
+            <button type="button" disabled={deleteBusy} onClick={onClose}>Close</button>
+        </>}
     >
         <DrawerTabs
             tabs={[
@@ -179,6 +328,21 @@ export default function SiteCheckDetailsDrawer({
 
         <div role="tabpanel" id="drawer-tab-panel-jobs" aria-labelledby="drawer-tab-jobs" hidden={activeTab !== 'jobs'}>
             <EditDrawerSection title="Generated Jobs and Equipment">
+                {selected && <div className="site-check-job-book">
+                    <div>
+                        <strong>Job Book allocation</strong>
+                        <span>Copy the generated Jobs to Excel, then paste the allocated Job numbers back in the same row order.</span>
+                    </div>
+                    <div>
+                        <button type="button" disabled={jobBookBusy || jobsLoading} onClick={() => void copyForJobBook()}>
+                            {jobBookBusy ? 'Working…' : 'Copy Jobs for Excel'}
+                        </button>
+                        <button type="button" disabled={jobBookBusy || jobsLoading} onClick={() => void openJobNumberDialog()}>
+                            Paste Job numbers
+                        </button>
+                    </div>
+                    {jobBookFeedback && <p role="status">{jobBookFeedback}</p>}
+                </div>}
                 {jobsLoading && jobs.length === 0 ? <p>Loading generated Jobs…</p>
                     : jobs.length === 0 ? <p>No generated Jobs were found.</p>
                         : <div className="site-check-job-list">
@@ -207,6 +371,31 @@ export default function SiteCheckDetailsDrawer({
                     {jobsLoading ? 'Loading…' : 'Load more Jobs'}
                 </button>}
             </EditDrawerSection>
+            {exclusions.length > 0 && <EditDrawerSection title="Excluded from this occurrence">
+                <p>These machines were unavailable when this Site Check started. They will be reconsidered at the next occurrence.</p>
+                <div className="site-check-job-list">
+                    {exclusions.map((exclusion) =>
+                        <article key={exclusion.gr_sitecheckequipmentexclusionid}>
+                            <div>
+                                <strong>{excludedEquipmentLabel(exclusion)}</strong>
+                                <span>{availabilityLabel(exclusion)}</span>
+                            </div>
+                            <div>
+                                <button
+                                    type="button"
+                                    disabled={!exclusion.gr_Equipment}
+                                    onClick={(event) => exclusion.gr_Equipment
+                                        && onOpenEquipment(
+                                            exclusion.gr_Equipment.gr_equipmentid,
+                                            event.currentTarget,
+                                        )}
+                                >
+                                    Open Equipment
+                                </button>
+                            </div>
+                        </article>)}
+                </div>
+            </EditDrawerSection>}
         </div>
 
         <div role="tabpanel" id="drawer-tab-panel-history" aria-labelledby="drawer-tab-history" hidden={activeTab !== 'history'}>
@@ -226,6 +415,7 @@ export default function SiteCheckDetailsDrawer({
                                 return <li key={check.gr_sitecheckid}>
                                     <button type="button" aria-current={selectedId === check.gr_sitecheckid ? 'true' : undefined} onClick={() => {
                                         loadedJobsFor.current = ''
+                                        loadedExclusionsFor.current = ''
                                         setSelected(check)
                                         setActiveTab('summary')
                                     }}>
@@ -241,5 +431,47 @@ export default function SiteCheckDetailsDrawer({
                 </button>}
             </EditDrawerSection>
         </div>
+        {showJobNumberDialog && <EditDrawerFormDialog
+            eyebrow="Job Book allocation"
+            title={`Allocate ${jobs.length} Job numbers`}
+            error={jobNumberError}
+            isBusy={jobBookBusy}
+            submitLabel={jobBookBusy ? 'Applying…' : 'Apply Job numbers'}
+            onCancel={() => {
+                setShowJobNumberDialog(false)
+                setJobNumberError('')
+            }}
+            onSubmit={() => void applyJobNumbers()}
+        >
+            <label className="site-check-job-number-field">
+                <span>Job numbers, one per line</span>
+                <textarea
+                    rows={Math.min(Math.max(jobs.length, 5), 16)}
+                    value={pastedJobNumbers}
+                    onChange={(event) => setPastedJobNumbers(event.target.value)}
+                    placeholder={'145410\n145411\n145412'}
+                    autoFocus
+                    disabled={jobBookBusy}
+                />
+            </label>
+            <p>The first number is assigned to the first Job shown in the generated list. This update is atomic: either every number is saved or none are.</p>
+            {jobs.some((job) => job.gr_jobnumber?.trim()) && <p><strong>Some Jobs already have numbers.</strong> Applying this list will replace them.</p>}
+        </EditDrawerFormDialog>}
+        {showDeleteConfirmation && selected && <EditDrawerConfirmation
+            eyebrow="Permanent deletion"
+            title="Delete this Site Check and its Jobs?"
+            message={<>
+                <p>This permanently deletes the Site Check occurrence and all {selected.gr_expectedjobcount} generated Jobs.</p>
+                <p>The Site Check Schedule, frequency, due date, Equipment scope, and manual selections will be preserved.</p>
+            </>}
+            error={deleteError}
+            isBusy={deleteBusy}
+            confirmLabel={deleteBusy ? 'Deleting…' : 'Delete Site Check and Jobs'}
+            onCancel={() => {
+                setShowDeleteConfirmation(false)
+                setDeleteError('')
+            }}
+            onConfirm={() => void deleteSelectedSiteCheck()}
+        />}
     </EditDrawerShell>
 }

@@ -23,9 +23,23 @@
   Schedule/selection persistence, current-Site enforcement, and replay-safe authoritative
   filtering. Newly assigned Equipment is not selected automatically and transferred-away
   Equipment cannot generate Site Check Jobs.
+- Added temporary Site Check Equipment availability for enabled Sites. In Workshop and
+  Temporarily Off-site machines are excluded from the current occurrence, recorded with an
+  immutable reason snapshot, and reconsidered at the next normal occurrence without catch-up
+  Jobs.
+- Target-smoked temporary availability on Can Park Auckland: two Jobs and one In Workshop
+  exclusion were created, displayed, and atomically removed without another sign-in prompt.
 - Target verification saved and reloaded a Weekly Manual Selection Schedule for Air New
   Zealand / Can Park Auckland with FN1579 only; the Run preview correctly showed one
   included Equipment and two excluded without creating an occurrence or Jobs.
+- Added a headerless Excel Job Book export for generated Site Check Jobs and an atomic,
+  order-preserving paste-back workflow for allocated numeric Job numbers.
+- Generated Site Check Job descriptions now identify the Schedule frequency and Monday
+  start date of the occurrence week.
+- Added an explicitly confirmed, atomic in-app action for deleting one Site Check occurrence
+  and all generated Jobs while preserving its Schedule and Equipment selection settings.
+- Disabled Site Check schedules no longer render Site Check status or actions in Site
+  headers; their stored history remains unchanged.
 
 ### Remaining validation
 

@@ -1,8 +1,16 @@
 import { SERVICE_TYPES } from '../../equipment/servicePlans/equipmentServicePlan.types.ts'
+import {
+    EQUIPMENT_SITE_CHECK_AVAILABILITIES,
+    type EquipmentSiteCheckAvailability,
+} from '../../equipment/types/equipmentSiteCheckAvailability.types.ts'
 import { buildJobCreatePayload } from '../../jobs/services/jobsApi.ts'
 import { JOB_STATUSES } from '../../jobs/types/jobStatus.types.ts'
 import { JOB_TYPES } from '../../jobs/types/jobType.types.ts'
-import { isValidDateOnly, isValidSiteCheckRequestKey } from '../domain/siteCheckCalculations.ts'
+import {
+    isValidDateOnly,
+    isValidSiteCheckRequestKey,
+    siteCheckJobDescription,
+} from '../domain/siteCheckCalculations.ts'
 import {
     SITE_CHECK_STATUSES,
     type SiteCheckSchedule,
@@ -21,6 +29,7 @@ export type SiteCheckCreationEquipment = {
     gr_model?: string | null
     statecode?: number
     gr_ownershiptype?: number | null
+    gr_sitecheckavailability?: EquipmentSiteCheckAvailability | null
 }
 
 export type SiteCheckCreationInput = {
@@ -28,6 +37,7 @@ export type SiteCheckCreationInput = {
     siteName: string
     technicianId: string
     equipment: readonly SiteCheckCreationEquipment[]
+    excludedEquipment?: readonly SiteCheckCreationEquipment[]
     requestKey: string
     startedOn: string
 }
@@ -42,13 +52,6 @@ type AtomicRequest = {
 function requireGuid(value: string, label: string) {
     if (!GUID_PATTERN.test(value)) throw new Error(`A valid ${label} is required.`)
     return value.toLowerCase()
-}
-
-function equipmentIdentifier(item: SiteCheckCreationEquipment) {
-    return item.gr_fleet?.trim()
-        || item.gr_serial?.trim()
-        || [item.gr_make, item.gr_model].filter(Boolean).join(' ').trim()
-        || item.gr_equipmentid
 }
 
 function validateInput(input: SiteCheckCreationInput) {
@@ -73,12 +76,20 @@ function validateInput(input: SiteCheckCreationInput) {
         throw new Error('A valid Site Check start time is required.')
     }
     input.equipment.forEach((item) => requireGuid(item.gr_equipmentid, 'Equipment ID'))
+    input.excludedEquipment?.forEach((item) => {
+        requireGuid(item.gr_equipmentid, 'excluded Equipment ID')
+        if (item.gr_sitecheckavailability !== EQUIPMENT_SITE_CHECK_AVAILABILITIES.TEMPORARILY_OFF_SITE
+            && item.gr_sitecheckavailability !== EQUIPMENT_SITE_CHECK_AVAILABILITIES.IN_WORKSHOP) {
+            throw new Error('Excluded Equipment must have an unavailable Site Check state.')
+        }
+    })
 }
 
 function creationRequests(input: SiteCheckCreationInput): AtomicRequest[] {
     validateInput(input)
     const schedule = input.schedule
     const siteId = schedule._gr_site_value.toLowerCase()
+    const jobDescription = siteCheckJobDescription(schedule.gr_frequency!, input.startedOn)
     const occurrence = {
         gr_name: `Site Check — ${input.siteName.trim() || siteId}`,
         gr_status: SITE_CHECK_STATUSES.IN_PROGRESS,
@@ -98,7 +109,7 @@ function creationRequests(input: SiteCheckCreationInput): AtomicRequest[] {
         ...buildJobCreatePayload({
             jobNumber: '',
             orderNumber: '',
-            description: `Site Check — ${equipmentIdentifier(item)}`,
+            description: jobDescription,
             jobType: JOB_TYPES.SITE_CHECK,
             status: JOB_STATUSES.ALLOCATED,
             equipmentId: item.gr_equipmentid,
@@ -107,6 +118,12 @@ function creationRequests(input: SiteCheckCreationInput): AtomicRequest[] {
             serviceType: SERVICE_TYPES.NONE,
         }, 'site-check'),
         'gr_SiteCheck@odata.bind': '$1',
+    }))
+    const exclusions = (input.excludedEquipment ?? []).map((item) => ({
+        gr_name: `Site Check exclusion — ${item.gr_fleet?.trim() || item.gr_equipmentid}`,
+        gr_availabilitysnapshot: item.gr_sitecheckavailability,
+        'gr_SiteCheck@odata.bind': '$1',
+        'gr_Equipment@odata.bind': `/gr_equipments(${item.gr_equipmentid})`,
     }))
 
     return [
@@ -118,6 +135,11 @@ function creationRequests(input: SiteCheckCreationInput): AtomicRequest[] {
             etag: schedule['@odata.etag'],
         },
         ...jobs.map((fields) => ({ method: 'POST' as const, entityPath: 'gr_jobs', fields })),
+        ...exclusions.map((fields) => ({
+            method: 'POST' as const,
+            entityPath: 'gr_sitecheckequipmentexclusions',
+            fields,
+        })),
     ]
 }
 

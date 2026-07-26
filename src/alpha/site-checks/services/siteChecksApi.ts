@@ -5,6 +5,7 @@ import type {
     SiteCheckEquipmentScope,
     SiteCheckJobProgressInput,
     SiteCheckDetailJob,
+    SiteCheckEquipmentExclusion,
     SiteCheckPage,
     SiteCheckSchedule,
     SiteCheckScheduleEquipment,
@@ -154,6 +155,33 @@ function mapDetailJob(value: unknown): SiteCheckDetailJob {
             gr_mechanicid: requireGuid(mechanic.gr_mechanicid, 'Job technician ID'),
             gr_name: requireString(mechanic.gr_name, 'Job technician name'),
         } : null,
+        '@odata.etag': typeof row['@odata.etag'] === 'string' ? row['@odata.etag'] : undefined,
+    }
+}
+
+function mapEquipmentExclusion(value: unknown): SiteCheckEquipmentExclusion {
+    const row = value as Record<string, unknown>
+    const equipment = row.gr_Equipment as Record<string, unknown> | null | undefined
+    return {
+        gr_sitecheckequipmentexclusionid: requireGuid(
+            row.gr_sitecheckequipmentexclusionid,
+            'Equipment exclusion ID',
+        ),
+        gr_name: requireString(row.gr_name, 'Equipment exclusion name'),
+        gr_availabilitysnapshot: requireNumber(
+            row.gr_availabilitysnapshot,
+            'availability snapshot',
+        ) as SiteCheckEquipmentExclusion['gr_availabilitysnapshot'],
+        _gr_sitecheck_value: requireGuid(row._gr_sitecheck_value, 'exclusion Site Check'),
+        _gr_equipment_value: requireGuid(row._gr_equipment_value, 'excluded Equipment'),
+        gr_Equipment: equipment ? {
+            gr_equipmentid: requireGuid(equipment.gr_equipmentid, 'excluded Equipment ID'),
+            gr_fleet: typeof equipment.gr_fleet === 'string' ? equipment.gr_fleet : null,
+            gr_serial: typeof equipment.gr_serial === 'string' ? equipment.gr_serial : null,
+            gr_make: typeof equipment.gr_make === 'string' ? equipment.gr_make : null,
+            gr_model: typeof equipment.gr_model === 'string' ? equipment.gr_model : null,
+        } : null,
+        '@odata.etag': typeof row['@odata.etag'] === 'string' ? row['@odata.etag'] : undefined,
     }
 }
 
@@ -354,11 +382,227 @@ export async function fetchSiteCheckDetailJobsPage(
         '$select=gr_jobid,gr_jobnumber,gr_description,gr_status,gr_completeddate,_gr_sitecheck_value',
         '$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_serial,gr_make,gr_model),gr_Mechanic($select=gr_mechanicid,gr_name)',
         `$filter=_gr_sitecheck_value eq ${id}`,
-        '$orderby=createdon asc',
+        '$orderby=createdon asc,gr_jobid asc',
         '$top=25',
     ].join('&')
     return readPage(accessToken, nextLink ?? `${apiUrl}/gr_jobs?${query}`,
         'Generated Site Check Jobs could not be loaded.', mapDetailJob, options)
+}
+
+export async function fetchSiteCheckEquipmentExclusionsPage(
+    accessToken: string,
+    siteCheckId: string,
+    nextLink?: string,
+    options: { apiUrl?: string; fetcher?: typeof fetch } = {},
+) {
+    const apiUrl = options.apiUrl ?? DEFAULT_API_URL
+    const id = requireGuid(siteCheckId, 'Site Check ID')
+    const query = [
+        '$select=gr_sitecheckequipmentexclusionid,gr_name,gr_availabilitysnapshot,_gr_sitecheck_value,_gr_equipment_value',
+        '$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_serial,gr_make,gr_model)',
+        `$filter=_gr_sitecheck_value eq ${id}`,
+        '$orderby=createdon asc,gr_sitecheckequipmentexclusionid asc',
+        '$top=25',
+    ].join('&')
+    return readPage(
+        accessToken,
+        nextLink ?? `${apiUrl}/gr_sitecheckequipmentexclusions?${query}`,
+        'Site Check Equipment exclusions could not be loaded.',
+        mapEquipmentExclusion,
+        options,
+    )
+}
+
+export async function allocateSiteCheckJobNumbers(
+    accessToken: string,
+    allocations: readonly { job: SiteCheckDetailJob; jobNumber: string }[],
+    options: { apiUrl?: string; fetcher?: typeof fetch } = {},
+) {
+    if (allocations.length === 0) throw new Error('No Site Check Jobs were supplied.')
+    const seenJobs = new Set<string>()
+    const seenNumbers = new Set<string>()
+    allocations.forEach(({ job, jobNumber }) => {
+        const jobId = requireGuid(job.gr_jobid, 'Job ID').toLowerCase()
+        const normalizedNumber = jobNumber.trim()
+        if (seenJobs.has(jobId)) throw new Error('A Site Check Job was supplied more than once.')
+        if (!/^\d+$/.test(normalizedNumber)) throw new Error('Job numbers must contain digits only.')
+        if (seenNumbers.has(normalizedNumber)) throw new Error('Each Job number must be unique.')
+        if (!job['@odata.etag']) throw new Error('Reload the Site Check Jobs before allocating numbers.')
+        seenJobs.add(jobId)
+        seenNumbers.add(normalizedNumber)
+    })
+
+    const suffix = crypto.randomUUID().replaceAll('-', '')
+    const batchBoundary = `batch_${suffix}`
+    const changeBoundary = `changeset_${suffix}`
+    const lines = [
+        `--${batchBoundary}`,
+        `Content-Type: multipart/mixed; boundary=${changeBoundary}`,
+        '',
+    ]
+    allocations.forEach(({ job, jobNumber }, index) => {
+        lines.push(
+            `--${changeBoundary}`,
+            'Content-Type: application/http',
+            'Content-Transfer-Encoding: binary',
+            `Content-ID: ${index + 1}`,
+            '',
+            `PATCH /api/data/v9.2/gr_jobs(${job.gr_jobid}) HTTP/1.1`,
+            'Accept: application/json',
+            'Content-Type: application/json; type=entry',
+            `If-Match: ${job['@odata.etag']}`,
+            '',
+            JSON.stringify({ gr_jobnumber: jobNumber.trim() }),
+            '',
+        )
+    })
+    lines.push(`--${changeBoundary}--`, `--${batchBoundary}--`, '')
+
+    const fetcher = options.fetcher ?? fetch
+    const response = await fetcher(`${options.apiUrl ?? DEFAULT_API_URL}/$batch`, {
+        method: 'POST',
+        headers: {
+            ...headers(accessToken),
+            'Content-Type': `multipart/mixed; boundary=${batchBoundary}`,
+            'OData-MaxVersion': '4.0',
+            'OData-Version': '4.0',
+        },
+        body: lines.join('\r\n'),
+    })
+    const responseBody = await response.text()
+    const statuses = [...responseBody.matchAll(/HTTP\/1\.1\s+(\d{3})/g)]
+        .map((match) => Number(match[1]))
+    const failure = statuses.find((status) => status >= 400)
+    if (!response.ok || failure) {
+        if ((failure ?? response.status) === 412) {
+            throw new Error('One or more Jobs changed elsewhere. Reload and paste the numbers again.')
+        }
+        throw new Error('Dataverse rejected the atomic Job number allocation.')
+    }
+    if (statuses.filter((status) => status >= 200 && status < 300).length !== allocations.length) {
+        throw new Error('Dataverse did not confirm every Job number update.')
+    }
+}
+
+export async function deleteSiteCheckOccurrence(
+    accessToken: string,
+    occurrence: SiteCheck,
+    jobs: readonly SiteCheckDetailJob[],
+    exclusions: readonly SiteCheckEquipmentExclusion[],
+    schedule?: SiteCheckSchedule | null,
+    options: { apiUrl?: string; fetcher?: typeof fetch } = {},
+) {
+    const occurrenceId = requireGuid(occurrence.gr_sitecheckid, 'Site Check ID')
+    if (!occurrence['@odata.etag']) throw new Error('Reload the Site Check before deleting it.')
+    jobs.forEach((job) => {
+        requireGuid(job.gr_jobid, 'Job ID')
+        if (job._gr_sitecheck_value.toLowerCase() !== occurrenceId.toLowerCase()) {
+            throw new Error('A generated Job belongs to a different Site Check.')
+        }
+        if (!job['@odata.etag']) throw new Error('Reload the generated Jobs before deleting.')
+    })
+    exclusions.forEach((exclusion) => {
+        requireGuid(exclusion.gr_sitecheckequipmentexclusionid, 'Equipment exclusion ID')
+        if (exclusion._gr_sitecheck_value.toLowerCase() !== occurrenceId.toLowerCase()) {
+            throw new Error('An Equipment exclusion belongs to a different Site Check.')
+        }
+        if (!exclusion['@odata.etag']) {
+            throw new Error('Reload the Equipment exclusions before deleting.')
+        }
+    })
+    const clearsActivePointer = Boolean(
+        schedule?._gr_activesitecheck_value
+        && schedule._gr_activesitecheck_value.toLowerCase() === occurrenceId.toLowerCase(),
+    )
+    if (clearsActivePointer && !schedule?.['@odata.etag']) {
+        throw new Error('Reload the Site Check Schedule before deleting this active Site Check.')
+    }
+
+    const suffix = crypto.randomUUID().replaceAll('-', '')
+    const batchBoundary = `batch_${suffix}`
+    const changeBoundary = `changeset_${suffix}`
+    const requests: Array<{
+        method: 'PATCH' | 'DELETE'
+        path: string
+        fields?: Record<string, unknown>
+        etag: string
+    }> = []
+    if (clearsActivePointer && schedule) {
+        requests.push({
+            method: 'PATCH',
+            path: `gr_sitecheckschedules(${schedule.gr_sitecheckscheduleid})`,
+            fields: { 'gr_ActiveSiteCheck@odata.bind': null },
+            etag: schedule['@odata.etag']!,
+        })
+    }
+    jobs.forEach((job) => requests.push({
+        method: 'DELETE',
+        path: `gr_jobs(${job.gr_jobid})`,
+        etag: job['@odata.etag']!,
+    }))
+    exclusions.forEach((exclusion) => requests.push({
+        method: 'DELETE',
+        path: `gr_sitecheckequipmentexclusions(${exclusion.gr_sitecheckequipmentexclusionid})`,
+        etag: exclusion['@odata.etag']!,
+    }))
+    requests.push({
+        method: 'DELETE',
+        path: `gr_sitechecks(${occurrenceId})`,
+        etag: occurrence['@odata.etag'],
+    })
+
+    const lines = [
+        `--${batchBoundary}`,
+        `Content-Type: multipart/mixed; boundary=${changeBoundary}`,
+        '',
+    ]
+    requests.forEach((request, index) => {
+        lines.push(
+            `--${changeBoundary}`,
+            'Content-Type: application/http',
+            'Content-Transfer-Encoding: binary',
+            `Content-ID: ${index + 1}`,
+            '',
+            `${request.method} /api/data/v9.2/${request.path} HTTP/1.1`,
+            'Accept: application/json',
+            ...(request.fields ? ['Content-Type: application/json; type=entry'] : []),
+            `If-Match: ${request.etag}`,
+            '',
+            ...(request.fields ? [JSON.stringify(request.fields)] : []),
+            '',
+        )
+    })
+    lines.push(`--${changeBoundary}--`, `--${batchBoundary}--`, '')
+
+    const response = await (options.fetcher ?? fetch)(
+        `${options.apiUrl ?? DEFAULT_API_URL}/$batch`,
+        {
+            method: 'POST',
+            headers: {
+                ...headers(accessToken),
+                'Content-Type': `multipart/mixed; boundary=${batchBoundary}`,
+                'OData-MaxVersion': '4.0',
+                'OData-Version': '4.0',
+            },
+            body: lines.join('\r\n'),
+        },
+    )
+    const responseBody = await response.text()
+    const statuses = [...responseBody.matchAll(/HTTP\/1\.1\s+(\d{3})/g)]
+        .map((match) => Number(match[1]))
+    const failure = statuses.find((status) => status >= 400)
+    if (!response.ok || failure) {
+        if ((failure ?? response.status) === 412) {
+            throw new Error('The Site Check, Schedule, or one of its Jobs changed. Reload and review it before deleting.')
+        }
+        if ((failure ?? response.status) === 403) {
+            throw new Error('You do not have permission to delete Site Checks.')
+        }
+        throw new Error('Dataverse rejected the atomic Site Check deletion.')
+    }
+    if (statuses.filter((status) => status >= 200 && status < 300).length !== requests.length) {
+        throw new Error('Dataverse did not confirm every Site Check deletion operation.')
+    }
 }
 
 export async function saveSiteCheckSchedule(

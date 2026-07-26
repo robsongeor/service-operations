@@ -1,4 +1,5 @@
 import type { JobStatus } from '../../jobs/types/jobStatus.types.ts'
+import type { EquipmentSiteCheckAvailability } from '../../equipment/types/equipmentSiteCheckAvailability.types.ts'
 
 export const SITE_CHECK_FREQUENCIES = {
     WEEKLY: 122830000,
@@ -150,9 +151,26 @@ export type SiteCheckDetailJob = Required<SiteCheckJobProgressInput> & {
         gr_mechanicid: string
         gr_name: string
     } | null
+    '@odata.etag'?: string
 }
 
 export type SiteCheckPage<T> = {
     records: T[]
     nextLink?: string
+}
+
+export type SiteCheckEquipmentExclusion = {
+    gr_sitecheckequipmentexclusionid: string
+    gr_name: string
+    gr_availabilitysnapshot: EquipmentSiteCheckAvailability
+    _gr_sitecheck_value: string
+    _gr_equipment_value: string
+    gr_Equipment?: {
+        gr_equipmentid: string
+        gr_fleet?: string | null
+        gr_serial?: string | null
+        gr_make?: string | null
+        gr_model?: string | null
+    } | null
+    '@odata.etag'?: string
 }

@@ -1,6 +1,7 @@
 import {
     calculateSiteCheckProgress,
     filterSiteCheckEquipment,
+    siteCheckUnavailableEquipment,
 } from '../domain/siteCheckCalculations.ts'
 import type { SiteCheck, SiteCheckSchedule } from '../types/siteCheck.types.ts'
 import {
@@ -56,7 +57,7 @@ export async function fetchSiteCheckEquipmentForSite(
 ): Promise<SiteCheckCreationEquipment[]> {
     if (!GUID_PATTERN.test(siteId)) throw new Error('A valid Site ID is required.')
     const query = [
-        '$select=gr_equipmentid,gr_fleet,gr_serial,gr_make,gr_model,statecode,gr_ownershiptype',
+        '$select=gr_equipmentid,gr_fleet,gr_serial,gr_make,gr_model,statecode,gr_ownershiptype,gr_sitecheckavailability',
         `$filter=_gr_site_value eq ${siteId}`,
         '$orderby=gr_fleet asc',
     ].join('&')
@@ -160,6 +161,11 @@ export async function startSiteCheckWorkflow(
         schedule.gr_equipmentscope,
         selections.map((selection) => selection._gr_equipment_value),
     )
+    const excludedEquipment = siteCheckUnavailableEquipment(
+        equipment,
+        schedule.gr_equipmentscope,
+        selections.map((selection) => selection._gr_equipment_value),
+    )
     if (!includedEquipment.length) throw new Error('This Site has no applicable Equipment.')
 
     try {
@@ -168,6 +174,7 @@ export async function startSiteCheckWorkflow(
             siteName: input.siteName,
             technicianId: mechanic.gr_mechanicid,
             equipment: includedEquipment,
+            excludedEquipment,
             requestKey: input.requestKey,
             startedOn: input.startedOn,
         })

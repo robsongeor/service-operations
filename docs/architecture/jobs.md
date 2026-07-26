@@ -61,6 +61,15 @@ through the completion framework rather than screen-specific writes.
   idempotent retry. A generated Job cannot be reopened after its parent Site Check completes.
   Its technician may be reassigned, but its protected Job Type and original Site/Equipment
   relationships cannot be changed. Job Card Status remains outside this workflow.
+- Generated Site Check Jobs may receive externally allocated numeric Job numbers through
+  the Site Check details drawer. Exact-count/format validation and stable creation order are
+  domain-owned; all numbers are written atomically with Job ETags and then reloaded.
+- New Site Check Jobs share an occurrence description in the form
+  `<Frequency> checks for <dd/mm/yyyy>`, where the date is the Monday starting the
+  occurrence's New Zealand-local week. Historical descriptions are not backfilled.
+- A confirmed Site Check occurrence deletion removes all of that occurrence's generated
+  Jobs atomically before removing the parent. It does not use ordinary per-Job deletion and
+  cannot partially preserve a generated set.
 - The public technician Job Card route is `/portal/job/:token`. It validates a random token
   through the server API and returns a deliberately minimal Job projection. The browser
   never receives Dataverse credentials or direct anonymous Dataverse access.

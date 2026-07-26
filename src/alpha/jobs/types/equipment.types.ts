@@ -1,6 +1,7 @@
 import type { EquipmentComplianceStatus } from '../../equipment/compliance/equipmentCompliance'
 import type { MaintenanceProfile, PowerType, ServiceProgramme } from '../../equipment/servicePlans/maintenanceConfiguration'
 import type { EquipmentOwnershipType } from '../../equipment/types/equipmentOwnership.types'
+import type { EquipmentSiteCheckAvailability } from '../../equipment/types/equipmentSiteCheckAvailability.types'
 
 export type Equipment = {
     gr_equipmentid: string
@@ -23,6 +24,7 @@ export type Equipment = {
     gr_serviceprogramme?: ServiceProgramme | null
     gr_maintenanceprofile?: MaintenanceProfile | null
     gr_ownershiptype?: EquipmentOwnershipType | null
+    gr_sitecheckavailability?: EquipmentSiteCheckAvailability | null
     gr_customaenabled?: boolean | null
     gr_custombenabled?: boolean | null
     gr_customcenabled?: boolean | null

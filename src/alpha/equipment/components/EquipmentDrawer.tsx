@@ -28,6 +28,11 @@ import {
     EQUIPMENT_OWNERSHIP_OPTIONS,
     type EquipmentOwnershipType,
 } from '../types/equipmentOwnership.types'
+import {
+    EQUIPMENT_SITE_CHECK_AVAILABILITIES,
+    EQUIPMENT_SITE_CHECK_AVAILABILITY_OPTIONS,
+    type EquipmentSiteCheckAvailability,
+} from '../types/equipmentSiteCheckAvailability.types'
 
 type SharedProps = {
     customers: Customer[]
@@ -37,6 +42,7 @@ type SharedProps = {
     isSaving: boolean
     saveError: string
     onClose: () => void
+    siteCheckEnabledSiteIds?: readonly string[]
 }
 
 type CreateProps = SharedProps & {
@@ -111,6 +117,9 @@ export default function EquipmentDrawer(props: Props) {
             ?? initialSite?.gr_defaultmaintenanceprofile
             ?? MAINTENANCE_PROFILES.STANDARD,
         ownershipType: equipment?.gr_ownershiptype ?? initialValues?.ownershipType ?? null,
+        siteCheckAvailability: equipment?.gr_sitecheckavailability
+            ?? initialValues?.siteCheckAvailability
+            ?? null,
         customAEnabled: equipment?.gr_customaenabled ?? initialValues?.customAEnabled ?? true,
         customBEnabled: equipment?.gr_custombenabled ?? initialValues?.customBEnabled ?? false,
         customCEnabled: equipment?.gr_customcenabled ?? initialValues?.customCEnabled ?? true,
@@ -165,6 +174,9 @@ export default function EquipmentDrawer(props: Props) {
             .sort((a, b) => b.createdon.localeCompare(a.createdon))
         : []
     const selectedCustomer = customers.find((customer) => customer.gr_customerid === customerId)
+    const siteChecksEnabled = Boolean(form.siteId) && Boolean(
+        props.siteCheckEnabledSiteIds?.some((id) => id.toLowerCase() === form.siteId.toLowerCase()),
+    )
     const visibleSites = sites
         .filter((site) => site.gr_Customer?.gr_customerid === customerId)
         .sort((a, b) => siteOptionLabel(a).localeCompare(siteOptionLabel(b)))
@@ -670,6 +682,26 @@ export default function EquipmentDrawer(props: Props) {
                                     )}
                                 </select>
                             </label>
+                            {siteChecksEnabled && <label>
+                                Site Check Availability
+                                <select
+                                    value={form.siteCheckAvailability ?? ''}
+                                    onChange={(event) => updateField(
+                                        'siteCheckAvailability',
+                                        event.target.value
+                                            ? Number(event.target.value) as EquipmentSiteCheckAvailability
+                                            : null,
+                                    )}
+                                >
+                                    <option value="">Available at Site</option>
+                                    {EQUIPMENT_SITE_CHECK_AVAILABILITY_OPTIONS
+                                        .filter((option) =>
+                                            option.value !== EQUIPMENT_SITE_CHECK_AVAILABILITIES.AVAILABLE_AT_SITE)
+                                        .map((option) => <option key={option.value} value={option.value}>
+                                            {option.label}
+                                        </option>)}
+                                </select>
+                            </label>}
                             {isCreate && <><label>Power Type<select value={form.powerType} onChange={(event) => {
                                 const powerType = Number(event.target.value) as PowerType
                                 setForm((current) => ({ ...current, powerType, serviceProgramme: current.serviceProgramme === SERVICE_PROGRAMMES.CUSTOM ? current.serviceProgramme : powerType === POWER_TYPES.ELECTRIC ? SERVICE_PROGRAMMES.ELECTRIC_STANDARD : SERVICE_PROGRAMMES.ICE_STANDARD }))

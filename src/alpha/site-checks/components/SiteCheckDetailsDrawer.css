@@ -56,6 +56,42 @@
     list-style: none;
 }
 
+.site-check-job-book {
+    display: grid;
+    gap: .65rem;
+    margin-bottom: 1rem;
+    padding: .8rem;
+    border: 1px solid #b7d7cd;
+    border-radius: .6rem;
+    background: #f3faf7;
+}
+
+.site-check-job-book > div {
+    display: flex;
+    justify-content: space-between;
+    gap: .75rem;
+}
+
+.site-check-job-book > div:first-child {
+    flex-direction: column;
+    gap: .2rem;
+}
+
+.site-check-job-book p {
+    margin: 0;
+}
+
+.site-check-job-number-field {
+    display: grid;
+    gap: .4rem;
+}
+
+.site-check-job-number-field textarea {
+    min-height: 8rem;
+    resize: vertical;
+    font: inherit;
+}
+
 .site-check-job-list article {
     display: flex;
     justify-content: space-between;

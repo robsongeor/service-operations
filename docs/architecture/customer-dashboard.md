@@ -70,11 +70,21 @@ Equipment query, so transferred-away or otherwise stale selections cannot genera
 Zero current matches blocks creation. Historical occurrences and Jobs are unaffected by
 later selection changes.
 
+The temporary-availability rule runs after Schedule scope filtering.
+Equipment marked In Workshop or Temporarily Off-site receives no Job for that occurrence
+and waits for the next normal occurrence after returning to Available at Site. The creation
+transaction records an immutable exclusion snapshot. The Equipment marker is shown in the
+Customer Dashboard Equipment drawer only when the Equipment's current Site has an enabled
+Schedule. No catch-up workflow is created.
+
 Enabled schedules appear as compact state summaries in their Site headers. Customer summary
 counts cover Up to date, Due, Overdue, and In progress only; disabled and invalid schedules
 are excluded. Each count is a keyboard-accessible toggle that filters the Sites tab, with an
 announced result count and explicit clear action. The Site Checks domain projection owns
 state, count, and operational-Job progress calculation; the dashboard only renders it.
+Disabled schedules render no Site Check status, Run, Current, or History content in the Site
+header. Their occurrence and Job history remains stored and becomes accessible again if the
+Schedule is re-enabled.
 
 Due and Overdue Sites expose Run Site Check. The Site Check-owned drawer reuses the shared
 drawer shell and existing searchable technician selector. It reviews Customer, Site,
@@ -94,6 +104,19 @@ close. Successful creation opens the authoritative occurrence directly. Concurre
 drawer reads coalesce silent token acquisition and never trigger interactive sign-in.
 Closing the combined Site Settings drawer also restores focus to the exact Site settings
 button that invoked it.
+
+The Jobs & Equipment tab also owns the Job Book handoff. It loads every generated Job in
+stable creation order, exports headerless tab-separated Mechanic, Model, Fleet Number,
+Company, Description, Address, Suburb, and City columns, and accepts one numeric Job number
+per line in that same order. The update is one ETag-protected Dataverse change set and
+reloads the authoritative rows after success. Site address parts use the existing
+comma-separated `gr_address` convention; no separate address columns are inferred.
+
+The details drawer exposes a permanent-delete action behind explicit confirmation. The
+Site Check occurrence and every generated Job are deleted in one ETag-protected change set;
+an active Schedule pointer is cleared first. The Schedule, due configuration, Equipment
+scope, and manual selections remain. Successful deletion refreshes both dashboard Site
+Checks and Jobs projections.
 
 ## Important Business Rules
 

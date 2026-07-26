@@ -26,6 +26,9 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
 
 ## Priority 2 — Product improvements
 
+- [x] Implement Site Check temporary Equipment availability:
+  enabled-Site-only marker, In Workshop/Temporarily Off-site exclusion, and occurrence
+  exclusion snapshots; no catch-up Jobs.
 
 - [ ] Complete persistent Customer creation and Customer-level information management;
   current Customer-level behaviour still includes local prototype boundaries.
