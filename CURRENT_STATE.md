@@ -27,6 +27,16 @@ Branch: `codex/site-checks-polish`
 
 ## Recent milestone
 
+Phase 19 Checklist Administration is implemented locally and its approved Dataverse
+least-privilege boundary is provisioned. The admin-only `/site-checks/checklists` route
+loads ICE/Electric definitions, edits validated local drafts, and atomically publishes a
+new immutable version while deactivating the previous version with ETag protection.
+`georger@liftrucks.co.nz` is the sole assignee of the new unmanaged **Site Check Checklist
+Administrator** role. Service Operations retains Template/Item Read and operational Append
+To but no longer has Create, Write, Delete, or Append. Same-session verification passed
+without schema/business-row changes or an interactive sign-in prompt. Signed-in admin UI
+and separate non-admin direct-write denial smoke tests remain.
+
 The product direction for the next Site Checks expansion is approved and recorded as
 Phases 14–18 in the authoritative tracker. Phase 14 is complete: the authenticated
 `/site-checks` workspace shows enabled Sites across Customers, defaults to Needs attention,

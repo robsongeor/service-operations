@@ -456,6 +456,26 @@ or use an interactive login merely to repeat a passing check. No template conten
 seeded; actual prompts and item-level mandatory/evidence rules remain a separate
 product-content approval.
 
+### Phase 19 checklist administration security
+
+Approved, provisioned, and verified on 26 July 2026. Checklist publication uses the existing versioned tables and does
+not require new schema. The dedicated unmanaged **Site Check Checklist Administrator** role
+is assigned only to the verified Dataverse user for `georger@liftrucks.co.nz` and receives
+Organisation Read/Create/Write/Append/Append To on Template and Template Item, with no
+Delete. The broad Service Operations role retains Organisation Read and Append To on those
+tables but loses Create/Write/Delete/Append. Append To remains operationally necessary for
+Schedule and immutable Snapshot relationships to target published definitions; it does not
+permit definition mutation. Provisioning and verification are owned by the
+`ProvisionChecklistAdminSecurity` and `VerifyChecklistAdminSecurity` modes of the combined
+schema script and must use one cached no-prompt connection.
+
+The first no-prompt provisioning connection created the unmanaged role and added its ten
+privileges, then stopped before assignment/removal on a local SDK collection error. The
+corrected idempotent continuation assigned the role only to the verified administrator,
+removed the eight broad mutation grants, retained Organisation Read/Append To for
+operational relationship use, and passed same-session verification. No schema or business
+records were changed.
+
 ### Per-Equipment checklist correction provisioned
 
 The product owner subsequently confirmed that one Site Check occurrence may contain ICE

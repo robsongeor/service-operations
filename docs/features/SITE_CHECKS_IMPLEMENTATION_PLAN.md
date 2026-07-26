@@ -30,7 +30,7 @@ leave unfinished work unchecked.
 | 16 — Versioned checklist foundation | In progress | Schema/security ready; checklist content and application work remain |
 | 17 — Technician multi-machine workflow | Not started | Depends on Phases 15 and 16 |
 | 18 — Findings, office review, and hardening | Not started | Findings actions require separate product approval |
-| 19 — Checklist administration | Blocked | Local implementation may begin; authoritative admin-only role change requires explicit approval |
+| 19 — Checklist administration | In progress | Implemented and security-provisioned; signed-in UI and non-admin denial smoke remain |
 
 Status values are **Not started**, **In progress**, **Blocked**, and **Complete**.
 
@@ -1978,7 +1978,7 @@ source relationships, and audit behaviour require product/schema approval.
 
 ### Phase 19 — Checklist administration
 
-Status: **Blocked — security-role provisioning requires explicit approval**
+Status: **In progress — implemented and security-provisioned; final smoke remains**
 
 Provide a signed-in Checklist Admin screen for the existing organisation-wide ICE and
 Electric definitions. The sole initial administrator is the established Service Operations
@@ -2001,29 +2001,50 @@ delta:
 - grant it Organisation Read/Create/Write/Append/Append To on Checklist Template and
   Checklist Template Item (no Delete);
 - assign it only to the Dataverse user verified for `georger@liftrucks.co.nz`;
-- remove Template and Template Item Create/Write/Delete/Append/Append To from the broad
-  Service Operations role while retaining Read;
+- remove Template and Template Item Create/Write/Delete/Append from the broad Service
+  Operations role while retaining Read and Append To; Append To is required so operational
+  Schedule/snapshot relationships can continue targeting published definitions;
 - retain the operational Snapshot/Response privileges already required by Site Check
   creation and review;
 - verify another Service Operations user cannot publish through either the UI or direct
   Dataverse Web API.
 
-- [ ] Obtain explicit approval for the exact security-role delta above.
-- [ ] Add a shared administrator identity rule and admin-only route/menu visibility.
-- [ ] Add paged active Template and ordered Template Item loading through the existing
+- [x] Obtain explicit approval for the exact security-role delta above.
+- [x] Add a shared administrator identity rule and admin-only route/menu visibility.
+- [x] Add paged active Template and ordered Template Item loading through the existing
   checklist service.
-- [ ] Add the ICE/Electric editor with add, remove, reorder, group, prompt, response type,
+- [x] Add the ICE/Electric editor with add, remove, reorder, group, prompt, response type,
   required-answer, failure-comment, and optional-photo rules.
-- [ ] Validate non-empty definitions, unique stable item keys/orders, supported response
+- [x] Validate non-empty definitions, unique stable item keys/orders, supported response
   types, and coherent conditional rules before publishing.
-- [ ] Publish a new Template version and all Items atomically with ETag protection.
-- [ ] Deactivate the superseded version only inside the same successful transaction.
-- [ ] Refresh authoritative content after publication and show the resulting version.
-- [ ] Provision and verify the dedicated administrator role in one approved cached
+- [x] Publish a new Template version and all Items atomically with ETag protection.
+- [x] Deactivate the superseded version only inside the same successful transaction.
+- [x] Refresh authoritative content after publication and show the resulting version.
+- [x] Provision and verify the dedicated administrator role in one approved cached
   no-prompt session; do not repeatedly request sign-in.
 - [ ] Test unauthorized navigation, direct write denial, validation, concurrency,
   transaction rollback, historical snapshot preservation, and next-occurrence selection.
 - [ ] Update schema, security, operator, user, and deployment documentation.
+
+Implementation note (26 July 2026): the local administrator route is gated to the shared
+administrator identity and loads both active definitions through the existing paged
+checklist service. It edits local draft state, validates stable keys, sections, prompts,
+answer types, ordering, and conditional rules, and publishes the new Template, all Items,
+and old-version deactivation in one ETag-protected Dataverse change set. Published content
+is never edited or deleted. The security provisioning contract retains broad-role Append
+To because operational snapshot and Schedule relationships still need to target published
+definitions; this is relationship use, not definition mutation.
+
+Security provisioning note (26 July 2026): the product owner explicitly approved the Phase
+19 model. The first cached `LoginPrompt Never` connection created the unmanaged role and
+added its ten approved privileges, then stopped before assignment or broad-role removal
+because of a local SDK collection-construction error. After the local script was corrected
+and parsed, one idempotent cached no-prompt continuation assigned the role only to the
+verified `georger@liftrucks.co.nz` Dataverse user, removed eight Template/Item mutation
+privileges from Service Operations, retained the four required Read/Append To grants, and
+passed same-session verification. No schema or business rows changed. A new unauthenticated
+browser tab correctly showed the Microsoft sign-in boundary; no login prompt was triggered.
+Signed-in administrator rendering and a separate non-admin direct-write denial remain.
 
 ## 32. Phased dependency order
 

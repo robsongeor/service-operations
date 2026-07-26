@@ -18,7 +18,7 @@
     "test:site-check-assignment": "node --experimental-strip-types --test tests/siteCheckAssignment.test.ts",
     "test:job-photo": "node --experimental-strip-types --test tests/jobPhoto.test.ts",
     "test:customer-dashboard": "node --experimental-strip-types --test tests/customerDashboardSiteSettings.test.ts",
-    "test:site-checks": "node --experimental-strip-types --test tests/siteChecks.test.ts",
+    "test:site-checks": "node --experimental-strip-types --test tests/siteChecks.test.ts tests/siteCheckChecklistAdmin.test.ts",
     "test:jobs-site-checks": "node --experimental-strip-types --test tests/jobsSiteChecksIntegration.test.ts"
   },
   "dependencies": {

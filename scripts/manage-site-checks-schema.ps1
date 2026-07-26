@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Inspect', 'InspectTechnicianAccess', 'ProvisionTechnicianAccess', 'InspectChecklist', 'ProvisionChecklist', 'InspectChecklistCorrection', 'ProvisionChecklistCorrection', 'InspectChecklistContent', 'ProvisionChecklistContent', 'VerifyChecklist', 'Provision', 'ProvisionAvailability', 'Verify', 'AuditSecurity', 'ProvisionSecurity', 'PurgeOccurrences', 'PurgeData')]
+    [ValidateSet('Inspect', 'InspectTechnicianAccess', 'ProvisionTechnicianAccess', 'InspectChecklist', 'ProvisionChecklist', 'InspectChecklistCorrection', 'ProvisionChecklistCorrection', 'InspectChecklistContent', 'ProvisionChecklistContent', 'VerifyChecklist', 'InspectChecklistAdminSecurity', 'ProvisionChecklistAdminSecurity', 'VerifyChecklistAdminSecurity', 'Provision', 'ProvisionAvailability', 'Verify', 'AuditSecurity', 'ProvisionSecurity', 'PurgeOccurrences', 'PurgeData')]
     [string]$Mode = 'Inspect',
 
     [string]$EnvironmentUrl = 'https://org0d4246d7.crm6.dynamics.com',
@@ -7,6 +7,8 @@ param(
     [string]$SolutionUniqueName = 'ServiceOperationsNew',
 
     [string]$ChecklistContentPath = (Join-Path $PSScriptRoot 'site-check-checklist-v1.json'),
+
+    [string]$ChecklistAdminEmail = 'georger@liftrucks.co.nz',
 
     [ValidateSet('Never', 'Auto')]
     [string]$LoginPrompt = 'Never',
@@ -2687,6 +2689,323 @@ function Invoke-SiteCheckOccurrencePurge {
     Write-Output "Atomic occurrence purge verified: deleted $($siteChecks.Count) Site Checks, $($jobs.Count) Site Check Jobs, and $($exclusions.Count) exclusions; cleared $($activeSchedules.Count) active pointers; preserved $($remainingSchedules.Count) Schedules."
 }
 
+function Get-ChecklistAdminSecurityContracts {
+    return [ordered]@{
+        AdminRoleName = 'Site Check Checklist Administrator'
+        AdminPrivileges = @(
+            'prvCreategr_SiteCheckChecklistTemplate',
+            'prvReadgr_SiteCheckChecklistTemplate',
+            'prvWritegr_SiteCheckChecklistTemplate',
+            'prvAppendgr_SiteCheckChecklistTemplate',
+            'prvAppendTogr_SiteCheckChecklistTemplate',
+            'prvCreategr_SiteCheckChecklistTemplateItem',
+            'prvReadgr_SiteCheckChecklistTemplateItem',
+            'prvWritegr_SiteCheckChecklistTemplateItem',
+            'prvAppendgr_SiteCheckChecklistTemplateItem',
+            'prvAppendTogr_SiteCheckChecklistTemplateItem'
+        )
+        ServiceOperationsRemove = @(
+            'prvCreategr_SiteCheckChecklistTemplate',
+            'prvWritegr_SiteCheckChecklistTemplate',
+            'prvDeletegr_SiteCheckChecklistTemplate',
+            'prvAppendgr_SiteCheckChecklistTemplate',
+            'prvCreategr_SiteCheckChecklistTemplateItem',
+            'prvWritegr_SiteCheckChecklistTemplateItem',
+            'prvDeletegr_SiteCheckChecklistTemplateItem',
+            'prvAppendgr_SiteCheckChecklistTemplateItem'
+        )
+        ServiceOperationsRetain = @(
+            'prvReadgr_SiteCheckChecklistTemplate',
+            'prvAppendTogr_SiteCheckChecklistTemplate',
+            'prvReadgr_SiteCheckChecklistTemplateItem',
+            'prvAppendTogr_SiteCheckChecklistTemplateItem'
+        )
+    }
+}
+
+function Get-ChecklistAdminUser {
+    param(
+        [Parameter(Mandatory)]$Service,
+        [Parameter(Mandatory)][string]$Email
+    )
+    $query = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new('systemuser')
+    $query.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new(
+        'systemuserid', 'domainname', 'internalemailaddress', 'businessunitid',
+        'isdisabled', 'applicationid'
+    )
+    $match = $query.Criteria.AddFilter([Microsoft.Xrm.Sdk.Query.LogicalOperator]::Or)
+    $match.AddCondition(
+        'domainname',
+        [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,
+        $Email
+    )
+    $match.AddCondition(
+        'internalemailaddress',
+        [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,
+        $Email
+    )
+    $query.Criteria.AddCondition(
+        'isdisabled',
+        [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,
+        $false
+    )
+    $query.Criteria.AddCondition(
+        'applicationid',
+        [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Null
+    )
+    $users = @($Service.RetrieveMultiple($query).Entities)
+    if ($users.Count -ne 1) {
+        throw "Expected exactly one enabled human Dataverse user for the approved checklist administrator."
+    }
+    return $users[0]
+}
+
+function Get-RoleByName {
+    param(
+        [Parameter(Mandatory)]$Service,
+        [Parameter(Mandatory)][string]$Name
+    )
+    $query = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new('role')
+    $query.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new(
+        'roleid', 'name', 'ismanaged', 'businessunitid'
+    )
+    $query.Criteria.AddCondition(
+        'name',
+        [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,
+        $Name
+    )
+    return @($Service.RetrieveMultiple($query).Entities)
+}
+
+function Get-PrivilegeMetadataByName {
+    param(
+        [Parameter(Mandatory)]$Service,
+        [Parameter(Mandatory)][string[]]$Names
+    )
+    $query = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new('privilege')
+    $query.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new('name')
+    $filter = $query.Criteria.AddFilter([Microsoft.Xrm.Sdk.Query.LogicalOperator]::Or)
+    foreach ($name in ($Names | Sort-Object -Unique)) {
+        $filter.AddCondition(
+            'name',
+            [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,
+            $name
+        )
+    }
+    $rows = @($Service.RetrieveMultiple($query).Entities)
+    foreach ($name in ($Names | Sort-Object -Unique)) {
+        if (-not ($rows | Where-Object {
+            [string]$_.Attributes['name'] -ieq $name
+        } | Select-Object -First 1)) {
+            throw "Checklist administrator privilege metadata was not found: $name"
+        }
+    }
+    return $rows
+}
+
+function Test-UserRoleAssignment {
+    param(
+        [Parameter(Mandatory)]$Service,
+        [Parameter(Mandatory)][Guid]$UserId,
+        [Parameter(Mandatory)][Guid]$RoleId
+    )
+    $query = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new('systemuserroles')
+    $query.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new('systemuserid', 'roleid')
+    $query.Criteria.AddCondition(
+        'systemuserid',
+        [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,
+        $UserId
+    )
+    $query.Criteria.AddCondition(
+        'roleid',
+        [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,
+        $RoleId
+    )
+    return @($Service.RetrieveMultiple($query).Entities).Count -eq 1
+}
+
+function Get-ChecklistAdminSecurityState {
+    param(
+        [Parameter(Mandatory)]$Service,
+        [Parameter(Mandatory)][string]$AdminEmail
+    )
+    $contracts = Get-ChecklistAdminSecurityContracts
+    $user = Get-ChecklistAdminUser -Service $Service -Email $AdminEmail
+    $adminRoles = @(Get-RoleByName -Service $Service -Name $contracts.AdminRoleName)
+    $serviceRoles = @(Get-RoleByName -Service $Service -Name 'Service Operations')
+    if ($serviceRoles.Count -ne 1 -or [bool]$serviceRoles[0].Attributes['ismanaged']) {
+        throw 'Expected exactly one unmanaged Service Operations role.'
+    }
+    $allNames = @(
+        $contracts.AdminPrivileges
+        $contracts.ServiceOperationsRemove
+        $contracts.ServiceOperationsRetain
+    )
+    $metadata = @(Get-PrivilegeMetadataByName -Service $Service -Names $allNames)
+    $summary = {
+        param($role, [string[]]$names)
+        if (-not $role) { return @() }
+        $request = [Microsoft.Crm.Sdk.Messages.RetrieveRolePrivilegesRoleRequest]::new()
+        $request.RoleId = $role.Id
+        $grants = @($Service.Execute($request).RolePrivileges)
+        return @($names | ForEach-Object {
+            $name = $_
+            $privilege = $metadata | Where-Object {
+                [string]$_.Attributes['name'] -ieq $name
+            } | Select-Object -First 1
+            $grant = $grants | Where-Object PrivilegeId -EQ $privilege.Id |
+                Select-Object -First 1
+            [pscustomobject]@{
+                Name = $name
+                Granted = [bool]$grant
+                Depth = if ($grant) { [string]$grant.Depth } else { $null }
+            }
+        })
+    }
+    $adminRole = if ($adminRoles.Count -eq 1) { $adminRoles[0] } else { $null }
+    return [pscustomobject]@{
+        AdminRoleCount = $adminRoles.Count
+        AdminRoleManaged = if ($adminRole) {
+            [bool]$adminRole.Attributes['ismanaged']
+        } else { $null }
+        AdminAssignedToApprovedUser = if ($adminRole) {
+            Test-UserRoleAssignment -Service $Service -UserId $user.Id -RoleId $adminRole.Id
+        } else { $false }
+        AdminPrivileges = & $summary $adminRole $contracts.AdminPrivileges
+        ServiceOperationsRemovedPrivileges = & $summary $serviceRoles[0] `
+            $contracts.ServiceOperationsRemove
+        ServiceOperationsRetainedPrivileges = & $summary $serviceRoles[0] `
+            $contracts.ServiceOperationsRetain
+    }
+}
+
+function Assert-ChecklistAdminSecurity {
+    param(
+        [Parameter(Mandatory)]$Service,
+        [Parameter(Mandatory)][string]$AdminEmail
+    )
+    $state = Get-ChecklistAdminSecurityState -Service $Service -AdminEmail $AdminEmail
+    if ($state.AdminRoleCount -ne 1 -or $state.AdminRoleManaged `
+        -or -not $state.AdminAssignedToApprovedUser) {
+        throw 'Checklist administrator role or assignment verification failed.'
+    }
+    foreach ($grant in $state.AdminPrivileges) {
+        if (-not $grant.Granted -or $grant.Depth -ne 'Global') {
+            throw "Checklist administrator privilege verification failed: $($grant.Name)"
+        }
+    }
+    foreach ($grant in $state.ServiceOperationsRemovedPrivileges) {
+        if ($grant.Granted) {
+            throw "Service Operations still has disallowed checklist mutation privilege: $($grant.Name)"
+        }
+    }
+    foreach ($grant in $state.ServiceOperationsRetainedPrivileges) {
+        if (-not $grant.Granted -or $grant.Depth -ne 'Global') {
+            throw "Service Operations lost required operational privilege: $($grant.Name)"
+        }
+    }
+    Write-Output 'Checklist administrator role, assignment, and least-privilege boundary verified.'
+}
+
+function Invoke-ChecklistAdminSecurityProvisioning {
+    param(
+        [Parameter(Mandatory)]$Service,
+        [Parameter(Mandatory)][string]$AdminEmail
+    )
+    $contracts = Get-ChecklistAdminSecurityContracts
+    $user = Get-ChecklistAdminUser -Service $Service -Email $AdminEmail
+    $roles = @(Get-RoleByName -Service $Service -Name $contracts.AdminRoleName)
+    if ($roles.Count -gt 1) { throw 'Multiple Checklist Administrator roles already exist.' }
+    if (-not $roles.Count) {
+        $role = [Microsoft.Xrm.Sdk.Entity]::new('role')
+        $role['name'] = $contracts.AdminRoleName
+        $role['businessunitid'] = $user.Attributes['businessunitid']
+        $roleId = $Service.Create($role)
+        $roles = @($Service.Retrieve(
+            'role',
+            $roleId,
+            [Microsoft.Xrm.Sdk.Query.ColumnSet]::new(
+                'roleid', 'name', 'ismanaged', 'businessunitid'
+            )
+        ))
+        Write-Output 'Created Site Check Checklist Administrator role.'
+    }
+    $adminRole = $roles[0]
+    if ([bool]$adminRole.Attributes['ismanaged']) {
+        throw 'Checklist Administrator role must be unmanaged.'
+    }
+    $serviceRoles = @(Get-RoleByName -Service $Service -Name 'Service Operations')
+    if ($serviceRoles.Count -ne 1 -or [bool]$serviceRoles[0].Attributes['ismanaged']) {
+        throw 'Expected exactly one unmanaged Service Operations role.'
+    }
+    $allNames = @(
+        $contracts.AdminPrivileges
+        $contracts.ServiceOperationsRemove
+        $contracts.ServiceOperationsRetain
+    )
+    $metadata = @(Get-PrivilegeMetadataByName -Service $Service -Names $allNames)
+
+    $adminCurrentRequest = [Microsoft.Crm.Sdk.Messages.RetrieveRolePrivilegesRoleRequest]::new()
+    $adminCurrentRequest.RoleId = $adminRole.Id
+    $adminCurrent = @($Service.Execute($adminCurrentRequest).RolePrivileges)
+    $toAdd = [System.Collections.Generic.List[Microsoft.Crm.Sdk.Messages.RolePrivilege]]::new()
+    foreach ($name in $contracts.AdminPrivileges) {
+        $privilege = $metadata | Where-Object {
+            [string]$_.Attributes['name'] -ieq $name
+        } | Select-Object -First 1
+        $existing = $adminCurrent | Where-Object PrivilegeId -EQ $privilege.Id |
+            Select-Object -First 1
+        if ($existing) {
+            if ($existing.Depth -ne [Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Global) {
+                throw "Checklist Administrator has $name at an incompatible depth."
+            }
+            continue
+        }
+        $grant = [Microsoft.Crm.Sdk.Messages.RolePrivilege]::new()
+        $grant.PrivilegeId = $privilege.Id
+        $grant.Depth = [Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Global
+        $toAdd.Add($grant)
+    }
+    if ($toAdd.Count) {
+        $add = [Microsoft.Crm.Sdk.Messages.AddPrivilegesRoleRequest]::new()
+        $add.RoleId = $adminRole.Id
+        $add.Privileges = $toAdd.ToArray()
+        $Service.Execute($add) | Out-Null
+        Write-Output "Added $($toAdd.Count) approved Checklist Administrator privileges."
+    }
+
+    if (-not (Test-UserRoleAssignment -Service $Service -UserId $user.Id -RoleId $adminRole.Id)) {
+        $roleReferences = [Microsoft.Xrm.Sdk.EntityReferenceCollection]::new()
+        $roleReferences.Add(
+            [Microsoft.Xrm.Sdk.EntityReference]::new('role', $adminRole.Id)
+        )
+        $Service.Associate(
+            'systemuser',
+            $user.Id,
+            [Microsoft.Xrm.Sdk.Relationship]::new('systemuserroles_association'),
+            $roleReferences
+        )
+        Write-Output 'Assigned Checklist Administrator role to the approved user.'
+    }
+
+    $serviceCurrentRequest = [Microsoft.Crm.Sdk.Messages.RetrieveRolePrivilegesRoleRequest]::new()
+    $serviceCurrentRequest.RoleId = $serviceRoles[0].Id
+    $serviceCurrent = @($Service.Execute($serviceCurrentRequest).RolePrivileges)
+    foreach ($name in $contracts.ServiceOperationsRemove) {
+        $privilege = $metadata | Where-Object {
+            [string]$_.Attributes['name'] -ieq $name
+        } | Select-Object -First 1
+        if (-not ($serviceCurrent | Where-Object PrivilegeId -EQ $privilege.Id |
+            Select-Object -First 1)) { continue }
+        $remove = [Microsoft.Crm.Sdk.Messages.RemovePrivilegeRoleRequest]::new()
+        $remove.RoleId = $serviceRoles[0].Id
+        $remove.PrivilegeId = $privilege.Id
+        $Service.Execute($remove) | Out-Null
+        Write-Output "Removed $name from Service Operations."
+    }
+    Assert-ChecklistAdminSecurity -Service $Service -AdminEmail $AdminEmail
+}
+
 $toolsPath = Get-PacToolsPath
 Import-DataverseAssemblies -ToolsPath $toolsPath
 
@@ -2718,6 +3037,7 @@ if ($ValidateSdk) {
     [Microsoft.Xrm.Sdk.Metadata.EntityKeyMetadata]::new() | Out-Null
     [Microsoft.Crm.Sdk.Messages.RetrieveRolePrivilegesRoleRequest]::new() | Out-Null
     [Microsoft.Crm.Sdk.Messages.AddPrivilegesRoleRequest]::new() | Out-Null
+    [Microsoft.Crm.Sdk.Messages.RemovePrivilegeRoleRequest]::new() | Out-Null
     [Microsoft.Crm.Sdk.Messages.RolePrivilege]::new() | Out-Null
     [Microsoft.Crm.Sdk.Messages.WhoAmIRequest]::new() | Out-Null
     [Microsoft.Xrm.Sdk.Messages.ExecuteTransactionRequest]::new() | Out-Null
@@ -2809,6 +3129,23 @@ if ($Mode -eq 'ProvisionChecklist') {
 
 if ($Mode -eq 'VerifyChecklist') {
     Assert-ChecklistSchema -Service $service -RequireActiveKeys
+    return
+}
+
+if ($Mode -eq 'InspectChecklistAdminSecurity') {
+    Get-ChecklistAdminSecurityState -Service $service -AdminEmail $ChecklistAdminEmail |
+        ConvertTo-Json -Depth 12
+    return
+}
+
+if ($Mode -eq 'ProvisionChecklistAdminSecurity') {
+    Invoke-ChecklistAdminSecurityProvisioning -Service $service `
+        -AdminEmail $ChecklistAdminEmail
+    return
+}
+
+if ($Mode -eq 'VerifyChecklistAdminSecurity') {
+    Assert-ChecklistAdminSecurity -Service $service -AdminEmail $ChecklistAdminEmail
     return
 }
 

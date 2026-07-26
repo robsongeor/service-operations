@@ -1,6 +1,6 @@
 import { useMsal } from '@azure/msal-react'
 import LoginScreen from './alpha/LoginScreen'
-import { Routes, Route, useLocation } from 'react-router-dom'
+import { Navigate, Routes, Route, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import JobsScreen from './alpha/jobs/JobsScreen'
 import SchedulingScreen from './alpha/scheduling/SchedulingScreen'
@@ -15,6 +15,8 @@ import { useActiveMsalAccount } from './auth/useActiveMsalAccount'
 import TechnicianJobSubmissionPage from './alpha/portal/TechnicianJobSubmissionPage'
 import SiteChecksScreen from './alpha/site-checks/SiteChecksScreen'
 import SiteCheckAssignmentPage from './alpha/portal/SiteCheckAssignmentPage'
+import ChecklistAdminScreen from './alpha/site-checks/ChecklistAdminScreen'
+import { isServiceOperationsAdministrator } from './auth/adminAuthorization'
 
 function App() {
   const { accounts } = useMsal()
@@ -54,6 +56,12 @@ function App() {
           <Route path="/equipment" element={<EquipmentScreen />} />
           <Route path="/jobs" element={<JobsScreen key={signedInUser?.storageId || 'account-pending'} />} />
           <Route path="/site-checks" element={<SiteChecksScreen />} />
+          <Route
+            path="/site-checks/checklists"
+            element={isServiceOperationsAdministrator(signedInUser)
+              ? <ChecklistAdminScreen />
+              : <Navigate to="/site-checks" replace />}
+          />
           <Route path="/scheduling" element={<SchedulingScreen />} />
           <Route path="/quotes" element={<QuotesScreen key={signedInUser?.storageId || 'account-pending'} />} />
           <Route path="/pricing" element={<PricingScreen />} />

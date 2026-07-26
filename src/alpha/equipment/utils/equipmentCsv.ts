@@ -1,4 +1,8 @@
 import type { SignedInUserInfo } from '../../../auth/signedInUser.ts'
+import {
+    SERVICE_OPERATIONS_ADMIN_EMAIL,
+    isServiceOperationsAdministrator,
+} from '../../../auth/adminAuthorization.ts'
 import type { Equipment } from '../../jobs/types/equipment.types.ts'
 import type { Site } from '../../jobs/types/site.types.ts'
 import { EQUIPMENT_COMPLIANCE_STATUSES, type EquipmentComplianceStatus } from '../compliance/equipmentCompliance.ts'
@@ -12,10 +16,10 @@ import {
 } from '../servicePlans/maintenanceConfiguration.ts'
 import { normalizeEquipmentInput, toEquipmentDateOnlyValue, type EquipmentUpdateInput } from '../types/equipmentManager.types.ts'
 
-export const EQUIPMENT_CSV_ADMIN_EMAIL = 'georger@liftrucks.co.nz'
+export const EQUIPMENT_CSV_ADMIN_EMAIL = SERVICE_OPERATIONS_ADMIN_EMAIL
 
 export function canUseEquipmentCsvTools(user: SignedInUserInfo | null) {
-    return user?.username?.trim().toLowerCase() === EQUIPMENT_CSV_ADMIN_EMAIL
+    return isServiceOperationsAdministrator(user)
 }
 
 export const EQUIPMENT_CSV_COLUMNS = [

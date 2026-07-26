@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import SidebarFooter from './SidebarFooter'
+import { getSignedInUserInfo } from './auth/signedInUser'
+import { useActiveMsalAccount } from './auth/useActiveMsalAccount'
+import { isServiceOperationsAdministrator } from './auth/adminAuthorization'
 import './Sidebar.css'
 
 const menuItems = [
@@ -18,6 +21,14 @@ const menuItems = [
 
 export default function Sidebar() {
     const [isOpen, setIsOpen] = useState(true)
+    const activeAccount = useActiveMsalAccount()
+    const isAdmin = isServiceOperationsAdministrator(getSignedInUserInfo(activeAccount))
+    const visibleMenuItems = isAdmin
+        ? [
+            ...menuItems,
+            { label: 'Checklist Admin', shortLabel: 'A', path: '/site-checks/checklists' },
+        ]
+        : menuItems
 
     return (
         <aside className={isOpen ? 'sidebar open' : 'sidebar collapsed'}>
@@ -42,7 +53,7 @@ export default function Sidebar() {
             <p className="sidebar-section-title">Main menu</p>
 
             <nav className="sidebar-nav" aria-label="Main menu">
-                {menuItems.map((item) => (
+                {visibleMenuItems.map((item) => (
                     <NavLink
                         key={item.path}
                         to={item.path}
