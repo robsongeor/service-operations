@@ -1,4 +1,5 @@
 import type { JobStatus } from '../../jobs/types/jobStatus.types.ts'
+import type { JobCardStatus } from '../../jobs/types/jobCardStatus.types.ts'
 import type { EquipmentSiteCheckAvailability } from '../../equipment/types/equipmentSiteCheckAvailability.types.ts'
 
 export const SITE_CHECK_FREQUENCIES = {
@@ -103,6 +104,7 @@ export type SiteCheckScheduleEquipment = {
 export type SiteCheckJobProgressInput = {
     gr_jobid?: string
     gr_status: JobStatus
+    gr_jobcardstatus?: JobCardStatus | null
     _gr_sitecheck_value?: string
 }
 
@@ -113,6 +115,12 @@ export type SiteCheckProgress = {
     expected: number
     hasIntegrityMismatch: boolean
     isComplete: boolean
+}
+
+export type SiteCheckSubmissionProgress = {
+    submitted: number
+    remaining: number
+    expected: number
 }
 
 export type SiteCheckScheduleValidation = {

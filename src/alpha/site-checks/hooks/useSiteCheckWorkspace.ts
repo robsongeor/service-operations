@@ -123,7 +123,16 @@ export function useSiteCheckWorkspace() {
     useEffect(() => {
         const refresh = () => void load().catch(() => undefined)
         window.addEventListener('site-checks-changed', refresh)
-        return () => window.removeEventListener('site-checks-changed', refresh)
+        const refreshWhenVisible = () => {
+            if (document.visibilityState === 'visible') refresh()
+        }
+        window.addEventListener('focus', refresh)
+        document.addEventListener('visibilitychange', refreshWhenVisible)
+        return () => {
+            window.removeEventListener('site-checks-changed', refresh)
+            window.removeEventListener('focus', refresh)
+            document.removeEventListener('visibilitychange', refreshWhenVisible)
+        }
     }, [load])
 
     const startSiteCheck = useCallback(async (input: StartSiteCheckWorkflowInput) => {

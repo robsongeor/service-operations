@@ -3,11 +3,13 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { JOB_STATUSES } from '../src/alpha/jobs/types/jobStatus.types.ts'
+import { JOB_CARD_STATUSES } from '../src/alpha/jobs/types/jobCardStatus.types.ts'
 import {
     addCalendarDaysDateOnly,
     addCalendarMonthsDateOnly,
     calculateNextSiteCheckDueDate,
     calculateSiteCheckProgress,
+    calculateSiteCheckSubmissionProgress,
     classifySiteCheckCreationConflict,
     filterSiteCheckEquipment,
     getSiteCheckScheduleState,
@@ -1024,6 +1026,21 @@ test('progress completes only when every expected generated Job is operationally
     assert.equal(calculateSiteCheckProgress(completeJobs, 2).isComplete, true)
     assert.equal(calculateSiteCheckProgress(completeJobs, 3).isComplete, false)
     assert.equal(calculateSiteCheckProgress([], 0).isComplete, false)
+})
+
+test('submission progress is separate from operational completion progress', () => {
+    const jobs = [
+        { gr_status: JOB_STATUSES.ALLOCATED, gr_jobcardstatus: JOB_CARD_STATUSES.SUBMITTED },
+        { gr_status: JOB_STATUSES.ALLOCATED, gr_jobcardstatus: JOB_CARD_STATUSES.SENT },
+        { gr_status: JOB_STATUSES.COMPLETE, gr_jobcardstatus: JOB_CARD_STATUSES.CLOSED },
+    ]
+
+    assert.deepEqual(calculateSiteCheckSubmissionProgress(jobs, 3), {
+        submitted: 2,
+        remaining: 1,
+        expected: 3,
+    })
+    assert.equal(calculateSiteCheckProgress(jobs, 3).completed, 1)
 })
 
 test('history is late only when the NZ completion date is after the due snapshot', () => {

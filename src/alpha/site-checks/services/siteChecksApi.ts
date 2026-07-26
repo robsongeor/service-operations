@@ -135,6 +135,9 @@ function mapProgressJob(value: unknown): Required<SiteCheckJobProgressInput> {
     return {
         gr_jobid: requireGuid(row.gr_jobid, 'Job ID'),
         gr_status: requireNumber(row.gr_status, 'Job status') as JobStatus,
+        gr_jobcardstatus: typeof row.gr_jobcardstatus === 'number'
+            ? row.gr_jobcardstatus as NonNullable<SiteCheckJobProgressInput['gr_jobcardstatus']>
+            : null,
         _gr_sitecheck_value: requireGuid(row._gr_sitecheck_value, 'parent Site Check'),
     }
 }
@@ -344,7 +347,7 @@ export async function fetchSiteCheckJobs(
     const ids = normalizeIds(siteCheckIds)
     if (ids.length === 0) return []
     const query = [
-        '$select=gr_jobid,gr_status,_gr_sitecheck_value',
+        '$select=gr_jobid,gr_status,gr_jobcardstatus,_gr_sitecheck_value',
         `$filter=${lookupFilter('_gr_sitecheck_value', ids)}`,
     ].join('&')
     const rows = await readCollection(
@@ -383,7 +386,7 @@ export async function fetchSiteCheckDetailJobsPage(
     const apiUrl = options.apiUrl ?? DEFAULT_API_URL
     const id = requireGuid(siteCheckId, 'Site Check ID')
     const query = [
-        '$select=gr_jobid,gr_jobnumber,gr_description,gr_status,gr_completeddate,_gr_sitecheck_value',
+        '$select=gr_jobid,gr_jobnumber,gr_description,gr_status,gr_jobcardstatus,gr_completeddate,_gr_sitecheck_value',
         '$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_serial,gr_make,gr_model),gr_Mechanic($select=gr_mechanicid,gr_name)',
         `$filter=_gr_sitecheck_value eq ${id}`,
         '$orderby=createdon asc,gr_jobid asc',

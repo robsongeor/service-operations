@@ -1,4 +1,5 @@
 import { JOB_STATUSES } from '../../jobs/types/jobStatus.types.ts'
+import { JOB_CARD_STATUSES } from '../../jobs/types/jobCardStatus.types.ts'
 import { EQUIPMENT_OWNERSHIP_TYPES } from '../../equipment/types/equipmentOwnership.types.ts'
 import { newZealandDateOnly } from '../../shared/dates/dateOnly.ts'
 import {
@@ -15,6 +16,7 @@ import {
     type SiteCheckCreationConflict,
     type SiteCheckJobProgressInput,
     type SiteCheckProgress,
+    type SiteCheckSubmissionProgress,
     type SiteCheckSchedule,
     type SiteCheckScheduleState,
     type SiteCheckScheduleValidation,
@@ -207,6 +209,24 @@ export function calculateSiteCheckProgress(
         expected,
         hasIntegrityMismatch: expected !== total,
         isComplete: expected > 0 && total === expected && completed === total,
+    }
+}
+
+export function calculateSiteCheckSubmissionProgress(
+    jobs: readonly SiteCheckJobProgressInput[],
+    expectedJobCount: number,
+): SiteCheckSubmissionProgress {
+    const expected = Number.isInteger(expectedJobCount) && expectedJobCount > 0
+        ? expectedJobCount
+        : 0
+    const submitted = jobs.filter((job) =>
+        job.gr_jobcardstatus === JOB_CARD_STATUSES.SUBMITTED
+        || job.gr_jobcardstatus === JOB_CARD_STATUSES.CLOSED).length
+
+    return {
+        submitted,
+        remaining: Math.max(expected - submitted, 0),
+        expected,
     }
 }
 

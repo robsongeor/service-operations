@@ -1850,7 +1850,7 @@ Every request revalidates token state and the selected Job's membership in the o
 a client-supplied Job ID is never authorization.
 
 - [x] Build the assignment overview from the minimal public projection.
-- [ ] Label submitted progress separately from operational completed progress.
+- [x] Label submitted progress separately from operational completed progress.
 - [x] Add a compact machine selector, Previous/Next navigation, and Continue next machine.
 - [x] Reuse existing Job Card story, time, and parts contracts in per-Job submission.
 - [x] Add approved checklist answer/comment controls and conditional comment evidence.

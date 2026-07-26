@@ -1,8 +1,13 @@
-import { calculateSiteCheckProgress, getSiteCheckScheduleState } from './siteCheckCalculations.ts'
+import {
+    calculateSiteCheckProgress,
+    calculateSiteCheckSubmissionProgress,
+    getSiteCheckScheduleState,
+} from './siteCheckCalculations.ts'
 import type {
     SiteCheck,
     SiteCheckJobProgressInput,
     SiteCheckProgress,
+    SiteCheckSubmissionProgress,
     SiteCheckSchedule,
     SiteCheckScheduleState,
 } from '../types/siteCheck.types.ts'
@@ -15,6 +20,7 @@ export type SiteCheckDashboardItem = {
     state: SiteCheckScheduleState
     activeSiteCheck?: SiteCheck
     progress?: SiteCheckProgress
+    submissionProgress?: SiteCheckSubmissionProgress
 }
 
 export type SiteCheckDashboardSummary = Record<ReportableSiteCheckState, number>
@@ -59,6 +65,12 @@ export function buildSiteCheckDashboardProjection(input: {
             activeSiteCheck,
             progress: activeSiteCheck
                 ? calculateSiteCheckProgress(
+                    jobsByCheck.get(activeSiteCheck.gr_sitecheckid.toLowerCase()) ?? [],
+                    activeSiteCheck.gr_expectedjobcount,
+                )
+                : undefined,
+            submissionProgress: activeSiteCheck
+                ? calculateSiteCheckSubmissionProgress(
                     jobsByCheck.get(activeSiteCheck.gr_sitecheckid.toLowerCase()) ?? [],
                     activeSiteCheck.gr_expectedjobcount,
                 )

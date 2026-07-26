@@ -246,7 +246,10 @@ export default function SiteChecksScreen() {
                             <td><span className={`site-checks-status ${item.state}`}>{STATE_LABELS[item.state]}</span></td>
                             <td>{formatWofDateOnly(item.schedule.gr_nextduedate) || 'Not configured'}</td>
                             <td>{item.progress
-                                ? <span className="site-checks-progress"><strong>{item.progress.completed}/{item.progress.expected}</strong><small>{item.progress.remaining} remaining</small></span>
+                                ? <span className="site-checks-progress">
+                                    <strong>{item.submissionProgress?.submitted ?? 0}/{item.progress.expected} Job Cards submitted</strong>
+                                    <small>{item.progress.completed}/{item.progress.expected} Jobs complete</small>
+                                </span>
                                 : '—'}</td>
                             <td>{technician?.gr_name ?? '—'}</td>
                             <td>{canStart
