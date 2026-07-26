@@ -10,10 +10,22 @@ import EditDrawerConfirmation from '../shared/drawer/EditDrawerConfirmation'
 import EditDrawerSection from '../shared/drawer/EditDrawerSection'
 import EditDrawerShell from '../shared/drawer/EditDrawerShell'
 import SearchableSelect from '../shared/searchable-select/SearchableSelect'
+import FormSwitch from '../shared/form-switch/FormSwitch'
+import {
+    resolveSiteCheckEquipmentScope,
+    SITE_CHECK_EQUIPMENT_SCOPE_OPTIONS,
+    SITE_CHECK_EQUIPMENT_SCOPES,
+    type SiteCheckEquipmentScope,
+    SITE_CHECK_FREQUENCY_OPTIONS,
+    type SiteCheckFrequency,
+    type SiteCheckSchedule,
+    type SiteCheckScheduleSaveInput,
+} from '../site-checks/types/siteCheck.types'
+import { validateSiteCheckSchedule } from '../site-checks/domain/siteCheckCalculations'
 import './SiteMaintenanceSettingsDrawer.css'
 import './SiteSettingsDrawer.css'
 
-export type SiteSettingsTab = 'details' | 'settings' | 'bulk-equipment'
+export type SiteSettingsTab = 'details' | 'settings' | 'site-checks' | 'bulk-equipment'
 
 type Props = {
     site: Site
@@ -21,8 +33,14 @@ type Props = {
     busy: boolean
     error: string
     bulkImportAllowed: boolean
+    siteCheckSchedule?: SiteCheckSchedule
+    siteCheckSelectedEquipmentIds: string[]
+    siteChecksLoading: boolean
+    siteChecksSaving: boolean
+    siteChecksError: string
     onSaveDetails: (name: string, address: string) => Promise<void>
     onSaveSettings: (profile: MaintenanceProfile, equipmentIds: string[]) => Promise<void>
+    onSaveSiteChecks: (input: SiteCheckScheduleSaveInput) => Promise<void>
     onDetailsComplete: (name: string) => void
     onSettingsComplete: () => void
     onOpenBulkImport: () => void
@@ -47,8 +65,14 @@ export default function SiteSettingsDrawer({
     busy,
     error,
     bulkImportAllowed,
+    siteCheckSchedule,
+    siteCheckSelectedEquipmentIds,
+    siteChecksLoading,
+    siteChecksSaving,
+    siteChecksError,
     onSaveDetails,
     onSaveSettings,
+    onSaveSiteChecks,
     onDetailsComplete,
     onSettingsComplete,
     onOpenBulkImport,
@@ -65,12 +89,41 @@ export default function SiteSettingsDrawer({
     const [confirming, setConfirming] = useState(false)
     const [localError, setLocalError] = useState('')
     const [detailsSuccess, setDetailsSuccess] = useState('')
+    const initialSiteChecks = {
+        enabled: siteCheckSchedule?.gr_enabled ?? false,
+        frequency: siteCheckSchedule?.gr_frequency ?? '' as SiteCheckFrequency | '',
+        equipmentScope: resolveSiteCheckEquipmentScope(siteCheckSchedule?.gr_equipmentscope),
+        dueDate: siteCheckSchedule?.gr_nextduedate ?? '',
+    }
+    const currentSiteCheckEquipmentIds = siteCheckSelectedEquipmentIds.filter((id) =>
+        equipment.some((item) => item.gr_equipmentid.toLowerCase() === id.toLowerCase()))
+    const [siteChecksEnabled, setSiteChecksEnabled] = useState(initialSiteChecks.enabled)
+    const [siteChecksFrequency, setSiteChecksFrequency] = useState<SiteCheckFrequency | ''>(
+        initialSiteChecks.frequency,
+    )
+    const [siteChecksDueDate, setSiteChecksDueDate] = useState(initialSiteChecks.dueDate)
+    const [siteChecksEquipmentScope, setSiteChecksEquipmentScope] =
+        useState<SiteCheckEquipmentScope>(initialSiteChecks.equipmentScope)
+    const [siteCheckEquipmentIds, setSiteCheckEquipmentIds] =
+        useState<string[]>(currentSiteCheckEquipmentIds)
+    const [savedSiteChecks, setSavedSiteChecks] = useState({
+        ...initialSiteChecks,
+        selectedEquipmentIds: currentSiteCheckEquipmentIds,
+    })
+    const [siteChecksSuccess, setSiteChecksSuccess] = useState('')
+    const [confirmingDisable, setConfirmingDisable] = useState(false)
 
     const sortedEquipment = useMemo(() => [...equipment].sort((left, right) =>
         equipmentLabel(left).localeCompare(equipmentLabel(right), undefined, { numeric: true }),
     ), [equipment])
     const selected = sortedEquipment.filter((item) => selectedIds.includes(item.gr_equipmentid))
     const detailsDirty = name.trim() !== savedDetails.name.trim() || address.trim() !== savedDetails.address.trim()
+    const siteChecksDirty = siteChecksEnabled !== savedSiteChecks.enabled
+        || siteChecksFrequency !== savedSiteChecks.frequency
+        || siteChecksEquipmentScope !== savedSiteChecks.equipmentScope
+        || siteChecksDueDate !== savedSiteChecks.dueDate
+        || [...siteCheckEquipmentIds].sort().join(',')
+            !== [...savedSiteChecks.selectedEquipmentIds].sort().join(',')
 
     const saveDetails = async (event: FormEvent) => {
         event.preventDefault()
@@ -107,15 +160,74 @@ export default function SiteSettingsDrawer({
         else void saveSettings()
     }
 
+    const saveSiteChecks = async () => {
+        const validation = validateSiteCheckSchedule({
+            enabled: siteChecksEnabled,
+            frequency: siteChecksFrequency || null,
+            nextDueDate: siteChecksDueDate || null,
+        })
+        if (!validation.valid) {
+            setLocalError(validation.errors.join(' '))
+            return
+        }
+        if (
+            siteChecksEnabled
+            && siteChecksEquipmentScope === SITE_CHECK_EQUIPMENT_SCOPES.MANUAL_SELECTION
+            && siteCheckEquipmentIds.length === 0
+        ) {
+            setLocalError('Select at least one Equipment record for Manual Selection.')
+            return
+        }
+        setLocalError('')
+        setSiteChecksSuccess('')
+        try {
+            await onSaveSiteChecks({
+                siteId: site.gr_siteid,
+                siteName: site.gr_name,
+                enabled: siteChecksEnabled,
+                frequency: siteChecksFrequency || null,
+                equipmentScope: siteChecksEquipmentScope,
+                selectedEquipmentIds: siteCheckEquipmentIds,
+                nextDueDate: siteChecksDueDate || null,
+            })
+            setSavedSiteChecks({
+                enabled: siteChecksEnabled,
+                frequency: siteChecksFrequency,
+                equipmentScope: siteChecksEquipmentScope,
+                dueDate: siteChecksDueDate,
+                selectedEquipmentIds: siteCheckEquipmentIds,
+            })
+            setConfirmingDisable(false)
+            setSiteChecksSuccess('Site Check settings saved to Dataverse.')
+        } catch (caught) {
+            setLocalError(caught instanceof Error
+                ? caught.message
+                : 'Site Check settings could not be saved.')
+        }
+    }
+
+    const requestSiteChecksSave = () => {
+        if (
+            siteCheckSchedule?._gr_activesitecheck_value
+            && siteCheckSchedule.gr_enabled
+            && !siteChecksEnabled
+        ) {
+            setConfirmingDisable(true)
+            return
+        }
+        void saveSiteChecks()
+    }
+
     const requestClose = () => {
         if (busy) return
-        if (detailsDirty && !window.confirm('Discard unsaved Site changes?')) return
+        if ((detailsDirty || siteChecksDirty) && !window.confirm('Discard unsaved Site changes?')) return
         onClose()
     }
 
     const tabs = [
         { id: 'details' as const, label: 'Details', hasError: activeTab === 'details' && Boolean(localError) },
         { id: 'settings' as const, label: 'Settings', hasError: activeTab === 'settings' && Boolean(localError || error) },
+        { id: 'site-checks' as const, label: 'Site Checks', hasError: activeTab === 'site-checks' && Boolean(localError || siteChecksError) },
         ...(bulkImportAllowed ? [{ id: 'bulk-equipment' as const, label: 'Bulk Add Equipment' }] : []),
     ]
 
@@ -128,6 +240,8 @@ export default function SiteSettingsDrawer({
             footer={<>
                 <span>{activeTab === 'settings'
                     ? `${selectedIds.length} machine${selectedIds.length === 1 ? '' : 's'} selected for update`
+                    : activeTab === 'site-checks'
+                        ? siteChecksSuccess || 'Site Checks are optional for this Site.'
                     : activeTab === 'bulk-equipment'
                         ? 'Customer and Site will be selected automatically.'
                         : detailsSuccess || 'Site name and address changes save to Dataverse.'}</span>
@@ -135,6 +249,7 @@ export default function SiteSettingsDrawer({
                     <button type="button" onClick={requestClose} disabled={busy}>Cancel</button>
                     {activeTab === 'details' && <button type="submit" form="site-settings-details-form" className="primary" disabled={busy || !detailsDirty}>Save changes</button>}
                     {activeTab === 'settings' && <button type="button" className="primary" onClick={requestSettingsSave} disabled={busy}>Save settings</button>}
+                    {activeTab === 'site-checks' && <button type="button" className="primary" onClick={requestSiteChecksSave} disabled={busy || siteChecksLoading || siteChecksSaving || !siteChecksDirty}>Save Site Checks</button>}
                     {activeTab === 'bulk-equipment' && <button type="button" className="primary" onClick={onOpenBulkImport}>Open bulk add</button>}
                 </div>
             </>}
@@ -150,6 +265,142 @@ export default function SiteSettingsDrawer({
                         </div>
                     </EditDrawerSection>
                 </form>
+            </div>
+
+            <div role="tabpanel" aria-labelledby="drawer-tab-site-checks" hidden={activeTab !== 'site-checks'}>
+                <EditDrawerSection title="Recurring Site Checks">
+                    {siteChecksLoading ? <p>Loading Site Check settings…</p> : <>
+                        <div className="site-checks-enable-row">
+                            <div>
+                                <strong>Enable Site Checks</strong>
+                                <p>Include this Site in Site Check due and overdue reporting.</p>
+                            </div>
+                            <FormSwitch
+                                label="Enable Site Checks"
+                                checked={siteChecksEnabled}
+                                disabled={busy || siteChecksSaving}
+                                onChange={(enabled) => {
+                                    setSiteChecksEnabled(enabled)
+                                    setSiteChecksSuccess('')
+                                    setLocalError('')
+                                }}
+                            />
+                        </div>
+                        <div className="site-settings-fields">
+                            <label>
+                                Frequency
+                                <select
+                                    value={siteChecksFrequency}
+                                    disabled={busy || siteChecksSaving || !siteChecksEnabled}
+                                    aria-required={siteChecksEnabled}
+                                    onChange={(event) => {
+                                        setSiteChecksFrequency(event.target.value
+                                            ? Number(event.target.value) as SiteCheckFrequency
+                                            : '')
+                                        setSiteChecksSuccess('')
+                                        setLocalError('')
+                                    }}
+                                >
+                                    <option value="">Select frequency</option>
+                                    {SITE_CHECK_FREQUENCY_OPTIONS.map((option) =>
+                                        <option key={option.value} value={option.value}>{option.label}</option>,
+                                    )}
+                                </select>
+                            </label>
+                            <label>
+                                Equipment scope
+                                <select
+                                    value={siteChecksEquipmentScope}
+                                    disabled={busy || siteChecksSaving || !siteChecksEnabled}
+                                    onChange={(event) => {
+                                        setSiteChecksEquipmentScope(Number(event.target.value) as SiteCheckEquipmentScope)
+                                        setSiteChecksSuccess('')
+                                        setLocalError('')
+                                    }}
+                                >
+                                    {SITE_CHECK_EQUIPMENT_SCOPE_OPTIONS.map((option) =>
+                                        <option key={option.value} value={option.value}>{option.label}</option>,
+                                    )}
+                                </select>
+                            </label>
+                            <label>
+                                Initial or next due date
+                                <input
+                                    type="date"
+                                    value={siteChecksDueDate}
+                                    disabled={busy || siteChecksSaving || !siteChecksEnabled}
+                                    required={siteChecksEnabled}
+                                    onChange={(event) => {
+                                        setSiteChecksDueDate(event.target.value)
+                                        setSiteChecksSuccess('')
+                                        setLocalError('')
+                                    }}
+                                />
+                            </label>
+                        </div>
+                        {siteChecksEquipmentScope === SITE_CHECK_EQUIPMENT_SCOPES.MANUAL_SELECTION && <>
+                            <SearchableSelect
+                                id="site-check-equipment-selector"
+                                label="Equipment included"
+                                value=""
+                                onChange={() => undefined}
+                                multiple
+                                values={siteCheckEquipmentIds}
+                                onValuesChange={(ids) => {
+                                    setSiteCheckEquipmentIds([...new Set(ids)])
+                                    setSiteChecksSuccess('')
+                                    setLocalError('')
+                                }}
+                                options={sortedEquipment.map((item) => ({
+                                    value: item.gr_equipmentid,
+                                    label: [equipmentLabel(item), item.gr_make, item.gr_model]
+                                        .filter(Boolean).join(' · '),
+                                    secondary: item.gr_serial ? `S/N ${item.gr_serial}` : undefined,
+                                    searchText: [item.gr_fleet, item.gr_serial, item.gr_make, item.gr_model]
+                                        .filter(Boolean).join(' '),
+                                }))}
+                                placeholder="Select Equipment"
+                                searchPlaceholder="Search fleet, serial, make or model"
+                                emptyLabel="No Equipment at this Site"
+                                disabled={busy || siteChecksSaving || !siteChecksEnabled}
+                                required={siteChecksEnabled}
+                            />
+                            <section className="site-check-equipment-selected" aria-labelledby="site-check-equipment-selected-heading">
+                                <div>
+                                    <h3 id="site-check-equipment-selected-heading">
+                                        Selected Equipment <span>({siteCheckEquipmentIds.length})</span>
+                                    </h3>
+                                    {siteCheckEquipmentIds.length > 0 && <button
+                                        type="button"
+                                        onClick={() => setSiteCheckEquipmentIds([])}
+                                        disabled={busy || siteChecksSaving}
+                                    >Clear all</button>}
+                                </div>
+                                {siteCheckEquipmentIds.length === 0
+                                    ? <p>No Equipment selected yet.</p>
+                                    : <ul>{sortedEquipment
+                                        .filter((item) => siteCheckEquipmentIds.includes(item.gr_equipmentid))
+                                        .map((item) => <li key={item.gr_equipmentid}>
+                                            <span>
+                                                <strong>{equipmentLabel(item)}</strong>
+                                                <small>{[item.gr_make, item.gr_model, item.gr_serial && `S/N ${item.gr_serial}`]
+                                                    .filter(Boolean).join(' · ') || 'No machine details'}</small>
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setSiteCheckEquipmentIds((ids) =>
+                                                    ids.filter((id) => id !== item.gr_equipmentid))}
+                                                disabled={busy || siteChecksSaving}
+                                                aria-label={`Remove ${equipmentLabel(item)} from Site Check`}
+                                            >Remove</button>
+                                        </li>)}</ul>}
+                            </section>
+                        </>}
+                        {!siteChecksEnabled && siteCheckSchedule && <p>
+                            Existing Site Check history and generated Jobs are retained when disabled.
+                        </p>}
+                    </>}
+                </EditDrawerSection>
             </div>
 
             <div role="tabpanel" aria-labelledby="drawer-tab-settings" hidden={activeTab !== 'settings'}>
@@ -197,7 +448,7 @@ export default function SiteSettingsDrawer({
                 <h3>Bulk Add Equipment</h3>
                 <p>Paste, validate, review, correct, and import Equipment using the existing bulk-add workflow. The destination is already set to <strong>{site.gr_name}</strong>.</p>
             </div>
-            {(localError || error) && <p className="site-maintenance-error" role="alert">{localError || error}</p>}
+            {(localError || error || siteChecksError) && <p className="site-maintenance-error" role="alert">{localError || error || siteChecksError}</p>}
         </EditDrawerShell>
 
         {confirming && <EditDrawerConfirmation
@@ -209,6 +460,16 @@ export default function SiteSettingsDrawer({
             confirmLabel={busy ? 'Applying…' : 'Apply and save'}
             onCancel={() => { if (!busy) setConfirming(false) }}
             onConfirm={() => void saveSettings()}
+        />}
+        {confirmingDisable && <EditDrawerConfirmation
+            eyebrow="Disable Site Checks"
+            title={`Disable Site Checks for ${site.gr_name}?`}
+            message="The current Site Check and its Jobs remain accessible and can still be completed. This Site will leave due and overdue reporting, and no new Site Check can be started while disabled."
+            error={localError || siteChecksError}
+            isBusy={siteChecksSaving}
+            confirmLabel={siteChecksSaving ? 'Disabling…' : 'Disable Site Checks'}
+            onCancel={() => { if (!siteChecksSaving) setConfirmingDisable(false) }}
+            onConfirm={() => void saveSiteChecks()}
         />}
     </>
 }

@@ -108,6 +108,9 @@
 .customer-site-expand-actions button { padding: 3px 5px; border: 0; background: transparent; color: #3f6b5c; font: inherit; font-size: .68rem; font-weight: 750; cursor: pointer; }
 .customer-site-expand-actions button:hover { text-decoration: underline; }
 .customer-site-expand-actions button:focus-visible { border-radius: 4px; outline: 2px solid #315b4d; outline-offset: 2px; }
+.customer-site-check-feedback { min-height: 18px; color: #69746e; font-size: .7rem; }
+.customer-site-check-feedback:empty { display: none; }
+.customer-site-check-feedback button { padding: 0; border: 0; background: transparent; color: #286552; font: inherit; font-weight: 750; text-decoration: underline; cursor: pointer; }
 
 .customer-site-card { overflow: hidden; }
 .customer-site-card > header { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 16px; border-bottom: 1px solid #e3e8e5; background: #f8faf8; cursor: pointer; transition: background 120ms ease; }
@@ -127,6 +130,12 @@
 .customer-site-header-summary small { color: #7a847e; font-size: .62rem; font-weight: 750; letter-spacing: .05em; text-transform: uppercase; }
 .customer-site-header-summary strong { color: #3f4b45; font-size: .72rem; font-weight: 700; white-space: pre-wrap; }
 .customer-site-header-summary > span:last-child { color: #68736d; font-size: .7rem; font-weight: 750; white-space: nowrap; }
+.customer-site-header-summary > .customer-site-check-summary { display: grid; gap: 2px; min-width: 132px; padding-left: 14px; border-left: 1px solid #dce4df; }
+.customer-site-check-summary strong { text-transform: capitalize; }
+.customer-site-check-summary[data-state="due"] strong { color: #8a5b00; }
+.customer-site-check-summary[data-state="overdue"] strong,
+.customer-site-check-summary[data-state="invalid"] strong { color: #a33636; }
+.customer-site-check-summary[data-state="in-progress"] strong { color: #286552; }
 .customer-site-card h4 { color: #28312c; font-size: .95rem; }
 .customer-site-card p { margin-top: 3px; color: #747d77; font-size: .74rem; }
 .customer-site-meta { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; }

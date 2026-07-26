@@ -6,6 +6,10 @@ import {
 } from '../compliance/equipmentCompliance.ts'
 import type { MaintenanceProfile, PowerType, ServiceProgramme } from '../servicePlans/maintenanceConfiguration.ts'
 import { MAINTENANCE_PROFILES, SERVICE_PROGRAMMES } from '../servicePlans/maintenanceConfiguration.ts'
+import {
+    isEquipmentOwnershipType,
+    type EquipmentOwnershipType,
+} from './equipmentOwnership.types.ts'
 
 export type EquipmentUpdateInput = {
     fleet: string
@@ -21,6 +25,7 @@ export type EquipmentUpdateInput = {
     powerType: PowerType
     serviceProgramme: ServiceProgramme
     maintenanceProfile: MaintenanceProfile
+    ownershipType: EquipmentOwnershipType | null
     customAEnabled: boolean
     customBEnabled: boolean
     customCEnabled: boolean
@@ -55,6 +60,9 @@ export function toEquipmentDateOnlyValue(value?: string | null) {
 export function normalizeEquipmentInput(input: EquipmentUpdateInput): EquipmentUpdateInput {
     if (!isEquipmentComplianceStatus(input.complianceStatus)) {
         throw new Error('Select a valid Compliance Status.')
+    }
+    if (input.ownershipType != null && !isEquipmentOwnershipType(input.ownershipType)) {
+        throw new Error('Select a valid Equipment Ownership.')
     }
     const registrationNumber = input.registrationNumber.trim()
     const rawCurrentWofExpiry = input.currentWofExpiry.trim()

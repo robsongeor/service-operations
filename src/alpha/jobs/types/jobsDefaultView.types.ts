@@ -1,8 +1,9 @@
-import { JOB_STATUSES, JOB_STATUS_OPTIONS, type JobStatus } from './jobStatus.types'
-import { JOB_TYPE_OPTIONS, type JobTypeFilter } from './jobType.types'
-import { isJobsStickyThroughColumnId, type JobsStickyThroughColumnId } from './jobsTableColumns'
+import { JOB_STATUSES, JOB_STATUS_OPTIONS, type JobStatus } from './jobStatus.types.ts'
+import { JOB_TYPE_OPTIONS, type JobTypeFilter } from './jobType.types.ts'
+import { isJobsStickyThroughColumnId, type JobsStickyThroughColumnId } from './jobsTableColumns.ts'
 
-export const JOBS_DEFAULT_VIEW_KEY_PREFIX = 'service-operations.jobs-default-view.v1'
+export const LEGACY_JOBS_DEFAULT_VIEW_KEY_PREFIX = 'service-operations.jobs-default-view.v1'
+export const JOBS_DEFAULT_VIEW_KEY_PREFIX = 'service-operations.jobs-default-view.v2'
 
 export type JobsDefaultView = {
     selectedJobType: JobTypeFilter
@@ -11,7 +12,7 @@ export type JobsDefaultView = {
 }
 
 export const APPLICATION_DEFAULT_JOBS_VIEW: JobsDefaultView = {
-    selectedJobType: 'all',
+    selectedJobType: 'operational',
     visibleStatuses: JOB_STATUS_OPTIONS.map((status) => status.value),
     stickyThroughColumnId: null,
 }
@@ -30,12 +31,16 @@ export function canonicaliseJobStatuses(statuses: JobStatus[]) {
 export function restoreJobsDefaultView(storageKey: string): JobsDefaultView | null {
     try {
         const raw = sessionStorage.getItem(storageKey)
-        if (!raw) return null
+        const storageId = storageKey.slice(`${JOBS_DEFAULT_VIEW_KEY_PREFIX}.`.length)
+        const legacyKey = `${LEGACY_JOBS_DEFAULT_VIEW_KEY_PREFIX}.${storageId}`
+        const legacyRaw = !raw ? sessionStorage.getItem(legacyKey) : null
+        if (!raw && !legacyRaw) return null
 
-        const value = JSON.parse(raw) as Partial<JobsDefaultView> | null
+        const value = JSON.parse(raw ?? legacyRaw!) as Partial<JobsDefaultView> | null
         if (!value || typeof value !== 'object') return null
 
         const selectedJobType = value.selectedJobType === 'all'
+            || value.selectedJobType === 'operational'
             || value.selectedJobType === 'unconfirmed'
             || (typeof value.selectedJobType === 'number' && validJobTypes.has(value.selectedJobType))
             ? value.selectedJobType as JobsDefaultView['selectedJobType']
@@ -54,7 +59,15 @@ export function restoreJobsDefaultView(storageKey: string): JobsDefaultView | nu
             : isJobsStickyThroughColumnId(value.stickyThroughColumnId)
                 ? value.stickyThroughColumnId
                 : APPLICATION_DEFAULT_JOBS_VIEW.stickyThroughColumnId
-        return { selectedJobType, visibleStatuses, stickyThroughColumnId }
+        const migratedSelectedJobType = legacyRaw && selectedJobType === 'all'
+            ? 'operational'
+            : selectedJobType
+        const restored = { selectedJobType: migratedSelectedJobType, visibleStatuses, stickyThroughColumnId }
+        if (legacyRaw) {
+            sessionStorage.setItem(storageKey, JSON.stringify(restored))
+            sessionStorage.removeItem(legacyKey)
+        }
+        return restored
     } catch {
         return null
     }

@@ -26,6 +26,7 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
 
 ## Priority 2 — Product improvements
 
+
 - [ ] Complete persistent Customer creation and Customer-level information management;
   current Customer-level behaviour still includes local prototype boundaries.
 - [ ] Decide whether Technician Job Cards require customer signature, checklist,

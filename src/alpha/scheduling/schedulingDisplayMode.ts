@@ -25,6 +25,7 @@ export function restoreSchedulingJobTypeFilter(): SchedulingJobTypeFilter {
         const storedJobType = sessionStorage.getItem(SCHEDULING_JOB_TYPE_FILTER_KEY)
         if (storedJobType === 'all') return storedJobType
         const numericJobType = Number(storedJobType)
+        if (numericJobType === JOB_TYPES.SITE_CHECK) return 'all'
         if (Object.values(JOB_TYPES).includes(numericJobType as JobType)) return numericJobType as JobType
     } catch {
         // Use the default when storage is unavailable.

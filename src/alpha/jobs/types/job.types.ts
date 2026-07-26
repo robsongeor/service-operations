@@ -46,6 +46,7 @@ export type Job = {
     }[]
     gr_hourmeter?: number | null
     gr_completeddate?: string | null
+    _gr_sitecheck_value?: string | null
     gr_servicetype?: ServiceType | null
     gr_currentofficeaction?: OfficeAction | null
     gr_officeactionowner?: string | null

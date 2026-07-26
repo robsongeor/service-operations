@@ -1,5 +1,38 @@
 # Changelog
 
+## Unreleased
+
+### Site Checks
+
+- Added optional per-Site weekly, fortnightly, or monthly Site Check schedules in the
+  combined Site Settings drawer, with customer and Site dashboard status summaries.
+- Added atomic, replay-safe Site Check creation that produces one protected Site Check Job
+  per Site Equipment record and initially assigns every generated Job to one technician.
+- Added operational progress and atomic final-Job rollover while keeping Job Status
+  independent from Job Card Status.
+- Added dedicated Site Check Jobs filtering, Operational-default exclusion, Scheduler
+  exclusion, current details, permanent history, and canonical Job/Equipment navigation.
+- Provisioned and verified the Site Check Dataverse schema, alternate keys, Choice value,
+  relationships, and least-privilege Service Operations role grants.
+- Added silent-token request coalescing, bounded paging, concurrency safeguards,
+  non-destructive rollback guidance, and desktop drawer focus restoration.
+- Added explicit Customer-owned/Liftrucks-rental Equipment classification and per-Site
+  Site Check Equipment scope, including authoritative rental-only exclusion of
+  Customer-owned and Not classified Equipment.
+- Added per-Site Manual Selection scope with the shared searchable multi-select, atomic
+  Schedule/selection persistence, current-Site enforcement, and replay-safe authoritative
+  filtering. Newly assigned Equipment is not selected automatically and transferred-away
+  Equipment cannot generate Site Check Jobs.
+- Target verification saved and reloaded a Weekly Manual Selection Schedule for Air New
+  Zealand / Can Park Auckland with FN1579 only; the Run preview correctly showed one
+  included Equipment and two excluded without creating an occurrence or Jobs.
+
+### Remaining validation
+
+- Assigned non-admin settings/create/completion smoke testing, maximum-Site runtime
+  observation, manual desktop accessibility, historical disable/re-enable review, and
+  deployment rollback review remain release gates.
+
 ## v1.3.0 — 25 July 2026
 
 ### Major Features

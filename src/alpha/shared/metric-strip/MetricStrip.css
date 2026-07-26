@@ -25,6 +25,19 @@
 .metric-strip-item dd { margin: 0; color: #29342e; font-size: .8rem; font-weight: 800; }
 .metric-strip-item[data-tone="warning"] dd { color: #8a5b00; }
 .metric-strip-item[data-tone="danger"] dd { color: #a33636; }
+.metric-strip-item dd > button {
+    margin: -3px -5px;
+    padding: 3px 5px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: currentColor;
+    font: inherit;
+    cursor: pointer;
+}
+.metric-strip-item dd > button:hover { background: #edf4f0; }
+.metric-strip-item dd > button:focus-visible { outline: 2px solid #315b4d; outline-offset: 1px; }
+.metric-strip-item[data-active="true"] dd > button { background: #dfeee7; box-shadow: inset 0 0 0 1px #92b3a5; }
 
 @media (max-width: 700px) {
     .metric-strip-item {

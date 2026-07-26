@@ -368,8 +368,8 @@ export default function JobEditDrawer({
                 {activeTab === 'details' && (
                     <div className="job-edit-grid">
                         <JobCoreFields
-                            jobTypeOptions={job.gr_jobtype === JOB_TYPES.WOF
-                                ? JOB_TYPE_OPTIONS.filter((option) => option.value === JOB_TYPES.WOF)
+                            jobTypeOptions={job.gr_jobtype === JOB_TYPES.WOF || job.gr_jobtype === JOB_TYPES.SITE_CHECK
+                                ? JOB_TYPE_OPTIONS.filter((option) => option.value === job.gr_jobtype)
                                 : STANDARD_JOB_TYPE_OPTIONS}
                             draft={draft}
                             setDraft={setDraft}

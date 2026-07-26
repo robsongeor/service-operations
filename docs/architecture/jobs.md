@@ -36,6 +36,13 @@ through the completion framework rather than screen-specific writes.
 ## Important Business Rules
 
 - Breakdown, Service, and Workshop Jobs may exist without Equipment.
+- Site Check is a protected Job Type created only by the Site Check workflow. It is excluded
+  from ordinary Job creation options, requires Equipment, and reuses the canonical Job
+  payload mapping inside an atomic Site Check transaction.
+- The default Operational Jobs view excludes Site Check Type. Site Checks has a dedicated
+  type tab, while All jobs is explicitly unfiltered by type. Versioned current/default view
+  migration maps legacy `all` to `operational` and preserves status, search, sorting,
+  office/scheduled filters, reset behavior, and sticky-column preferences.
 - Job Status and Job Card Status are never interchangeable.
 - Completion Review is not completion.
 - Unconfirmed Jobs are visible history but unavailable for allocation and scheduling.
@@ -47,6 +54,13 @@ through the completion framework rather than screen-specific writes.
 - Dispatch state changes only after successful dispatch.
 - Technician submission does not close the operational Job; office completion is
   authoritative.
+- Generated Site Check Job status changes from both the Jobs table and Job drawer route
+  through `siteCheckCompletionApi`. It reloads the parent and every sibling, blocks progress
+  on expected-count mismatch, and atomically completes the final Job, occurrence, and
+  Schedule rollover with ETags. Post-write reconciliation handles concurrent final Jobs and
+  idempotent retry. A generated Job cannot be reopened after its parent Site Check completes.
+  Its technician may be reassigned, but its protected Job Type and original Site/Equipment
+  relationships cannot be changed. Job Card Status remains outside this workflow.
 - The public technician Job Card route is `/portal/job/:token`. It validates a random token
   through the server API and returns a deliberately minimal Job projection. The browser
   never receives Dataverse credentials or direct anonymous Dataverse access.

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useJobs } from '../jobs/hooks/useJobs'
-import { jobIsOperational } from '../jobs/types/jobStatus.types'
+import { jobIsSchedulerEligible } from '../jobs/types/jobSchedulerEligibility'
 import {
     SCHEDULE_TYPE,
     type JobScheduleOption,
@@ -9,6 +9,7 @@ import type { Job } from '../jobs/types/job.types'
 import JobEditDrawer from '../jobs/components/JobEditDrawer'
 import JobCompletionWorkflow from '../jobs/components/JobCompletionWorkflow'
 import JobTypeTabs from '../jobs/components/JobTypeTabs'
+import { JOB_TYPES, SCHEDULER_JOB_TYPE_OPTIONS } from '../jobs/types/jobType.types'
 import '../jobs/components/JobTypeControls.css'
 import './SchedulingScreen.css'
 import { useNavigate } from 'react-router-dom'
@@ -225,10 +226,12 @@ export default function SchedulingScreen() {
     })
     const visibleOptionsThisWeek = optionsThisWeek.filter((option) => {
         const job = jobsById.get(option._gr_job_value?.toLowerCase())
-        if (!job || !jobIsOperational(job.gr_status)) return false
+        if (!job || !jobIsSchedulerEligible(job)) return false
         if (selectedJobType === 'all') return true
         return job.gr_jobtype === selectedJobType
     })
+    const excludedSiteCheckOptions = optionsThisWeek.filter((option) =>
+        jobsById.get(option._gr_job_value?.toLowerCase())?.gr_jobtype === JOB_TYPES.SITE_CHECK)
     const flexibleWeekOptions = visibleOptionsThisWeek.filter(
         (option) => option.gr_scheduletype === SCHEDULE_TYPE.WEEK,
     )
@@ -313,12 +316,18 @@ export default function SchedulingScreen() {
             <div className="scheduling-job-type-filter">
                 <JobTypeTabs
                     selectedJobType={selectedJobType}
+                    includeOperational={false}
+                    jobTypeOptions={SCHEDULER_JOB_TYPE_OPTIONS}
                     onChange={(jobType) => {
-                        if (jobType !== 'unconfirmed') setSelectedJobType(jobType)
+                        if (jobType !== 'unconfirmed' && jobType !== 'operational') setSelectedJobType(jobType)
                     }}
                     ariaLabel="Filter scheduled jobs by type"
                 />
             </div>
+
+            {excludedSiteCheckOptions.length > 0 && <p className="scheduling-site-check-audit" role="status">
+                {excludedSiteCheckOptions.length} historical Site Check schedule option{excludedSiteCheckOptions.length === 1 ? ' is' : 's are'} hidden. Review the source Jobs before any separately approved cleanup.
+            </p>}
 
             <div className="schedule-board-scroll">
                 <div className="schedule-board">

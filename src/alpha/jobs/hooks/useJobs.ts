@@ -16,6 +16,7 @@ import {
 } from '../services/jobsApi'
 import type { JobSaveInput } from '../types/jobSave.types'
 import { JOB_STATUSES, UNCONFIRMED_OPERATION_MESSAGE, jobIsOperational, type JobStatus } from '../types/jobStatus.types'
+import { jobIsSchedulerEligible, SITE_CHECK_SCHEDULER_MESSAGE } from '../types/jobSchedulerEligibility'
 import { JOB_CARD_STATUSES, type JobCardStatus } from '../types/jobCardStatus.types'
 import type { JobAssignmentInput } from '../types/jobAssignment.types'
 import {
@@ -77,6 +78,7 @@ import {
     createSiteContact as createSiteContactApi,
 } from '../services/contactsApi'
 import { fetchQuotes as fetchQuotesApi } from '../../quotes/services/quotesApi'
+import { updateSiteCheckJobStatus } from '../../site-checks/services/siteCheckCompletionApi'
 import type { Quote } from '../../quotes/types/quote.types'
 import { fetchEquipmentServicePlans } from '../../equipment/servicePlans/servicePlanApi'
 import type { EquipmentServicePlan } from '../../equipment/servicePlans/equipmentServicePlan.types'
@@ -242,6 +244,12 @@ export function useJobs() {
         return job
     }
 
+    const assertJobSchedulerEligible = async (token: string, jobId: string) => {
+        const job = await assertJobOperational(token, jobId)
+        if (!jobIsSchedulerEligible(job)) throw new Error(SITE_CHECK_SCHEDULER_MESSAGE)
+        return job
+    }
+
     const prepareJobForUnconfirmed = async (token: string, job: Job) => {
         const options = scheduleOptions.filter((option) => option._gr_job_value?.toLowerCase() === job.gr_jobid.toLowerCase())
         const assignments = jobAssignments.filter((assignment) => assignment._gr_job_value?.toLowerCase() === job.gr_jobid.toLowerCase())
@@ -267,7 +275,7 @@ export function useJobs() {
 
     const createScheduleOption = async (option: JobScheduleOptionInput) => {
         const token = await getAccessToken()
-        await assertJobOperational(token, option.jobId)
+        await assertJobSchedulerEligible(token, option.jobId)
 
         if (option.confirmed) {
             const currentlyConfirmed = scheduleOptions.filter(
@@ -291,7 +299,7 @@ export function useJobs() {
 
     const confirmScheduleOption = async (jobId: string, optionId: string) => {
         const token = await getAccessToken()
-        await assertJobOperational(token, jobId)
+        await assertJobSchedulerEligible(token, jobId)
         const optionsForJob = scheduleOptions.filter(
             (option) => option._gr_job_value?.toLowerCase() === jobId.toLowerCase(),
         )
@@ -312,7 +320,7 @@ export function useJobs() {
         option: JobScheduleOptionInput,
     ) => {
         const token = await getAccessToken()
-        await assertJobOperational(token, option.jobId)
+        await assertJobSchedulerEligible(token, option.jobId)
         await updateJobScheduleOptionApi(token, optionId, option)
         await fetchScheduleOptions()
     }
@@ -371,6 +379,14 @@ export function useJobs() {
             return false
         }
         const token = await getAccessToken()
+        if (currentJob._gr_sitecheck_value) {
+            const result = await updateSiteCheckJobStatus(token, { jobId, status })
+            await fetchJobs()
+            if (result) {
+                window.dispatchEvent(new CustomEvent('site-checks-changed'))
+            }
+            return true
+        }
         if (status === JOB_STATUSES.UNCONFIRMED && currentJob.gr_status !== JOB_STATUSES.UNCONFIRMED) {
             await prepareJobForUnconfirmed(token, currentJob)
         }
@@ -508,6 +524,20 @@ export function useJobs() {
             return false
         }
         const token = await getAccessToken()
+        if (currentJob._gr_sitecheck_value) {
+            const completedDate = job.completedDate || (isCompleting ? new Date().toISOString() : undefined)
+            const result = await updateSiteCheckJobStatus(token, {
+                jobId,
+                status: job.status,
+                pendingSave: { ...job, completedDate },
+                completedOn: completedDate,
+            })
+            await fetchJobs()
+            if (result) {
+                window.dispatchEvent(new CustomEvent('site-checks-changed'))
+            }
+            return true
+        }
         if (job.status === JOB_STATUSES.UNCONFIRMED && currentJob.gr_status !== JOB_STATUSES.UNCONFIRMED) {
             await prepareJobForUnconfirmed(token, currentJob)
             job = { ...job, mechanicId: undefined }

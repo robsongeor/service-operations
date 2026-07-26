@@ -38,6 +38,9 @@ identity, On-road compliance, and missing maintenance history are calculated con
 - Customer is not stored directly on Equipment.
 - Current Hour Meter is presented as “Last Known Hour Meter”; the stored contract remains
   unchanged.
+- Equipment Ownership is explicit current master data: Not classified, Customer owned, or
+  Liftrucks rental. Not classified is stored as null; ownership is never inferred from
+  identifiers, Customer, Site, or free text.
 - Road compliance determines whether Equipment can participate in new WOF work.
 - Equipment CSV maintenance is restricted to the explicitly authorised administrator.
   Imports match only by Equipment Dataverse ID, ignore blank cells by default, validate

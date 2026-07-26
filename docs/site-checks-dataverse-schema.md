@@ -1,0 +1,399 @@
+# Site Checks Dataverse Schema
+
+## Status
+
+**Provisioned and verified 26 July 2026; Equipment ownership and Schedule Equipment scope
+extension provisioned and verified 26 July 2026; Manual Equipment selection schema and its
+composite key provisioned and verified Active 26 July 2026.**
+
+This document owns the detailed Site Checks Dataverse contract. The tables, columns,
+navigation properties, relationship schema names, alternate keys, Choice values, and delete
+behaviors below were provisioned through the approved combined schema tool on 26 July 2026.
+Application constants may use the confirmed contracts below.
+
+Use the confirmed values below as application constants only after the alternate keys are
+verified Active. Never run provisioning from an application build or deployment.
+
+## Provisioning result — 26 July 2026
+
+The explicitly approved `-Mode Provision -LoginPrompt Never` invocation:
+
+- reused one cached Dataverse connection and opened no interactive sign-in prompt;
+- created `gr_sitecheckschedule` and `gr_sitecheck`;
+- created all scalar columns and six approved lookup relationships;
+- added nullable `gr_job.gr_sitecheck`;
+- added Site Check `122830004` to `gr_jobtypechoices`;
+- published the affected tables and global Choice once;
+- created both alternate keys; and
+- passed same-session structural read-back verification.
+
+The provisioning command exited successfully. A later single cached, read-only `-Mode
+Verify -LoginPrompt Never` invocation confirmed the complete schema and both alternate keys
+as Active. Neither invocation opened a sign-in prompt. No security roles were changed.
+
+## Inspection and authentication workflow
+
+The combined schema-management owner is
+[`../scripts/manage-site-checks-schema.ps1`](../scripts/manage-site-checks-schema.ps1).
+It is designed to:
+
+- create no Dataverse connection during offline definition validation;
+- create exactly one `CrmServiceClient` during a live invocation;
+- default to `LoginPrompt=Never`, reusing a cached session or failing without opening a
+  prompt;
+- retrieve Site, Equipment, Job, and Mechanic metadata in one
+  `RetrieveMetadataChangesRequest`;
+- query solution membership using the same connection; and
+- optionally make one aggregate Equipment-by-Site request that returns only the maximum
+  count required for transaction sizing;
+- provision idempotently only when `-Mode Provision` is deliberately supplied; and
+- publish and post-verify through that same single connection, avoiding a second sign-in.
+
+Offline validation:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/manage-site-checks-schema.ps1 `
+  -ValidateDefinition `
+  -ValidateSdk
+```
+
+Cached-session inspection, which must fail rather than prompt:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/manage-site-checks-schema.ps1 `
+  -Mode Inspect `
+  -LoginPrompt Never
+```
+
+An invocation with `-LoginPrompt Auto` may open Microsoft sign-in. Codex must show the exact
+request plan and obtain approval before running it. A failed or cancelled attempt is not
+automatically repeated.
+
+Provisioning is intentionally a separate execution gate. Product/schema approval does not
+authorise this command:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/manage-site-checks-schema.ps1 `
+  -Mode Provision `
+  -LoginPrompt Never
+```
+
+Run it only after explicit Dataverse-mutation approval. It reuses cached authentication,
+creates or validates the approved schema, publishes affected metadata, and performs read-back
+verification in the same process. If cached authentication is unavailable, it fails without
+prompting. A later `-Mode Verify` invocation is needed only when an alternate-key index remains
+pending; it is read-only and also uses the cached session by default.
+
+The expected live request budget is one connection, one metadata request, two solution
+queries, and—only when explicitly requested—one aggregate data-profile request.
+
+## Live inspection result — 26 July 2026
+
+The cached-session inspection completed with `LoginPrompt=Never`. It created one connection,
+made the documented read-only requests, opened no interactive prompt, and performed no
+writes.
+
+## Existing dependencies requiring live verification
+
+| Dependency | Confirmed live result |
+| --- | --- | --- |
+| Site | `gr_site` / `gr_sites`; user-owned; ID `gr_siteid`; primary name `gr_address`; in solution |
+| Site → Customer | Lookup `gr_customer`; navigation `gr_Customer`; relationship `gr_site_Customer_gr_customer`; delete `RemoveLink` |
+| Equipment | `gr_equipment` / `gr_equipments`; user-owned; ID `gr_equipmentid`; primary name `gr_fleet`; in solution |
+| Equipment → Site | Lookup `gr_site`; navigation `gr_Site`; relationship `gr_equipment_Site_gr_site`; delete `RemoveLink` |
+| Job | `gr_job` / `gr_jobs`; user-owned; ID `gr_jobid`; primary name `gr_jobnumber`; in solution |
+| Mechanic | `gr_mechanic` / `gr_mechanics`; user-owned; ID `gr_mechanicid`; primary name `gr_name`; in solution |
+| Job Type | `gr_job.gr_jobtype`; global `gr_jobtypechoices`; values confirmed below |
+| Job Status | `gr_job.gr_status`; global `gr_status`; values confirmed below |
+| Job Card Status | `gr_job.gr_jobcardstatus`; global `gr_jobcardstatus`; values confirmed below |
+| Job relationships | `gr_Equipment`, `gr_Mechanic`, `gr_Site`, and `gr_Contact` confirmed; no Job → Customer lookup exists |
+| Existing alternate keys | None on Site, Equipment, Job, or Mechanic |
+| Solution | All four tables are components of `ServiceOperationsNew` |
+| Largest Site | 22 Equipment; aggregate returned no names or customer data |
+
+### Confirmed existing Choice values
+
+| Choice | Label | Value |
+| --- | --- | ---: |
+| Job Type | Breakdown | `122830000` |
+| Job Type | Service | `122830001` |
+| Job Type | Workshop | `122830002` |
+| Job Type | WOF | `122830003` |
+| Job Status | Allocated | `122830000` |
+| Job Status | Unallocated | `122830001` |
+| Job Status | Waiting for parts | `122830002` |
+| Job Status | Complete | `122830003` |
+| Job Status | Review | `122830004` |
+| Job Status | Unconfirmed | `122830005` |
+| Job Card Status | Not sent | `122830000` |
+| Job Card Status | Sent | `122830001` |
+| Job Card Status | Submitted | `122830002` |
+| Job Card Status | Closed | `122830003` |
+
+Dataverse labels Job Status `122830004` as **Review**. Current application code labels the
+same value **Completion Review**. Site Checks will continue using the numeric contract and
+must not silently rename this existing application label; reconciliation is a separate
+product/documentation decision.
+
+## Confirmed table: Site Check Schedule
+
+| Property | Confirmed value |
+| --- | --- |
+| Display name | Site Check Schedule |
+| Schema name | `gr_SiteCheckSchedule` |
+| Logical name | `gr_sitecheckschedule` |
+| Entity set | `gr_sitecheckschedules` |
+| Ownership | Organisation-owned |
+| Primary ID | `gr_sitecheckscheduleid` |
+| Primary name | `gr_name` |
+| Activity | No |
+
+### Confirmed columns
+
+| Display name | Confirmed schema/logical name | Type | Required/default | Purpose and constraints |
+| --- | --- | --- | --- | --- |
+| Name | `gr_Name` / `gr_name` | Text 200 | Required | Generated display label; not a business key |
+| Site | `gr_Site` / `gr_site` | Lookup → Site | Required | One schedule per Site; alternate-key member |
+| Enabled | `gr_Enabled` / `gr_enabled` | Yes/No | Required; No | Authoritative participation flag |
+| Frequency | `gr_Frequency` / `gr_frequency` | Local Choice | Required when enabled; no default | Weekly, Fortnightly, Monthly |
+| Equipment Scope | `gr_EquipmentScope` / `gr_equipmentscope` | Local Choice | Optional; default All Equipment | All Equipment, Liftrucks Rentals Only, or Manual Selection; existing null values are interpreted as All Equipment |
+| Next Due Date | `gr_NextDueDate` / `gr_nextduedate` | Date Only | Required when enabled | Indexed reporting boundary |
+| Last Completed Date | `gr_LastCompletedDate` / `gr_lastcompleteddate` | Date Only | Optional | Written by rollover only |
+| Active Site Check | `gr_ActiveSiteCheck` / `gr_activesitecheck` | Lookup → Site Check | Optional; null | ETag-guarded active lock and navigation pointer |
+
+### Confirmed keys and relationships
+
+- Alternate key `gr_sitecheckschedule_site_key` on `gr_site` enforces one schedule
+  per Site.
+- Site relationship `gr_sitecheckschedule_Site_gr_site`, navigation `gr_Site`.
+- Active relationship `gr_sitecheckschedule_ActiveSiteCheck_gr_sitecheck`,
+  navigation `gr_ActiveSiteCheck`.
+- Site delete behavior must preserve operational history; use Restrict or approved
+  Referential behavior, never cascade-delete Site Checks or Jobs.
+- Active Site Check delete behavior must not cascade. Application users cannot delete active
+  or historical occurrences in version 1.
+
+## Confirmed table: Site Check
+
+| Property | Confirmed value |
+| --- | --- |
+| Display name | Site Check |
+| Schema name | `gr_SiteCheck` |
+| Logical name | `gr_sitecheck` |
+| Entity set | `gr_sitechecks` |
+| Ownership | Organisation-owned |
+| Primary ID | `gr_sitecheckid` |
+| Primary name | `gr_name` |
+| Activity | No |
+
+### Confirmed columns
+
+| Display name | Confirmed schema/logical name | Type | Required/default | Purpose and constraints |
+| --- | --- | --- | --- | --- |
+| Name | `gr_Name` / `gr_name` | Text 200 | Required | Generated history label |
+| Schedule | `gr_SiteCheckSchedule` / `gr_sitecheckschedule` | Lookup → Site Check Schedule | Required | Recurring owner; indexed |
+| Site | `gr_Site` / `gr_site` | Lookup → Site | Required | Immutable occurrence context; must match schedule |
+| Assigned Technician | `gr_AssignedTechnician` / `gr_assignedtechnician` | Lookup → Mechanic | Required | Initial summary technician |
+| Status | `gr_Status` / `gr_status` | Local Choice | Required; In Progress | Initial values In Progress and Complete only |
+| Started On | `gr_StartedOn` / `gr_startedon` | Date and Time, User Local | Required | Creation timestamp |
+| Completed On | `gr_CompletedOn` / `gr_completedon` | Date and Time, User Local | Optional | Rollover timestamp |
+| Frequency Snapshot | `gr_FrequencySnapshot` / `gr_frequencysnapshot` | Local Choice | Required | Immutable occurrence cadence |
+| Due Date Snapshot | `gr_DueDateSnapshot` / `gr_duedatesnapshot` | Date Only | Required | Immutable due/late boundary; indexed |
+| Expected Job Count | `gr_ExpectedJobCount` / `gr_expectedjobcount` | Whole Number, min 1 | Required | Creation integrity snapshot |
+| Creation Request Key | `gr_CreationRequestKey` / `gr_creationrequestkey` | Text 100 | Required | Unique replay identifier; never displayed |
+
+### Confirmed keys and relationships
+
+- Alternate key `gr_sitecheck_creationrequestkey_key` on
+  `gr_creationrequestkey`.
+- Relationships/navigation properties:
+  - `gr_sitecheck_SiteCheckSchedule_gr_sitecheckschedule` / `gr_SiteCheckSchedule`;
+  - `gr_sitecheck_Site_gr_site` / `gr_Site`;
+  - `gr_sitecheck_AssignedTechnician_gr_mechanic` / `gr_AssignedTechnician`.
+- Schedule/Site delete does not cascade.
+- Status contains no Cancelled or Skipped value in version 1.
+
+## Confirmed Job change
+
+| Display name | Confirmed schema/logical name | Type | Required/default | Purpose |
+| --- | --- | --- | --- | --- |
+| Site Check | `gr_SiteCheck` / `gr_sitecheck` | Lookup → Site Check | Optional on Job | Required by protected Site Check creation; indexed for progress |
+
+Existing Jobs remain null and receive no backfill. The relationship must not cascade-delete
+Jobs. Generated Jobs continue using the canonical existing Site, Equipment, Mechanic, and
+any verified Customer relationship behavior.
+
+Relationship `gr_job_SiteCheck_gr_sitecheck`, navigation `gr_SiteCheck`, delete
+behavior Restrict.
+
+## Confirmed Equipment ownership extension
+
+| Display name | Confirmed schema/logical name | Type | Required/default | Purpose |
+| --- | --- | --- | --- | --- |
+| Equipment Ownership | `gr_OwnershipType` / `gr_ownershiptype` | Local Choice | Optional; null means Not classified | Explicitly distinguishes Customer-owned Equipment from Liftrucks rental Equipment |
+
+No Equipment rows were backfilled during provisioning. Existing null values remain
+**Not classified**. The application must never infer ownership from Fleet Number, Customer,
+Site, make/model, or other free text.
+
+## Confirmed table: Site Check Schedule Equipment
+
+| Property | Confirmed value |
+| --- | --- |
+| Display name | Site Check Schedule Equipment |
+| Schema name | `gr_SiteCheckScheduleEquipment` |
+| Logical name | `gr_sitecheckscheduleequipment` |
+| Entity set | `gr_sitecheckscheduleequipments` |
+| Ownership | Organisation-owned |
+| Primary ID | `gr_sitecheckscheduleequipmentid` |
+| Primary name | `gr_name` |
+| Activity | No |
+
+This table stores current Manual Selection configuration only. It is not copied into
+historical occurrences and it does not replace the parent lookup on generated Jobs.
+
+### Confirmed columns, relationships, and key
+
+| Display name | Confirmed schema/logical name | Type | Required/default | Purpose and constraints |
+| --- | --- | --- | --- | --- |
+| Name | `gr_Name` / `gr_name` | Text 200 | Required | Generated display label; not a business key |
+| Site Check Schedule | `gr_SiteCheckSchedule` / `gr_sitecheckschedule` | Lookup → Site Check Schedule | Required | Parent recurring configuration |
+| Equipment | `gr_Equipment` / `gr_equipment` | Lookup → Equipment | Required | One explicitly selected Equipment record |
+
+- Schedule relationship
+  `gr_sitecheckscheduleequipment_SiteCheckSchedule_gr_sitecheckschedule`, navigation
+  `gr_SiteCheckSchedule`, referenced navigation
+  `gr_sitecheckschedule_scheduleequipment`, delete behavior Restrict.
+- Equipment relationship `gr_sitecheckscheduleequipment_Equipment_gr_equipment`, navigation
+  `gr_Equipment`, referenced navigation `gr_equipment_sitecheckschedules`, delete behavior
+  Restrict.
+- Composite alternate key
+  `gr_sitecheckscheduleequipment_scheduleequipment_key` on
+  `gr_sitecheckschedule, gr_equipment` prevents duplicate selections. It was created and
+  structurally verified on 26 July 2026. The immediate read-only verification reported
+  Pending and the next cached verification confirmed Active.
+- No Customer or Site lookup is duplicated. Current Site membership is validated through
+  the authoritative Site Equipment query at creation time.
+
+## Confirmed Choice changes
+
+| Choice | Options | Numeric values |
+| --- | --- | --- |
+| Site Check Frequency (local) | Weekly `122830000`; Fortnightly `122830001`; Monthly `122830002` | Provisioned and verified |
+| Site Check Status (local) | In Progress `122830000`; Complete `122830001` | Provisioned and verified |
+| Equipment Ownership (local on Equipment) | Customer Owned `122830000`; Liftrucks Rental `122830001`; null is Not classified | Provisioned and verified |
+| Site Check Equipment Scope (local on Schedule) | All Equipment `122830000`; Liftrucks Rentals Only `122830001`; Manual Selection `122830002`; existing null is treated as All Equipment | Provisioned and structurally verified |
+| Existing global Job Type | Site Check `122830004` | Provisioned and verified |
+
+The provisioning tool inserts/verifies labels and values idempotently and reads them back
+after publish. Application constants use this verified result.
+
+## Indexes, alternate keys, and query support
+
+- Schedule: alternate key on Site; index/query support for Enabled + Next Due Date and Active
+  Site Check.
+- Site Check: alternate key on Creation Request Key; indexes/query support for Schedule,
+  Site, Status, Due Date Snapshot, and Assigned Technician.
+- Job: index/query support for Site Check lookup and operational Job Status.
+- Site Check Schedule Equipment: composite alternate key on Schedule + Equipment; query
+  selections by Schedule and intersect with current Site Equipment at run time.
+- Provisioning must verify alternate-key status reaches Active before dependent application
+  code is released.
+
+Dataverse-managed index details are verified from alternate-key/metadata state where exposed;
+the application must use lookup GUIDs and typed Choice values, never display text.
+
+Microsoft documents Lookup columns as valid alternate-key members and permits up to 1,000
+individual requests in a Web API batch. The largest observed Site needs 24 change-set
+operations (one Site Check create, one schedule lock update, and 22 Job creates), leaving
+substantial operation-count headroom. Phase 4 must still measure the constructed payload and
+fail safely if it exceeds the verified request-size boundary.
+
+References:
+
+- [Define alternate keys in Dataverse](https://learn.microsoft.com/en-us/power-apps/maker/data-platform/define-alternate-keys-reference-records)
+- [Execute Web API batch operations](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/execute-batch-operations-using-web-api)
+
+## Security proposal
+
+Exact role names and privileges require approval:
+
+- Operational readers: read schedules and Site Checks.
+- Site Check managers: create/update schedules; create Site Checks and generated Jobs; read
+  Site, Equipment, and Mechanic.
+- Completion-capable users: update generated Job Status and the constrained Site
+  Check/Schedule rollover fields.
+- No version 1 role receives Site Check delete through the application workflow.
+
+If field-level constrained rollover cannot be expressed safely with existing user roles,
+stop for an authenticated server-workflow decision rather than grant broad privileges.
+
+The combined schema tool now includes read-only `AuditSecurity` mode. It uses one cached
+connection, retrieves no user names, and reports only unmanaged roles assigned to enabled
+human users plus relevant privilege depths. Its first invocation on 26 July 2026 connected
+without a prompt and performed no writes, but report formatting stopped on a single-object
+PowerShell array edge case. After explicit approval, the corrected retry completed with one
+cached connection, no prompt, no user identities, and no writes.
+
+### Security audit result — 26 July 2026
+
+- The cached connection has Basic User and System Administrator; this was used only to
+  perform the audit.
+- One unmanaged role is actively assigned to enabled human users: `Service Operations`
+  (`3da914a0-cc84-f111-ab0e-7ced8d3278bf`).
+- Service Operations already has global Create/Read/Write/Append/Append To access for Job,
+  Site, Equipment, and Mechanic (and broader existing privileges not changed here).
+- It has no Site Check Schedule or Site Check privileges.
+- No separate actively assigned unmanaged manager role exists, so version 1 cannot express a
+  narrower manager cohort without creating a new role and making explicit user assignments.
+
+Recommended version 1 delta is to add only organisation-depth Create, Read, Write, Append,
+and Append To for `gr_sitecheckschedule` and `gr_sitecheck` to Service Operations. Do not add
+Delete, Assign, or Share. Existing target-table privileges already support the required
+lookups and generated Job workflow.
+
+After explicit approval, `ProvisionSecurity` ran once on 26 July 2026 using one cached
+connection with no prompt. It added the ten grants and verified every grant at organisation
+depth in the same invocation. It did not add Delete, Assign, or Share and made no user
+assignment changes. The mode remains idempotent for future verification/recovery.
+
+## Migration and data preservation
+
+- No Site is enabled automatically.
+- No schedule or Site Check history is fabricated.
+- No historical Job is reclassified or linked.
+- No existing Equipment ownership value is fabricated or backfilled.
+- Existing Schedule Equipment Scope nulls retain the prior All Equipment behavior.
+- No manual selection rows are backfilled. Existing Schedules therefore retain their prior
+  All Equipment or Liftrucks Rentals Only behavior.
+- New Job lookup is nullable.
+- Disabling preserves all records.
+- Relationship behavior is explicitly non-cascading for operational history.
+- Rollback removes application exposure but retains provisioned schema and data.
+
+## Provisioning gate
+
+Before Provision mode is run:
+
+- [x] Complete the single approved live inspection.
+- [x] Record exact existing metadata and Choice values above.
+- [x] Approve all product decisions listed in the implementation tracker.
+- [x] Approve exact proposed schema, lookup/navigation names, Choice values, keys, ownership,
+  and migration approach.
+- [x] Confirm operation-count headroom against the largest Site.
+- [x] Audit, approve, provision, and verify the exact security-role privilege changes.
+- [x] Measure the constructed creation payload before Phase 4 release: the representative
+  22-Equipment change set is 24 operations and 15,820 UTF-8 bytes, below the application
+  4 MiB safety guard and the documented 1,000-operation limit.
+- [x] Obtain explicit permission to modify Dataverse.
+
+The original approved schema has been provisioned, its two alternate keys are Active, and
+its approved Service Operations security privileges have been provisioned and verified.
+The separately approved Manual Selection schema is provisioned and its composite key is
+Active. A read-only audit initially confirmed Service Operations had no selection-table
+privileges. After separate explicit approval, the tool added and verified organisation-depth
+Create, Read, Delete, Append, and Append To for `gr_sitecheckscheduleequipment`. It did not
+add Write, Assign, or Share and made no user-assignment changes.

@@ -197,6 +197,7 @@ export function bulkEquipmentRowInput(
         powerType: POWER_TYPES.OTHER_UNKNOWN,
         serviceProgramme: SERVICE_PROGRAMMES.ICE_STANDARD,
         maintenanceProfile: MAINTENANCE_PROFILES.STANDARD,
+        ownershipType: null,
         customAEnabled: true,
         customBEnabled: false,
         customCEnabled: true,

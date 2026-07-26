@@ -251,14 +251,15 @@ export default function JobsScreen() {
                             value={draftDefaultView.selectedJobType}
                             onChange={(event) => setDraftDefaultView((current) => ({
                                 ...current,
-                                selectedJobType: event.target.value === 'all' || event.target.value === 'unconfirmed'
+                                selectedJobType: event.target.value === 'all' || event.target.value === 'operational' || event.target.value === 'unconfirmed'
                                     ? event.target.value
                                     : Number(event.target.value) as JobsDefaultView['selectedJobType'],
                             }))}
                         >
-                            <option value="all">All jobs</option>
+                            <option value="operational">Operational</option>
                             {JOB_TYPE_OPTIONS.map((jobType) => <option key={jobType.value} value={jobType.value}>{jobType.label}</option>)}
                             <option value="unconfirmed">Unconfirmed</option>
+                            <option value="all">All jobs (unfiltered)</option>
                         </select>
                     </label>
                     <label className="jobs-default-tab">

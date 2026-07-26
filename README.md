@@ -30,6 +30,7 @@ Common starting points:
 - [Technician Job Card Submission](docs/architecture/technician-job-submission.md)
 - [Equipment and maintenance](docs/architecture/equipment.md)
 - [Customer Dashboard](docs/architecture/customer-dashboard.md)
+- [Site Checks release tracker](docs/features/SITE_CHECKS_IMPLEMENTATION_PLAN.md)
 - [Scheduler](docs/architecture/scheduler.md)
 - [WOF/REGO](docs/architecture/wof.md)
 - [Reusable components](docs/architecture/reusable-components.md)

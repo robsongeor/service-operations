@@ -1,9 +1,10 @@
-import { JOB_STATUSES, type JobStatus } from './jobStatus.types'
-import { JOB_TYPES, type JobTypeFilter } from './jobType.types'
-import type { JobsDefaultView } from './jobsDefaultView.types'
+import { JOB_STATUSES, type JobStatus } from './jobStatus.types.ts'
+import { JOB_TYPES, type JobTypeFilter } from './jobType.types.ts'
+import type { JobsDefaultView } from './jobsDefaultView.types.ts'
 
 export const LEGACY_JOBS_VIEW_STATE_KEY = 'service-operations.jobs-view-state.v1'
-export const JOBS_VIEW_STATE_KEY_PREFIX = 'service-operations.jobs-view-state.v2'
+export const LEGACY_SCOPED_JOBS_VIEW_STATE_KEY_PREFIX = 'service-operations.jobs-view-state.v2'
+export const JOBS_VIEW_STATE_KEY_PREFIX = 'service-operations.jobs-view-state.v3'
 
 export type ScheduledJobsVisibility = 'all' | 'today' | 'today-tomorrow' | 'this-week'
 export type JobsSortColumn = 'created' | 'status' | 'customer' | 'mechanic'
@@ -25,7 +26,7 @@ const jobTypes = new Set<number>(Object.values(JOB_TYPES))
 
 export const DEFAULT_JOBS_VIEW_STATE: JobsViewState = {
     visibleStatuses: Object.values(JOB_STATUSES),
-    selectedJobType: 'all',
+    selectedJobType: 'operational',
     officeAttentionFilter: 'all',
     searchText: '',
     scheduledJobsVisibility: 'all',
@@ -45,6 +46,7 @@ function parseJobsViewState(raw: string | null): JobsViewState | null {
             ? value.visibleStatuses.filter((status): status is JobStatus => typeof status === 'number' && jobStatuses.has(status))
             : DEFAULT_JOBS_VIEW_STATE.visibleStatuses
         const selectedJobType = value.selectedJobType === 'all'
+            || value.selectedJobType === 'operational'
             || value.selectedJobType === 'unconfirmed'
             || (typeof value.selectedJobType === 'number' && jobTypes.has(value.selectedJobType))
             ? value.selectedJobType as JobTypeFilter
@@ -94,10 +96,25 @@ export function restoreJobsViewState(storageKey: string, migrateLegacy = false):
         if (scopedValue !== null) return parseJobsViewState(scopedValue)
 
         if (migrateLegacy) {
+            const storageId = storageKey.slice(`${JOBS_VIEW_STATE_KEY_PREFIX}.`.length)
+            const legacyScopedKey = `${LEGACY_SCOPED_JOBS_VIEW_STATE_KEY_PREFIX}.${storageId}`
+            const legacyScopedValue = sessionStorage.getItem(legacyScopedKey)
+            if (legacyScopedValue !== null) {
+                const migratedState = parseJobsViewState(legacyScopedValue)
+                if (migratedState) {
+                    if (migratedState.selectedJobType === 'all') migratedState.selectedJobType = 'operational'
+                    sessionStorage.setItem(storageKey, JSON.stringify(migratedState))
+                }
+                sessionStorage.removeItem(legacyScopedKey)
+                return migratedState
+            }
             const legacyValue = sessionStorage.getItem(LEGACY_JOBS_VIEW_STATE_KEY)
             if (legacyValue !== null) {
                 const migratedState = parseJobsViewState(legacyValue)
-                if (migratedState) sessionStorage.setItem(storageKey, JSON.stringify(migratedState))
+                if (migratedState) {
+                    if (migratedState.selectedJobType === 'all') migratedState.selectedJobType = 'operational'
+                    sessionStorage.setItem(storageKey, JSON.stringify(migratedState))
+                }
                 sessionStorage.removeItem(LEGACY_JOBS_VIEW_STATE_KEY)
                 return migratedState
             }

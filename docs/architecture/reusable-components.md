@@ -8,14 +8,14 @@ because a similar visual pattern appears in more than one feature.
 
 | Component | Location | Use |
 | --- | --- | --- |
-| `EditDrawerShell` | `src/alpha/shared/drawer/EditDrawerShell.tsx` | Standard right-hand drawer layout, header, loading state, actions, and close behaviour. |
+| `EditDrawerShell` | `src/alpha/shared/drawer/EditDrawerShell.tsx` | Standard right-hand drawer layout, unique accessible title, initial dialog focus, Escape close, contained Tab navigation, header, loading state, actions, and close behaviour. |
 | `EditDrawerSection` | `src/alpha/shared/drawer/EditDrawerSection.tsx` | Consistent grouping and spacing inside drawers. |
 | `EditDrawerConfirmation` | `src/alpha/shared/drawer/EditDrawerConfirmation.tsx` | Confirmation within drawer workflows, including destructive or consequential actions. |
 | `EditDrawerFormDialog` | `src/alpha/shared/drawer/EditDrawerFormDialog.tsx` | Small supporting form dialog opened from a drawer. |
 | `DrawerTabs` | `src/alpha/shared/drawer/DrawerTabs.tsx` | Accessible, responsive drawer tab navigation with active and validation-error states. |
 | `SearchableSelect` | `src/alpha/shared/searchable-select/SearchableSelect.tsx` | Searchable, keyboard-accessible selection. Supports single selection and optional backward-compatible multi-selection. Consumers own selected-item summaries and removal UI. |
 | `FormSwitch` | `src/alpha/shared/form-switch/FormSwitch.tsx` | Compact accessible boolean switch with visible state text, keyboard behavior, disabled state, and focus styling. |
-| `MetricStrip` | `src/alpha/shared/metric-strip/MetricStrip.tsx` | Compact, wrapping dashboard summary of semantic label/value pairs with optional warning and danger emphasis. |
+| `MetricStrip` | `src/alpha/shared/metric-strip/MetricStrip.tsx` | Compact, wrapping dashboard summary of semantic label/value pairs with optional warning/danger emphasis and optional keyboard-accessible value activation for feature-owned filtering. |
 | `PageHeader` | `src/alpha/shared/page-header/PageHeader.tsx` | Standard sticky management-page header with optional eyebrow, subtitle, and responsive action area. |
 
 Use the shared drawer CSS and interaction patterns with these components. Feature state,
@@ -55,7 +55,7 @@ Business rules must have one owner even when several screens display the result.
 | Maintenance configuration | `src/alpha/equipment/servicePlans/maintenanceConfiguration.ts` | Maintenance configuration rules. |
 | Service-plan calculations | `src/alpha/equipment/servicePlans/servicePlanCalculations.ts` | Service-plan calculations. |
 | Service-plan status | `src/alpha/equipment/servicePlans/servicePlanStatus.ts` | Maintenance/service-plan status derivation. |
-| Job completion | `src/alpha/jobs/completion/` | Job completion orchestration and completion-side effects. |
+| Job completion | `src/alpha/jobs/completion/` and `src/alpha/site-checks/services/siteCheckCompletionApi.ts` | Job-type-owned completion orchestration and atomic completion-side effects, reached through `useJobs`. |
 | Equipment CSV tools | `src/alpha/equipment/utils/equipmentCsv.ts` | Admin authorization, UTF-8 CSV serialization/parsing, stable-ID matching, blank-safe comparison, and staged Equipment change review. |
 
 Use feature hooks and services for loading and mutations. Components render values and raise

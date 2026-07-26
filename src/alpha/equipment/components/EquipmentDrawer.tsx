@@ -24,6 +24,10 @@ import {
     getEquipmentComplianceStatus,
 } from '../compliance/equipmentCompliance'
 import { currentNewZealandDateOnly } from '../../shared/dates/dateOnly'
+import {
+    EQUIPMENT_OWNERSHIP_OPTIONS,
+    type EquipmentOwnershipType,
+} from '../types/equipmentOwnership.types'
 
 type SharedProps = {
     customers: Customer[]
@@ -106,6 +110,7 @@ export default function EquipmentDrawer(props: Props) {
             ?? initialValues?.maintenanceProfile
             ?? initialSite?.gr_defaultmaintenanceprofile
             ?? MAINTENANCE_PROFILES.STANDARD,
+        ownershipType: equipment?.gr_ownershiptype ?? initialValues?.ownershipType ?? null,
         customAEnabled: equipment?.gr_customaenabled ?? initialValues?.customAEnabled ?? true,
         customBEnabled: equipment?.gr_custombenabled ?? initialValues?.customBEnabled ?? false,
         customCEnabled: equipment?.gr_customcenabled ?? initialValues?.customCEnabled ?? true,
@@ -563,7 +568,7 @@ export default function EquipmentDrawer(props: Props) {
         }
     }
 
-    const updateField = (field: keyof EquipmentUpdateInput, value: string | boolean | number) => {
+    const updateField = (field: keyof EquipmentUpdateInput, value: string | boolean | number | null) => {
         setForm((current) => ({ ...current, [field]: value }))
         if (formError) setFormError('')
     }
@@ -648,6 +653,23 @@ export default function EquipmentDrawer(props: Props) {
                             <label>Serial number<input value={form.serial} onChange={(event) => updateField('serial', event.target.value)} /></label>
                             <label>Make<input value={form.make} onChange={(event) => updateField('make', event.target.value)} /></label>
                             <label>Model<input value={form.model} onChange={(event) => updateField('model', event.target.value)} /></label>
+                            <label>
+                                Equipment Ownership
+                                <select
+                                    value={form.ownershipType ?? ''}
+                                    onChange={(event) => updateField(
+                                        'ownershipType',
+                                        event.target.value
+                                            ? Number(event.target.value) as EquipmentOwnershipType
+                                            : null,
+                                    )}
+                                >
+                                    <option value="">Not classified</option>
+                                    {EQUIPMENT_OWNERSHIP_OPTIONS.map((option) =>
+                                        <option key={option.value} value={option.value}>{option.label}</option>,
+                                    )}
+                                </select>
+                            </label>
                             {isCreate && <><label>Power Type<select value={form.powerType} onChange={(event) => {
                                 const powerType = Number(event.target.value) as PowerType
                                 setForm((current) => ({ ...current, powerType, serviceProgramme: current.serviceProgramme === SERVICE_PROGRAMMES.CUSTOM ? current.serviceProgramme : powerType === POWER_TYPES.ELECTRIC ? SERVICE_PROGRAMMES.ELECTRIC_STANDARD : SERVICE_PROGRAMMES.ICE_STANDARD }))

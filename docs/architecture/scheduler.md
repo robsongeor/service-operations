@@ -26,10 +26,15 @@ state as changes made from Jobs.
 ## Important Business Rules
 
 - Unconfirmed Jobs are not schedulable.
+- Site Check Jobs are not schedulable.
 - Schedule options are durable child records, not fields copied onto the Job.
 - Removing or invalidating allocation must coordinate with affected schedule records.
 - Scheduling does not change Job Card state or imply operational completion.
 - Service completion started from Scheduler uses the shared completion workflow.
+- Jobs owns `jobIsSchedulerEligible`; Scheduler projection and schedule create/confirm/update
+  validation use that same rule. Scheduler type tabs omit Site Check. Historical Site Check
+  schedule options remain stored but hidden and are counted for non-destructive review;
+  cleanup requires separate approval.
 
 ## Extension Points
 

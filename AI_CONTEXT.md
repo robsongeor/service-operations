@@ -62,6 +62,11 @@ writes.
 
 - Office users use MSAL delegated Dataverse access.
 - Resolve the active account through shared auth helpers; never select by cached-array order.
+- Reuse silent MSAL token acquisition and pass one token through a coordinated load or
+  mutation. Feature rendering, background refresh, and retry loops never initiate an
+  interactive sign-in; interaction-required errors expose one explicit user action.
+- Batch and deduplicate Dataverse reads, reuse one authenticated connection for administrative
+  workflows, and avoid repeated metadata or `WhoAmI` requests within the same operation.
 - Public portal workflows use a separate confidential Entra registration and least-
   privilege Dataverse Application User.
 - Validate authenticated server actions with Dataverse `WhoAmI`.

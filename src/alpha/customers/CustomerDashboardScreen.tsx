@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
 import { getSignedInUserInfo } from '../../auth/signedInUser'
@@ -33,6 +33,13 @@ import MetricStrip, { type MetricStripItem } from '../shared/metric-strip/Metric
 import PageHeader from '../shared/page-header/PageHeader'
 import PageSettingsButton from '../shared/settings/PageSettingsButton'
 import { formatWofDateOnly, getWofDueStatus } from '../wof/utils/wofRules'
+import { useSiteChecks } from '../site-checks/hooks/useSiteChecks'
+import { buildSiteCheckDashboardProjection, type ReportableSiteCheckState } from '../site-checks/domain/siteCheckDashboard'
+import { SITE_CHECK_FREQUENCY_OPTIONS } from '../site-checks/types/siteCheck.types'
+import { currentNewZealandDateOnly } from '../shared/dates/dateOnly'
+import RunSiteCheckDrawer from '../site-checks/components/RunSiteCheckDrawer'
+import SiteCheckDetailsDrawer from '../site-checks/components/SiteCheckDetailsDrawer'
+import type { SiteCheck } from '../site-checks/types/siteCheck.types'
 import './CustomerDashboardScreen.css'
 
 const dateFormatter = new Intl.DateTimeFormat('en-NZ', { dateStyle: 'medium' })
@@ -40,6 +47,7 @@ const CUSTOMER_DASHBOARD_AUTO_EXPAND_SITE_LIMIT = 2
 const CUSTOMER_DASHBOARD_AUTO_EXPAND_EQUIPMENT_LIMIT = 10
 type SiteEquipmentSortKey = 'fleet' | 'wofExpiry' | 'dataStatus'
 type SiteEquipmentSort = { key: SiteEquipmentSortKey; direction: 'asc' | 'desc' }
+type SiteCheckDashboardFilter = ReportableSiteCheckState | 'all'
 const DEFAULT_SITE_EQUIPMENT_SORT: SiteEquipmentSort = { key: 'fleet', direction: 'asc' }
 
 function display(value?: string | number | null) {
@@ -131,6 +139,17 @@ export default function CustomerDashboardScreen() {
     const [siteSuccess, setSiteSuccess] = useState('')
     const [localCustomers, setLocalCustomers] = useState<Customer[]>([])
     const [customerDrafts, setCustomerDrafts] = useState<Record<string, CustomerDraft>>({})
+    const [siteCheckFilter, setSiteCheckFilter] = useState<SiteCheckDashboardFilter>('all')
+    const [runSiteCheckSite, setRunSiteCheckSite] = useState<Site | null>(null)
+    const [siteCheckDetails, setSiteCheckDetails] = useState<{
+        site: Site
+        check?: SiteCheck | null
+        tab: 'summary' | 'jobs' | 'history'
+    } | null>(null)
+    const siteCheckNestedTriggerRef = useRef<HTMLButtonElement | null>(null)
+    const siteCheckDetailsTriggerRef = useRef<HTMLButtonElement | null>(null)
+    const siteSettingsTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+    const sitesHeadingRef = useRef<HTMLHeadingElement>(null)
 
     const allCustomers = useMemo(() => [...customers, ...localCustomers].map((customer) => ({
         ...customer,
@@ -160,6 +179,39 @@ export default function CustomerDashboardScreen() {
     const customerSites = allSites
         .filter((site) => site.gr_Customer?.gr_customerid === selectedCustomerId)
         .sort((a, b) => a.gr_name.localeCompare(b.gr_name))
+    const persistedCustomerSiteIds = customerSites
+        .filter((site) => !site.gr_siteid.startsWith('prototype-site-'))
+        .map((site) => site.gr_siteid)
+    const siteChecks = useSiteChecks(persistedCustomerSiteIds)
+    const siteCheckDashboard = buildSiteCheckDashboardProjection({
+        schedules: siteChecks.schedules,
+        siteChecks: siteChecks.siteChecks,
+        jobs: siteChecks.jobs,
+        today: currentNewZealandDateOnly(),
+    })
+    const siteCheckBySite = new Map(siteCheckDashboard.items.map((item) => [item.siteId, item]))
+    const visibleCustomerSites = siteCheckFilter === 'all'
+        ? customerSites
+        : customerSites.filter((site) =>
+            siteCheckBySite.get(site.gr_siteid.toLowerCase())?.state === siteCheckFilter)
+    const applySiteCheckFilter = (filter: ReportableSiteCheckState) => {
+        const nextFilter = siteCheckFilter === filter ? 'all' : filter
+        setActiveTab('sites')
+        setSiteCheckFilter(nextFilter)
+        if (nextFilter !== 'all') {
+            const matchingSiteIds = customerSites
+                .filter((site) => siteCheckBySite.get(site.gr_siteid.toLowerCase())?.state === nextFilter)
+                .map((site) => site.gr_siteid)
+            setExpandedSitesByCustomer((current) => ({
+                ...current,
+                [selectedCustomerId]: {
+                    ...current[selectedCustomerId],
+                    ...Object.fromEntries(matchingSiteIds.map((siteId) => [siteId, true])),
+                },
+            }))
+        }
+        window.setTimeout(() => sitesHeadingRef.current?.focus(), 0)
+    }
     const selectedCustomerDraft = customerDrafts[selectedCustomerId]
     const customerContacts: CustomerContact[] = [
         ...(selectedCustomerDraft?.accountsContact ? [{
@@ -242,6 +294,32 @@ export default function CustomerDashboardScreen() {
         { label: 'Sites', value: customerSites.length },
         { label: 'Equipment', value: customerEquipment.length },
         { label: 'Open Jobs', value: openJobs.length },
+        {
+            label: 'Checks Up to date',
+            value: siteCheckDashboard.summary['up-to-date'],
+            active: siteCheckFilter === 'up-to-date',
+            onActivate: () => applySiteCheckFilter('up-to-date'),
+        },
+        {
+            label: 'Checks Due',
+            value: siteCheckDashboard.summary.due,
+            tone: 'warning',
+            active: siteCheckFilter === 'due',
+            onActivate: () => applySiteCheckFilter('due'),
+        },
+        {
+            label: 'Checks Overdue',
+            value: siteCheckDashboard.summary.overdue,
+            tone: 'danger',
+            active: siteCheckFilter === 'overdue',
+            onActivate: () => applySiteCheckFilter('overdue'),
+        },
+        {
+            label: 'Checks In progress',
+            value: siteCheckDashboard.summary['in-progress'],
+            active: siteCheckFilter === 'in-progress',
+            onActivate: () => applySiteCheckFilter('in-progress'),
+        },
         { label: 'Services Due Soon', value: maintenanceCounts.dueSoon, tone: 'warning' },
         { label: 'Overdue Services', value: maintenanceCounts.overdue, tone: 'danger' },
         { label: 'WOF Current', value: roadComplianceCounts.current },
@@ -439,7 +517,7 @@ export default function CustomerDashboardScreen() {
                 <div className="customer-section-heading">
                     <div>
                         <span>Current section</span>
-                        <h3>Sites and Equipment</h3>
+                        <h3 ref={sitesHeadingRef} tabIndex={-1}>Sites and Equipment</h3>
                     </div>
                     <div className="customer-site-expand-actions">
                         {customerSites.length > 1 && <>
@@ -450,12 +528,35 @@ export default function CustomerDashboardScreen() {
                     </div>
                 </div>
 
-                {customerSites.length === 0 ? <div className="customer-dashboard-empty compact">No sites have been recorded for this customer yet.</div> : customerSites.map((site) => {
+                <div className="customer-site-check-feedback" aria-live="polite">
+                    {siteChecks.isLoading
+                        ? 'Loading Site Check status…'
+                        : siteChecks.loadError
+                            ? `Site Check status is unavailable. ${siteChecks.loadError}`
+                            : siteCheckFilter !== 'all'
+                                ? <span>Showing {visibleCustomerSites.length} {siteCheckFilter.replaceAll('-', ' ')} Site{visibleCustomerSites.length === 1 ? '' : 's'}. <button type="button" onClick={() => setSiteCheckFilter('all')}>Clear filter</button></span>
+                                : siteCheckDashboard.invalidCount > 0
+                                    ? `${siteCheckDashboard.invalidCount} enabled Site Check Schedule${siteCheckDashboard.invalidCount === 1 ? ' is' : 's are'} incomplete and excluded from the summary.`
+                                    : ''}
+                </div>
+
+                {customerSites.length === 0 ? <div className="customer-dashboard-empty compact">No sites have been recorded for this customer yet.</div>
+                    : visibleCustomerSites.length === 0 ? <div className="customer-dashboard-empty compact">No Sites match this Site Check filter.</div>
+                        : visibleCustomerSites.map((site) => {
                     const rows = equipmentForSite(site)
                     const equipmentSort = equipmentSortBySite[site.gr_siteid] ?? DEFAULT_SITE_EQUIPMENT_SORT
                     const operatingHours = customerDrafts[selectedCustomer.gr_customerid]?.sites.find((item) => item.id === site.gr_siteid)?.operatingHours
                     const expanded = siteIsExpanded(site.gr_siteid)
                     const equipmentRegionId = `customer-site-equipment-${site.gr_siteid}`
+                    const siteCheck = siteCheckBySite.get(site.gr_siteid.toLowerCase())
+                    const frequency = SITE_CHECK_FREQUENCY_OPTIONS.find(
+                        (option) => option.value === siteCheck?.schedule.gr_frequency,
+                    )?.label
+                    const technician = siteCheck?.activeSiteCheck
+                        ? mechanics.find((item) =>
+                            item.gr_mechanicid.toLowerCase()
+                            === siteCheck.activeSiteCheck?._gr_assignedtechnician_value.toLowerCase())
+                        : undefined
                     return <article className="customer-site-card" key={site.gr_siteid}>
                         <header onClick={() => setSiteExpanded(site.gr_siteid, !expanded)}>
                             <button
@@ -474,10 +575,56 @@ export default function CustomerDashboardScreen() {
                                 <span className="customer-site-heading"><span><strong>{site.gr_name || 'Unnamed Site'}</strong><small>{site.gr_address || 'No address recorded'}</small></span></span>
                                 <span className="customer-site-header-summary">
                                     <span><small>Operating hours</small><strong>{operatingHours || 'Not recorded'}</strong></span>
+                                    {siteCheck?.schedule.gr_enabled && <span className="customer-site-check-summary" data-state={siteCheck.state}>
+                                        <small>Site Check</small>
+                                        <strong>{siteCheck.state === 'in-progress'
+                                            ? `${siteCheck.progress?.completed ?? 0}/${siteCheck.progress?.total ?? 0} complete`
+                                            : siteCheck.state === 'invalid'
+                                                ? 'Schedule incomplete'
+                                                : siteCheck.state.replaceAll('-', ' ')}</strong>
+                                        <small>{siteCheck.state === 'in-progress'
+                                            ? `${technician?.gr_name ?? 'Technician unavailable'} · ${siteCheck.progress?.remaining ?? 0} remaining`
+                                            : `${frequency ?? 'Frequency unavailable'} · ${formatWofDateOnly(siteCheck.schedule.gr_nextduedate) || 'No due date'}`}</small>
+                                    </span>}
                                     <span>{rows.length} Equipment</span>
                                 </span>
                             </button>
                             <div className="customer-site-meta" onClick={(event) => event.stopPropagation()}>
+                                {(siteCheck?.state === 'due' || siteCheck?.state === 'overdue') && <button
+                                    type="button"
+                                    onClick={() => {
+                                        siteChecks.clearStartError()
+                                        setRunSiteCheckSite(site)
+                                    }}
+                                >
+                                    Run Site Check
+                                </button>}
+                                {siteCheck?.state === 'in-progress' && siteCheck.activeSiteCheck && <button
+                                    type="button"
+                                    onClick={(event) => {
+                                        siteCheckDetailsTriggerRef.current = event.currentTarget
+                                        setSiteCheckDetails({
+                                            site,
+                                            check: siteCheck.activeSiteCheck,
+                                            tab: 'summary',
+                                        })
+                                    }}
+                                >
+                                    View Current Site Check
+                                </button>}
+                                {siteCheck?.schedule && <button
+                                    type="button"
+                                    onClick={(event) => {
+                                        siteCheckDetailsTriggerRef.current = event.currentTarget
+                                        setSiteCheckDetails({
+                                            site,
+                                            check: siteCheck.activeSiteCheck,
+                                            tab: 'history',
+                                        })
+                                    }}
+                                >
+                                    Site Check History
+                                </button>}
                                 <button
                                     type="button"
                                     disabled={site.gr_siteid.startsWith('prototype-site-') || selectedCustomer.gr_customerid.startsWith('prototype-customer-')}
@@ -499,6 +646,9 @@ export default function CustomerDashboardScreen() {
                                 {!site.gr_siteid.startsWith('prototype-site-')
                                     && !selectedCustomer.gr_customerid.startsWith('prototype-customer-')
                                     && <PageSettingsButton
+                                        ref={(element) => {
+                                            siteSettingsTriggerRefs.current[site.gr_siteid] = element
+                                        }}
                                         title="Site settings"
                                         ariaLabel={`Site settings for ${site.gr_name}`}
                                         onClick={() => {
@@ -641,6 +791,39 @@ export default function CustomerDashboardScreen() {
             </section>}
         </>}
 
+        {siteCheckDetails && selectedCustomer && <SiteCheckDetailsDrawer
+            key={`${siteCheckDetails.site.gr_siteid}-${siteCheckDetails.check?.gr_sitecheckid ?? 'history'}`}
+            customerName={selectedCustomer.gr_name}
+            siteName={siteCheckDetails.site.gr_name}
+            siteId={siteCheckDetails.site.gr_siteid}
+            initialSiteCheck={siteCheckDetails.check}
+            initialTab={siteCheckDetails.tab}
+            technicianName={(id) => mechanics.find(
+                (mechanic) => mechanic.gr_mechanicid.toLowerCase() === id.toLowerCase(),
+            )?.gr_name ?? 'Technician unavailable'}
+            loadHistoryPage={siteChecks.loadHistoryPage}
+            loadJobsPage={siteChecks.loadDetailJobsPage}
+            onOpenJob={(jobId, trigger) => {
+                const job = operationalJobs.find((item) => item.gr_jobid.toLowerCase() === jobId.toLowerCase())
+                if (!job) return
+                siteCheckNestedTriggerRef.current = trigger
+                setEditingJob(job)
+            }}
+            onOpenEquipment={(equipmentId, trigger) => {
+                const record = equipment.find((item) => item.gr_equipmentid.toLowerCase() === equipmentId.toLowerCase())
+                if (!record) return
+                siteCheckNestedTriggerRef.current = trigger
+                setEditingEquipment(record)
+            }}
+            onClose={() => {
+                const trigger = siteCheckDetailsTriggerRef.current
+                siteCheckNestedTriggerRef.current = null
+                siteCheckDetailsTriggerRef.current = null
+                setSiteCheckDetails(null)
+                window.setTimeout(() => trigger?.focus(), 0)
+            }}
+        />}
+
         {editingEquipment && <EquipmentDrawer
             mode="edit"
             equipment={editingEquipment}
@@ -651,7 +834,12 @@ export default function CustomerDashboardScreen() {
             jobs={equipmentJobs}
             isSaving={isSaving}
             saveError={saveError}
-            onClose={() => setEditingEquipment(null)}
+            onClose={() => {
+                const trigger = siteCheckNestedTriggerRef.current
+                siteCheckNestedTriggerRef.current = null
+                setEditingEquipment(null)
+                window.setTimeout(() => trigger?.focus(), 0)
+            }}
             onSave={async (input) => { const updated = await updateEquipment(editingEquipment, input); setEditingEquipment(updated) }}
             onSaveMaintenanceHistory={async (plans, input) => { const updated = await saveEquipmentMaintenanceHistory(editingEquipment, plans, input); setEditingEquipment(updated.equipment) }}
             onCreateJob={(record) => { setEditingEquipment(null); setCreatingJobInitialValues(initialJobValuesForEquipment(record)) }}
@@ -709,23 +897,41 @@ export default function CustomerDashboardScreen() {
         />}
 
         {siteSettingsSite && selectedCustomer && <SiteSettingsDrawer
-            key={siteSettingsSite.gr_siteid}
+            key={`${siteSettingsSite.gr_siteid}-${siteChecks.isLoading
+                ? 'loading'
+                : siteChecks.schedules[0]?.gr_sitecheckscheduleid ?? 'new'}`}
             site={siteSettingsSite}
             equipment={equipmentForSite(siteSettingsSite)}
-            busy={isSaving}
+            busy={isSaving || siteChecks.isSaving}
             error={saveError}
             bulkImportAllowed={bulkImportAllowed}
+            siteCheckSchedule={siteChecks.schedules.find((schedule) =>
+                schedule._gr_site_value.toLowerCase() === siteSettingsSite.gr_siteid.toLowerCase()
+            )}
+            siteCheckSelectedEquipmentIds={siteChecks.scheduleEquipment
+                .filter((selection) => selection._gr_sitecheckschedule_value.toLowerCase()
+                    === siteChecks.schedules.find((schedule) =>
+                        schedule._gr_site_value.toLowerCase()
+                        === siteSettingsSite.gr_siteid.toLowerCase()
+                    )?.gr_sitecheckscheduleid.toLowerCase())
+                .map((selection) => selection._gr_equipment_value)}
+            siteChecksLoading={siteChecks.isLoading}
+            siteChecksSaving={siteChecks.isSaving}
+            siteChecksError={siteChecks.loadError || siteChecks.saveError}
             onSaveDetails={(name, address) => updateSites([{
                 siteId: siteSettingsSite.gr_siteid,
                 input: { name, address },
             }])}
             onSaveSettings={(profile, equipmentIds) => updateSiteMaintenanceSettings(siteSettingsSite, profile, equipmentIds)}
+            onSaveSiteChecks={async (input) => { await siteChecks.saveSchedule(input) }}
             onDetailsComplete={(name) => {
                 setSiteSuccess(`${name} updated successfully.`)
             }}
             onSettingsComplete={() => {
+                const trigger = siteSettingsTriggerRefs.current[siteSettingsSite.gr_siteid]
                 setSiteSuccess(`${siteSettingsSite.gr_name} maintenance settings updated.`)
                 setSiteSettingsSite(null)
+                window.setTimeout(() => trigger?.focus(), 0)
             }}
             onOpenBulkImport={() => {
                 setSiteExpanded(siteSettingsSite.gr_siteid, true)
@@ -733,7 +939,41 @@ export default function CustomerDashboardScreen() {
                 setBulkImportSite(siteSettingsSite)
                 setSiteSettingsSite(null)
             }}
-            onClose={() => setSiteSettingsSite(null)}
+            onClose={() => {
+                const trigger = siteSettingsTriggerRefs.current[siteSettingsSite.gr_siteid]
+                setSiteSettingsSite(null)
+                window.setTimeout(() => trigger?.focus(), 0)
+            }}
+        />}
+
+        {runSiteCheckSite && selectedCustomer && <RunSiteCheckDrawer
+            key={runSiteCheckSite.gr_siteid}
+            customerName={selectedCustomer.gr_name}
+            siteName={runSiteCheckSite.gr_name}
+            siteId={runSiteCheckSite.gr_siteid}
+            schedule={siteChecks.schedules.find((schedule) =>
+                schedule._gr_site_value.toLowerCase() === runSiteCheckSite.gr_siteid.toLowerCase()
+            )}
+            equipment={equipmentForSite(runSiteCheckSite)}
+            selectedEquipmentIds={siteChecks.scheduleEquipment
+                .filter((selection) => selection._gr_sitecheckschedule_value.toLowerCase()
+                    === siteChecks.schedules.find((schedule) =>
+                        schedule._gr_site_value.toLowerCase()
+                        === runSiteCheckSite.gr_siteid.toLowerCase()
+                    )?.gr_sitecheckscheduleid.toLowerCase())
+                .map((selection) => selection._gr_equipment_value)}
+            mechanics={mechanics}
+            busy={siteChecks.isStarting}
+            error={siteChecks.startError}
+            onStart={siteChecks.startSiteCheck}
+            onComplete={(created) => {
+                setSiteSuccess(`${created.gr_name} started successfully.`)
+                setSiteCheckDetails({ site: runSiteCheckSite, check: created, tab: 'summary' })
+                setRunSiteCheckSite(null)
+            }}
+            onClose={() => {
+                if (!siteChecks.isStarting) setRunSiteCheckSite(null)
+            }}
         />}
 
         {creatingJobInitialValues && <JobCreateDrawer
@@ -787,7 +1027,12 @@ export default function CustomerDashboardScreen() {
             officeUpdates={officeUpdates.filter((update) => update.jobId.toLowerCase() === editingJob.gr_jobid.toLowerCase())}
             onCreateOfficeUpdate={createJobOfficeUpdate}
             onSaveOfficeAttention={updateJobOfficeAttention}
-            onClose={() => setEditingJob(null)}
+            onClose={() => {
+                const trigger = siteCheckNestedTriggerRef.current
+                siteCheckNestedTriggerRef.current = null
+                setEditingJob(null)
+                window.setTimeout(() => trigger?.focus(), 0)
+            }}
         />}
 
         <JobCompletionWorkflow

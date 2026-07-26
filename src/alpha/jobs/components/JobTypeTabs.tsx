@@ -6,15 +6,24 @@ type Props = {
     onChange: (jobType: JobTypeFilter) => void
     ariaLabel?: string
     includeUnconfirmed?: boolean
+    includeOperational?: boolean
+    jobTypeOptions?: typeof JOB_TYPE_OPTIONS
 }
 
-export default function JobTypeTabs({ selectedJobType, onChange, ariaLabel = 'Filter jobs by type', includeUnconfirmed = false }: Props) {
+export default function JobTypeTabs({
+    selectedJobType,
+    onChange,
+    ariaLabel = 'Filter jobs by type',
+    includeUnconfirmed = false,
+    includeOperational = true,
+    jobTypeOptions = JOB_TYPE_OPTIONS,
+}: Props) {
     return (
         <div className="job-type-tabs" role="tablist" aria-label={ariaLabel}>
-            <button type="button" role="tab" aria-selected={selectedJobType === 'all'} className={selectedJobType === 'all' ? 'job-type-tab active' : 'job-type-tab'} onClick={() => onChange('all')}>
-                All jobs
-            </button>
-            {JOB_TYPE_OPTIONS.map((jobType) => (
+            {includeOperational && <button type="button" role="tab" aria-selected={selectedJobType === 'operational'} className={selectedJobType === 'operational' ? 'job-type-tab active' : 'job-type-tab'} onClick={() => onChange('operational')}>
+                Operational
+            </button>}
+            {jobTypeOptions.map((jobType) => (
                 <button key={jobType.value} type="button" role="tab" aria-selected={selectedJobType === jobType.value} className={selectedJobType === jobType.value ? 'job-type-tab active' : 'job-type-tab'} onClick={() => onChange(jobType.value)}>
                     {jobType.label}
                 </button>
@@ -24,6 +33,9 @@ export default function JobTypeTabs({ selectedJobType, onChange, ariaLabel = 'Fi
                     Unconfirmed
                 </button>
             )}
+            <button type="button" role="tab" aria-selected={selectedJobType === 'all'} className={selectedJobType === 'all' ? 'job-type-tab active' : 'job-type-tab'} onClick={() => onChange('all')}>
+                All jobs
+            </button>
         </div>
     )
 }

@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import type { Job } from '../types/job.types'
 import type { Mechanic } from '../types/mechanic.types'
-import { getJobTypeLabel } from '../types/jobType.types'
+import { getJobTypeLabel, JOB_TYPES } from '../types/jobType.types'
 import JobTypeBadge from './JobTypeBadge'
 import JobTypeTabs from './JobTypeTabs'
 import {
@@ -134,7 +134,8 @@ export default function JobsTable({
 
     const jobsForSelectedType = useMemo(() => jobs.filter((job) => {
         if (selectedJobType === 'unconfirmed' && job.gr_status !== JOB_STATUSES.UNCONFIRMED) return false
-        if (selectedJobType !== 'all' && selectedJobType !== 'unconfirmed' && job.gr_jobtype !== selectedJobType) return false
+        if (selectedJobType === 'operational' && job.gr_jobtype === JOB_TYPES.SITE_CHECK) return false
+        if (selectedJobType !== 'all' && selectedJobType !== 'operational' && selectedJobType !== 'unconfirmed' && job.gr_jobtype !== selectedJobType) return false
         if (!jobMatchesScheduledVisibility(job.gr_jobid, scheduleOptions, scheduledJobsVisibility)) return false
         const needsAttention = jobNeedsOfficeAttention(job)
         const matchesOfficeActionFilter = officeAttentionFilter === 'all'

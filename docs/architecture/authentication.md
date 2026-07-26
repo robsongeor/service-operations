@@ -24,6 +24,27 @@ VITE_DATAVERSE_URL
 `VITE_DATAVERSE_URL` is the organisation origin without `/api/data/v9.2` or a trailing
 slash. User preferences use the resolved account storage ID.
 
+### Token acquisition and interaction rules
+
+- Feature coordinators use `acquireTokenSilent` with the account resolved by
+  `useActiveMsalAccount`.
+- A page-level load or mutation acquires once, then passes that bearer token to parallel
+  feature-service calls. Child components and individual rows never acquire tokens.
+- Concurrent callers should share an in-flight silent token promise where a common
+  coordinator is available. MSAL remains responsible for token caching and renewal; the
+  application must not add a second token cache.
+- `loginRedirect` or a popup is allowed only from an explicit sign-in/reauthenticate action.
+  Rendering, effects, background refresh, automatic retry, and Dataverse 401 handling must
+  not start interactive authentication.
+- An MSAL interaction-required result is surfaced once with a user-invoked sign-in action.
+  Repeated service failures must not create a sign-in loop.
+- Authenticated server workflows validate the caller once per server operation. Do not call
+  `WhoAmI` once per child record.
+
+These rules reduce both sign-in prompts and token/Dataverse traffic. They do not permit
+sharing tokens between users, persisting bearer tokens outside MSAL, or bypassing expiry and
+consent checks.
+
 ## Public portal service
 
 Anonymous browsers never receive Dataverse credentials. Server endpoints acquire a
@@ -45,6 +66,19 @@ registration and Dataverse Application User are documented in
 Office-only API actions, such as secure technician-link generation and Job lookup, require
 the caller's Dataverse bearer token and validate it with `WhoAmI` before acting. An
 anonymous Function trigger is not authorization by itself.
+
+## Administrative and provisioning sessions
+
+Existing schema scripts commonly create a `CrmServiceClient` with `LoginPrompt=Auto`. A
+multi-step feature must not invoke several such scripts in sequence when that would create
+separate sign-in attempts. Prefer one idempotent feature script with explicit Inspect,
+Provision, and Verify modes; one invocation creates one service connection and reuses it for
+metadata reads, writes, publish, and post-verification.
+
+Read-only inspection must be the default before provisioning. Codex must not start an
+auth-capable script for local investigation, and must obtain approval before the first live
+session. A cancelled or failed interactive sign-in is returned to the user instead of being
+automatically retried.
 
 ## Extension points
 

@@ -37,6 +37,24 @@ Feature services own OData queries, mappings, lookup bindings, and payloads. Dom
 own reusable choices, calculations, and validation. Workflows reload authoritative state
 when concurrency matters and update local state after successful mutations.
 
+Coordinators acquire one delegated token for a logical load/mutation and pass it to all
+participating services. Related reads are selected/expanded or run in parallel, duplicate
+in-flight loads are coalesced, and refreshes reload only the authoritative affected
+projection. Administrative workflows use one authenticated connection per invocation and
+batch metadata retrieval instead of reconnecting for each table or field.
+
+Site Check creation composes the canonical Job payload builder with one Dataverse change
+set: occurrence create, ETag-guarded schedule active-pointer update, and all Equipment Job
+creates. Content-ID references link the schedule and Jobs to the newly created occurrence;
+any nested failure rolls back the entire set. Creation preflight and reconciliation reuse
+one supplied delegated token. An unknown result is accepted only when the request-key
+occurrence exists, the schedule points to it, and the linked Job count equals the immutable
+expected count.
+The replay path avoids Equipment and mechanic reads after locating its request-key record;
+new-request schedule, Equipment, and mechanic preflight reads run in parallel. An active
+pointer after a negative request-key lookup is an immediate concurrent-manager conflict,
+without repeating the lookup.
+
 ## Important Business Rules
 
 - Never infer relationship truth from display text.
@@ -45,6 +63,9 @@ when concurrency matters and update local state after successful mutations.
 - A current-state field does not replace historical records.
 - Equipment Customer is derived, not duplicated.
 - Atomic workflows use ETags to reject stale changes.
+- Interactive authentication is never a Dataverse retry strategy.
+- `WhoAmI`, metadata, and record reads are not repeated per child row when one validation or
+  batched query can cover the operation.
 
 ## Extension Points
 

@@ -21,6 +21,24 @@ Use these instructions before every Service Operations task.
 Do not perform a full repository scan unless explicitly required. Preserve unrelated
 working-tree changes.
 
+## Dataverse and sign-in efficiency
+
+- Prefer confirmed schema documentation, source contracts, and existing verification output
+  before making a live Dataverse request.
+- Consolidate required live metadata inspection into one read-only session and one batched
+  request plan. Reuse the same authenticated service/token for the whole phase.
+- Do not run several scripts that each create a new interactive Dataverse connection when
+  one combined inspection or provisioning script can perform the work.
+- Never trigger an interactive sign-in merely to inspect local code or documentation.
+- Before running a command that may open a Dataverse or Microsoft sign-in prompt, state why
+  live access is required and obtain the user's approval. Do not automatically repeat a
+  failed or cancelled sign-in prompt.
+- Provisioning scripts must support read-only preflight and must create one connection per
+  invocation. Provision, publish, and post-verify in the same approved invocation where safe.
+- In application code, acquire delegated tokens silently through the active-account helper.
+  Do not call login redirect/popup from feature rendering, background refresh, or retry
+  loops. An interaction-required result must become one explicit user action.
+
 ## Implement
 
 - Reuse existing shared components and canonical feature workflows.

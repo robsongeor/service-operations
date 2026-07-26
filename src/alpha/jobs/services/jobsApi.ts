@@ -1,8 +1,8 @@
-import type { Job } from '../types/job.types'
-import type { JobSaveInput } from '../types/jobSave.types'
-import { assertJobTypeAllowedForCreation, type JobCreationSource } from '../types/jobType.types'
+import type { Job } from '../types/job.types.ts'
+import type { JobSaveInput } from '../types/jobSave.types.ts'
+import { assertJobTypeAllowedForCreation, type JobCreationSource } from '../types/jobType.types.ts'
 
-const DATAVERSE_URL = import.meta.env.VITE_DATAVERSE_URL
+const DATAVERSE_URL = import.meta.env?.VITE_DATAVERSE_URL ?? ''
 
 function blobDataUrl(blob: Blob) {
     return new Promise<string>((resolve, reject) => {
@@ -40,7 +40,7 @@ export async function fetchJobPhotos(accessToken: string, jobId: string): Promis
 
 export async function fetchJobs(accessToken: string): Promise<Job[]> {
     const result = await fetch(
-        `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=gr_jobid,createdon,gr_jobnumber,gr_status,gr_ordernumber,gr_description,gr_jobtype,gr_jobcardstatus,gr_jobcardsenton,gr_jobcardsubmittedon,gr_jobcardclosedon,gr_hourmeter,gr_completeddate,gr_servicetype,gr_currentofficeaction,gr_officeactionowner,gr_officeattentionrequired,gr_techniciansubmissiontokenhash,gr_techniciansubmissiontokencreatedon,gr_techniciansubmissiontokenexpireson,gr_techniciansubmissiontokenused,gr_techniciansubmissionsubmittedon,gr_techniciansubmissionhourmeter,gr_techniciansubmissionstory&$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_serial,gr_currenthourmeter,gr_currenthourmeterrecordeddate,gr_servicetrackingenabled),gr_Mechanic($select=gr_mechanicid,gr_name,gr_phone,gr_email),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name,gr_phone,gr_email)`,
+        `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=gr_jobid,createdon,gr_jobnumber,gr_status,gr_ordernumber,gr_description,gr_jobtype,gr_jobcardstatus,gr_jobcardsenton,gr_jobcardsubmittedon,gr_jobcardclosedon,gr_hourmeter,gr_completeddate,gr_servicetype,gr_currentofficeaction,gr_officeactionowner,gr_officeattentionrequired,gr_techniciansubmissiontokenhash,gr_techniciansubmissiontokencreatedon,gr_techniciansubmissiontokenexpireson,gr_techniciansubmissiontokenused,gr_techniciansubmissionsubmittedon,gr_techniciansubmissionhourmeter,gr_techniciansubmissionstory,_gr_sitecheck_value&$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_serial,gr_currenthourmeter,gr_currenthourmeterrecordeddate,gr_servicetrackingenabled),gr_Mechanic($select=gr_mechanicid,gr_name,gr_phone,gr_email),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name,gr_phone,gr_email)`,
         {
             cache: 'no-store',
             headers: {
@@ -100,11 +100,10 @@ export async function fetchJobs(accessToken: string): Promise<Job[]> {
     }))
 }
 
-export async function createJob(
-    accessToken: string,
+export function buildJobCreatePayload(
     job: JobSaveInput,
     source: JobCreationSource = 'standard',
-): Promise<string> {
+) {
     assertJobTypeAllowedForCreation(job.jobType, source)
     const newJob: Record<string, string | number> = {
         gr_jobnumber: job.jobNumber,
@@ -134,7 +133,15 @@ export async function createJob(
     if (job.officeActionOwner != null) newJob.gr_officeactionowner = job.officeActionOwner
     if (job.hourMeter != null) newJob.gr_hourmeter = job.hourMeter
     if (job.completedDate) newJob.gr_completeddate = job.completedDate
+    return newJob
+}
 
+export async function createJob(
+    accessToken: string,
+    job: JobSaveInput,
+    source: JobCreationSource = 'standard',
+): Promise<string> {
+    const newJob = buildJobCreatePayload(job, source)
     const result = await fetch(
         `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2/gr_jobs`,
         {
