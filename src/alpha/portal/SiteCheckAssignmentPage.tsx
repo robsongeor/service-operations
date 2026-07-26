@@ -30,7 +30,6 @@ export default function SiteCheckAssignmentPage() {
         comment?: string
     }>>({})
     const [story, setStory] = useState('')
-    const [search, setSearch] = useState('')
     const [timeDate, setTimeDate] = useState(new Date().toISOString().slice(0, 10))
     const [timeHours, setTimeHours] = useState('')
     const [kilometres, setKilometres] = useState('0')
@@ -82,7 +81,7 @@ export default function SiteCheckAssignmentPage() {
 
     if (!assignment) return <main className="technician-portal">
         <section className="technician-portal-card technician-portal-message" aria-live="polite">
-            <h1>Loading Site Checkâ€¦</h1>
+            <h1>Loading Site Check…</h1>
         </section>
     </main>
 
@@ -97,14 +96,14 @@ export default function SiteCheckAssignmentPage() {
         },
         new Map(),
     ) ?? new Map()
-    const visibleJobs = assignment.jobs.filter((job) => {
-        const query = search.trim().toLowerCase()
-        return !query || [
-            equipmentLabel(job),
-            job.jobNumber,
-            job.equipment?.serial,
-        ].some((value) => value?.toLowerCase().includes(query))
-    })
+    const selectedJobIndex = Math.max(0, assignment.jobs.findIndex((job) => job.jobId === selectedJob?.jobId))
+    const submittedCount = assignment.jobs.filter((job) => job.jobCardStatus === 122830002).length
+    const answeredCount = selectedJob?.checklist.filter((item) => {
+        const answer = answers[item.snapshotItemId]
+        return item.responseType === 122830002
+            ? Boolean(answer?.numericAnswer)
+            : answer?.choiceAnswer !== undefined
+    }).length ?? 0
     const selectJob = (jobId: string, force = false) => {
         if (!force && jobId !== selectedJobId && hasUnsavedInput
             && !window.confirm('Discard the unsaved answers for this machine?')) return
@@ -165,54 +164,70 @@ export default function SiteCheckAssignmentPage() {
         }
     }
 
-    return <main className="technician-portal">
-        <section className="technician-portal-card">
-            <header>
+    return <main className="technician-portal site-check-portal">
+        <section className="technician-portal-card site-check-workspace">
+            <header className="site-check-header">
                 <p>Service Operations</p>
                 <h1>{assignment.siteCheckName || 'Site Check'}</h1>
+                <div className="site-check-overall-progress">
+                    <span><strong>{submittedCount}</strong> of {assignment.jobs.length} machines submitted</span>
+                    <progress value={submittedCount} max={Math.max(assignment.jobs.length, 1)} />
+                </div>
             </header>
-            <dl>
+            <dl className="site-check-assignment-summary">
                 {assignment.customerName && <div><dt>Customer</dt><dd>{assignment.customerName}</dd></div>}
                 {assignment.siteName && <div><dt>Site</dt><dd>{assignment.siteName}</dd></div>}
                 {assignment.technicianName && <div><dt>Technician</dt><dd>{assignment.technicianName}</dd></div>}
                 {assignment.dueDate && <div><dt>Due date</dt><dd>{assignment.dueDate}</dd></div>}
-                <div><dt>Equipment Jobs</dt><dd>{assignment.jobs.length} of {assignment.expectedJobCount}</dd></div>
             </dl>
-            <section aria-labelledby="site-check-machines">
-                <h2 id="site-check-machines">Machines</h2>
-                <label>Search machines
-                    <input
-                        type="search"
-                        value={search}
-                        onChange={(event) => setSearch(event.target.value)}
-                        placeholder="Fleet, serial, or Job number"
-                    />
+            <nav className="site-check-machine-picker" aria-label="Choose a machine">
+                <label htmlFor="site-check-machine">Machine
+                    <select
+                        id="site-check-machine"
+                        value={selectedJob?.jobId ?? ''}
+                        onChange={(event) => selectJob(event.target.value)}
+                    >
+                        {assignment.jobs.map((job, index) => <option key={job.jobId} value={job.jobId}>
+                            {job.jobCardStatus === 122830002 ? '✓ ' : ''}
+                            {index + 1}. {equipmentLabel(job)} — Job {job.jobNumber || 'unassigned'}
+                        </option>)}
+                    </select>
                 </label>
-                <div className="technician-repeatable" role="list">
-                    {visibleJobs.map((job) => <article key={job.jobId} className="technician-repeatable-row">
-                        <div>
-                            <strong>{equipmentLabel(job)}</strong>
-                            <p>Job {job.jobNumber || 'number unavailable'}</p>
-                            <p>{job.checklist.length} checklist items</p>
-                        </div>
-                        <button
-                            type="button"
-                            aria-pressed={selectedJob?.jobId === job.jobId}
-                            onClick={() => selectJob(job.jobId)}
-                        >
-                            {job.jobCardStatus === 122830002
-                                ? 'Submitted'
-                                : selectedJob?.jobId === job.jobId ? 'Viewing' : 'Open checklist'}
-                        </button>
-                    </article>)}
+                <div>
+                    <button
+                        type="button"
+                        disabled={selectedJobIndex === 0}
+                        onClick={() => selectJob(assignment.jobs[selectedJobIndex - 1].jobId)}
+                    >
+                        ← Previous
+                    </button>
+                    <span>{selectedJobIndex + 1} of {assignment.jobs.length}</span>
+                    <button
+                        type="button"
+                        disabled={selectedJobIndex >= assignment.jobs.length - 1}
+                        onClick={() => selectJob(assignment.jobs[selectedJobIndex + 1].jobId)}
+                    >
+                        Next →
+                    </button>
                 </div>
-            </section>
+            </nav>
             {selectedJob && <section aria-labelledby="site-check-machine-checklist">
-                <h2 id="site-check-machine-checklist">{equipmentLabel(selectedJob)}</h2>
-                <p>Job {selectedJob.jobNumber || 'number unavailable'}</p>
-                {selectedJob.description && <p>{selectedJob.description}</p>}
+                <div className="site-check-machine-heading">
+                    <div>
+                        <p>Machine {selectedJobIndex + 1} of {assignment.jobs.length}</p>
+                        <h2 id="site-check-machine-checklist">{equipmentLabel(selectedJob)}</h2>
+                        <span>Job {selectedJob.jobNumber || 'number unavailable'}</span>
+                    </div>
+                    {selectedJob.jobCardStatus === 122830002
+                        ? <strong className="site-check-complete-badge">Submitted</strong>
+                        : <span>{answeredCount}/{selectedJob.checklist.length} answered</span>}
+                </div>
+                {selectedJob.description && <p className="site-check-description">{selectedJob.description}</p>}
                 {selectedJob.jobCardStatus === 122830002
-                    ? <p>This machine Job Card has been submitted.</p>
+                    ? <div className="site-check-submitted-message">
+                        <strong>This machine is complete.</strong>
+                        <p>The Job Card has been submitted. Choose another machine above to continue.</p>
+                    </div>
                     : selectedJob.checklist.length === 0
                     ? <p role="alert">This machine does not have a checklist snapshot.</p>
                     : [...checklistGroups].map(([groupName, items]) => <section
@@ -223,7 +238,7 @@ export default function SiteCheckAssignmentPage() {
                         <h3 id={`checklist-${groupName.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`}>
                             {groupName}
                         </h3>
-                        <ol>
+                        <ol className="site-check-question-list">
                             {items.map((item) => <li key={item.snapshotItemId}>
                                 <fieldset disabled={busy}>
                                     <legend>{item.prompt}</legend>
@@ -244,9 +259,9 @@ export default function SiteCheckAssignmentPage() {
                                                 }))}
                                             />
                                         </label>
-                                        : <div>
+                                        : <div className="site-check-answer-options">
                                             {[['Pass', 122830000], ['Fail', 122830001], ['Not applicable', 122830002]].map(([label, value]) =>
-                                                <label key={value}>
+                                                <label key={value} data-answer={label}>
                                                     <input
                                                         type="radio"
                                                         name={`answer-${item.snapshotItemId}`}
@@ -257,15 +272,21 @@ export default function SiteCheckAssignmentPage() {
                                                             [item.snapshotItemId]: {
                                                                 ...current[item.snapshotItemId],
                                                                 choiceAnswer: value as number,
+                                                                ...(value === 122830001
+                                                                    ? {}
+                                                                    : { comment: undefined }),
                                                             },
                                                         }))}
                                                     />
                                                     {label}
                                                 </label>)}
                                         </div>}
-                                    <label>Comment{item.commentRequiredOnNegative ? ' (required on Fail)' : ''}
+                                    {answers[item.snapshotItemId]?.choiceAnswer === 122830001 && <label>
+                                        Failure comment{item.commentRequiredOnNegative ? ' *' : ''}
                                         <textarea
                                             rows={2}
+                                            required={item.commentRequiredOnNegative}
+                                            placeholder="Describe the issue found"
                                             value={answers[item.snapshotItemId]?.comment ?? ''}
                                             onChange={(event) => setAnswers((current) => ({
                                                 ...current,
@@ -275,7 +296,7 @@ export default function SiteCheckAssignmentPage() {
                                                 },
                                             }))}
                                         />
-                                    </label>
+                                    </label>}
                                 </fieldset>
                             </li>)}
                         </ol>
@@ -346,9 +367,12 @@ export default function SiteCheckAssignmentPage() {
                         </label>
                     </fieldset>
                     {validation && <p className="technician-portal-error" role="alert">{validation}</p>}
+                    <div className="site-check-submit-bar">
+                    <span>{answeredCount}/{selectedJob.checklist.length} checks answered</span>
                     <button type="button" disabled={busy} onClick={() => void submit()}>
                         {busy ? 'Submitting…' : 'Submit machine Job Card'}
                     </button>
+                    </div>
                     <p>Submitting the Job Card does not complete the operational Job.</p>
                 </>}
             </section>}

@@ -10,8 +10,7 @@ const submissionTimestampFormatter = new Intl.DateTimeFormat('en-NZ', {
 })
 
 export function hasTechnicianSubmission(job: Job) {
-    return job.gr_techniciansubmissiontokenused === true
-        && Boolean(job.gr_techniciansubmissionsubmittedon)
+    return Boolean(job.gr_techniciansubmissionsubmittedon)
         && getJobCardStatus(job.gr_jobcardstatus) === JOB_CARD_STATUSES.SUBMITTED
 }
 

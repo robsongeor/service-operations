@@ -30,6 +30,7 @@ leave unfinished work unchecked.
 | 16 — Versioned checklist foundation | In progress | Schema/security ready; checklist content and application work remain |
 | 17 — Technician multi-machine workflow | Not started | Depends on Phases 15 and 16 |
 | 18 — Findings, office review, and hardening | Not started | Findings actions require separate product approval |
+| 19 — Checklist administration | Blocked | Local implementation may begin; authoritative admin-only role change requires explicit approval |
 
 Status values are **Not started**, **In progress**, **Blocked**, and **Complete**.
 
@@ -1850,7 +1851,7 @@ a client-supplied Job ID is never authorization.
 
 - [x] Build the assignment overview from the minimal public projection.
 - [ ] Label submitted progress separately from operational completed progress.
-- [x] Add searchable machine list and Continue next machine.
+- [x] Add a compact machine selector, Previous/Next navigation, and Continue next machine.
 - [x] Reuse existing Job Card story, time, and parts contracts in per-Job submission.
 - [x] Add approved checklist answer/comment controls and conditional comment evidence.
 - [x] Revalidate occurrence token, Job membership, and submission state on every request.
@@ -1882,7 +1883,7 @@ portal advances to the next unsubmitted machine after success.
 
 Job Card parity note (26 July 2026): Site Check submission now validates and atomically
 creates canonical Job Card time-entry and Job Material rows alongside checklist Responses
-and the Job Card Status update. The portal provides fleet/serial/Job-number search,
+and the Job Card Status update. The portal provides a compact Equipment/Job selector,
 automatically continues to the next unsubmitted machine, and confirms before discarding
 unsaved machine input on a machine switch. Optional photo upload, whole-page navigation
 guarding, full accessibility/recovery/browser validation, and production-safe portal smoke
@@ -1916,6 +1917,22 @@ logs local server exceptions without exposing them publicly. Focused tests and b
 The probed environment contained zero Snapshot rows, so occurrences created before
 checklist integration must be recreated for checklist smoke validation; do not backfill an
 active operational occurrence implicitly.
+
+Mobile workflow correction (26 July 2026): field testing with a 15-machine assignment
+replaced the vertically repeated machine directory with a one-machine workspace. A sticky,
+native machine selector and Previous/Next controls provide direct access without scrolling
+past other machines. Overall submitted progress, per-machine answered progress, section
+headings, touch-sized Pass/Fail/Not applicable controls, and the submit action remain
+visible at the point of work. The layout collapses assignment context on narrow screens and
+uses a safe-area-aware fixed submission bar. Successful submission still advances to the
+next outstanding machine, and unsaved-input protection remains authoritative.
+Failure comments use progressive disclosure: the comment field is shown only after Fail is
+selected, is marked required when the snapshot rule requires evidence, and is cleared if the
+answer changes to Pass or Not applicable.
+Office Job Card review recognises authoritative Site Check submissions from the submitted
+timestamp and Job Card Status rather than requiring the ordinary single-Job email token-used
+flag. Site Checks use an occurrence-level access token, so that unrelated flag is not an
+evidence prerequisite.
 
 ### Phase 18 — Findings, office review, and hardening
 
@@ -1958,6 +1975,55 @@ source relationships, and audit behaviour require product/schema approval.
 - Findings require explicit office review. Follow-up Jobs and Quotes are never automatic.
 - Reuse generic Job Photos, Job Card time/parts/evidence, canonical drawers, and canonical
   Job/Quote creation workflows.
+
+### Phase 19 — Checklist administration
+
+Status: **Blocked — security-role provisioning requires explicit approval**
+
+Provide a signed-in Checklist Admin screen for the existing organisation-wide ICE and
+Electric definitions. The sole initial administrator is the established Service Operations
+administrator account `georger@liftrucks.co.nz`. Client-side route/menu gating is only a
+usability boundary; Dataverse security is authoritative.
+
+Published Templates and Template Items remain immutable. The editor loads the current
+active version into local draft state, supports adding, removing, reordering, grouping, and
+editing questions/rules, validates the complete definition, then publishes a new version in
+one atomic change set. Publication creates the new Template and Items, links the superseded
+Template, and deactivates the prior version with its ETag. Existing occurrences retain
+their immutable Snapshot Items; only subsequently created occurrences use the new version.
+There is no direct edit, delete, or historical backfill of published content.
+
+The current broad Service Operations role has organisation-level Template and Template Item
+mutation privileges, so the requested “only me” boundary requires this approved security
+delta:
+
+- create an unmanaged **Site Check Checklist Administrator** role;
+- grant it Organisation Read/Create/Write/Append/Append To on Checklist Template and
+  Checklist Template Item (no Delete);
+- assign it only to the Dataverse user verified for `georger@liftrucks.co.nz`;
+- remove Template and Template Item Create/Write/Delete/Append/Append To from the broad
+  Service Operations role while retaining Read;
+- retain the operational Snapshot/Response privileges already required by Site Check
+  creation and review;
+- verify another Service Operations user cannot publish through either the UI or direct
+  Dataverse Web API.
+
+- [ ] Obtain explicit approval for the exact security-role delta above.
+- [ ] Add a shared administrator identity rule and admin-only route/menu visibility.
+- [ ] Add paged active Template and ordered Template Item loading through the existing
+  checklist service.
+- [ ] Add the ICE/Electric editor with add, remove, reorder, group, prompt, response type,
+  required-answer, failure-comment, and optional-photo rules.
+- [ ] Validate non-empty definitions, unique stable item keys/orders, supported response
+  types, and coherent conditional rules before publishing.
+- [ ] Publish a new Template version and all Items atomically with ETag protection.
+- [ ] Deactivate the superseded version only inside the same successful transaction.
+- [ ] Refresh authoritative content after publication and show the resulting version.
+- [ ] Provision and verify the dedicated administrator role in one approved cached
+  no-prompt session; do not repeatedly request sign-in.
+- [ ] Test unauthorized navigation, direct write denial, validation, concurrency,
+  transaction rollback, historical snapshot preservation, and next-occurrence selection.
+- [ ] Update schema, security, operator, user, and deployment documentation.
 
 ## 32. Phased dependency order
 

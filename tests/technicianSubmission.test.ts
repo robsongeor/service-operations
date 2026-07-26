@@ -26,6 +26,16 @@ test('recognises a completed technician submission', () => {
     })), true)
 })
 
+test('recognises a Site Check submission without a single-Job token', () => {
+    assert.equal(hasTechnicianSubmission(job({
+        gr_jobcardstatus: JOB_CARD_STATUSES.SUBMITTED,
+        gr_techniciansubmissiontokenused: false,
+        gr_techniciansubmissionsubmittedon: '2026-07-25T03:37:00Z',
+        gr_techniciansubmissionstory: 'Completed the machine checklist.',
+        _gr_sitecheck_value: 'site-check-1',
+    })), true)
+})
+
 test('does not treat token existence alone as a submission', () => {
     assert.equal(hasTechnicianSubmission(job({
         gr_jobcardstatus: JOB_CARD_STATUSES.SENT,

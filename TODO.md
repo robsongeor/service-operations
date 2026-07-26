@@ -35,6 +35,9 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
   cross-customer workspace, one-link bulk technician dispatch, versioned per-machine
   checklists, guided multi-machine submission, and reviewed findings. Phases 15–18 retain
   explicit schema/security approval gates.
+- [ ] Add versioned Site Check checklist administration for
+  `georger@liftrucks.co.nz`, including a dedicated least-privilege Dataverse role and
+  immutable publish-new-version workflow; see Phase 19 of the Site Checks tracker.
 - [ ] Complete persistent Customer creation and Customer-level information management;
   current Customer-level behaviour still includes local prototype boundaries.
 - [ ] Decide whether Job Materials need quantity, part number, stock lookup, or inventory
