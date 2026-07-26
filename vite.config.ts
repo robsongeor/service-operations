@@ -15,6 +15,7 @@ const siteCheckAssignmentService = require('./api/services/siteCheckAssignmentSe
   generate: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
   revoke: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
   handlePublicGet: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
+  submitJob: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
   jsonResponse: (status: number, body: object, headers?: Record<string, string>) => LocalFunctionResponse
 }
 
@@ -136,9 +137,11 @@ function siteCheckAssignmentProxy(env: Record<string, string | undefined>): Plug
           if (request.method === 'GET') result = await siteCheckAssignmentService.handlePublicGet(localRequest)
           else if (request.method === 'POST' && body.action === 'generate') result = await siteCheckAssignmentService.generate(localRequest)
           else if (request.method === 'POST' && body.action === 'revoke') result = await siteCheckAssignmentService.revoke(localRequest)
+          else if (request.method === 'POST' && body.action === 'submitJob') result = await siteCheckAssignmentService.submitJob(localRequest)
           else result = siteCheckAssignmentService.jsonResponse(405, { error: 'Method not allowed.' }, { Allow: 'GET, POST' })
           sendFunctionResponse(response, result)
-        } catch {
+        } catch (error) {
+          console.error('Local Site Check assignment request failed.', error)
           sendFunctionResponse(response, siteCheckAssignmentService.jsonResponse(503, {
             code: 'temporary',
             error: 'The Site Check assignment service is temporarily unavailable.',

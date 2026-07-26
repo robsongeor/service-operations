@@ -226,7 +226,7 @@ async function findOccurrence(token, bearer) {
         `${dataverseOrigin()}/api/data/v9.2/gr_sitechecks?`
         + '$select=gr_sitecheckid,gr_name,gr_status,gr_startedon,gr_frequencysnapshot,gr_duedatesnapshot,gr_expectedjobcount,'
         + 'gr_sitechecktechnicianaccesstokenexpireson,gr_sitechecktechnicianaccesstokenrevokedon,_gr_assignedtechnician_value'
-        + '&$expand=gr_AssignedTechnician($select=gr_mechanicid,gr_name),gr_Site($select=gr_name;$expand=gr_Customer($select=gr_name))'
+        + '&$expand=gr_Site($select=gr_name;$expand=gr_Customer($select=gr_name))'
         + `&$filter=gr_sitechecktechnicianaccesstokenhash eq '${escapeOData(hash)}'&$top=2`,
         { headers: { Authorization: bearer, Accept: 'application/json' } },
     )
@@ -254,7 +254,6 @@ function publicProjection(occurrence, jobs, snapshots = []) {
         siteCheckName: occurrence.gr_name,
         customerName: occurrence.gr_Site?.gr_Customer?.gr_name,
         siteName: occurrence.gr_Site?.gr_name,
-        technicianName: occurrence.gr_AssignedTechnician?.gr_name,
         frequency: occurrence.gr_frequencysnapshot,
         dueDate: occurrence.gr_duedatesnapshot,
         startedOn: occurrence.gr_startedon,

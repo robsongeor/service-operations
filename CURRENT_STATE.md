@@ -175,6 +175,13 @@ The complete repository regression suite, lint, production build, and `git diff 
 pass. Release preparation excludes the unrelated untracked `docs/wiki/` directory. The
 branch is ready to push; deployment and production-safe authenticated/manual validation
 remain separate explicit actions.
+A localhost assignment-link 503 was diagnosed as an unnecessary public Mechanic expansion:
+the least-privilege portal identity correctly lacked Mechanic Read and Dataverse returned
+403. The public projection no longer expands or exposes Mechanic; GUID-based assignment
+authorization is unchanged and no new privilege is required. Local middleware now includes
+the `submitJob` route and safe console diagnostics. Tests/build pass. The environment had
+zero Snapshot rows, so the existing pre-integration occurrence must be recreated to test
+the checklist itself.
 The product owner decided missing and Other/Unknown Power Type defaults to the ICE Template
 without changing Equipment Service Data; preview and technician UI must show **ICE checklist
 (defaulted)**. Checklist content and comment/photo rules still await explicit approval.

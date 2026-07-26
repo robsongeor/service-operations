@@ -1904,6 +1904,19 @@ production build, and `git diff --check` also pass. The branch is ready to push,
 17 remains **In progress** until deployment and the production-safe authenticated portal,
 keyboard, screen-reader, recovery, and file-upload smoke checks are completed.
 
+Local portal diagnostic (26 July 2026): the first generated localhost assignment link
+returned the safe temporary-unavailable screen. A read-only application-identity probe
+confirmed authentication and Snapshot Read succeeded, then isolated a 403 on the public
+occurrence projection because it unnecessarily expanded `gr_AssignedTechnician` while the
+least-privilege Public Portal role intentionally has no Mechanic Read. The expansion and
+technician-name projection were removed; authorization continues to compare the assigned
+Mechanic lookup GUID without reading the Mechanic row. No privilege broadening was needed.
+The Vite middleware now also routes `submitJob` consistently with the deployed Function and
+logs local server exceptions without exposing them publicly. Focused tests and build pass.
+The probed environment contained zero Snapshot rows, so occurrences created before
+checklist integration must be recreated for checklist smoke validation; do not backfill an
+active operational occurrence implicitly.
+
 ### Phase 18 — Findings, office review, and hardening
 
 Status: **Not started**
