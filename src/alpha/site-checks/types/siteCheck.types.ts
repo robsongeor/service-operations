@@ -72,6 +72,7 @@ export type SiteCheckSchedule = {
     gr_lastcompleteddate?: string | null
     _gr_site_value: string
     _gr_activesitecheck_value?: string | null
+    _gr_checklisttemplate_value?: string | null
     '@odata.etag'?: string
 }
 

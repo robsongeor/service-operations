@@ -7,10 +7,14 @@
 .run-site-check-equipment li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 11px; border-bottom: 1px solid #e8ece9; }
 .run-site-check-equipment li:last-child { border-bottom: 0; }
 .run-site-check-equipment li > span { display: grid; gap: 2px; }
+.run-site-check-equipment select { min-width: 150px; padding: 6px 8px; border: 1px solid #cfd7d2; border-radius: 7px; background: #fff; color: #303a34; font: inherit; }
 .run-site-check-equipment strong { color: #303a34; font-size: .75rem; }
 .run-site-check-equipment small { color: #78817c; font-size: .66rem; }
 .run-site-check-equipment em { padding: 3px 6px; border-radius: 999px; background: #f2e8d2; color: #795915; font-size: .6rem; font-style: normal; font-weight: 800; text-transform: uppercase; }
 .run-site-check-equipment .empty { justify-content: center; color: #7a837e; }
+.run-site-check-included { margin-top: 12px; }
+.run-site-check-included summary { cursor: pointer; color: #355e50; font-size: .75rem; font-weight: 800; }
+.run-site-check-included .run-site-check-equipment { margin-top: 8px; }
 .edit-drawer-footer > div { display: flex; gap: 8px; }
 
 @media (max-width: 520px) {

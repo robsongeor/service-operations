@@ -15,6 +15,10 @@ import {
     saveSiteCheckScheduleConfiguration,
 } from '../services/siteChecksApi'
 import { startSiteCheckWorkflow, type StartSiteCheckWorkflowInput } from '../services/siteCheckCreationWorkflow'
+import {
+    prepareSiteCheckAssignmentEmail,
+    type SiteCheckAssignmentEmailInput,
+} from '../services/siteCheckAssignmentApi'
 import type {
     SiteCheck,
     SiteCheckDetailJob,
@@ -254,6 +258,9 @@ export function useSiteChecks(siteIds: readonly string[]) {
         return jobs.length
     }, [acquireAccessToken, coordinator, siteScope, snapshot.schedules])
 
+    const prepareAssignmentEmail = useCallback(async (input: SiteCheckAssignmentEmailInput) =>
+        prepareSiteCheckAssignmentEmail(await acquireAccessToken(), input), [acquireAccessToken])
+
     return {
         ...snapshot,
         isLoading,
@@ -272,6 +279,7 @@ export function useSiteChecks(siteIds: readonly string[]) {
         loadAllDetailJobs,
         loadAllEquipmentExclusions,
         allocateJobNumbers,
+        prepareAssignmentEmail,
         deleteOccurrence,
     }
 }

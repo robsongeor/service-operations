@@ -1,10 +1,12 @@
 param(
-    [ValidateSet('Inspect', 'Provision', 'ProvisionAvailability', 'Verify', 'AuditSecurity', 'ProvisionSecurity', 'PurgeOccurrences', 'PurgeData')]
+    [ValidateSet('Inspect', 'InspectTechnicianAccess', 'ProvisionTechnicianAccess', 'InspectChecklist', 'ProvisionChecklist', 'InspectChecklistCorrection', 'ProvisionChecklistCorrection', 'InspectChecklistContent', 'ProvisionChecklistContent', 'VerifyChecklist', 'Provision', 'ProvisionAvailability', 'Verify', 'AuditSecurity', 'ProvisionSecurity', 'PurgeOccurrences', 'PurgeData')]
     [string]$Mode = 'Inspect',
 
     [string]$EnvironmentUrl = 'https://org0d4246d7.crm6.dynamics.com',
 
     [string]$SolutionUniqueName = 'ServiceOperationsNew',
+
+    [string]$ChecklistContentPath = (Join-Path $PSScriptRoot 'site-check-checklist-v1.json'),
 
     [ValidateSet('Never', 'Auto')]
     [string]$LoginPrompt = 'Never',
@@ -346,6 +348,383 @@ function Get-AttributeMetadata {
     }
 }
 
+function Get-RolePrivilegeSummary {
+    param(
+        [Parameter(Mandatory)]$Service,
+        [Parameter(Mandatory)][string]$RoleName,
+        [Parameter(Mandatory)][string[]]$PrivilegeNames
+    )
+
+    $roleQuery = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new('role')
+    $roleQuery.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new('roleid', 'name', 'ismanaged')
+    $roleQuery.Criteria.AddCondition(
+        'name',
+        [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,
+        $RoleName
+    )
+    $roles = @($Service.RetrieveMultiple($roleQuery).Entities)
+
+    $privilegeQuery = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new('privilege')
+    $privilegeQuery.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new('name')
+    $privilegeFilter = $privilegeQuery.Criteria.AddFilter(
+        [Microsoft.Xrm.Sdk.Query.LogicalOperator]::Or
+    )
+    foreach ($name in $PrivilegeNames) {
+        $privilegeFilter.AddCondition(
+            'name',
+            [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,
+            $name
+        )
+    }
+    $privileges = @($Service.RetrieveMultiple($privilegeQuery).Entities)
+    $roleResults = foreach ($role in $roles) {
+        $request = [Microsoft.Crm.Sdk.Messages.RetrieveRolePrivilegesRoleRequest]::new()
+        $request.RoleId = $role.Id
+        $grants = @($Service.Execute($request).RolePrivileges)
+        [pscustomobject]@{
+            RoleId = $role.Id
+            IsManaged = [bool]$role.Attributes['ismanaged']
+            Privileges = @($PrivilegeNames | ForEach-Object {
+                $expectedName = $_
+                $metadata = $privileges | Where-Object {
+                    [string]$_.Attributes['name'] -ieq $expectedName
+                } | Select-Object -First 1
+                $grant = if ($metadata) {
+                    $grants | Where-Object PrivilegeId -EQ $metadata.Id | Select-Object -First 1
+                } else {
+                    $null
+                }
+                [pscustomobject]@{
+                    Name = $expectedName
+                    MetadataFound = $null -ne $metadata
+                    Granted = $null -ne $grant
+                    Depth = if ($grant) { [string]$grant.Depth } else { $null }
+                }
+            })
+        }
+    }
+
+    return [pscustomobject]@{
+        RoleName = $RoleName
+        RoleCount = $roles.Count
+        Roles = @($roleResults)
+    }
+}
+
+function Get-TechnicianAccessPreflight {
+    param([Parameter(Mandatory)]$Service)
+
+    $siteCheck = Get-EntityMetadata -Service $Service -LogicalName 'gr_sitecheck'
+    $emailDispatch = Get-EntityMetadata -Service $Service -LogicalName 'gr_emaildispatch'
+    $proposedColumns = @(
+        'gr_sitechecktechnicianaccesstokenhash',
+        'gr_sitechecktechnicianaccesstokencreatedon',
+        'gr_sitechecktechnicianaccesstokenexpireson',
+        'gr_sitechecktechnicianaccesstokenrevokedon'
+    )
+
+    $serviceOperationsPrivileges = @(
+        'prvCreategr_EmailDispatch',
+        'prvReadgr_EmailDispatch',
+        'prvWritegr_EmailDispatch',
+        'prvAppendgr_EmailDispatch',
+        'prvAppendTogr_EmailDispatch',
+        'prvReadgr_SiteCheck',
+        'prvAppendgr_SiteCheck',
+        'prvAppendTogr_SiteCheck'
+    )
+    $portalPrivileges = @(
+        'prvCreategr_SiteCheck',
+        'prvReadgr_SiteCheck',
+        'prvWritegr_SiteCheck',
+        'prvDeletegr_SiteCheck',
+        'prvAppendgr_SiteCheck',
+        'prvAppendTogr_SiteCheck',
+        'prvCreategr_EmailDispatch',
+        'prvReadgr_EmailDispatch',
+        'prvWritegr_EmailDispatch'
+    )
+
+    return [ordered]@{
+        Mode = 'InspectTechnicianAccess'
+        EnvironmentUrl = $EnvironmentUrl.TrimEnd('/')
+        ReadOnly = $true
+        SiteCheck = [ordered]@{
+            Found = $null -ne $siteCheck
+            EntitySetName = if ($siteCheck) { $siteCheck.EntitySetName } else { $null }
+            ProposedColumns = @($proposedColumns | ForEach-Object {
+                $attribute = if ($siteCheck) {
+                    $siteCheck.Attributes | Where-Object LogicalName -EQ $_ | Select-Object -First 1
+                } else {
+                    $null
+                }
+                [pscustomobject]@{
+                    LogicalName = $_
+                    Found = $null -ne $attribute
+                    AttributeType = if ($attribute) { [string]$attribute.AttributeType } else { $null }
+                    MaxLength = if ($attribute -and $attribute.PSObject.Properties['MaxLength']) {
+                        $attribute.MaxLength
+                    } else {
+                        $null
+                    }
+                }
+            })
+            Keys = if ($siteCheck) {
+                @($siteCheck.Keys | ForEach-Object {
+                    [pscustomobject]@{
+                        LogicalName = $_.LogicalName
+                        KeyAttributes = @($_.KeyAttributes)
+                        Status = [string]$_.EntityKeyIndexStatus
+                    }
+                })
+            } else {
+                @()
+            }
+        }
+        EmailDispatch = [ordered]@{
+            Found = $null -ne $emailDispatch
+            EntitySetName = if ($emailDispatch) { $emailDispatch.EntitySetName } else { $null }
+            JobLookup = if ($emailDispatch) {
+                $attribute = $emailDispatch.Attributes |
+                    Where-Object LogicalName -EQ 'gr_job' |
+                    Select-Object -First 1
+                [pscustomobject]@{
+                    Found = $null -ne $attribute
+                    AttributeType = if ($attribute) { [string]$attribute.AttributeType } else { $null }
+                    RequiredLevel = if ($attribute) {
+                        [string]$attribute.RequiredLevel.Value
+                    } else {
+                        $null
+                    }
+                    RequiredLevelCanBeChanged = if ($attribute) {
+                        [bool]$attribute.RequiredLevel.CanBeChanged
+                    } else {
+                        $null
+                    }
+                    IsManaged = if ($attribute) { [bool]$attribute.IsManaged } else { $null }
+                    IsValidForUpdate = if ($attribute) { [bool]$attribute.IsValidForUpdate } else { $null }
+                }
+            } else {
+                $null
+            }
+            SiteCheckLookup = if ($emailDispatch) {
+                $attribute = $emailDispatch.Attributes |
+                    Where-Object LogicalName -EQ 'gr_sitecheck' |
+                    Select-Object -First 1
+                [pscustomobject]@{
+                    Found = $null -ne $attribute
+                    AttributeType = if ($attribute) { [string]$attribute.AttributeType } else { $null }
+                    RequiredLevel = if ($attribute) {
+                        [string]$attribute.RequiredLevel.Value
+                    } else {
+                        $null
+                    }
+                }
+            } else {
+                $null
+            }
+            SiteCheckRelationships = if ($emailDispatch) {
+                @($emailDispatch.ManyToOneRelationships | Where-Object {
+                    $_.ReferencingAttribute -eq 'gr_sitecheck' -or
+                    $_.SchemaName -eq 'gr_sitecheck_emaildispatches'
+                } | ForEach-Object {
+                    [pscustomobject]@{
+                        SchemaName = $_.SchemaName
+                        ReferencingAttribute = $_.ReferencingAttribute
+                        ReferencedEntity = $_.ReferencedEntity
+                        DeleteBehavior = [string]$_.CascadeConfiguration.Delete
+                    }
+                })
+            } else {
+                @()
+            }
+        }
+        Security = [ordered]@{
+            ServiceOperations = Get-RolePrivilegeSummary -Service $Service `
+                -RoleName 'Service Operations' `
+                -PrivilegeNames $serviceOperationsPrivileges
+            PublicPortalService = Get-RolePrivilegeSummary -Service $Service `
+                -RoleName 'Public Portal Service' `
+                -PrivilegeNames $portalPrivileges
+        }
+        Notes = @(
+            'No business rows, user identities, or email addresses were retrieved.',
+            'No metadata, role privileges, solution components, or data were changed.',
+            'One Dataverse connection was used with the requested login-prompt policy.'
+        )
+    }
+}
+
+function Ensure-OptionalAttribute {
+    param(
+        [Parameter(Mandatory)]$Service,
+        [Parameter(Mandatory)][string]$EntityName,
+        [Parameter(Mandatory)][string]$LogicalName
+    )
+
+    $attribute = Get-AttributeMetadata $Service $EntityName $LogicalName
+    if ($null -eq $attribute) {
+        throw "Required existing column was not found: $EntityName.$LogicalName"
+    }
+    if ([string]$attribute.RequiredLevel.Value -eq 'None') {
+        Write-Output "Compatible optional column already exists: $EntityName.$LogicalName"
+        return
+    }
+    if ([string]$attribute.RequiredLevel.Value -ne 'ApplicationRequired') {
+        throw "Conflict: $EntityName.$LogicalName has unsupported required level $($attribute.RequiredLevel.Value)."
+    }
+
+    if ([string]$attribute.AttributeType -ne 'Lookup') {
+        throw "Conflict: $EntityName.$LogicalName is not a Lookup."
+    }
+    $attribute.RequiredLevel.Value =
+        [Microsoft.Xrm.Sdk.Metadata.AttributeRequiredLevel]::None
+    $request = [Microsoft.Xrm.Sdk.Messages.UpdateAttributeRequest]::new()
+    $request.EntityName = $EntityName
+    $request.Attribute = $attribute
+    $request.MergeLabels = $false
+    $request.SolutionUniqueName = $SolutionUniqueName
+    $Service.Execute($request) | Out-Null
+    Write-Output "Submitted optional required-level update: $EntityName.$LogicalName"
+}
+
+function Ensure-PublicPortalSiteCheckRead {
+    param([Parameter(Mandatory)]$Service)
+
+    $roleQuery = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new('role')
+    $roleQuery.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new('roleid', 'name', 'ismanaged')
+    $roleQuery.Criteria.AddCondition(
+        'name',
+        [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,
+        'Public Portal Service'
+    )
+    $roles = @($Service.RetrieveMultiple($roleQuery).Entities)
+    if ($roles.Count -ne 1 -or [bool]$roles[0].Attributes['ismanaged']) {
+        throw 'Expected exactly one unmanaged Public Portal Service role.'
+    }
+
+    $privilegeQuery = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new('privilege')
+    $privilegeQuery.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new('name')
+    $privilegeQuery.Criteria.AddCondition(
+        'name',
+        [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,
+        'prvReadgr_SiteCheck'
+    )
+    $privileges = @($Service.RetrieveMultiple($privilegeQuery).Entities)
+    if ($privileges.Count -ne 1) {
+        throw 'Expected exactly one prvReadgr_SiteCheck privilege.'
+    }
+
+    $currentRequest = [Microsoft.Crm.Sdk.Messages.RetrieveRolePrivilegesRoleRequest]::new()
+    $currentRequest.RoleId = $roles[0].Id
+    $current = $Service.Execute($currentRequest).RolePrivileges |
+        Where-Object PrivilegeId -EQ $privileges[0].Id |
+        Select-Object -First 1
+    if ($current -and $current.Depth -eq [Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Global) {
+        Write-Output 'Public Portal Service already has Site Check Read at Organization depth.'
+        return
+    }
+    if ($current) {
+        throw "Conflict: Public Portal Service Site Check Read exists at $($current.Depth), not Organization depth."
+    }
+
+    $grant = [Microsoft.Crm.Sdk.Messages.RolePrivilege]::new()
+    $grant.PrivilegeId = $privileges[0].Id
+    $grant.Depth = [Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Global
+    $request = [Microsoft.Crm.Sdk.Messages.AddPrivilegesRoleRequest]::new()
+    $request.RoleId = $roles[0].Id
+    $request.Privileges = @($grant)
+    $Service.Execute($request) | Out-Null
+    Write-Output 'Granted Site Check Read to Public Portal Service at Organization depth.'
+}
+
+function Assert-TechnicianAccessSchema {
+    param([Parameter(Mandatory)]$Service)
+
+    $hash = Get-AttributeMetadata $Service 'gr_sitecheck' 'gr_sitechecktechnicianaccesstokenhash'
+    Assert-AttributeType $hash 'String' 'gr_sitecheck.gr_sitechecktechnicianaccesstokenhash'
+    if ($hash.MaxLength -ne 64 -or [string]$hash.RequiredLevel.Value -ne 'None') {
+        throw 'Verification failed: Site Check token hash contract is incompatible.'
+    }
+    foreach ($logicalName in @(
+        'gr_sitechecktechnicianaccesstokencreatedon',
+        'gr_sitechecktechnicianaccesstokenexpireson',
+        'gr_sitechecktechnicianaccesstokenrevokedon'
+    )) {
+        $attribute = Get-AttributeMetadata $Service 'gr_sitecheck' $logicalName
+        Assert-AttributeType $attribute 'DateTime' "gr_sitecheck.$logicalName"
+        if ([string]$attribute.DateTimeBehavior.Value -ne 'UserLocal' -or
+            [string]$attribute.RequiredLevel.Value -ne 'None') {
+            throw "Verification failed: gr_sitecheck.$logicalName is incompatible."
+        }
+    }
+
+    $emailJob = Get-AttributeMetadata $Service 'gr_emaildispatch' 'gr_job'
+    if ([string]$emailJob.AttributeType -ne 'Lookup' -or
+        [string]$emailJob.RequiredLevel.Value -ne 'None') {
+        throw 'Verification failed: gr_emaildispatch.gr_job is not an optional Lookup.'
+    }
+    $siteCheckLookup = Get-AttributeMetadata $Service 'gr_emaildispatch' 'gr_sitecheck'
+    if ([string]$siteCheckLookup.AttributeType -ne 'Lookup' -or
+        [string]$siteCheckLookup.RequiredLevel.Value -ne 'None' -or
+        @($siteCheckLookup.Targets) -notcontains 'gr_sitecheck') {
+        throw 'Verification failed: gr_emaildispatch.gr_sitecheck is incompatible.'
+    }
+
+    $siteCheck = Get-EntityMetadata $Service 'gr_sitecheck'
+    $key = @($siteCheck.Keys | Where-Object {
+        $_.LogicalName -eq 'gr_sitecheck_technicianaccesstokenhash_key'
+    })
+    if ($key.Count -ne 1 -or
+        (@($key[0].KeyAttributes) -join ',') -ne 'gr_sitechecktechnicianaccesstokenhash') {
+        throw 'Verification failed: Site Check technician access token key is missing or incompatible.'
+    }
+
+    $role = Get-RolePrivilegeSummary -Service $Service `
+        -RoleName 'Public Portal Service' `
+        -PrivilegeNames @('prvReadgr_SiteCheck')
+    $grant = $role.Roles[0].Privileges[0]
+    if ($role.RoleCount -ne 1 -or -not $grant.Granted -or $grant.Depth -ne 'Global') {
+        throw 'Verification failed: Public Portal Service Site Check Read is not Organization depth.'
+    }
+
+    Write-Output "Phase 15 technician-access schema and security verification passed; token key status: $($key[0].EntityKeyIndexStatus)."
+}
+
+function Invoke-TechnicianAccessProvisioning {
+    param([Parameter(Mandatory)]$Service)
+
+    Ensure-Text $Service 'gr_sitecheck' 'gr_SiteCheckTechnicianAccessTokenHash' `
+        'Site Check Technician Access Token Hash' 64
+    Ensure-DateTime $Service 'gr_sitecheck' 'gr_SiteCheckTechnicianAccessTokenCreatedOn' `
+        'Site Check Technician Access Token Created On'
+    Ensure-DateTime $Service 'gr_sitecheck' 'gr_SiteCheckTechnicianAccessTokenExpiresOn' `
+        'Site Check Technician Access Token Expires On'
+    Ensure-DateTime $Service 'gr_sitecheck' 'gr_SiteCheckTechnicianAccessTokenRevokedOn' `
+        'Site Check Technician Access Token Revoked On'
+    Ensure-OptionalAttribute $Service 'gr_emaildispatch' 'gr_job'
+    Ensure-Lookup $Service 'gr_emaildispatch' 'gr_SiteCheck' 'Site Check' 'gr_sitecheck' `
+        'gr_sitecheck_emaildispatches' 'gr_sitecheck_emaildispatches'
+
+    $publish = [Microsoft.Crm.Sdk.Messages.PublishXmlRequest]::new()
+    $publish.ParameterXml = @'
+<importexportxml>
+  <entities>
+    <entity>gr_sitecheck</entity>
+    <entity>gr_emaildispatch</entity>
+  </entities>
+</importexportxml>
+'@
+    $Service.Execute($publish) | Out-Null
+    Write-Output 'Published Site Check and Email Dispatch Phase 15 metadata.'
+
+    Ensure-Key $Service 'gr_sitecheck' 'gr_SiteCheck_TechnicianAccessTokenHash_Key' `
+        'Site Check Technician Access Token Hash Key' `
+        @('gr_sitechecktechnicianaccesstokenhash')
+    Ensure-PublicPortalSiteCheckRead $Service
+    Assert-TechnicianAccessSchema $Service
+}
+
 function Assert-AttributeType {
     param(
         [Parameter(Mandatory)]$Attribute,
@@ -435,6 +814,35 @@ function Ensure-Text {
         return
     }
     $attribute = [Microsoft.Xrm.Sdk.Metadata.StringAttributeMetadata]::new()
+    $attribute.SchemaName = $SchemaName
+    $attribute.DisplayName = New-Label $DisplayName
+    $attribute.MaxLength = $MaxLength
+    $attribute.RequiredLevel = New-RequiredLevel $Required
+    Add-Attribute $Service $EntityName $attribute
+}
+
+function Ensure-Memo {
+    param(
+        [Parameter(Mandatory)]$Service,
+        [Parameter(Mandatory)][string]$EntityName,
+        [Parameter(Mandatory)][string]$SchemaName,
+        [Parameter(Mandatory)][string]$DisplayName,
+        [Parameter(Mandatory)][int]$MaxLength,
+        [bool]$Required = $false
+    )
+    $logicalName = $SchemaName.ToLowerInvariant()
+    $existing = Get-AttributeMetadata $Service $EntityName $logicalName
+    if ($null -ne $existing) {
+        Assert-AttributeType $existing 'Memo' "$EntityName.$logicalName"
+        if ($existing.MaxLength -ne $MaxLength -or
+            [string]$existing.RequiredLevel.Value -ne
+                [string](New-RequiredLevel $Required).Value) {
+            throw "Conflict: $EntityName.$logicalName has incompatible length or required level."
+        }
+        Write-Output "Compatible column already exists: $EntityName.$logicalName"
+        return
+    }
+    $attribute = [Microsoft.Xrm.Sdk.Metadata.MemoAttributeMetadata]::new()
     $attribute.SchemaName = $SchemaName
     $attribute.DisplayName = New-Label $DisplayName
     $attribute.MaxLength = $MaxLength
@@ -650,6 +1058,38 @@ function Ensure-Integer {
     $attribute.MinValue = $Minimum
     $attribute.MaxValue = $Maximum
     $attribute.Format = [Microsoft.Xrm.Sdk.Metadata.IntegerFormat]::None
+    Add-Attribute $Service $EntityName $attribute
+}
+
+function Ensure-Decimal {
+    param(
+        [Parameter(Mandatory)]$Service,
+        [Parameter(Mandatory)][string]$EntityName,
+        [Parameter(Mandatory)][string]$SchemaName,
+        [Parameter(Mandatory)][string]$DisplayName,
+        [Parameter(Mandatory)][decimal]$Minimum,
+        [Parameter(Mandatory)][decimal]$Maximum,
+        [Parameter(Mandatory)][int]$Precision,
+        [bool]$Required = $false
+    )
+    $logicalName = $SchemaName.ToLowerInvariant()
+    $existing = Get-AttributeMetadata $Service $EntityName $logicalName
+    if ($null -ne $existing) {
+        Assert-AttributeType $existing 'Decimal' "$EntityName.$logicalName"
+        if ($existing.MinValue -ne $Minimum -or $existing.MaxValue -ne $Maximum -or
+            $existing.Precision -ne $Precision) {
+            throw "Conflict: $EntityName.$logicalName has an incompatible range or precision."
+        }
+        Write-Output "Compatible column already exists: $EntityName.$logicalName"
+        return
+    }
+    $attribute = [Microsoft.Xrm.Sdk.Metadata.DecimalAttributeMetadata]::new()
+    $attribute.SchemaName = $SchemaName
+    $attribute.DisplayName = New-Label $DisplayName
+    $attribute.RequiredLevel = New-RequiredLevel $Required
+    $attribute.MinValue = $Minimum
+    $attribute.MaxValue = $Maximum
+    $attribute.Precision = $Precision
     Add-Attribute $Service $EntityName $attribute
 }
 
@@ -1242,6 +1682,793 @@ function Ensure-SiteChecksSecurityRole {
     Write-Output 'Verified approved Site Checks privileges at Organization depth.'
 }
 
+function Get-ChecklistPreflight {
+    param([Parameter(Mandatory)]$Service)
+
+    $proposedTables = @(
+        'gr_sitecheckchecklisttemplate',
+        'gr_sitecheckchecklisttemplateitem',
+        'gr_sitecheckchecklistsnapshotitem',
+        'gr_sitecheckchecklistresponse'
+    )
+    $existingPrivileges = @(
+        'prvAppendgr_JobPhoto',
+        'prvWritegr_JobPhoto',
+        'prvAppendTogr_Job',
+        'prvAppendTogr_Mechanic',
+        'prvAppendTogr_SiteCheck',
+        'prvAppendgr_SiteCheckSchedule'
+    )
+
+    return [ordered]@{
+        Mode = 'InspectChecklist'
+        EnvironmentUrl = $EnvironmentUrl.TrimEnd('/')
+        ReadOnly = $true
+        BusinessDataRead = $false
+        ProposedTables = @($proposedTables | ForEach-Object {
+            $metadata = Get-EntityMetadata -Service $Service -LogicalName $_
+            [pscustomobject]@{
+                LogicalName = $_
+                Found = $null -ne $metadata
+                EntitySetName = if ($metadata) { $metadata.EntitySetName } else { $null }
+                OwnershipType = if ($metadata) { [string]$metadata.OwnershipType } else { $null }
+                PrimaryName = if ($metadata) { $metadata.PrimaryNameAttribute } else { $null }
+            }
+        })
+        ProposedExtensions = @(
+            [pscustomobject]@{
+                Entity = 'gr_sitecheckschedule'
+                Attribute = 'gr_checklisttemplate'
+                Found = $null -ne (
+                    Get-AttributeMetadata $Service 'gr_sitecheckschedule' 'gr_checklisttemplate'
+                )
+            },
+            [pscustomobject]@{
+                Entity = 'gr_jobphoto'
+                Attribute = 'gr_checklistresponse'
+                Found = $null -ne (
+                    Get-AttributeMetadata $Service 'gr_jobphoto' 'gr_checklistresponse'
+                )
+            }
+        )
+        ExistingRelationshipPrivileges = @(
+            Get-RolePrivilegeSummary -Service $Service `
+                -RoleName 'Service Operations' -PrivilegeNames $existingPrivileges
+            Get-RolePrivilegeSummary -Service $Service `
+                -RoleName 'Public Portal Service' -PrivilegeNames $existingPrivileges
+        )
+        ApprovedChoices = [ordered]@{
+            ResponseType = @(
+                'Pass / Fail / Not applicable=122830000',
+                'Yes / No=122830001',
+                'Number=122830002',
+                'Text=122830003'
+            )
+            ChoiceAnswer = @(
+                'Pass=122830000',
+                'Fail=122830001',
+                'Not applicable=122830002',
+                'Yes=122830003',
+                'No=122830004'
+            )
+        }
+        Notes = @(
+            'No customer, Site, Equipment, Job, checklist, or other business rows were read.',
+            'Found proposed names require compatibility verification before any provisioning.',
+            'ProvisionChecklist is idempotent and stops on incompatible existing metadata.'
+        )
+    }
+}
+
+function Ensure-RolePrivilegesGlobal {
+    param(
+        [Parameter(Mandatory)]$Service,
+        [Parameter(Mandatory)][string]$RoleName,
+        [Parameter(Mandatory)][string[]]$PrivilegeNames
+    )
+
+    $roleQuery = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new('role')
+    $roleQuery.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new(
+        'roleid', 'name', 'ismanaged'
+    )
+    $roleQuery.Criteria.AddCondition(
+        'name',
+        [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,
+        $RoleName
+    )
+    $roles = @($Service.RetrieveMultiple($roleQuery).Entities)
+    if ($roles.Count -ne 1 -or [bool]$roles[0].Attributes['ismanaged']) {
+        throw "Expected exactly one unmanaged $RoleName role."
+    }
+
+    $privilegeQuery = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new('privilege')
+    $privilegeQuery.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new('name')
+    $filter = $privilegeQuery.Criteria.AddFilter(
+        [Microsoft.Xrm.Sdk.Query.LogicalOperator]::Or
+    )
+    foreach ($name in $PrivilegeNames) {
+        $filter.AddCondition(
+            'name',
+            [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,
+            $name
+        )
+    }
+    $metadata = @($Service.RetrieveMultiple($privilegeQuery).Entities)
+    foreach ($name in $PrivilegeNames) {
+        if (-not ($metadata | Where-Object {
+            [string]$_.Attributes['name'] -ieq $name
+        } | Select-Object -First 1)) {
+            throw "Required checklist privilege metadata was not found: $name"
+        }
+    }
+
+    $currentRequest = [Microsoft.Crm.Sdk.Messages.RetrieveRolePrivilegesRoleRequest]::new()
+    $currentRequest.RoleId = $roles[0].Id
+    $current = @($Service.Execute($currentRequest).RolePrivileges)
+    $toAdd = [System.Collections.Generic.List[Microsoft.Crm.Sdk.Messages.RolePrivilege]]::new()
+    foreach ($name in $PrivilegeNames) {
+        $privilege = $metadata | Where-Object {
+            [string]$_.Attributes['name'] -ieq $name
+        } | Select-Object -First 1
+        $grant = $current | Where-Object PrivilegeId -EQ $privilege.Id | Select-Object -First 1
+        if ($grant) {
+            if ($grant.Depth -ne [Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Global) {
+                throw "Conflict: $RoleName has $name at $($grant.Depth), not Organization depth."
+            }
+            continue
+        }
+        $newGrant = [Microsoft.Crm.Sdk.Messages.RolePrivilege]::new()
+        $newGrant.PrivilegeId = $privilege.Id
+        $newGrant.Depth = [Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Global
+        $toAdd.Add($newGrant)
+    }
+    if ($toAdd.Count) {
+        $request = [Microsoft.Crm.Sdk.Messages.AddPrivilegesRoleRequest]::new()
+        $request.RoleId = $roles[0].Id
+        $request.Privileges = $toAdd.ToArray()
+        $Service.Execute($request) | Out-Null
+        Write-Output "Added $($toAdd.Count) approved checklist privileges to $RoleName."
+    } else {
+        Write-Output "$RoleName already has all approved checklist privileges."
+    }
+
+    $verified = Get-RolePrivilegeSummary -Service $Service `
+        -RoleName $RoleName -PrivilegeNames $PrivilegeNames
+    foreach ($grant in $verified.Roles[0].Privileges) {
+        if (-not $grant.Granted -or $grant.Depth -ne 'Global') {
+            throw "Checklist security verification failed for $RoleName / $($grant.Name)."
+        }
+    }
+    Write-Output "Verified approved checklist privileges for $RoleName at Organization depth."
+}
+
+function Get-ChecklistPrivilegeContracts {
+    return [ordered]@{
+        ServiceOperations = @(
+            'prvCreategr_SiteCheckChecklistTemplate',
+            'prvReadgr_SiteCheckChecklistTemplate',
+            'prvWritegr_SiteCheckChecklistTemplate',
+            'prvDeletegr_SiteCheckChecklistTemplate',
+            'prvAppendgr_SiteCheckChecklistTemplate',
+            'prvAppendTogr_SiteCheckChecklistTemplate',
+            'prvCreategr_SiteCheckChecklistTemplateItem',
+            'prvReadgr_SiteCheckChecklistTemplateItem',
+            'prvWritegr_SiteCheckChecklistTemplateItem',
+            'prvDeletegr_SiteCheckChecklistTemplateItem',
+            'prvAppendgr_SiteCheckChecklistTemplateItem',
+            'prvAppendTogr_SiteCheckChecklistTemplateItem',
+            'prvCreategr_SiteCheckChecklistSnapshotItem',
+            'prvReadgr_SiteCheckChecklistSnapshotItem',
+            'prvDeletegr_SiteCheckChecklistSnapshotItem',
+            'prvAppendgr_SiteCheckChecklistSnapshotItem',
+            'prvAppendTogr_SiteCheckChecklistSnapshotItem',
+            'prvReadgr_SiteCheckChecklistResponse',
+            'prvDeletegr_SiteCheckChecklistResponse'
+        )
+        PublicPortal = @(
+            'prvReadgr_SiteCheckChecklistSnapshotItem',
+            'prvAppendTogr_SiteCheckChecklistSnapshotItem',
+            'prvCreategr_SiteCheckChecklistResponse',
+            'prvReadgr_SiteCheckChecklistResponse',
+            'prvAppendgr_SiteCheckChecklistResponse',
+            'prvAppendTogr_SiteCheckChecklistResponse',
+            'prvAppendTogr_Job',
+            'prvAppendTogr_Mechanic',
+            'prvWritegr_JobPhoto',
+            'prvAppendgr_JobPhoto'
+        )
+    }
+}
+
+function Get-ChecklistSnapshotRowCount {
+    param([Parameter(Mandatory)]$Service)
+    $query = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new(
+        'gr_sitecheckchecklistsnapshotitem'
+    )
+    $query.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new(
+        'gr_sitecheckchecklistsnapshotitemid'
+    )
+    $query.TopCount = 1
+    return @($Service.RetrieveMultiple($query).Entities).Count
+}
+
+function Get-ChecklistCorrectionPreflight {
+    param([Parameter(Mandatory)]$Service)
+    $snapshot = Get-EntityMetadata $Service 'gr_sitecheckchecklistsnapshotitem'
+    if (-not $snapshot) { throw 'The provisioned Checklist Snapshot Item table was not found.' }
+    $jobLookup = Get-AttributeMetadata $Service `
+        'gr_sitecheckchecklistsnapshotitem' 'gr_job'
+    $servicePrivileges = @(
+        'prvAppendgr_SiteCheckChecklistSnapshotItem',
+        'prvAppendTogr_Job'
+    )
+
+    return [ordered]@{
+        Mode = 'InspectChecklistCorrection'
+        EnvironmentUrl = $EnvironmentUrl.TrimEnd('/')
+        ReadOnly = $true
+        SnapshotRowCountAtMostOne = Get-ChecklistSnapshotRowCount $Service
+        JobLookup = [ordered]@{
+            Found = $null -ne $jobLookup
+            AttributeType = if ($jobLookup) { [string]$jobLookup.AttributeType } else { $null }
+            RequiredLevel = if ($jobLookup) {
+                [string]$jobLookup.RequiredLevel.Value
+            } else {
+                $null
+            }
+        }
+        Keys = @($snapshot.Keys | ForEach-Object {
+            [pscustomobject]@{
+                LogicalName = $_.LogicalName
+                KeyAttributes = @($_.KeyAttributes)
+                Status = [string]$_.EntityKeyIndexStatus
+            }
+        })
+        ServiceOperations = Get-RolePrivilegeSummary -Service $Service `
+            -RoleName 'Service Operations' -PrivilegeNames $servicePrivileges
+        Notes = @(
+            'The count is deliberately capped at one; zero is required before correction.',
+            'No Site, Equipment, Job, response, or other business rows were retrieved.',
+            'Provisioning does not seed Templates, Items, Snapshots, or Responses.'
+        )
+    }
+}
+
+function Remove-ChecklistSnapshotSiteCheckKey {
+    param([Parameter(Mandatory)]$Service)
+    $entity = Get-EntityMetadata $Service 'gr_sitecheckchecklistsnapshotitem'
+    $oldName = 'gr_sitecheckchecklistsnapshotitem_sitecheck_itemkey_key'
+    $old = @($entity.Keys | Where-Object LogicalName -EQ $oldName)
+    if ($old.Count -eq 0) {
+        Write-Output 'Old Site Check + Item Key is already absent.'
+        return
+    }
+    if ($old.Count -ne 1 -or
+        ((@($old[0].KeyAttributes | Sort-Object) -join ',') -ne
+            ((@('gr_sitecheck', 'gr_itemkey') | Sort-Object) -join ','))) {
+        throw 'Conflict: the old Snapshot Item key is incompatible.'
+    }
+    $request = [Microsoft.Xrm.Sdk.Messages.DeleteEntityKeyRequest]::new()
+    $request.EntityLogicalName = 'gr_sitecheckchecklistsnapshotitem'
+    $request.Name = $oldName
+    $Service.Execute($request) | Out-Null
+    Write-Output 'Deleted the obsolete Snapshot Item Site Check + Item Key.'
+}
+
+function Invoke-ChecklistCorrectionProvisioning {
+    param([Parameter(Mandatory)]$Service)
+    if ((Get-ChecklistSnapshotRowCount $Service) -ne 0) {
+        throw 'Checklist Snapshot Item rows exist. Stop and design a migration before changing the key.'
+    }
+
+    Remove-ChecklistSnapshotSiteCheckKey $Service
+    Ensure-Lookup $Service 'gr_sitecheckchecklistsnapshotitem' 'gr_Job' `
+        'Job' 'gr_job' 'gr_job_sitecheckchecklistsnapshotitems' `
+        'gr_job_sitecheckchecklistsnapshotitems' $true
+
+    $publish = [Microsoft.Crm.Sdk.Messages.PublishXmlRequest]::new()
+    $publish.ParameterXml = @'
+<importexportxml>
+  <entities>
+    <entity>gr_sitecheckchecklistsnapshotitem</entity>
+    <entity>gr_job</entity>
+  </entities>
+</importexportxml>
+'@
+    $Service.Execute($publish) | Out-Null
+    Write-Output 'Published the per-Job Checklist Snapshot Item correction.'
+
+    Ensure-Key $Service 'gr_sitecheckchecklistsnapshotitem' `
+        'gr_SiteCheckChecklistSnapshotItem_Job_ItemKey_Key' `
+        'Site Check Checklist Snapshot Item Job and Item Key' `
+        @('gr_job', 'gr_itemkey')
+    Assert-ChecklistSchema $Service
+    Write-Output 'Checklist Snapshot Item per-Job correction completed without seeding business data.'
+}
+
+function Get-ChecklistContentDefinition {
+    if (-not (Test-Path -LiteralPath $ChecklistContentPath)) {
+        throw "Checklist content manifest was not found: $ChecklistContentPath"
+    }
+    $definition = Get-Content -LiteralPath $ChecklistContentPath -Raw | ConvertFrom-Json
+    $templates = @($definition.templates)
+    if ($templates.Count -ne 2) { throw 'Checklist content must define exactly two Templates.' }
+    $expectedCounts = @{ SITE_CHECK_ICE = 23; SITE_CHECK_ELECTRIC = 22 }
+    foreach ($template in $templates) {
+        if (-not $expectedCounts.ContainsKey([string]$template.code)) {
+            throw "Unsupported checklist Template code: $($template.code)"
+        }
+        if ([int]$template.version -ne 1 -or -not ([string]$template.name).Trim()) {
+            throw "Checklist Template $($template.code) must have a name and version 1."
+        }
+        $items = @($template.items)
+        if ($items.Count -ne $expectedCounts[[string]$template.code]) {
+            throw "Checklist Template $($template.code) has $($items.Count) items; expected $($expectedCounts[[string]$template.code])."
+        }
+        $keys = @($items | ForEach-Object { ([string]$_.key).Trim().ToLowerInvariant() })
+        $orders = @($items | ForEach-Object { [int]$_.order })
+        if (@($keys | Where-Object { -not $_ }).Count -ne 0 -or
+            @($keys | Sort-Object -Unique).Count -ne $keys.Count -or
+            @($orders | Sort-Object -Unique).Count -ne $orders.Count) {
+            throw "Checklist Template $($template.code) has empty or duplicated keys/orders."
+        }
+        foreach ($item in $items) {
+            if (-not ([string]$item.group).Trim() -or -not ([string]$item.prompt).Trim()) {
+                throw "Checklist Template $($template.code) has an item without group or prompt."
+            }
+        }
+    }
+    return $definition
+}
+
+function Get-ChecklistContentState {
+    param([Parameter(Mandatory)]$Service)
+    $query = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new('gr_sitecheckchecklisttemplate')
+    $query.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new(
+        'gr_sitecheckchecklisttemplateid', 'gr_name', 'gr_templatecode', 'gr_version', 'gr_active'
+    )
+    $codes = [Microsoft.Xrm.Sdk.Query.FilterExpression]::new(
+        [Microsoft.Xrm.Sdk.Query.LogicalOperator]::Or
+    )
+    foreach ($code in @('SITE_CHECK_ICE', 'SITE_CHECK_ELECTRIC')) {
+        $codes.AddCondition('gr_templatecode', [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal, $code)
+    }
+    $query.Criteria.AddFilter($codes)
+    $templates = @($Service.RetrieveMultiple($query).Entities)
+    $items = @()
+    foreach ($template in $templates) {
+        $itemQuery = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new(
+            'gr_sitecheckchecklisttemplateitem'
+        )
+        $itemQuery.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new(
+            'gr_sitecheckchecklisttemplateitemid', 'gr_name', 'gr_checklisttemplate',
+            'gr_itemkey', 'gr_groupname', 'gr_prompt', 'gr_responsetype',
+            'gr_displayorder', 'gr_required', 'gr_commentrequiredonnegative',
+            'gr_photorequiredonnegative'
+        )
+        $itemQuery.Criteria.AddCondition(
+            'gr_checklisttemplate',
+            [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,
+            $template.Id
+        )
+        $items += @($Service.RetrieveMultiple($itemQuery).Entities)
+    }
+    return [pscustomobject]@{ Templates = $templates; Items = $items }
+}
+
+function Get-ChecklistItemRule {
+    param($Item, $Defaults, [string]$Name)
+    if ($Item.PSObject.Properties.Name -contains $Name) { return $Item.$Name }
+    return $Defaults.$Name
+}
+
+function Assert-ChecklistContent {
+    param(
+        [Parameter(Mandatory)]$State,
+        [Parameter(Mandatory)]$Definition
+    )
+    $templates = @($State.Templates)
+    if ($templates.Count -ne 2) {
+        throw "Checklist content verification expected two Templates; found $($templates.Count)."
+    }
+    foreach ($expected in @($Definition.templates)) {
+        $actual = @($templates | Where-Object {
+            [string]$_.Attributes['gr_templatecode'] -ceq [string]$expected.code -and
+            [int]$_.Attributes['gr_version'] -eq [int]$expected.version
+        })
+        if ($actual.Count -ne 1 -or
+            [string]$actual[0].Attributes['gr_name'] -cne [string]$expected.name -or
+            [bool]$actual[0].Attributes['gr_active'] -ne $true) {
+            throw "Checklist Template $($expected.code) does not match the approved v1 definition."
+        }
+        $actualItems = @($State.Items | Where-Object {
+            $_.Attributes['gr_checklisttemplate'].Id -eq $actual[0].Id
+        })
+        if ($actualItems.Count -ne @($expected.items).Count) {
+            throw "Checklist Template $($expected.code) item count does not match."
+        }
+        foreach ($item in @($expected.items)) {
+            $row = @($actualItems | Where-Object {
+                [string]$_.Attributes['gr_itemkey'] -ceq [string]$item.key
+            })
+            $responseType = [int](Get-ChecklistItemRule $item $Definition.defaults 'responseType')
+            $commentRequired = [bool](Get-ChecklistItemRule $item $Definition.defaults 'commentRequiredOnNegative')
+            if ($row.Count -ne 1 -or
+                [string]$row[0].Attributes['gr_groupname'] -cne [string]$item.group -or
+                [string]$row[0].Attributes['gr_prompt'] -cne [string]$item.prompt -or
+                [int]$row[0].Attributes['gr_responsetype'].Value -ne $responseType -or
+                [int]$row[0].Attributes['gr_displayorder'] -ne [int]$item.order -or
+                [bool]$row[0].Attributes['gr_required'] -ne $true -or
+                [bool]$row[0].Attributes['gr_commentrequiredonnegative'] -ne $commentRequired -or
+                [bool]$row[0].Attributes['gr_photorequiredonnegative'] -ne $false) {
+                throw "Checklist item $($expected.code)/$($item.key) does not match the approved v1 definition."
+            }
+        }
+    }
+}
+
+function Get-ChecklistContentPreflight {
+    param([Parameter(Mandatory)]$Service)
+    $definition = Get-ChecklistContentDefinition
+    $state = Get-ChecklistContentState $Service
+    return [ordered]@{
+        Mode = 'InspectChecklistContent'
+        EnvironmentUrl = $EnvironmentUrl.TrimEnd('/')
+        ReadOnly = $true
+        ApprovedTemplateCount = @($definition.templates).Count
+        ApprovedItemCount = @($definition.templates | ForEach-Object { @($_.items) }).Count
+        ExistingMatchingTemplateCount = @($state.Templates).Count
+        ExistingMatchingItemCount = @($state.Items).Count
+        Templates = @($definition.templates | ForEach-Object {
+            [pscustomobject]@{ Code = $_.code; Version = $_.version; Items = @($_.items).Count }
+        })
+        Notes = @(
+            'Only the two approved Template codes and their child Items were read.',
+            'No Site Check, Job, Equipment, Schedule, Snapshot, Response, or customer data was read.',
+            'Provisioning uses one atomic transaction and is an exact-match no-op after success.'
+        )
+    }
+}
+
+function Invoke-ChecklistContentProvisioning {
+    param([Parameter(Mandatory)]$Service)
+    Assert-ChecklistSchema $Service -RequireActiveKeys
+    $definition = Get-ChecklistContentDefinition
+    $state = Get-ChecklistContentState $Service
+    if (@($state.Templates).Count -gt 0) {
+        Assert-ChecklistContent $state $definition
+        Write-Output 'Approved Site Check checklist v1 content already exists exactly; no write was made.'
+        return
+    }
+    if (@($state.Items).Count -gt 0) {
+        throw 'Checklist Template Items exist without the approved parent Templates. Stop for review.'
+    }
+
+    $transaction = [Microsoft.Xrm.Sdk.Messages.ExecuteTransactionRequest]::new()
+    $transaction.ReturnResponses = $false
+    $transaction.Requests = [Microsoft.Xrm.Sdk.OrganizationRequestCollection]::new()
+    foreach ($template in @($definition.templates)) {
+        $templateId = [guid]::NewGuid()
+        $templateRow = [Microsoft.Xrm.Sdk.Entity]::new(
+            'gr_sitecheckchecklisttemplate', $templateId
+        )
+        $templateRow['gr_name'] = [string]$template.name
+        $templateRow['gr_templatecode'] = [string]$template.code
+        $templateRow['gr_version'] = [int]$template.version
+        $templateRow['gr_active'] = $true
+        $templateRequest = [Microsoft.Xrm.Sdk.Messages.CreateRequest]::new()
+        $templateRequest.Target = $templateRow
+        $transaction.Requests.Add($templateRequest)
+
+        foreach ($item in @($template.items)) {
+            $itemRow = [Microsoft.Xrm.Sdk.Entity]::new(
+                'gr_sitecheckchecklisttemplateitem', [guid]::NewGuid()
+            )
+            $itemRow['gr_name'] = [string]$item.key
+            $itemRow['gr_checklisttemplate'] = [Microsoft.Xrm.Sdk.EntityReference]::new(
+                'gr_sitecheckchecklisttemplate', $templateId
+            )
+            $itemRow['gr_itemkey'] = [string]$item.key
+            $itemRow['gr_groupname'] = [string]$item.group
+            $itemRow['gr_prompt'] = [string]$item.prompt
+            $itemRow['gr_responsetype'] = [Microsoft.Xrm.Sdk.OptionSetValue]::new(
+                [int](Get-ChecklistItemRule $item $definition.defaults 'responseType')
+            )
+            $itemRow['gr_displayorder'] = [int]$item.order
+            $itemRow['gr_required'] = [bool](
+                Get-ChecklistItemRule $item $definition.defaults 'required'
+            )
+            $itemRow['gr_commentrequiredonnegative'] = [bool](
+                Get-ChecklistItemRule $item $definition.defaults 'commentRequiredOnNegative'
+            )
+            $itemRow['gr_photorequiredonnegative'] = [bool](
+                Get-ChecklistItemRule $item $definition.defaults 'photoRequiredOnNegative'
+            )
+            $itemRequest = [Microsoft.Xrm.Sdk.Messages.CreateRequest]::new()
+            $itemRequest.Target = $itemRow
+            $transaction.Requests.Add($itemRequest)
+        }
+    }
+    if ($transaction.Requests.Count -ne 47) {
+        throw "Checklist seed transaction has $($transaction.Requests.Count) requests; expected 47."
+    }
+    $Service.Execute($transaction) | Out-Null
+    Assert-ChecklistContent (Get-ChecklistContentState $Service) $definition
+    Write-Output 'Created and verified two approved Site Check checklist v1 Templates and 45 Items atomically.'
+}
+
+function Assert-ChecklistSchema {
+    param(
+        [Parameter(Mandatory)]$Service,
+        [switch]$RequireActiveKeys
+    )
+
+    $tableContracts = @(
+        @{
+            Name = 'gr_sitecheckchecklisttemplate'
+            Key = 'gr_sitecheckchecklisttemplate_code_version_key'
+            Attributes = @('gr_templatecode', 'gr_version')
+        },
+        @{
+            Name = 'gr_sitecheckchecklisttemplateitem'
+            Key = 'gr_sitecheckchecklisttemplateitem_template_itemkey_key'
+            Attributes = @('gr_checklisttemplate', 'gr_itemkey')
+        },
+        @{
+            Name = 'gr_sitecheckchecklistsnapshotitem'
+            Key = 'gr_sitecheckchecklistsnapshotitem_job_itemkey_key'
+            Attributes = @('gr_job', 'gr_itemkey')
+        },
+        @{
+            Name = 'gr_sitecheckchecklistresponse'
+            Key = 'gr_sitecheckchecklistresponse_job_snapshot_key'
+            Attributes = @('gr_job', 'gr_snapshotitem')
+        }
+    )
+    foreach ($contract in $tableContracts) {
+        $entity = Get-EntityMetadata $Service $contract.Name
+        if (-not $entity -or
+            $entity.OwnershipType -ne
+                [Microsoft.Xrm.Sdk.Metadata.OwnershipTypes]::OrganizationOwned) {
+            throw "Checklist verification failed for table $($contract.Name)."
+        }
+        $key = @($entity.Keys | Where-Object LogicalName -EQ $contract.Key)
+        if ($key.Count -ne 1 -or
+            ((@($key[0].KeyAttributes | Sort-Object) -join ',') -ne
+                (@($contract.Attributes | Sort-Object) -join ','))) {
+            throw "Checklist verification failed for key $($contract.Key)."
+        }
+        if ($RequireActiveKeys -and [string]$key[0].EntityKeyIndexStatus -ne 'Active') {
+            throw "Checklist key $($contract.Key) is $($key[0].EntityKeyIndexStatus), not Active."
+        }
+        Write-Output "Verified checklist table/key: $($contract.Name) ($($key[0].EntityKeyIndexStatus))"
+    }
+
+    $responseType = Get-AttributeMetadata $Service `
+        'gr_sitecheckchecklisttemplateitem' 'gr_responsetype'
+    Assert-ChoiceOptions $responseType @(
+        @{ Label = 'Pass / Fail / Not applicable'; Value = 122830000 },
+        @{ Label = 'Yes / No'; Value = 122830001 },
+        @{ Label = 'Number'; Value = 122830002 },
+        @{ Label = 'Text'; Value = 122830003 }
+    ) 'gr_sitecheckchecklisttemplateitem.gr_responsetype'
+    $answer = Get-AttributeMetadata $Service `
+        'gr_sitecheckchecklistresponse' 'gr_choiceanswer'
+    Assert-ChoiceOptions $answer @(
+        @{ Label = 'Pass'; Value = 122830000 },
+        @{ Label = 'Fail'; Value = 122830001 },
+        @{ Label = 'Not applicable'; Value = 122830002 },
+        @{ Label = 'Yes'; Value = 122830003 },
+        @{ Label = 'No'; Value = 122830004 }
+    ) 'gr_sitecheckchecklistresponse.gr_choiceanswer'
+
+    foreach ($lookup in @(
+        @('gr_sitecheckschedule', 'gr_checklisttemplate', 'gr_sitecheckchecklisttemplate'),
+        @('gr_jobphoto', 'gr_checklistresponse', 'gr_sitecheckchecklistresponse'),
+        @('gr_sitecheckchecklistsnapshotitem', 'gr_job', 'gr_job')
+    )) {
+        $attribute = Get-AttributeMetadata $Service $lookup[0] $lookup[1]
+        if (-not $attribute -or [string]$attribute.AttributeType -ne 'Lookup' -or
+            @($attribute.Targets) -notcontains $lookup[2]) {
+            throw "Checklist verification failed for $($lookup[0]).$($lookup[1])."
+        }
+    }
+
+    $privileges = Get-ChecklistPrivilegeContracts
+    foreach ($roleContract in @(
+        @('Service Operations', $privileges.ServiceOperations),
+        @('Public Portal Service', $privileges.PublicPortal)
+    )) {
+        $summary = Get-RolePrivilegeSummary -Service $Service `
+            -RoleName $roleContract[0] -PrivilegeNames $roleContract[1]
+        if ($summary.RoleCount -ne 1) {
+            throw "Checklist security verification found $($summary.RoleCount) $($roleContract[0]) roles."
+        }
+        foreach ($grant in $summary.Roles[0].Privileges) {
+            if (-not $grant.Granted -or $grant.Depth -ne 'Global') {
+                throw "Checklist security verification failed for $($roleContract[0]) / $($grant.Name)."
+            }
+        }
+    }
+    Write-Output 'Phase 16 checklist schema, Choices, relationships, keys, and security passed verification.'
+}
+
+function Invoke-ChecklistProvisioning {
+    param([Parameter(Mandatory)]$Service)
+
+    Ensure-Table $Service 'gr_SiteCheckChecklistTemplate' 'Site Check Checklist Template' `
+        'Site Check Checklist Templates' 'Versioned Site Check checklist definition.'
+    Ensure-Text $Service 'gr_sitecheckchecklisttemplate' 'gr_TemplateCode' `
+        'Template Code' 100 $true
+    Ensure-Integer $Service 'gr_sitecheckchecklisttemplate' 'gr_Version' `
+        'Version' 1 100000 $true
+    Ensure-Boolean $Service 'gr_sitecheckchecklisttemplate' 'gr_Active' `
+        'Active' $true $true
+    Ensure-Lookup $Service 'gr_sitecheckchecklisttemplate' 'gr_SupersedesTemplate' `
+        'Supersedes Template' 'gr_sitecheckchecklisttemplate' `
+        'gr_sitecheckchecklisttemplate_supersedes' `
+        'gr_sitecheckchecklisttemplate_supersededby'
+
+    Ensure-Table $Service 'gr_SiteCheckChecklistTemplateItem' `
+        'Site Check Checklist Template Item' 'Site Check Checklist Template Items' `
+        'Ordered versioned Site Check checklist prompt.'
+    Ensure-Lookup $Service 'gr_sitecheckchecklisttemplateitem' 'gr_ChecklistTemplate' `
+        'Checklist Template' 'gr_sitecheckchecklisttemplate' `
+        'gr_sitecheckchecklisttemplate_items' `
+        'gr_sitecheckchecklisttemplate_items' $true
+    Ensure-Text $Service 'gr_sitecheckchecklisttemplateitem' 'gr_ItemKey' `
+        'Item Key' 100 $true
+    Ensure-Text $Service 'gr_sitecheckchecklisttemplateitem' 'gr_GroupName' `
+        'Group Name' 200 $true
+    Ensure-Memo $Service 'gr_sitecheckchecklisttemplateitem' 'gr_Prompt' `
+        'Prompt' 2000 $true
+    Ensure-Choice $Service 'gr_sitecheckchecklisttemplateitem' 'gr_ResponseType' `
+        'Response Type' @(
+            @{ Label = 'Pass / Fail / Not applicable'; Value = 122830000 },
+            @{ Label = 'Yes / No'; Value = 122830001 },
+            @{ Label = 'Number'; Value = 122830002 },
+            @{ Label = 'Text'; Value = 122830003 }
+        ) $null $true
+    Ensure-Integer $Service 'gr_sitecheckchecklisttemplateitem' 'gr_DisplayOrder' `
+        'Display Order' 0 100000 $true
+    Ensure-Boolean $Service 'gr_sitecheckchecklisttemplateitem' 'gr_Required' `
+        'Required' $false $true
+    Ensure-Boolean $Service 'gr_sitecheckchecklisttemplateitem' `
+        'gr_CommentRequiredOnNegative' 'Comment Required on Negative' $false $true
+    Ensure-Boolean $Service 'gr_sitecheckchecklisttemplateitem' `
+        'gr_PhotoRequiredOnNegative' 'Photo Required on Negative' $false $true
+
+    Ensure-Lookup $Service 'gr_sitecheckschedule' 'gr_ChecklistTemplate' `
+        'Checklist Template' 'gr_sitecheckchecklisttemplate' `
+        'gr_sitecheckschedule_checklisttemplate' `
+        'gr_sitecheckchecklisttemplate_schedules'
+
+    Ensure-Table $Service 'gr_SiteCheckChecklistSnapshotItem' `
+        'Site Check Checklist Snapshot Item' 'Site Check Checklist Snapshot Items' `
+        'Immutable checklist prompt copied to a Site Check occurrence.'
+    Ensure-Lookup $Service 'gr_sitecheckchecklistsnapshotitem' 'gr_SiteCheck' `
+        'Site Check' 'gr_sitecheck' 'gr_sitecheck_checklistsnapshotitems' `
+        'gr_sitecheck_checklistsnapshotitems' $true
+    Ensure-Lookup $Service 'gr_sitecheckchecklistsnapshotitem' 'gr_SourceTemplateItem' `
+        'Source Template Item' 'gr_sitecheckchecklisttemplateitem' `
+        'gr_sitecheckchecklisttemplateitem_snapshots' `
+        'gr_sitecheckchecklisttemplateitem_snapshots'
+    Ensure-Text $Service 'gr_sitecheckchecklistsnapshotitem' 'gr_ItemKey' `
+        'Item Key' 100 $true
+    Ensure-Text $Service 'gr_sitecheckchecklistsnapshotitem' 'gr_GroupName' `
+        'Group Name' 200 $true
+    Ensure-Memo $Service 'gr_sitecheckchecklistsnapshotitem' 'gr_Prompt' `
+        'Prompt' 2000 $true
+    Ensure-Choice $Service 'gr_sitecheckchecklistsnapshotitem' 'gr_ResponseType' `
+        'Response Type' @(
+            @{ Label = 'Pass / Fail / Not applicable'; Value = 122830000 },
+            @{ Label = 'Yes / No'; Value = 122830001 },
+            @{ Label = 'Number'; Value = 122830002 },
+            @{ Label = 'Text'; Value = 122830003 }
+        ) $null $true
+    Ensure-Integer $Service 'gr_sitecheckchecklistsnapshotitem' 'gr_DisplayOrder' `
+        'Display Order' 0 100000 $true
+    Ensure-Boolean $Service 'gr_sitecheckchecklistsnapshotitem' 'gr_Required' `
+        'Required' $false $true
+    Ensure-Boolean $Service 'gr_sitecheckchecklistsnapshotitem' `
+        'gr_CommentRequiredOnNegative' 'Comment Required on Negative' $false $true
+    Ensure-Boolean $Service 'gr_sitecheckchecklistsnapshotitem' `
+        'gr_PhotoRequiredOnNegative' 'Photo Required on Negative' $false $true
+
+    Ensure-Table $Service 'gr_SiteCheckChecklistResponse' `
+        'Site Check Checklist Response' 'Site Check Checklist Responses' `
+        'Technician answer for one Job and occurrence checklist item.'
+    Ensure-Lookup $Service 'gr_sitecheckchecklistresponse' 'gr_Job' `
+        'Job' 'gr_job' 'gr_job_sitecheckchecklistresponses' `
+        'gr_job_sitecheckchecklistresponses' $true
+    Ensure-Lookup $Service 'gr_sitecheckchecklistresponse' 'gr_SnapshotItem' `
+        'Snapshot Item' 'gr_sitecheckchecklistsnapshotitem' `
+        'gr_sitecheckchecklistsnapshotitem_responses' `
+        'gr_sitecheckchecklistsnapshotitem_responses' $true
+    Ensure-Choice $Service 'gr_sitecheckchecklistresponse' 'gr_ChoiceAnswer' `
+        'Choice Answer' @(
+            @{ Label = 'Pass'; Value = 122830000 },
+            @{ Label = 'Fail'; Value = 122830001 },
+            @{ Label = 'Not applicable'; Value = 122830002 },
+            @{ Label = 'Yes'; Value = 122830003 },
+            @{ Label = 'No'; Value = 122830004 }
+        )
+    Ensure-Decimal $Service 'gr_sitecheckchecklistresponse' 'gr_NumericAnswer' `
+        'Numeric Answer' -1000000000 1000000000 4
+    Ensure-Memo $Service 'gr_sitecheckchecklistresponse' 'gr_TextAnswer' `
+        'Text Answer' 10000
+    Ensure-Memo $Service 'gr_sitecheckchecklistresponse' 'gr_Comment' `
+        'Comment' 10000
+    Ensure-DateTime $Service 'gr_sitecheckchecklistresponse' 'gr_SubmittedOn' `
+        'Submitted On' $true
+    Ensure-Lookup $Service 'gr_sitecheckchecklistresponse' 'gr_Technician' `
+        'Technician' 'gr_mechanic' 'gr_mechanic_sitecheckchecklistresponses' `
+        'gr_mechanic_sitecheckchecklistresponses' $true
+
+    Ensure-Lookup $Service 'gr_jobphoto' 'gr_ChecklistResponse' `
+        'Checklist Response' 'gr_sitecheckchecklistresponse' `
+        'gr_sitecheckchecklistresponse_jobphotos' `
+        'gr_sitecheckchecklistresponse_jobphotos'
+
+    $publish = [Microsoft.Crm.Sdk.Messages.PublishXmlRequest]::new()
+    $publish.ParameterXml = @'
+<importexportxml>
+  <entities>
+    <entity>gr_sitecheckchecklisttemplate</entity>
+    <entity>gr_sitecheckchecklisttemplateitem</entity>
+    <entity>gr_sitecheckschedule</entity>
+    <entity>gr_sitecheckchecklistsnapshotitem</entity>
+    <entity>gr_sitecheckchecklistresponse</entity>
+    <entity>gr_jobphoto</entity>
+  </entities>
+</importexportxml>
+'@
+    $Service.Execute($publish) | Out-Null
+    Write-Output 'Published approved Phase 16 checklist metadata.'
+
+    Ensure-Key $Service 'gr_sitecheckchecklisttemplate' `
+        'gr_SiteCheckChecklistTemplate_Code_Version_Key' `
+        'Site Check Checklist Template Code and Version' `
+        @('gr_templatecode', 'gr_version')
+    Ensure-Key $Service 'gr_sitecheckchecklisttemplateitem' `
+        'gr_SiteCheckChecklistTemplateItem_Template_ItemKey_Key' `
+        'Site Check Checklist Template Item Template and Item Key' `
+        @('gr_checklisttemplate', 'gr_itemkey')
+    if ((Get-ChecklistSnapshotRowCount $Service) -ne 0) {
+        throw 'Checklist Snapshot Item rows exist. Stop before applying the per-Job key correction.'
+    }
+    Remove-ChecklistSnapshotSiteCheckKey $Service
+    Ensure-Lookup $Service 'gr_sitecheckchecklistsnapshotitem' 'gr_Job' `
+        'Job' 'gr_job' 'gr_job_sitecheckchecklistsnapshotitems' `
+        'gr_job_sitecheckchecklistsnapshotitems' $true
+    $snapshotCorrectionPublish = [Microsoft.Crm.Sdk.Messages.PublishXmlRequest]::new()
+    $snapshotCorrectionPublish.ParameterXml = @'
+<importexportxml>
+  <entities>
+    <entity>gr_sitecheckchecklistsnapshotitem</entity>
+    <entity>gr_job</entity>
+  </entities>
+</importexportxml>
+'@
+    $Service.Execute($snapshotCorrectionPublish) | Out-Null
+    Ensure-Key $Service 'gr_sitecheckchecklistsnapshotitem' `
+        'gr_SiteCheckChecklistSnapshotItem_Job_ItemKey_Key' `
+        'Site Check Checklist Snapshot Item Job and Item Key' `
+        @('gr_job', 'gr_itemkey')
+    Ensure-Key $Service 'gr_sitecheckchecklistresponse' `
+        'gr_SiteCheckChecklistResponse_Job_Snapshot_Key' `
+        'Site Check Checklist Response Job and Snapshot Item' `
+        @('gr_job', 'gr_snapshotitem')
+
+    $privileges = Get-ChecklistPrivilegeContracts
+    Ensure-RolePrivilegesGlobal $Service 'Service Operations' `
+        $privileges.ServiceOperations
+    Ensure-RolePrivilegesGlobal $Service 'Public Portal Service' `
+        $privileges.PublicPortal
+    Assert-ChecklistSchema $Service
+    Write-Output 'Phase 16 provisioning completed without creating checklist templates or business data.'
+}
+
 function Get-AllRecords {
     param(
         [Parameter(Mandatory)]$Service,
@@ -1483,8 +2710,11 @@ if ($ValidateSdk) {
     [Microsoft.Xrm.Sdk.Messages.CreateEntityRequest]::new() | Out-Null
     [Microsoft.Xrm.Sdk.Messages.CreateAttributeRequest]::new() | Out-Null
     [Microsoft.Xrm.Sdk.Messages.CreateOneToManyRequest]::new() | Out-Null
+    [Microsoft.Xrm.Sdk.Metadata.MemoAttributeMetadata]::new() | Out-Null
+    [Microsoft.Xrm.Sdk.Metadata.DecimalAttributeMetadata]::new() | Out-Null
     [Microsoft.Xrm.Sdk.Messages.InsertOptionValueRequest]::new() | Out-Null
     [Microsoft.Xrm.Sdk.Messages.CreateEntityKeyRequest]::new() | Out-Null
+    [Microsoft.Xrm.Sdk.Messages.DeleteEntityKeyRequest]::new() | Out-Null
     [Microsoft.Xrm.Sdk.Metadata.EntityKeyMetadata]::new() | Out-Null
     [Microsoft.Crm.Sdk.Messages.RetrieveRolePrivilegesRoleRequest]::new() | Out-Null
     [Microsoft.Crm.Sdk.Messages.AddPrivilegesRoleRequest]::new() | Out-Null
@@ -1534,6 +2764,51 @@ if ($Mode -eq 'Verify') {
 
 if ($Mode -eq 'AuditSecurity') {
     Get-SiteChecksSecurityAudit -Service $service | ConvertTo-Json -Depth 8
+    return
+}
+
+if ($Mode -eq 'InspectTechnicianAccess') {
+    Get-TechnicianAccessPreflight -Service $service | ConvertTo-Json -Depth 12
+    return
+}
+
+if ($Mode -eq 'ProvisionTechnicianAccess') {
+    Invoke-TechnicianAccessProvisioning -Service $service
+    return
+}
+
+if ($Mode -eq 'InspectChecklist') {
+    Get-ChecklistPreflight -Service $service | ConvertTo-Json -Depth 12
+    return
+}
+
+if ($Mode -eq 'InspectChecklistCorrection') {
+    Get-ChecklistCorrectionPreflight -Service $service | ConvertTo-Json -Depth 12
+    return
+}
+
+if ($Mode -eq 'ProvisionChecklistCorrection') {
+    Invoke-ChecklistCorrectionProvisioning -Service $service
+    return
+}
+
+if ($Mode -eq 'InspectChecklistContent') {
+    Get-ChecklistContentPreflight -Service $service | ConvertTo-Json -Depth 12
+    return
+}
+
+if ($Mode -eq 'ProvisionChecklistContent') {
+    Invoke-ChecklistContentProvisioning -Service $service
+    return
+}
+
+if ($Mode -eq 'ProvisionChecklist') {
+    Invoke-ChecklistProvisioning -Service $service
+    return
+}
+
+if ($Mode -eq 'VerifyChecklist') {
+    Assert-ChecklistSchema -Service $service -RequireActiveKeys
     return
 }
 

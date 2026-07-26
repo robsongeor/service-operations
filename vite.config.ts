@@ -11,6 +11,12 @@ const jobSubmissionService = require('./api/services/jobSubmissionService') as {
   handlePublicPost: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
   jsonResponse: (status: number, body: object, headers?: Record<string, string>) => LocalFunctionResponse
 }
+const siteCheckAssignmentService = require('./api/services/siteCheckAssignmentService') as {
+  generate: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
+  revoke: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
+  handlePublicGet: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
+  jsonResponse: (status: number, body: object, headers?: Record<string, string>) => LocalFunctionResponse
+}
 
 const LIFTTRUCKS_API_ORIGIN = 'https://webview.liftrucks.co.nz'
 const LIFTTRUCKS_API_KEY = '500256'
@@ -52,7 +58,12 @@ function sendFunctionResponse(response: ServerResponse, result: LocalFunctionRes
   response.end(result.body ?? '')
 }
 
-function jobSubmissionProxy(): Plugin {
+function jobSubmissionProxy(env: Record<string, string | undefined>): Plugin {
+  process.env.DATAVERSE_URL ||= env.DATAVERSE_URL || env.VITE_DATAVERSE_URL
+  process.env.DATAVERSE_TENANT_ID ||= env.DATAVERSE_TENANT_ID || env.VITE_MSAL_TENANT_ID
+  process.env.DATAVERSE_CLIENT_ID ||= env.DATAVERSE_CLIENT_ID
+  process.env.DATAVERSE_CLIENT_SECRET ||= env.DATAVERSE_CLIENT_SECRET
+
   const installMiddleware = (middlewares: { use: (handler: (request: IncomingMessage, response: ServerResponse, next: () => void) => void) => void }) => {
     middlewares.use((request, response, next) => {
       if (!request.url) return next()
@@ -88,6 +99,56 @@ function jobSubmissionProxy(): Plugin {
   }
   return {
     name: 'job-submission-api-proxy',
+    configureServer(server) {
+      installMiddleware(server.middlewares)
+    },
+    configurePreviewServer(server) {
+      installMiddleware(server.middlewares)
+    },
+  }
+}
+
+function siteCheckAssignmentProxy(env: Record<string, string | undefined>): Plugin {
+  process.env.DATAVERSE_URL ||= env.DATAVERSE_URL || env.VITE_DATAVERSE_URL
+  process.env.DATAVERSE_TENANT_ID ||= env.DATAVERSE_TENANT_ID || env.VITE_MSAL_TENANT_ID
+  process.env.DATAVERSE_CLIENT_ID ||= env.DATAVERSE_CLIENT_ID
+  process.env.DATAVERSE_CLIENT_SECRET ||= env.DATAVERSE_CLIENT_SECRET
+
+  const installMiddleware = (middlewares: { use: (handler: (request: IncomingMessage, response: ServerResponse, next: () => void) => void) => void }) => {
+    middlewares.use((request, response, next) => {
+      if (!request.url) return next()
+      const requestUrl = new URL(request.url, 'http://localhost')
+      if (requestUrl.pathname !== '/api/sitecheckassignment') return next()
+
+      void (async () => {
+        try {
+          const body = request.method === 'POST' ? await readJsonBody(request) : {}
+          if (body === null) {
+            return sendFunctionResponse(response, siteCheckAssignmentService.jsonResponse(400, { error: 'The request body is invalid.' }))
+          }
+          const localRequest: LocalFunctionRequest = {
+            method: request.method,
+            headers: request.headers,
+            query: Object.fromEntries(requestUrl.searchParams),
+            body,
+          }
+          let result: LocalFunctionResponse
+          if (request.method === 'GET') result = await siteCheckAssignmentService.handlePublicGet(localRequest)
+          else if (request.method === 'POST' && body.action === 'generate') result = await siteCheckAssignmentService.generate(localRequest)
+          else if (request.method === 'POST' && body.action === 'revoke') result = await siteCheckAssignmentService.revoke(localRequest)
+          else result = siteCheckAssignmentService.jsonResponse(405, { error: 'Method not allowed.' }, { Allow: 'GET, POST' })
+          sendFunctionResponse(response, result)
+        } catch {
+          sendFunctionResponse(response, siteCheckAssignmentService.jsonResponse(503, {
+            code: 'temporary',
+            error: 'The Site Check assignment service is temporarily unavailable.',
+          }))
+        }
+      })()
+    })
+  }
+  return {
+    name: 'site-check-assignment-api-proxy',
     configureServer(server) {
       installMiddleware(server.middlewares)
     },
@@ -252,6 +313,6 @@ export default defineConfig(({ mode }) => {
 
   return {
     root: import.meta.dirname,
-    plugins: [react(), liftTrucksProxy(env), jobSubmissionProxy()],
+    plugins: [react(), liftTrucksProxy(env), jobSubmissionProxy(env), siteCheckAssignmentProxy(env)],
   }
 })

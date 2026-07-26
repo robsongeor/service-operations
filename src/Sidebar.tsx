@@ -10,6 +10,7 @@ const menuItems = [
     { label: 'Equipment', shortLabel: 'E', path: '/equipment' },
     { label: 'WOF / REGO', shortLabel: 'W', path: '/wof' },
     { label: 'Jobs', shortLabel: 'J', path: '/jobs' },
+    { label: 'Site Checks', shortLabel: 'S', path: '/site-checks' },
     { label: 'Scheduling', shortLabel: 'C', path: '/scheduling' },
     { label: 'Quotes', shortLabel: 'Q', path: '/quotes' },
     { label: 'Pricing', shortLabel: '$', path: '/pricing' },

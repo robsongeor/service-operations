@@ -148,6 +148,15 @@ the Job Photo File value, and commit the final Job submission state in one chang
 Delete, Assign, and Share remain unavailable. Job Write is necessarily table-scoped, so the
 fixed server-side payload remains the column-level security boundary.
 
+## Proposed Site Check assignment delta
+
+Provisioned after explicit approval on 2026-07-26. Public Portal Service has Organisation
+Read on `gr_sitecheck` and no other inspected Site Check or Email Dispatch privilege.
+Existing Job/Equipment/Site/Customer and evidence-child
+privileges support later per-machine submission. The role does not need Mechanic Read,
+Email Dispatch access, or Site Check Create/Write/Delete/Append/Append To/Assign/Share.
+The occurrence token endpoint must still enforce its fixed server-side projection.
+
 Live Job Create, Assign, and Share actions were not attempted because doing so against an
 operational record would be unsafe. Their absence was verified directly from the assigned
 role's privilege set.

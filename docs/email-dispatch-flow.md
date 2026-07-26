@@ -20,3 +20,15 @@ The current environment contains the active flow **Test Job Email Dispatch** (`9
 10. Save the flow and turn it on.
 
 For the real flow, insert **Office 365 Outlook — Send an email (V2)** before Update a row. Use Recipient Email, Subject, and Body from the trigger. Only set Email Sent to Yes after the Outlook action succeeds.
+
+## Site Checks
+
+Site Checks does not use this flow. The product owner selected the working Jobs-table email
+handoff: generate the occurrence link, build a `mailto:` URL, and open the configured email
+client with recipient, subject, and body prefilled. It does not create an Email Dispatch
+row or claim confirmed delivery.
+
+An optional `gr_emaildispatch.gr_sitecheck` relationship was provisioned during the earlier
+investigation, but it is unused. The existing required Job lookup was not changed. Do not
+provision a separate Site Check Email Dispatch table or extend this flow unless the product
+decision changes explicitly.

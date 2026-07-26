@@ -48,10 +48,27 @@ Future portal workflows may add checklist, inspection, signature, delivery, WOF,
 customer sign-off evidence. Extend the server service boundary and generic child models;
 do not widen the public Job projection without a security review.
 
+The approved Site Checks design adds one occurrence-level bearer link at
+`/portal/site-check/:token`, backed by a separate `/api/sitecheckassignment` service. It
+groups navigation but preserves one independently submitted Job Card per Equipment. Its
+token schema and Public Portal Service Organisation Read privilege are provisioned. The
+shared service, Azure Function wrapper, and equivalent Vite middleware implement secure
+generation/revocation and minimal anonymous lookup locally.
+
+The product owner subsequently resolved the Static Web App Contributor/RBAC and environment
+configuration. Production deployment remains held because a supplied configuration
+screenshot exposed the client-secret value. The product owner confirmed it was rotated and
+the environment setting replaced on 2026-07-26. Local public-route validation returns only
+a safe temporary response when the local API process lacks that server identity. The exact
+delivery state is owned by the
+[Site Checks tracker](../features/SITE_CHECKS_IMPLEMENTATION_PLAN.md).
+
 ## Related files
 
 - [`../../api/jobsubmission/index.js`](../../api/jobsubmission/index.js)
 - [`../../api/services/jobSubmissionService.js`](../../api/services/jobSubmissionService.js)
+- [`../../api/sitecheckassignment/index.js`](../../api/sitecheckassignment/index.js)
+- [`../../api/services/siteCheckAssignmentService.js`](../../api/services/siteCheckAssignmentService.js)
 - [`../../src/alpha/portal/TechnicianJobSubmissionPage.tsx`](../../src/alpha/portal/TechnicianJobSubmissionPage.tsx)
 - [Technician Job Card Submission](technician-job-submission.md)
 - [Authentication](authentication.md)

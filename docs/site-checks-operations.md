@@ -7,6 +7,15 @@ Checks. Product architecture and implementation progress remain owned by the
 [implementation tracker](features/SITE_CHECKS_IMPLEMENTATION_PLAN.md); exact Dataverse
 contracts remain owned by the [schema document](site-checks-dataverse-schema.md).
 
+## Cross-customer workspace
+
+Open **Site Checks** from the main navigation to see enabled Site Check Sites across all
+Customers. The initial **Needs attention** view includes Overdue, Due, and In progress
+Sites. Use the status totals or filters to focus by state, technician, frequency, due-date
+range, Customer, or Site. **Start** opens the existing creation review, **Open** shows the
+active occurrence, and **History** shows completed occurrences. Configuration remains in
+the relevant Customer Dashboard Site Settings.
+
 ## Authentication rule
 
 Routine application validation must use an already signed-in Service Operations user and

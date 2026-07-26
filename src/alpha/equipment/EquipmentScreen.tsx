@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import EquipmentDrawer from './components/EquipmentDrawer'
 import EquipmentTable from './components/EquipmentTable'
 import { useEquipmentManager } from './hooks/useEquipmentManager'
@@ -25,6 +26,7 @@ type StateFilter = 'all' | 'active' | 'inactive'
 const text = (value?: string | null) => value?.trim().toLocaleLowerCase() ?? ''
 
 export default function EquipmentScreen() {
+    const [searchParams, setSearchParams] = useSearchParams()
     const activeAccount = useActiveMsalAccount()
     const signedInUser = getSignedInUserInfo(activeAccount)
     const csvToolsAllowed = canUseEquipmentCsvTools(signedInUser)
@@ -55,6 +57,21 @@ export default function EquipmentScreen() {
     const [settingsOpen, setSettingsOpen] = useState(false)
     const [csvError, setCsvError] = useState('')
     const [csvImport, setCsvImport] = useState<{ filename: string; rows: EquipmentCsvReviewRow[] } | null>(null)
+
+    useEffect(() => {
+        const equipmentId = searchParams.get('equipmentId')
+        if (!equipmentId || isLoading || editingEquipment) return
+        const record = equipment.find((item) =>
+            item.gr_equipmentid.toLowerCase() === equipmentId.toLowerCase())
+        if (!record) return
+        const timer = window.setTimeout(() => {
+            setEditingEquipment(record)
+            const next = new URLSearchParams(searchParams)
+            next.delete('equipmentId')
+            setSearchParams(next, { replace: true })
+        }, 0)
+        return () => window.clearTimeout(timer)
+    }, [editingEquipment, equipment, isLoading, searchParams, setSearchParams])
 
     const siteOptions = sites.filter((site) => !customerId || site.gr_Customer?.gr_customerid === customerId)
     const rows = useMemo(() => {

@@ -48,6 +48,28 @@ import {
 import { assertJobTypeAllowedForCreation, JOB_TYPES } from '../src/alpha/jobs/types/jobType.types.ts'
 import { startSiteCheckWorkflow } from '../src/alpha/site-checks/services/siteCheckCreationWorkflow.ts'
 import { updateSiteCheckJobStatus } from '../src/alpha/site-checks/services/siteCheckCompletionApi.ts'
+import {
+    fetchSiteCheckWorkspaceMechanics,
+    fetchSiteCheckWorkspaceSites,
+} from '../src/alpha/site-checks/services/siteCheckWorkspaceApi.ts'
+import {
+    buildSiteCheckChecklistSnapshotCreates,
+    resolveSiteCheckChecklistTemplate,
+    validateSiteCheckChecklistTemplate,
+} from '../src/alpha/site-checks/domain/siteCheckChecklist.ts'
+import { POWER_TYPES } from '../src/alpha/equipment/servicePlans/maintenanceConfiguration.ts'
+import {
+    fetchSiteCheckChecklistResponses,
+    fetchSiteCheckChecklistSnapshotItems,
+    fetchSiteCheckChecklistTemplate,
+    fetchSiteCheckChecklistTemplateItems,
+} from '../src/alpha/site-checks/services/siteCheckChecklistApi.ts'
+import {
+    SITE_CHECK_CHECKLIST_CHOICE_ANSWERS,
+    SITE_CHECK_CHECKLIST_RESPONSE_TYPES,
+    type SiteCheckChecklistTemplate,
+    type SiteCheckChecklistTemplateItem,
+} from '../src/alpha/site-checks/types/siteCheckChecklist.types.ts'
 
 const IDS = {
     site: '11111111-1111-1111-1111-111111111111',
@@ -56,6 +78,220 @@ const IDS = {
     technician: '44444444-4444-4444-4444-444444444444',
     job: '55555555-5555-5555-5555-555555555555',
 }
+
+const CHECKLIST_IDS = {
+    template: '66666666-6666-6666-6666-666666666666',
+    item: '77777777-7777-7777-7777-777777777777',
+    snapshot: '88888888-8888-8888-8888-888888888888',
+    response: '99999999-9999-9999-9999-999999999999',
+}
+
+function checklistTemplate(): SiteCheckChecklistTemplate {
+    return {
+        gr_sitecheckchecklisttemplateid: CHECKLIST_IDS.template,
+        gr_name: 'Standard Site Check v1',
+        gr_templatecode: 'STANDARD',
+        gr_version: 1,
+        gr_active: true,
+    }
+}
+
+function checklistItem(
+    overrides: Partial<SiteCheckChecklistTemplateItem> = {},
+): SiteCheckChecklistTemplateItem {
+    return {
+        gr_sitecheckchecklisttemplateitemid: CHECKLIST_IDS.item,
+        gr_name: 'Brakes',
+        _gr_checklisttemplate_value: CHECKLIST_IDS.template,
+        gr_itemkey: 'brakes',
+        gr_groupname: 'Safety',
+        gr_prompt: 'Check service and park brakes.',
+        gr_responsetype: SITE_CHECK_CHECKLIST_RESPONSE_TYPES.PASS_FAIL_NOT_APPLICABLE,
+        gr_displayorder: 10,
+        gr_required: true,
+        gr_commentrequiredonnegative: true,
+        gr_photorequiredonnegative: false,
+        ...overrides,
+    }
+}
+
+test('Site Check checklist validation and snapshot construction preserve immutable wording and rules', () => {
+    const template = checklistTemplate()
+    const later = checklistItem({
+        gr_sitecheckchecklisttemplateitemid: '77777777-7777-7777-7777-777777777778',
+        gr_itemkey: 'hour-meter',
+        gr_name: 'Hour meter',
+        gr_prompt: 'Record the hour meter.',
+        gr_responsetype: SITE_CHECK_CHECKLIST_RESPONSE_TYPES.NUMBER,
+        gr_displayorder: 20,
+        gr_commentrequiredonnegative: false,
+    })
+    assert.deepEqual(
+        validateSiteCheckChecklistTemplate(template, [later, checklistItem()]),
+        { valid: true, errors: [] },
+    )
+    const snapshots = buildSiteCheckChecklistSnapshotCreates(
+        '$1',
+        '$2',
+        template,
+        [later, checklistItem()],
+    )
+    assert.deepEqual(snapshots.map((item) => item.gr_itemkey), ['brakes', 'hour-meter'])
+    assert.equal(snapshots[0].gr_prompt, 'Check service and park brakes.')
+    assert.equal(snapshots[0].gr_commentrequiredonnegative, true)
+    assert.equal(snapshots[0]['gr_SiteCheck@odata.bind'], '$1')
+    assert.equal(snapshots[0]['gr_Job@odata.bind'], '$2')
+    assert.equal(
+        snapshots[0]['gr_SourceTemplateItem@odata.bind'],
+        `/gr_sitecheckchecklisttemplateitems(${CHECKLIST_IDS.item})`,
+    )
+})
+
+test('Site Check checklist selection uses Electric only for Electric and defaults unknown to ICE', () => {
+    assert.deepEqual(resolveSiteCheckChecklistTemplate(POWER_TYPES.ICE), {
+        templateCode: 'SITE_CHECK_ICE',
+        kind: 'ICE',
+        defaulted: false,
+        label: 'ICE checklist',
+    })
+    assert.deepEqual(resolveSiteCheckChecklistTemplate(POWER_TYPES.ELECTRIC), {
+        templateCode: 'SITE_CHECK_ELECTRIC',
+        kind: 'ELECTRIC',
+        defaulted: false,
+        label: 'Electric checklist',
+    })
+    for (const powerType of [POWER_TYPES.OTHER_UNKNOWN, null, undefined]) {
+        assert.deepEqual(resolveSiteCheckChecklistTemplate(powerType), {
+            templateCode: 'SITE_CHECK_ICE',
+            kind: 'ICE',
+            defaulted: true,
+            label: 'ICE checklist (defaulted)',
+        })
+    }
+})
+
+test('Site Check checklist validation rejects inactive, empty, duplicated, and cross-template definitions', () => {
+    assert.match(
+        validateSiteCheckChecklistTemplate(
+            { ...checklistTemplate(), gr_active: false },
+            [],
+        ).errors.join(' '),
+        /inactive.*no items/i,
+    )
+    const invalid = validateSiteCheckChecklistTemplate(checklistTemplate(), [
+        checklistItem(),
+        checklistItem({
+            gr_sitecheckchecklisttemplateitemid: '77777777-7777-7777-7777-777777777779',
+            _gr_checklisttemplate_value: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        }),
+    ])
+    assert.equal(invalid.valid, false)
+    assert.match(invalid.errors.join(' '), /different template.*duplicated.*display order/i)
+})
+
+test('Site Check checklist services use confirmed entity sets, paging, and typed mappings', async () => {
+    const apiUrl = 'https://example.test/api/data/v9.2'
+    const requested: string[] = []
+    const fetcher = async (input: string | URL | Request) => {
+        const url = String(input)
+        requested.push(url)
+        if (url.includes(`gr_sitecheckchecklisttemplates(${CHECKLIST_IDS.template})`)) {
+            return new Response(JSON.stringify(checklistTemplate()))
+        }
+        if (url.includes('gr_sitecheckchecklisttemplateitems')) {
+            return new Response(JSON.stringify({
+                value: [checklistItem()],
+                ...(url.includes('$skiptoken=next')
+                    ? {}
+                    : { '@odata.nextLink': `${apiUrl}/gr_sitecheckchecklisttemplateitems?$skiptoken=next` }),
+            }))
+        }
+        if (url.includes('gr_sitecheckchecklistsnapshotitems')) {
+            return new Response(JSON.stringify({
+                value: [{
+                    gr_sitecheckchecklistsnapshotitemid: CHECKLIST_IDS.snapshot,
+                    gr_name: 'STANDARD v1 — brakes',
+                    _gr_sitecheck_value: IDS.siteCheck,
+                    _gr_job_value: IDS.job,
+                    _gr_sourcetemplateitem_value: CHECKLIST_IDS.item,
+                    ...checklistItem(),
+                }],
+            }))
+        }
+        return new Response(JSON.stringify({
+            value: [{
+                gr_sitecheckchecklistresponseid: CHECKLIST_IDS.response,
+                gr_name: 'Brake response',
+                _gr_job_value: IDS.job,
+                _gr_snapshotitem_value: CHECKLIST_IDS.snapshot,
+                _gr_technician_value: IDS.technician,
+                gr_choiceanswer: SITE_CHECK_CHECKLIST_CHOICE_ANSWERS.PASS,
+                gr_numericanswer: null,
+                gr_textanswer: null,
+                gr_comment: null,
+                gr_submittedon: '2026-07-26T10:00:00Z',
+            }],
+        }))
+    }
+    const options = { apiUrl, fetcher: fetcher as typeof fetch }
+    const template = await fetchSiteCheckChecklistTemplate('token', CHECKLIST_IDS.template, options)
+    const items = await fetchSiteCheckChecklistTemplateItems('token', CHECKLIST_IDS.template, options)
+    const snapshots = await fetchSiteCheckChecklistSnapshotItems('token', IDS.siteCheck, options)
+    const responses = await fetchSiteCheckChecklistResponses('token', [IDS.job, IDS.job], options)
+    assert.equal(template.gr_templatecode, 'STANDARD')
+    assert.equal(items.length, 2)
+    assert.equal(snapshots[0].gr_responsetype, SITE_CHECK_CHECKLIST_RESPONSE_TYPES.PASS_FAIL_NOT_APPLICABLE)
+    assert.equal(responses[0].gr_choiceanswer, SITE_CHECK_CHECKLIST_CHOICE_ANSWERS.PASS)
+    assert.ok(requested.some((url) => url.includes('gr_sitecheckchecklisttemplates')))
+    assert.ok(requested.some((url) => url.includes('gr_sitecheckchecklistresponses')))
+    assert.equal(requested.filter((url) => url.includes('gr_sitecheckchecklisttemplateitems')).length, 2)
+})
+
+test('Site Check workspace reference queries follow trusted Dataverse continuation pages', async () => {
+    const apiUrl = 'https://example.test/api/data/v9.2'
+    const requests: string[] = []
+    const fetcher = async (input: string | URL | Request) => {
+        const url = String(input)
+        requests.push(url)
+        if (url.includes('gr_sites') && requests.filter((item) => item.includes('gr_sites')).length === 1) {
+            return new Response(JSON.stringify({
+                value: [{ gr_siteid: IDS.site, gr_name: 'Can Park Auckland', gr_address: '', gr_Customer: { gr_customerid: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', gr_name: 'Air New Zealand' } }],
+                '@odata.nextLink': `${apiUrl}/gr_sites?$skiptoken=next`,
+            }), { status: 200 })
+        }
+        if (url.includes('gr_sites')) {
+            return new Response(JSON.stringify({ value: [{ gr_siteid: '11111111-1111-1111-1111-111111111112', gr_name: 'Second Site', gr_address: '' }] }), { status: 200 })
+        }
+        return new Response(JSON.stringify({
+            value: [{ gr_mechanicid: IDS.technician, gr_name: 'Anura', gr_email: '', gr_phone: '', statecode: 0 }],
+        }), { status: 200 })
+    }
+    const [sites, mechanics] = await Promise.all([
+        fetchSiteCheckWorkspaceSites('token', { apiUrl, fetcher: fetcher as typeof fetch }),
+        fetchSiteCheckWorkspaceMechanics('token', { apiUrl, fetcher: fetcher as typeof fetch }),
+    ])
+    assert.equal(sites.length, 2)
+    assert.equal(mechanics[0]?.gr_name, 'Anura')
+    assert.equal(requests.filter((url) => url.includes('gr_sites')).length, 2)
+    assert.ok(requests.some((url) => url.includes('$expand=gr_Customer')))
+})
+
+test('Site Checks workspace reuses the canonical drawers and does not load the global Jobs collection', () => {
+    const screen = readFileSync(new URL('../src/alpha/site-checks/SiteChecksScreen.tsx', import.meta.url), 'utf8')
+    const hook = readFileSync(new URL('../src/alpha/site-checks/hooks/useSiteCheckWorkspace.ts', import.meta.url), 'utf8')
+    const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
+    const sidebar = readFileSync(new URL('../src/Sidebar.tsx', import.meta.url), 'utf8')
+    assert.match(screen, /Needs attention/)
+    assert.match(screen, /<MetricStrip/)
+    assert.match(screen, /<RunSiteCheckDrawer/)
+    assert.match(screen, /<SiteCheckDetailsDrawer/)
+    assert.match(screen, /loadSiteEquipment/)
+    assert.match(screen, /No enabled Site Checks match these filters/)
+    assert.doesNotMatch(hook, /fetchJobs\(/)
+    assert.match(hook, /coordinator\.loadSiteChecks/)
+    assert.match(app, /path="\/site-checks"/)
+    assert.match(sidebar, /label: 'Site Checks'/)
+})
 
 test('Site Check Job Book export and number allocation preserve one deterministic row order', async () => {
     const jobs = [
@@ -329,6 +565,12 @@ test('dashboard projection calculates active progress from operational Job Statu
 })
 
 function creationInput(equipmentCount = 22) {
+    const equipment = Array.from({ length: equipmentCount }, (_, index) => ({
+        gr_equipmentid: `60000000-0000-0000-0000-${String(index + 1).padStart(12, '0')}`,
+        gr_fleet: `FLT-${index + 1}`,
+        statecode: index === 0 ? 1 : 0,
+        gr_powertype: POWER_TYPES.ICE,
+    }))
     return {
         schedule: {
             gr_sitecheckscheduleid: IDS.schedule,
@@ -341,26 +583,61 @@ function creationInput(equipmentCount = 22) {
         },
         siteName: 'Test Site',
         technicianId: IDS.technician,
-        equipment: Array.from({ length: equipmentCount }, (_, index) => ({
-            gr_equipmentid: `60000000-0000-0000-0000-${String(index + 1).padStart(12, '0')}`,
-            gr_fleet: `FLT-${index + 1}`,
-            statecode: index === 0 ? 1 : 0,
+        equipment,
+        checklists: equipment.map((item) => ({
+            equipmentId: item.gr_equipmentid,
+            template: checklistTemplate(),
+            items: [checklistItem()],
         })),
         requestKey: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
         startedOn: '2026-07-26T01:00:00.000Z',
     } as const
 }
 
-test('22-Equipment creation fits one atomic 24-operation change set', () => {
+const checklistWorkflowDependencies = {
+    fetchChecklistTemplates: async () => [{
+        ...checklistTemplate(),
+        gr_name: 'ICE Site Check',
+        gr_templatecode: 'SITE_CHECK_ICE',
+    }],
+    fetchChecklistItems: async () => [checklistItem()],
+}
+
+test('22-Equipment creation includes per-Job snapshots in one atomic change set', () => {
     const batch = buildSiteCheckCreationChangeSet(creationInput())
-    assert.equal(batch.operationCount, 24)
-    assert.ok(batch.payloadBytes < 30_000, `Unexpected payload size: ${batch.payloadBytes}`)
+    assert.equal(batch.operationCount, 46)
+    assert.ok(batch.payloadBytes < 60_000, `Unexpected payload size: ${batch.payloadBytes}`)
     assert.match(batch.body, /POST \/api\/data\/v9\.2\/gr_sitechecks HTTP\/1\.1/)
     assert.match(batch.body, /If-Match: W\/"10"/)
     assert.match(batch.body, /"gr_ActiveSiteCheck@odata.bind":"\$1"/)
     assert.equal((batch.body.match(/POST \/api\/data\/v9\.2\/gr_jobs HTTP\/1\.1/g) ?? []).length, 22)
-    assert.equal((batch.body.match(/"gr_SiteCheck@odata.bind":"\$1"/g) ?? []).length, 22)
+    assert.equal(
+        (batch.body.match(/POST \/api\/data\/v9\.2\/gr_sitecheckchecklistsnapshotitems HTTP\/1\.1/g) ?? []).length,
+        22,
+    )
+    assert.match(batch.body, /"gr_Job@odata.bind":"\$3"/)
     assert.match(batch.body, /Weekly checks for 20\/07\/2026/)
+})
+
+test('22 ICE machines with the full 23-item checklist remain within atomic limits', () => {
+    const input = creationInput()
+    const fullItems = Array.from({ length: 23 }, (_, index) => checklistItem({
+        gr_sitecheckchecklisttemplateitemid:
+            `77777777-7777-4777-8777-${String(index + 1).padStart(12, '0')}`,
+        gr_name: `Item ${index + 1}`,
+        gr_itemkey: `item-${index + 1}`,
+        gr_displayorder: (index + 1) * 10,
+    }))
+    const batch = buildSiteCheckCreationChangeSet({
+        ...input,
+        checklists: input.equipment.map((item) => ({
+            equipmentId: item.gr_equipmentid,
+            template: checklistTemplate(),
+            items: fullItems,
+        })),
+    })
+    assert.equal(batch.operationCount, 530)
+    assert.ok(batch.payloadBytes < 4 * 1024 * 1024)
 })
 
 test('atomic creation snapshots unavailable Equipment without creating a Job for it', () => {
@@ -372,7 +649,7 @@ test('atomic creation snapshots unavailable Equipment without creating a Job for
     }] as const
     const batch = buildSiteCheckCreationChangeSet({ ...input, excludedEquipment })
 
-    assert.equal(batch.operationCount, 4)
+    assert.equal(batch.operationCount, 5)
     assert.equal((batch.body.match(/POST \/api\/data\/v9\.2\/gr_jobs HTTP\/1\.1/g) ?? []).length, 1)
     assert.equal(
         (batch.body.match(/POST \/api\/data\/v9\.2\/gr_sitecheckequipmentexclusions HTTP\/1\.1/g) ?? []).length,
@@ -383,6 +660,33 @@ test('atomic creation snapshots unavailable Equipment without creating a Job for
         new RegExp(`"gr_availabilitysnapshot":${EQUIPMENT_SITE_CHECK_AVAILABILITIES.TEMPORARILY_OFF_SITE}`),
     )
     assert.match(batch.body, /"gr_Equipment@odata.bind":"\/gr_equipments\(70000000-0000-0000-0000-000000000001\)"/)
+})
+
+test('inline availability changes share the atomic Site Check creation transaction', () => {
+    const input = creationInput(1)
+    const equipment = {
+        ...input.equipment[0],
+        '@odata.etag': 'W/"equipment-7"',
+    }
+    const batch = buildSiteCheckCreationChangeSet({
+        ...input,
+        equipment: [equipment],
+        availabilityUpdates: [{
+            equipment,
+            availability: EQUIPMENT_SITE_CHECK_AVAILABILITIES.AVAILABLE_AT_SITE,
+        }],
+    })
+
+    assert.equal(batch.operationCount, 5)
+    assert.match(
+        batch.body,
+        new RegExp(`PATCH /api/data/v9.2/gr_equipments\\(${equipment.gr_equipmentid}\\)`),
+    )
+    assert.match(batch.body, /If-Match: W\/"equipment-7"/)
+    assert.match(
+        batch.body,
+        new RegExp(`"gr_sitecheckavailability":${EQUIPMENT_SITE_CHECK_AVAILABILITIES.AVAILABLE_AT_SITE}`),
+    )
 })
 
 test('Site Check Job descriptions use frequency and the Monday of the NZ start week', () => {
@@ -457,6 +761,7 @@ test('creation workflow reconciles an unknown write outcome without creating aga
         requestKey: input.requestKey,
         startedOn: input.startedOn,
     }, {
+        ...checklistWorkflowDependencies,
         fetchSchedules: async () => {
             scheduleReads += 1
             return [{

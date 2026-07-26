@@ -13,6 +13,8 @@ import WofScreen from './alpha/wof/WofScreen'
 import { getSignedInUserInfo } from './auth/signedInUser'
 import { useActiveMsalAccount } from './auth/useActiveMsalAccount'
 import TechnicianJobSubmissionPage from './alpha/portal/TechnicianJobSubmissionPage'
+import SiteChecksScreen from './alpha/site-checks/SiteChecksScreen'
+import SiteCheckAssignmentPage from './alpha/portal/SiteCheckAssignmentPage'
 
 function App() {
   const { accounts } = useMsal()
@@ -24,6 +26,13 @@ function App() {
     return <Routes>
       <Route path="/portal/job/:token" element={<TechnicianJobSubmissionPage />} />
       <Route path="/portal/job" element={<TechnicianJobSubmissionPage />} />
+    </Routes>
+  }
+
+  if (location.pathname === '/portal/site-check' || location.pathname.startsWith('/portal/site-check/')) {
+    return <Routes>
+      <Route path="/portal/site-check/:token" element={<SiteCheckAssignmentPage />} />
+      <Route path="/portal/site-check" element={<SiteCheckAssignmentPage />} />
     </Routes>
   }
 
@@ -44,6 +53,7 @@ function App() {
           <Route path="/mechanics" element={<MechanicsScreen />} />
           <Route path="/equipment" element={<EquipmentScreen />} />
           <Route path="/jobs" element={<JobsScreen key={signedInUser?.storageId || 'account-pending'} />} />
+          <Route path="/site-checks" element={<SiteChecksScreen />} />
           <Route path="/scheduling" element={<SchedulingScreen />} />
           <Route path="/quotes" element={<QuotesScreen key={signedInUser?.storageId || 'account-pending'} />} />
           <Route path="/pricing" element={<PricingScreen />} />

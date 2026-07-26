@@ -1,9 +1,22 @@
 import {
+    isEquipmentSiteCheckAvailability,
+    resolveEquipmentSiteCheckAvailability,
+    type EquipmentSiteCheckAvailability,
+} from '../../equipment/types/equipmentSiteCheckAvailability.types.ts'
+import {
     calculateSiteCheckProgress,
     filterSiteCheckEquipment,
     siteCheckUnavailableEquipment,
 } from '../domain/siteCheckCalculations.ts'
+import {
+    resolveSiteCheckChecklistTemplate,
+    validateSiteCheckChecklistTemplate,
+} from '../domain/siteCheckChecklist.ts'
 import type { SiteCheck, SiteCheckSchedule } from '../types/siteCheck.types.ts'
+import {
+    fetchActiveSiteCheckChecklistTemplates,
+    fetchSiteCheckChecklistTemplateItems,
+} from './siteCheckChecklistApi.ts'
 import {
     executeSiteCheckCreation,
     type SiteCheckCreationEquipment,
@@ -30,6 +43,10 @@ export type StartSiteCheckWorkflowInput = {
     technicianId: string
     requestKey: string
     startedOn: string
+    availabilityOverrides?: readonly {
+        equipmentId: string
+        availability: EquipmentSiteCheckAvailability
+    }[]
 }
 
 type WorkflowDependencies = {
@@ -40,6 +57,8 @@ type WorkflowDependencies = {
     executeCreation?: typeof executeSiteCheckCreation
     fetchByRequestKey?: typeof fetchSiteCheckByRequestKey
     fetchJobs?: typeof fetchSiteCheckJobs
+    fetchChecklistTemplates?: typeof fetchActiveSiteCheckChecklistTemplates
+    fetchChecklistItems?: typeof fetchSiteCheckChecklistTemplateItems
 }
 
 function headers(accessToken: string) {
@@ -57,7 +76,7 @@ export async function fetchSiteCheckEquipmentForSite(
 ): Promise<SiteCheckCreationEquipment[]> {
     if (!GUID_PATTERN.test(siteId)) throw new Error('A valid Site ID is required.')
     const query = [
-        '$select=gr_equipmentid,gr_fleet,gr_serial,gr_make,gr_model,statecode,gr_ownershiptype,gr_sitecheckavailability',
+        '$select=gr_equipmentid,gr_fleet,gr_serial,gr_make,gr_model,statecode,gr_ownershiptype,gr_powertype,gr_sitecheckavailability',
         `$filter=_gr_site_value eq ${siteId}`,
         '$orderby=gr_fleet asc',
     ].join('&')
@@ -130,6 +149,10 @@ export async function startSiteCheckWorkflow(
     const executeCreation = dependencies.executeCreation ?? executeSiteCheckCreation
     const fetchByRequestKey = dependencies.fetchByRequestKey ?? fetchSiteCheckByRequestKey
     const fetchJobs = dependencies.fetchJobs ?? fetchSiteCheckJobs
+    const fetchChecklistTemplates =
+        dependencies.fetchChecklistTemplates ?? fetchActiveSiteCheckChecklistTemplates
+    const fetchChecklistItems =
+        dependencies.fetchChecklistItems ?? fetchSiteCheckChecklistTemplateItems
     const reconciliation = { fetchSchedules, fetchByRequestKey, fetchJobs }
 
     const replay = await fetchByRequestKey(accessToken, input.requestKey)
@@ -156,17 +179,71 @@ export async function startSiteCheckWorkflow(
     if (!mechanic || mechanic.statecode === 1) {
         throw new Error('Select an active technician.')
     }
+    const overrides = new Map(
+        (input.availabilityOverrides ?? []).map((override) => {
+            if (!GUID_PATTERN.test(override.equipmentId)
+                || !isEquipmentSiteCheckAvailability(override.availability)) {
+                throw new Error('Equipment availability changes are invalid.')
+            }
+            return [override.equipmentId.toLowerCase(), override.availability] as const
+        }),
+    )
+    const reviewedEquipment = equipment.map((item) => ({
+        ...item,
+        gr_sitecheckavailability: overrides.get(item.gr_equipmentid.toLowerCase())
+            ?? item.gr_sitecheckavailability,
+    }))
     const includedEquipment = filterSiteCheckEquipment(
-        equipment,
+        reviewedEquipment,
         schedule.gr_equipmentscope,
         selections.map((selection) => selection._gr_equipment_value),
     )
     const excludedEquipment = siteCheckUnavailableEquipment(
-        equipment,
+        reviewedEquipment,
         schedule.gr_equipmentscope,
         selections.map((selection) => selection._gr_equipment_value),
     )
+    const scopedIds = new Set([...includedEquipment, ...excludedEquipment]
+        .map((item) => item.gr_equipmentid.toLowerCase()))
+    if ([...overrides.keys()].some((id) => !scopedIds.has(id))) {
+        throw new Error('Equipment availability changed outside the current Site Check scope.')
+    }
+    const authoritativeById = new Map(
+        equipment.map((item) => [item.gr_equipmentid.toLowerCase(), item] as const),
+    )
+    const availabilityUpdates = [...overrides].flatMap(([id, availability]) => {
+        const authoritative = authoritativeById.get(id)
+        if (!authoritative
+            || resolveEquipmentSiteCheckAvailability(authoritative.gr_sitecheckavailability)
+                === availability) return []
+        return [{ equipment: authoritative, availability }]
+    })
     if (!includedEquipment.length) throw new Error('This Site has no applicable Equipment.')
+    const resolutions = includedEquipment.map((item) =>
+        resolveSiteCheckChecklistTemplate(item.gr_powertype))
+    const templateCodes = [...new Set(resolutions.map((resolution) => resolution.templateCode))]
+    const templates = await fetchChecklistTemplates(accessToken, templateCodes)
+    const templateByCode = new Map(
+        templates.map((template) => [template.gr_templatecode, template] as const),
+    )
+    const templateItems = new Map(await Promise.all(templates.map(async (template) => {
+        const items = await fetchChecklistItems(
+            accessToken,
+            template.gr_sitecheckchecklisttemplateid,
+        )
+        const validation = validateSiteCheckChecklistTemplate(template, items)
+        if (!validation.valid) throw new Error(validation.errors.join(' '))
+        return [template.gr_templatecode, items] as const
+    })))
+    const checklists = includedEquipment.map((item, index) => {
+        const code = resolutions[index].templateCode
+        const template = templateByCode.get(code)
+        const items = templateItems.get(code)
+        if (!template || !items) {
+            throw new Error(`The active ${code} checklist template is unavailable.`)
+        }
+        return { equipmentId: item.gr_equipmentid, template, items }
+    })
 
     try {
         await executeCreation(accessToken, {
@@ -174,7 +251,9 @@ export async function startSiteCheckWorkflow(
             siteName: input.siteName,
             technicianId: mechanic.gr_mechanicid,
             equipment: includedEquipment,
+            checklists,
             excludedEquipment,
+            availabilityUpdates,
             requestKey: input.requestKey,
             startedOn: input.startedOn,
         })

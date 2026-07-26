@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added the cross-customer Site Checks workspace with a Needs Attention queue, interactive
+  state totals, combined filters, direct Start/Open/History actions, and canonical record
+  navigation without loading the global Jobs or Equipment collections.
+
 ### Site Checks
 
 - Added optional per-Site weekly, fortnightly, or monthly Site Check schedules in the
@@ -29,6 +33,11 @@
   Jobs.
 - Target-smoked temporary availability on Can Park Auckland: two Jobs and one In Workshop
   exclusion were created, displayed, and atomically removed without another sign-in prompt.
+- Consolidated the Site header's current Site Check and history actions into one
+  context-aware button backed by the existing details drawer.
+- Streamlined Site Check creation into one review drawer with inline persistent Equipment
+  availability, collapsed included machines, prominent exceptions, atomic creation, and
+  direct post-create access to Job Book allocation.
 - Target verification saved and reloaded a Weekly Manual Selection Schedule for Air New
   Zealand / Can Park Auckland with FN1579 only; the Run preview correctly showed one
   included Equipment and two excluded without creating an occurrence or Jobs.

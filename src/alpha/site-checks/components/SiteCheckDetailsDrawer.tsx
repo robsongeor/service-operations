@@ -17,6 +17,7 @@ import {
     type SiteCheckPage,
 } from '../types/siteCheck.types'
 import './SiteCheckDetailsDrawer.css'
+import type { SiteCheckAssignmentEmailInput } from '../services/siteCheckAssignmentApi'
 
 type Tab = 'summary' | 'jobs' | 'history'
 
@@ -36,6 +37,7 @@ type Props = {
         job: SiteCheckDetailJob
         jobNumber: string
     }[]) => Promise<void>
+    prepareAssignmentEmail: (input: SiteCheckAssignmentEmailInput) => Promise<string>
     onDelete: (siteCheck: SiteCheck) => Promise<void>
     onOpenJob: (jobId: string, trigger: HTMLButtonElement) => void
     onOpenEquipment: (equipmentId: string, trigger: HTMLButtonElement) => void
@@ -94,6 +96,7 @@ export default function SiteCheckDetailsDrawer({
     loadAllJobs,
     loadAllEquipmentExclusions,
     allocateJobNumbers,
+    prepareAssignmentEmail,
     onDelete,
     onOpenJob,
     onOpenEquipment,
@@ -117,6 +120,7 @@ export default function SiteCheckDetailsDrawer({
     const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false)
     const [deleteBusy, setDeleteBusy] = useState(false)
     const [deleteError, setDeleteError] = useState('')
+    const [emailBusy, setEmailBusy] = useState(false)
     const selectedId = selected?.gr_sitecheckid
     const loadedJobsFor = useRef('')
     const loadedExclusionsFor = useRef('')
@@ -271,12 +275,43 @@ export default function SiteCheckDetailsDrawer({
         }
     }
 
+    const emailAssignment = async () => {
+        if (!selected) return
+        setEmailBusy(true)
+        setError('')
+        try {
+            const mailto = await prepareAssignmentEmail({
+                siteCheckId: selected.gr_sitecheckid,
+                customerName,
+                siteName,
+                frequencyLabel: frequencyLabel(selected),
+                dueDate: selected.gr_duedatesnapshot,
+                jobCount: selected.gr_expectedjobcount,
+            })
+            window.location.href = mailto
+        } catch (cause) {
+            setError(cause instanceof Error
+                ? cause.message
+                : 'The secure Site Check email link could not be created.')
+        } finally {
+            setEmailBusy(false)
+        }
+    }
+
     return <EditDrawerShell
         eyebrow="Site Checks"
         title={selected?.gr_name ?? `${siteName} history`}
-        busy={deleteBusy}
+        busy={deleteBusy || emailBusy}
         onClose={onClose}
         footer={<>
+            {selected?.gr_status === SITE_CHECK_STATUSES.IN_PROGRESS && <button
+                type="button"
+                className="primary"
+                disabled={deleteBusy || emailBusy}
+                onClick={() => void emailAssignment()}
+            >
+                {emailBusy ? 'Preparing emailâ€¦' : 'Send to technician'}
+            </button>}
             {selected && <button
                 type="button"
                 className="danger"

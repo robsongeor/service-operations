@@ -1,6 +1,8 @@
 import { SERVICE_TYPES } from '../../equipment/servicePlans/equipmentServicePlan.types.ts'
+import type { PowerType } from '../../equipment/servicePlans/maintenanceConfiguration.ts'
 import {
     EQUIPMENT_SITE_CHECK_AVAILABILITIES,
+    isEquipmentSiteCheckAvailability,
     type EquipmentSiteCheckAvailability,
 } from '../../equipment/types/equipmentSiteCheckAvailability.types.ts'
 import { buildJobCreatePayload } from '../../jobs/services/jobsApi.ts'
@@ -15,6 +17,11 @@ import {
     SITE_CHECK_STATUSES,
     type SiteCheckSchedule,
 } from '../types/siteCheck.types.ts'
+import { buildSiteCheckChecklistSnapshotCreates } from '../domain/siteCheckChecklist.ts'
+import type {
+    SiteCheckChecklistTemplate,
+    SiteCheckChecklistTemplateItem,
+} from '../types/siteCheckChecklist.types.ts'
 
 const DEFAULT_API_URL = `${import.meta.env?.VITE_DATAVERSE_URL ?? ''}/api/data/v9.2`
 const GUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -29,7 +36,14 @@ export type SiteCheckCreationEquipment = {
     gr_model?: string | null
     statecode?: number
     gr_ownershiptype?: number | null
+    gr_powertype?: PowerType | null
     gr_sitecheckavailability?: EquipmentSiteCheckAvailability | null
+    '@odata.etag'?: string
+}
+
+export type SiteCheckEquipmentAvailabilityUpdate = {
+    equipment: SiteCheckCreationEquipment
+    availability: EquipmentSiteCheckAvailability
 }
 
 export type SiteCheckCreationInput = {
@@ -37,7 +51,13 @@ export type SiteCheckCreationInput = {
     siteName: string
     technicianId: string
     equipment: readonly SiteCheckCreationEquipment[]
+    checklists: readonly {
+        equipmentId: string
+        template: SiteCheckChecklistTemplate
+        items: readonly SiteCheckChecklistTemplateItem[]
+    }[]
     excludedEquipment?: readonly SiteCheckCreationEquipment[]
+    availabilityUpdates?: readonly SiteCheckEquipmentAvailabilityUpdate[]
     requestKey: string
     startedOn: string
 }
@@ -76,11 +96,28 @@ function validateInput(input: SiteCheckCreationInput) {
         throw new Error('A valid Site Check start time is required.')
     }
     input.equipment.forEach((item) => requireGuid(item.gr_equipmentid, 'Equipment ID'))
+    const equipmentIds = new Set(input.equipment.map((item) => item.gr_equipmentid.toLowerCase()))
+    const checklistIds = input.checklists.map((entry) =>
+        requireGuid(entry.equipmentId, 'checklist Equipment ID'))
+    if (checklistIds.length !== equipmentIds.size
+        || new Set(checklistIds).size !== checklistIds.length
+        || checklistIds.some((id) => !equipmentIds.has(id))) {
+        throw new Error('Every included Equipment item requires exactly one checklist.')
+    }
     input.excludedEquipment?.forEach((item) => {
         requireGuid(item.gr_equipmentid, 'excluded Equipment ID')
         if (item.gr_sitecheckavailability !== EQUIPMENT_SITE_CHECK_AVAILABILITIES.TEMPORARILY_OFF_SITE
             && item.gr_sitecheckavailability !== EQUIPMENT_SITE_CHECK_AVAILABILITIES.IN_WORKSHOP) {
             throw new Error('Excluded Equipment must have an unavailable Site Check state.')
+        }
+    })
+    input.availabilityUpdates?.forEach(({ equipment, availability }) => {
+        requireGuid(equipment.gr_equipmentid, 'Equipment availability ID')
+        if (!equipment['@odata.etag']) {
+            throw new Error('Reload Equipment before changing Site Check availability.')
+        }
+        if (!isEquipmentSiteCheckAvailability(availability)) {
+            throw new Error('Equipment has an invalid Site Check availability.')
         }
     })
 }
@@ -119,11 +156,29 @@ function creationRequests(input: SiteCheckCreationInput): AtomicRequest[] {
         }, 'site-check'),
         'gr_SiteCheck@odata.bind': '$1',
     }))
+    const checklistByEquipment = new Map(
+        input.checklists.map((entry) => [entry.equipmentId.toLowerCase(), entry] as const),
+    )
+    const snapshots = input.equipment.flatMap((item, equipmentIndex) => {
+        const checklist = checklistByEquipment.get(item.gr_equipmentid.toLowerCase())!
+        return buildSiteCheckChecklistSnapshotCreates(
+            '$1',
+            `$${equipmentIndex + 3}`,
+            checklist.template,
+            checklist.items,
+        )
+    })
     const exclusions = (input.excludedEquipment ?? []).map((item) => ({
         gr_name: `Site Check exclusion — ${item.gr_fleet?.trim() || item.gr_equipmentid}`,
         gr_availabilitysnapshot: item.gr_sitecheckavailability,
         'gr_SiteCheck@odata.bind': '$1',
         'gr_Equipment@odata.bind': `/gr_equipments(${item.gr_equipmentid})`,
+    }))
+    const availabilityUpdates = (input.availabilityUpdates ?? []).map((update) => ({
+        method: 'PATCH' as const,
+        entityPath: `gr_equipments(${update.equipment.gr_equipmentid})`,
+        fields: { gr_sitecheckavailability: update.availability },
+        etag: update.equipment['@odata.etag'],
     }))
 
     return [
@@ -135,11 +190,17 @@ function creationRequests(input: SiteCheckCreationInput): AtomicRequest[] {
             etag: schedule['@odata.etag'],
         },
         ...jobs.map((fields) => ({ method: 'POST' as const, entityPath: 'gr_jobs', fields })),
+        ...snapshots.map((fields) => ({
+            method: 'POST' as const,
+            entityPath: 'gr_sitecheckchecklistsnapshotitems',
+            fields,
+        })),
         ...exclusions.map((fields) => ({
             method: 'POST' as const,
             entityPath: 'gr_sitecheckequipmentexclusions',
             fields,
         })),
+        ...availabilityUpdates,
     ]
 }
 

@@ -82,15 +82,23 @@ counts cover Up to date, Due, Overdue, and In progress only; disabled and invali
 are excluded. Each count is a keyboard-accessible toggle that filters the Sites tab, with an
 announced result count and explicit clear action. The Site Checks domain projection owns
 state, count, and operational-Job progress calculation; the dashboard only renders it.
+Each enabled Site exposes one context-aware details action: an active occurrence is labelled
+View Current Site Check and opens Summary; otherwise the same action is labelled Site Check
+History and opens History. The header never renders separate current and history buttons.
 Disabled schedules render no Site Check status, Run, Current, or History content in the Site
 header. Their occurrence and Job history remains stored and becomes accessible again if the
 Schedule is re-enabled.
 
 Due and Overdue Sites expose Run Site Check. The Site Check-owned drawer reuses the shared
-drawer shell and existing searchable technician selector. It reviews Customer, Site,
-frequency, due date, all currently loaded Site Equipment (including inactive labels), and
-the generated Job count. The preview is advisory: submit re-reads schedule, active mechanic,
-and Site Equipment authoritatively with one silent token. A drawer-session UUID is retained
+drawer shell and existing searchable technician selector. It keeps Customer, Site,
+frequency, and due date concise, collapses the normally included Equipment list, and keeps
+unavailable exceptions prominent. Managers can mark Equipment Available at Site,
+Temporarily Off-site, or In Workshop inline rather than leaving the workflow. Submit
+re-reads schedule, active mechanic, and Site Equipment authoritatively with one silent token.
+Inline Equipment availability PATCHes, the occurrence, Schedule lock, Jobs, and exclusion
+snapshots share one ETag-protected atomic change set. After success the existing details
+drawer opens directly on Jobs & Equipment so Job Book copy/paste is immediately available.
+A drawer-session UUID is retained
 for safe explicit retry, and the creation action is disabled while the atomic transaction
 and reconciliation run.
 

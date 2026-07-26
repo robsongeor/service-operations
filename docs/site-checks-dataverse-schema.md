@@ -333,6 +333,172 @@ remains one child operation per candidate. No catch-up record or Job is created 
 key is Active. Application creation writes each occurrence, its generated Jobs, and these
 snapshots in one atomic change set.
 
+## Proposed Phase 15 technician access and Email Dispatch extension
+
+**Provisioned for the approved token-access design. Email Dispatch is not a runtime dependency.**
+These proposed columns belong on confirmed `gr_sitecheck`:
+
+| Business purpose | Display / schema / logical name | Type | Required/default | Key, security, migration |
+| --- | --- | --- | --- | --- |
+| Store only an occurrence token hash | Site Check Technician Access Token Hash / `gr_SiteCheckTechnicianAccessTokenHash` / `gr_sitechecktechnicianaccesstokenhash` | Single line text, 64 | Optional; null | Proposed unique alternate key `gr_sitecheck_technicianaccesstokenhash_key`; office writes, portal service reads; no backfill |
+| Record issue time | Site Check Technician Access Token Created On / `gr_SiteCheckTechnicianAccessTokenCreatedOn` / `gr_sitechecktechnicianaccesstokencreatedon` | Date and time, User Local | Optional; null | Replaced with hash/expiry; no backfill |
+| Bound access | Site Check Technician Access Token Expires On / `gr_SiteCheckTechnicianAccessTokenExpiresOn` / `gr_sitechecktechnicianaccesstokenexpireson` | Date and time, User Local | Optional; null | Seven-day service default; accepted bound 1–720 hours; no backfill |
+| Audit revocation | Site Check Technician Access Token Revoked On / `gr_SiteCheckTechnicianAccessTokenRevokedOn` / `gr_sitechecktechnicianaccesstokenrevokedon` | Date and time, User Local | Optional; null | Cleared on issue/reissue and set on explicit revoke; no backfill |
+
+No Used flag is proposed because one occurrence token supports several independent Job Card
+submissions. It remains valid until expiry, replacement, explicit revocation, deletion, or
+operational occurrence completion. Replacement changes the stored hash; raw tokens are
+never stored.
+
+Extend confirmed organisation-owned Email Dispatch:
+
+| Change | Exact proposed contract | Relationships/defaults | Security/migration |
+| --- | --- | --- | --- |
+| Add occurrence owner | Site Check / `gr_SiteCheck` / `gr_sitecheck` lookup → `gr_sitecheck` | Optional; relationship `gr_sitecheck_emaildispatches`; Referential/Restrict, no cascade | Existing rows remain null; office workflow only |
+| Permit occurrence-only dispatch | Change confirmed Job lookup `gr_Job` / `gr_job` required level from Application Required to Optional | Service enforces exactly one of Job or Site Check | Existing rows retain Job; no rewrite |
+
+The confirmed entity set remains `gr_emaildispatchs`. Existing recipient, subject, body,
+sent/error, requested/completed, Job Assignment, and Power Automate trigger contracts remain
+unchanged. No new Choice is required.
+
+Read-only preflight result (2026-07-26): one cached connection with `LoginPrompt=Never`
+confirmed that all four proposed Site Check token columns and the proposed key are absent;
+Email Dispatch `gr_job` exists as an Application Required Lookup; and the proposed
+`gr_sitecheck` Lookup/relationship is absent. The existing
+`gr_sitecheck_creationrequestkey_key` is Active. No metadata, privileges, data, or solution
+components were changed.
+
+Proposed security delta:
+
+- Public Portal Service: Organisation Read on Site Check only. No Site Check Create, Write,
+  Delete, Append, Append To, Assign, or Share; no Email Dispatch privilege.
+- Service Operations: no privilege delta. The preflight verified Organisation-depth
+  Create/Read/Write/Append/Append To on Email Dispatch and Read/Append/Append To on Site
+  Check.
+- Public responses never expose token fields, Email Dispatch content, or unrelated Jobs.
+
+The Public Portal Service preflight found no inspected Site Check or Email Dispatch
+privileges. Provision only Organisation Read on Site Check after explicit approval; do not
+add Email Dispatch or Site Check mutation privileges.
+
+Provisioning result (2026-07-26):
+
+- all four Site Check token columns are provisioned and published;
+- `gr_sitecheck_technicianaccesstokenhash_key` is Active;
+- optional `gr_emaildispatch.gr_sitecheck` and
+  `gr_sitecheck_emaildispatches` are provisioned with Restrict delete behaviour;
+- Public Portal Service has Organisation Read on Site Check and no inspected mutation or
+  Email Dispatch privilege; and
+- `gr_emaildispatch.gr_job` remains Application Required. Dataverse returned success for
+  three SDK update attempts but did not retain the required-level change, even though the
+  column is unmanaged, valid for update, and reports that Required Level can be changed.
+
+Do not retry this mutation without a new evidence-based approach. The product owner
+subsequently chose the working Jobs-table `mailto:` handoff, so the retained required Job
+lookup is not a Site Checks blocker. Site Checks must not write the optional Email Dispatch
+Site Check lookup, and no separate dispatch table is approved for provisioning.
+
+## Phase 16 checklist foundation
+
+**Provisioned, published, and verified on 26 July 2026.**
+
+Local architecture inspection confirmed no generic checklist model to reuse.
+`gr_wofinspection` remains WOF-specific. The proposal reuses canonical Job,
+`gr_jobphoto`, `gr_jobcardsubmissiontimeentry`, and `gr_jobmaterial` ownership while adding
+normalized checklist definitions and answers. The product owner approved the schema,
+Choice values, initial organisation-wide template scope, and least-privilege security
+model. Provisioning used one cached `LoginPrompt=Never` connection and did not create or
+change business data:
+
+| Confirmed table/extension | Key columns and relationships | Required/default and constraints |
+| --- | --- | --- |
+| `gr_sitecheckchecklisttemplate` | `gr_templatecode` Text(100), `gr_version` Whole Number, optional self lookup `gr_supersedestemplate` | Organisation-owned; `gr_active` Yes/No required default Yes; alternate key Code + Version; immutable after use |
+| `gr_sitecheckchecklisttemplateitem` | required `gr_checklisttemplate`; `gr_itemkey` Text(100); group, prompt, type, order, required/comment/photo rules | Organisation-owned; alternate key Template + Item Key; immutable with parent |
+| `gr_sitecheckschedule.gr_checklisttemplate` | optional lookup to Template | Existing rows null; selected version must be active and valid |
+| `gr_sitecheckchecklistsnapshotitem` | required `gr_sitecheck`; required `gr_job`; optional source Template Item; copied item key, wording, type, order, and rules | Organisation-owned; alternate key Job + Item Key; immutable |
+| `gr_sitecheckchecklistresponse` | required `gr_job`, `gr_snapshotitem`, `gr_submittedon`, `gr_technician`; typed optional choice/decimal/text fields and comment | Organisation-owned; alternate key Job + Snapshot Item; one compatible answer; immutable after submission |
+| `gr_jobphoto.gr_checklistresponse` | optional lookup to Response; canonical Job lookup remains required | Response Job must match photo Job; existing photos null |
+
+Confirmed entity sets:
+
+- `gr_sitecheckchecklisttemplates`
+- `gr_sitecheckchecklisttemplateitems`
+- `gr_sitecheckchecklistsnapshotitems`
+- `gr_sitecheckchecklistresponses`
+
+Provisioned local `gr_responsetype`: Pass / Fail / Not applicable `122830000`, Yes / No
+`122830001`, Number `122830002`, Text `122830003`. Proposed `gr_choiceanswer`: Pass
+`122830000`, Fail `122830001`, Not applicable `122830002`, Yes `122830003`, No
+`122830004`. These are new local Choice values owned by these checklist columns.
+
+No historical backfill is proposed. Existing Schedules remain checklist-free until a
+template is selected. Only new occurrences snapshot a selected template. Service
+Operations manages templates and reads submitted responses; Public Portal Service receives
+only Snapshot Read and Response Create/Read/Append/Append To plus the minimum Job Photo
+relationship delta verified necessary. The preflight found Public Portal Service already
+had Organisation Write/Append on Job Photo and Append To on Job. Provisioning added the
+missing new-table privileges and Append To on Mechanic; it did not grant Template,
+Template Item, or Schedule mutation, Snapshot mutation, Response Write/Delete, or broader
+Site Check mutation.
+
+Same-session verification confirmed the four key definitions. Dataverse initially reported
+each index as `Pending`, and one later cached, read-only verification confirmed all four
+`Active`:
+
+- `gr_sitecheckchecklisttemplate_code_version_key`
+- `gr_sitecheckchecklisttemplateitem_template_itemkey_key`
+- `gr_sitecheckchecklistsnapshotitem_sitecheck_itemkey_key`
+- `gr_sitecheckchecklistresponse_job_snapshot_key`
+
+Future audits can use
+`manage-site-checks-schema.ps1 -Mode VerifyChecklist -LoginPrompt Never`; do not re-provision
+or use an interactive login merely to repeat a passing check. No template content was
+seeded; actual prompts and item-level mandatory/evidence rules remain a separate
+product-content approval.
+
+### Per-Equipment checklist correction provisioned
+
+The product owner subsequently confirmed that one Site Check occurrence may contain ICE
+and Electric Equipment, with one checklist per generated machine Job. Existing
+`gr_equipment.gr_powertype` is the authoritative Template selector. The currently
+original Snapshot Item Site Check + Item Key contract could not distinguish overlapping
+item keys across per-Job checklists.
+
+The following approved delta was provisioned and structurally verified on 26 July 2026.
+The replacement alternate-key definition exists and its Dataverse index was still
+`Pending` at the final read-only check; it must be confirmed `Active` before occurrence
+integration:
+
+A subsequent single cached no-prompt verification on 26 July 2026 confirmed the replacement
+key `Active`; all four checklist alternate keys and the Phase 16 schema/security contract
+passed verification.
+
+### Provisioned version-1 checklist content
+
+On 26 July 2026 the product owner explicitly approved and provisioned two organisation-wide
+active Templates:
+
+- `SITE_CHECK_ICE`, version 1, with 23 Items; and
+- `SITE_CHECK_ELECTRIC`, version 1, with 22 Items.
+
+The authoritative exact seed manifest is `scripts/site-check-checklist-v1.json`. A
+no-prompt preflight confirmed zero matching rows, then one atomic transaction created both
+Templates and all 45 Items. Exact read-back verification passed. Inspection answers are
+required; failed inspection items require comments; photos are optional in v1; and
+`meter.service-hours` is a required Number response. Do not edit these version-1 rows in
+place after occurrence snapshots use them; create a new Template version instead.
+
+- add required `gr_job` lookup to `gr_sitecheckchecklistsnapshotitem`;
+- retain required `gr_sitecheck` for occurrence-level loading;
+- replace the Site Check + Item Key alternate key with Job + Item Key;
+- create no backfill because no Snapshot Item rows exist;
+- leave Schedule Template lookup null and unused in v1; and
+- resolve missing and Other / Unknown Equipment Power Type to the active ICE Template
+  without updating Equipment; label the runtime selection as defaulted.
+
+This delta is not approved or provisioned. See
+`features/SITE_CHECK_CHECKLIST_CONTENT_PROPOSAL.md`.
+
 ## Indexes, alternate keys, and query support
 
 - Schedule: alternate key on Site; index/query support for Enabled + Next Due Date and Active

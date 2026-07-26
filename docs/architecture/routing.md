@@ -14,15 +14,18 @@ management shell and a public portal shell.
 | `/mechanics` | Technician management |
 | `/equipment` | Equipment Management |
 | `/jobs` | Jobs |
+| `/site-checks` | Cross-customer Site Checks workspace |
 | `/scheduling` | Scheduler |
 | `/quotes` | Quotes |
 | `/pricing` | Pricing |
 | `/wof` | WOF Management |
 | `/portal/job/:token` | Anonymous Technician Job Card Submission |
+| `/portal/site-check/:token` | Proposed Site Check assignment portal (Phase 15; subject to approval) |
 
 Management routes require an MSAL account and render with the shared navigation shell.
 `/portal/job` and `/portal/job/:token` are evaluated before the management authentication
-gate and intentionally render without the Sidebar or office navigation.
+gate and intentionally render without the Sidebar or office navigation. The proposed Site
+Check assignment route must use the same public-shell boundary if Phase 15 is approved.
 
 ## Navigation rules
 

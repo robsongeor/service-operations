@@ -98,6 +98,12 @@ delivery, WOF, or customer sign-off records as explicit child models. Extend gen
 Photo rather than creating feature-specific photo tables. Keep the public projection and
 role privileges minimal.
 
+Site Checks will reuse the canonical per-Job form and submission transaction behind one
+proposed occurrence-level assignment link. The occurrence token never replaces or consumes
+the Job-level evidence record, never completes operational Jobs, and authorises only
+parent-linked Jobs still assigned to the occurrence technician. See the
+[Site Checks tracker](../features/SITE_CHECKS_IMPLEMENTATION_PLAN.md), Phase 15.
+
 ## Related files
 
 - [`../../api/services/jobSubmissionService.js`](../../api/services/jobSubmissionService.js)

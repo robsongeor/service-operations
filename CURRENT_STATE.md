@@ -27,6 +27,169 @@ Branch: `codex/site-checks-polish`
 
 ## Recent milestone
 
+The product direction for the next Site Checks expansion is approved and recorded as
+Phases 14–18 in the authoritative tracker. Phase 14 is complete: the authenticated
+`/site-checks` workspace shows enabled Sites across Customers, defaults to Needs attention,
+supports state metrics plus combined operational filters, and reuses the existing
+Run/details drawers. It uses one silent token, paged Site/technician references, bounded
+100-Site Schedule scopes, batched occurrence/progress reads, and lazy per-Site Equipment;
+it does not load global Jobs or Equipment. Customer, Job, and Equipment links reach their
+canonical management context. A signed-in desktop smoke loaded three enabled Sites, verified
+Due and technician filters, opened the active Summary drawer, loaded the three-machine
+creation review without submitting it, and verified Escape/focus return. No authentication
+prompt or Dataverse write occurred.
+Technicians will receive one occurrence-level assignment experience while retaining one
+independent Job and Job Card per Equipment. Future checklist definitions will be versioned
+and snapshotted, technician submission will remain separate from operational completion,
+and findings will require explicit office review before creating follow-up Jobs or Quotes.
+No new schema is approved or provisioned by this design decision; bulk access, checklist,
+and findings schema/security changes retain explicit approval gates.
+
+Phase 15 local inspection and the consolidated live read-only preflight are complete. The
+preflight used one
+cached `LoginPrompt=Never` connection and made no changes. It confirmed that the four
+proposed Site Check token columns/key and Email Dispatch Site Check relationship are absent,
+that Email Dispatch Job is currently required, that Service Operations already has the
+necessary Organisation-depth relationship privileges, and that Public Portal Service
+currently has no Site Check privilege. The proposal adds four optional token-lifecycle
+columns plus a token-hash alternate key on Site
+Check, adds an optional Site Check lookup to Email Dispatch, and changes its required Job
+lookup to optional with an application-enforced exactly-one-owner rule. Public Portal
+Service would receive only Organisation Read on Site Check. At the preflight stage no
+schema, role, flow, server, email, or application mutation had been performed.
+
+Phase 15 schema/security provisioning was then explicitly approved. The four token fields,
+published optional Email Dispatch Site Check relationship, Active token-hash key, and only
+Organisation Read on Site Check for Public Portal Service are now provisioned and verified.
+Email Dispatch Job remains Application Required: Dataverse returned success for three
+required-level update attempts but retained the old value, despite reporting the column as
+unmanaged, updateable, and changeable. No further blind retries should be made. This is no
+longer a Phase 15 blocker: the working Jobs-table email action was traced to secure-link
+generation followed by a `mailto:` handoff, and the product owner selected that mechanism
+instead of Power Automate. The optional Email Dispatch Site Check relationship is unused;
+no separate dispatch table should be provisioned. Phase 15 application implementation has
+started locally: the shared Site Check assignment service, Azure Function wrapper, and Vite
+middleware implement authenticated link generation/revocation and anonymous minimal
+occurrence/Job lookup. The client reuses the Jobs-table email validator and `mailto:`
+builder with Site Check-specific subject/body. The manager **Send to technician** action and
+unauthenticated read-only `/portal/site-check/:token` assignment list are wired. Six focused
+tests, lint, and production build pass.
+
+The product owner resolved the Static Web App Contributor/RBAC and missing environment
+configuration and then confirmed the client secret exposed in a supplied screenshot was
+rotated and replaced in the Static Web App environment. Never copy the old or current value
+into source, documentation, logs, or responses.
+
+Post-rotation full regression tests, lint, and production build pass. The localhost public
+route rendered its safe temporary-error response because the local API process does not
+have the rotated server identity. The management tab was signed out after reload; no token,
+Dataverse write, mailto handoff, or real communication was created. Live validation remains
+pending one user-initiated localhost sign-in plus local server identity configuration or a
+deployed endpoint.
+
+The subsequent signed-in manager smoke verified **Send to technician** on both active
+Cardinal Site Checks. Drury's 17 Jobs and Puhinui's two Jobs were correctly blocked because
+their generated Jobs do not all have numeric Job Numbers. No token, Dataverse write, mail
+client, or communication was created. Successful end-to-end link validation awaits a
+genuinely numbered in-progress occurrence; production Job Numbers must not be assigned only
+to facilitate a test.
+
+Phase 16 schema, proposed Choice values, initial organisation-wide template scope, and the
+least-privilege security model were explicitly approved and provisioned on 26 July 2026.
+One cached, no-prompt preflight confirmed the four table names and two extension lookup names
+were unused and inspected only metadata/role grants. A second single cached connection
+created and published the versioned Template/Item, occurrence Snapshot Item, per-Job
+Response, Schedule Template selection, and optional Job Photo Response relationship.
+Same-session structural, Choice, relationship, key-definition, and role-grant verification
+passed without creating or changing business data. All four alternate keys were initially
+Pending; one later cached, read-only `VerifyChecklist` check confirmed all four Active and
+reverified the schema/security contract. No checklist content was seeded; actual prompts
+and item-level required/comment/photo rules remain a separate product approval before
+application integration.
+
+The first Phase 16 application-foundation slice is complete locally. It adds typed Template,
+Template Item, Snapshot Item, Response, response-type, and choice-answer contracts; strict
+paged Dataverse reads using the four metadata-confirmed entity sets; active-template and
+item-integrity validation; and deterministic immutable snapshot payload construction.
+Schedule reads now include the optional selected-Template lookup. It does not add template
+administration, seed checklist content, change occurrence creation, change technician
+submission, or write business data. The focused 52-test Site Checks suite, lint, and
+production build pass.
+
+The two supplied legacy fortnightly check sheets have been extracted and compared without
+modifying the originals. The product owner clarified that one technician link opens all
+machine Jobs, but each Job must receive the checklist selected from its Equipment Service
+Data. Existing `gr_equipment.gr_powertype` (ICE/Electric/Other or Unknown) is authoritative.
+The unseeded content proposal defines separate complete ICE and Electric Templates. Its
+required schema correction was approved and provisioned on 26 July 2026: Snapshot Item now
+has a required Job lookup and Job + Item Key alternate key while retaining Site Check for
+occurrence reads. A cached no-prompt preflight confirmed zero Snapshot rows and the required
+Service Operations relationship privileges before the old key was replaced; structural
+verification passed without creating business rows.
+The replacement alternate-key definition exists but its Dataverse index remained `Pending`
+at the final no-prompt read-only check. Do not repeatedly poll; confirm `Active` in the next
+relevant Dataverse session before occurrence integration.
+A later single cached no-prompt verification confirmed it `Active` and all Phase 16
+schema/security contracts passed. Local Snapshot Item types, reads, and creation payloads
+now require the generated Job binding. A pure domain resolver selects Electric only for
+Electric Power Type and selects ICE for ICE, Other / Unknown, and missing values, with the
+latter cases labelled **ICE checklist (defaulted)**. Focused tests and lint pass.
+The exact Phase 16 checklist v1 content and rules were explicitly approved and provisioned
+on 26 July 2026. A cached no-prompt preflight found zero matching rows. One subsequent
+cached no-prompt connection atomically created `SITE_CHECK_ICE` v1 with 23 Items and
+`SITE_CHECK_ELECTRIC` v1 with 22 Items, then verified every row against
+`scripts/site-check-checklist-v1.json`. Answers are required, failed inspection items
+require comments, photos are optional, and the service-meter reading is a required Number.
+No operational or customer business rows were created or changed. The next implementation
+slice was completed locally: authoritative creation loads and validates the required active
+Templates, selects per Equipment Power Type, and adds every per-Job immutable Snapshot Item
+to the same atomic change set as the occurrence and generated Jobs. The Run review labels
+each machine's checklist and explicitly marks ICE fallback. Missing or invalid content
+blocks before writing. The verified 22-machine ICE case produces 530 operations within the
+enforced limits. The focused 54-test suite, lint, and production build pass. No occurrence
+was created during this validation.
+
+Phase 17 has started locally. The secure Site Check assignment endpoint now loads Snapshot
+Items and returns only those attached to Jobs still authorised by the occurrence token and
+assigned technician. The portal now has a machine selector and grouped immutable checklist
+display with response-rule hints. It remains intentionally read-only until checklist
+Responses, Job Card fields, and token/job replay protection are committed through one
+canonical server-side per-Job transaction. Six assignment tests and lint pass.
+That transaction is now implemented locally: each request revalidates the occurrence token,
+technician, Job membership/state, and Snapshot ownership; validates every required answer,
+numeric meter reading, and failed-item comment; then atomically creates Responses and marks
+only Job Card Status Submitted using the Job ETag. Operational Job Status is untouched.
+Replay/concurrent writes are rejected by ETag and alternate keys, and the portal advances
+to the next unsubmitted machine. Time, parts, photos, search, unsaved-change warnings, and
+an end-to-end portal smoke remain. Eight focused assignment tests and build pass.
+Canonical time entries and Job Materials now join checklist Responses and the Job Card
+update in the same atomic transaction. The portal also supports machine search, automatic
+continue-to-next, and an unsaved-input confirmation when switching machines. Optional photo
+upload, whole-page navigation guarding, accessibility/recovery/browser validation, and an
+end-to-end portal smoke remain. Eight focused assignment tests, lint, and build pass.
+Optional photos now reuse the canonical Job Photo preparation, validation, idempotent
+upload-key, Job relationship, and file-column upload path. A whole-page `beforeunload`
+warning complements machine-switch confirmation, and preview URLs are released on reset.
+Live authenticated portal/file smoke validation remains outstanding.
+The complete repository regression suite, lint, production build, and `git diff --check`
+pass. Release preparation excludes the unrelated untracked `docs/wiki/` directory. The
+branch is ready to push; deployment and production-safe authenticated/manual validation
+remain separate explicit actions.
+The product owner decided missing and Other/Unknown Power Type defaults to the ICE Template
+without changing Equipment Service Data; preview and technician UI must show **ICE checklist
+(defaulted)**. Checklist content and comment/photo rules still await explicit approval.
+No Dataverse business rows or application behaviour changed.
+
+Starting a Site Check is now one compact review flow. The drawer selects the technician,
+collapses included Equipment, keeps unavailable exceptions visible, and allows persistent
+availability changes inline. Those Equipment updates now share the existing atomic
+occurrence/Schedule/Job/exclusion transaction. Successful creation opens directly on Jobs &
+Equipment for immediate Job Book copy/paste.
+
+Enabled Site headers now use one context-aware Site Check details action instead of separate
+current and history buttons. In progress opens the current occurrence Summary; other enabled
+states open History through the same details drawer.
+
 Phase 13 temporary Equipment availability is implemented locally. The Equipment marker is
 available from the Customer Dashboard Equipment drawer only when the current Site has an
 enabled recurring Schedule. In Workshop and Temporarily Off-site Equipment are excluded

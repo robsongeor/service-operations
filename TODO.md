@@ -30,10 +30,13 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
   enabled-Site-only marker, In Workshop/Temporarily Off-site exclusion, and occurrence
   exclusion snapshots; no catch-up Jobs.
 
+- [ ] Deliver the approved Site Checks operational expansion in
+  [`docs/features/SITE_CHECKS_IMPLEMENTATION_PLAN.md`](docs/features/SITE_CHECKS_IMPLEMENTATION_PLAN.md):
+  cross-customer workspace, one-link bulk technician dispatch, versioned per-machine
+  checklists, guided multi-machine submission, and reviewed findings. Phases 15–18 retain
+  explicit schema/security approval gates.
 - [ ] Complete persistent Customer creation and Customer-level information management;
   current Customer-level behaviour still includes local prototype boundaries.
-- [ ] Decide whether Technician Job Cards require customer signature, checklist,
-  inspection, or customer sign-off child records.
 - [ ] Decide whether Job Materials need quantity, part number, stock lookup, or inventory
   integration. Keep the technician label as **Parts** unless the user workflow changes.
 - [ ] Consider technician/assignment grouping for time entries and submission evidence.

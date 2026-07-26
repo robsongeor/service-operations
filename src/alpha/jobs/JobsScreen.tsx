@@ -13,12 +13,13 @@ import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
 import PageSettingsButton from '../shared/settings/PageSettingsButton'
 import PageSettingsDialog from '../shared/settings/PageSettingsDialog'
 import './JobsScreen.css'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { JOBS_TABLE_COLUMNS, type JobsStickyThroughColumnId } from './types/jobsTableColumns'
 import JobCompletionWorkflow from './components/JobCompletionWorkflow'
 
 export default function JobsScreen() {
     const navigate = useNavigate()
+    const [searchParams, setSearchParams] = useSearchParams()
     const activeAccount = useActiveMsalAccount()
     const signedInUser = getSignedInUserInfo(activeAccount)
     const storageKey = signedInUser ? getJobsViewStateKey(signedInUser.storageId) : null
@@ -93,6 +94,25 @@ export default function JobsScreen() {
             // The already-loaded Job remains available if the background refresh fails.
         })
     }
+
+    useEffect(() => {
+        const jobId = searchParams.get('jobId')
+        if (!jobId || isLoading || editingJob) return
+        const job = jobs.find((item) => item.gr_jobid.toLowerCase() === jobId.toLowerCase())
+        if (!job) return
+        const timer = window.setTimeout(() => {
+            setEditingInitialTab('details')
+            setEditingJob(job)
+            void fetchJobForDrawer(job.gr_jobid).then((refreshedJob) => {
+                if (!refreshedJob) return
+                setEditingJob((current) => current?.gr_jobid === job.gr_jobid ? refreshedJob : current)
+            }).catch(() => undefined)
+            const next = new URLSearchParams(searchParams)
+            next.delete('jobId')
+            setSearchParams(next, { replace: true })
+        }, 0)
+        return () => window.clearTimeout(timer)
+    }, [editingJob, fetchJobForDrawer, isLoading, jobs, searchParams, setSearchParams])
 
     const currentMatchesDefault = viewState.selectedJobType === defaultView.selectedJobType
         && canonicaliseJobStatuses(viewState.visibleStatuses).join(',') === canonicaliseJobStatuses(defaultView.visibleStatuses).join(',')

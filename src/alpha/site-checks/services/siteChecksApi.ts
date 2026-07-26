@@ -75,6 +75,10 @@ function mapSchedule(value: unknown): SiteCheckSchedule {
             row._gr_activesitecheck_value,
             'active Site Check',
         ),
+        _gr_checklisttemplate_value: optionalGuid(
+            row._gr_checklisttemplate_value,
+            'checklist Template',
+        ),
         '@odata.etag': typeof row['@odata.etag'] === 'string' ? row['@odata.etag'] : undefined,
     }
 }
@@ -250,13 +254,13 @@ async function readScheduleResponse(response: Response) {
 export async function fetchSiteCheckSchedulesForSites(
     accessToken: string,
     siteIds: readonly string[],
-    options: { apiUrl?: string; fetcher?: typeof fetch } = {},
+    options: { apiUrl?: string; fetcher?: typeof fetch; enabledOnly?: boolean } = {},
 ) {
     const ids = normalizeIds(siteIds)
     if (ids.length === 0) return []
     const query = [
-        '$select=gr_sitecheckscheduleid,gr_name,gr_enabled,gr_frequency,gr_equipmentscope,gr_nextduedate,gr_lastcompleteddate,_gr_site_value,_gr_activesitecheck_value',
-        `$filter=${lookupFilter('_gr_site_value', ids)}`,
+        '$select=gr_sitecheckscheduleid,gr_name,gr_enabled,gr_frequency,gr_equipmentscope,gr_nextduedate,gr_lastcompleteddate,_gr_site_value,_gr_activesitecheck_value,_gr_checklisttemplate_value',
+        `$filter=${options.enabledOnly ? 'gr_enabled eq true and ' : ''}(${lookupFilter('_gr_site_value', ids)})`,
         '$orderby=gr_name asc',
     ].join('&')
     const rows = await readCollection(

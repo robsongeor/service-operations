@@ -1,0 +1,69 @@
+{
+  "templates": [
+    {
+      "code": "SITE_CHECK_ICE",
+      "name": "ICE Site Check",
+      "version": 1,
+      "items": [
+        { "order": 10, "key": "visual.damage", "group": "Visual", "prompt": "Check for bent, dented, or broken parts and inspect seat condition." },
+        { "order": 20, "key": "visual.fluid-leaks", "group": "Visual", "prompt": "Check under the unit for fluid leaks." },
+        { "order": 30, "key": "visual.tyres-wheels", "group": "Visual", "prompt": "Check tyres and wheels for damage; confirm wheel nuts are present and tight." },
+        { "order": 40, "key": "visual.forks-attachment", "group": "Visual", "prompt": "Check forks or carpet probe are in place, straight, and secured by locking pins." },
+        { "order": 50, "key": "visual.chains-hoses-cables", "group": "Visual", "prompt": "Check chains, hoses, and cables are secure, with no broken links or loose rollers." },
+        { "order": 60, "key": "visual.guards", "group": "Visual", "prompt": "Check overhead guard and load backrest condition and security." },
+        { "order": 70, "key": "visual.safety-devices", "group": "Visual", "prompt": "Check flashing, head, brake, and indicator lights and the horn." },
+        { "order": 80, "key": "visual.dash-gauges", "group": "Visual", "prompt": "Check all dash warning lamps and gauges operate correctly." },
+        { "order": 110, "key": "engine.oil-level", "group": "Engine", "prompt": "Check engine oil is between the minimum and maximum marks." },
+        { "order": 120, "key": "engine.coolant-hoses", "group": "Engine", "prompt": "Check radiator water/coolant level, hoses, and leaks." },
+        { "order": 130, "key": "engine.fan-belt", "group": "Engine", "prompt": "Check fan belt adjustment and tension." },
+        { "order": 140, "key": "engine.fuel-system", "group": "Engine", "prompt": "Check for fuel leaks and confirm the tank cap is fitted." },
+        { "order": 150, "key": "engine.air-cleaner", "group": "Engine", "prompt": "Check air cleaner and pre-cleaner are installed and operating; clean where required." },
+        { "order": 310, "key": "operation.functions", "group": "Operational", "prompt": "Check machine operation and all fitted functions." },
+        { "order": 320, "key": "operation.travel-controls", "group": "Operational", "prompt": "Check forward and reverse operation with no unusual noise." },
+        { "order": 330, "key": "operation.audible-alarms", "group": "Operational", "prompt": "Check horn and reverse beeper." },
+        { "order": 340, "key": "operation.brakes", "group": "Operational", "prompt": "Check park brake and foot brake operate correctly." },
+        { "order": 350, "key": "operation.drive-disconnect", "group": "Operational", "prompt": "Check the inch pedal engages and disengages drive." },
+        { "order": 360, "key": "operation.steering", "group": "Operational", "prompt": "Check steering lock to lock with no unusual noise; grease where applicable." },
+        { "order": 370, "key": "operation.hydraulics", "group": "Operational", "prompt": "Check raise/lower, tilt, side-shift, and fork-position controls as fitted." },
+        { "order": 380, "key": "operation.mast", "group": "Operational", "prompt": "Check mast is greased and tilt and bottom pivots are secure." },
+        { "order": 390, "key": "operation.other-safety", "group": "Operational", "prompt": "Check neutral start, speed governor, and forward/reverse interlock as fitted." },
+        { "order": 400, "key": "meter.service-hours", "group": "Operational", "prompt": "Record the service meter reading.", "responseType": 122830002, "commentRequiredOnNegative": false }
+      ]
+    },
+    {
+      "code": "SITE_CHECK_ELECTRIC",
+      "name": "Electric Site Check",
+      "version": 1,
+      "items": [
+        { "order": 10, "key": "visual.damage", "group": "Visual", "prompt": "Check for bent, dented, or broken parts and inspect seat condition." },
+        { "order": 20, "key": "visual.fluid-leaks", "group": "Visual", "prompt": "Check under the unit for fluid leaks." },
+        { "order": 30, "key": "visual.tyres-wheels", "group": "Visual", "prompt": "Check tyres and wheels for damage; confirm wheel nuts are present and tight." },
+        { "order": 40, "key": "visual.forks-attachment", "group": "Visual", "prompt": "Check forks or carpet probe are in place, straight, and secured by locking pins." },
+        { "order": 50, "key": "visual.chains-hoses-cables", "group": "Visual", "prompt": "Check chains, hoses, and cables are secure, with no broken links or loose rollers." },
+        { "order": 60, "key": "visual.guards", "group": "Visual", "prompt": "Check overhead guard and load backrest condition and security." },
+        { "order": 70, "key": "visual.safety-devices", "group": "Visual", "prompt": "Check flashing, head, brake, and indicator lights and the horn." },
+        { "order": 80, "key": "visual.dash-gauges", "group": "Visual", "prompt": "Check all dash warning lamps and gauges operate correctly." },
+        { "order": 210, "key": "battery.water-level", "group": "Battery", "prompt": "Check battery water level is between the minimum and maximum marks." },
+        { "order": 220, "key": "battery.connections", "group": "Battery", "prompt": "Check connections on the battery, charger, and forklift; remove foreign objects." },
+        { "order": 230, "key": "battery.charger", "group": "Battery", "prompt": "Check the charger operates correctly." },
+        { "order": 240, "key": "battery.security", "group": "Battery", "prompt": "Check the battery is securely locked and correctly located." },
+        { "order": 310, "key": "operation.functions", "group": "Operational", "prompt": "Check machine operation and all fitted functions." },
+        { "order": 320, "key": "operation.travel-controls", "group": "Operational", "prompt": "Check forward and reverse operation with no unusual noise." },
+        { "order": 330, "key": "operation.audible-alarms", "group": "Operational", "prompt": "Check horn and reverse beeper." },
+        { "order": 340, "key": "operation.brakes", "group": "Operational", "prompt": "Check park brake and foot brake operate correctly." },
+        { "order": 350, "key": "operation.drive-disconnect", "group": "Operational", "prompt": "Check the emergency switch operates correctly." },
+        { "order": 360, "key": "operation.steering", "group": "Operational", "prompt": "Check steering lock to lock with no unusual noise; grease where applicable." },
+        { "order": 370, "key": "operation.hydraulics", "group": "Operational", "prompt": "Check raise/lower, tilt, side-shift, and fork-position controls as fitted." },
+        { "order": 380, "key": "operation.mast", "group": "Operational", "prompt": "Check mast is greased and tilt and bottom pivots are secure." },
+        { "order": 390, "key": "operation.other-safety", "group": "Operational", "prompt": "Check neutral start, speed governor, and forward/reverse interlock as fitted." },
+        { "order": 400, "key": "meter.service-hours", "group": "Operational", "prompt": "Record the service meter reading.", "responseType": 122830002, "commentRequiredOnNegative": false }
+      ]
+    }
+  ],
+  "defaults": {
+    "responseType": 122830000,
+    "required": true,
+    "commentRequiredOnNegative": true,
+    "photoRequiredOnNegative": false
+  }
+}

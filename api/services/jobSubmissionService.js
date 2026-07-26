@@ -23,7 +23,7 @@ function requestHeader(request, name) {
 
 function dataverseOrigin() {
     try {
-        const url = new URL((process.env.DATAVERSE_URL || '').trim())
+        const url = new URL((process.env.DATAVERSE_URL || process.env.VITE_DATAVERSE_URL || '').trim())
         return url.protocol === 'https:' ? url.origin : ''
     } catch {
         return ''
@@ -386,6 +386,7 @@ module.exports = {
     generate,
     handlePublicGet,
     handlePublicPost,
+    persistPhotos,
     jsonResponse,
     test: {
     generateToken,

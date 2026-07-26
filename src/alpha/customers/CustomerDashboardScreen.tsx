@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
 import { getSignedInUserInfo } from '../../auth/signedInUser'
 import { useEquipmentManager } from '../equipment/hooks/useEquipmentManager'
@@ -56,6 +56,7 @@ function display(value?: string | number | null) {
 
 export default function CustomerDashboardScreen() {
     const navigate = useNavigate()
+    const [searchParams, setSearchParams] = useSearchParams()
     const activeAccount = useActiveMsalAccount()
     const signedInUser = getSignedInUserInfo(activeAccount)
     const bulkImportAllowed = canUseBulkEquipmentImport(signedInUser)
@@ -151,6 +152,28 @@ export default function CustomerDashboardScreen() {
     const siteCheckDetailsTriggerRef = useRef<HTMLButtonElement | null>(null)
     const siteSettingsTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({})
     const sitesHeadingRef = useRef<HTMLHeadingElement>(null)
+
+    useEffect(() => {
+        const customerId = searchParams.get('customerId')
+        const siteId = searchParams.get('siteId')
+        if (!customerId || !customers.some((customer) => customer.gr_customerid.toLowerCase() === customerId.toLowerCase())) return
+        const timer = window.setTimeout(() => {
+            setSelectedCustomerId(customerId)
+            setActiveTab('sites')
+            if (siteId) {
+                setExpandedSitesByCustomer((current) => ({
+                    ...current,
+                    [customerId]: { ...current[customerId], [siteId]: true },
+                }))
+            }
+            const next = new URLSearchParams(searchParams)
+            next.delete('customerId')
+            next.delete('siteId')
+            setSearchParams(next, { replace: true })
+            window.setTimeout(() => sitesHeadingRef.current?.focus(), 0)
+        }, 0)
+        return () => window.clearTimeout(timer)
+    }, [customers, searchParams, setSearchParams])
 
     const allCustomers = useMemo(() => [...customers, ...localCustomers].map((customer) => ({
         ...customer,
@@ -603,19 +626,6 @@ export default function CustomerDashboardScreen() {
                                 >
                                     Run Site Check
                                 </button>}
-                                {siteCheck?.state === 'in-progress' && siteCheck.activeSiteCheck && <button
-                                    type="button"
-                                    onClick={(event) => {
-                                        siteCheckDetailsTriggerRef.current = event.currentTarget
-                                        setSiteCheckDetails({
-                                            site,
-                                            check: siteCheck.activeSiteCheck,
-                                            tab: 'summary',
-                                        })
-                                    }}
-                                >
-                                    View Current Site Check
-                                </button>}
                                 {siteCheck?.schedule.gr_enabled && <button
                                     type="button"
                                     onClick={(event) => {
@@ -623,11 +633,16 @@ export default function CustomerDashboardScreen() {
                                         setSiteCheckDetails({
                                             site,
                                             check: siteCheck.activeSiteCheck,
-                                            tab: 'history',
+                                            tab: siteCheck.state === 'in-progress'
+                                                && siteCheck.activeSiteCheck
+                                                ? 'summary'
+                                                : 'history',
                                         })
                                     }}
                                 >
-                                    Site Check History
+                                    {siteCheck.state === 'in-progress' && siteCheck.activeSiteCheck
+                                        ? 'View Current Site Check'
+                                        : 'Site Check History'}
                                 </button>}
                                 <button
                                     type="button"
@@ -811,6 +826,7 @@ export default function CustomerDashboardScreen() {
             loadAllJobs={siteChecks.loadAllDetailJobs}
             loadAllEquipmentExclusions={siteChecks.loadAllEquipmentExclusions}
             allocateJobNumbers={siteChecks.allocateJobNumbers}
+            prepareAssignmentEmail={siteChecks.prepareAssignmentEmail}
             onDelete={async (check) => {
                 await siteChecks.deleteOccurrence(check)
                 await fetchJobs()
@@ -987,7 +1003,7 @@ export default function CustomerDashboardScreen() {
             onStart={siteChecks.startSiteCheck}
             onComplete={(created) => {
                 setSiteSuccess(`${created.gr_name} started successfully.`)
-                setSiteCheckDetails({ site: runSiteCheckSite, check: created, tab: 'summary' })
+                setSiteCheckDetails({ site: runSiteCheckSite, check: created, tab: 'jobs' })
                 setRunSiteCheckSite(null)
             }}
             onClose={() => {

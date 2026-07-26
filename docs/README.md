@@ -22,7 +22,7 @@ by scanning the repository.
 
 | Subsystem | Architecture | Detailed schema or workflow |
 | --- | --- | --- |
-| Site Checks (release validation) | [`features/SITE_CHECKS_IMPLEMENTATION_PLAN.md`](features/SITE_CHECKS_IMPLEMENTATION_PLAN.md) | [`site-checks-dataverse-schema.md`](site-checks-dataverse-schema.md) — provisioned and verified; [`site-checks-operations.md`](site-checks-operations.md) — release/smoke/rollback checklist |
+| Site Checks (release validation) | [`features/SITE_CHECKS_IMPLEMENTATION_PLAN.md`](features/SITE_CHECKS_IMPLEMENTATION_PLAN.md) | [`features/SITE_CHECK_CHECKLIST_CONTENT_PROPOSAL.md`](features/SITE_CHECK_CHECKLIST_CONTENT_PROPOSAL.md) — unprovisioned checklist content proposal; [`site-checks-dataverse-schema.md`](site-checks-dataverse-schema.md) — provisioned and verified; [`site-checks-operations.md`](site-checks-operations.md) — release/smoke/rollback checklist |
 | Jobs | [`architecture/jobs.md`](architecture/jobs.md) | [`job-card-dataverse-schema.md`](job-card-dataverse-schema.md), [`job-assignment-dataverse-schema.md`](job-assignment-dataverse-schema.md), [`email-dispatch-flow.md`](email-dispatch-flow.md) |
 | Technician submission | [`architecture/technician-job-submission.md`](architecture/technician-job-submission.md) | [`technician-job-submission-schema.md`](technician-job-submission-schema.md), [`public-portal-service-identity.md`](public-portal-service-identity.md) |
 | Equipment | [`architecture/equipment.md`](architecture/equipment.md) | [`hour-meter-recorded-date-schema.md`](hour-meter-recorded-date-schema.md) |
