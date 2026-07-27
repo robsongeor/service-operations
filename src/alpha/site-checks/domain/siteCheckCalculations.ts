@@ -139,22 +139,39 @@ export function siteCheckJobDescription(
 }
 
 export function calculateNextSiteCheckDueDate(
-    completedDate: string,
+    referenceDate: string,
     frequency: SiteCheckFrequency,
 ) {
-    if (!isValidDateOnly(completedDate)) {
-        throw new Error('A valid completion date is required to calculate the next Site Check.')
+    if (!isValidDateOnly(referenceDate)) {
+        throw new Error('A valid reference date is required to calculate the next Site Check.')
     }
 
     switch (frequency) {
         case SITE_CHECK_FREQUENCIES.WEEKLY:
-            return addCalendarDaysDateOnly(completedDate, 7)
+            return addCalendarDaysDateOnly(referenceDate, 7)
         case SITE_CHECK_FREQUENCIES.FORTNIGHTLY:
-            return addCalendarDaysDateOnly(completedDate, 14)
+            return addCalendarDaysDateOnly(referenceDate, 14)
         case SITE_CHECK_FREQUENCIES.MONTHLY:
-            return addCalendarMonthsDateOnly(completedDate, 1)
+            return addCalendarMonthsDateOnly(referenceDate, 1)
         default:
             throw new Error('A valid Site Check frequency is required.')
+    }
+}
+
+export function calculateInitialSiteCheckDate(
+    dueDate: string,
+    frequency: SiteCheckFrequency,
+) {
+    if (!isValidDateOnly(dueDate)) return ''
+    switch (frequency) {
+        case SITE_CHECK_FREQUENCIES.WEEKLY:
+            return addCalendarDaysDateOnly(dueDate, -7)
+        case SITE_CHECK_FREQUENCIES.FORTNIGHTLY:
+            return addCalendarDaysDateOnly(dueDate, -14)
+        case SITE_CHECK_FREQUENCIES.MONTHLY:
+            return addCalendarMonthsDateOnly(dueDate, -1)
+        default:
+            return ''
     }
 }
 

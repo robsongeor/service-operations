@@ -496,6 +496,8 @@ export async function deleteSiteCheckOccurrence(
     schedule?: SiteCheckSchedule | null,
     options: { apiUrl?: string; fetcher?: typeof fetch } = {},
 ) {
+    const apiUrl = options.apiUrl ?? DEFAULT_API_URL
+    const fetcher = options.fetcher ?? fetch
     const occurrenceId = requireGuid(occurrence.gr_sitecheckid, 'Site Check ID')
     if (!occurrence['@odata.etag']) throw new Error('Reload the Site Check before deleting it.')
     jobs.forEach((job) => {
@@ -522,6 +524,36 @@ export async function deleteSiteCheckOccurrence(
         throw new Error('Reload the Site Check Schedule before deleting this active Site Check.')
     }
 
+    const jobIds = normalizeIds(jobs.map((job) => job.gr_jobid))
+    const dependentDefinitions = [
+        ['gr_sitecheckchecklistresponses', 'gr_sitecheckchecklistresponseid'],
+        ['gr_jobphotos', 'gr_jobphotoid'],
+        ['gr_jobcardsubmissiontimeentries', 'gr_jobcardsubmissiontimeentryid'],
+        ['gr_jobmaterials', 'gr_jobmaterialid'],
+        ['gr_jobassignments', 'gr_jobassignmentid'],
+        ['gr_jobscheduleoptions', 'gr_jobscheduleoptionid'],
+        ['gr_emaildispatchs', 'gr_emaildispatchid'],
+        ['gr_jobofficeupdates', 'gr_jobofficeupdateid'],
+        ['gr_quotes', 'gr_quoteid'],
+        ['gr_sitecheckchecklistsnapshotitems', 'gr_sitecheckchecklistsnapshotitemid'],
+    ] as const
+    const dependants: Array<{ entitySet: string; id: string; etag: string }> = []
+    if (jobIds.length > 0) {
+        for (const [entitySet, idField] of dependentDefinitions) {
+            const rows = await readCollection(
+                accessToken,
+                `${apiUrl}/${entitySet}?$select=${idField}&$filter=${lookupFilter('_gr_job_value', jobIds)}`,
+                'The Site Check deletion dependencies could not be loaded.',
+                fetcher,
+            ) as Array<Record<string, unknown>>
+            rows.forEach((row) => dependants.push({
+                entitySet,
+                id: requireGuid(row[idField], `${entitySet} record ID`),
+                etag: typeof row['@odata.etag'] === 'string' ? row['@odata.etag'] : '*',
+            }))
+        }
+    }
+
     const suffix = crypto.randomUUID().replaceAll('-', '')
     const batchBoundary = `batch_${suffix}`
     const changeBoundary = `changeset_${suffix}`
@@ -539,6 +571,11 @@ export async function deleteSiteCheckOccurrence(
             etag: schedule['@odata.etag']!,
         })
     }
+    dependants.forEach((dependant) => requests.push({
+        method: 'DELETE',
+        path: `${dependant.entitySet}(${dependant.id})`,
+        etag: dependant.etag,
+    }))
     jobs.forEach((job) => requests.push({
         method: 'DELETE',
         path: `gr_jobs(${job.gr_jobid})`,
@@ -554,6 +591,9 @@ export async function deleteSiteCheckOccurrence(
         path: `gr_sitechecks(${occurrenceId})`,
         etag: occurrence['@odata.etag'],
     })
+    if (requests.length > 1000) {
+        throw new Error('This Site Check has too much dependent history for one atomic deletion. Contact an administrator.')
+    }
 
     const lines = [
         `--${batchBoundary}`,
@@ -578,8 +618,8 @@ export async function deleteSiteCheckOccurrence(
     })
     lines.push(`--${changeBoundary}--`, `--${batchBoundary}--`, '')
 
-    const response = await (options.fetcher ?? fetch)(
-        `${options.apiUrl ?? DEFAULT_API_URL}/$batch`,
+    const response = await fetcher(
+        `${apiUrl}/$batch`,
         {
             method: 'POST',
             headers: {
@@ -600,9 +640,9 @@ export async function deleteSiteCheckOccurrence(
             throw new Error('The Site Check, Schedule, or one of its Jobs changed. Reload and review it before deleting.')
         }
         if ((failure ?? response.status) === 403) {
-            throw new Error('You do not have permission to delete Site Checks.')
+            throw new Error('You do not have permission to delete the Site Check or one of its dependent records.')
         }
-        throw new Error('Dataverse rejected the atomic Site Check deletion.')
+        throw new Error('Dataverse rejected the atomic Site Check deletion because a protected dependent record remains.')
     }
     if (statuses.filter((status) => status >= 200 && status < 300).length !== requests.length) {
         throw new Error('Dataverse did not confirm every Site Check deletion operation.')

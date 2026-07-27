@@ -7,7 +7,7 @@ import { createJobScheduleOption } from '../../jobs/services/jobScheduleApi'
 import { SCHEDULE_TYPE } from '../../jobs/types/jobSchedule.types'
 import type { CreateWofInput, ServiceProvider, TechnicianQualification, UpdateWofInput, WofInspection } from '../types/wof.types'
 import { WOF_RESULTS } from '../types/wof.types'
-import { verifyWofExpiryWithRetry, wofDatesMatch } from '../utils/wofRules'
+import { getWofJobCreationDisposition, normalizeWofDateOnly, verifyWofExpiryWithRetry, wofDatesMatch } from '../utils/wofRules'
 import { newZealandDateOnly } from '../../shared/dates/dateOnly'
 
 const API_URL = `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2`
@@ -101,7 +101,7 @@ async function createInspection(token: string, input: CreateWofInput, jobId: str
         body: JSON.stringify({
             gr_name: `WOF - ${input.equipment.gr_fleet || input.equipment.gr_serial || 'Equipment'}`,
             gr_registrationnumbersnapshot: input.equipment.gr_registrationnumber || null,
-            gr_previouswofexpiry: input.equipment.gr_currentwofexpiry || null,
+            gr_previouswofexpiry: normalizeWofDateOnly(input.equipment.gr_currentwofexpiry) || null,
             gr_wofresult: WOF_RESULTS.PLANNED,
             'gr_Job@odata.bind': `/gr_jobs(${jobId})`,
             'gr_Equipment@odata.bind': `/gr_equipments(${input.equipment.gr_equipmentid})`,
@@ -111,12 +111,18 @@ async function createInspection(token: string, input: CreateWofInput, jobId: str
     if (!response.ok) throw new Error(`The WOF Job was created, but its Inspection record failed: ${await response.text()}`)
 }
 
-async function assertNoActiveWofJob(token: string, equipment: Equipment) {
+type ActiveWofJob = { gr_jobid: string; gr_jobnumber?: string | null }
+
+async function findActiveWofJob(token: string, equipment: Equipment): Promise<ActiveWofJob | undefined> {
     const activeJobs = await getJson<{ gr_jobid: string; gr_jobnumber?: string | null }>(token,
         `gr_jobs?$select=gr_jobid,gr_jobnumber&$filter=_gr_equipment_value eq ${equipment.gr_equipmentid} and gr_jobtype eq ${JOB_TYPES.WOF} and gr_status ne ${JOB_STATUSES.COMPLETE}&$orderby=createdon desc&$top=1`)
-    if (activeJobs[0]) {
-        throw new Error(`An active WOF Job${activeJobs[0].gr_jobnumber ? ` (${activeJobs[0].gr_jobnumber})` : ''} already exists for this Equipment. Open the existing Job instead.`)
-    }
+    return activeJobs[0]
+}
+
+async function assertNoActiveWofJob(token: string, equipment: Equipment) {
+    const activeJob = await findActiveWofJob(token, equipment)
+    if (activeJob) throw new Error(`An active WOF Job${activeJob.gr_jobnumber ? ` (${activeJob.gr_jobnumber})` : ''} already exists for this Equipment. Open the existing Job instead.`)
+
     const records = await getJson<WofInspectionDataverseRow>(token,
         `gr_wofinspections?$select=${WOF_INSPECTION_SELECT}&$expand=${WOF_INSPECTION_EXPAND}&$filter=_gr_equipment_value eq ${equipment.gr_equipmentid}&$orderby=createdon desc&$top=1`)
     const latest = records[0] && mapWofInspection(records[0])
@@ -131,6 +137,24 @@ async function assertNoActiveWofJob(token: string, equipment: Equipment) {
 }
 
 export async function createWofJobFromJobDrawer(token: string, equipment: Equipment, job: JobSaveInput) {
+    const existingJob = await findActiveWofJob(token, equipment)
+    if (existingJob) {
+        const linkedInspections = await getJson<{ gr_wofinspectionid: string }>(token,
+            `gr_wofinspections?$select=gr_wofinspectionid&$filter=_gr_job_value eq ${existingJob.gr_jobid}&$top=1`)
+        if (getWofJobCreationDisposition(true, linkedInspections.length > 0) === 'existing') {
+            throw new Error(`An active WOF Job${existingJob.gr_jobnumber ? ` (${existingJob.gr_jobnumber})` : ''} already exists for this Equipment. Open the existing Job instead.`)
+        }
+        await createInspection(token, {
+            equipment,
+            jobNumber: existingJob.gr_jobnumber || job.jobNumber,
+            description: job.description,
+            scheduledDate: '',
+            assignmentMode: 'internal',
+            internalInspectorId: job.mechanicId,
+        }, existingJob.gr_jobid)
+        return existingJob.gr_jobid
+    }
+
     await assertNoActiveWofJob(token, equipment)
     const jobId = await createJob(token, job, 'wof')
     await createInspection(token, {

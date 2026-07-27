@@ -13,10 +13,13 @@ import type { Equipment } from '../src/alpha/jobs/types/equipment.types.ts'
 import { WOF_RESULTS, type WofInspection } from '../src/alpha/wof/types/wof.types.ts'
 import {
     formatWofDateOnly,
+    getWofJobCreationDisposition,
     getLatestWofInspection,
     getWofWorkflowStatus,
+    normalizeWofDateOnly,
     verifyWofExpiryWithRetry,
     wofDatesMatch,
+    wofCanCreateJob,
     wofNeedsAdministration,
 } from '../src/alpha/wof/utils/wofRules.ts'
 
@@ -113,6 +116,23 @@ test('expired WOF without a Job remains Expired', () => {
 
 test('fully administered WOF does not expose the expiry administration action', () => {
     assert.equal(wofNeedsAdministration('current'), false)
+})
+
+test('WOF Jobs can be created for due soon and expired Equipment', () => {
+    assert.equal(wofCanCreateJob('due-soon'), true)
+    assert.equal(wofCanCreateJob('expired'), true)
+    assert.equal(wofCanCreateJob('current'), false)
+    assert.equal(wofCanCreateJob('job-created'), false)
+})
+
+test('WOF Job retries repair only the missing Inspection link', () => {
+    assert.equal(getWofJobCreationDisposition(false, false), 'create')
+    assert.equal(getWofJobCreationDisposition(true, false), 'repair')
+    assert.equal(getWofJobCreationDisposition(true, true), 'existing')
+})
+
+test('WOF Inspection snapshots normalize Dataverse timestamps to Date Only values', () => {
+    assert.equal(normalizeWofDateOnly('2026-07-31T00:00:00Z'), '2026-07-31')
 })
 
 test('latest WOF inspection is selected by Dataverse created date', () => {

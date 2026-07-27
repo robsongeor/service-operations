@@ -53,6 +53,13 @@ test('technician email retains Job details and includes the generated portal URL
     assert.match(decodeURIComponent(mailto), /portal\/job\/secure-token/)
 })
 
+test('technician email subject includes Job, fleet, customer and description', () => {
+    assert.equal(
+        buildTechnicianEmailSubject(job),
+        'Job: 145222 - FN1758 - Waikato Auto Parts - Service',
+    )
+})
+
 test('active link detection requires an unused, unexpired stored hash', () => {
     const active = {
         ...job,

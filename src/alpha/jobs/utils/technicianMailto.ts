@@ -18,12 +18,16 @@ export function isValidTechnicianEmail(value?: string | null) {
 
 export function buildTechnicianEmailSubject(job: Job) {
     const jobNumber = collapseWhitespace(job.gr_jobnumber)
+    const fleetNumber = collapseWhitespace(job.gr_Equipment?.gr_fleet)
     const customer = collapseWhitespace(job.gr_Site?.gr_Customer?.gr_name)
     const description = truncate(collapseWhitespace(job.gr_description), 70)
-    const subjectParts = [jobNumber ? `Job ${jobNumber}` : 'Service Job', customer, description]
-        .filter(Boolean)
 
-    return truncate(subjectParts.join(' - '), 150)
+    return truncate([
+        `Job: ${jobNumber || 'Not supplied'}`,
+        fleetNumber || 'No fleet number',
+        customer || 'No customer',
+        description || 'No description',
+    ].join(' - '), 150)
 }
 
 export function buildTechnicianEmailBody(

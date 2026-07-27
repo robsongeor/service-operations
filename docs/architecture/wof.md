@@ -14,7 +14,7 @@ ineligible for new WOF work.
 
 The WOF Management screen is the office work queue for this lifecycle. It derives an
 operational workflow status from the Equipment expiry, latest WOF Inspection, linked Job,
-and confirmed schedule option. Expired Equipment opens the shared Job creation drawer with
+and confirmed schedule option. Due Soon or Expired Equipment opens the shared Job creation drawer with
 WOF, Equipment, Customer, and Site preselected. Existing work opens the manager-facing
 shared Job edit drawer in place on the WOF screen; the WOF feature does not implement a
 second Job editor. Successful Job mutations refresh only the WOF workflow datasets needed
@@ -46,6 +46,8 @@ helpers parse, format, load, and save WOF and registration dates without timezon
 - Date Only values must retain their calendar date across environments.
 - Only one unfinished WOF cycle may exist per Equipment. Creation must recheck Dataverse
   immediately before saving and direct the user to the existing Job when one is present.
+- If Job creation succeeded but its WOF Inspection write failed, retrying from the WOF queue
+  repairs the missing Inspection link against that active Job instead of creating a duplicate.
 - A completed Inspection remains ready for office administration until its new expiry is
   written to the Equipment record. The Equipment then returns to normal expiry monitoring.
 - A WOF Job cannot transition to Complete until a valid new expiry is supplied. Completion

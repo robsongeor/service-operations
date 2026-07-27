@@ -21,7 +21,11 @@ import {
     type SiteCheckSchedule,
     type SiteCheckScheduleSaveInput,
 } from '../site-checks/types/siteCheck.types'
-import { validateSiteCheckSchedule } from '../site-checks/domain/siteCheckCalculations'
+import {
+    calculateInitialSiteCheckDate,
+    calculateNextSiteCheckDueDate,
+    validateSiteCheckSchedule,
+} from '../site-checks/domain/siteCheckCalculations'
 import './SiteMaintenanceSettingsDrawer.css'
 import './SiteSettingsDrawer.css'
 
@@ -89,11 +93,14 @@ export default function SiteSettingsDrawer({
     const [confirming, setConfirming] = useState(false)
     const [localError, setLocalError] = useState('')
     const [detailsSuccess, setDetailsSuccess] = useState('')
+    const existingSiteCheckFrequency = siteCheckSchedule?.gr_frequency ?? '' as SiteCheckFrequency | ''
     const initialSiteChecks = {
         enabled: siteCheckSchedule?.gr_enabled ?? false,
-        frequency: siteCheckSchedule?.gr_frequency ?? '' as SiteCheckFrequency | '',
+        frequency: existingSiteCheckFrequency,
         equipmentScope: resolveSiteCheckEquipmentScope(siteCheckSchedule?.gr_equipmentscope),
-        dueDate: siteCheckSchedule?.gr_nextduedate ?? '',
+        initialDate: existingSiteCheckFrequency && siteCheckSchedule?.gr_nextduedate
+            ? calculateInitialSiteCheckDate(siteCheckSchedule.gr_nextduedate, existingSiteCheckFrequency)
+            : '',
     }
     const currentSiteCheckEquipmentIds = siteCheckSelectedEquipmentIds.filter((id) =>
         equipment.some((item) => item.gr_equipmentid.toLowerCase() === id.toLowerCase()))
@@ -101,7 +108,7 @@ export default function SiteSettingsDrawer({
     const [siteChecksFrequency, setSiteChecksFrequency] = useState<SiteCheckFrequency | ''>(
         initialSiteChecks.frequency,
     )
-    const [siteChecksDueDate, setSiteChecksDueDate] = useState(initialSiteChecks.dueDate)
+    const [siteChecksInitialDate, setSiteChecksInitialDate] = useState(initialSiteChecks.initialDate)
     const [siteChecksEquipmentScope, setSiteChecksEquipmentScope] =
         useState<SiteCheckEquipmentScope>(initialSiteChecks.equipmentScope)
     const [siteCheckEquipmentIds, setSiteCheckEquipmentIds] =
@@ -121,7 +128,7 @@ export default function SiteSettingsDrawer({
     const siteChecksDirty = siteChecksEnabled !== savedSiteChecks.enabled
         || siteChecksFrequency !== savedSiteChecks.frequency
         || siteChecksEquipmentScope !== savedSiteChecks.equipmentScope
-        || siteChecksDueDate !== savedSiteChecks.dueDate
+        || siteChecksInitialDate !== savedSiteChecks.initialDate
         || [...siteCheckEquipmentIds].sort().join(',')
             !== [...savedSiteChecks.selectedEquipmentIds].sort().join(',')
 
@@ -160,11 +167,22 @@ export default function SiteSettingsDrawer({
         else void saveSettings()
     }
 
+    const existingScheduleIsUnchanged = Boolean(
+        siteCheckSchedule?.gr_nextduedate
+        && siteChecksFrequency === initialSiteChecks.frequency
+        && siteChecksInitialDate === initialSiteChecks.initialDate,
+    )
+    const calculatedSiteChecksDueDate = existingScheduleIsUnchanged
+        ? siteCheckSchedule!.gr_nextduedate!
+        : siteChecksFrequency && siteChecksInitialDate
+            ? calculateNextSiteCheckDueDate(siteChecksInitialDate, siteChecksFrequency)
+            : ''
+
     const saveSiteChecks = async () => {
         const validation = validateSiteCheckSchedule({
             enabled: siteChecksEnabled,
             frequency: siteChecksFrequency || null,
-            nextDueDate: siteChecksDueDate || null,
+            nextDueDate: calculatedSiteChecksDueDate || null,
         })
         if (!validation.valid) {
             setLocalError(validation.errors.join(' '))
@@ -188,13 +206,13 @@ export default function SiteSettingsDrawer({
                 frequency: siteChecksFrequency || null,
                 equipmentScope: siteChecksEquipmentScope,
                 selectedEquipmentIds: siteCheckEquipmentIds,
-                nextDueDate: siteChecksDueDate || null,
+                nextDueDate: calculatedSiteChecksDueDate || null,
             })
             setSavedSiteChecks({
                 enabled: siteChecksEnabled,
                 frequency: siteChecksFrequency,
                 equipmentScope: siteChecksEquipmentScope,
-                dueDate: siteChecksDueDate,
+                initialDate: siteChecksInitialDate,
                 selectedEquipmentIds: siteCheckEquipmentIds,
             })
             setConfirmingDisable(false)
@@ -324,17 +342,26 @@ export default function SiteSettingsDrawer({
                                 </select>
                             </label>
                             <label>
-                                Initial or next due date
+                                Initial date
                                 <input
                                     type="date"
-                                    value={siteChecksDueDate}
+                                    value={siteChecksInitialDate}
                                     disabled={busy || siteChecksSaving || !siteChecksEnabled}
                                     required={siteChecksEnabled}
                                     onChange={(event) => {
-                                        setSiteChecksDueDate(event.target.value)
+                                        setSiteChecksInitialDate(event.target.value)
                                         setSiteChecksSuccess('')
                                         setLocalError('')
                                     }}
+                                />
+                            </label>
+                            <label>
+                                First due date
+                                <input
+                                    type="date"
+                                    value={calculatedSiteChecksDueDate}
+                                    disabled
+                                    readOnly
                                 />
                             </label>
                         </div>

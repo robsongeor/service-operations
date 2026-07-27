@@ -110,6 +110,15 @@ export function wofNeedsAdministration(status: WofWorkflowStatus) {
     return status === 'inspection-complete' || status === 'ready-to-issue'
 }
 
+export function wofCanCreateJob(status: WofWorkflowStatus) {
+    return status === 'due-soon' || status === 'expired'
+}
+
+export function getWofJobCreationDisposition(hasActiveJob: boolean, hasLinkedInspection: boolean) {
+    if (!hasActiveJob) return 'create' as const
+    return hasLinkedInspection ? 'existing' as const : 'repair' as const
+}
+
 export function formatWofDateOnly(value?: string | null) {
     const normalized = normalizeWofDateOnly(value)
     if (!normalized) return ''

@@ -15,7 +15,7 @@ import { useWof } from './hooks/useWof'
 import type { WofTab } from './types/wof.types'
 import type { WofInspection } from './types/wof.types'
 import { DEFAULT_WOF_PREFERENCES, loadWofPreferences, saveWofPreferences, type WofSortKey } from './types/wofViewState.types'
-import { formatWofDateOnly, getLatestWofInspection, getWofDueStatus, getWofWorkflowStatus, wofNeedsAdministration, WOF_WORKFLOW_LABELS } from './utils/wofRules'
+import { formatWofDateOnly, getLatestWofInspection, getWofDueStatus, getWofWorkflowStatus, wofCanCreateJob, wofNeedsAdministration, WOF_WORKFLOW_LABELS } from './utils/wofRules'
 import './WofScreen.css'
 
 const tabs: { value: WofTab; label: string }[] = [
@@ -139,7 +139,7 @@ export default function WofScreen({ accountId }: { accountId: string }) {
         {!loading && !error && <div className="wof-table-wrap"><table><thead><tr><th>Equipment</th><th>REGO</th><th><button type="button" onClick={() => changeSort('customer')}>Customer <JobsTableSortIcon active={preferences.sort.key === 'customer'} direction={preferences.sort.direction} /></button></th><th>Site</th><th><button type="button" onClick={() => changeSort('expiry')}>WOF Expiry <JobsTableSortIcon active={preferences.sort.key === 'expiry'} direction={preferences.sort.direction} /></button></th><th>Workflow Status</th><th>Schedule / Job</th><th>Action</th></tr></thead><tbody>{rows.map(({ equipment: item, inspection, schedule, customer, site, workflow }) => {
             const ready = wofNeedsAdministration(workflow)
             const activeJob = ['job-created', 'scheduled', 'inspection-complete', 'ready-to-issue'].includes(workflow)
-            const action = workflow === 'expired'
+            const action = wofCanCreateJob(workflow)
                 ? <button type="button" className="wof-row-action primary" onClick={() => setJobEquipment(item)}>Create WOF Job</button>
                 : activeJob && inspection?.gr_Job
                     ? <button type="button" className="wof-row-action" onClick={() => setViewingJobId(inspection.gr_Job!.gr_jobid)}>{ready ? 'Open Job' : 'View Job'}</button>

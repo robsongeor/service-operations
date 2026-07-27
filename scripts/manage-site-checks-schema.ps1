@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Inspect', 'InspectTechnicianAccess', 'ProvisionTechnicianAccess', 'InspectChecklist', 'ProvisionChecklist', 'InspectChecklistCorrection', 'ProvisionChecklistCorrection', 'InspectChecklistContent', 'ProvisionChecklistContent', 'VerifyChecklist', 'InspectChecklistAdminSecurity', 'ProvisionChecklistAdminSecurity', 'VerifyChecklistAdminSecurity', 'Provision', 'ProvisionAvailability', 'Verify', 'AuditSecurity', 'ProvisionSecurity', 'PurgeOccurrences', 'PurgeData')]
+    [ValidateSet('Inspect', 'InspectTechnicianAccess', 'ProvisionTechnicianAccess', 'InspectChecklist', 'ProvisionChecklist', 'InspectChecklistCorrection', 'ProvisionChecklistCorrection', 'InspectChecklistContent', 'ProvisionChecklistContent', 'VerifyChecklist', 'InspectChecklistAdminSecurity', 'ProvisionChecklistAdminSecurity', 'VerifyChecklistAdminSecurity', 'Provision', 'ProvisionAvailability', 'Verify', 'AuditSecurity', 'ProvisionSecurity', 'PurgeOccurrences', 'PurgeData', 'PurgeCustomerData')]
     [string]$Mode = 'Inspect',
 
     [string]$EnvironmentUrl = 'https://org0d4246d7.crm6.dynamics.com',
@@ -9,6 +9,8 @@ param(
     [string]$ChecklistContentPath = (Join-Path $PSScriptRoot 'site-check-checklist-v1.json'),
 
     [string]$ChecklistAdminEmail = 'georger@liftrucks.co.nz',
+
+    [string]$CustomerName,
 
     [ValidateSet('Never', 'Auto')]
     [string]$LoginPrompt = 'Never',
@@ -2489,6 +2491,28 @@ function Get-AllRecords {
     return @($records)
 }
 
+function Get-RecordsByLookupIds {
+    param(
+        [Parameter(Mandatory)]$Service,
+        [Parameter(Mandatory)][string]$EntityName,
+        [Parameter(Mandatory)][string]$IdAttribute,
+        [Parameter(Mandatory)][string]$LookupAttribute,
+        [Parameter(Mandatory)][guid[]]$LookupIds
+    )
+    if ($LookupIds.Count -eq 0) { return @() }
+    $query = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new($EntityName)
+    $query.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new($IdAttribute)
+    $query.Criteria.FilterOperator = [Microsoft.Xrm.Sdk.Query.LogicalOperator]::Or
+    foreach ($lookupId in $LookupIds) {
+        $query.Criteria.AddCondition(
+            $LookupAttribute,
+            [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,
+            $lookupId
+        )
+    }
+    return @(Get-AllRecords $Service $query)
+}
+
 function Invoke-SiteChecksDataPurge {
     param([Parameter(Mandatory)]$Service)
 
@@ -2600,6 +2624,236 @@ function Invoke-SiteChecksDataPurge {
         throw "Purge verification failed: $($remainingSchedules.Count) Schedules, $($remainingSiteChecks.Count) Site Checks, $($remainingJobs.Count) Site Check Jobs, $($remainingSelections.Count) manual selections, and $($remainingExclusions.Count) exclusions remain."
     }
     Write-Output "Atomic purge verified: deleted $($schedules.Count) Schedules, $($siteChecks.Count) Site Checks, $($jobs.Count) Site Check Jobs, $($selections.Count) manual selections, and $($exclusions.Count) exclusions."
+}
+
+function Invoke-CustomerSiteChecksDataPurge {
+    param(
+        [Parameter(Mandatory)]$Service,
+        [Parameter(Mandatory)][string]$TargetCustomerName
+    )
+
+    $customerQuery = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new('gr_customer')
+    $customerQuery.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new('gr_customerid', 'gr_name')
+    $customerQuery.Criteria.AddCondition(
+        'gr_name',
+        [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,
+        $TargetCustomerName.Trim()
+    )
+    $customers = @(Get-AllRecords $Service $customerQuery)
+    if ($customers.Count -ne 1) {
+        throw "Expected one exact Customer named '$TargetCustomerName'; found $($customers.Count). Nothing was deleted."
+    }
+
+    $siteQuery = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new('gr_site')
+    $siteQuery.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new('gr_siteid', 'gr_name')
+    $siteQuery.Criteria.AddCondition(
+        'gr_customer',
+        [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,
+        $customers[0].Id
+    )
+    $sites = @(Get-AllRecords $Service $siteQuery)
+    $siteIds = @($sites | ForEach-Object Id)
+    if ($siteIds.Count -eq 0) {
+        Write-Output "Customer '$TargetCustomerName' has no Sites. Nothing was deleted."
+        return
+    }
+
+    $scheduleQuery = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new('gr_sitecheckschedule')
+    $scheduleQuery.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new(
+        'gr_sitecheckscheduleid', 'gr_name', 'gr_activesitecheck'
+    )
+    $scheduleQuery.Criteria.FilterOperator = [Microsoft.Xrm.Sdk.Query.LogicalOperator]::Or
+    foreach ($siteId in $siteIds) {
+        $scheduleQuery.Criteria.AddCondition(
+            'gr_site',
+            [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,
+            [guid]$siteId
+        )
+    }
+    $schedules = @(Get-AllRecords $Service $scheduleQuery)
+
+    $siteCheckQuery = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new('gr_sitecheck')
+    $siteCheckQuery.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new(
+        'gr_sitecheckid', 'gr_name'
+    )
+    $siteCheckQuery.Criteria.FilterOperator = [Microsoft.Xrm.Sdk.Query.LogicalOperator]::Or
+    foreach ($siteId in $siteIds) {
+        $siteCheckQuery.Criteria.AddCondition(
+            'gr_site',
+            [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,
+            [guid]$siteId
+        )
+    }
+    $siteChecks = @(Get-AllRecords $Service $siteCheckQuery)
+    $siteCheckIds = @($siteChecks | ForEach-Object Id)
+
+    $jobs = @()
+    $exclusions = @()
+    if ($siteCheckIds.Count -gt 0) {
+        $jobQuery = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new('gr_job')
+        $jobQuery.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new(
+            'gr_jobid', 'gr_jobnumber', 'gr_sitecheck'
+        )
+        $jobQuery.Criteria.FilterOperator = [Microsoft.Xrm.Sdk.Query.LogicalOperator]::Or
+        foreach ($siteCheckId in $siteCheckIds) {
+            $jobQuery.Criteria.AddCondition(
+                'gr_sitecheck',
+                [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,
+                [guid]$siteCheckId
+            )
+        }
+        $jobs = @(Get-AllRecords $Service $jobQuery)
+
+        $exclusionQuery = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new(
+            'gr_sitecheckequipmentexclusion'
+        )
+        $exclusionQuery.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new(
+            'gr_sitecheckequipmentexclusionid'
+        )
+        $exclusionQuery.Criteria.FilterOperator = [Microsoft.Xrm.Sdk.Query.LogicalOperator]::Or
+        foreach ($siteCheckId in $siteCheckIds) {
+            $exclusionQuery.Criteria.AddCondition(
+                'gr_sitecheck',
+                [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,
+                [guid]$siteCheckId
+            )
+        }
+        $exclusions = @(Get-AllRecords $Service $exclusionQuery)
+    }
+
+    $selections = @()
+    $scheduleIds = @($schedules | ForEach-Object Id)
+    if ($scheduleIds.Count -gt 0) {
+        $selectionQuery = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new(
+            'gr_sitecheckscheduleequipment'
+        )
+        $selectionQuery.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new(
+            'gr_sitecheckscheduleequipmentid'
+        )
+        $selectionQuery.Criteria.FilterOperator = [Microsoft.Xrm.Sdk.Query.LogicalOperator]::Or
+        foreach ($scheduleId in $scheduleIds) {
+            $selectionQuery.Criteria.AddCondition(
+                'gr_sitecheckschedule',
+                [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,
+                [guid]$scheduleId
+            )
+        }
+        $selections = @(Get-AllRecords $Service $selectionQuery)
+    }
+
+    $jobIds = [guid[]]@($jobs | ForEach-Object Id)
+    $responses = @(Get-RecordsByLookupIds $Service 'gr_sitecheckchecklistresponse' `
+        'gr_sitecheckchecklistresponseid' 'gr_job' $jobIds)
+    $snapshots = @(Get-RecordsByLookupIds $Service 'gr_sitecheckchecklistsnapshotitem' `
+        'gr_sitecheckchecklistsnapshotitemid' 'gr_job' $jobIds)
+    $photos = @(Get-RecordsByLookupIds $Service 'gr_jobphoto' `
+        'gr_jobphotoid' 'gr_job' $jobIds)
+    $timeEntries = @(Get-RecordsByLookupIds $Service 'gr_jobcardsubmissiontimeentry' `
+        'gr_jobcardsubmissiontimeentryid' 'gr_job' $jobIds)
+    $materials = @(Get-RecordsByLookupIds $Service 'gr_jobmaterial' `
+        'gr_jobmaterialid' 'gr_job' $jobIds)
+    $assignments = @(Get-RecordsByLookupIds $Service 'gr_jobassignment' `
+        'gr_jobassignmentid' 'gr_job' $jobIds)
+    $scheduleOptions = @(Get-RecordsByLookupIds $Service 'gr_jobscheduleoption' `
+        'gr_jobscheduleoptionid' 'gr_job' $jobIds)
+    $emailDispatches = @(Get-RecordsByLookupIds $Service 'gr_emaildispatch' `
+        'gr_emaildispatchid' 'gr_job' $jobIds)
+    $officeUpdates = @(Get-RecordsByLookupIds $Service 'gr_jobofficeupdate' `
+        'gr_jobofficeupdateid' 'gr_job' $jobIds)
+    $quotes = @(Get-RecordsByLookupIds $Service 'gr_quote' `
+        'gr_quoteid' 'gr_job' $jobIds)
+
+    Write-Output "Resolved customer purge target '$TargetCustomerName': $($sites.Count) Sites (preserved), $($schedules.Count) Schedules, $($siteChecks.Count) Site Checks, $($jobs.Count) generated Jobs, $($responses.Count) checklist responses, $($snapshots.Count) checklist snapshots, $($photos.Count) photos, $($timeEntries.Count) time entries, $($materials.Count) materials, $($assignments.Count) assignments, $($scheduleOptions.Count) schedule options, $($emailDispatches.Count) email dispatches, $($officeUpdates.Count) office updates, $($quotes.Count) quotes, $($selections.Count) manual selections, and $($exclusions.Count) exclusions."
+    if (($jobs.Count + $siteChecks.Count + $schedules.Count + $selections.Count + $exclusions.Count) -eq 0) {
+        Write-Output "Customer '$TargetCustomerName' has no Site Check data. Nothing was deleted."
+        return
+    }
+
+    $transaction = [Microsoft.Xrm.Sdk.Messages.ExecuteTransactionRequest]::new()
+    $transaction.ReturnResponses = $false
+    $transaction.Requests = [Microsoft.Xrm.Sdk.OrganizationRequestCollection]::new()
+
+    foreach ($schedule in $schedules | Where-Object {
+        $_.Attributes.ContainsKey('gr_activesitecheck')
+    }) {
+        $target = [Microsoft.Xrm.Sdk.Entity]::new('gr_sitecheckschedule', $schedule.Id)
+        $target['gr_activesitecheck'] = $null
+        $request = [Microsoft.Xrm.Sdk.Messages.UpdateRequest]::new()
+        $request.Target = $target
+        $transaction.Requests.Add($request)
+    }
+    foreach ($record in $responses) {
+        $request = [Microsoft.Xrm.Sdk.Messages.DeleteRequest]::new()
+        $request.Target = [Microsoft.Xrm.Sdk.EntityReference]::new(
+            'gr_sitecheckchecklistresponse', $record.Id
+        )
+        $transaction.Requests.Add($request)
+    }
+    foreach ($collection in @(
+        @{ Entity = 'gr_jobphoto'; Records = $photos },
+        @{ Entity = 'gr_jobcardsubmissiontimeentry'; Records = $timeEntries },
+        @{ Entity = 'gr_jobmaterial'; Records = $materials },
+        @{ Entity = 'gr_jobassignment'; Records = $assignments },
+        @{ Entity = 'gr_jobscheduleoption'; Records = $scheduleOptions },
+        @{ Entity = 'gr_emaildispatch'; Records = $emailDispatches },
+        @{ Entity = 'gr_jobofficeupdate'; Records = $officeUpdates },
+        @{ Entity = 'gr_quote'; Records = $quotes }
+    )) {
+        foreach ($record in $collection.Records) {
+            $request = [Microsoft.Xrm.Sdk.Messages.DeleteRequest]::new()
+            $request.Target = [Microsoft.Xrm.Sdk.EntityReference]::new(
+                $collection.Entity, $record.Id
+            )
+            $transaction.Requests.Add($request)
+        }
+    }
+    foreach ($record in $snapshots) {
+        $request = [Microsoft.Xrm.Sdk.Messages.DeleteRequest]::new()
+        $request.Target = [Microsoft.Xrm.Sdk.EntityReference]::new(
+            'gr_sitecheckchecklistsnapshotitem', $record.Id
+        )
+        $transaction.Requests.Add($request)
+    }
+    foreach ($job in $jobs) {
+        $request = [Microsoft.Xrm.Sdk.Messages.DeleteRequest]::new()
+        $request.Target = [Microsoft.Xrm.Sdk.EntityReference]::new('gr_job', $job.Id)
+        $transaction.Requests.Add($request)
+    }
+    foreach ($exclusion in $exclusions) {
+        $request = [Microsoft.Xrm.Sdk.Messages.DeleteRequest]::new()
+        $request.Target = [Microsoft.Xrm.Sdk.EntityReference]::new(
+            'gr_sitecheckequipmentexclusion', $exclusion.Id
+        )
+        $transaction.Requests.Add($request)
+    }
+    foreach ($siteCheck in $siteChecks) {
+        $request = [Microsoft.Xrm.Sdk.Messages.DeleteRequest]::new()
+        $request.Target = [Microsoft.Xrm.Sdk.EntityReference]::new('gr_sitecheck', $siteCheck.Id)
+        $transaction.Requests.Add($request)
+    }
+    foreach ($selection in $selections) {
+        $request = [Microsoft.Xrm.Sdk.Messages.DeleteRequest]::new()
+        $request.Target = [Microsoft.Xrm.Sdk.EntityReference]::new(
+            'gr_sitecheckscheduleequipment', $selection.Id
+        )
+        $transaction.Requests.Add($request)
+    }
+    foreach ($schedule in $schedules) {
+        $request = [Microsoft.Xrm.Sdk.Messages.DeleteRequest]::new()
+        $request.Target = [Microsoft.Xrm.Sdk.EntityReference]::new(
+            'gr_sitecheckschedule', $schedule.Id
+        )
+        $transaction.Requests.Add($request)
+    }
+
+    $Service.Execute($transaction) | Out-Null
+
+    $remainingSiteChecks = @(Get-AllRecords $Service $siteCheckQuery)
+    $remainingSchedules = @(Get-AllRecords $Service $scheduleQuery)
+    if ($remainingSiteChecks.Count -or $remainingSchedules.Count) {
+        throw "Customer purge verification failed: $($remainingSiteChecks.Count) Site Checks and $($remainingSchedules.Count) Schedules remain."
+    }
+    Write-Output "Atomic customer purge verified for '$TargetCustomerName': deleted $($schedules.Count) Schedules, $($siteChecks.Count) Site Checks, $($jobs.Count) generated Jobs and their dependent history, $($selections.Count) manual selections, and $($exclusions.Count) exclusions. Preserved the Customer and $($sites.Count) Sites."
 }
 
 function Invoke-SiteCheckOccurrencePurge {
@@ -3055,6 +3309,13 @@ Write-Output "Login prompt policy: $LoginPrompt"
 
 if ($Mode -eq 'PurgeData') {
     Invoke-SiteChecksDataPurge -Service $service
+    return
+}
+if ($Mode -eq 'PurgeCustomerData') {
+    if ([string]::IsNullOrWhiteSpace($CustomerName)) {
+        throw 'PurgeCustomerData requires -CustomerName.'
+    }
+    Invoke-CustomerSiteChecksDataPurge -Service $service -TargetCustomerName $CustomerName
     return
 }
 if ($Mode -eq 'PurgeOccurrences') {

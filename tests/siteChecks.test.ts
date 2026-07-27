@@ -7,6 +7,7 @@ import {
     addCalendarDaysDateOnly,
     addCalendarMonthsDateOnly,
     calculateNextSiteCheckDueDate,
+    calculateInitialSiteCheckDate,
     calculateSiteCheckProgress,
     classifySiteCheckCreationConflict,
     filterSiteCheckEquipment,
@@ -394,22 +395,41 @@ test('Site Check deletion atomically clears an active pointer and deletes Jobs b
     let body = ''
     await deleteSiteCheckOccurrence('token', occurrence, jobs, exclusions, schedule, {
         apiUrl: 'https://example.test',
-        fetcher: (async (_input, init) => {
+        fetcher: (async (input, init) => {
+            if (String(input).includes('gr_sitecheckchecklistresponses')) {
+                return new Response(JSON.stringify({ value: [{
+                    '@odata.etag': 'W/"24"',
+                    gr_sitecheckchecklistresponseid: '88888888-8888-4888-8888-888888888888',
+                }] }), { status: 200 })
+            }
+            if (String(input).includes('gr_sitecheckchecklistsnapshotitems')) {
+                return new Response(JSON.stringify({ value: [{
+                    '@odata.etag': 'W/"25"',
+                    gr_sitecheckchecklistsnapshotitemid: '99999999-9999-4999-8999-999999999999',
+                }] }), { status: 200 })
+            }
+            if (init?.method !== 'POST') {
+                return new Response(JSON.stringify({ value: [] }), { status: 200 })
+            }
             body = String(init?.body)
             return new Response(
-                'HTTP/1.1 204 No Content\r\n'.repeat(4),
+                'HTTP/1.1 204 No Content\r\n'.repeat(6),
                 { status: 200 },
             )
         }) as typeof fetch,
     })
     const scheduleIndex = body.indexOf(`PATCH /api/data/v9.2/gr_sitecheckschedules(${IDS.schedule})`)
+    const responseIndex = body.indexOf('DELETE /api/data/v9.2/gr_sitecheckchecklistresponses(88888888-8888-4888-8888-888888888888)')
+    const snapshotIndex = body.indexOf('DELETE /api/data/v9.2/gr_sitecheckchecklistsnapshotitems(99999999-9999-4999-8999-999999999999)')
     const jobIndex = body.indexOf(`DELETE /api/data/v9.2/gr_jobs(${IDS.job})`)
     const exclusionIndex = body.indexOf(
         `DELETE /api/data/v9.2/gr_sitecheckequipmentexclusions(${exclusions[0].gr_sitecheckequipmentexclusionid})`,
     )
     const occurrenceIndex = body.indexOf(`DELETE /api/data/v9.2/gr_sitechecks(${IDS.siteCheck})`)
     assert.ok(scheduleIndex >= 0)
-    assert.ok(jobIndex > scheduleIndex)
+    assert.ok(responseIndex > scheduleIndex)
+    assert.ok(snapshotIndex > responseIndex)
+    assert.ok(jobIndex > snapshotIndex)
     assert.ok(exclusionIndex > jobIndex)
     assert.ok(occurrenceIndex > exclusionIndex)
     assert.match(body, /"gr_ActiveSiteCheck@odata.bind":null/)
@@ -955,6 +975,17 @@ test('weekly and fortnightly cadence use calendar days across month and year bou
     assert.equal(
         calculateNextSiteCheckDueDate('2026-12-25', SITE_CHECK_FREQUENCIES.FORTNIGHTLY),
         '2027-01-08',
+    )
+})
+
+test('Site Check initial dates derive the first due date and round-trip existing schedules', () => {
+    assert.equal(
+        calculateNextSiteCheckDueDate('2026-07-27', SITE_CHECK_FREQUENCIES.FORTNIGHTLY),
+        '2026-08-10',
+    )
+    assert.equal(
+        calculateInitialSiteCheckDate('2026-08-10', SITE_CHECK_FREQUENCIES.FORTNIGHTLY),
+        '2026-07-27',
     )
 })
 
