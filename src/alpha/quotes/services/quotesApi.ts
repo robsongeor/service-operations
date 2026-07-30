@@ -186,3 +186,61 @@ export async function updateQuote(
     })
     await ensureSuccess(response, 'Failed to update quote')
 }
+
+export async function deleteQuote(
+    accessToken: string,
+    quoteId: string,
+    quoteLineIds: string[],
+): Promise<void> {
+    const suffix = crypto.randomUUID().replaceAll('-', '')
+    const batchBoundary = `batch_${suffix}`
+    const changeBoundary = `changeset_${suffix}`
+    const paths = [
+        ...quoteLineIds.map((lineId) => `gr_quotelines(${lineId})`),
+        `gr_quotes(${quoteId})`,
+    ]
+    const lines = [
+        `--${batchBoundary}`,
+        `Content-Type: multipart/mixed; boundary=${changeBoundary}`,
+        '',
+    ]
+    paths.forEach((path, index) => {
+        lines.push(
+            `--${changeBoundary}`,
+            'Content-Type: application/http',
+            'Content-Transfer-Encoding: binary',
+            `Content-ID: ${index + 1}`,
+            '',
+            `DELETE /api/data/v9.2/${path} HTTP/1.1`,
+            'Accept: application/json',
+            'If-Match: *',
+            '',
+            '',
+        )
+    })
+    lines.push(`--${changeBoundary}--`, `--${batchBoundary}--`, '')
+
+    const response = await fetch(`${API_URL}/$batch`, {
+        method: 'POST',
+        headers: {
+            ...headers(accessToken),
+            'Content-Type': `multipart/mixed; boundary=${batchBoundary}`,
+            'OData-MaxVersion': '4.0',
+            'OData-Version': '4.0',
+        },
+        body: lines.join('\r\n'),
+    })
+    const responseBody = await response.text()
+    const statuses = [...responseBody.matchAll(/HTTP\/1\.1\s+(\d{3})/g)]
+        .map((match) => Number(match[1]))
+    const failure = statuses.find((status) => status >= 400)
+    if (!response.ok || failure) {
+        if ((failure ?? response.status) === 403) {
+            throw new Error('You do not have permission to delete this quote.')
+        }
+        throw new Error('Dataverse rejected the atomic quote deletion.')
+    }
+    if (statuses.filter((status) => status >= 200 && status < 300).length !== paths.length) {
+        throw new Error('Dataverse did not confirm every quote deletion operation.')
+    }
+}

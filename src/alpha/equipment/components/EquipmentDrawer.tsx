@@ -73,8 +73,6 @@ type MaintenanceHistoryForm = {
 type CustomerMode = 'none' | 'existing' | 'new'
 type SiteMode = 'none' | 'existing' | 'new'
 
-const PLANNED_SERVICE_TYPES: PlannedServiceType[] = [SERVICE_TYPES.A, SERVICE_TYPES.B, SERVICE_TYPES.C]
-
 const siteOptionLabel = (site: Site) => site.gr_name || 'Unnamed site'
 
 const formatDate = (value: string) => {
@@ -271,7 +269,7 @@ export default function EquipmentDrawer(props: Props) {
             return
         }
         const nextPlans: MaintenanceHistoryInput['plans'] = []
-        for (const serviceType of PLANNED_SERVICE_TYPES) {
+        for (const serviceType of maintenanceConfiguration.activeServiceTypes) {
             const values = maintenanceForm.plans[serviceType]
             const hours = values.lastCompletedHours === '' ? null : Number(values.lastCompletedHours)
             if (hours != null && (!Number.isFinite(hours) || hours < 0)) {
@@ -922,7 +920,7 @@ export default function EquipmentDrawer(props: Props) {
                 <label>Hour Meter<input type="number" min="0" value={maintenanceForm.currentHourMeter} onChange={(event) => { setMaintenanceForm((current) => ({ ...current, currentHourMeter: event.target.value })); setMaintenanceError('') }} /></label>
                 <label>Reading recorded date<input type="date" required value={maintenanceForm.readingRecordedDate} onChange={(event) => { setMaintenanceForm((current) => ({ ...current, readingRecordedDate: event.target.value })); setMaintenanceError('') }} /></label>
             </fieldset>
-            {PLANNED_SERVICE_TYPES.map((serviceType) => {
+            {maintenanceConfiguration.activeServiceTypes.map((serviceType) => {
                 const label = SERVICE_TYPE_OPTIONS.find((option) => option.value === serviceType)?.label
                 return <fieldset className="equipment-maintenance-history-group" key={serviceType}>
                     <legend>{label}</legend>

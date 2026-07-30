@@ -404,6 +404,23 @@
     line-height: 1.2;
 }
 
+.jobs-table-equipment-link {
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.jobs-table-equipment-link:hover strong,
+.jobs-table-equipment-link:focus-visible strong {
+    color: #166534;
+    text-decoration: underline;
+}
+
 .jobs-table-summary strong,
 .jobs-table-summary span,
 .jobs-table-summary small {

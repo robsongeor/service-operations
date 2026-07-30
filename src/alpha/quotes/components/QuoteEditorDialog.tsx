@@ -19,6 +19,7 @@ import { buildQuoteTableClipboard, copyQuoteTable, isCopyableQuoteLine } from '.
 import SearchableSelect, { type SearchableSelectOption } from '../../shared/searchable-select/SearchableSelect'
 import type { Customer } from '../../jobs/types/customer.types'
 import type { Equipment } from '../../jobs/types/equipment.types'
+import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation'
 
 type EditableLine = QuoteLineInput & { key: string }
 
@@ -34,6 +35,7 @@ type QuoteEditorDialogProps = {
     error: string
     onClose: () => void
     onSave: (input: QuoteInput) => Promise<void>
+    onDelete: () => Promise<void>
     authorName: string
     authorIdentityAvailable: boolean
 }
@@ -105,6 +107,7 @@ export default function QuoteEditorDialog({
     error,
     onClose,
     onSave,
+    onDelete,
     authorName,
     authorIdentityAvailable,
 }: QuoteEditorDialogProps) {
@@ -126,6 +129,7 @@ export default function QuoteEditorDialog({
         : [newLine(0)])
     const [copyFeedback, setCopyFeedback] = useState<'success' | 'error' | ''>('')
     const [formError, setFormError] = useState('')
+    const [confirmDelete, setConfirmDelete] = useState(false)
 
     const jobOptions = useMemo<SearchableSelectOption[]>(() => jobs.map((job) => ({
         value: job.gr_jobid,
@@ -442,6 +446,7 @@ export default function QuoteEditorDialog({
                             <button type="button" className="quote-secondary-button" title="Copy Quote line items and totals as a formatted table" disabled={copyableLines.length === 0} onClick={() => void copyTable()}>Copy Table</button>
                             {copyFeedback && <span className={copyFeedback === 'error' ? 'quote-copy-feedback error' : 'quote-copy-feedback'} role="status">{copyFeedback === 'success' ? 'Quote table copied.' : 'Unable to copy Quote table. Please try again.'}</span>}
                         </div>
+                        {quote && <button type="button" className="quote-delete-button" disabled={isSaving} onClick={() => setConfirmDelete(true)}>Delete quote</button>}
                         <button type="button" className="quote-secondary-button" onClick={onClose}>Cancel</button>
                         <button type="submit" className="quote-primary-button" disabled={isSaving || lines.length === 0}>
                             {isSaving ? 'Saving…' : quote ? 'Save quote' : 'Create quote'}
@@ -449,6 +454,16 @@ export default function QuoteEditorDialog({
                     </footer>
                 </form>
             </section>
+            {confirmDelete && quote && <EditDrawerConfirmation
+                eyebrow="Delete quote"
+                title={`Delete ${quote.gr_quotenumber || quote.gr_name || 'this quote'}?`}
+                message="This permanently deletes the quote and all of its quote lines. This cannot be undone."
+                error={error}
+                isBusy={isSaving}
+                confirmLabel={isSaving ? 'Deleting…' : 'Delete quote'}
+                onCancel={() => setConfirmDelete(false)}
+                onConfirm={() => void onDelete()}
+            />}
         </div>
     )
 }

@@ -34,6 +34,7 @@ export default function QuotesScreen() {
         reload,
         loadLines,
         save,
+        deleteQuote,
         clearSaveError,
     } = useQuotes()
     const [editingQuote, setEditingQuote] = useState<Quote | null | undefined>(
@@ -74,6 +75,10 @@ export default function QuotesScreen() {
                 return viewState.dateSort === 'ascending' ? leftTime - rightTime : rightTime - leftTime
             })
     }, [quotes, search, signedInUser?.entraObjectId, viewState])
+    const visibleQuoteTotal = visibleQuotes.reduce((total, quote) => total + quote.gr_total, 0)
+    const selectedStatusLabel = viewState.status === 'all'
+        ? 'All statuses'
+        : QUOTE_STATUS_LABELS[viewState.status] ?? 'Selected status'
 
     useEffect(() => {
         if (!viewStorageKey) return
@@ -145,6 +150,18 @@ export default function QuotesScreen() {
         }
     }
 
+    const removeQuote = async () => {
+        if (!editingQuote) return
+        try {
+            await deleteQuote(editingQuote.gr_quoteid, editingLines)
+            setEditingQuote(undefined)
+            setEditingLines([])
+            setSearchParams({})
+        } catch {
+            // The hook exposes the Dataverse message in the confirmation.
+        }
+    }
+
     return (
         <div className="quotes-page">
             <header className="quotes-page-header">
@@ -159,7 +176,10 @@ export default function QuotesScreen() {
 
             <section className="quotes-summary">
                 <div><span>Quote register</span><h2>Customer estimates linked to jobs</h2></div>
-                <span>{quotes.length} quotes</span>
+                <div className="quotes-summary-totals">
+                    <span>{visibleQuotes.length} {visibleQuotes.length === 1 ? 'quote' : 'quotes'}</span>
+                    <strong><small>{selectedStatusLabel} total</small>{money.format(visibleQuoteTotal)}</strong>
+                </div>
             </section>
 
             <div className="quotes-toolbar">
@@ -236,6 +256,7 @@ export default function QuotesScreen() {
                         setSearchParams({})
                     }}
                     onSave={saveQuote}
+                    onDelete={removeQuote}
                     authorName={editingQuote?.createdby?.fullname || signedInUser?.displayName || ''}
                     authorIdentityAvailable={Boolean(editingQuote?.createdby?.systemuserid || signedInUser?.entraObjectId)}
                 />

@@ -80,8 +80,19 @@ import {
 import { fetchQuotes as fetchQuotesApi } from '../../quotes/services/quotesApi'
 import { updateSiteCheckJobStatus } from '../../site-checks/services/siteCheckCompletionApi'
 import type { Quote } from '../../quotes/types/quote.types'
-import { fetchEquipmentServicePlans } from '../../equipment/servicePlans/servicePlanApi'
+import {
+    fetchEquipmentServicePlans,
+    saveEquipmentMaintenanceHistory as saveEquipmentMaintenanceHistoryApi,
+    syncEquipmentServiceProgramme,
+    type MaintenanceHistoryInput,
+} from '../../equipment/servicePlans/servicePlanApi'
 import type { EquipmentServicePlan } from '../../equipment/servicePlans/equipmentServicePlan.types'
+import {
+    applyEquipmentUpdate,
+    deleteEquipment as deleteEquipmentApi,
+    updateEquipment as updateEquipmentApi,
+} from '../../equipment/services/equipmentManagerApi'
+import type { EquipmentUpdateInput } from '../../equipment/types/equipmentManager.types'
 import {
     getJobCompletionKind,
     resolveCompletionEquipment,
@@ -118,6 +129,8 @@ export function useJobs() {
     const [completionRequest, setCompletionRequest] = useState<JobCompletionRequest | null>(null)
     const [isCompletingJob, setIsCompletingJob] = useState(false)
     const [completionError, setCompletionError] = useState('')
+    const [isEquipmentSaving, setIsEquipmentSaving] = useState(false)
+    const [equipmentSaveError, setEquipmentSaveError] = useState('')
 
     const getAccessToken = async () => {
         if (!account) throw new Error('No active Microsoft account is available. Sign in again and retry.')
@@ -142,6 +155,92 @@ export function useJobs() {
         await fetchEquipment()
 
         return equipmentId
+    }
+
+    const updateEquipment = async (record: Equipment, input: EquipmentUpdateInput) => {
+        setIsEquipmentSaving(true)
+        setEquipmentSaveError('')
+        try {
+            const token = await getAccessToken()
+            await updateEquipmentApi(token, record.gr_equipmentid, input)
+            const selectedSite = sites.find((site) => site.gr_siteid === input.siteId)
+            const updated = applyEquipmentUpdate(record, input, selectedSite)
+            const recordPlans = servicePlans.filter((plan) =>
+                plan._gr_equipment_value?.toLowerCase() === record.gr_equipmentid.toLowerCase())
+            const syncedPlans = await syncEquipmentServiceProgramme(token, updated, recordPlans)
+            setServicePlans((current) => [
+                ...current.filter((plan) => plan._gr_equipment_value?.toLowerCase() !== record.gr_equipmentid.toLowerCase()),
+                ...syncedPlans,
+            ])
+            setEquipmentList((current) => current.map((item) =>
+                item.gr_equipmentid === updated.gr_equipmentid ? updated : item))
+            setJobs((current) => current.map((job) =>
+                job.gr_Equipment?.gr_equipmentid === updated.gr_equipmentid
+                    ? { ...job, gr_Equipment: updated }
+                    : job))
+            return updated
+        } catch (error) {
+            setEquipmentSaveError(error instanceof Error ? error.message : 'Equipment could not be saved.')
+            throw error
+        } finally {
+            setIsEquipmentSaving(false)
+        }
+    }
+
+    const saveEquipmentMaintenanceHistory = async (
+        record: Equipment,
+        existingPlans: EquipmentServicePlan[],
+        input: MaintenanceHistoryInput,
+    ) => {
+        setIsEquipmentSaving(true)
+        setEquipmentSaveError('')
+        try {
+            const token = await getAccessToken()
+            const updatedPlans = await saveEquipmentMaintenanceHistoryApi(
+                token, record.gr_equipmentid, record, existingPlans, input)
+            const updated = {
+                ...record,
+                gr_currenthourmeter: input.currentHourMeter,
+                gr_currenthourmeterrecordeddate: input.readingRecordedDate,
+            }
+            setEquipmentList((current) => current.map((item) =>
+                item.gr_equipmentid === updated.gr_equipmentid ? updated : item))
+            setJobs((current) => current.map((job) =>
+                job.gr_Equipment?.gr_equipmentid === updated.gr_equipmentid
+                    ? { ...job, gr_Equipment: updated }
+                    : job))
+            setServicePlans((current) => {
+                const updatedTypes = new Set(updatedPlans.map((plan) => plan.gr_servicetype))
+                return [
+                    ...current.filter((plan) =>
+                        plan._gr_equipment_value?.toLowerCase() !== record.gr_equipmentid.toLowerCase()
+                        || !updatedTypes.has(plan.gr_servicetype)),
+                    ...updatedPlans,
+                ]
+            })
+            return updated
+        } catch (error) {
+            setEquipmentSaveError(error instanceof Error ? error.message : 'Maintenance history could not be saved.')
+            throw error
+        } finally {
+            setIsEquipmentSaving(false)
+        }
+    }
+
+    const deleteEquipment = async (equipmentId: string) => {
+        setIsEquipmentSaving(true)
+        setEquipmentSaveError('')
+        try {
+            const token = await getAccessToken()
+            await deleteEquipmentApi(token, equipmentId)
+            setEquipmentList((current) => current.filter((item) => item.gr_equipmentid !== equipmentId))
+            await fetchJobs()
+        } catch (error) {
+            setEquipmentSaveError(error instanceof Error ? error.message : 'Equipment could not be deleted.')
+            throw error
+        } finally {
+            setIsEquipmentSaving(false)
+        }
     }
 
     const createCustomer = async (customer: {
@@ -844,6 +943,12 @@ export function useJobs() {
         updateJobOfficeAttention,
         createJob,
         createEquipment,
+        updateEquipment,
+        saveEquipmentMaintenanceHistory,
+        deleteEquipment,
+        isEquipmentSaving,
+        equipmentSaveError,
+        clearEquipmentSaveError: () => setEquipmentSaveError(''),
         createSite,
         createCustomer,
         mechanics,

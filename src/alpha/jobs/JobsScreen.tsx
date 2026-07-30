@@ -16,6 +16,8 @@ import './JobsScreen.css'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { JOBS_TABLE_COLUMNS, type JobsStickyThroughColumnId } from './types/jobsTableColumns'
 import JobCompletionWorkflow from './components/JobCompletionWorkflow'
+import EquipmentDrawer from '../equipment/components/EquipmentDrawer'
+import type { Equipment } from './types/equipment.types'
 
 export default function JobsScreen() {
     const navigate = useNavigate()
@@ -36,6 +38,8 @@ export default function JobsScreen() {
         sendPrimaryJobEmail, sendAssignmentJobEmail, prepareTechnicianJobEmail,
         createJobAssignment, deleteJobAssignment,
         createContactForSite, createEquipment, createSite, createCustomer,
+        updateEquipment, saveEquipmentMaintenanceHistory, deleteEquipment,
+        isEquipmentSaving, equipmentSaveError, clearEquipmentSaveError,
         createScheduleOption, updateScheduleOption, deleteScheduleOption,
         createJobOfficeUpdate,
         updateJobOfficeAttention,
@@ -45,6 +49,7 @@ export default function JobsScreen() {
     const [editingJob, setEditingJob] = useState<Job | null>(null)
     const [editingInitialTab, setEditingInitialTab] = useState<'details' | 'jobcard'>('details')
     const [isCreatingJob, setIsCreatingJob] = useState(false)
+    const [editingEquipment, setEditingEquipment] = useState<Equipment | null>(null)
     const [defaultView, setDefaultView] = useState<JobsDefaultView>(() => defaultViewStorageKey
         ? restoreJobsDefaultView(defaultViewStorageKey) ?? APPLICATION_DEFAULT_JOBS_VIEW
         : APPLICATION_DEFAULT_JOBS_VIEW)
@@ -93,6 +98,14 @@ export default function JobsScreen() {
         }).catch(() => {
             // The already-loaded Job remains available if the background refresh fails.
         })
+    }
+
+    const openEquipment = (equipmentId: string) => {
+        const equipment = equipmentList.find((item) =>
+            item.gr_equipmentid.toLowerCase() === equipmentId.toLowerCase())
+        if (!equipment) return
+        clearEquipmentSaveError()
+        setEditingEquipment(equipment)
     }
 
     useEffect(() => {
@@ -217,6 +230,7 @@ export default function JobsScreen() {
                     onEmailTechnician={prepareTechnicianJobEmail}
                     onEditJob={(job) => openJob(job)}
                     onOpenJobCard={(job) => openJob(job, 'jobcard')}
+                    onOpenEquipment={openEquipment}
                     mechanics={mechanics}
                     officeUpdates={officeUpdates}
                     scheduleOptions={scheduleOptions}
@@ -362,6 +376,33 @@ export default function JobsScreen() {
                     onClose={() => {
                         setEditingJob(null)
                         setEditingInitialTab('details')
+                    }}
+                />
+            )}
+            {editingEquipment && (
+                <EquipmentDrawer
+                    mode="edit"
+                    equipment={editingEquipment}
+                    equipmentList={equipmentList}
+                    servicePlans={servicePlans.filter((plan) =>
+                        plan._gr_equipment_value?.toLowerCase() === editingEquipment.gr_equipmentid.toLowerCase())}
+                    customers={customers}
+                    sites={sites}
+                    jobs={jobs}
+                    isSaving={isEquipmentSaving}
+                    saveError={equipmentSaveError}
+                    onClose={() => setEditingEquipment(null)}
+                    onSave={async (input) => {
+                        const updated = await updateEquipment(editingEquipment, input)
+                        setEditingEquipment(updated)
+                    }}
+                    onSaveMaintenanceHistory={async (plans, input) => {
+                        const updated = await saveEquipmentMaintenanceHistory(editingEquipment, plans, input)
+                        setEditingEquipment(updated)
+                    }}
+                    onDelete={async () => {
+                        await deleteEquipment(editingEquipment.gr_equipmentid)
+                        setEditingEquipment(null)
                     }}
                 />
             )}

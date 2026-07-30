@@ -44,6 +44,7 @@ type Props = {
     onEmailTechnician: (job: Job) => Promise<string>
     onEditJob: (job: Job) => void
     onOpenJobCard: (job: Job) => void
+    onOpenEquipment: (equipmentId: string) => void
     mechanics: Mechanic[]
     officeUpdates: JobOfficeUpdate[]
     scheduleOptions: JobScheduleOption[]
@@ -69,6 +70,7 @@ export default function JobsTable({
     onEmailTechnician,
     onEditJob,
     onOpenJobCard,
+    onOpenEquipment,
     mechanics,
     officeUpdates,
     scheduleOptions,
@@ -515,11 +517,16 @@ export default function JobsTable({
 
                                 <td {...stickyProps('equipment')}>
                                     {job.gr_Equipment ? (
-                                        <div className="jobs-table-summary">
+                                        <button
+                                            type="button"
+                                            className="jobs-table-summary jobs-table-equipment-link"
+                                            aria-label={`Open equipment ${job.gr_Equipment.gr_fleet || job.gr_Equipment.gr_serial || 'record'}`}
+                                            onClick={() => onOpenEquipment(job.gr_Equipment!.gr_equipmentid)}
+                                        >
                                             <strong>{job.gr_Equipment.gr_fleet || 'No fleet number'}</strong>
                                             <span>{job.gr_Equipment.gr_make} {job.gr_Equipment.gr_model}</span>
                                             <small>{job.gr_Equipment.gr_serial}</small>
-                                        </div>
+                                        </button>
                                     ) : <span className="jobs-table-muted">None</span>}
                                 </td>
 

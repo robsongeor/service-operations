@@ -8,6 +8,7 @@ import type { Equipment } from '../../jobs/types/equipment.types'
 import { fetchPricingItems } from '../services/pricingApi'
 import {
     createQuote as createQuoteApi,
+    deleteQuote as deleteQuoteApi,
     fetchQuoteJobs,
     fetchQuoteLines,
     fetchQuotes,
@@ -120,6 +121,22 @@ export function useQuotes() {
         }
     }
 
+    const deleteQuote = async (quoteId: string, lines: QuoteLine[]) => {
+        setIsSaving(true)
+        setSaveError('')
+        try {
+            const token = await getAccessToken()
+            await deleteQuoteApi(token, quoteId, lines.map((line) => line.gr_quotelineid))
+            setQuotes((current) => current.filter((quote) => quote.gr_quoteid !== quoteId))
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'The quote could not be deleted.'
+            setSaveError(message)
+            throw error
+        } finally {
+            setIsSaving(false)
+        }
+    }
+
     return {
         quotes,
         jobs,
@@ -133,6 +150,7 @@ export function useQuotes() {
         reload: load,
         loadLines,
         save,
+        deleteQuote,
         clearSaveError: () => setSaveError(''),
     }
 }

@@ -23,14 +23,19 @@
 }
 .quote-primary-button { border: 1px solid #176f66; background: #176f66; color: #fff; }
 .quote-secondary-button { border: 1px solid #ccd5d0; background: #fff; color: #344039; }
+.quote-delete-button { min-height: 38px; padding: 0 15px; border: 1px solid #c67878; border-radius: 8px; background: #fff; color: #913b3b; font-size: .76rem; font-weight: 750; cursor: pointer; }
+.quote-delete-button:disabled { cursor: wait; opacity: .55; }
 .quote-primary-button:disabled, .quote-secondary-button:disabled { cursor: wait; opacity: .65; }
 
 .quotes-summary { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
 .quotes-summary h2 { font-size: 1.05rem; }
-.quotes-summary > span {
+.quotes-summary-totals { display: flex; align-items: center; gap: 10px; }
+.quotes-summary-totals > span {
     padding: 6px 10px; border-radius: 999px; background: #edf2ef; color: #59665f;
     font-size: .7rem; font-weight: 700;
 }
+.quotes-summary-totals > strong { display: grid; min-width: 150px; justify-items: end; color: #164e40; font-size: 1rem; font-variant-numeric: tabular-nums; }
+.quotes-summary-totals > strong small { color: #77817b; font-size: .62rem; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
 .quotes-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .quotes-toolbar label { display: block; width: min(430px,100%); }
 .quotes-toolbar input, .quote-field input, .quote-field select, .quote-field textarea {
@@ -148,6 +153,8 @@
 }
 
 @media (max-width: 700px) {
+    .quotes-summary { align-items: flex-start; flex-direction: column; }
+    .quotes-summary-totals { width: 100%; justify-content: space-between; }
     .quotes-toolbar { align-items: stretch; flex-direction: column; }
     .quotes-status-filter { justify-content: flex-start; }
     .quotes-table-shell { overflow-x: auto; }
