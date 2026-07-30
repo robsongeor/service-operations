@@ -2,6 +2,7 @@ import { InteractionRequiredAuthError } from '@azure/msal-browser'
 import { useMsal } from '@azure/msal-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useActiveMsalAccount } from '../../../auth/useActiveMsalAccount'
+import { acquireDataverseAccessToken } from '../../../auth/dataverseAuthentication'
 import type { Equipment } from '../../jobs/types/equipment.types'
 import type { Mechanic } from '../../jobs/types/mechanic.types'
 import type { Site } from '../../jobs/types/site.types'
@@ -54,12 +55,7 @@ export function useSiteCheckWorkspace() {
     const requestVersion = useRef(0)
 
     const acquireAccessToken = useCallback(async () => {
-        if (!account) throw new Error('No active Microsoft account is available. Sign in again and retry.')
-        const response = await instance.acquireTokenSilent({
-            scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`],
-            account,
-        })
-        return response.accessToken
+        return acquireDataverseAccessToken(instance, account)
     }, [account, instance])
 
     const coordinator = useMemo(

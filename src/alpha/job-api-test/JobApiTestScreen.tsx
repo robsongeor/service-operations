@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
+import { acquireDataverseAccessToken } from '../../auth/dataverseAuthentication'
 import './JobApiTestScreen.css'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -51,13 +52,9 @@ export default function JobApiTestScreen() {
         const endpoint = `/api/joblookup?${new URLSearchParams({ jobNumber: trimmedJobNumber })}`
 
         try {
-            if (!account) throw new Error('No active Microsoft account is available. Sign in again and retry.')
-            const authentication = await instance.acquireTokenSilent({
-                scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`],
-                account,
-            })
+            const accessToken = await acquireDataverseAccessToken(instance, account)
             const apiResponse = await fetch(endpoint, {
-                headers: { Authorization: `Bearer ${authentication.accessToken}` },
+                headers: { Authorization: `Bearer ${accessToken}` },
             })
             const body = await apiResponse.text()
             const responseSource = apiResponse.headers.get('x-job-lookup-source') || 'internal endpoint'

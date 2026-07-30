@@ -1,0 +1,86 @@
+.dataverse-session-backdrop {
+    position: fixed;
+    z-index: 2000;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: rgba(18, 27, 22, .44);
+    backdrop-filter: blur(3px);
+}
+
+.dataverse-session-dialog {
+    display: grid;
+    width: min(440px, 100%);
+    box-sizing: border-box;
+    grid-template-columns: 42px 1fr;
+    gap: 14px;
+    padding: 24px;
+    border: 1px solid #e0d6cc;
+    border-radius: 15px;
+    background: #fffdfa;
+    box-shadow: 0 24px 64px rgba(28, 23, 18, .22);
+}
+
+.dataverse-session-dialog > span {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    place-items: center;
+    border-radius: 50%;
+    background: #fff0d8;
+    color: #985d18;
+    font-weight: 850;
+}
+
+.dataverse-session-dialog p,
+.dataverse-session-dialog h2 {
+    margin: 0;
+}
+
+.dataverse-session-dialog div > p:first-child {
+    color: #986126;
+    font-size: .68rem;
+    font-weight: 800;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+}
+
+.dataverse-session-dialog h2 {
+    margin-top: 3px;
+    color: #28231f;
+    font-size: 1.1rem;
+}
+
+.dataverse-session-dialog div > p:last-child {
+    margin-top: 8px;
+    color: #6d665f;
+    font-size: .8rem;
+    line-height: 1.5;
+}
+
+.dataverse-session-error {
+    grid-column: 1 / -1;
+    color: #973b3b;
+    font-size: .76rem;
+}
+
+.dataverse-session-dialog button {
+    min-height: 39px;
+    grid-column: 1 / -1;
+    justify-self: end;
+    padding: 0 15px;
+    border: 1px solid #176f66;
+    border-radius: 8px;
+    background: #176f66;
+    color: #fff;
+    font: inherit;
+    font-size: .78rem;
+    font-weight: 750;
+    cursor: pointer;
+}
+
+.dataverse-session-dialog button:disabled {
+    cursor: wait;
+    opacity: .6;
+}

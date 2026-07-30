@@ -10,12 +10,18 @@ import './index.css'
 
 const msalInstance = new PublicClientApplication(msalConfig)
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <MsalProvider instance={msalInstance}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </MsalProvider>
-  </React.StrictMode>,
-)
+const authResponse = `${window.location.hash}&${window.location.search}`
+const isEmbeddedAuthResponse = (window.self !== window.top || Boolean(window.opener))
+  && /(?:^|[&#?])(code|error|state)=/.test(authResponse)
+
+if (!isEmbeddedAuthResponse) {
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <MsalProvider instance={msalInstance}>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </MsalProvider>
+    </React.StrictMode>,
+  )
+}

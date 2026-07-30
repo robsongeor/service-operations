@@ -2,6 +2,7 @@ import { InteractionRequiredAuthError } from '@azure/msal-browser'
 import { useMsal } from '@azure/msal-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useActiveMsalAccount } from '../../../auth/useActiveMsalAccount'
+import { acquireDataverseAccessToken } from '../../../auth/dataverseAuthentication'
 import {
     createSiteChecksDataCoordinator,
     type SiteChecksSnapshot,
@@ -59,10 +60,7 @@ export function useSiteChecks(siteIds: readonly string[]) {
         const requestKey = `${account.homeAccountId}:${import.meta.env.VITE_DATAVERSE_URL}`
         const existingRequest = silentTokenRequests.get(requestKey)
         if (existingRequest) return existingRequest
-        const request = instance.acquireTokenSilent({
-            scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`],
-            account,
-        }).then((response) => response.accessToken)
+        const request = acquireDataverseAccessToken(instance, account)
         silentTokenRequests.set(requestKey, request)
         try {
             return await request

@@ -1287,17 +1287,24 @@ test('coordinator skips token acquisition and child reads for empty or inactive 
     assert.equal(childCalls, 0)
 })
 
-test('Site Checks hook uses silent authentication and contains no interactive retry path', () => {
+test('Site Checks hook uses the shared Dataverse authentication recovery path', () => {
     const source = readFileSync(
         new URL('../src/alpha/site-checks/hooks/useSiteChecks.ts', import.meta.url),
         'utf8',
     )
+    const authenticationSource = readFileSync(
+        new URL('../src/auth/dataverseAuthentication.ts', import.meta.url),
+        'utf8',
+    )
     assert.match(source, /useActiveMsalAccount/)
-    assert.match(source, /acquireTokenSilent/)
-    assert.match(source, /InteractionRequiredAuthError/)
+    assert.match(source, /acquireDataverseAccessToken/)
     assert.match(source, /silentTokenRequests/)
     assert.doesNotMatch(source, /loginRedirect|loginPopup|acquireTokenRedirect|acquireTokenPopup/)
     assert.match(source, /createSiteChecksDataCoordinator/)
+    assert.match(authenticationSource, /acquireTokenSilent/)
+    assert.match(authenticationSource, /SILENT_AUTH_REDIRECT_URI/)
+    assert.match(authenticationSource, /timed_out/)
+    assert.match(authenticationSource, /acquireTokenPopup/)
 })
 
 test('schedule creation uses the Site relationship and preserves disabled cadence values', async () => {

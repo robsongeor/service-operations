@@ -13,6 +13,7 @@ import {
 } from '../services/mechanicsApi'
 import type { QualificationType, TechnicianQualification, TechnicianQualificationInput } from '../../wof/types/wof.types'
 import { createTechnicianQualification as createQualificationApi, deactivateTechnicianQualification as deactivateQualificationApi, fetchAllTechnicianQualifications, fetchQualificationTypes, updateTechnicianQualification as updateQualificationApi } from '../../wof/services/qualificationApi'
+import { acquireDataverseAccessToken } from '../../../auth/dataverseAuthentication'
 
 export function useMechanics() {
     const { instance } = useMsal()
@@ -27,12 +28,7 @@ export function useMechanics() {
     const [saveError, setSaveError] = useState('')
 
     const getToken = useCallback(async () => {
-        if (!account) throw new Error('No active Microsoft account is available. Sign in again and retry.')
-        const response = await instance.acquireTokenSilent({
-            scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`],
-            account,
-        })
-        return response.accessToken
+        return acquireDataverseAccessToken(instance, account)
     }, [account, instance])
 
     const load = useCallback(async () => {

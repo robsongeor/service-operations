@@ -33,6 +33,7 @@ import {
     equipmentInputFromCsvPatch,
     type EquipmentCsvReviewRow,
 } from '../utils/equipmentCsv'
+import { acquireDataverseAccessToken } from '../../../auth/dataverseAuthentication'
 
 export function useEquipmentManager() {
     const { instance } = useMsal()
@@ -48,12 +49,7 @@ export function useEquipmentManager() {
     const [saveError, setSaveError] = useState('')
 
     const getToken = useCallback(async () => {
-        if (!account) throw new Error('No active Microsoft account is available. Sign in again and retry.')
-        const response = await instance.acquireTokenSilent({
-            scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`],
-            account,
-        })
-        return response.accessToken
+        return acquireDataverseAccessToken(instance, account)
     }, [account, instance])
 
     const load = useCallback(async () => {

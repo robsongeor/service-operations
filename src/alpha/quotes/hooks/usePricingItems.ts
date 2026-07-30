@@ -8,6 +8,7 @@ import {
     updatePricingItem as updatePricingItemApi,
 } from '../services/pricingApi'
 import type { PricingItem, PricingItemInput } from '../types/pricing.types'
+import { acquireDataverseAccessToken } from '../../../auth/dataverseAuthentication'
 
 export function usePricingItems() {
     const { instance } = useMsal()
@@ -19,12 +20,7 @@ export function usePricingItems() {
     const [isSaving, setIsSaving] = useState(false)
 
     const getAccessToken = useCallback(async () => {
-        if (!account) throw new Error('No active Microsoft account is available. Sign in again and retry.')
-        const response = await instance.acquireTokenSilent({
-            scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`],
-            account,
-        })
-        return response.accessToken
+        return acquireDataverseAccessToken(instance, account)
     }, [account, instance])
 
     const loadItems = useCallback(async () => {

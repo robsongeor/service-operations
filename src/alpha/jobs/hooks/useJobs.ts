@@ -105,6 +105,7 @@ import {
 } from '../completion/jobCompletion'
 import { completeServiceJobAtomically } from '../completion/serviceCompletionApi'
 import { updateWofExpiryForCompletion } from '../../wof/services/wofApi'
+import { acquireDataverseAccessToken } from '../../../auth/dataverseAuthentication'
 
 
 
@@ -133,13 +134,7 @@ export function useJobs() {
     const [equipmentSaveError, setEquipmentSaveError] = useState('')
 
     const getAccessToken = async () => {
-        if (!account) throw new Error('No active Microsoft account is available. Sign in again and retry.')
-        const response = await instance.acquireTokenSilent({
-            scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`],
-            account,
-        })
-
-        return response.accessToken
+        return acquireDataverseAccessToken(instance, account)
     }
 
     const createEquipment = async (equipment: {
@@ -846,11 +841,7 @@ export function useJobs() {
             setLoadError('')
 
             try {
-                const response = await instance.acquireTokenSilent({
-                    scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`],
-                    account,
-                })
-                const token = response.accessToken
+                const token = await acquireDataverseAccessToken(instance, account)
                 const mechanicsRequest = fetch(
                     `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2/gr_mechanics?$select=gr_mechanicid,gr_name,gr_phone,gr_email,gr_camnumber,gr_rego,gr_region`,
                     {

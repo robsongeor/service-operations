@@ -24,10 +24,23 @@ VITE_DATAVERSE_URL
 `VITE_DATAVERSE_URL` is the organisation origin without `/api/data/v9.2` or a trailing
 slash. User preferences use the resolved account storage ID.
 
+For the lightest silent-renewal callback, register
+`https://<application-origin>/auth/silent.html` as a Single-page application redirect URI
+in the Entra app registration and set:
+
+```text
+VITE_MSAL_SILENT_REDIRECT_URI=https://<application-origin>/auth/silent.html
+```
+
+The variable is optional. When it is absent, MSAL uses the already-registered application
+origin and `main.tsx` prevents the React application from booting inside an iframe or popup
+that contains an MSAL authorization response.
+
 ### Token acquisition and interaction rules
 
-- Feature coordinators use `acquireTokenSilent` with the account resolved by
-  `useActiveMsalAccount`.
+- Feature coordinators use the shared `acquireDataverseAccessToken` helper with the account
+  resolved by `useActiveMsalAccount`. The helper performs `acquireTokenSilent` with the
+  lightweight callback URI.
 - A page-level load or mutation acquires once, then passes that bearer token to parallel
   feature-service calls. Child components and individual rows never acquire tokens.
 - Concurrent callers should share an in-flight silent token promise where a common
@@ -36,8 +49,10 @@ slash. User preferences use the resolved account storage ID.
 - `loginRedirect` or a popup is allowed only from an explicit sign-in/reauthenticate action.
   Rendering, effects, background refresh, automatic retry, and Dataverse 401 handling must
   not start interactive authentication.
-- An MSAL interaction-required result is surfaced once with a user-invoked sign-in action.
-  Repeated service failures must not create a sign-in loop.
+- An MSAL interaction-required or hidden-iframe timeout result is surfaced once through the
+  global session-recovery dialog. Its user-invoked popup resolves the pending shared token
+  request so the interrupted load or mutation continues without a page reload. Repeated
+  service failures must not create a sign-in loop.
 - Authenticated server workflows validate the caller once per server operation. Do not call
   `WhoAmI` once per child record.
 
@@ -91,6 +106,7 @@ for server credentials or introduce browser-accessible secrets.
 - [`../../src/auth/authConfig.ts`](../../src/auth/authConfig.ts)
 - [`../../src/auth/signedInUser.ts`](../../src/auth/signedInUser.ts)
 - [`../../src/auth/useActiveMsalAccount.ts`](../../src/auth/useActiveMsalAccount.ts)
+- [`../../src/auth/dataverseAuthentication.ts`](../../src/auth/dataverseAuthentication.ts)
 - [`../../api/services/jobSubmissionService.js`](../../api/services/jobSubmissionService.js)
 - [Security](security.md)
 - [Public portal](public-portal.md)

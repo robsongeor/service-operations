@@ -27,7 +27,12 @@ Public build-time variables:
 VITE_MSAL_CLIENT_ID
 VITE_MSAL_TENANT_ID
 VITE_DATAVERSE_URL
+VITE_MSAL_SILENT_REDIRECT_URI (optional)
 ```
+
+When `VITE_MSAL_SILENT_REDIRECT_URI` is configured, its exact
+`https://<application-origin>/auth/silent.html` value must also be registered as a
+Single-page application redirect URI in Microsoft Entra.
 
 Server-only portal variables:
 

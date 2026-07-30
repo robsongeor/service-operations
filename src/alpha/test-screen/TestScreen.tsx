@@ -1,6 +1,7 @@
 import { useMsal } from '@azure/msal-react'
 
 import { useEffect, useState } from 'react'
+import { acquireDataverseAccessToken } from '../../auth/dataverseAuthentication'
 
 type Mechanic = {
     gr_mechanicid: string
@@ -25,16 +26,13 @@ function TestScreen() {
     const handleLogout = () => { instance.logoutPopup() }
 
     const fetchMechanics = async () => {
-        const response = await instance.acquireTokenSilent({
-            scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`],
-            account,
-        })
+        const accessToken = await acquireDataverseAccessToken(instance, account)
 
         const result = await fetch(
             `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2/gr_mechanics?$select=gr_mechanicid,gr_name,gr_phone,gr_email`,
             {
                 headers: {
-                    Authorization: `Bearer ${response.accessToken}`,
+                    Authorization: `Bearer ${accessToken}`,
                     Accept: 'application/json',
                 },
             },
@@ -50,15 +48,12 @@ function TestScreen() {
         let cancelled = false
 
         const loadMechanics = async () => {
-            const response = await instance.acquireTokenSilent({
-                scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`],
-                account,
-            })
+            const accessToken = await acquireDataverseAccessToken(instance, account)
             const result = await fetch(
                 `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2/gr_mechanics?$select=gr_mechanicid,gr_name,gr_phone,gr_email`,
                 {
                     headers: {
-                        Authorization: `Bearer ${response.accessToken}`,
+                        Authorization: `Bearer ${accessToken}`,
                         Accept: 'application/json',
                     },
                 },
@@ -81,17 +76,14 @@ function TestScreen() {
             return
         }
 
-        const response = await instance.acquireTokenSilent({
-            scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`],
-            account,
-        })
+        const accessToken = await acquireDataverseAccessToken(instance, account)
 
         const result = await fetch(
             `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2/gr_mechanics`,
             {
                 method: 'POST',
                 headers: {
-                    Authorization: `Bearer ${response.accessToken}`,
+                    Authorization: `Bearer ${accessToken}`,
                     'Content-Type': 'application/json',
                     Accept: 'application/json',
                 },

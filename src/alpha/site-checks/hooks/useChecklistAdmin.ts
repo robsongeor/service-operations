@@ -14,6 +14,7 @@ import type {
     SiteCheckChecklistTemplate,
     SiteCheckChecklistTemplateItem,
 } from '../types/siteCheckChecklist.types.ts'
+import { acquireDataverseAccessToken } from '../../../auth/dataverseAuthentication.ts'
 
 const CODES = ['SITE_CHECK_ICE', 'SITE_CHECK_ELECTRIC'] as const
 
@@ -32,11 +33,7 @@ export function useChecklistAdmin() {
     const [error, setError] = useState('')
 
     const token = useCallback(async () => {
-        if (!account) throw new Error('No active Microsoft account is available.')
-        return (await instance.acquireTokenSilent({
-            account,
-            scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`],
-        })).accessToken
+        return acquireDataverseAccessToken(instance, account)
     }, [account, instance])
 
     const refresh = useCallback(async () => {

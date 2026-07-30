@@ -25,6 +25,7 @@ import { SERVICE_TYPES } from '../../equipment/servicePlans/equipmentServicePlan
 import type { CreateWofInput, ServiceProvider, TechnicianQualification, UpdateWofInput, WofInspection } from '../types/wof.types'
 import { createWof as createWofApi, createWofJobFromJobDrawer, deleteWofInspection, fetchTechnicianQualifications, fetchWofInspection, fetchWofInspections, fetchWofProviders, updateWof as updateWofApi } from '../services/wofApi'
 import { getWofDeletionBlockReason } from '../utils/wofRules'
+import { acquireDataverseAccessToken } from '../../../auth/dataverseAuthentication'
 
 export function useWof() {
     const { instance } = useMsal()
@@ -45,9 +46,10 @@ export function useWof() {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
 
-    const token = useCallback(async () => (await instance.acquireTokenSilent({
-        scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`], account: account!,
-    })).accessToken, [account, instance])
+    const token = useCallback(
+        () => acquireDataverseAccessToken(instance, account),
+        [account, instance],
+    )
 
     const load = useCallback(async () => {
         if (!account) { setLoading(false); return }

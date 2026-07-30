@@ -16,6 +16,7 @@ import {
 } from '../services/quotesApi'
 import type { PricingItem } from '../types/pricing.types'
 import type { Quote, QuoteInput, QuoteJob, QuoteLine } from '../types/quote.types'
+import { acquireDataverseAccessToken } from '../../../auth/dataverseAuthentication'
 
 export function useQuotes() {
     const { instance } = useMsal()
@@ -31,11 +32,7 @@ export function useQuotes() {
     const [saveError, setSaveError] = useState('')
 
     const getAccessToken = useCallback(async () => {
-        const response = await instance.acquireTokenSilent({
-            scopes: [`${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`],
-            account: account ?? undefined,
-        })
-        return response.accessToken
+        return acquireDataverseAccessToken(instance, account)
     }, [account, instance])
 
     const load = useCallback(async () => {

@@ -17,6 +17,7 @@ import SiteChecksScreen from './alpha/site-checks/SiteChecksScreen'
 import SiteCheckAssignmentPage from './alpha/portal/SiteCheckAssignmentPage'
 import ChecklistAdminScreen from './alpha/site-checks/ChecklistAdminScreen'
 import { isServiceOperationsAdministrator } from './auth/adminAuthorization'
+import DataverseSessionRecovery from './auth/DataverseSessionRecovery'
 
 function App() {
   const { accounts } = useMsal()
@@ -44,6 +45,7 @@ function App() {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
+      <DataverseSessionRecovery />
       {/* Sidebar */}
       <Sidebar />
 
