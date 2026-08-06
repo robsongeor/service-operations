@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { JOB_STATUSES } from '../src/alpha/jobs/types/jobStatus.types.ts'
@@ -116,6 +117,16 @@ test('expired WOF without a Job remains Expired', () => {
 
 test('fully administered WOF does not expose the expiry administration action', () => {
     assert.equal(wofNeedsAdministration('current'), false)
+})
+
+test('WOF workflow refresh reloads Equipment after completing the linked Job', () => {
+    const source = readFileSync(
+        new URL('../src/alpha/wof/hooks/useWof.ts', import.meta.url),
+        'utf8',
+    )
+    assert.match(source, /const \[equipmentRows, inspectionRows, jobRows, scheduleRows\] = await Promise\.all/)
+    assert.match(source, /fetchEquipment\(accessToken\)/)
+    assert.match(source, /setEquipment\(equipmentRows\)/)
 })
 
 test('WOF Jobs can be created for due soon and expired Equipment', () => {

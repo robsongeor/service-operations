@@ -124,11 +124,13 @@ export function useWof() {
 
     const refreshWorkflowData = async () => {
         const accessToken = await token()
-        const [inspectionRows, jobRows, scheduleRows] = await Promise.all([
+        const [equipmentRows, inspectionRows, jobRows, scheduleRows] = await Promise.all([
+            fetchEquipment(accessToken),
             fetchWofInspections(accessToken),
             fetchJobs(accessToken),
             fetchJobScheduleOptions(accessToken),
         ])
+        setEquipment(equipmentRows)
         setInspections(inspectionRows)
         setJobs(jobRows)
         setScheduleOptions(scheduleRows)
