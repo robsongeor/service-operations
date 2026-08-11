@@ -33,7 +33,7 @@ export default function JobsScreen() {
         jobAssignments,
         servicePlans,
         officeUpdates,
-        createJob, updateJob, deleteJob, updateJobStatus, updateJobFields,
+        createJob, updateJob, deleteJob, updateJobStatus, updateJobFields, allocateJobNumbers,
         updateJobCardStatus,
         sendPrimaryJobEmail, sendAssignmentJobEmail, prepareTechnicianJobEmail,
         createJobAssignment, deleteJobAssignment,
@@ -227,6 +227,7 @@ export default function JobsScreen() {
                     resetToDefaultDisabled={currentMatchesDefault}
                     onStatusChange={updateJobStatus}
                     onJobFieldsChange={updateJobFields}
+                    onJobNumberAllocation={allocateJobNumbers}
                     onEmailTechnician={prepareTechnicianJobEmail}
                     onEditJob={(job) => openJob(job)}
                     onOpenJobCard={(job) => openJob(job, 'jobcard')}

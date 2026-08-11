@@ -7,6 +7,7 @@ import { JOB_TYPES } from '../src/alpha/jobs/types/jobType.types.ts'
 import { jobIsSchedulerEligible } from '../src/alpha/jobs/types/jobSchedulerEligibility.ts'
 import { APPLICATION_DEFAULT_JOBS_VIEW, getJobsDefaultViewKey, restoreJobsDefaultView } from '../src/alpha/jobs/types/jobsDefaultView.types.ts'
 import { getJobsViewStateKey, restoreJobsViewState } from '../src/alpha/jobs/types/jobsViewState.types.ts'
+import { allocateJobNumbers } from '../src/alpha/jobs/services/jobsApi.ts'
 
 class MemoryStorage {
     values = new Map<string, string>()
@@ -72,4 +73,25 @@ test('Jobs table supports copying selected visible Job Book rows in sorted order
     assert.match(jobsTable, /selectedShownJobs\.map\(buildJobBookSpreadsheetRow\)\.join\('\\n'\)/)
     assert.match(jobsTable, /Select all shown/)
     assert.match(jobsTable, /Select Job \$\{job\.gr_jobnumber \|\| 'row'\} for job book export/)
+})
+
+test('Job number paste uses one atomic change set in selected-row order', async () => {
+    const originalFetch = globalThis.fetch
+    let request: RequestInit | undefined
+    globalThis.fetch = async (_url, init) => {
+        request = init
+        return new Response('HTTP/1.1 204 No Content\r\nHTTP/1.1 204 No Content', { status: 200 })
+    }
+    try {
+        await allocateJobNumbers('token', [
+            { job: { gr_jobid: 'job-1', '@odata.etag': 'W/"1"' } as never, jobNumber: '145850' },
+            { job: { gr_jobid: 'job-2', '@odata.etag': 'W/"2"' } as never, jobNumber: '145851' },
+        ])
+        assert.match(String(request?.body), /PATCH \/api\/data\/v9\.2\/gr_jobs\(job-1\)/)
+        assert.match(String(request?.body), /If-Match: W\/"1"/)
+        assert.match(String(request?.body), /\{"gr_jobnumber":"145850"\}/)
+        assert.match(String(request?.body), /\{"gr_jobnumber":"145851"\}/)
+    } finally {
+        globalThis.fetch = originalFetch
+    }
 })

@@ -6,6 +6,7 @@ import type { OfficeAction } from './officeAction.types'
 
 export type Job = {
     gr_jobid: string
+    '@odata.etag'?: string
     createdon: string
     gr_jobnumber: string | null
     gr_status: JobStatus

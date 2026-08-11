@@ -41,6 +41,7 @@ type Props = {
             'gr_Mechanic@odata.bind'?: string | null
         }
     ) => Promise<void>
+    onJobNumberAllocation: (allocations: readonly { job: Job; jobNumber: string }[]) => Promise<void>
     onEmailTechnician: (job: Job) => Promise<string>
     onEditJob: (job: Job) => void
     onOpenJobCard: (job: Job) => void
@@ -67,6 +68,7 @@ export default function JobsTable({
     resetToDefaultDisabled,
     onStatusChange,
     onJobFieldsChange,
+    onJobNumberAllocation,
     onEmailTechnician,
     onEditJob,
     onOpenJobCard,
@@ -79,6 +81,7 @@ export default function JobsTable({
     const { searchText, selectedJobType, officeAttentionFilter, scheduledJobsVisibility, sort } = viewState
     const [selectedRowId, setSelectedRowId] = useState<string | null>(null)
     const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(() => new Set())
+    const [isPastingJobNumbers, setIsPastingJobNumbers] = useState(false)
     const [openMechanicJobId, setOpenMechanicJobId] = useState<string | null>(null)
     const [savingMechanicJobId, setSavingMechanicJobId] = useState<string | null>(null)
     const [emailingJobId, setEmailingJobId] = useState<string | null>(null)
@@ -312,6 +315,34 @@ export default function JobsTable({
         window.setTimeout(() => setCopyFeedback(null), 2600)
     }
 
+    const pasteSelectedJobNumbers = async () => {
+        if (!selectedShownJobs.length || isPastingJobNumbers) return
+        setIsPastingJobNumbers(true)
+        try {
+            if (!navigator.clipboard?.readText) throw new Error('Clipboard access is unavailable.')
+            const pastedNumbers = (await navigator.clipboard.readText())
+                .split(/\r?\n/)
+                .map((value) => value.trim())
+                .filter(Boolean)
+            if (pastedNumbers.length !== selectedShownJobs.length) {
+                throw new Error(`Paste ${selectedShownJobs.length} Job numbers, one per line, in the selected row order.`)
+            }
+            await onJobNumberAllocation(selectedShownJobs.map((job, index) => ({ job, jobNumber: pastedNumbers[index] })))
+            setCopyFeedback({
+                message: `${selectedShownJobs.length} Job numbers saved.`,
+                isError: false,
+            })
+        } catch (error) {
+            setCopyFeedback({
+                message: error instanceof Error ? error.message : 'The Job numbers could not be saved.',
+                isError: true,
+            })
+        } finally {
+            setIsPastingJobNumbers(false)
+        }
+        window.setTimeout(() => setCopyFeedback(null), 2600)
+    }
+
     const copyJobForSpreadsheet = async (job: Job) => {
         const jobNumber = spreadsheetCell(job.gr_jobnumber)
         if (!jobNumber) return
@@ -430,6 +461,14 @@ export default function JobsTable({
                 </label>
                 <button type="button" onClick={() => void copySelectedJobs()} disabled={selectedShownJobs.length === 0}>
                     Copy {selectedShownJobs.length ? `${selectedShownJobs.length} selected` : 'selected'} for job book
+                </button>
+                <button
+                    type="button"
+                    onClick={() => void pasteSelectedJobNumbers()}
+                    disabled={selectedShownJobs.length === 0 || isPastingJobNumbers}
+                    title="Read one Job number per line from the clipboard and assign them in selected row order"
+                >
+                    {isPastingJobNumbers ? 'Saving Job numbers…' : 'Paste Job numbers'}
                 </button>
             </div>
 

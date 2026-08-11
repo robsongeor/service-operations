@@ -10,6 +10,7 @@ import {
     updateJobStatus as updateJobStatusApi,
     updateJobCardStatus as updateJobCardStatusApi,
     updateJobFields as updateJobFieldsApi,
+    allocateJobNumbers as allocateJobNumbersApi,
     updateJobOfficeAttention as updateJobOfficeAttentionApi,
     updateJob as updateJobApi,
     deleteJob as deleteJobApi,
@@ -599,6 +600,12 @@ export function useJobs() {
         await fetchJobs()
     }
 
+    const allocateJobNumbers = async (allocations: readonly { job: Job; jobNumber: string }[]) => {
+        const token = await getAccessToken()
+        await allocateJobNumbersApi(token, allocations)
+        await fetchJobs()
+    }
+
     const updateJob = async (jobId: string, job: JobSaveInput) => {
         const currentJob = jobs.find((item) => item.gr_jobid === jobId)
         if (!currentJob) throw new Error('The job could not be found. Refresh the page and try again.')
@@ -954,6 +961,7 @@ export function useJobs() {
         updateJobAssignmentStatus,
         deleteJobAssignment,
         updateJobFields,
+        allocateJobNumbers,
         updateJob,
         completionRequest,
         isCompletingJob,

@@ -252,6 +252,74 @@ export async function updateJobFields(
     }
 }
 
+export async function allocateJobNumbers(
+    token: string,
+    allocations: readonly { job: Job; jobNumber: string }[],
+) {
+    if (!allocations.length) throw new Error('Select one or more Jobs before pasting job numbers.')
+    const seenJobIds = new Set<string>()
+    const seenNumbers = new Set<string>()
+    allocations.forEach(({ job, jobNumber }) => {
+        const normalizedNumber = jobNumber.trim()
+        if (seenJobIds.has(job.gr_jobid)) throw new Error('A Job was selected more than once.')
+        if (!/^\d+$/.test(normalizedNumber)) throw new Error('Each pasted Job number must contain digits only.')
+        if (seenNumbers.has(normalizedNumber)) throw new Error('Each pasted Job number must be unique.')
+        if (!job['@odata.etag']) throw new Error('Reload the Jobs table before pasting job numbers.')
+        seenJobIds.add(job.gr_jobid)
+        seenNumbers.add(normalizedNumber)
+    })
+
+    const suffix = crypto.randomUUID().replaceAll('-', '')
+    const batchBoundary = `batch_${suffix}`
+    const changeBoundary = `changeset_${suffix}`
+    const lines = [
+        `--${batchBoundary}`,
+        `Content-Type: multipart/mixed; boundary=${changeBoundary}`,
+        '',
+    ]
+    allocations.forEach(({ job, jobNumber }, index) => {
+        lines.push(
+            `--${changeBoundary}`,
+            'Content-Type: application/http',
+            'Content-Transfer-Encoding: binary',
+            `Content-ID: ${index + 1}`,
+            '',
+            `PATCH /api/data/v9.2/gr_jobs(${job.gr_jobid}) HTTP/1.1`,
+            'Accept: application/json',
+            'Content-Type: application/json; type=entry',
+            `If-Match: ${job['@odata.etag']}`,
+            '',
+            JSON.stringify({ gr_jobnumber: jobNumber.trim() }),
+            '',
+        )
+    })
+    lines.push(`--${changeBoundary}--`, `--${batchBoundary}--`, '')
+
+    const response = await fetch(`${DATAVERSE_URL}/$batch`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': `multipart/mixed; boundary=${batchBoundary}`,
+            Accept: 'application/json',
+            'OData-MaxVersion': '4.0',
+            'OData-Version': '4.0',
+        },
+        body: lines.join('\r\n'),
+    })
+    const responseBody = await response.text()
+    const statuses = [...responseBody.matchAll(/HTTP\/1\.1\s+(\d{3})/g)].map((match) => Number(match[1]))
+    const failure = statuses.find((status) => status >= 400)
+    if (!response.ok || failure) {
+        if ((failure ?? response.status) === 412) {
+            throw new Error('One or more Jobs changed elsewhere. Reload and paste the numbers again.')
+        }
+        throw new Error('Dataverse rejected the atomic Job number update.')
+    }
+    if (statuses.filter((status) => status >= 200 && status < 300).length !== allocations.length) {
+        throw new Error('Dataverse did not confirm every Job number update.')
+    }
+}
+
 export async function updateJobOfficeAttention(
     token: string,
     jobId: string,
