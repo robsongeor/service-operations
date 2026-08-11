@@ -93,6 +93,13 @@ token path as the rest of the office application. Dataverse directly enforces th
 manager-role boundary for bounded Review/child reads, File downloads and ETag-protected Review +
 Activity change sets. No interactive authentication is initiated by the feature hook or service.
 
+Chargeable Invoice supporting-photo selection, metadata creation, File upload and finalisation use
+the signed-in manager's delegated Dataverse token directly. The client validates image signatures
+and limits before creating Pending Review Documents; Dataverse permissions remain the authorization
+boundary. Files receive no anonymous URL, and only Complete documents are downloadable. Technician
+photo requests use a validated `mailto:` URL that opens an editable local draft only; prepared-on
+is not delivery proof.
+
 ## Administrative and provisioning sessions
 
 Existing schema scripts commonly create a `CrmServiceClient` with `LoginPrompt=Auto`. A

@@ -130,6 +130,14 @@ and server validation. It does not change the organisation limit or silently com
 PDFs. Any future file-limit or photo-compression change requires separate approval and reverifies
 existing File workflows.
 
+Supporting-photo upload is manager-only and uses the delegated office-user token. A Review may
+retain at most 20 Complete Supporting Photo documents. JPG, PNG, HEIC and HEIF inputs require a
+matching byte signature, MIME type and extension; SHA-256 Source Snapshot Hash prevents duplicate
+content in one Review. Metadata begins Pending before the File write. One later Review-ETag
+changeset marks all staged rows Complete, records Photos Received and appends Activity. Known
+failures become Failed; an uncertain finalisation is reconciled before any deliberate retry.
+Pending/Failed documents are visible as recovery evidence but are not downloadable.
+
 ## Review Activity
 
 Schema `gr_ChargeableInvoiceActivity`; entity set `gr_chargeableinvoiceactivities`. Require

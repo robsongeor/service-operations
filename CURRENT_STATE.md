@@ -14,10 +14,11 @@ Branch: `codex/chargeable-invoice-review`
 
 ## Unfinished work
 
-- Chargeable Invoice Review Phases 1–4 and the Phase 5 revised-invoice comparison slice are
-  complete locally. Supporting documents and unsent handoffs remain, followed by explicitly gated
-  role assignment and release validation. The approved staging columns are provisioned and
-  verified; release flags remain disabled and the manager role remains unassigned.
+- Chargeable Invoice Review Phases 1–4 plus Phase 5 revised-invoice comparison, supporting-photo
+  upload and unsent technician photo-request handoff are complete locally. Correction instructions
+  and approval-PDF/PO work remain, followed by explicitly gated role assignment and release
+  validation. The approved staging columns are provisioned and verified; release flags remain
+  disabled and the manager role remains unassigned.
 - Approve and provision the minimum Site Check deletion privileges, then smoke-test the
   in-app occurrence deletion action as the intended Service Operations role.
 
@@ -526,3 +527,13 @@ Correction outcomes and a Revision Compared Activity commit atomically; unknown 
 existing immutable Review/revision reconciliation. Matched rows identify their Revision, Not Made
 rows remain unresolved for the next revision, and both states are visible in the workspace. No live
 invoice was imported, no role was assigned, no release flag was enabled and no communication was sent.
+
+The next Phase 5 slice is also complete locally. An opened workspace loads a bounded active
+Mechanic list; deliberate technician selection, photo-request preparation and their Activities use
+ETag-protected Review transitions. Prepare opens a validated editable `mailto:` draft and records
+preparation only. Supporting-photo upload accepts at most 20 retained JPG/PNG/HEIC/HEIF files per
+Review at 5 MiB each, verifies byte signatures and SHA-256 duplicates, stages Review Documents,
+writes File bytes, then atomically completes the documents, records Photos Received and appends
+Activity. Known failures retain safe Failed staging; uncertain finalisation reconciles without
+automatic retry. Only Complete documents download. Focused tests cover mail composition, validation,
+atomic finalisation and failed staging. No live file was uploaded and no email was sent.

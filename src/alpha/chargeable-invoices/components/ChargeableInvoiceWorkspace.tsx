@@ -9,7 +9,9 @@ import { getReadyToProcessBlockers } from '../domain/chargeableInvoiceState.ts'
 import {
     CHARGEABLE_INVOICE_LINE_TYPES,
     CHARGEABLE_INVOICE_CORRECTION_COMPARISONS,
+    CHARGEABLE_INVOICE_DOCUMENT_TYPES,
     CHARGEABLE_INVOICE_PHOTO_STATUSES,
+    CHARGEABLE_INVOICE_UPLOAD_STATUSES,
     CHARGEABLE_INVOICE_WAITING_ON,
     type ChargeableInvoiceDocument,
     type ChargeableInvoiceWaitingOn,
@@ -28,6 +30,9 @@ type Props = {
     onStart: () => Promise<void>
     onSaveWaiting: (waitingOn: ChargeableInvoiceWaitingOn | null, note: string) => Promise<void>
     onSaveRequirements: (draft: ChargeableInvoiceRequirementsDraft) => Promise<void>
+    onSavePhotoTechnician: (technicianId: string) => Promise<void>
+    onPreparePhotoRequest: () => Promise<string>
+    onUploadPhotos: (files: File[]) => Promise<void>
     onMarkReady: () => Promise<void>
     onMarkDoNotProcess: (reason: string) => Promise<void>
     onAddCorrection: (draft: ChargeableInvoiceCorrectionDraft) => Promise<void>
@@ -108,8 +113,55 @@ function RequirementsEditor({ workspace, saving, onSave }: {
     </>
 }
 
+function PhotoWorkflow({ workspace, saving, onSaveTechnician, onPrepare, onUpload }: {
+    workspace: Workspace
+    saving: boolean
+    onSaveTechnician: (technicianId: string) => Promise<void>
+    onPrepare: () => Promise<string>
+    onUpload: (files: File[]) => Promise<void>
+}) {
+    const review = workspace.review
+    const [technicianId, setTechnicianId] = useState(review._gr_photorequesttechnician_value ?? '')
+    const [files, setFiles] = useState<File[]>([])
+    const [inputKey, setInputKey] = useState(0)
+    const selected = workspace.technicians.find((technician) => technician.gr_mechanicid === technicianId)
+    const saved = review._gr_photorequesttechnician_value === technicianId && Boolean(selected)
+    const received = workspace.documents.filter((document) =>
+        document.gr_documenttype === CHARGEABLE_INVOICE_DOCUMENT_TYPES.SUPPORTING_PHOTO
+        && document.gr_uploadstatus === CHARGEABLE_INVOICE_UPLOAD_STATUSES.COMPLETE).length
+    const disabled = saving || review.gr_photosrequired !== true || review.gr_disposition != null
+    const prepare = async () => {
+        try { window.location.href = await onPrepare() } catch { /* workspace error contains the safe detail */ }
+    }
+    const upload = async () => {
+        try {
+            await onUpload(files)
+            setFiles([])
+            setInputKey((current) => current + 1)
+        } catch { /* workspace error contains the safe detail */ }
+    }
+    if (review.gr_photosrequired !== true) return <p>Record that supporting photos are required to enable this workflow.</p>
+    return <>
+        <div className="chargeable-decision-grid">
+            <label className="chargeable-field">Photo-request technician<select value={technicianId} disabled={disabled} onChange={(event) => setTechnicianId(event.currentTarget.value)}><option value="">Choose technician</option>{workspace.technicians.map((technician) => <option key={technician.gr_mechanicid} value={technician.gr_mechanicid}>{technician.gr_name}{technician.gr_email ? '' : ' — no email'}</option>)}</select></label>
+            <div className="chargeable-field"><span>Saved selection</span><strong>{saved ? selected?.gr_name : 'Not saved'}</strong></div>
+            <div className="chargeable-field"><span>Request prepared</span><strong>{formatDateTime(review.gr_photorequestpreparedon)}</strong></div>
+            <div className="chargeable-field"><span>Photos retained</span><strong>{received}</strong></div>
+        </div>
+        <div className="chargeable-action-row">
+            <button type="button" className="chargeable-secondary" disabled={disabled || !selected || saved} onClick={() => void onSaveTechnician(technicianId)}>Save technician</button>
+            <button type="button" className="chargeable-secondary" disabled={disabled || !saved || !selected?.gr_email} onClick={() => void prepare()}>Prepare photo-request email</button>
+        </div>
+        <p className="chargeable-evidence-note">Preparing opens an editable email draft in your email application. It does not send or prove delivery.</p>
+        <label className="chargeable-field">Supporting photos<input key={inputKey} type="file" multiple accept="image/jpeg,image/png,image/heic,image/heif,.jpg,.jpeg,.png,.heic,.heif" disabled={disabled || !saved} onChange={(event) => setFiles(Array.from(event.currentTarget.files ?? []))} /></label>
+        {files.length > 0 && <p>{files.length} photo{files.length === 1 ? '' : 's'} selected. Each file must be 5 MiB or smaller; a review may retain up to 20.</p>}
+        <button type="button" className="chargeable-secondary" disabled={disabled || !saved || files.length === 0} onClick={() => void upload()}>{saving ? 'Uploading…' : 'Upload selected photos'}</button>
+    </>
+}
+
 export default function ChargeableInvoiceWorkspace({
     workspace, loading, saving, error, onStart, onSaveWaiting, onSaveRequirements,
+    onSavePhotoTechnician, onPreparePhotoRequest, onUploadPhotos,
     onMarkReady, onMarkDoNotProcess, onAddCorrection, onLoadDocument, onDownload, onClose,
 }: Props) {
     const [tab, setTab] = useState<Tab>('summary')
@@ -198,6 +250,9 @@ export default function ChargeableInvoiceWorkspace({
                 <EditDrawerSection title="PO and supporting photos">
                     <RequirementsEditor key={`${review.gr_chargeableinvoicereviewid}-requirements-${review['@odata.etag']}`} workspace={workspace} saving={saving} onSave={onSaveRequirements} />
                 </EditDrawerSection>
+                <EditDrawerSection title="Photo request and uploads">
+                    <PhotoWorkflow key={`${review.gr_chargeableinvoicereviewid}-photos-${review['@odata.etag']}`} workspace={workspace} saving={saving} onSaveTechnician={onSavePhotoTechnician} onPrepare={onPreparePhotoRequest} onUpload={onUploadPhotos} />
+                </EditDrawerSection>
             </>}
         </div>
 
@@ -226,7 +281,7 @@ export default function ChargeableInvoiceWorkspace({
                     {review?.gr_reviewstartedon && review.gr_disposition == null && <button type="button" className="chargeable-secondary" disabled={saving} onClick={() => setShowCorrectionDialog(true)}>Add correction</button>}
                 </EditDrawerSection>
                 <EditDrawerSection title="Documents">
-                    <ul className="chargeable-document-list">{workspace?.documents.map((document) => <li key={document.gr_chargeableinvoicedocumentid}><span><strong>{document.gr_filename || document.gr_name}</strong><small>{(document.gr_bytecount / 1024).toFixed(0)} KiB</small></span><button type="button" className="chargeable-secondary" onClick={() => void onDownload(document)}>Download</button></li>)}</ul>
+                    <ul className="chargeable-document-list">{workspace?.documents.map((document) => <li key={document.gr_chargeableinvoicedocumentid}><span><strong>{document.gr_filename || document.gr_name}</strong><small>{(document.gr_bytecount / 1024).toFixed(0)} KiB · {document.gr_uploadstatus === CHARGEABLE_INVOICE_UPLOAD_STATUSES.COMPLETE ? 'Complete' : document.gr_uploadstatus === CHARGEABLE_INVOICE_UPLOAD_STATUSES.FAILED ? 'Failed' : 'Pending'}</small></span><button type="button" className="chargeable-secondary" disabled={document.gr_uploadstatus !== CHARGEABLE_INVOICE_UPLOAD_STATUSES.COMPLETE} onClick={() => void onDownload(document)}>Download</button></li>)}</ul>
                 </EditDrawerSection>
             </>}
         </div>

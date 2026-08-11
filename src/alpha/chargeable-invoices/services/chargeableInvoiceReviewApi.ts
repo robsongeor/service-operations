@@ -3,12 +3,15 @@ import {
     CHARGEABLE_INVOICE_DISPOSITIONS,
     CHARGEABLE_INVOICE_PHOTO_STATUSES,
     CHARGEABLE_INVOICE_CORRECTION_COMPARISONS,
+    CHARGEABLE_INVOICE_DOCUMENT_TYPES,
+    CHARGEABLE_INVOICE_UPLOAD_STATUSES,
     type ChargeableInvoiceActivity,
     type ChargeableInvoiceCorrection,
     type ChargeableInvoiceDocument,
     type ChargeableInvoiceLine,
     type ChargeableInvoiceReview,
     type ChargeableInvoiceRevision,
+    type ChargeableInvoiceTechnician,
     type ChargeableInvoiceWaitingOn,
     type ChargeableInvoiceWorkspace,
 } from '../types/chargeableInvoice.types.ts'
@@ -22,10 +25,14 @@ import {
     buildChargeableInvoiceCorrectionFields,
     type ChargeableInvoiceCorrectionDraft,
 } from '../domain/chargeableInvoiceCorrectionDraft.ts'
+import { buildMailtoUrl } from '../../jobs/utils/technicianMailto.ts'
 
 const API_URL = `${import.meta.env?.VITE_DATAVERSE_URL ?? 'https://invalid.local'}/api/data/v9.2`
 const MAX_QUEUE_RECORDS = 500
 const MAX_DETAIL_RECORDS = 500
+const MAX_TECHNICIANS = 200
+export const MAX_CHARGEABLE_INVOICE_PHOTOS = 20
+export const MAX_CHARGEABLE_INVOICE_PHOTO_BYTES = 5 * 1024 * 1024
 
 function headers(accessToken: string) {
     return { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' }
@@ -68,6 +75,7 @@ const reviewSelect = [
     'gr_greentreereference', 'gr_matchstatus', 'gr_importstatus', 'gr_reviewstartedon',
     'gr_waitingon', 'gr_waitingnote', 'gr_porequired', 'gr_ponumber', 'gr_poreceivedon',
     'gr_photosrequired', 'gr_photosstatus', 'gr_photorequestpreparedon',
+    '_gr_photorequesttechnician_value',
     'gr_porequestpreparedon', 'gr_disposition', 'gr_dispositionon', 'gr_dispositionreason',
     '_gr_job_value', '_gr_customer_value', '_gr_site_value', '_gr_equipment_value',
     '_gr_currentrevision_value', 'createdon', 'modifiedon',
@@ -108,7 +116,11 @@ function detailUrl(entitySet: string, select: string, reviewId: string, orderby?
 }
 
 export async function fetchChargeableInvoiceWorkspace(accessToken: string, reviewId: string): Promise<ChargeableInvoiceWorkspace> {
-    const [review, revisions, corrections, documents, activities] = await Promise.all([
+    const technicianUrl = new URL(`${API_URL}/gr_mechanics`)
+    technicianUrl.searchParams.set('$select', 'gr_mechanicid,gr_name,gr_email,statecode')
+    technicianUrl.searchParams.set('$filter', 'statecode eq 0')
+    technicianUrl.searchParams.set('$orderby', 'gr_name asc')
+    const [review, revisions, corrections, documents, activities, technicians] = await Promise.all([
         fetchReview(accessToken, reviewId),
         readAll<ChargeableInvoiceRevision>(accessToken, detailUrl('gr_chargeableinvoicerevisions', [
             'gr_chargeableinvoicerevisionid', 'gr_name', '_gr_review_value', '_gr_sourcedocument_value',
@@ -135,6 +147,7 @@ export async function fetchChargeableInvoiceWorkspace(accessToken: string, revie
             '_gr_document_value', '_gr_correction_value', 'gr_event', 'gr_detail', 'gr_occurredon',
             'createdon', '_createdby_value',
         ].join(','), reviewId, 'gr_occurredon desc'), MAX_DETAIL_RECORDS),
+        readAll<ChargeableInvoiceTechnician>(accessToken, technicianUrl.toString(), MAX_TECHNICIANS),
     ])
     if (revisions.length > 50) throw new Error('This review has more than 50 revisions and cannot be opened safely.')
     const revisionIds = revisions.map((item) => item.gr_chargeableinvoicerevisionid)
@@ -145,7 +158,7 @@ export async function fetchChargeableInvoiceWorkspace(accessToken: string, revie
         url.searchParams.set('$orderby', 'gr_sortorder asc')
         return url.toString()
     })(), MAX_DETAIL_RECORDS) : []
-    return { review, revisions, lines, corrections, documents, activities }
+    return { review, revisions, lines, corrections, documents, activities, technicians }
 }
 
 type ReviewTransition = {
@@ -346,7 +359,242 @@ export async function createChargeableInvoiceCorrection(
     return fetchChargeableInvoiceWorkspace(accessToken, review.gr_chargeableinvoicereviewid)
 }
 
+function assertPhotoWorkflow(review: ChargeableInvoiceReview) {
+    if (!review.gr_reviewstartedon) throw new Error('Start the review before requesting or uploading photos.')
+    if (review.gr_disposition != null) throw new Error('Photos cannot be changed on a historical review.')
+    if (review.gr_photosrequired !== true) throw new Error('Record that supporting photos are required before continuing.')
+}
+
+export function buildChargeableInvoicePhotoRequestMailto(
+    review: ChargeableInvoiceReview,
+    technician: ChargeableInvoiceTechnician,
+) {
+    const firstName = technician.gr_name.trim().split(/\s+/)[0] || 'there'
+    const equipment = [review.gr_Equipment?.gr_make, review.gr_Equipment?.gr_model].filter(Boolean).join(' ').trim()
+    const subject = `Photos required - Job ${review.gr_Job?.gr_jobnumber || review.gr_greentreereference} - Invoice ${review.gr_invoicenumber}`
+    const body = [
+        `Hi ${firstName},`, '',
+        'Please reply with the supporting photos for the completed work below.', '',
+        `Job: ${review.gr_Job?.gr_jobnumber || review.gr_greentreereference}`,
+        `Invoice: ${review.gr_invoicenumber}`,
+        `Customer: ${review.gr_Customer?.gr_name || 'Not recorded'}`,
+        `Site: ${review.gr_Site?.gr_name || 'Not recorded'}`,
+        `Equipment: ${[equipment, review.gr_Equipment?.gr_fleet ? `Fleet ${review.gr_Equipment.gr_fleet}` : '', review.gr_Equipment?.gr_serial ? `Serial ${review.gr_Equipment.gr_serial}` : ''].filter(Boolean).join(' - ') || 'Not recorded'}`,
+        review.gr_Job?.gr_description ? `Work: ${review.gr_Job.gr_description.replace(/\s+/g, ' ').trim().slice(0, 600)}` : '', '',
+        'This draft has not been sent automatically.', '', 'Thanks',
+    ].filter((line, index, all) => line !== '' || all[index - 1] !== '').join('\n')
+    return buildMailtoUrl({ recipient: technician.gr_email || '', subject, body })
+}
+
+export function saveChargeableInvoicePhotoTechnician(
+    accessToken: string,
+    review: ChargeableInvoiceReview,
+    technician: ChargeableInvoiceTechnician,
+) {
+    assertPhotoWorkflow(review)
+    if (technician.statecode !== 0) throw new Error('Choose an active technician.')
+    if (!technician.gr_mechanicid) throw new Error('Choose a technician.')
+    return applyTransition(accessToken, review, {
+        fields: { 'gr_PhotoRequestTechnician@odata.bind': `/gr_mechanics(${technician.gr_mechanicid})` },
+        event: 122830006,
+        name: 'Photo request technician selected',
+        detail: `Technician selected: ${technician.gr_name.trim()}.`,
+    })
+}
+
+export async function prepareChargeableInvoicePhotoRequest(
+    accessToken: string,
+    workspace: ChargeableInvoiceWorkspace,
+) {
+    const review = workspace.review
+    assertPhotoWorkflow(review)
+    const technician = workspace.technicians.find((item) => item.gr_mechanicid.toLowerCase()
+        === review._gr_photorequesttechnician_value?.toLowerCase())
+    if (!technician) throw new Error('Select and save an active technician before preparing the photo request.')
+    const mailto = buildChargeableInvoicePhotoRequestMailto(review, technician)
+    const next = await applyTransition(accessToken, review, {
+        fields: {
+            gr_photorequestpreparedon: new Date().toISOString(),
+            gr_photosstatus: CHARGEABLE_INVOICE_PHOTO_STATUSES.REQUESTED,
+        },
+        event: 122830007,
+        name: 'Photo request prepared',
+        detail: `An unsent email draft was prepared for ${technician.gr_name.trim()}.`,
+    })
+    return { workspace: next, mailto }
+}
+
+type PreparedSupportingPhoto = {
+    file: File
+    contentType: 'image/jpeg' | 'image/png' | 'image/heic' | 'image/heif'
+    hash: string
+}
+
+function detectedPhotoType(bytes: Uint8Array): PreparedSupportingPhoto['contentType'] | null {
+    if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg'
+    if (bytes.length >= 8 && [137, 80, 78, 71, 13, 10, 26, 10].every((value, index) => bytes[index] === value)) return 'image/png'
+    if (bytes.length >= 12 && String.fromCharCode(...bytes.slice(4, 8)) === 'ftyp') {
+        const brand = String.fromCharCode(...bytes.slice(8, 12)).toLowerCase()
+        if (['heic', 'heix', 'hevc', 'hevx'].includes(brand)) return 'image/heic'
+        if (['mif1', 'msf1', 'heif'].includes(brand)) return 'image/heif'
+    }
+    return null
+}
+
+function allowedExtension(fileName: string, contentType: PreparedSupportingPhoto['contentType']) {
+    const extension = fileName.trim().toLowerCase().match(/\.[^.]+$/)?.[0]
+    return contentType === 'image/jpeg' ? extension === '.jpg' || extension === '.jpeg'
+        : contentType === 'image/png' ? extension === '.png'
+            : contentType === 'image/heic' ? extension === '.heic'
+                : extension === '.heif'
+}
+
+async function sha256Hex(buffer: ArrayBuffer) {
+    const digest = await crypto.subtle.digest('SHA-256', buffer)
+    return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+export async function validateChargeableInvoiceSupportingPhotos(
+    files: File[],
+    documents: ChargeableInvoiceDocument[],
+) {
+    if (!files.length) throw new Error('Choose at least one supporting photo.')
+    const existing = documents.filter((document) => document.gr_documenttype === CHARGEABLE_INVOICE_DOCUMENT_TYPES.SUPPORTING_PHOTO
+        && document.gr_uploadstatus === CHARGEABLE_INVOICE_UPLOAD_STATUSES.COMPLETE)
+    if (files.length + existing.length > MAX_CHARGEABLE_INVOICE_PHOTOS) {
+        throw new Error(`A review may retain at most ${MAX_CHARGEABLE_INVOICE_PHOTOS} supporting photos.`)
+    }
+    const hashes = new Set(existing.map((document) => document.gr_sourcesnapshothash).filter(Boolean))
+    const prepared: PreparedSupportingPhoto[] = []
+    for (const file of files) {
+        if (!file.name.trim() || file.name.length > 255 || file.size < 1 || file.size > MAX_CHARGEABLE_INVOICE_PHOTO_BYTES) {
+            throw new Error('Each supporting photo must have a valid name and be no larger than 5 MiB.')
+        }
+        const buffer = await file.arrayBuffer()
+        if (buffer.byteLength !== file.size) throw new Error('A supporting photo changed while it was being validated.')
+        const contentType = detectedPhotoType(new Uint8Array(buffer))
+        if (!contentType || !allowedExtension(file.name, contentType)
+            || file.type && file.type.toLowerCase() !== contentType) {
+            throw new Error('Supporting photos must be valid JPG, PNG, HEIC or HEIF files with matching extensions.')
+        }
+        const hash = await sha256Hex(buffer)
+        if (hashes.has(hash)) throw new Error('The same supporting photo is already present or selected more than once.')
+        hashes.add(hash)
+        prepared.push({ file, contentType, hash })
+    }
+    return prepared
+}
+
+function photoFinalizationBatch(review: ChargeableInvoiceReview, documentIds: string[]) {
+    if (!review['@odata.etag']) throw new Error('Refresh the invoice review before uploading photos.')
+    const boundary = `batch_${crypto.randomUUID().replaceAll('-', '')}`
+    const changeset = `changeset_${crypto.randomUUID().replaceAll('-', '')}`
+    const requests: string[] = []
+    const add = (contentId: number, method: string, path: string, body: Record<string, unknown>, extraHeaders: string[] = []) => requests.push([
+        `--${changeset}`, 'Content-Type: application/http', 'Content-Transfer-Encoding: binary', `Content-ID: ${contentId}`, '',
+        `${method} ${path} HTTP/1.1`, 'Content-Type: application/json;type=entry', ...extraHeaders, '', JSON.stringify(body),
+    ].join('\r\n'))
+    documentIds.forEach((id, index) => add(index + 1, 'PATCH', `gr_chargeableinvoicedocuments(${id})`, {
+        gr_uploadstatus: CHARGEABLE_INVOICE_UPLOAD_STATUSES.COMPLETE,
+        gr_uploaderror: null,
+    }))
+    const reviewContentId = documentIds.length + 1
+    add(reviewContentId, 'PATCH', `gr_chargeableinvoicereviews(${review.gr_chargeableinvoicereviewid})`, {
+        gr_photosstatus: CHARGEABLE_INVOICE_PHOTO_STATUSES.RECEIVED,
+    }, [`If-Match: ${review['@odata.etag']}`])
+    add(reviewContentId + 1, 'POST', 'gr_chargeableinvoiceactivities', {
+        gr_name: 'Photos received',
+        'gr_Review@odata.bind': `/gr_chargeableinvoicereviews(${review.gr_chargeableinvoicereviewid})`,
+        ...(review._gr_currentrevision_value ? { 'gr_Revision@odata.bind': `/gr_chargeableinvoicerevisions(${review._gr_currentrevision_value})` } : {}),
+        gr_event: 122830008,
+        gr_detail: `${documentIds.length} supporting photo${documentIds.length === 1 ? '' : 's'} uploaded.`,
+        gr_occurredon: new Date().toISOString(),
+    })
+    return {
+        boundary,
+        payload: [`--${boundary}`, `Content-Type: multipart/mixed;boundary=${changeset}`, '', ...requests, `--${changeset}--`, `--${boundary}--`, ''].join('\r\n'),
+    }
+}
+
+async function markPhotoDocumentsFailed(accessToken: string, documentIds: string[]) {
+    await Promise.all(documentIds.map((id) => fetch(`${API_URL}/gr_chargeableinvoicedocuments(${id})`, {
+        method: 'PATCH', headers: { ...headers(accessToken), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            gr_uploadstatus: CHARGEABLE_INVOICE_UPLOAD_STATUSES.FAILED,
+            gr_uploaderror: 'Supporting photo upload did not complete. Select the files and retry.',
+        }),
+    }).catch(() => null)))
+}
+
+export async function uploadChargeableInvoiceSupportingPhotos(
+    accessToken: string,
+    workspace: ChargeableInvoiceWorkspace,
+    files: File[],
+) {
+    const review = workspace.review
+    assertPhotoWorkflow(review)
+    if (!review._gr_photorequesttechnician_value || !workspace.technicians.some((technician) =>
+        technician.gr_mechanicid.toLowerCase() === review._gr_photorequesttechnician_value?.toLowerCase())) {
+        throw new Error('Select and save an active photo-request technician before uploading photos.')
+    }
+    const prepared = await validateChargeableInvoiceSupportingPhotos(files, workspace.documents)
+    const documentIds: string[] = []
+    try {
+        for (const photo of prepared) {
+            const create = await fetch(`${API_URL}/gr_chargeableinvoicedocuments`, {
+                method: 'POST', headers: { ...headers(accessToken), 'Content-Type': 'application/json', Prefer: 'return=representation' },
+                body: JSON.stringify({
+                    gr_name: photo.file.name.trim(),
+                    'gr_Review@odata.bind': `/gr_chargeableinvoicereviews(${review.gr_chargeableinvoicereviewid})`,
+                    ...(review._gr_currentrevision_value ? { 'gr_Revision@odata.bind': `/gr_chargeableinvoicerevisions(${review._gr_currentrevision_value})` } : {}),
+                    gr_documenttype: CHARGEABLE_INVOICE_DOCUMENT_TYPES.SUPPORTING_PHOTO,
+                    gr_contenttype: photo.contentType,
+                    gr_bytecount: photo.file.size,
+                    gr_sourcesnapshothash: photo.hash,
+                    gr_uploadstatus: CHARGEABLE_INVOICE_UPLOAD_STATUSES.PENDING,
+                }),
+            })
+            if (!create.ok) throw safeError(create.status, 'creating supporting photo metadata')
+            const document = await create.json() as { gr_chargeableinvoicedocumentid?: string }
+            if (!document.gr_chargeableinvoicedocumentid) throw new Error('Dataverse returned invalid supporting photo metadata.')
+            documentIds.push(document.gr_chargeableinvoicedocumentid)
+            const upload = await fetch(`${API_URL}/gr_chargeableinvoicedocuments(${document.gr_chargeableinvoicedocumentid})/gr_file?x-ms-file-name=${encodeURIComponent(photo.file.name.trim())}`, {
+                method: 'PATCH', headers: { ...headers(accessToken), 'Content-Type': 'application/octet-stream' }, body: photo.file,
+            })
+            if (!upload.ok) throw safeError(upload.status, 'uploading a supporting photo')
+        }
+    } catch (error) {
+        await markPhotoDocumentsFailed(accessToken, documentIds)
+        throw error
+    }
+    const batch = photoFinalizationBatch(review, documentIds)
+    let response: Response
+    try {
+        response = await fetch(`${API_URL}/$batch`, {
+            method: 'POST', headers: { ...headers(accessToken), 'Content-Type': `multipart/mixed;boundary=${batch.boundary}` }, body: batch.payload,
+        })
+    } catch {
+        try {
+            const reconciled = await fetchChargeableInvoiceWorkspace(accessToken, review.gr_chargeableinvoicereviewid)
+            if (documentIds.every((id) => reconciled.documents.some((document) => document.gr_chargeableinvoicedocumentid === id
+                && document.gr_uploadstatus === CHARGEABLE_INVOICE_UPLOAD_STATUSES.COMPLETE))
+                && reconciled.review.gr_photosstatus === CHARGEABLE_INVOICE_PHOTO_STATUSES.RECEIVED) return reconciled
+        } catch { /* preserve unknown outcome */ }
+        throw new Error('The supporting photo upload outcome is unknown. Refresh the review before retrying.')
+    }
+    const responseText = await response.text()
+    const nestedFailure = [...responseText.matchAll(/HTTP\/1\.1 (\d{3})/g)].map((match) => Number(match[1])).find((status) => status >= 400)
+    if (!response.ok || nestedFailure) {
+        await markPhotoDocumentsFailed(accessToken, documentIds)
+        throw safeError(nestedFailure || response.status, 'finalising supporting photos')
+    }
+    return fetchChargeableInvoiceWorkspace(accessToken, review.gr_chargeableinvoicereviewid)
+}
+
 export async function downloadChargeableInvoiceDocument(accessToken: string, document: ChargeableInvoiceDocument) {
+    if (document.gr_uploadstatus !== CHARGEABLE_INVOICE_UPLOAD_STATUSES.COMPLETE) {
+        throw new Error('Only complete invoice documents can be downloaded.')
+    }
     const response = await fetch(`${API_URL}/gr_chargeableinvoicedocuments(${document.gr_chargeableinvoicedocumentid})/gr_file/$value`, {
         headers: headers(accessToken),
     })
@@ -356,4 +604,4 @@ export async function downloadChargeableInvoiceDocument(accessToken: string, doc
     return blob
 }
 
-export const chargeableInvoiceReviewApiTest = { trustedNextLink, transitionBatch }
+export const chargeableInvoiceReviewApiTest = { trustedNextLink, transitionBatch, photoFinalizationBatch, detectedPhotoType }

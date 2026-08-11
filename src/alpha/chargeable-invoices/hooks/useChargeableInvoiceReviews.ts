@@ -10,9 +10,12 @@ import {
     fetchChargeableInvoiceWorkspace,
     markChargeableInvoiceDoNotProcess,
     markChargeableInvoiceReady,
+    prepareChargeableInvoicePhotoRequest,
     saveChargeableInvoiceRequirements,
+    saveChargeableInvoicePhotoTechnician,
     saveChargeableInvoiceWaiting,
     startChargeableInvoiceReview,
+    uploadChargeableInvoiceSupportingPhotos,
 } from '../services/chargeableInvoiceReviewApi.ts'
 import type {
     ChargeableInvoiceDocument,
@@ -162,6 +165,54 @@ export function useChargeableInvoiceReviews() {
         }
     }, [accessToken, applyWorkspace, workspace])
 
+    const savePhotoTechnician = useCallback(async (technicianId: string) => {
+        if (!workspace) return
+        const technician = workspace.technicians.find((item) => item.gr_mechanicid === technicianId)
+        if (!technician) {
+            setWorkspaceError('Choose an active technician.')
+            return
+        }
+        setIsSaving(true)
+        setWorkspaceError('')
+        try {
+            applyWorkspace(await saveChargeableInvoicePhotoTechnician(await accessToken(), workspace.review, technician))
+        } catch (error) {
+            setWorkspaceError(error instanceof Error ? error.message : 'The photo-request technician could not be saved.')
+        } finally {
+            setIsSaving(false)
+        }
+    }, [accessToken, applyWorkspace, workspace])
+
+    const preparePhotoRequest = useCallback(async () => {
+        if (!workspace) throw new Error('The invoice review workspace is unavailable.')
+        setIsSaving(true)
+        setWorkspaceError('')
+        try {
+            const prepared = await prepareChargeableInvoicePhotoRequest(await accessToken(), workspace)
+            applyWorkspace(prepared.workspace)
+            return prepared.mailto
+        } catch (error) {
+            setWorkspaceError(error instanceof Error ? error.message : 'The photo request could not be prepared.')
+            throw error
+        } finally {
+            setIsSaving(false)
+        }
+    }, [accessToken, applyWorkspace, workspace])
+
+    const uploadPhotos = useCallback(async (files: File[]) => {
+        if (!workspace) throw new Error('The invoice review workspace is unavailable.')
+        setIsSaving(true)
+        setWorkspaceError('')
+        try {
+            applyWorkspace(await uploadChargeableInvoiceSupportingPhotos(await accessToken(), workspace, files))
+        } catch (error) {
+            setWorkspaceError(error instanceof Error ? error.message : 'The supporting photos could not be uploaded.')
+            throw error
+        } finally {
+            setIsSaving(false)
+        }
+    }, [accessToken, applyWorkspace, workspace])
+
     const loadDocument = useCallback(async (document: ChargeableInvoiceDocument) => {
         setWorkspaceError('')
         try {
@@ -196,5 +247,6 @@ export function useChargeableInvoiceReviews() {
         reviews, counts, selectedId, workspace, isLoading, isLoadingWorkspace, isSaving,
         loadError, workspaceError, refresh, openReview, closeReview, startReview, saveWaiting,
         loadDocument, downloadDocument, saveRequirements, markReady, markDoNotProcess, addCorrection,
+        savePhotoTechnician, preparePhotoRequest, uploadPhotos,
     }
 }

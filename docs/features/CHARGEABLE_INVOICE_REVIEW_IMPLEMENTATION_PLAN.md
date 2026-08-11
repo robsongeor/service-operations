@@ -303,8 +303,8 @@ stale workspace cannot append a correction. New corrections begin Outstanding an
 
 ### Phase 5 — revised invoices, documents and correction comparison
 
-- **Status:** revised-invoice comparison slice complete locally; supporting-document upload,
-  technician `mailto:` and correction-instruction handoff remain.
+- **Status:** revised-invoice comparison, supporting-photo upload and technician `mailto:` slices
+  complete locally; correction-instruction handoff remains.
 - **Scope:** revised upload, diff classifications, photo upload, technician `mailto:`, correction instructions.
 - **Dependencies/areas/schema:** Phases 3–4; parser/diff/document/workspace services; none.
 - **Acceptance/tests/docs:** every PDF/value retained; classifications visible; email unsent;
@@ -320,6 +320,21 @@ ETag-protected, and the immutable Review + revision-number key remains the unkno
 reconciliation boundary. A Matched outcome records the new Revision lookup; Not Made remains
 unresolved and is re-evaluated by every later revised import. The workspace shows the matched
 revision number or that the correction was not made in the latest revision.
+
+The workspace reads at most 200 active Mechanics only when a review is opened. A manager must
+deliberately save the photo-request technician before preparing the request or uploading photos;
+selection appends Technician Selected Activity under the Review ETag. Prepare photo request
+validates the selected technician email, records Requested/prepared-on plus Photo Request Prepared
+Activity atomically, then opens an editable `mailto:` draft. It never sends or records delivery.
+
+A review retains at most 20 Complete supporting photos. Each selected JPG, PNG, HEIC or HEIF must
+be at most 5 MiB and pass byte-signature, MIME/extension and SHA-256 duplicate checks. Upload uses
+delegated Dataverse access: create a Pending Review Document, write its File bytes, then atomically
+mark every staged Document Complete, set Photos Received and append Photos Received Activity under
+the Review ETag. Known failures retain safe Failed metadata for deliberate retry. A transport error
+during finalisation reconciles the authoritative Review/Documents and otherwise reports an unknown
+outcome without retrying. Only Complete documents can be downloaded. No Job Photo row, Job status
+write, anonymous URL or automatic communication is created.
 
 ### Phase 6 — PO approval documents and handoff
 

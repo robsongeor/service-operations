@@ -6,6 +6,7 @@ import {
     CHARGEABLE_INVOICE_CORRECTION_COMPARISONS,
     CHARGEABLE_INVOICE_CORRECTION_TYPES,
     CHARGEABLE_INVOICE_DISPOSITIONS,
+    CHARGEABLE_INVOICE_DOCUMENT_TYPES,
     CHARGEABLE_INVOICE_IMPORT_STATUSES,
     CHARGEABLE_INVOICE_LINE_TYPES,
     CHARGEABLE_INVOICE_PHOTO_STATUSES,
@@ -31,7 +32,12 @@ import {
 import { compareOutstandingCorrections } from '../src/alpha/chargeable-invoices/domain/chargeableInvoiceRevisionComparison.ts'
 import { buildChargeableInvoiceCorrectionFields } from '../src/alpha/chargeable-invoices/domain/chargeableInvoiceCorrectionDraft.ts'
 import { validateChargeableInvoicePdf } from '../src/alpha/chargeable-invoices/services/chargeableInvoicePreviewApi.ts'
-import { chargeableInvoiceReviewApiTest } from '../src/alpha/chargeable-invoices/services/chargeableInvoiceReviewApi.ts'
+import {
+    buildChargeableInvoicePhotoRequestMailto,
+    chargeableInvoiceReviewApiTest,
+    uploadChargeableInvoiceSupportingPhotos,
+    validateChargeableInvoiceSupportingPhotos,
+} from '../src/alpha/chargeable-invoices/services/chargeableInvoiceReviewApi.ts'
 
 test('queue state requires an explicit start and gives Waiting precedence while active', () => {
     assert.equal(deriveChargeableInvoicePrimaryQueue({}), 'new')
@@ -329,6 +335,97 @@ test('review paging accepts only Dataverse continuation links on the configured 
     assert.throws(() => chargeableInvoiceReviewApiTest.trustedNextLink('https://attacker.example/api/data/v9.2/reviews'), /untrusted/i)
 })
 
+test('photo request mailto is explicit, editable, and addressed only to the selected technician', () => {
+    const review = {
+        gr_chargeableinvoicereviewid: 'review-id', gr_name: 'VFL00001', gr_invoicenumber: 'VFL00001',
+        gr_invoicedate: '2026-07-27', gr_greentreereference: '145156',
+        gr_matchstatus: CHARGEABLE_INVOICE_MATCH_STATUSES.MATCHED_EXACTLY,
+        gr_importstatus: CHARGEABLE_INVOICE_IMPORT_STATUSES.ACTIVE,
+        gr_Job: { gr_jobid: 'job-id', gr_jobnumber: '145156', gr_description: 'Repair hydraulic leak' },
+        gr_Customer: { gr_customerid: 'customer-id', gr_name: 'Example Customer' },
+        gr_Site: { gr_siteid: 'site-id', gr_name: 'Example Site' },
+    } satisfies ChargeableInvoiceReview
+    const mailto = buildChargeableInvoicePhotoRequestMailto(review, {
+        gr_mechanicid: 'mechanic-id', gr_name: 'Alex Technician', gr_email: 'alex@example.com', statecode: 0,
+    })
+    assert.match(mailto, /^mailto:alex%40example\.com\?/)
+    const decoded = decodeURIComponent(mailto)
+    assert.match(decoded, /Photos required - Job 145156 - Invoice VFL00001/)
+    assert.match(decoded, /Please reply with the supporting photos/)
+    assert.match(decoded, /This draft has not been sent automatically/)
+})
+
+test('supporting photo validation verifies signatures, extensions, size, and duplicate hashes', async () => {
+    const pngBytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0])
+    const valid = new File([pngBytes], 'repair.png', { type: 'image/png' })
+    const prepared = await validateChargeableInvoiceSupportingPhotos([valid], [])
+    assert.equal(prepared[0].contentType, 'image/png')
+    assert.equal(prepared[0].hash.length, 64)
+    await assert.rejects(() => validateChargeableInvoiceSupportingPhotos([
+        new File([pngBytes], 'repair.jpg', { type: 'image/jpeg' }),
+    ], []), /valid JPG, PNG, HEIC or HEIF/i)
+    await assert.rejects(() => validateChargeableInvoiceSupportingPhotos([valid], [{
+        gr_chargeableinvoicedocumentid: 'document-id', gr_name: 'existing.png', _gr_review_value: 'review-id',
+        gr_documenttype: CHARGEABLE_INVOICE_DOCUMENT_TYPES.SUPPORTING_PHOTO,
+        gr_contenttype: 'image/png', gr_bytecount: pngBytes.length, gr_sourcesnapshothash: prepared[0].hash,
+        gr_uploadstatus: 122830001,
+    }]), /already present/i)
+})
+
+test('photo finalization atomically completes documents, receives photos, and appends activity under Review ETag', () => {
+    const review = {
+        gr_chargeableinvoicereviewid: 'review-id', gr_name: 'VFL00001', gr_invoicenumber: 'VFL00001',
+        gr_invoicedate: '2026-07-27', gr_greentreereference: '145156',
+        gr_matchstatus: CHARGEABLE_INVOICE_MATCH_STATUSES.MATCHED_EXACTLY,
+        gr_importstatus: CHARGEABLE_INVOICE_IMPORT_STATUSES.ACTIVE,
+        _gr_currentrevision_value: 'revision-id', '@odata.etag': 'W/"9"',
+    } satisfies ChargeableInvoiceReview
+    const batch = chargeableInvoiceReviewApiTest.photoFinalizationBatch(review, ['document-1', 'document-2'])
+    assert.match(batch.payload, /PATCH gr_chargeableinvoicedocuments\(document-1\)/)
+    assert.match(batch.payload, /PATCH gr_chargeableinvoicedocuments\(document-2\)/)
+    assert.match(batch.payload, /PATCH gr_chargeableinvoicereviews\(review-id\)/)
+    assert.match(batch.payload, /If-Match: W\/"9"/)
+    assert.match(batch.payload, /"gr_photosstatus":122830002/)
+    assert.match(batch.payload, /"gr_event":122830008/)
+    assert.doesNotMatch(batch.payload, /PATCH gr_jobs|gr_jobstatus|gr_status/)
+})
+
+test('known supporting photo upload failure retains a safe Failed staging document for retry', async () => {
+    const originalFetch = globalThis.fetch
+    const calls: Array<{ url: string; method: string; body?: string }> = []
+    globalThis.fetch = async (input, init) => {
+        const url = String(input)
+        const method = init?.method ?? 'GET'
+        calls.push({ url, method, body: typeof init?.body === 'string' ? init.body : undefined })
+        if (url.endsWith('/gr_chargeableinvoicedocuments') && method === 'POST') {
+            return Response.json({ gr_chargeableinvoicedocumentid: 'document-id' }, { status: 201 })
+        }
+        if (url.includes('/gr_file?') && method === 'PATCH') return new Response('', { status: 500 })
+        if (url.endsWith('gr_chargeableinvoicedocuments(document-id)') && method === 'PATCH') return new Response('', { status: 204 })
+        throw new Error(`Unexpected request: ${method} ${url}`)
+    }
+    const pngBytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0])
+    try {
+        await assert.rejects(() => uploadChargeableInvoiceSupportingPhotos('token', {
+            review: {
+                gr_chargeableinvoicereviewid: 'review-id', gr_name: 'VFL00001', gr_invoicenumber: 'VFL00001',
+                gr_invoicedate: '2026-07-27', gr_greentreereference: '145156',
+                gr_matchstatus: CHARGEABLE_INVOICE_MATCH_STATUSES.MATCHED_EXACTLY,
+                gr_importstatus: CHARGEABLE_INVOICE_IMPORT_STATUSES.ACTIVE,
+                gr_reviewstartedon: '2026-08-11T00:00:00Z', gr_photosrequired: true,
+                _gr_photorequesttechnician_value: 'mechanic-id', '@odata.etag': 'W/"3"',
+            },
+            revisions: [], lines: [], corrections: [], documents: [], activities: [],
+            technicians: [{ gr_mechanicid: 'mechanic-id', gr_name: 'Alex', gr_email: 'alex@example.com', statecode: 0 }],
+        }, [new File([pngBytes], 'repair.png', { type: 'image/png' })]), /failed safely/i)
+    } finally {
+        globalThis.fetch = originalFetch
+    }
+    const failedPatch = calls.find((call) => call.url.endsWith('gr_chargeableinvoicedocuments(document-id)') && call.method === 'PATCH')
+    assert.match(failedPatch?.body ?? '', /"gr_uploadstatus":122830002/)
+    assert.match(failedPatch?.body ?? '', /Select the files and retry/)
+})
+
 test('Chargeable Invoice route uses shared page primitives and delegates intake and queue workflows', async () => {
     const [app, sidebar, screen, queue, workspace, correctionDialog, reviewApi] = await Promise.all([
         readFile(new URL('../src/App.tsx', import.meta.url), 'utf8'),
@@ -356,6 +453,8 @@ test('Chargeable Invoice route uses shared page primitives and delegates intake 
     assert.match(workspace, /View source PDF/)
     assert.match(workspace, /URL\.revokeObjectURL/)
     assert.match(workspace, /Add correction/)
+    assert.match(workspace, /Prepare photo-request email/)
+    assert.match(workspace, /Upload selected photos/)
     assert.match(correctionDialog, /source revision and line remain immutable/i)
     assert.match(reviewApi, /POST gr_chargeableinvoicecorrections/)
     assert.match(reviewApi, /gr_Correction@odata\.bind': '\$2'/)

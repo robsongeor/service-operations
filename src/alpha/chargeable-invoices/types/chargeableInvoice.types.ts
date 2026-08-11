@@ -123,6 +123,13 @@ export type ChargeableInvoiceReview = {
     } | null
 }
 
+export type ChargeableInvoiceTechnician = {
+    gr_mechanicid: string
+    gr_name: string
+    gr_email?: string | null
+    statecode?: number
+}
+
 export type ChargeableInvoiceDocument = {
     gr_chargeableinvoicedocumentid: string
     gr_name: string
@@ -236,4 +243,5 @@ export type ChargeableInvoiceWorkspace = {
     corrections: ChargeableInvoiceCorrection[]
     documents: ChargeableInvoiceDocument[]
     activities: ChargeableInvoiceActivity[]
+    technicians: ChargeableInvoiceTechnician[]
 }

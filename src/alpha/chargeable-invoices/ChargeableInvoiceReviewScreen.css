@@ -55,6 +55,7 @@
 .chargeable-field { display: grid; gap: 5px; margin-bottom: 12px; font-weight: 700; }
 .chargeable-field select, .chargeable-field textarea, .chargeable-field input { padding: 8px; border: 1px solid #aebbb8; border-radius: 7px; background: white; font: inherit; font-weight: 400; }
 .chargeable-decision-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; }
+.chargeable-action-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .chargeable-check { display: flex; align-items: center; gap: 7px; margin-bottom: 12px; font-weight: 700; }
 .chargeable-evidence-note { padding: 9px 11px; border-radius: 7px; color: #574600; background: #fff8d8; }
 .chargeable-inline-error { color: #842029; }
