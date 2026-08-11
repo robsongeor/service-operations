@@ -34,6 +34,7 @@ type Props = {
     onSavePhotoTechnician: (technicianId: string) => Promise<void>
     onPreparePhotoRequest: () => Promise<string>
     onUploadPhotos: (files: File[]) => Promise<void>
+    onGenerateApprovalPdf: () => Promise<void>
     onMarkReady: () => Promise<void>
     onMarkDoNotProcess: (reason: string) => Promise<void>
     onAddCorrection: (draft: ChargeableInvoiceCorrectionDraft) => Promise<void>
@@ -162,7 +163,7 @@ function PhotoWorkflow({ workspace, saving, onSaveTechnician, onPrepare, onUploa
 
 export default function ChargeableInvoiceWorkspace({
     workspace, loading, saving, error, onStart, onSaveWaiting, onSaveRequirements,
-    onSavePhotoTechnician, onPreparePhotoRequest, onUploadPhotos,
+    onSavePhotoTechnician, onPreparePhotoRequest, onUploadPhotos, onGenerateApprovalPdf,
     onMarkReady, onMarkDoNotProcess, onAddCorrection, onLoadDocument, onDownload, onClose,
 }: Props) {
     const [tab, setTab] = useState<Tab>('summary')
@@ -174,6 +175,7 @@ export default function ChargeableInvoiceWorkspace({
     const [previewBusy, setPreviewBusy] = useState(false)
     const [showCorrectionDialog, setShowCorrectionDialog] = useState(false)
     const [instructionFeedback, setInstructionFeedback] = useState('')
+    const [approvalFeedback, setApprovalFeedback] = useState('')
     const review = workspace?.review
 
     const currentRevision = useMemo(() => workspace?.revisions.find((revision) =>
@@ -311,6 +313,9 @@ export default function ChargeableInvoiceWorkspace({
                     {review?.gr_reviewstartedon && review.gr_disposition == null && <button type="button" className="chargeable-secondary" disabled={saving} onClick={() => setShowCorrectionDialog(true)}>Add correction</button>}
                 </EditDrawerSection>
                 <EditDrawerSection title="Documents">
+                    <div className="chargeable-action-row"><button type="button" className="chargeable-secondary" disabled={saving || !review?.gr_reviewstartedon || review.gr_porequired !== true || review.gr_disposition != null || blockers.some((blocker) => blocker.includes('correction'))} onClick={() => { setApprovalFeedback(''); void onGenerateApprovalPdf().then(() => setApprovalFeedback('Approval PDF is ready to download. No communication was sent.')).catch(() => {}) }}>{saving ? 'Generating...' : 'Generate approval PDF'}</button></div>
+                    <p className="chargeable-evidence-note">Generated from the current reviewed revision and marked &quot;FOR CUSTOMER PO APPROVAL - NOT A TAX INVOICE&quot;. It is not the final GreenTree tax invoice.</p>
+                    {approvalFeedback && <p role="status" aria-live="polite">{approvalFeedback}</p>}
                     <ul className="chargeable-document-list">{workspace?.documents.map((document) => <li key={document.gr_chargeableinvoicedocumentid}><span><strong>{document.gr_filename || document.gr_name}</strong><small>{(document.gr_bytecount / 1024).toFixed(0)} KiB · {document.gr_uploadstatus === CHARGEABLE_INVOICE_UPLOAD_STATUSES.COMPLETE ? 'Complete' : document.gr_uploadstatus === CHARGEABLE_INVOICE_UPLOAD_STATUSES.FAILED ? 'Failed' : 'Pending'}</small></span><button type="button" className="chargeable-secondary" disabled={document.gr_uploadstatus !== CHARGEABLE_INVOICE_UPLOAD_STATUSES.COMPLETE} onClick={() => void onDownload(document)}>Download</button></li>)}</ul>
                 </EditDrawerSection>
             </>}

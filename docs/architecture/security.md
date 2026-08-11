@@ -62,6 +62,15 @@ after deliberate manager action, byte count is checked against Dataverse metadat
 rendered through a local browser object URL that is revoked when replaced or unmounted. The app
 does not expose or retain an anonymous or durable File URL.
 
+Approval PDFs are generated only by the authenticated server endpoint and are fail-closed behind
+`CHARGEABLE_INVOICE_APPROVAL_ENABLED` plus the malware-readiness gate. The endpoint requires the
+loaded Review ETag and current Revision ID, re-reads an Active started PO-required Review, its
+immutable Revision and at most 200 Lines, and rejects terminal reviews or unresolved Corrections.
+The browser supplies identifiers only. The renderer uses a versioned bounded PDF layout, ASCII-safe
+text, A4 pages and a 5 MiB output limit. A canonical source-snapshot hash prevents duplicate
+Complete documents. File staging and ETag-protected Document/Activity finalisation follow the
+existing recoverable pattern; no generated file receives an anonymous URL.
+
 Terminal Ready to Process performs a fresh bounded read for Outstanding/Not Made corrections
 immediately before its ETag-protected Review transition. Terminal actions require an explicit
 confirmation; Do Not Process additionally requires a non-empty reason. Extracted Order No is

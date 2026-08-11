@@ -616,6 +616,7 @@ async function preview(request) {
 module.exports = {
     preview,
     jsonResponse,
+    validateManager,
     test: {
         exactJobMatch,
         existingInvoice,

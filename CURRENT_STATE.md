@@ -14,7 +14,8 @@ Branch: `codex/chargeable-invoice-review`
 
 ## Unfinished work
 
-- Chargeable Invoice Review Phases 1–5 are complete locally. Approval-PDF/PO work remains,
+- Chargeable Invoice Review Phases 1–5 and the first Phase 6 approval-PDF slice are complete
+  locally. PO request preparation and remaining Phase 6 integration remain,
   followed by explicitly gated role assignment and release validation. The approved staging
   columns are provisioned and verified; release flags remain disabled and the manager role remains
   unassigned.
@@ -544,3 +545,14 @@ header, story or line details; Matched and Superseded history is excluded. Malfo
 snapshots use a safe unavailable label. Generation creates no Dataverse mutation or Activity and
 states that nothing was sent automatically. Focused tests cover filtering, evidence wording,
 requested values, filename and workspace actions.
+
+Chargeable Invoice Review Phase 6 has started locally. A new authenticated server endpoint
+re-reads the current immutable Review/Revision/Lines, rejects stale, terminal, non-PO and
+unresolved-correction states, and renders the familiar Liftrucks approval layout with the prominent
+`FOR CUSTOMER PO APPROVAL - NOT A TAX INVOICE` marker. The versioned `pdf-lib` renderer produces
+extractable A4 PDFs; a canonical SHA-256 snapshot hash reuses an existing matching Complete
+document. New output stages as a Review Document and atomically completes with an Approval PDF
+Generated Activity under the Review ETag. The workspace can generate and download the document.
+De-identified extracted-text and visual render checks pass. No live document was generated, no
+release flag was enabled and no deployment or communication occurred. Recipient selection and the
+editable PO-request `mailto:` handoff remain.

@@ -48,12 +48,17 @@ Chargeable Invoice preview release gates are server-only and default to disabled
 ```text
 CHARGEABLE_INVOICE_PREVIEW_ENABLED
 CHARGEABLE_INVOICE_MALWARE_SCANNING_READY
+CHARGEABLE_INVOICE_APPROVAL_ENABLED
 ```
 
 Do not set either flag to `true` as part of ordinary deployment. Enable them only after manager
 role assignments are approved and the deployed PDF upload path's malware-scanning readiness is
-verified. The API package installs `pdfjs-dist`; dependency installation is required when the
+verified. The API package installs `pdfjs-dist` and `pdf-lib`; dependency installation is required when the
 managed Function build runs.
+
+Approval generation additionally requires `CHARGEABLE_INVOICE_APPROVAL_ENABLED=true`. Leave it
+false until the generated-PDF File path, manager-role smoke and malware-scanning readiness have
+passed in the target environment. Enabling preview does not enable approval generation.
 
 Do not enable the intake endpoint until the approved Review Import Status and Document Upload
 Status/Error columns have been provisioned and verified. The deployed smoke must cover a

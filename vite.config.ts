@@ -22,6 +22,9 @@ const chargeableInvoicePreviewService = require('./api/services/chargeableInvoic
   preview: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
   jsonResponse: (status: number, body: object, headers?: Record<string, string>) => LocalFunctionResponse
 }
+const chargeableInvoiceApprovalService = require('./api/services/chargeableInvoiceApprovalService') as {
+  generate: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
+}
 
 const LIFTTRUCKS_API_ORIGIN = 'https://webview.liftrucks.co.nz'
 const LIFTTRUCKS_API_KEY = '500256'
@@ -233,6 +236,49 @@ function chargeableInvoicePreviewProxy(env: Record<string, string | undefined>):
   }
 }
 
+function chargeableInvoiceApprovalProxy(env: Record<string, string | undefined>): Plugin {
+  process.env.DATAVERSE_URL ||= env.DATAVERSE_URL || env.VITE_DATAVERSE_URL
+  process.env.CHARGEABLE_INVOICE_APPROVAL_ENABLED ||= env.CHARGEABLE_INVOICE_APPROVAL_ENABLED
+  process.env.CHARGEABLE_INVOICE_MALWARE_SCANNING_READY ||= env.CHARGEABLE_INVOICE_MALWARE_SCANNING_READY
+  const maximumRequestBytes = 8192
+
+  const installMiddleware = (middlewares: { use: (handler: (request: IncomingMessage, response: ServerResponse, next: () => void) => void) => void }) => {
+    middlewares.use((request, response, next) => {
+      if (!request.url) return next()
+      const requestUrl = new URL(request.url, 'http://localhost')
+      if (requestUrl.pathname !== '/api/chargeableinvoiceapproval') return next()
+
+      void (async () => {
+        if (request.method !== 'POST') {
+          return sendFunctionResponse(response, chargeableInvoicePreviewService.jsonResponse(405, { error: 'Method not allowed.' }, { Allow: 'POST' }))
+        }
+        const parsed = await readLimitedJsonBody(request, maximumRequestBytes)
+        if (parsed.tooLarge) {
+          return sendFunctionResponse(response, chargeableInvoicePreviewService.jsonResponse(413, { error: 'The approval PDF request is too large.' }))
+        }
+        if (parsed.body === null) {
+          return sendFunctionResponse(response, chargeableInvoicePreviewService.jsonResponse(400, { error: 'The request body is invalid.' }))
+        }
+        sendFunctionResponse(response, await chargeableInvoiceApprovalService.generate({
+          method: request.method,
+          headers: request.headers,
+          body: parsed.body,
+        }))
+      })().catch(() => {
+        sendFunctionResponse(response, chargeableInvoicePreviewService.jsonResponse(503, {
+          error: 'Approval PDF generation is temporarily unavailable.',
+        }))
+      })
+    })
+  }
+
+  return {
+    name: 'chargeable-invoice-approval-api-proxy',
+    configureServer(server) { installMiddleware(server.middlewares) },
+    configurePreviewServer(server) { installMiddleware(server.middlewares) },
+  }
+}
+
 function liftTrucksProxy(env: Record<string, string | undefined>): Plugin {
   const validateAuthenticatedUser = async (request: IncomingMessage, response: ServerResponse) => {
     const authorization = request.headers.authorization?.trim() ?? ''
@@ -394,6 +440,7 @@ export default defineConfig(({ mode }) => {
       jobSubmissionProxy(env),
       siteCheckAssignmentProxy(env),
       chargeableInvoicePreviewProxy(env),
+      chargeableInvoiceApprovalProxy(env),
     ],
   }
 })

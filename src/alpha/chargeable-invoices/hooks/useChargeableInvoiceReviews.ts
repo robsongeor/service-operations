@@ -8,6 +8,7 @@ import {
     createChargeableInvoiceCorrection,
     fetchChargeableInvoiceReviews,
     fetchChargeableInvoiceWorkspace,
+    generateChargeableInvoiceApprovalPdf,
     markChargeableInvoiceDoNotProcess,
     markChargeableInvoiceReady,
     prepareChargeableInvoicePhotoRequest,
@@ -213,6 +214,20 @@ export function useChargeableInvoiceReviews() {
         }
     }, [accessToken, applyWorkspace, workspace])
 
+    const generateApprovalPdf = useCallback(async () => {
+        if (!workspace) throw new Error('The invoice review workspace is unavailable.')
+        setIsSaving(true)
+        setWorkspaceError('')
+        try {
+            applyWorkspace(await generateChargeableInvoiceApprovalPdf(await accessToken(), workspace))
+        } catch (error) {
+            setWorkspaceError(error instanceof Error ? error.message : 'The approval PDF could not be generated.')
+            throw error
+        } finally {
+            setIsSaving(false)
+        }
+    }, [accessToken, applyWorkspace, workspace])
+
     const loadDocument = useCallback(async (document: ChargeableInvoiceDocument) => {
         setWorkspaceError('')
         try {
@@ -247,6 +262,6 @@ export function useChargeableInvoiceReviews() {
         reviews, counts, selectedId, workspace, isLoading, isLoadingWorkspace, isSaving,
         loadError, workspaceError, refresh, openReview, closeReview, startReview, saveWaiting,
         loadDocument, downloadDocument, saveRequirements, markReady, markDoNotProcess, addCorrection,
-        savePhotoTechnician, preparePhotoRequest, uploadPhotos,
+        savePhotoTechnician, preparePhotoRequest, uploadPhotos, generateApprovalPdf,
     }
 }

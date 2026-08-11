@@ -169,7 +169,9 @@ also opens an editable draft. V1 cannot reliably attach files to `mailto:`, so i
 explicit download/attach steps for approval PDFs/photos.
 
 Generate a server-side approval PDF from an immutable reviewed-revision snapshot using a
-versioned HTML/CSS template and headless-PDF runtime. Retain the familiar appearance but add
+versioned PDF layout module and the bounded `pdf-lib` runtime. This avoids a browser executable
+and Office dependency in Azure Functions while retaining deterministic layout and extractable
+text. Retain the familiar appearance but add
 `FOR CUSTOMER PO APPROVAL — NOT A TAX INVOICE`, document version and generation time. Store it
 as a Review Document. Do not automate Excel: it depends on an Office runtime and is not robust
 in Azure Functions. GreenTree remains the final accounting-invoice owner.
@@ -346,12 +348,25 @@ creates no Dataverse row or Activity, and clearly states that nothing was sent a
 
 ### Phase 6 — PO approval documents and handoff
 
+- **Status:** first slice complete locally: server-authoritative approval snapshot, versioned
+  PDF render, idempotent storage/download and workspace generation action. Recipient selection,
+  PO-request draft preparation and final Phase 6 integration remain.
 - **Scope:** reviewed snapshot, approval PDF render/store/download, recipient selection,
   PO-request `mailto:`, PO number and Ready derivation.
 - **Dependencies/areas/schema:** Phases 2–5 plus approved branding; server renderer and workspace;
   optional contact-purpose decision.
 - **Acceptance/tests/docs:** PDF has non-invoice marker and correct totals; missing PO/photos
   blocks Ready; renderer/security/manual-compose tests; deployment docs.
+
+The approval endpoint validates the delegated identity and manager-table access once, then
+re-reads the Active Review, current Revision, at most 200 Lines and unresolved Corrections from
+Dataverse. Generation requires a started, non-terminal, PO-required review with no Outstanding or
+Not Made correction and an exact current Review ETag/revision match. A SHA-256 hash of the
+canonical reviewed snapshot plus `liftrucks-approval-v1` makes an existing Complete document
+reusable instead of creating duplicates. A new document stages as Pending, receives the generated
+PDF File, then becomes Complete with its Approval PDF Generated Activity and Review ETag sentinel
+in one change set. Known failures remain Failed; an uncertain finalisation is reconciled without
+automatic retry. The release flag remains disabled and no live document has been generated.
 
 ### Phase 7 — release readiness
 

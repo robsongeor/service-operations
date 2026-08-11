@@ -100,6 +100,11 @@ boundary. Files receive no anonymous URL, and only Complete documents are downlo
 photo requests use a validated `mailto:` URL that opens an editable local draft only; prepared-on
 is not delivery proof.
 
+Chargeable Invoice approval-PDF generation uses the same delegated bearer token through the
+authenticated server endpoint. The endpoint performs one `WhoAmI` and bounded Review-table access
+probe, then re-reads the current Review/Revision/Lines itself; browser-supplied commercial values
+are never trusted. Dataverse remains the authorization and File-storage boundary.
+
 ## Administrative and provisioning sessions
 
 Existing schema scripts commonly create a `CrmServiceClient` with `LoginPrompt=Auto`. A

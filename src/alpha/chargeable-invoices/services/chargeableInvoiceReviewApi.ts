@@ -605,4 +605,39 @@ export async function downloadChargeableInvoiceDocument(accessToken: string, doc
     return blob
 }
 
+export async function generateChargeableInvoiceApprovalPdf(
+    accessToken: string,
+    workspace: ChargeableInvoiceWorkspace,
+) {
+    const review = workspace.review
+    if (!review.gr_reviewstartedon) throw new Error('Start the review before generating an approval PDF.')
+    if (review.gr_disposition != null) throw new Error('Approval PDFs cannot be generated for a historical review.')
+    if (review.gr_porequired !== true) throw new Error('Record that a customer PO is required before generating an approval PDF.')
+    if (!review._gr_currentrevision_value || !review['@odata.etag']) {
+        throw new Error('Refresh the invoice review before generating an approval PDF.')
+    }
+    if (workspace.corrections.some((correction) =>
+        correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.OUTSTANDING
+        || correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.NOT_MADE)) {
+        throw new Error('Resolve all outstanding invoice corrections before generating the approval PDF.')
+    }
+    const response = await fetch('/api/chargeableinvoiceapproval', {
+        method: 'POST',
+        headers: { ...headers(accessToken), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            reviewId: review.gr_chargeableinvoicereviewid,
+            revisionId: review._gr_currentrevision_value,
+            reviewEtag: review['@odata.etag'],
+        }),
+    })
+    const body = await response.json().catch(() => null) as { error?: string } | null
+    if (!response.ok) {
+        if ([400, 409, 412].includes(response.status) && body?.error) throw new Error(body.error)
+        if (response.status === 401) throw new Error('Your session expired while generating the approval PDF. Sign in again and retry.')
+        if (response.status === 403) throw new Error('Chargeable Invoice Manager access is required.')
+        throw new Error(body?.error || 'The approval PDF could not be generated safely.')
+    }
+    return fetchChargeableInvoiceWorkspace(accessToken, review.gr_chargeableinvoicereviewid)
+}
+
 export const chargeableInvoiceReviewApiTest = { trustedNextLink, transitionBatch, photoFinalizationBatch, detectedPhotoType }
