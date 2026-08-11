@@ -16,8 +16,8 @@ Branch: `codex/chargeable-invoice-review`
 
 - Chargeable Invoice Review Phases 1 and 2 are complete. Phase 3 preview, duplicate/revision
   decisions, manual exact Job recovery and recoverable import are implemented locally. The
-  approved staging columns still require a separately authorised provisioning run; release
-  flags and the manager role remain disabled/unassigned until their explicit gates are met.
+  approved staging columns are provisioned and verified; release flags and the manager role
+  remain disabled/unassigned until their explicit gates are met.
 - Approve and provision the minimum Site Check deletion privileges, then smoke-test the
   in-app occurrence deletion action as the intended Service Operations role.
 
@@ -492,10 +492,10 @@ Delete/Assign/Share grants; verification confirmed no user or team assignments. 
 rows were created and the organisation upload limit and `Service Operations` role were not
 changed.
 
-Phase 3 is complete locally. The next authorised schema step is to provision and verify the
-approved Review Import Status and Document Upload Status/Error columns. Then perform a
-de-identified manager-role smoke covering new import, revised import, failure recovery and
-access denial before enabling either release flag. Manager role assignments, deployment,
+Phase 3 is complete locally, and the approved Review Import Status plus Document Upload
+Status/Error columns are provisioned and verified. The next gated work is a de-identified
+manager-role smoke covering new import, revised import, failure recovery and access denial
+before enabling either release flag. Manager role assignments, deployment,
 enabling preview flags, server dependency/configuration changes and all real
 communications retain separate explicit approval gates. The remaining Site Checks release
 gates, production server-settings verification and Technician Job Card smoke test remain

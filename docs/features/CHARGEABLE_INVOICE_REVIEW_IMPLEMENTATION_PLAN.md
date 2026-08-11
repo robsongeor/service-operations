@@ -15,7 +15,8 @@
 - [x] Six-table schema and unassigned manager role provisioned, published and verified after
   explicit approval on 11 August 2026; no business rows or assignments were created.
 - [x] Phase 3 intake, duplicate/revision decisions, manual exact Job recovery and recoverable
-  server-side import implemented locally; staging-column provisioning and release smoke remain.
+  server-side import implemented locally; staging columns provisioned and verified after
+  explicit approval. Release smoke remains.
 - [ ] Implementation phases below.
 
 ## Problem and V1 scope
@@ -235,7 +236,8 @@ changes as Not Made for manager review.
 
 ### Phase 3 — authenticated intake and import review
 
-- **Status:** implemented locally; staging columns and deployed release gates remain pending.
+- **Status:** implemented locally; staging columns are provisioned and verified, while deployed
+  release gates remain pending.
 - **Scope:** upload/extract preview, batch validation, exact Job matching, per-file selection,
   duplicate choice, atomic confirmation and source-PDF storage.
 - **Dependencies/areas/schema:** Phase 2; `api/chargeableinvoice*`, feature services/hook/UI;

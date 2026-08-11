@@ -5,8 +5,9 @@
 The product owner approved this schema/role design and its V1 retention, 5 MiB file-limit,
 document wording, allowlist/scanning and deferred-assignment decisions on 11 August 2026. The
 six-table schema and the unassigned `Chargeable Invoice Manager` role were provisioned,
-published and read back on 11 August 2026. Role assignment and any organisation file-limit
-change remain separately gated.
+published and read back on 11 August 2026. The approved recoverable-import staging columns were
+also provisioned, published and verified on 11 August 2026. Role assignment and any organisation
+file-limit change remain separately gated.
 
 The 11 August 2026 read-only preflight used one interactive connection and made no writes. It
 confirmed all six proposed table names and ten relationship names are unused; existing reference
@@ -144,5 +145,6 @@ managers receive no Delete.
 `Verify`. The original approved run created the metadata and unassigned role, published, then verified
 the contract and all 30 organisation-depth grants. It created no business rows, assigned no
 users or teams, did not change the organisation limit, and did not grant the new tables to
-Service Operations. The recoverable staging columns above are approved in the authoritative
-contract but remain pending a separately authorised provisioning run.
+Service Operations. A later explicitly approved idempotent run added and verified Review Import
+Status plus Document Upload Status/Error. It created no business rows, assigned no role, changed
+no organisation setting and left the release flags disabled.
