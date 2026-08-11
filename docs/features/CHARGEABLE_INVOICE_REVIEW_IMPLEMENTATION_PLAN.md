@@ -181,7 +181,7 @@ in Azure Functions. GreenTree remains the final accounting-invoice owner.
 Invoices, pricing, POs and photos are confidential. Manager routes/server actions validate a
 delegated caller; server values are server-only. Add least-privilege manager grants only for
 these tables/File columns; no anonymous access. Enforce file type/size/page/count allowlists,
-safe errors, malware scanning decision and retention limits before production. Never log PDF
+safe errors and retention limits before production. Never log PDF
 text, PO numbers, email body or file content.
 
 Use ETags for Review/current-revision/prerequisite transitions. Recheck the invoice key/current
@@ -195,8 +195,8 @@ failed staging. Activity is append-only and every success reloads the authoritat
 - Keep the verified 5 MiB organisation limit; validate each file clearly and do not change it.
 - Retain imported revisions, corrections and activity history without V1 deletion actions.
 - Label approval documents `FOR CUSTOMER PO APPROVAL — NOT A TAX INVOICE`.
-- Allow only validated PDFs and supported images; production malware-scanning readiness remains
-  a release gate.
+- Allow only validated PDFs and supported images. V1 has no malware-scanning integration or
+  readiness gate by explicit product-owner decision on 12 August 2026.
 - Provision the role unassigned; manager assignments require a later explicit user list/action.
 
 ## Testing and deployment
@@ -251,8 +251,8 @@ The preview endpoint now validates `WhoAmI` and manager table access, enforces t
 text bounds, uses server-side PDF.js positional text extraction, and performs one exact bounded
 Job Number query from GreenTree Our Ref. It returns structured evidence only and performs no
 Review, Revision, Line or Document write, so authenticated preview and Job lookup are available
-without upload-readiness flags. Confirmed import remains fail-closed behind the existing server
-import switch and malware-scanning readiness until those are separately approved.
+without an import flag. Confirmed import remains fail-closed behind its existing independent
+server switch until that is separately approved.
 
 The `/chargeable-invoices` screen reuses the shared Page Header and Metric Strip, accepts up to
 20 PDFs, acquires one silent token per preview action, bounds concurrent previews, and preserves

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Removed the Chargeable Invoice malware-readiness setting and gate by explicit product decision;
+  import and approval retain independent disabled-by-default server switches and file validation.
 - Allowed authenticated, bounded Chargeable Invoice PDF preview and Job lookup before File-upload
   readiness while keeping confirmed import and approval generation fail-closed.
 - Added the Chargeable Invoice Review release operations contract with no-cleanup V1 retention,

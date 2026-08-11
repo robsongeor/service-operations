@@ -47,20 +47,20 @@ Chargeable Invoice File-write release gates are server-only and default to disab
 
 ```text
 CHARGEABLE_INVOICE_PREVIEW_ENABLED
-CHARGEABLE_INVOICE_MALWARE_SCANNING_READY
 CHARGEABLE_INVOICE_APPROVAL_ENABLED
 ```
 
 Authenticated bounded PDF preview and Job lookup are read-only and do not require these flags.
 Despite its legacy name, `CHARGEABLE_INVOICE_PREVIEW_ENABLED` gates confirmed import and source
-File persistence. Do not set any flag to `true` as part of ordinary deployment. Enable File-write
-paths only after manager role assignments are approved and the deployed PDF upload path's malware-
-scanning readiness is verified. The API package installs `pdfjs-dist` and `pdf-lib`; dependency
-installation is required when the managed Function build runs.
+File persistence. Do not set either flag to `true` as part of ordinary deployment. Enable the
+relevant File-write path only after manager role assignments and its target-environment smoke are
+approved. V1 deliberately has no malware-scanning setting or integration. The API package installs
+`pdfjs-dist` and `pdf-lib`; dependency installation is required when the managed Function build
+runs.
 
 Approval generation additionally requires `CHARGEABLE_INVOICE_APPROVAL_ENABLED=true`. Leave it
-false until the generated-PDF File path, manager-role smoke and malware-scanning readiness have
-passed in the target environment. Enabling preview does not enable approval generation.
+false until the generated-PDF File path and manager-role smoke have passed in the target
+environment. Enabling import does not enable approval generation.
 
 Do not enable confirmed import until the approved Review Import Status and Document Upload
 Status/Error columns have been provisioned and verified. The deployed smoke must cover a

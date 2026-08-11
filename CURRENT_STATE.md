@@ -51,9 +51,10 @@ is 5 MiB. A detailed User-owned schema and dedicated manager-role proposal is do
 metadata, privileges, assignments, business rows, files or configuration were changed.
 
 The product owner approved the proposed six User-owned tables, dedicated unassigned manager
-role, 5 MiB V1 file limit, immutable history, approval-PDF wording, file allowlists and malware-
-scanning release gate. This confirms the Phase 1 contract but is not itself authorisation to
-provision Dataverse or create/grant the role.
+role, 5 MiB V1 file limit, immutable history, approval-PDF wording and file allowlists. The
+original malware-scanning release-gate decision was explicitly withdrawn on 12 August 2026;
+V1 now has no malware-scanning integration or setting. This confirms the Phase 1 contract but is
+not itself authorisation to provision Dataverse or create/grant the role.
 
 The first local Phase 2 foundation slice is implemented: named Choice constants and typed Review,
 Line and Correction contracts plus pure primary-queue, Waiting, Ready-to-Process and Do-Not-
@@ -576,11 +577,12 @@ defaults, least-privilege role, silent authentication, reusable accessible works
 file bounds. No role was assigned, flag changed, deployment performed, live row written or
 communication sent.
 
-Authenticated Chargeable Invoice PDF preview and manual Job lookup no longer depend on malware-
-scanning readiness because neither action persists the supplied file. Confirmed import still
-fails closed behind the existing server import switch and malware-readiness flag before it can
-create a Review or upload a Dataverse File. Approval generation is unchanged. Focused tests prove
-preview succeeds with upload flags absent while import remains blocked.
+Chargeable Invoice V1 no longer has malware-scanning integration or a readiness setting, by
+explicit product-owner decision on 12 August 2026. Authenticated preview and Job lookup remain
+available without a flag. Confirmed import and approval generation each retain their own disabled-
+by-default server switch before creating or uploading Dataverse File evidence. Manager access,
+strict file allowlists, bounded parsing/rendering, staged recovery and ETag protections remain;
+none of those controls are represented as malware detection.
 
 The Phase 7 release preflight reverified the live Dataverse metadata and role contract on
 12 August 2026 through one explicitly approved interactive `Verify` session. All six tables,

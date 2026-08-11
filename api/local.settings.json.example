@@ -10,7 +10,6 @@
     "LIFTTRUCKS_API_USERNAME": "your-lifttrucks-api-username",
     "LIFTTRUCKS_API_PASSWORD": "your-lifttrucks-api-password",
     "CHARGEABLE_INVOICE_PREVIEW_ENABLED": "false",
-    "CHARGEABLE_INVOICE_APPROVAL_ENABLED": "false",
-    "CHARGEABLE_INVOICE_MALWARE_SCANNING_READY": "false"
+    "CHARGEABLE_INVOICE_APPROVAL_ENABLED": "false"
   }
 }

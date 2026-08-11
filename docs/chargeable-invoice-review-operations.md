@@ -30,11 +30,14 @@ session. Before target validation, separately obtain explicit approval to:
 - assign the unassigned `Chargeable Invoice Manager` role to a named manager list;
 - deploy the client and API artifacts;
 - install the server PDF dependencies in the managed Function build;
-- verify malware-scanning readiness for the deployed Dataverse File path; and
 - enable each required File-write server flag. Authenticated preview and Job lookup are
   non-persisting and need no upload-readiness flag. Keep
-  `CHARGEABLE_INVOICE_PREVIEW_ENABLED`, `CHARGEABLE_INVOICE_APPROVAL_ENABLED` and
-  `CHARGEABLE_INVOICE_MALWARE_SCANNING_READY` false until its gate has passed.
+  `CHARGEABLE_INVOICE_PREVIEW_ENABLED` and `CHARGEABLE_INVOICE_APPROVAL_ENABLED` false until
+  each independent gate has passed.
+
+V1 deliberately has no malware-scanning integration or readiness setting. Operators must not
+describe the file allowlists or bounded parser as malware detection. Reintroducing scanning later
+requires an approved design, deployment contract and target-path verification.
 
 Do not provision schema, change the organisation upload limit, create credentials, or send a real
 customer or technician communication as an inferred release step.
@@ -123,8 +126,7 @@ raw Dataverse responses. Monitoring must not make a failed business mutation loo
 
 ## Rollback
 
-1. Set the Chargeable Invoice import and approval flags false first; keep the malware-readiness
-   flag conservative until the deployed path is reverified.
+1. Set the Chargeable Invoice import and approval flags false first.
 2. If access must be withdrawn, remove the manager role only from the explicitly approved users or
    teams through the authorised administrative path.
 3. Roll back client/API artifacts through the normal deployment workflow.
@@ -135,8 +137,8 @@ raw Dataverse responses. Monitoring must not make a failed business mutation loo
 
 ## Release decision record
 
-Record target/environment, artifact commit, approver, named role assignments, dependency and
-malware-readiness verification, flag values, fixture identifiers, checks run, request counts,
+Record target/environment, artifact commit, approver, named role assignments, dependency
+verification, flag values, fixture identifiers, checks run, request counts,
 timings, accessibility results, failures/blockers, rollback owner and final go/no-go decision.
 The feature is not production-ready while any controlled smoke, access denial, accessibility,
 performance, safe-error or rollback check remains unverified.

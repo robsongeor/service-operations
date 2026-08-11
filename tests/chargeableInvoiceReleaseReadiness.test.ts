@@ -25,7 +25,7 @@ test('release documentation owns retention, smoke, accessibility and rollback ga
     assert.match(operations, /Set the Chargeable Invoice import and approval flags false first/i)
 })
 
-test('all release flags remain server-only and import and approval fail closed', async () => {
+test('independent import and approval flags remain server-only and fail closed', async () => {
     const [settings, preview, approval] = await Promise.all([
         source('api/local.settings.json.example'),
         source('api/services/chargeableInvoicePreviewService.js'),
@@ -35,9 +35,10 @@ test('all release flags remain server-only and import and approval fail closed',
 
     assert.equal(parsed.Values.CHARGEABLE_INVOICE_PREVIEW_ENABLED, 'false')
     assert.equal(parsed.Values.CHARGEABLE_INVOICE_APPROVAL_ENABLED, 'false')
-    assert.equal(parsed.Values.CHARGEABLE_INVOICE_MALWARE_SCANNING_READY, 'false')
-    assert.match(preview, /CHARGEABLE_INVOICE_PREVIEW_ENABLED[\s\S]*CHARGEABLE_INVOICE_MALWARE_SCANNING_READY/)
-    assert.match(approval, /CHARGEABLE_INVOICE_APPROVAL_ENABLED[\s\S]*CHARGEABLE_INVOICE_MALWARE_SCANNING_READY/)
+    assert.equal(parsed.Values.CHARGEABLE_INVOICE_MALWARE_SCANNING_READY, undefined)
+    assert.match(preview, /process\.env\.CHARGEABLE_INVOICE_PREVIEW_ENABLED === 'true'/)
+    assert.match(approval, /process\.env\.CHARGEABLE_INVOICE_APPROVAL_ENABLED === 'true'/)
+    assert.doesNotMatch(`${preview}\n${approval}`, /MALWARE_SCANNING_READY/)
 })
 
 test('manager workflow preserves silent authentication and excludes automatic email dispatch', async () => {

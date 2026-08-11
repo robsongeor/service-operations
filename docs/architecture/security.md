@@ -47,11 +47,11 @@ the supplied bytes, rechecks exact Job/duplicate state, stages bounded metadata 
 protected atomic finalisation after the File upload. Failed staging records contain only safe
 error text and remain recoverable because managers have no Delete privilege. Authenticated,
 bounded preview and Job lookup do not persist the supplied file and are available without the
-upload release flags. Confirmed import remains fail-closed unless both the legacy-named
-`CHARGEABLE_INVOICE_PREVIEW_ENABLED` import switch and
-`CHARGEABLE_INVOICE_MALWARE_SCANNING_READY` are explicitly `true`. The latter may be enabled only
-after the deployed Dataverse File upload path's malware-scanning readiness has been verified and
-approved.
+import release flag. Confirmed import remains fail-closed unless the legacy-named
+`CHARGEABLE_INVOICE_PREVIEW_ENABLED` import switch is explicitly `true`. By explicit product-owner
+decision on 12 August 2026, V1 has no malware-scanning integration or readiness gate. It relies on
+manager-only access, file signature/type/size/page/text allowlists, bounded parsing and recoverable
+staging; this does not claim to detect malicious content.
 
 The review queue filters to Active imports before returning records. Workspace reads are bounded,
 follow only same-origin Dataverse continuation links, and request only the six review tables plus
@@ -66,7 +66,7 @@ rendered through a local browser object URL that is revoked when replaced or unm
 does not expose or retain an anonymous or durable File URL.
 
 Approval PDFs are generated only by the authenticated server endpoint and are fail-closed behind
-`CHARGEABLE_INVOICE_APPROVAL_ENABLED` plus the malware-readiness gate. The endpoint requires the
+`CHARGEABLE_INVOICE_APPROVAL_ENABLED`. The endpoint requires the
 loaded Review ETag and current Revision ID, re-reads an Active started PO-required Review, its
 immutable Revision and at most 200 Lines, and rejects terminal reviews or unresolved Corrections.
 The browser supplies identifiers only. The renderer uses a versioned bounded PDF layout, ASCII-safe

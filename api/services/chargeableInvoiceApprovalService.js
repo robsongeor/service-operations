@@ -19,7 +19,6 @@ class UnknownApprovalOutcomeError extends Error {}
 
 function approvalEnabled() {
     return process.env.CHARGEABLE_INVOICE_APPROVAL_ENABLED === 'true'
-        && process.env.CHARGEABLE_INVOICE_MALWARE_SCANNING_READY === 'true'
 }
 
 function requestContract(body) {

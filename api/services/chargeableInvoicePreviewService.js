@@ -40,7 +40,6 @@ function dataverseOrigin() {
 
 function importEnabled() {
     return process.env.CHARGEABLE_INVOICE_PREVIEW_ENABLED === 'true'
-        && process.env.CHARGEABLE_INVOICE_MALWARE_SCANNING_READY === 'true'
 }
 
 async function validateManager(request) {
@@ -584,7 +583,7 @@ async function preview(request) {
     }
     if (request.body?.action === 'import') {
         if (!importEnabled()) {
-            return jsonResponse(503, { error: 'Invoice PDF import is not enabled until upload readiness is confirmed.' })
+            return jsonResponse(503, { error: 'Invoice PDF import is not enabled.' })
         }
         return importInvoice(request, manager)
     }

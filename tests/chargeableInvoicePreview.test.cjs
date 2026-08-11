@@ -7,7 +7,6 @@ const originalEnvironment = {
     DATAVERSE_URL: process.env.DATAVERSE_URL,
     VITE_DATAVERSE_URL: process.env.VITE_DATAVERSE_URL,
     CHARGEABLE_INVOICE_PREVIEW_ENABLED: process.env.CHARGEABLE_INVOICE_PREVIEW_ENABLED,
-    CHARGEABLE_INVOICE_MALWARE_SCANNING_READY: process.env.CHARGEABLE_INVOICE_MALWARE_SCANNING_READY,
 }
 
 function restoreEnvironment() {
@@ -93,7 +92,6 @@ test('invoice preview requires manager table access and returns no role internal
 test('authenticated non-persisting preview works without upload release flags', { concurrency: false }, async () => {
     process.env.DATAVERSE_URL = 'https://example.crm.dynamics.com'
     delete process.env.CHARGEABLE_INVOICE_PREVIEW_ENABLED
-    delete process.env.CHARGEABLE_INVOICE_MALWARE_SCANNING_READY
     let fetchCalls = 0
     global.fetch = async (url) => {
         fetchCalls += 1
@@ -105,10 +103,9 @@ test('authenticated non-persisting preview works without upload release flags', 
     assert.doesNotMatch(response.body, /malware-scanning readiness/i)
 })
 
-test('confirmed import stays disabled until upload and malware readiness are enabled', { concurrency: false }, async () => {
+test('confirmed import stays disabled until its independent server switch is enabled', { concurrency: false }, async () => {
     process.env.DATAVERSE_URL = 'https://example.crm.dynamics.com'
     delete process.env.CHARGEABLE_INVOICE_PREVIEW_ENABLED
-    delete process.env.CHARGEABLE_INVOICE_MALWARE_SCANNING_READY
     let fetchCalls = 0
     global.fetch = async (url) => {
         fetchCalls += 1
@@ -118,7 +115,7 @@ test('confirmed import stays disabled until upload and malware readiness are ena
     const response = await invoke(request(pdf, { body: { ...request(pdf).body, action: 'import' } }))
     assert.equal(response.status, 503)
     assert.equal(fetchCalls, 2)
-    assert.match(response.body, /import is not enabled until upload readiness/i)
+    assert.match(response.body, /import is not enabled/i)
 })
 
 test('invoice preview validates declared bytes, MIME type, extension, and PDF signature', () => {
@@ -133,7 +130,6 @@ test('invoice preview validates declared bytes, MIME type, extension, and PDF si
 test('authenticated preview extracts labelled text and performs one exact bounded Job query', { concurrency: false }, async () => {
     process.env.DATAVERSE_URL = 'https://example.crm.dynamics.com'
     process.env.CHARGEABLE_INVOICE_PREVIEW_ENABLED = 'true'
-    process.env.CHARGEABLE_INVOICE_MALWARE_SCANNING_READY = 'true'
     const urls = []
     global.fetch = async (url, options) => {
         urls.push(String(url))
