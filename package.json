@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "npm run test:api && npm run test:maintenance && npm run test:wof && npm run test:equipment && npm run test:job-email && npm run test:technician-submission && npm run test:site-check-assignment && npm run test:job-photo && npm run test:customer-dashboard && npm run test:site-checks && npm run test:jobs-site-checks",
+    "test": "npm run test:api && npm run test:maintenance && npm run test:wof && npm run test:equipment && npm run test:job-email && npm run test:technician-submission && npm run test:site-check-assignment && npm run test:job-photo && npm run test:customer-dashboard && npm run test:site-checks && npm run test:jobs-site-checks && npm run test:chargeable-invoices",
     "test:api": "node --test tests/joblookup.test.cjs tests/jobsubmission.test.cjs",
     "test:maintenance": "node --experimental-strip-types --test tests/maintenanceServicePlans.test.ts",
     "test:wof": "node --experimental-strip-types --test tests/wofWorkflow.test.ts",
@@ -19,7 +19,8 @@
     "test:job-photo": "node --experimental-strip-types --test tests/jobPhoto.test.ts",
     "test:customer-dashboard": "node --experimental-strip-types --test tests/customerDashboardSiteSettings.test.ts",
     "test:site-checks": "node --experimental-strip-types --test tests/siteChecks.test.ts tests/siteCheckChecklistAdmin.test.ts",
-    "test:jobs-site-checks": "node --experimental-strip-types --test tests/jobsSiteChecksIntegration.test.ts"
+    "test:jobs-site-checks": "node --experimental-strip-types --test tests/jobsSiteChecksIntegration.test.ts",
+    "test:chargeable-invoices": "node --experimental-strip-types --test tests/chargeableInvoiceReview.test.ts"
   },
   "dependencies": {
     "@azure/msal-browser": "^5.9.0",

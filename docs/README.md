@@ -31,7 +31,7 @@ by scanning the repository.
 | Scheduler | [`architecture/scheduler.md`](architecture/scheduler.md) | Job scheduling relationships are documented with Jobs |
 | WOF/REGO | [`architecture/wof.md`](architecture/wof.md) | [`wof-dataverse-schema.md`](wof-dataverse-schema.md) |
 | Quotes and pricing | [`architecture/quotes.md`](architecture/quotes.md) | [`quotes-dataverse-schema.md`](quotes-dataverse-schema.md) |
-| Chargeable Invoice Review (planned) | [`features/CHARGEABLE_INVOICE_REVIEW_IMPLEMENTATION_PLAN.md`](features/CHARGEABLE_INVOICE_REVIEW_IMPLEMENTATION_PLAN.md) | Proposed manager workflow, schema, extraction, documents, and approval gates |
+| Chargeable Invoice Review (in progress) | [`features/CHARGEABLE_INVOICE_REVIEW_IMPLEMENTATION_PLAN.md`](features/CHARGEABLE_INVOICE_REVIEW_IMPLEMENTATION_PLAN.md) | [`chargeable-invoice-review-dataverse-schema.md`](chargeable-invoice-review-dataverse-schema.md) — provisioned schema and unassigned role |
 
 ## Cross-cutting architecture
 

@@ -1,6 +1,6 @@
 # Current State
 
-Branch: `codex/site-checks-polish`
+Branch: `codex/chargeable-invoice-review`
 
 ## Deployment status
 
@@ -14,6 +14,10 @@ Branch: `codex/site-checks-polish`
 
 ## Unfinished work
 
+- Chargeable Invoice Review Phase 1 contract decisions and read-only preflight are complete.
+  Phase 2 schema and typed-state foundations are complete; extraction/diff, intake, UI and
+  service work remain. The manager role remains unassigned until an explicit manager list and
+  assignment action are approved.
 - Approve and provision the minimum Site Check deletion privileges, then smoke-test the
   in-app occurrence deletion action as the intended Service Operations role.
 
@@ -26,6 +30,41 @@ Branch: `codex/site-checks-polish`
 - Run a production-safe Technician Job Card smoke test.
 
 ## Recent milestone
+
+The manager-only Chargeable Invoice Review implementation plan is approved for phased work.
+Four representative, single-page GreenTree PDFs were visually and structurally inspected
+without modifying the originals. They confirm stable labelled invoice/header/equipment/totals
+regions but variable optional PO, story, meter and service content. The plan now records four
+real workflow fixtures: Waiting on Sales with a possible Do Not Process disposition, technician
+photo/PO approval, part-price correction plus new Labour/Consumables lines, and a technician-
+verified Date of Job correction. Extracted Order No remains source evidence and never
+automatically proves PO receipt. No Dataverse, application, cloud or email mutation occurred.
+
+The approved Chargeable Invoice Review Dataverse preflight then completed through one
+interactive connection after the no-prompt attempt safely stopped. It confirmed all six proposed
+table names and ten relationship names are unused; required User-owned reference contracts and
+the unmanaged target solution are present; Service Operations has global reference access; the
+dedicated Chargeable Invoice Manager role does not yet exist; and the organisation upload limit
+is 5 MiB. A detailed User-owned schema and dedicated manager-role proposal is documented. No
+metadata, privileges, assignments, business rows, files or configuration were changed.
+
+The product owner approved the proposed six User-owned tables, dedicated unassigned manager
+role, 5 MiB V1 file limit, immutable history, approval-PDF wording, file allowlists and malware-
+scanning release gate. This confirms the Phase 1 contract but is not itself authorisation to
+provision Dataverse or create/grant the role.
+
+The first local Phase 2 foundation slice is implemented: named Choice constants and typed Review,
+Line and Correction contracts plus pure primary-queue, Waiting, Ready-to-Process and Do-Not-
+Process rules. Five focused tests cover explicit review start, Waiting precedence, terminal
+history, PO/photo prerequisites and required no-charge reasoning. Full regression tests, lint,
+production build and whitespace validation pass. No route, UI, service, Dataverse metadata,
+role or business record was created by this slice.
+
+After separate explicit external-write approval, the six-table schema, Restrict relationships,
+three alternate keys and 5 MiB File contract were provisioned and published. The unassigned
+manager role has the approved 30 organisation-depth grants and no new-table Delete/Assign/Share
+grants. A later read-only verification confirmed active keys, the full schema/role contract and
+zero user/team assignments. No business rows were created.
 
 Phase 19 Checklist Administration is implemented locally and its approved Dataverse
 least-privilege boundary is provisioned. The admin-only `/site-checks/checklists` route
@@ -420,9 +459,16 @@ and fixed the required Dataverse change-set `Content-ID` headers.
 
 ## Next task
 
-Complete the remaining Site Checks release gates: explicitly identify and test an assigned
-least-privilege non-admin account, observe the verified maximum Site, validate
-disable/re-enable preservation and deployment rollback, and perform the desktop keyboard,
-screen-reader, and 200% zoom audit. Then complete Phases 2 and 8. The production
-server-settings verification and Technician Job Card smoke test remain separate outstanding
-release work.
+Chargeable Invoice Review Phase 2 is underway. On 11 August 2026 the explicitly approved six
+user-owned tables, columns, Restrict relationships, three alternate keys and 5 MiB File column
+were provisioned and published. The unassigned `Chargeable Invoice Manager` role was created
+with the approved 30 organisation-depth Create/Read/Write/Append/Append To grants and no
+Delete/Assign/Share grants; verification confirmed no user or team assignments. No business
+rows were created and the organisation upload limit and `Service Operations` role were not
+changed.
+
+Continue Phase 2 with extraction and revision-diff helpers, then begin authenticated intake.
+Manager role assignments, deployment, server dependency/configuration changes and all real
+communications retain separate explicit approval gates. The remaining Site Checks release
+gates, production server-settings verification and Technician Job Card smoke test remain
+separate outstanding release work.

@@ -4,9 +4,16 @@
 
 - [x] Repository, branch, architecture, schema, current file/email handling, and representative PDF inspected.
 - [x] V1 boundaries, data model, state derivation, security model, and phased delivery proposed.
-- [ ] Product owner approves the schema, document retention limits, GreenTree extraction fixture set, and customer document wording.
-- [ ] Dataverse read-only preflight.
-- [ ] Schema/security provisioning (explicit approval required).
+- [x] Initial four-file GreenTree extraction fixture set inspected and scenario expectations recorded.
+- [x] Reusable read-only Dataverse preflight script created and locally validated.
+- [x] Product owner approved the proposed schema/role contract, 5 MiB V1 limit, immutable
+  retention, extraction contract, approval-document wording, upload allowlists/scanning release
+  gate, and deferred manager-role assignment on 11 August 2026.
+- [x] Dataverse read-only preflight completed in one explicitly approved interactive session;
+  names, reference contracts, solution, role prerequisites and upload limit were inspected
+  without writes.
+- [x] Six-table schema and unassigned manager role provisioned, published and verified after
+  explicit approval on 11 August 2026; no business rows or assignments were created.
 - [ ] Implementation phases below.
 
 ## Problem and V1 scope
@@ -17,10 +24,10 @@ GreenTree PDF invoices, review exceptions beside the source PDF, request/track c
 photos and POs, prepare—not send—emails, and return work to the existing GreenTree/accounts
 process when no management work remains. It never changes operational Job Status.
 
-The representative document confirms a one-page, text-bearing commercial layout with job/date,
-customer/site/contact/equipment, story, priced labour/material rows and GST totals. Extraction
-must be format-specific and confidence-scored until a representative fixture pack is approved;
-the uploaded PDF remains the authority. V1 excludes GreenTree integration/retrieval,
+The four representative documents confirm a one-page, text-bearing commercial layout with
+job/date, customer/site/contact/equipment, story, priced labour/material rows and GST totals.
+Extraction must be format-specific and confidence-scored until the contract is approved; the
+uploaded PDF remains the authority. V1 excludes GreenTree integration/retrieval,
 accounts/Nargiza users, automatic email send/ingestion, technician-portal photo ingestion,
 scanned-job-card parsing, automatic customer rules, AI wording, assignment, and accounting
 `Processed` state.
@@ -42,8 +49,11 @@ scanned-job-card parsing, automatic customer rules, AI wording, assignment, and 
 
 ## State and derived queue tabs
 
-Persist `New`, `In review`, `Waiting`, and `Ready to Process`; the UI derives queue placement
-from events instead of exposing many editable statuses.
+Persist `New`, `In review`, `Waiting`, and a terminal management disposition; the UI derives
+queue placement from events instead of exposing many editable statuses. V1 terminal
+dispositions are `Ready to Process` and `Do Not Process`. The latter is required when a
+commercial decision determines that the work must not be charged; it requires an explanatory
+note and remains in History.
 
 | Tab | Derived rule |
 | --- | --- |
@@ -51,8 +61,8 @@ from events instead of exposing many editable statuses.
 | New | No `reviewStartedOn`; opening a PDF changes nothing. |
 | In Progress | Started, not waiting, not ready. |
 | Waiting | An active waiting reason/note exists. |
-| Ready to Process | `readyToProcessOn` exists. |
-| History | Ready reviews plus superseded/replaced revisions. |
+| Ready to Process | Terminal disposition is Ready to Process. |
+| History | Ready-to-process and do-not-process reviews plus superseded/replaced revisions. |
 
 Ready is allowed only with no active wait, a PO number when PO is required, and received
 photos when photos are required. Managers explicitly start review, set PO/photos requirements,
@@ -60,11 +70,14 @@ create exception corrections and manage Waiting. `Corrections → Process` recor
 instructions then reaches ready without requiring a returned revision. Further action remains
 open through its actual prerequisite, not another broad status.
 
-## Proposed Dataverse model (approval required)
+## Provisioned Dataverse model
 
-Use organisation ownership unless confirmed environment policy requires user/team ownership
-with organisation-depth manager grants. Logical names are proposals requiring collision and
-navigation-name preflight.
+Use User ownership, matching every verified reference table, with organisation-depth grants in
+a new dedicated `Chargeable Invoice Manager` role. The preflight confirmed every proposed table
+and relationship name is unused, the target solution is unmanaged, and the existing Service
+Operations role already has global reference-table access. Exact fields, Choices, relationships
+and privileges are owned by
+[`../chargeable-invoice-review-dataverse-schema.md`](../chargeable-invoice-review-dataverse-schema.md).
 
 | Table | Key fields/relationships | Purpose |
 | --- | --- | --- |
@@ -72,16 +85,46 @@ navigation-name preflight.
 | Invoice Revision (`gr_chargeableinvoicerevision`) | required Review; revision number; extracted header/totals JSON; extraction status/confidence; source-document | Immutable imported version; unique Review + revision. |
 | Invoice Line (`gr_chargeableinvoiceline`) | required Revision; extracted line key; Labour/Parts/Other; description, quantity, unit price, total, order | Immutable structured extraction; unique Revision + line key. |
 | Review Correction (`gr_chargeableinvoicecorrection`) | required Review/Revision; optional source Line; field, original snapshot, requested value, matched state | Append-only story/line change request. |
-| Review Document (`gr_chargeableinvoicedocument`) | required Review; optional Revision; document type; File; filename/content type/size; generated snapshot/version | Original/revised PDFs, approval PDFs, PO, photos. |
+| Review Document (`gr_chargeableinvoicedocument`) | required Review; optional Revision; document type; File plus native filename companion; content type/size; generated snapshot/version | Original/revised PDFs, approval PDFs, PO, photos. |
 | Review Activity (`gr_chargeableinvoiceactivity`) | required Review; optional Revision/Document/Correction; event Choice; safe detail; actor/on | Automatic timeline and manual notes. |
 
 The Review holds invoice number/date, GreenTree reference, match confidence/status,
 `reviewStartedOn/By`, waiting-on Choice (Technician, Customer, Accounts, Sales, Management,
 Other), waiting note, `poRequired`, PO number/received-on, `photosRequired`, photo lifecycle
 (Not requested/Requested/Received), selected photo-request technician, prepared timestamps,
-`readyToProcessOn/By`, and current-revision lookup. Revision snapshots contain customer/site/
+terminal disposition/on/by/reason, and current-revision lookup. Revision snapshots contain customer/site/
 equipment display data shown in its PDF. Keep original-extraction JSON for source fidelity but
 normalise searchable headers and lines into columns.
+
+`Order No` extracted from GreenTree is immutable revision evidence and is separate from the
+manager-confirmed PO number. It may be `.`, a bare number, or labelled text such as `PO # ...`.
+It can be offered as a candidate for deliberate adoption, but must never automatically mark PO
+Received or satisfy the ready-to-process prerequisite.
+
+## Fixture evidence and scenario acceptance cases
+
+All four supplied files are single-page, machine-readable PDFs, not scans. The parser should
+use positional words/table coordinates rather than plain text lines: long story text is split
+mid-word in the extraction stream, currency symbols are inconsistently attached, and customer
+address columns can interleave in plain text.
+
+Reliable labelled fields across the set are Tax Invoice number, invoice date, page, Our Ref,
+Order No, account/customer and site blocks, headline description, Fleet No, make, model, serial,
+service meter, Date of Job, service interval, next service due, optional Description of Repair
+Work, optional Work Completed, typed Labour/Parts rows, subtotal, GST rate/amount and total.
+Blank service/meter/story sections are valid. Fleet text may concatenate site/customer and fleet
+tokens, so authoritative Equipment comes from the matched Job; extracted fleet remains evidence.
+Every import recalculates line totals, subtotal, GST and total and flags—not silently repairs—any
+mismatch.
+
+The initial acceptance scenarios are:
+
+| Our Ref | Workflow fixture |
+| --- | --- |
+| `144849` | Start Review, set Waiting on Sales with a note about sale/trade-in confirmation, then resolve either to Ready to Process or Do Not Process with a required reason. |
+| `145156` | PO Required + Photos Required; deliberately select the actual technician, prepare an unsent photo-request email, upload/mark photos received, generate approval PDF, prepare PO request, record confirmed PO, then derive Ready. The extracted Order No does not satisfy the PO step automatically. |
+| `145421` | Add corrections against existing part pricing and add requested Labour and Consumables lines that do not exist in the source revision. An existing extracted PO does not bypass corrections. |
+| `145554` | Flag Date of Job as a structured header correction, wait on the deliberately selected technician, and compare a later revised invoice against the requested date. |
 
 V1 reads existing Site Contacts. A future contact-purpose relationship/choice (PO/accounts)
 needs a separate decision after confirming global contact reuse; do not add customer-email
@@ -103,7 +146,9 @@ Invoice number identifies a Review. Duplicates are previewed as `Skip` or `Impor
 A revision appends a PDF/value snapshot transactionally and compares header/story/totals and
 lines by stable parser key, with any description-similarity fallback labelled uncertain. Every
 outstanding correction is recorded as matched, not made or unexpected change; ambiguous lines
-remain visible for a manager.
+remain visible for a manager. A correction may target a header field, story, existing line field,
+line deletion, or a requested new line with category/description/quantity/rate/price. Requested
+new lines compare against later revisions without inventing a source-line relationship.
 
 ## Review workspace, documents and email
 
@@ -139,17 +184,28 @@ revision at import confirmation. Return safe 412 refresh/retry guidance with no 
 of uncertain uploads. Stage File rows then atomically link/activate them; define retention for
 failed staging. Activity is append-only and every success reloads the authoritative review.
 
+### Approved V1 decisions
+
+- Use the six proposed User-owned tables and dedicated Chargeable Invoice Manager role.
+- Keep the verified 5 MiB organisation limit; validate each file clearly and do not change it.
+- Retain imported revisions, corrections and activity history without V1 deletion actions.
+- Label approval documents `FOR CUSTOMER PO APPROVAL — NOT A TAX INVOICE`.
+- Allow only validated PDFs and supported images; production malware-scanning readiness remains
+  a release gate.
+- Provision the role unassigned; manager assignments require a later explicit user list/action.
+
 ## Testing and deployment
 
-Maintain de-identified fixture PDFs: normal, multi-line, missing/ambiguous Job, duplicate/
-revision, malformed and total mismatch. Unit-test parser normalisation, matching, state,
+Maintain approved de-identified derivatives of the four initial fixtures plus missing/ambiguous
+Job, duplicate/revision, malformed and total-mismatch variants. Do not commit customer invoice
+PDFs or extracted customer data. Unit-test parser normalisation, matching, state,
 correction and diffing; service-test limits, ETags/change sets/File upload; component-test
 keyboard/focus/responsive panes; run approved manager-role smoke tests with no real email.
 PDF generation needs render/pixel and extracted-text verification. Deployment requires an
 approved server parser/renderer dependency and possibly managed scanning settings—explicit
 security/deployment gates, never Vite variables.
 
-## Phased implementation (all unchecked)
+## Phased implementation
 
 ### Phase 1 — approved contract and preflight
 
