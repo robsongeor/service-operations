@@ -136,7 +136,8 @@ export async function fetchChargeableInvoiceWorkspace(accessToken: string, revie
             '_gr_sourceline_value', 'gr_correctiontype', 'gr_fieldkey', 'gr_originalsnapshot',
             'gr_requestedtext', 'gr_requestedlinetype', 'gr_requesteddescription',
             'gr_requestedquantity', 'gr_requestedunitprice', 'gr_comparisonstatus', '_gr_matchedrevision_value',
-        ].join(','), reviewId), MAX_DETAIL_RECORDS),
+            'createdon',
+        ].join(','), reviewId, 'createdon asc'), MAX_DETAIL_RECORDS),
         readAll<ChargeableInvoiceDocument>(accessToken, detailUrl('gr_chargeableinvoicedocuments', [
             'gr_chargeableinvoicedocumentid', 'gr_name', '_gr_review_value', '_gr_revision_value',
             'gr_documenttype', 'gr_contenttype', 'gr_bytecount', 'gr_templateversion',

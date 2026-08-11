@@ -219,6 +219,7 @@ export type ChargeableInvoiceCorrection = {
     gr_requestedunitprice?: number | null
     gr_comparisonstatus: ChargeableInvoiceCorrectionComparison
     _gr_matchedrevision_value?: string | null
+    createdon?: string
 }
 
 export type ChargeableInvoiceActivity = {

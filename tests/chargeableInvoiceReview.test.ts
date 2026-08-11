@@ -31,6 +31,7 @@ import {
 } from '../src/alpha/chargeable-invoices/domain/greenTreeInvoiceExtraction.ts'
 import { compareOutstandingCorrections } from '../src/alpha/chargeable-invoices/domain/chargeableInvoiceRevisionComparison.ts'
 import { buildChargeableInvoiceCorrectionFields } from '../src/alpha/chargeable-invoices/domain/chargeableInvoiceCorrectionDraft.ts'
+import { buildChargeableInvoiceCorrectionInstructions } from '../src/alpha/chargeable-invoices/domain/chargeableInvoiceCorrectionInstructions.ts'
 import { validateChargeableInvoicePdf } from '../src/alpha/chargeable-invoices/services/chargeableInvoicePreviewApi.ts'
 import {
     buildChargeableInvoicePhotoRequestMailto,
@@ -278,6 +279,49 @@ test('a correction not made in one revision is re-evaluated by the next revision
     assert.equal(results[0].comparison, CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.MATCHED_IN_REVISION)
 })
 
+test('correction instructions include unresolved evidence and requests while excluding resolved history', () => {
+    const instructions = buildChargeableInvoiceCorrectionInstructions({
+        review: {
+            gr_chargeableinvoicereviewid: 'review-id', gr_name: 'VFL00005', gr_invoicenumber: 'VFL00005',
+            gr_invoicedate: '2026-07-30', gr_greentreereference: '145421',
+            gr_matchstatus: CHARGEABLE_INVOICE_MATCH_STATUSES.MATCHED_EXACTLY,
+            gr_importstatus: CHARGEABLE_INVOICE_IMPORT_STATUSES.ACTIVE,
+            _gr_currentrevision_value: 'revision-id',
+            gr_Job: { gr_jobid: 'job-id', gr_jobnumber: '145421' },
+            gr_Customer: { gr_customerid: 'customer-id', gr_name: 'Example Customer' },
+            gr_Site: { gr_siteid: 'site-id', gr_name: 'Example Site' },
+        },
+        revisions: [{
+            gr_chargeableinvoicerevisionid: 'revision-id', gr_name: 'VFL00005 revision 1',
+            _gr_review_value: 'review-id', _gr_sourcedocument_value: 'document-id', gr_revisionnumber: 1,
+            gr_extractionversion: 'test-v1', gr_invoicenumber: 'VFL00005', gr_invoicedate: '2026-07-30',
+            gr_greentreereference: '145421', gr_extractionjson: '{}',
+        }],
+        lines: [], documents: [], activities: [], technicians: [],
+        corrections: [
+            correction({ gr_chargeableinvoicecorrectionid: 'header', gr_fieldkey: 'dateOfJob', gr_originalsnapshot: '2026-07-29', gr_requestedtext: '2026-07-28' }),
+            correction({
+                gr_chargeableinvoicecorrectionid: 'line', gr_correctiontype: CHARGEABLE_INVOICE_CORRECTION_TYPES.CHANGE_LINE,
+                gr_comparisonstatus: CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.NOT_MADE,
+                gr_originalsnapshot: JSON.stringify(sourceLine), gr_requestedunitprice: 55,
+            }),
+            correction({
+                gr_chargeableinvoicecorrectionid: 'resolved', gr_fieldkey: 'headline', gr_requestedtext: 'Resolved text',
+                gr_comparisonstatus: CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.MATCHED_IN_REVISION,
+            }),
+        ],
+    })
+    assert.equal(instructions.count, 2)
+    assert.equal(instructions.fileName, 'VFL00005-correction-instructions.txt')
+    assert.match(instructions.text, /Invoice: VFL00005/)
+    assert.match(instructions.text, /HEADER — Date of Job/)
+    assert.match(instructions.text, /Current: 2026-07-29/)
+    assert.match(instructions.text, /Requested: 2026-07-28/)
+    assert.match(instructions.text, /CHANGE LINE[\s\S]*Seal kit[\s\S]*Requested Unit price: \$55\.00/)
+    assert.match(instructions.text, /This file has not been sent automatically/)
+    assert.doesNotMatch(instructions.text, /Resolved text/)
+})
+
 test('correction drafts preserve source evidence and require meaningful requested changes', () => {
     const revision = {
         gr_chargeableinvoicerevisionid: 'revision-id', gr_name: 'VFL00001 rev 1', _gr_review_value: 'review-id',
@@ -455,6 +499,8 @@ test('Chargeable Invoice route uses shared page primitives and delegates intake 
     assert.match(workspace, /Add correction/)
     assert.match(workspace, /Prepare photo-request email/)
     assert.match(workspace, /Upload selected photos/)
+    assert.match(workspace, /Copy correction instructions/)
+    assert.match(workspace, /Download correction instructions/)
     assert.match(correctionDialog, /source revision and line remain immutable/i)
     assert.match(reviewApi, /POST gr_chargeableinvoicecorrections/)
     assert.match(reviewApi, /gr_Correction@odata\.bind': '\$2'/)

@@ -19,6 +19,7 @@ import {
 } from '../types/chargeableInvoice.types.ts'
 import { validateChargeableInvoiceRequirements, type ChargeableInvoiceRequirementsDraft } from '../domain/chargeableInvoiceState.ts'
 import type { ChargeableInvoiceCorrectionDraft } from '../domain/chargeableInvoiceCorrectionDraft.ts'
+import { buildChargeableInvoiceCorrectionInstructions } from '../domain/chargeableInvoiceCorrectionInstructions.ts'
 
 type Tab = 'summary' | 'invoice' | 'history'
 
@@ -172,6 +173,7 @@ export default function ChargeableInvoiceWorkspace({
     const [previewUrl, setPreviewUrl] = useState('')
     const [previewBusy, setPreviewBusy] = useState(false)
     const [showCorrectionDialog, setShowCorrectionDialog] = useState(false)
+    const [instructionFeedback, setInstructionFeedback] = useState('')
     const review = workspace?.review
 
     const currentRevision = useMemo(() => workspace?.revisions.find((revision) =>
@@ -186,6 +188,10 @@ export default function ChargeableInvoiceWorkspace({
         document.gr_chargeableinvoicedocumentid === currentRevision?._gr_sourcedocument_value
         && document.gr_contenttype === 'application/pdf'),
     [currentRevision?._gr_sourcedocument_value, workspace?.documents])
+    const correctionInstructions = useMemo(() => {
+        if (!workspace) return null
+        try { return buildChargeableInvoiceCorrectionInstructions(workspace) } catch { return null }
+    }, [workspace])
     const blockers = review ? [
         ...getReadyToProcessBlockers(review),
         ...(workspace?.corrections.some((correction) =>
@@ -206,6 +212,27 @@ export default function ChargeableInvoiceWorkspace({
         } finally {
             setPreviewBusy(false)
         }
+    }
+
+    const copyCorrectionInstructions = async () => {
+        if (!correctionInstructions) return
+        try {
+            await navigator.clipboard.writeText(correctionInstructions.text)
+            setInstructionFeedback(`${correctionInstructions.count} correction instruction${correctionInstructions.count === 1 ? '' : 's'} copied.`)
+        } catch {
+            setInstructionFeedback('The correction instructions could not be copied. Use Download instead.')
+        }
+    }
+
+    const downloadCorrectionInstructions = () => {
+        if (!correctionInstructions) return
+        const url = URL.createObjectURL(new Blob([correctionInstructions.text], { type: 'text/plain;charset=utf-8' }))
+        const link = window.document.createElement('a')
+        link.href = url
+        link.download = correctionInstructions.fileName
+        link.click()
+        window.setTimeout(() => URL.revokeObjectURL(url), 0)
+        setInstructionFeedback(`${correctionInstructions.count} correction instruction${correctionInstructions.count === 1 ? '' : 's'} downloaded. No communication was sent.`)
     }
 
     return <EditDrawerShell
@@ -278,6 +305,9 @@ export default function ChargeableInvoiceWorkspace({
                 </EditDrawerSection>
                 <EditDrawerSection title="Corrections">
                     {workspace?.corrections.length ? <ul className="chargeable-correction-list">{workspace.corrections.map((correction) => <li key={correction.gr_chargeableinvoicecorrectionid}><strong>{correction.gr_requesteddescription || correction.gr_requestedtext || correction.gr_fieldkey || 'Line correction'}</strong><span>{correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.OUTSTANDING ? 'Outstanding' : correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.MATCHED_IN_REVISION ? `Matched in revision ${revisionNumbers.get(correction._gr_matchedrevision_value || '') ?? ''}`.trim() : correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.NOT_MADE ? 'Not made in latest revision' : 'Superseded'}</span></li>)}</ul> : <p>No corrections have been recorded.</p>}
+                    <div className="chargeable-action-row"><button type="button" className="chargeable-secondary" disabled={!correctionInstructions} onClick={() => void copyCorrectionInstructions()}>Copy correction instructions</button><button type="button" className="chargeable-secondary" disabled={!correctionInstructions} onClick={downloadCorrectionInstructions}>Download correction instructions</button></div>
+                    <p className="chargeable-evidence-note">Instructions include unresolved corrections only and are prepared for manual handoff. Nothing is sent automatically.</p>
+                    {instructionFeedback && <p role="status" aria-live="polite">{instructionFeedback}</p>}
                     {review?.gr_reviewstartedon && review.gr_disposition == null && <button type="button" className="chargeable-secondary" disabled={saving} onClick={() => setShowCorrectionDialog(true)}>Add correction</button>}
                 </EditDrawerSection>
                 <EditDrawerSection title="Documents">

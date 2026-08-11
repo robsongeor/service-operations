@@ -26,7 +26,7 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
 
 ## Priority 2 — Product improvements
 
-- [ ] Deliver the planned manager-only Chargeable Invoice Review workflow: Phases 1–4 plus Phase 5 revised comparison, supporting-photo upload and unsent technician photo-request handoff are complete locally; continue correction-instruction handoff, approval-PDF/PO work, role assignment and release validation. See [`docs/features/CHARGEABLE_INVOICE_REVIEW_IMPLEMENTATION_PLAN.md`](docs/features/CHARGEABLE_INVOICE_REVIEW_IMPLEMENTATION_PLAN.md); role assignment and deployment retain explicit approval gates.
+- [ ] Deliver the planned manager-only Chargeable Invoice Review workflow: Phases 1–5 are complete locally, including revised comparison, supporting-photo upload, unsent technician photo requests and consolidated correction instructions; continue approval-PDF/PO work, role assignment and release validation. See [`docs/features/CHARGEABLE_INVOICE_REVIEW_IMPLEMENTATION_PLAN.md`](docs/features/CHARGEABLE_INVOICE_REVIEW_IMPLEMENTATION_PLAN.md); role assignment and deployment retain explicit approval gates.
 - [x] Implement Site Check temporary Equipment availability:
   enabled-Site-only marker, In Workshop/Temporarily Off-site exclusion, and occurrence
   exclusion snapshots; no catch-up Jobs.

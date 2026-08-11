@@ -303,8 +303,8 @@ stale workspace cannot append a correction. New corrections begin Outstanding an
 
 ### Phase 5 — revised invoices, documents and correction comparison
 
-- **Status:** revised-invoice comparison, supporting-photo upload and technician `mailto:` slices
-  complete locally; correction-instruction handoff remains.
+- **Status:** complete locally: revised-invoice comparison, supporting-photo upload, technician
+  `mailto:` and consolidated correction-instruction handoff.
 - **Scope:** revised upload, diff classifications, photo upload, technician `mailto:`, correction instructions.
 - **Dependencies/areas/schema:** Phases 3–4; parser/diff/document/workspace services; none.
 - **Acceptance/tests/docs:** every PDF/value retained; classifications visible; email unsent;
@@ -335,6 +335,14 @@ the Review ETag. Known failures retain safe Failed metadata for deliberate retry
 during finalisation reconciles the authoritative Review/Documents and otherwise reports an unknown
 outcome without retrying. Only Complete documents can be downloaded. No Job Photo row, Job status
 write, anonymous URL or automatic communication is created.
+
+The workspace builds deterministic plain-text correction instructions from its already loaded
+immutable Review, current Revision and structured Correction snapshots. Copy and `.txt` download
+include Outstanding and Not Made corrections only; Matched and Superseded history remains visible
+in the workspace but is excluded from the handoff. Header/story items show current and requested
+text, while line items show the retained source evidence and only the requested structured fields.
+Malformed historic line snapshots receive an explicit unavailable fallback. Generation is local,
+creates no Dataverse row or Activity, and clearly states that nothing was sent automatically.
 
 ### Phase 6 — PO approval documents and handoff
 

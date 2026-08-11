@@ -14,11 +14,10 @@ Branch: `codex/chargeable-invoice-review`
 
 ## Unfinished work
 
-- Chargeable Invoice Review Phases 1–4 plus Phase 5 revised-invoice comparison, supporting-photo
-  upload and unsent technician photo-request handoff are complete locally. Correction instructions
-  and approval-PDF/PO work remain, followed by explicitly gated role assignment and release
-  validation. The approved staging columns are provisioned and verified; release flags remain
-  disabled and the manager role remains unassigned.
+- Chargeable Invoice Review Phases 1–5 are complete locally. Approval-PDF/PO work remains,
+  followed by explicitly gated role assignment and release validation. The approved staging
+  columns are provisioned and verified; release flags remain disabled and the manager role remains
+  unassigned.
 - Approve and provision the minimum Site Check deletion privileges, then smoke-test the
   in-app occurrence deletion action as the intended Service Operations role.
 
@@ -537,3 +536,11 @@ writes File bytes, then atomically completes the documents, records Photos Recei
 Activity. Known failures retain safe Failed staging; uncertain finalisation reconciles without
 automatic retry. Only Complete documents download. Focused tests cover mail composition, validation,
 atomic finalisation and failed staging. No live file was uploaded and no email was sent.
+
+Phase 5 is now complete locally. The workspace generates deterministic consolidated correction
+instructions for clipboard copy or plain-text download from loaded immutable Review/Revision and
+structured Correction evidence. Outstanding and Not Made items include explicit current/requested
+header, story or line details; Matched and Superseded history is excluded. Malformed historic line
+snapshots use a safe unavailable label. Generation creates no Dataverse mutation or Activity and
+states that nothing was sent automatically. Focused tests cover filtering, evidence wording,
+requested values, filename and workspace actions.
