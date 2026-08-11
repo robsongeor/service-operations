@@ -38,7 +38,7 @@ function dataverseOrigin() {
     }
 }
 
-function uploadsEnabled() {
+function importEnabled() {
     return process.env.CHARGEABLE_INVOICE_PREVIEW_ENABLED === 'true'
         && process.env.CHARGEABLE_INVOICE_MALWARE_SCANNING_READY === 'true'
 }
@@ -575,9 +575,6 @@ async function preview(request) {
     if (request.method !== 'POST') return jsonResponse(405, { error: 'Method not allowed.' }, { Allow: 'POST' })
     const manager = await validateManager(request)
     if (manager.error) return manager.error
-    if (!uploadsEnabled()) {
-        return jsonResponse(503, { error: 'Invoice PDF preview is not enabled until malware-scanning readiness is confirmed.' })
-    }
     if (request.body?.action === 'jobLookup') {
         try {
             return jsonResponse(200, { match: await manualJobLookup(request.body.jobNumber, manager.origin, manager.authorization) })
@@ -585,7 +582,12 @@ async function preview(request) {
             return jsonResponse(503, { error: 'The Job lookup could not be completed.' })
         }
     }
-    if (request.body?.action === 'import') return importInvoice(request, manager)
+    if (request.body?.action === 'import') {
+        if (!importEnabled()) {
+            return jsonResponse(503, { error: 'Invoice PDF import is not enabled until upload readiness is confirmed.' })
+        }
+        return importInvoice(request, manager)
+    }
     const validated = validatePdfBody(request.body)
     if (validated.error) return jsonResponse(400, { error: validated.error })
     let pages

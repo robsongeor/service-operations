@@ -22,10 +22,10 @@ test('release documentation owns retention, smoke, accessibility and rollback ga
     assert.match(operations, /200% zoom/i)
     assert.match(operations, /Performance and request budgets/)
     assert.match(operations, /Do not create real accounting mutations or send communications/i)
-    assert.match(operations, /Set the Chargeable Invoice preview and approval flags false first/i)
+    assert.match(operations, /Set the Chargeable Invoice import and approval flags false first/i)
 })
 
-test('all release flags remain server-only, false by default and fail closed', async () => {
+test('all release flags remain server-only and import and approval fail closed', async () => {
     const [settings, preview, approval] = await Promise.all([
         source('api/local.settings.json.example'),
         source('api/services/chargeableInvoicePreviewService.js'),

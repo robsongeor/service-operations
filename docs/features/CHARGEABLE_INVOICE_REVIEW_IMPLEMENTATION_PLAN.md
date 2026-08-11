@@ -250,8 +250,9 @@ changes as Not Made for manager review.
 The preview endpoint now validates `WhoAmI` and manager table access, enforces the PDF/5 MiB/page/
 text bounds, uses server-side PDF.js positional text extraction, and performs one exact bounded
 Job Number query from GreenTree Our Ref. It returns structured evidence only and performs no
-Review, Revision, Line or Document write. Both server release flags default disabled until
-manager assignments and malware-scanning readiness are separately approved.
+Review, Revision, Line or Document write, so authenticated preview and Job lookup are available
+without upload-readiness flags. Confirmed import remains fail-closed behind the existing server
+import switch and malware-scanning readiness until those are separately approved.
 
 The `/chargeable-invoices` screen reuses the shared Page Header and Metric Strip, accepts up to
 20 PDFs, acquires one silent token per preview action, bounds concurrent previews, and preserves

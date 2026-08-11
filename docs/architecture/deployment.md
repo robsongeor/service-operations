@@ -43,7 +43,7 @@ DATAVERSE_CLIENT_ID
 DATAVERSE_CLIENT_SECRET
 ```
 
-Chargeable Invoice preview release gates are server-only and default to disabled:
+Chargeable Invoice File-write release gates are server-only and default to disabled:
 
 ```text
 CHARGEABLE_INVOICE_PREVIEW_ENABLED
@@ -51,16 +51,18 @@ CHARGEABLE_INVOICE_MALWARE_SCANNING_READY
 CHARGEABLE_INVOICE_APPROVAL_ENABLED
 ```
 
-Do not set any of these flags to `true` as part of ordinary deployment. Enable them only after manager
-role assignments are approved and the deployed PDF upload path's malware-scanning readiness is
-verified. The API package installs `pdfjs-dist` and `pdf-lib`; dependency installation is required when the
-managed Function build runs.
+Authenticated bounded PDF preview and Job lookup are read-only and do not require these flags.
+Despite its legacy name, `CHARGEABLE_INVOICE_PREVIEW_ENABLED` gates confirmed import and source
+File persistence. Do not set any flag to `true` as part of ordinary deployment. Enable File-write
+paths only after manager role assignments are approved and the deployed PDF upload path's malware-
+scanning readiness is verified. The API package installs `pdfjs-dist` and `pdf-lib`; dependency
+installation is required when the managed Function build runs.
 
 Approval generation additionally requires `CHARGEABLE_INVOICE_APPROVAL_ENABLED=true`. Leave it
 false until the generated-PDF File path, manager-role smoke and malware-scanning readiness have
 passed in the target environment. Enabling preview does not enable approval generation.
 
-Do not enable the intake endpoint until the approved Review Import Status and Document Upload
+Do not enable confirmed import until the approved Review Import Status and Document Upload
 Status/Error columns have been provisioned and verified. The deployed smoke must cover a
 de-identified new import, duplicate revision decision, failed-upload recovery and manager denial;
 it must not send a real customer communication.

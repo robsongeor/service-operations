@@ -498,7 +498,7 @@ Phase 3 is complete locally, and the approved Review Import Status plus Document
 Status/Error columns are provisioned and verified. The next gated work is a de-identified
 manager-role smoke covering new import, revised import, failure recovery and access denial
 before enabling either release flag. Manager role assignments, deployment,
-enabling preview flags, server dependency/configuration changes and all real
+enabling File-write flags, server dependency/configuration changes and all real
 communications retain separate explicit approval gates. The remaining Site Checks release
 gates, production server-settings verification and Technician Job Card smoke test remain
 separate outstanding release work.
@@ -575,6 +575,12 @@ monitoring and flags-first non-destructive rollback. Static release guards prote
 defaults, least-privilege role, silent authentication, reusable accessible workspace and request/
 file bounds. No role was assigned, flag changed, deployment performed, live row written or
 communication sent.
+
+Authenticated Chargeable Invoice PDF preview and manual Job lookup no longer depend on malware-
+scanning readiness because neither action persists the supplied file. Confirmed import still
+fails closed behind the existing server import switch and malware-readiness flag before it can
+create a Review or upload a Dataverse File. Approval generation is unchanged. Focused tests prove
+preview succeeds with upload flags absent while import remains blocked.
 
 The Phase 7 release preflight reverified the live Dataverse metadata and role contract on
 12 August 2026 through one explicitly approved interactive `Verify` session. All six tables,

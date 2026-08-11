@@ -45,10 +45,13 @@ pages, bounded extracted text, and the approved 5 MiB limit. PDF.js runs server-
 structured preview evidence; preview does not persist a file or Review. Confirmed import re-parses
 the supplied bytes, rechecks exact Job/duplicate state, stages bounded metadata and uses ETag-
 protected atomic finalisation after the File upload. Failed staging records contain only safe
-error text and remain recoverable because managers have no Delete privilege. The endpoint remains
-fail-closed unless both `CHARGEABLE_INVOICE_PREVIEW_ENABLED` and
+error text and remain recoverable because managers have no Delete privilege. Authenticated,
+bounded preview and Job lookup do not persist the supplied file and are available without the
+upload release flags. Confirmed import remains fail-closed unless both the legacy-named
+`CHARGEABLE_INVOICE_PREVIEW_ENABLED` import switch and
 `CHARGEABLE_INVOICE_MALWARE_SCANNING_READY` are explicitly `true`. The latter may be enabled only
-after the deployed upload path's malware-scanning readiness has been verified and approved.
+after the deployed Dataverse File upload path's malware-scanning readiness has been verified and
+approved.
 
 The review queue filters to Active imports before returning records. Workspace reads are bounded,
 follow only same-origin Dataverse continuation links, and request only the six review tables plus

@@ -31,7 +31,8 @@ session. Before target validation, separately obtain explicit approval to:
 - deploy the client and API artifacts;
 - install the server PDF dependencies in the managed Function build;
 - verify malware-scanning readiness for the deployed Dataverse File path; and
-- enable each required server flag. Keep
+- enable each required File-write server flag. Authenticated preview and Job lookup are
+  non-persisting and need no upload-readiness flag. Keep
   `CHARGEABLE_INVOICE_PREVIEW_ENABLED`, `CHARGEABLE_INVOICE_APPROVAL_ENABLED` and
   `CHARGEABLE_INVOICE_MALWARE_SCANNING_READY` false until its gate has passed.
 
@@ -122,7 +123,7 @@ raw Dataverse responses. Monitoring must not make a failed business mutation loo
 
 ## Rollback
 
-1. Set the Chargeable Invoice preview and approval flags false first; keep the malware-readiness
+1. Set the Chargeable Invoice import and approval flags false first; keep the malware-readiness
    flag conservative until the deployed path is reverified.
 2. If access must be withdrawn, remove the manager role only from the explicitly approved users or
    teams through the authorised administrative path.

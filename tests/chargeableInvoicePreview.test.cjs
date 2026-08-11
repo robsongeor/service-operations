@@ -90,7 +90,7 @@ test('invoice preview requires manager table access and returns no role internal
     assert.doesNotMatch(response.body, /systemuserroles|privilege/i)
 })
 
-test('invoice preview stays disabled until both server release gates are enabled', { concurrency: false }, async () => {
+test('authenticated non-persisting preview works without upload release flags', { concurrency: false }, async () => {
     process.env.DATAVERSE_URL = 'https://example.crm.dynamics.com'
     delete process.env.CHARGEABLE_INVOICE_PREVIEW_ENABLED
     delete process.env.CHARGEABLE_INVOICE_MALWARE_SCANNING_READY
@@ -100,9 +100,25 @@ test('invoice preview stays disabled until both server release gates are enabled
         return String(url).endsWith('/WhoAmI') ? Response.json({ UserId: 'manager' }) : Response.json({ value: [] })
     }
     const response = await invoke(request(makePdf(['Invoice No VFL00001'])))
+    assert.equal(response.status, 200)
+    assert.equal(fetchCalls, 3)
+    assert.doesNotMatch(response.body, /malware-scanning readiness/i)
+})
+
+test('confirmed import stays disabled until upload and malware readiness are enabled', { concurrency: false }, async () => {
+    process.env.DATAVERSE_URL = 'https://example.crm.dynamics.com'
+    delete process.env.CHARGEABLE_INVOICE_PREVIEW_ENABLED
+    delete process.env.CHARGEABLE_INVOICE_MALWARE_SCANNING_READY
+    let fetchCalls = 0
+    global.fetch = async (url) => {
+        fetchCalls += 1
+        return String(url).endsWith('/WhoAmI') ? Response.json({ UserId: 'manager' }) : Response.json({ value: [] })
+    }
+    const pdf = makePdf(['Invoice No VFL00001'])
+    const response = await invoke(request(pdf, { body: { ...request(pdf).body, action: 'import' } }))
     assert.equal(response.status, 503)
     assert.equal(fetchCalls, 2)
-    assert.match(response.body, /malware-scanning readiness/i)
+    assert.match(response.body, /import is not enabled until upload readiness/i)
 })
 
 test('invoice preview validates declared bytes, MIME type, extension, and PDF signature', () => {

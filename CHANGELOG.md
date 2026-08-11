@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Allowed authenticated, bounded Chargeable Invoice PDF preview and Job lookup before File-upload
+  readiness while keeping confirmed import and approval generation fail-closed.
 - Added the Chargeable Invoice Review release operations contract with no-cleanup V1 retention,
   de-identified access/business/accessibility/performance smoke tests, safe monitoring,
   non-destructive rollback and executable disabled-flag/least-privilege/bounded-request guards.
