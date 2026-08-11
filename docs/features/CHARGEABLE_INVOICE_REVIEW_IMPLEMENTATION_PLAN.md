@@ -303,10 +303,23 @@ stale workspace cannot append a correction. New corrections begin Outstanding an
 
 ### Phase 5 — revised invoices, documents and correction comparison
 
+- **Status:** revised-invoice comparison slice complete locally; supporting-document upload,
+  technician `mailto:` and correction-instruction handoff remain.
 - **Scope:** revised upload, diff classifications, photo upload, technician `mailto:`, correction instructions.
 - **Dependencies/areas/schema:** Phases 3–4; parser/diff/document/workspace services; none.
 - **Acceptance/tests/docs:** every PDF/value retained; classifications visible; email unsent;
   file retry/cleanup tests and security update.
+
+Revised import now reads at most 200 unresolved Corrections (Outstanding or Not Made) and compares
+them server-side against the newly parsed immutable Revision. Header/story values require an exact
+normalised match; change/remove operations use the retained source-Line key; requested new lines
+must have exactly one structured match. Ambiguous or unsupported evidence is Not Made rather than
+claimed as matched. The Revision, Lines, Document/Review links, per-Correction outcome and Revision
+Compared Activity commit in one Dataverse change set. Both the Review and each Correction are
+ETag-protected, and the immutable Review + revision-number key remains the unknown-outcome
+reconciliation boundary. A Matched outcome records the new Revision lookup; Not Made remains
+unresolved and is re-evaluated by every later revised import. The workspace shows the matched
+revision number or that the correction was not made in the latest revision.
 
 ### Phase 6 — PO approval documents and handoff
 

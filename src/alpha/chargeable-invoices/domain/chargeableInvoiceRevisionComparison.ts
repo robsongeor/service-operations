@@ -73,7 +73,8 @@ export function compareOutstandingCorrections(
 ) {
     const sourceById = new Map(sourceLines.map((line) => [line.gr_chargeableinvoicelineid, line]))
     return corrections
-        .filter((correction) => correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.OUTSTANDING)
+        .filter((correction) => correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.OUTSTANDING
+            || correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.NOT_MADE)
         .map((correction): ChargeableInvoiceCorrectionResult => {
             const id = correction.gr_chargeableinvoicecorrectionid
             if (correction.gr_correctiontype === CHARGEABLE_INVOICE_CORRECTION_TYPES.HEADER_FIELD) {

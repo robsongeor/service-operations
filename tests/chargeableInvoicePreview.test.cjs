@@ -190,6 +190,68 @@ test('server import normalization rejects unbalanced totals and finalization use
     assert.match(batch.payload, /"gr_importstatus":122830001/)
 })
 
+test('server comparison rechecks unresolved corrections and conservatively classifies a revised invoice', () => {
+    const corrections = [
+        {
+            gr_chargeableinvoicecorrectionid: 'header-correction', '@odata.etag': 'W/"2"',
+            gr_correctiontype: 122830000, gr_fieldkey: 'dateOfJob', gr_requestedtext: '2026-07-26',
+            gr_comparisonstatus: 122830002,
+        },
+        {
+            gr_chargeableinvoicecorrectionid: 'line-correction', '@odata.etag': 'W/"3"',
+            gr_correctiontype: 122830002, gr_originalsnapshot: JSON.stringify({ gr_linekey: 'line-parts' }),
+            gr_requestedunitprice: 55, gr_comparisonstatus: 122830000,
+        },
+        {
+            gr_chargeableinvoicecorrectionid: 'ambiguous-add', '@odata.etag': 'W/"4"',
+            gr_correctiontype: 122830003, gr_requestedlinetype: 122830002,
+            gr_requesteddescription: 'Consumables', gr_comparisonstatus: 122830000,
+        },
+    ]
+    const lines = [
+        { gr_linekey: 'line-parts', gr_linetype: 122830001, gr_description: 'Seal kit', gr_unitprice: 55 },
+        { gr_linekey: 'line-other-1', gr_linetype: 122830002, gr_description: 'Consumables' },
+        { gr_linekey: 'line-other-2', gr_linetype: 122830002, gr_description: 'Consumables' },
+    ]
+    const results = endpoint._test.compareUnresolvedCorrections(corrections, { gr_dateofjob: '2026-07-26' }, lines)
+    assert.deepEqual(results.map((item) => [item.correctionId, item.comparison]), [
+        ['header-correction', 122830001],
+        ['line-correction', 122830001],
+        ['ambiguous-add', 122830002],
+    ])
+})
+
+test('revised invoice finalization updates correction outcomes atomically under their ETags', () => {
+    const normalized = endpoint._test.normalizedImport({
+        invoiceNumber: 'VFL00001', invoiceDate: '27/07/26', greenTreeReference: '145156',
+        subtotal: '100', gstAmount: '15', total: '115', lines: [], extractionVersion: 'test', sourceEvidence: {},
+    })
+    const batch = endpoint._test.finalizationBatch('review-id', 'W/"1"', 'document-id', 2, normalized, false, [
+        { correctionId: 'matched-id', etag: 'W/"2"', comparison: 122830001 },
+        { correctionId: 'not-made-id', etag: 'W/"3"', comparison: 122830002 },
+    ])
+    assert.match(batch.payload, /PATCH gr_chargeableinvoicecorrections\(matched-id\)/)
+    assert.match(batch.payload, /If-Match: W\/"2"/)
+    assert.match(batch.payload, /"gr_MatchedRevision@odata.bind":"\$1"/)
+    assert.match(batch.payload, /PATCH gr_chargeableinvoicecorrections\(not-made-id\)/)
+    assert.match(batch.payload, /"gr_name":"Revision compared"/)
+    assert.match(batch.payload, /"gr_event":122830010/)
+    assert.match(batch.payload, /1 correction matched; 1 not made/)
+})
+
+test('unresolved correction lookup is bounded and requires concurrency evidence', { concurrency: false }, async () => {
+    global.fetch = async (url) => {
+        const parsed = new URL(String(url))
+        assert.equal(parsed.searchParams.get('$top'), '201')
+        assert.match(parsed.searchParams.get('$filter'), /122830000 or gr_comparisonstatus eq 122830002/)
+        return Response.json({ value: [{ gr_chargeableinvoicecorrectionid: 'correction-id', '@odata.etag': 'W/"7"' }] })
+    }
+    const rows = await endpoint._test.unresolvedCorrections('review-id', 'https://example.crm.dynamics.com', 'Bearer token')
+    assert.equal(rows.length, 1)
+    global.fetch = async () => Response.json({ value: [{ gr_chargeableinvoicecorrectionid: 'missing-etag' }] })
+    await assert.rejects(() => endpoint._test.unresolvedCorrections('review-id', 'https://example.crm.dynamics.com', 'Bearer token'), /concurrency data/i)
+})
+
 test('unknown finalization outcomes are reconciled by the immutable review/revision key', { concurrency: false }, async () => {
     global.fetch = async (url) => {
         const parsed = new URL(String(url))

@@ -128,6 +128,8 @@ export default function ChargeableInvoiceWorkspace({
     const currentLines = useMemo(() => workspace?.lines.filter((line) =>
         line._gr_revision_value === currentRevision?.gr_chargeableinvoicerevisionid) ?? [],
     [currentRevision?.gr_chargeableinvoicerevisionid, workspace?.lines])
+    const revisionNumbers = useMemo(() => new Map(workspace?.revisions.map((revision) =>
+        [revision.gr_chargeableinvoicerevisionid, revision.gr_revisionnumber]) ?? []), [workspace?.revisions])
     const sourceDocument = useMemo(() => workspace?.documents.find((document) =>
         document.gr_chargeableinvoicedocumentid === currentRevision?._gr_sourcedocument_value
         && document.gr_contenttype === 'application/pdf'),
@@ -220,7 +222,7 @@ export default function ChargeableInvoiceWorkspace({
                     <div className="chargeable-workspace-table-wrap"><table className="chargeable-workspace-table"><thead><tr><th>Type</th><th>Description</th><th>Qty</th><th>Rate</th><th>Total</th></tr></thead><tbody>{currentLines.map((line) => <tr key={line.gr_chargeableinvoicelineid}><td>{line.gr_linetype === CHARGEABLE_INVOICE_LINE_TYPES.LABOUR ? 'Labour' : line.gr_linetype === CHARGEABLE_INVOICE_LINE_TYPES.PARTS ? 'Parts' : 'Other'}</td><td>{line.gr_description}</td><td>{line.gr_quantity ?? '—'}</td><td>{line.gr_unitprice == null ? '—' : money.format(line.gr_unitprice)}</td><td>{line.gr_extendedprice == null ? '—' : money.format(line.gr_extendedprice)}</td></tr>)}</tbody></table></div>
                 </EditDrawerSection>
                 <EditDrawerSection title="Corrections">
-                    {workspace?.corrections.length ? <ul className="chargeable-correction-list">{workspace.corrections.map((correction) => <li key={correction.gr_chargeableinvoicecorrectionid}><strong>{correction.gr_requesteddescription || correction.gr_requestedtext || correction.gr_fieldkey || 'Line correction'}</strong><span>{correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.OUTSTANDING ? 'Outstanding' : correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.MATCHED_IN_REVISION ? 'Matched in revision' : correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.NOT_MADE ? 'Not made' : 'Superseded'}</span></li>)}</ul> : <p>No corrections have been recorded.</p>}
+                    {workspace?.corrections.length ? <ul className="chargeable-correction-list">{workspace.corrections.map((correction) => <li key={correction.gr_chargeableinvoicecorrectionid}><strong>{correction.gr_requesteddescription || correction.gr_requestedtext || correction.gr_fieldkey || 'Line correction'}</strong><span>{correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.OUTSTANDING ? 'Outstanding' : correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.MATCHED_IN_REVISION ? `Matched in revision ${revisionNumbers.get(correction._gr_matchedrevision_value || '') ?? ''}`.trim() : correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.NOT_MADE ? 'Not made in latest revision' : 'Superseded'}</span></li>)}</ul> : <p>No corrections have been recorded.</p>}
                     {review?.gr_reviewstartedon && review.gr_disposition == null && <button type="button" className="chargeable-secondary" disabled={saving} onClick={() => setShowCorrectionDialog(true)}>Add correction</button>}
                 </EditDrawerSection>
                 <EditDrawerSection title="Documents">

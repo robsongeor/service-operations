@@ -14,10 +14,10 @@ Branch: `codex/chargeable-invoice-review`
 
 ## Unfinished work
 
-- Chargeable Invoice Review Phases 1 and 2 are complete. Phase 3 preview, duplicate/revision
-  decisions, manual exact Job recovery and recoverable import are implemented locally. The
-  approved staging columns are provisioned and verified; release flags and the manager role
-  remain disabled/unassigned until their explicit gates are met.
+- Chargeable Invoice Review Phases 1–4 and the Phase 5 revised-invoice comparison slice are
+  complete locally. Supporting documents and unsent handoffs remain, followed by explicitly gated
+  role assignment and release validation. The approved staging columns are provisioned and
+  verified; release flags remain disabled and the manager role remains unassigned.
 - Approve and provision the minimum Site Check deletion privileges, then smoke-test the
   in-app occurrence deletion action as the intended Service Operations role.
 
@@ -517,3 +517,12 @@ stories, change/remove existing lines and requested new Labour/Parts/Other lines
 requires meaningful changes and captures immutable Revision/Line evidence. Correction creation,
 an ETag-enforcing Review sentinel update and append-only Activity commit atomically; new corrections
 begin Outstanding and block Ready. Phase 4 is complete locally.
+
+The first Phase 5 slice is complete locally. Revised imports now re-evaluate at most 200 unresolved
+Outstanding/Not Made Corrections on the server against the newly parsed immutable Revision. Exact
+normalised header/story matching, stable source-line keys and unique structured added-line matches
+avoid false positives. Revision/Lines, document activation, Review current revision, ETag-protected
+Correction outcomes and a Revision Compared Activity commit atomically; unknown outcomes retain the
+existing immutable Review/revision reconciliation. Matched rows identify their Revision, Not Made
+rows remain unresolved for the next revision, and both states are visible in the workspace. No live
+invoice was imported, no role was assigned, no release flag was enabled and no communication was sent.

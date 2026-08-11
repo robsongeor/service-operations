@@ -4,6 +4,7 @@ const MAX_TEXT_ITEMS = 20_000
 const PDF_PARSE_TIMEOUT_MS = 15_000
 const EXTRACTION_VERSION = 'greentree-layout-v1'
 const { createHash, randomBytes } = require('node:crypto')
+const { COMPARISONS, compareUnresolvedCorrections } = require('./chargeableInvoiceComparison')
 
 const MATCHED_EXACTLY = 122830000
 const UNMATCHED = 122830002
@@ -339,7 +340,7 @@ async function dataverseJson(url, authorization, options = {}) {
     return text ? JSON.parse(text) : null
 }
 
-function finalizationBatch(reviewId, reviewEtag, documentId, revisionNumber, normalized, firstImport) {
+function finalizationBatch(reviewId, reviewEtag, documentId, revisionNumber, normalized, firstImport, comparisons = []) {
     const boundary = `batch_${randomBytes(12).toString('hex')}`
     const changeset = `changeset_${randomBytes(12).toString('hex')}`
     const parts = []
@@ -361,7 +362,36 @@ function finalizationBatch(reviewId, reviewEtag, documentId, revisionNumber, nor
         'gr_Document@odata.bind': `/gr_chargeableinvoicedocuments(${documentId})`, gr_event: firstImport ? 122830000 : 122830009,
         gr_occurredon: new Date().toISOString(),
     })
+    if (!firstImport) {
+        comparisons.forEach((comparison, index) => add(nextId + 3 + index, 'PATCH', `gr_chargeableinvoicecorrections(${comparison.correctionId})`, {
+            gr_comparisonstatus: comparison.comparison,
+            ...(comparison.comparison === COMPARISONS.MATCHED_IN_REVISION ? { 'gr_MatchedRevision@odata.bind': '$1' } : {}),
+        }, [`If-Match: ${comparison.etag}`]))
+        const matched = comparisons.filter((comparison) => comparison.comparison === COMPARISONS.MATCHED_IN_REVISION).length
+        add(nextId + 3 + comparisons.length, 'POST', 'gr_chargeableinvoiceactivities', {
+            gr_name: 'Revision compared', 'gr_Review@odata.bind': `/gr_chargeableinvoicereviews(${reviewId})`,
+            'gr_Revision@odata.bind': '$1', gr_event: 122830010,
+            gr_detail: `${matched} correction${matched === 1 ? '' : 's'} matched; ${comparisons.length - matched} not made.`,
+            gr_occurredon: new Date().toISOString(),
+        })
+    }
     return { boundary, payload: [`--${boundary}`, `Content-Type: multipart/mixed;boundary=${changeset}`, '', ...parts, `--${changeset}--`, `--${boundary}--`, ''].join('\r\n') }
+}
+
+async function unresolvedCorrections(reviewId, origin, authorization) {
+    const url = new URL(`${origin}/api/data/v9.2/gr_chargeableinvoicecorrections`)
+    url.searchParams.set('$select', [
+        'gr_chargeableinvoicecorrectionid', 'gr_correctiontype', 'gr_fieldkey', 'gr_originalsnapshot',
+        'gr_requestedtext', 'gr_requestedlinetype', 'gr_requesteddescription', 'gr_requestedquantity',
+        'gr_requestedunitprice', 'gr_comparisonstatus',
+    ].join(','))
+    url.searchParams.set('$filter', `_gr_review_value eq ${reviewId} and (gr_comparisonstatus eq ${COMPARISONS.OUTSTANDING} or gr_comparisonstatus eq ${COMPARISONS.NOT_MADE})`)
+    url.searchParams.set('$top', '201')
+    const body = await dataverseJson(url, authorization)
+    const corrections = Array.isArray(body?.value) ? body.value : []
+    if (corrections.length > 200) throw new Error('The review has too many unresolved corrections to compare safely.')
+    if (corrections.some((correction) => !correction['@odata.etag'])) throw new Error('Correction concurrency data is unavailable.')
+    return corrections
 }
 
 async function reconcileFinalization(origin, authorization, reviewId, revisionNumber) {
@@ -463,6 +493,7 @@ async function importInvoice(request, manager) {
     let reviewId = duplicate.review?.gr_chargeableinvoicereviewid
     let reviewEtag = duplicate.review?.['@odata.etag']
     let documentId
+    let comparisons = []
     try {
         if (!reviewId) {
             const review = await dataverseJson(`${manager.origin}/api/data/v9.2/gr_chargeableinvoicereviews`, manager.authorization, {
@@ -480,6 +511,10 @@ async function importInvoice(request, manager) {
             reviewEtag = review?.['@odata.etag']
         }
         if (!reviewId) throw new Error('Review creation returned no identity.')
+        if (!firstImport) {
+            const corrections = await unresolvedCorrections(reviewId, manager.origin, manager.authorization)
+            comparisons = compareUnresolvedCorrections(corrections, normalized.revision, normalized.lines)
+        }
         const document = await dataverseJson(`${manager.origin}/api/data/v9.2/gr_chargeableinvoicedocuments`, manager.authorization, {
             method: 'POST', headers: { 'Content-Type': 'application/json', Prefer: 'return=representation' },
             body: JSON.stringify({
@@ -494,7 +529,7 @@ async function importInvoice(request, manager) {
             method: 'PATCH', headers: { Authorization: manager.authorization, Accept: 'application/json', 'Content-Type': 'application/octet-stream' }, body: validated.buffer,
         })
         if (!upload.ok) throw new Error('The source PDF file upload failed.')
-        const batch = finalizationBatch(reviewId, reviewEtag, documentId, duplicate.proposedRevisionNumber, normalized, firstImport)
+        const batch = finalizationBatch(reviewId, reviewEtag, documentId, duplicate.proposedRevisionNumber, normalized, firstImport, comparisons)
         let finalized
         let result
         try {
@@ -509,7 +544,13 @@ async function importInvoice(request, manager) {
             throw new Error('Invoice metadata finalization failed.')
         }
         if (!finalized.ok || /HTTP\/1\.1 [45]\d\d/.test(result)) throw new Error('Invoice metadata finalization failed.')
-        return jsonResponse(201, { imported: true, reviewId, revisionNumber: duplicate.proposedRevisionNumber })
+        return jsonResponse(201, {
+            imported: true, reviewId, revisionNumber: duplicate.proposedRevisionNumber,
+            comparison: firstImport ? null : {
+                matched: comparisons.filter((item) => item.comparison === COMPARISONS.MATCHED_IN_REVISION).length,
+                notMade: comparisons.filter((item) => item.comparison === COMPARISONS.NOT_MADE).length,
+            },
+        })
     } catch (error) {
         if (error instanceof UnknownImportOutcomeError) {
             return jsonResponse(503, { error: 'The invoice import outcome is unknown. Refresh before retrying.' })
@@ -581,6 +622,8 @@ module.exports = {
         manualJobLookup,
         normalizedImport,
         finalizationBatch,
+        unresolvedCorrections,
+        compareUnresolvedCorrections,
         reconcileFinalization,
         extractGreenTreeCandidate,
         extractPdfLayout,

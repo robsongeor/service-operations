@@ -104,6 +104,11 @@ Review and Source Revision; Source Line is optional. Persist correction type, fi
 snapshot, requested text, requested line type/description/quantity/unit price, comparison status
 and optional Matched Revision. Original extracted values are never mutated.
 
+On revised import, Outstanding and Not Made rows are unresolved comparison inputs. Conservative
+server-side comparison writes Matched in revision plus Matched Revision, or Not made without a
+matched lookup. Each update uses the Correction ETag and shares the immutable Revision finalisation
+change set; a Not made row remains eligible for comparison against a later revision.
+
 ## Review Document
 
 Schema `gr_ChargeableInvoiceDocument`; entity set `gr_chargeableinvoicedocuments`. Require

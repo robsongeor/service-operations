@@ -254,6 +254,24 @@ test('ambiguous duplicate added lines are not claimed as matched', () => {
     assert.match(results[0].reason, /ambiguous/i)
 })
 
+test('a correction not made in one revision is re-evaluated by the next revision', () => {
+    const results = compareOutstandingCorrections([
+        correction({
+            gr_comparisonstatus: CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.NOT_MADE,
+            gr_fieldkey: 'dateOfJob',
+            gr_requestedtext: '2026-07-26',
+        }),
+    ], [], {
+        gr_extractionversion: 'test-v1',
+        gr_invoicenumber: 'VFL00004',
+        gr_invoicedate: '2026-07-29',
+        gr_greentreereference: '145554',
+        gr_dateofjob: '2026-07-26',
+        gr_extractionjson: '{}',
+    }, [])
+    assert.equal(results[0].comparison, CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.MATCHED_IN_REVISION)
+})
+
 test('correction drafts preserve source evidence and require meaningful requested changes', () => {
     const revision = {
         gr_chargeableinvoicerevisionid: 'revision-id', gr_name: 'VFL00001 rev 1', _gr_review_value: 'review-id',
