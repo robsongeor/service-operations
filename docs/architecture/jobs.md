@@ -32,6 +32,10 @@ Detailed tables, columns, and relationship names belong in the relevant schema d
 Job create/edit drawers use shared drawer presentation and shared searchable selectors.
 Scheduling and Customer Dashboard entry points reuse the Jobs workflow. Completion is routed
 through the completion framework rather than screen-specific writes.
+The feature-owned Jobs table also owns Job Book clipboard export. A row click copies one
+job-book row; its explicit multi-select controls copy selected, currently shown Jobs in the
+visible sorted order as tab-separated rows. Clipboard export is browser-local and does not
+read or change Dataverse data.
 
 ## Important Business Rules
 

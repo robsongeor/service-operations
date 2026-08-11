@@ -112,6 +112,39 @@
 .jobs-reset-default:focus-visible { outline: 2px solid #55796d; outline-offset: 2px; }
 .jobs-reset-default:disabled { cursor: default; opacity: .45; }
 
+.jobs-bulk-copy-controls {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 10px 20px;
+    border-bottom: 1px solid #dfe4e1;
+    color: #59605c;
+    font-size: 0.72rem;
+    font-weight: 650;
+}
+
+.jobs-bulk-copy-controls label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.jobs-bulk-copy-controls button {
+    min-height: 30px;
+    padding: 0 11px;
+    border: 1px solid #55796d;
+    border-radius: 7px;
+    background: #edf7f2;
+    color: #285746;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.jobs-bulk-copy-controls button:disabled { cursor: not-allowed; opacity: .45; }
+.jobs-bulk-copy-controls button:focus-visible { outline: 2px solid #55796d; outline-offset: 2px; }
+
 .jobs-list-toolbar > span {
     margin-right: 3px;
     color: #737a76;

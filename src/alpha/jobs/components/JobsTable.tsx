@@ -78,6 +78,7 @@ export default function JobsTable({
 }: Props) {
     const { searchText, selectedJobType, officeAttentionFilter, scheduledJobsVisibility, sort } = viewState
     const [selectedRowId, setSelectedRowId] = useState<string | null>(null)
+    const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(() => new Set())
     const [openMechanicJobId, setOpenMechanicJobId] = useState<string | null>(null)
     const [savingMechanicJobId, setSavingMechanicJobId] = useState<string | null>(null)
     const [emailingJobId, setEmailingJobId] = useState<string | null>(null)
@@ -227,7 +228,7 @@ export default function JobsTable({
     const spreadsheetCell = (value?: string | null) =>
         (value ?? '').replace(/[\t\r\n]+/g, ' ').trim()
 
-    const copyJobRow = async (job: Job) => {
+    const buildJobBookSpreadsheetRow = (job: Job) => {
         const addressParts = spreadsheetCell(job.gr_Site?.gr_address)
             .split(',')
             .map((part) => part.trim())
@@ -235,7 +236,7 @@ export default function JobsTable({
         const siteAddress = addressParts[0] ?? ''
         const siteSuburb = addressParts[1] ?? ''
         const siteCity = addressParts.slice(2).join(', ')
-        const spreadsheetRow = [
+        return [
             job.gr_Mechanic?.gr_name,
             job.gr_Equipment?.gr_model,
             job.gr_Equipment?.gr_fleet,
@@ -246,7 +247,10 @@ export default function JobsTable({
             siteCity,
             job.gr_ordernumber,
         ].map(spreadsheetCell).join('\t')
+    }
 
+    const copyJobRow = async (job: Job) => {
+        const spreadsheetRow = buildJobBookSpreadsheetRow(job)
         try {
             await navigator.clipboard.writeText(spreadsheetRow)
             setSelectedRowId(job.gr_jobid)
@@ -258,6 +262,49 @@ export default function JobsTable({
             console.error(error)
             setCopyFeedback({
                 message: 'The row could not be copied. Check clipboard permission and try again.',
+                isError: true,
+            })
+        }
+
+        window.setTimeout(() => setCopyFeedback(null), 2600)
+    }
+
+    const selectedShownJobs = useMemo(
+        () => sortedJobs.filter((job) => selectedJobIds.has(job.gr_jobid)),
+        [selectedJobIds, sortedJobs],
+    )
+    const allShownJobsSelected = sortedJobs.length > 0 && selectedShownJobs.length === sortedJobs.length
+
+    const toggleSelectedJob = (jobId: string) => {
+        setSelectedJobIds((current) => {
+            const next = new Set(current)
+            if (next.has(jobId)) next.delete(jobId)
+            else next.add(jobId)
+            return next
+        })
+    }
+
+    const toggleAllShownJobs = () => {
+        setSelectedJobIds((current) => {
+            const next = new Set(current)
+            if (allShownJobsSelected) sortedJobs.forEach((job) => next.delete(job.gr_jobid))
+            else sortedJobs.forEach((job) => next.add(job.gr_jobid))
+            return next
+        })
+    }
+
+    const copySelectedJobs = async () => {
+        if (!selectedShownJobs.length) return
+        try {
+            await navigator.clipboard.writeText(selectedShownJobs.map(buildJobBookSpreadsheetRow).join('\n'))
+            setCopyFeedback({
+                message: `${selectedShownJobs.length} Jobs copied — paste them into the job book.`,
+                isError: false,
+            })
+        } catch (error) {
+            console.error(error)
+            setCopyFeedback({
+                message: 'The Jobs could not be copied. Check clipboard permission and try again.',
                 isError: true,
             })
         }
@@ -368,6 +415,21 @@ export default function JobsTable({
                     disabled={resetToDefaultDisabled}
                 >
                     Reset to Default
+                </button>
+            </div>
+
+            <div className="jobs-bulk-copy-controls" aria-label="Job book spreadsheet export">
+                <label>
+                    <input
+                        type="checkbox"
+                        checked={allShownJobsSelected}
+                        onChange={toggleAllShownJobs}
+                        disabled={sortedJobs.length === 0}
+                    />
+                    Select all shown
+                </label>
+                <button type="button" onClick={() => void copySelectedJobs()} disabled={selectedShownJobs.length === 0}>
+                    Copy {selectedShownJobs.length ? `${selectedShownJobs.length} selected` : 'selected'} for job book
                 </button>
             </div>
 
@@ -624,6 +686,14 @@ export default function JobsTable({
 
                                 <td className="jobs-table-actions-column">
                                     <div className="jobs-table-actions">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedJobIds.has(job.gr_jobid)}
+                                            aria-label={`Select Job ${job.gr_jobnumber || 'row'} for job book export`}
+                                            title="Select for job book export"
+                                            onClick={(event) => event.stopPropagation()}
+                                            onChange={() => toggleSelectedJob(job.gr_jobid)}
+                                        />
                                         {hasTechnicianSubmission(job) && (
                                             <button
                                                 className="jobs-submission-indicator"

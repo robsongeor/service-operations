@@ -66,3 +66,10 @@ test('Jobs and Scheduler apply explicit Site Check integration contracts', () =>
     assert.match(jobsHook, /assertJobSchedulerEligible/)
     assert.match(jobsHook, /SITE_CHECK_SCHEDULER_MESSAGE/)
 })
+
+test('Jobs table supports copying selected visible Job Book rows in sorted order', () => {
+    const jobsTable = readFileSync(new URL('../src/alpha/jobs/components/JobsTable.tsx', import.meta.url), 'utf8')
+    assert.match(jobsTable, /selectedShownJobs\.map\(buildJobBookSpreadsheetRow\)\.join\('\\n'\)/)
+    assert.match(jobsTable, /Select all shown/)
+    assert.match(jobsTable, /Select Job \$\{job\.gr_jobnumber \|\| 'row'\} for job book export/)
+})
