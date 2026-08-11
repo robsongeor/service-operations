@@ -245,4 +245,11 @@ export type ChargeableInvoiceWorkspace = {
     documents: ChargeableInvoiceDocument[]
     activities: ChargeableInvoiceActivity[]
     technicians: ChargeableInvoiceTechnician[]
+    siteContacts: SiteContact[]
 }
+
+export type ChargeableInvoicePoRecipientDraft = {
+    siteContactId?: string
+    manualEmail?: string
+}
+import type { SiteContact } from '../../jobs/types/siteContact.types.ts'

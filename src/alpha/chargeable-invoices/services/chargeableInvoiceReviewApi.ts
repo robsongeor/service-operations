@@ -9,6 +9,7 @@ import {
     type ChargeableInvoiceCorrection,
     type ChargeableInvoiceDocument,
     type ChargeableInvoiceLine,
+    type ChargeableInvoicePoRecipientDraft,
     type ChargeableInvoiceReview,
     type ChargeableInvoiceRevision,
     type ChargeableInvoiceTechnician,
@@ -25,12 +26,14 @@ import {
     buildChargeableInvoiceCorrectionFields,
     type ChargeableInvoiceCorrectionDraft,
 } from '../domain/chargeableInvoiceCorrectionDraft.ts'
-import { buildMailtoUrl } from '../../jobs/utils/technicianMailto.ts'
+import { buildMailtoUrl, isValidRecipientEmail } from '../../jobs/utils/technicianMailto.ts'
+import type { SiteContact } from '../../jobs/types/siteContact.types.ts'
 
 const API_URL = `${import.meta.env?.VITE_DATAVERSE_URL ?? 'https://invalid.local'}/api/data/v9.2`
 const MAX_QUEUE_RECORDS = 500
 const MAX_DETAIL_RECORDS = 500
 const MAX_TECHNICIANS = 200
+const MAX_SITE_CONTACTS = 200
 export const MAX_CHARGEABLE_INVOICE_PHOTOS = 20
 export const MAX_CHARGEABLE_INVOICE_PHOTO_BYTES = 5 * 1024 * 1024
 
@@ -115,6 +118,15 @@ function detailUrl(entitySet: string, select: string, reviewId: string, orderby?
     return url.toString()
 }
 
+function siteContactUrl(siteId: string) {
+    const url = new URL(`${API_URL}/gr_sitecontacts`)
+    url.searchParams.set('$select', 'gr_sitecontactid,_gr_site_value')
+    url.searchParams.set('$expand', 'gr_Contact($select=gr_contactid,gr_name,gr_phone,gr_email)')
+    url.searchParams.set('$filter', `_gr_site_value eq ${siteId}`)
+    url.searchParams.set('$orderby', 'createdon asc')
+    return url.toString()
+}
+
 export async function fetchChargeableInvoiceWorkspace(accessToken: string, reviewId: string): Promise<ChargeableInvoiceWorkspace> {
     const technicianUrl = new URL(`${API_URL}/gr_mechanics`)
     technicianUrl.searchParams.set('$select', 'gr_mechanicid,gr_name,gr_email,statecode')
@@ -152,14 +164,18 @@ export async function fetchChargeableInvoiceWorkspace(accessToken: string, revie
     ])
     if (revisions.length > 50) throw new Error('This review has more than 50 revisions and cannot be opened safely.')
     const revisionIds = revisions.map((item) => item.gr_chargeableinvoicerevisionid)
-    const lines = revisionIds.length ? await readAll<ChargeableInvoiceLine>(accessToken, (() => {
+    const linesPromise = revisionIds.length ? readAll<ChargeableInvoiceLine>(accessToken, (() => {
         const url = new URL(`${API_URL}/gr_chargeableinvoicelines`)
         url.searchParams.set('$select', 'gr_chargeableinvoicelineid,_gr_revision_value,gr_linekey,gr_linetype,gr_description,gr_quantity,gr_unitprice,gr_extendedprice,gr_sortorder,gr_confidence,gr_rawtext')
         url.searchParams.set('$filter', revisionIds.map((id) => `_gr_revision_value eq ${id}`).join(' or '))
         url.searchParams.set('$orderby', 'gr_sortorder asc')
         return url.toString()
     })(), MAX_DETAIL_RECORDS) : []
-    return { review, revisions, lines, corrections, documents, activities, technicians }
+    const siteContactsPromise = review._gr_site_value
+        ? readAll<SiteContact>(accessToken, siteContactUrl(review._gr_site_value), MAX_SITE_CONTACTS)
+        : []
+    const [lines, siteContacts] = await Promise.all([linesPromise, siteContactsPromise])
+    return { review, revisions, lines, corrections, documents, activities, technicians, siteContacts }
 }
 
 type ReviewTransition = {
@@ -251,10 +267,18 @@ export function saveChargeableInvoiceRequirements(
     if (review.gr_disposition != null) throw new Error('A historical invoice review cannot be changed.')
     const validation = validateChargeableInvoiceRequirements(draft)
     if (validation) throw new Error(validation)
+    return applyTransition(accessToken, review, requirementsTransition(review, draft))
+}
+
+function requirementsTransition(
+    review: ChargeableInvoiceReview,
+    draft: ChargeableInvoiceRequirementsDraft,
+): ReviewTransition {
     const photosStatus = draft.photosRequired === true
         ? draft.photosStatus ?? CHARGEABLE_INVOICE_PHOTO_STATUSES.NOT_REQUESTED
         : draft.photosRequired === false ? CHARGEABLE_INVOICE_PHOTO_STATUSES.NOT_REQUESTED : null
-    return applyTransition(accessToken, review, {
+    const firstPoReceipt = draft.poRequired === true && draft.poReceived && !review.gr_poreceivedon
+    return {
         fields: {
             gr_porequired: draft.poRequired,
             gr_ponumber: draft.poRequired ? draft.poNumber.trim() || null : null,
@@ -262,10 +286,12 @@ export function saveChargeableInvoiceRequirements(
             gr_photosrequired: draft.photosRequired,
             gr_photosstatus: photosStatus,
         },
-        event: 122830011,
-        name: 'PO and photo requirements changed',
-        detail: `PO required: ${draft.poRequired == null ? 'Undecided' : draft.poRequired ? 'Yes' : 'No'}; photos required: ${draft.photosRequired == null ? 'Undecided' : draft.photosRequired ? 'Yes' : 'No'}.`,
-    })
+        event: firstPoReceipt ? 122830014 : 122830011,
+        name: firstPoReceipt ? 'PO received' : 'PO and photo requirements changed',
+        detail: firstPoReceipt
+            ? 'A confirmed customer PO number was recorded.'
+            : `PO required: ${draft.poRequired == null ? 'Undecided' : draft.poRequired ? 'Yes' : 'No'}; photos required: ${draft.photosRequired == null ? 'Undecided' : draft.photosRequired ? 'Yes' : 'No'}.`,
+    }
 }
 
 export async function markChargeableInvoiceReady(accessToken: string, review: ChargeableInvoiceReview) {
@@ -592,6 +618,108 @@ export async function uploadChargeableInvoiceSupportingPhotos(
     return fetchChargeableInvoiceWorkspace(accessToken, review.gr_chargeableinvoicereviewid)
 }
 
+function poRequestDocuments(workspace: ChargeableInvoiceWorkspace) {
+    const currentRevisionId = workspace.review._gr_currentrevision_value
+    const approval = workspace.documents.find((document) =>
+        document.gr_documenttype === CHARGEABLE_INVOICE_DOCUMENT_TYPES.APPROVAL_PDF
+        && document.gr_uploadstatus === CHARGEABLE_INVOICE_UPLOAD_STATUSES.COMPLETE
+        && document._gr_revision_value?.toLowerCase() === currentRevisionId?.toLowerCase())
+    const photos = workspace.documents.filter((document) =>
+        document.gr_documenttype === CHARGEABLE_INVOICE_DOCUMENT_TYPES.SUPPORTING_PHOTO
+        && document.gr_uploadstatus === CHARGEABLE_INVOICE_UPLOAD_STATUSES.COMPLETE)
+    return { approval, photos }
+}
+
+function assertPoRequestWorkflow(workspace: ChargeableInvoiceWorkspace) {
+    const review = workspace.review
+    if (!review.gr_reviewstartedon) throw new Error('Start the review before preparing a PO request.')
+    if (review.gr_disposition != null) throw new Error('PO requests cannot be prepared for a historical review.')
+    if (review.gr_porequired !== true) throw new Error('Record that a customer PO is required before preparing its request.')
+    if (review.gr_poreceivedon) throw new Error('A confirmed customer PO has already been received.')
+    if (review.gr_photosrequired == null) throw new Error('Record whether supporting photos are required before preparing the PO request.')
+    if (workspace.corrections.some((correction) =>
+        correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.OUTSTANDING
+        || correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.NOT_MADE)) {
+        throw new Error('Resolve all outstanding invoice corrections before preparing the PO request.')
+    }
+    const documents = poRequestDocuments(workspace)
+    if (!documents.approval) throw new Error('Generate the current revision approval PDF before preparing the PO request.')
+    if (review.gr_photosrequired === true
+        && (review.gr_photosstatus !== CHARGEABLE_INVOICE_PHOTO_STATUSES.RECEIVED || !documents.photos.length)) {
+        throw new Error('Receive and upload the required supporting photos before preparing the PO request.')
+    }
+    return documents
+}
+
+function resolvePoRecipient(workspace: ChargeableInvoiceWorkspace, draft: ChargeableInvoicePoRecipientDraft) {
+    if (draft.siteContactId) {
+        const siteContact = workspace.siteContacts.find((candidate) =>
+            candidate.gr_sitecontactid.toLowerCase() === draft.siteContactId?.toLowerCase())
+        if (!siteContact?.gr_Contact || !isValidRecipientEmail(siteContact.gr_Contact.gr_email)) {
+            throw new Error('Choose a Site Contact with a valid email address.')
+        }
+        return { email: (siteContact.gr_Contact.gr_email ?? '').trim(), name: siteContact.gr_Contact.gr_name.trim() }
+    }
+    const email = draft.manualEmail?.trim() ?? ''
+    if (email.length > 320 || !isValidRecipientEmail(email)) {
+        throw new Error('Enter a valid customer recipient email address.')
+    }
+    return { email, name: '' }
+}
+
+export function buildChargeableInvoicePoRequestMailto(
+    workspace: ChargeableInvoiceWorkspace,
+    draft: ChargeableInvoicePoRecipientDraft,
+) {
+    const documents = assertPoRequestWorkflow(workspace)
+    const recipient = resolvePoRecipient(workspace, draft)
+    const review = workspace.review
+    const revision = workspace.revisions.find((candidate) =>
+        candidate.gr_chargeableinvoicerevisionid.toLowerCase() === review._gr_currentrevision_value?.toLowerCase())
+    if (!revision) throw new Error('The current invoice revision is unavailable.')
+    const jobNumber = review.gr_Job?.gr_jobnumber || review.gr_greentreereference
+    const customer = review.gr_Customer?.gr_name || revision.gr_customersnapshot || 'Customer'
+    const equipment = [review.gr_Equipment?.gr_make, review.gr_Equipment?.gr_model,
+        review.gr_Equipment?.gr_fleet ? `Fleet ${review.gr_Equipment.gr_fleet}` : ''].filter(Boolean).join(' - ')
+    const total = revision.gr_total == null ? 'Not recorded' : new Intl.NumberFormat('en-NZ', {
+        style: 'currency', currency: 'NZD',
+    }).format(revision.gr_total)
+    const firstName = recipient.name.split(/\s+/)[0] || 'there'
+    const subject = `Purchase order requested - Job ${jobNumber} - ${customer}`.slice(0, 150)
+    const body = [
+        `Hi ${firstName},`, '',
+        `Please review the attached customer PO approval document for the completed work on Job ${jobNumber}.`,
+        review.gr_photosrequired === true ? 'Supporting photos are also included for your review.' : '', '',
+        `Customer: ${customer}`,
+        `Site: ${review.gr_Site?.gr_name || revision.gr_sitesnapshot || 'Not recorded'}`,
+        `Equipment: ${equipment || revision.gr_fleet || revision.gr_serial || 'Not recorded'}`,
+        `Approval amount (including GST): ${total}`, '',
+        'The approval document is for customer PO approval and is not a tax invoice.',
+        'Please reply with your purchase order number so the work can proceed to invoicing.', '',
+        'Kind regards,',
+        'Liftrucks NZ Ltd',
+    ].filter((line, index, all) => line !== '' || all[index - 1] !== '').join('\n')
+    return {
+        mailto: buildMailtoUrl({ recipient: recipient.email, subject, body }),
+        attachments: [documents.approval, ...(review.gr_photosrequired === true ? documents.photos : [])],
+    }
+}
+
+export async function prepareChargeableInvoicePoRequest(
+    accessToken: string,
+    workspace: ChargeableInvoiceWorkspace,
+    draft: ChargeableInvoicePoRecipientDraft,
+) {
+    const prepared = buildChargeableInvoicePoRequestMailto(workspace, draft)
+    const next = await applyTransition(accessToken, workspace.review, {
+        fields: { gr_porequestpreparedon: new Date().toISOString() },
+        event: 122830013,
+        name: 'PO request prepared',
+        detail: 'An unsent customer PO-request email draft was prepared.',
+    })
+    return { workspace: next, mailto: prepared.mailto }
+}
+
 export async function downloadChargeableInvoiceDocument(accessToken: string, document: ChargeableInvoiceDocument) {
     if (document.gr_uploadstatus !== CHARGEABLE_INVOICE_UPLOAD_STATUSES.COMPLETE) {
         throw new Error('Only complete invoice documents can be downloaded.')
@@ -640,4 +768,6 @@ export async function generateChargeableInvoiceApprovalPdf(
     return fetchChargeableInvoiceWorkspace(accessToken, review.gr_chargeableinvoicereviewid)
 }
 
-export const chargeableInvoiceReviewApiTest = { trustedNextLink, transitionBatch, photoFinalizationBatch, detectedPhotoType }
+export const chargeableInvoiceReviewApiTest = {
+    trustedNextLink, transitionBatch, photoFinalizationBatch, detectedPhotoType, siteContactUrl, requirementsTransition,
+}

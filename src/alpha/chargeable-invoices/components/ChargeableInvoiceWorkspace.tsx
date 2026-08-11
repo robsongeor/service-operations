@@ -4,6 +4,7 @@ import EditDrawerShell from '../../shared/drawer/EditDrawerShell.tsx'
 import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation.tsx'
 import EditDrawerFormDialog from '../../shared/drawer/EditDrawerFormDialog.tsx'
 import DrawerTabs from '../../shared/drawer/DrawerTabs.tsx'
+import SearchableSelect from '../../shared/searchable-select/SearchableSelect.tsx'
 import ChargeableInvoiceCorrectionDialog from './ChargeableInvoiceCorrectionDialog.tsx'
 import { getReadyToProcessBlockers } from '../domain/chargeableInvoiceState.ts'
 import {
@@ -14,12 +15,14 @@ import {
     CHARGEABLE_INVOICE_UPLOAD_STATUSES,
     CHARGEABLE_INVOICE_WAITING_ON,
     type ChargeableInvoiceDocument,
+    type ChargeableInvoicePoRecipientDraft,
     type ChargeableInvoiceWaitingOn,
     type ChargeableInvoiceWorkspace as Workspace,
 } from '../types/chargeableInvoice.types.ts'
 import { validateChargeableInvoiceRequirements, type ChargeableInvoiceRequirementsDraft } from '../domain/chargeableInvoiceState.ts'
 import type { ChargeableInvoiceCorrectionDraft } from '../domain/chargeableInvoiceCorrectionDraft.ts'
 import { buildChargeableInvoiceCorrectionInstructions } from '../domain/chargeableInvoiceCorrectionInstructions.ts'
+import { isValidRecipientEmail } from '../../jobs/utils/technicianMailto.ts'
 
 type Tab = 'summary' | 'invoice' | 'history'
 
@@ -33,6 +36,7 @@ type Props = {
     onSaveRequirements: (draft: ChargeableInvoiceRequirementsDraft) => Promise<void>
     onSavePhotoTechnician: (technicianId: string) => Promise<void>
     onPreparePhotoRequest: () => Promise<string>
+    onPreparePoRequest: (draft: ChargeableInvoicePoRecipientDraft) => Promise<string>
     onUploadPhotos: (files: File[]) => Promise<void>
     onGenerateApprovalPdf: () => Promise<void>
     onMarkReady: () => Promise<void>
@@ -161,9 +165,75 @@ function PhotoWorkflow({ workspace, saving, onSaveTechnician, onPrepare, onUploa
     </>
 }
 
+function PoRequestWorkflow({ workspace, saving, onPrepare, onDownload }: {
+    workspace: Workspace
+    saving: boolean
+    onPrepare: (draft: ChargeableInvoicePoRecipientDraft) => Promise<string>
+    onDownload: (document: ChargeableInvoiceDocument) => Promise<void>
+}) {
+    const review = workspace.review
+    const [recipientChoice, setRecipientChoice] = useState('')
+    const [manualEmail, setManualEmail] = useState('')
+    const [attachmentsConfirmed, setAttachmentsConfirmed] = useState(false)
+    const validContacts = workspace.siteContacts.filter((siteContact) =>
+        siteContact.gr_Contact && isValidRecipientEmail(siteContact.gr_Contact.gr_email))
+    const options = [
+        ...validContacts.map((siteContact) => ({
+            value: siteContact.gr_sitecontactid,
+            label: siteContact.gr_Contact?.gr_name || 'Site Contact',
+            secondary: siteContact.gr_Contact?.gr_email,
+            searchText: `${siteContact.gr_Contact?.gr_email ?? ''} ${siteContact.gr_Contact?.gr_phone ?? ''}`,
+        })),
+        { value: '__manual__', label: 'Enter another email address', secondary: 'Manual recipient' },
+    ]
+    const approval = workspace.documents.find((document) =>
+        document.gr_documenttype === CHARGEABLE_INVOICE_DOCUMENT_TYPES.APPROVAL_PDF
+        && document.gr_uploadstatus === CHARGEABLE_INVOICE_UPLOAD_STATUSES.COMPLETE
+        && document._gr_revision_value?.toLowerCase() === review._gr_currentrevision_value?.toLowerCase())
+    const photos = workspace.documents.filter((document) =>
+        document.gr_documenttype === CHARGEABLE_INVOICE_DOCUMENT_TYPES.SUPPORTING_PHOTO
+        && document.gr_uploadstatus === CHARGEABLE_INVOICE_UPLOAD_STATUSES.COMPLETE)
+    const attachments = approval ? [approval, ...(review.gr_photosrequired === true ? photos : [])] : []
+    const unresolved = workspace.corrections.some((correction) =>
+        correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.OUTSTANDING
+        || correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.NOT_MADE)
+    const prerequisites = [
+        !review.gr_reviewstartedon ? 'Start the review.' : '',
+        review.gr_porequired !== true ? 'Record that a customer PO is required.' : '',
+        review.gr_photosrequired == null ? 'Record whether supporting photos are required.' : '',
+        unresolved ? 'Resolve all outstanding corrections.' : '',
+        !approval ? 'Generate the approval PDF for the current revision.' : '',
+        review.gr_photosrequired === true && (review.gr_photosstatus !== CHARGEABLE_INVOICE_PHOTO_STATUSES.RECEIVED || photos.length === 0)
+            ? 'Receive and upload the required supporting photos.' : '',
+        review.gr_poreceivedon ? 'A confirmed customer PO has already been received.' : '',
+    ].filter(Boolean)
+    const recipientReady = recipientChoice === '__manual__'
+        ? isValidRecipientEmail(manualEmail)
+        : validContacts.some((siteContact) => siteContact.gr_sitecontactid === recipientChoice)
+    const prepare = async () => {
+        try {
+            const draft = recipientChoice === '__manual__'
+                ? { manualEmail }
+                : { siteContactId: recipientChoice }
+            window.location.href = await onPrepare(draft)
+        } catch { /* workspace error contains the safe detail */ }
+    }
+    if (review.gr_porequired !== true) return <p>Record that a customer PO is required to enable this workflow.</p>
+    return <>
+        <SearchableSelect id="chargeable-po-recipient" label="Customer PO recipient" value={recipientChoice} options={options} onChange={(value) => { setRecipientChoice(value); setAttachmentsConfirmed(false) }} placeholder="Choose a Site Contact or manual entry" searchPlaceholder="Search Site Contacts" emptyLabel="No matching Site Contacts" disabled={saving || review.gr_disposition != null || Boolean(review.gr_poreceivedon)} required />
+        {recipientChoice === '__manual__' && <label className="chargeable-field">Recipient email<input type="email" value={manualEmail} maxLength={320} autoComplete="email" disabled={saving} onChange={(event) => setManualEmail(event.currentTarget.value)} /></label>}
+        <div className="chargeable-field"><span>Last prepared</span><strong>{formatDateTime(review.gr_porequestpreparedon)}</strong></div>
+        {prerequisites.length > 0 && <ul className="chargeable-blockers">{prerequisites.map((item) => <li key={item}>{item}</li>)}</ul>}
+        {attachments.length > 0 && <div><h4>Files to attach manually</h4><ul className="chargeable-document-list">{attachments.map((document) => <li key={document.gr_chargeableinvoicedocumentid}><span><strong>{document.gr_filename || document.gr_name}</strong><small>{document.gr_documenttype === CHARGEABLE_INVOICE_DOCUMENT_TYPES.APPROVAL_PDF ? 'Approval PDF' : 'Supporting photo'}</small></span><button type="button" className="chargeable-secondary" disabled={saving} onClick={() => void onDownload(document)}>Download</button></li>)}</ul></div>}
+        <label className="chargeable-check"><input type="checkbox" checked={attachmentsConfirmed} disabled={saving || attachments.length === 0} onChange={(event) => setAttachmentsConfirmed(event.currentTarget.checked)} />I will attach the downloaded files before sending</label>
+        <button type="button" className="chargeable-secondary" disabled={saving || review.gr_disposition != null || prerequisites.length > 0 || !recipientReady || !attachmentsConfirmed} onClick={() => void prepare()}>{saving ? 'Preparing...' : 'Prepare PO-request email'}</button>
+        <p className="chargeable-evidence-note">Preparing records an audit event and opens an editable draft. Files are not attached and the email is not sent automatically.</p>
+    </>
+}
+
 export default function ChargeableInvoiceWorkspace({
     workspace, loading, saving, error, onStart, onSaveWaiting, onSaveRequirements,
-    onSavePhotoTechnician, onPreparePhotoRequest, onUploadPhotos, onGenerateApprovalPdf,
+    onSavePhotoTechnician, onPreparePhotoRequest, onPreparePoRequest, onUploadPhotos, onGenerateApprovalPdf,
     onMarkReady, onMarkDoNotProcess, onAddCorrection, onLoadDocument, onDownload, onClose,
 }: Props) {
     const [tab, setTab] = useState<Tab>('summary')
@@ -281,6 +351,9 @@ export default function ChargeableInvoiceWorkspace({
                 </EditDrawerSection>
                 <EditDrawerSection title="Photo request and uploads">
                     <PhotoWorkflow key={`${review.gr_chargeableinvoicereviewid}-photos-${review['@odata.etag']}`} workspace={workspace} saving={saving} onSaveTechnician={onSavePhotoTechnician} onPrepare={onPreparePhotoRequest} onUpload={onUploadPhotos} />
+                </EditDrawerSection>
+                <EditDrawerSection title="Customer PO request">
+                    <PoRequestWorkflow key={`${review.gr_chargeableinvoicereviewid}-po-${review['@odata.etag']}`} workspace={workspace} saving={saving} onPrepare={onPreparePoRequest} onDownload={onDownload} />
                 </EditDrawerSection>
             </>}
         </div>

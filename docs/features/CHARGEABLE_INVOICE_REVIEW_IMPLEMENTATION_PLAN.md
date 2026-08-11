@@ -348,9 +348,9 @@ creates no Dataverse row or Activity, and clearly states that nothing was sent a
 
 ### Phase 6 — PO approval documents and handoff
 
-- **Status:** first slice complete locally: server-authoritative approval snapshot, versioned
-  PDF render, idempotent storage/download and workspace generation action. Recipient selection,
-  PO-request draft preparation and final Phase 6 integration remain.
+- **Status:** complete locally: server-authoritative approval snapshot, versioned PDF render,
+  idempotent storage/download, Site Contact or manual recipient selection, editable PO-request
+  draft preparation, PO receipt audit and existing Ready derivation.
 - **Scope:** reviewed snapshot, approval PDF render/store/download, recipient selection,
   PO-request `mailto:`, PO number and Ready derivation.
 - **Dependencies/areas/schema:** Phases 2–5 plus approved branding; server renderer and workspace;
@@ -367,6 +367,16 @@ reusable instead of creating duplicates. A new document stages as Pending, recei
 PDF File, then becomes Complete with its Approval PDF Generated Activity and Review ETag sentinel
 in one change set. Known failures remain Failed; an uncertain finalisation is reconciled without
 automatic retry. The release flag remains disabled and no live document has been generated.
+
+The workspace loads at most 200 Site Contacts for the Review's authoritative Site after the
+Review is known; it never loads a global recipient list. A manager deliberately chooses an
+emailed Site Contact or manual address. Preparation requires the current Complete approval PDF,
+resolved corrections, a recorded photo decision, and received Complete photos when required.
+The UI lists every file that must be downloaded and manually attached and requires confirmation
+before opening the editable `mailto:` draft. The ETag-protected transition records only
+`gr_porequestpreparedon` plus a safe PO Request Prepared Activity; recipient and body are not
+persisted and preparation is not send/delivery proof. The first deliberate confirmed PO number
+records the existing PO Received Activity and Ready remains derived from all prerequisites.
 
 ### Phase 7 — release readiness
 

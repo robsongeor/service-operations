@@ -26,7 +26,7 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
 
 ## Priority 2 — Product improvements
 
-- [ ] Deliver the planned manager-only Chargeable Invoice Review workflow: Phases 1–5 and the first Phase 6 approval-PDF generation/storage slice are complete locally; continue recipient selection, editable PO-request preparation, role assignment and release validation. See [`docs/features/CHARGEABLE_INVOICE_REVIEW_IMPLEMENTATION_PLAN.md`](docs/features/CHARGEABLE_INVOICE_REVIEW_IMPLEMENTATION_PLAN.md); role assignment and deployment retain explicit approval gates.
+- [ ] Deliver the planned manager-only Chargeable Invoice Review workflow: Phases 1–6 are complete locally; continue Phase 7 retention/recovery decisions, de-identified manager/accessibility/performance smoke, role assignment and release validation. See [`docs/features/CHARGEABLE_INVOICE_REVIEW_IMPLEMENTATION_PLAN.md`](docs/features/CHARGEABLE_INVOICE_REVIEW_IMPLEMENTATION_PLAN.md); role assignment and deployment retain explicit approval gates.
 - [x] Implement Site Check temporary Equipment availability:
   enabled-Site-only marker, In Workshop/Temporarily Off-site exclusion, and occurrence
   exclusion snapshots; no catch-up Jobs.

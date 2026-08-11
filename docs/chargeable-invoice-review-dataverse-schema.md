@@ -79,6 +79,12 @@ Schema `gr_ChargeableInvoiceReview`; expected entity set `gr_chargeableinvoicere
 | Disposition On | `gr_dispositionon` | Date/time | No | Terminal transition time. |
 | Disposition Reason | `gr_dispositionreason` | Multiline 4,000 | No | Required for Do Not Process. |
 
+PO-request recipient selection is transient application state. V1 reads existing Site Contacts
+for the Review Site or accepts a deliberately entered manual address; it does not persist an
+email address/body on Review and does not repurpose Email Dispatch. Preparing records the timestamp
+and PO Request Prepared Activity only. The first confirmed PO number/received decision records PO
+Received Activity without copying extracted Order No evidence.
+
 Built-in owner, created/modified user/time and ETag own audit, last-updated display and
 concurrency. Do not duplicate actor display names.
 

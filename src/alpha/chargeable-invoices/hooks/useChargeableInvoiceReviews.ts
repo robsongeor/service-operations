@@ -11,6 +11,7 @@ import {
     generateChargeableInvoiceApprovalPdf,
     markChargeableInvoiceDoNotProcess,
     markChargeableInvoiceReady,
+    prepareChargeableInvoicePoRequest,
     prepareChargeableInvoicePhotoRequest,
     saveChargeableInvoiceRequirements,
     saveChargeableInvoicePhotoTechnician,
@@ -20,6 +21,7 @@ import {
 } from '../services/chargeableInvoiceReviewApi.ts'
 import type {
     ChargeableInvoiceDocument,
+    ChargeableInvoicePoRecipientDraft,
     ChargeableInvoiceReview,
     ChargeableInvoiceWaitingOn,
     ChargeableInvoiceWorkspace,
@@ -200,6 +202,22 @@ export function useChargeableInvoiceReviews() {
         }
     }, [accessToken, applyWorkspace, workspace])
 
+    const preparePoRequest = useCallback(async (draft: ChargeableInvoicePoRecipientDraft) => {
+        if (!workspace) throw new Error('The invoice review workspace is unavailable.')
+        setIsSaving(true)
+        setWorkspaceError('')
+        try {
+            const prepared = await prepareChargeableInvoicePoRequest(await accessToken(), workspace, draft)
+            applyWorkspace(prepared.workspace)
+            return prepared.mailto
+        } catch (error) {
+            setWorkspaceError(error instanceof Error ? error.message : 'The PO request could not be prepared.')
+            throw error
+        } finally {
+            setIsSaving(false)
+        }
+    }, [accessToken, applyWorkspace, workspace])
+
     const uploadPhotos = useCallback(async (files: File[]) => {
         if (!workspace) throw new Error('The invoice review workspace is unavailable.')
         setIsSaving(true)
@@ -262,6 +280,6 @@ export function useChargeableInvoiceReviews() {
         reviews, counts, selectedId, workspace, isLoading, isLoadingWorkspace, isSaving,
         loadError, workspaceError, refresh, openReview, closeReview, startReview, saveWaiting,
         loadDocument, downloadDocument, saveRequirements, markReady, markDoNotProcess, addCorrection,
-        savePhotoTechnician, preparePhotoRequest, uploadPhotos, generateApprovalPdf,
+        savePhotoTechnician, preparePhotoRequest, preparePoRequest, uploadPhotos, generateApprovalPdf,
     }
 }

@@ -11,10 +11,12 @@ const truncate = (value: string, maximumLength: number) =>
 const section = (heading: string, lines: string[]) =>
     lines.length > 0 ? `${heading}\n-----------\n${lines.join('\n')}` : ''
 
-export function isValidTechnicianEmail(value?: string | null) {
+export function isValidRecipientEmail(value?: string | null) {
     const email = collapseWhitespace(value)
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
+
+export const isValidTechnicianEmail = isValidRecipientEmail
 
 export function buildTechnicianEmailSubject(job: Job) {
     const jobNumber = collapseWhitespace(job.gr_jobnumber)
@@ -86,8 +88,8 @@ export function buildMailtoUrl({
     subject: string
     body: string
 }) {
-    if (!isValidTechnicianEmail(recipient)) {
-        throw new Error('A valid technician email address is required.')
+    if (!isValidRecipientEmail(recipient)) {
+        throw new Error('A valid recipient email address is required.')
     }
 
     return `mailto:${encodeURIComponent(recipient.trim())}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`

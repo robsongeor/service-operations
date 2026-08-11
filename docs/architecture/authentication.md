@@ -105,6 +105,11 @@ authenticated server endpoint. The endpoint performs one `WhoAmI` and bounded Re
 probe, then re-reads the current Review/Revision/Lines itself; browser-supplied commercial values
 are never trusted. Dataverse remains the authorization and File-storage boundary.
 
+The PO-request workspace reads only Site Contacts associated with the Review's authoritative
+Site through the same delegated token. Recipient selection and email content remain browser-local.
+Preparing the editable draft uses the Review ETag to record its timestamp and append Activity;
+it neither calls a mail service nor proves send or delivery.
+
 ## Administrative and provisioning sessions
 
 Existing schema scripts commonly create a `CrmServiceClient` with `LoginPrompt=Auto`. A

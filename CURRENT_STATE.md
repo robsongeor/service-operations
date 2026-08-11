@@ -14,8 +14,7 @@ Branch: `codex/chargeable-invoice-review`
 
 ## Unfinished work
 
-- Chargeable Invoice Review Phases 1–5 and the first Phase 6 approval-PDF slice are complete
-  locally. PO request preparation and remaining Phase 6 integration remain,
+- Chargeable Invoice Review Phases 1–6 are complete locally. Phase 7 release readiness remains,
   followed by explicitly gated role assignment and release validation. The approved staging
   columns are provisioned and verified; release flags remain disabled and the manager role remains
   unassigned.
@@ -546,7 +545,7 @@ snapshots use a safe unavailable label. Generation creates no Dataverse mutation
 states that nothing was sent automatically. Focused tests cover filtering, evidence wording,
 requested values, filename and workspace actions.
 
-Chargeable Invoice Review Phase 6 has started locally. A new authenticated server endpoint
+The first Chargeable Invoice Review Phase 6 slice added an authenticated server endpoint that
 re-reads the current immutable Review/Revision/Lines, rejects stale, terminal, non-PO and
 unresolved-correction states, and renders the familiar Liftrucks approval layout with the prominent
 `FOR CUSTOMER PO APPROVAL - NOT A TAX INVOICE` marker. The versioned `pdf-lib` renderer produces
@@ -554,5 +553,14 @@ extractable A4 PDFs; a canonical SHA-256 snapshot hash reuses an existing matchi
 document. New output stages as a Review Document and atomically completes with an Approval PDF
 Generated Activity under the Review ETag. The workspace can generate and download the document.
 De-identified extracted-text and visual render checks pass. No live document was generated, no
-release flag was enabled and no deployment or communication occurred. Recipient selection and the
-editable PO-request `mailto:` handoff remain.
+release flag was enabled and no deployment or communication occurred.
+
+Chargeable Invoice Review Phase 6 is now complete locally. The workspace loads a bounded Site
+Contact list only for the Review Site, supports deliberate Site Contact or manual recipient entry,
+and gates PO-request preparation on the current Complete approval PDF, resolved Corrections and
+received supporting photos when required. It lists every file for manual download/attachment and
+requires explicit attachment confirmation before opening an editable `mailto:` draft. The Review
+ETag transition records preparation timestamp and safe Activity only; recipient/body are not
+persisted and no email is sent. First confirmed PO receipt now records the dedicated PO Received
+Activity, while existing business rules continue to derive Ready. No live data, files or
+communications were created.

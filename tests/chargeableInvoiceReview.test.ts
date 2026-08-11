@@ -35,6 +35,7 @@ import { buildChargeableInvoiceCorrectionInstructions } from '../src/alpha/charg
 import { validateChargeableInvoicePdf } from '../src/alpha/chargeable-invoices/services/chargeableInvoicePreviewApi.ts'
 import {
     buildChargeableInvoicePhotoRequestMailto,
+    buildChargeableInvoicePoRequestMailto,
     chargeableInvoiceReviewApiTest,
     uploadChargeableInvoiceSupportingPhotos,
     validateChargeableInvoiceSupportingPhotos,
@@ -297,7 +298,7 @@ test('correction instructions include unresolved evidence and requests while exc
             gr_extractionversion: 'test-v1', gr_invoicenumber: 'VFL00005', gr_invoicedate: '2026-07-30',
             gr_greentreereference: '145421', gr_extractionjson: '{}',
         }],
-        lines: [], documents: [], activities: [], technicians: [],
+        lines: [], documents: [], activities: [], technicians: [], siteContacts: [],
         corrections: [
             correction({ gr_chargeableinvoicecorrectionid: 'header', gr_fieldkey: 'dateOfJob', gr_originalsnapshot: '2026-07-29', gr_requestedtext: '2026-07-28' }),
             correction({
@@ -379,6 +380,13 @@ test('review paging accepts only Dataverse continuation links on the configured 
     assert.throws(() => chargeableInvoiceReviewApiTest.trustedNextLink('https://attacker.example/api/data/v9.2/reviews'), /untrusted/i)
 })
 
+test('workspace Site Contact lookup is bounded to the authoritative review Site', () => {
+    const url = new URL(chargeableInvoiceReviewApiTest.siteContactUrl('site-id'))
+    assert.equal(url.pathname, '/api/data/v9.2/gr_sitecontacts')
+    assert.equal(url.searchParams.get('$filter'), '_gr_site_value eq site-id')
+    assert.match(url.searchParams.get('$expand') ?? '', /gr_Contact/)
+})
+
 test('photo request mailto is explicit, editable, and addressed only to the selected technician', () => {
     const review = {
         gr_chargeableinvoicereviewid: 'review-id', gr_name: 'VFL00001', gr_invoicenumber: 'VFL00001',
@@ -397,6 +405,64 @@ test('photo request mailto is explicit, editable, and addressed only to the sele
     assert.match(decoded, /Photos required - Job 145156 - Invoice VFL00001/)
     assert.match(decoded, /Please reply with the supporting photos/)
     assert.match(decoded, /This draft has not been sent automatically/)
+})
+
+test('PO request mailto requires the current approval evidence and a deliberate Site recipient', () => {
+    const workspace = {
+        review: {
+            gr_chargeableinvoicereviewid: 'review-id', gr_name: 'VFL00001', gr_invoicenumber: 'VFL00001',
+            gr_invoicedate: '2026-07-27', gr_greentreereference: '145156',
+            gr_matchstatus: CHARGEABLE_INVOICE_MATCH_STATUSES.MATCHED_EXACTLY,
+            gr_importstatus: CHARGEABLE_INVOICE_IMPORT_STATUSES.ACTIVE,
+            gr_reviewstartedon: '2026-08-11T00:00:00Z', gr_porequired: true,
+            gr_photosrequired: true, gr_photosstatus: CHARGEABLE_INVOICE_PHOTO_STATUSES.RECEIVED,
+            _gr_currentrevision_value: 'revision-id', _gr_site_value: 'site-id', '@odata.etag': 'W/"8"',
+            gr_Job: { gr_jobid: 'job-id', gr_jobnumber: '145156', gr_description: 'Repair hydraulic leak' },
+            gr_Customer: { gr_customerid: 'customer-id', gr_name: 'Example Customer' },
+            gr_Site: { gr_siteid: 'site-id', gr_name: 'Example Site' },
+            gr_Equipment: { gr_equipmentid: 'equipment-id', gr_make: 'Example', gr_model: 'E20', gr_fleet: 'FLT-1' },
+        },
+        revisions: [{
+            gr_chargeableinvoicerevisionid: 'revision-id', gr_name: 'VFL00001 rev 1',
+            _gr_review_value: 'review-id', _gr_sourcedocument_value: 'source-id', gr_revisionnumber: 1,
+            gr_extractionversion: 'test', gr_invoicenumber: 'VFL00001', gr_invoicedate: '2026-07-27',
+            gr_greentreereference: '145156', gr_total: 432.5, gr_extractionjson: '{}',
+        }],
+        lines: [], corrections: [], activities: [], technicians: [],
+        documents: [
+            { gr_chargeableinvoicedocumentid: 'approval-id', gr_name: 'approval.pdf', gr_filename: 'approval.pdf', _gr_review_value: 'review-id', _gr_revision_value: 'revision-id', gr_documenttype: CHARGEABLE_INVOICE_DOCUMENT_TYPES.APPROVAL_PDF, gr_contenttype: 'application/pdf', gr_bytecount: 100, gr_uploadstatus: 122830001 },
+            { gr_chargeableinvoicedocumentid: 'photo-id', gr_name: 'photo.png', gr_filename: 'photo.png', _gr_review_value: 'review-id', _gr_revision_value: 'revision-id', gr_documenttype: CHARGEABLE_INVOICE_DOCUMENT_TYPES.SUPPORTING_PHOTO, gr_contenttype: 'image/png', gr_bytecount: 50, gr_uploadstatus: 122830001 },
+        ],
+        siteContacts: [{
+            gr_sitecontactid: 'site-contact-id',
+            gr_Contact: { gr_contactid: 'contact-id', gr_name: 'Pat Customer', gr_email: 'pat@example.com' },
+        }],
+    } satisfies import('../src/alpha/chargeable-invoices/types/chargeableInvoice.types.ts').ChargeableInvoiceWorkspace
+    const prepared = buildChargeableInvoicePoRequestMailto(workspace, { siteContactId: 'site-contact-id' })
+    assert.match(prepared.mailto, /^mailto:pat%40example\.com\?/)
+    const decoded = decodeURIComponent(prepared.mailto)
+    assert.match(decoded, /Purchase order requested - Job 145156 - Example Customer/)
+    assert.match(decoded, /Hi Pat/)
+    assert.match(decoded, /Approval amount \(including GST\): \$432\.50/)
+    assert.match(decoded, /not a tax invoice/i)
+    assert.equal(prepared.attachments.length, 2)
+    assert.throws(() => buildChargeableInvoicePoRequestMailto(workspace, { siteContactId: 'another-site-contact' }), /Site Contact/i)
+    assert.throws(() => buildChargeableInvoicePoRequestMailto(workspace, { manualEmail: 'invalid' }), /valid customer recipient/i)
+})
+
+test('first confirmed customer PO uses the dedicated PO Received activity event', () => {
+    const review = {
+        gr_chargeableinvoicereviewid: 'review-id', gr_name: 'VFL00001', gr_invoicenumber: 'VFL00001',
+        gr_invoicedate: '2026-07-27', gr_greentreereference: '145156',
+        gr_matchstatus: CHARGEABLE_INVOICE_MATCH_STATUSES.MATCHED_EXACTLY,
+        gr_importstatus: CHARGEABLE_INVOICE_IMPORT_STATUSES.ACTIVE,
+    } satisfies ChargeableInvoiceReview
+    const transition = chargeableInvoiceReviewApiTest.requirementsTransition(review, {
+        poRequired: true, poNumber: 'PO-123', poReceived: true, photosRequired: false, photosStatus: null,
+    })
+    assert.equal(transition.event, 122830014)
+    assert.equal(transition.name, 'PO received')
+    assert.doesNotMatch(transition.detail ?? '', /PO-123/)
 })
 
 test('supporting photo validation verifies signatures, extensions, size, and duplicate hashes', async () => {
@@ -461,6 +527,7 @@ test('known supporting photo upload failure retains a safe Failed staging docume
             },
             revisions: [], lines: [], corrections: [], documents: [], activities: [],
             technicians: [{ gr_mechanicid: 'mechanic-id', gr_name: 'Alex', gr_email: 'alex@example.com', statecode: 0 }],
+            siteContacts: [],
         }, [new File([pngBytes], 'repair.png', { type: 'image/png' })]), /failed safely/i)
     } finally {
         globalThis.fetch = originalFetch
@@ -499,10 +566,14 @@ test('Chargeable Invoice route uses shared page primitives and delegates intake 
     assert.match(workspace, /Add correction/)
     assert.match(workspace, /Prepare photo-request email/)
     assert.match(workspace, /Upload selected photos/)
+    assert.match(workspace, /<SearchableSelect/)
+    assert.match(workspace, /Prepare PO-request email/)
+    assert.match(workspace, /attach the downloaded files before sending/i)
     assert.match(workspace, /Copy correction instructions/)
     assert.match(workspace, /Download correction instructions/)
     assert.match(correctionDialog, /source revision and line remain immutable/i)
     assert.match(reviewApi, /POST gr_chargeableinvoicecorrections/)
     assert.match(reviewApi, /gr_Correction@odata\.bind': '\$2'/)
+    assert.doesNotMatch(reviewApi, /gr_emaildispatchs/)
     assert.doesNotMatch(screen, /fetch\(/)
 })

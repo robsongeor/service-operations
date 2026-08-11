@@ -71,6 +71,13 @@ text, A4 pages and a 5 MiB output limit. A canonical source-snapshot hash preven
 Complete documents. File staging and ETag-protected Document/Activity finalisation follow the
 existing recoverable pattern; no generated file receives an anonymous URL.
 
+PO-request preparation loads at most 200 Site Contacts for the authoritative Review Site and also
+allows a deliberately entered, syntactically validated recipient. It never persists the recipient
+or email body and does not use Email Dispatch. The current Revision's Complete approval PDF,
+resolved Corrections, deliberate photo decision and any required Complete photos are prerequisites.
+The UI identifies files for manual download/attachment; `mailto:` cannot attach or send them.
+Only an ETag-protected preparation timestamp and safe Activity are stored.
+
 Terminal Ready to Process performs a fresh bounded read for Outstanding/Not Made corrections
 immediately before its ETag-protected Review transition. Terminal actions require an explicit
 confirmation; Do Not Process additionally requires a non-empty reason. Extracted Order No is
