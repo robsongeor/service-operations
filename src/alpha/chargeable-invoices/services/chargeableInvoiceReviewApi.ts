@@ -18,6 +18,10 @@ import {
     validateDoNotProcess,
     type ChargeableInvoiceRequirementsDraft,
 } from '../domain/chargeableInvoiceState.ts'
+import {
+    buildChargeableInvoiceCorrectionFields,
+    type ChargeableInvoiceCorrectionDraft,
+} from '../domain/chargeableInvoiceCorrectionDraft.ts'
 
 const API_URL = `${import.meta.env?.VITE_DATAVERSE_URL ?? 'https://invalid.local'}/api/data/v9.2`
 const MAX_QUEUE_RECORDS = 500
@@ -281,6 +285,65 @@ export function markChargeableInvoiceDoNotProcess(accessToken: string, review: C
         name: 'Do not process',
         detail: reason,
     })
+}
+
+export async function createChargeableInvoiceCorrection(
+    accessToken: string,
+    workspace: ChargeableInvoiceWorkspace,
+    draft: ChargeableInvoiceCorrectionDraft,
+) {
+    const review = workspace.review
+    if (!review.gr_reviewstartedon) throw new Error('Start the review before adding a correction.')
+    if (review.gr_disposition != null) throw new Error('Corrections cannot be added to a historical review.')
+    if (!review['@odata.etag']) throw new Error('Refresh the invoice review before adding a correction.')
+    const revision = workspace.revisions.find((item) => item.gr_chargeableinvoicerevisionid === review._gr_currentrevision_value)
+        ?? workspace.revisions[0]
+    if (!revision) throw new Error('The current invoice revision is unavailable.')
+    const revisionLines = workspace.lines.filter((line) => line._gr_revision_value === revision.gr_chargeableinvoicerevisionid)
+    const built = buildChargeableInvoiceCorrectionFields(draft, revision, revisionLines)
+    if (built.error || !built.fields) throw new Error(built.error || 'The correction is invalid.')
+    const boundary = `batch_${crypto.randomUUID().replaceAll('-', '')}`
+    const changeset = `changeset_${crypto.randomUUID().replaceAll('-', '')}`
+    const correctionName = `Correction - ${review.gr_invoicenumber} - ${new Date().toISOString()}`.slice(0, 200)
+    const requests = [
+        [
+            `--${changeset}`, 'Content-Type: application/http', 'Content-Transfer-Encoding: binary', 'Content-ID: 1', '',
+            `PATCH gr_chargeableinvoicereviews(${review.gr_chargeableinvoicereviewid}) HTTP/1.1`,
+            'Content-Type: application/json;type=entry', `If-Match: ${review['@odata.etag']}`, '', JSON.stringify({ gr_name: review.gr_name }),
+        ].join('\r\n'),
+        [
+            `--${changeset}`, 'Content-Type: application/http', 'Content-Transfer-Encoding: binary', 'Content-ID: 2', '',
+            'POST gr_chargeableinvoicecorrections HTTP/1.1', 'Content-Type: application/json;type=entry', '',
+            JSON.stringify({
+                gr_name: correctionName,
+                'gr_Review@odata.bind': `/gr_chargeableinvoicereviews(${review.gr_chargeableinvoicereviewid})`,
+                'gr_SourceRevision@odata.bind': `/gr_chargeableinvoicerevisions(${revision.gr_chargeableinvoicerevisionid})`,
+                ...(built.sourceLineId ? { 'gr_SourceLine@odata.bind': `/gr_chargeableinvoicelines(${built.sourceLineId})` } : {}),
+                ...built.fields,
+            }),
+        ].join('\r\n'),
+        [
+            `--${changeset}`, 'Content-Type: application/http', 'Content-Transfer-Encoding: binary', 'Content-ID: 3', '',
+            'POST gr_chargeableinvoiceactivities HTTP/1.1', 'Content-Type: application/json;type=entry', '',
+            JSON.stringify({
+                gr_name: 'Correction added',
+                'gr_Review@odata.bind': `/gr_chargeableinvoicereviews(${review.gr_chargeableinvoicereviewid})`,
+                'gr_Revision@odata.bind': `/gr_chargeableinvoicerevisions(${revision.gr_chargeableinvoicerevisionid})`,
+                'gr_Correction@odata.bind': '$2',
+                gr_event: 122830003,
+                gr_detail: 'A structured correction was added for the current invoice revision.',
+                gr_occurredon: new Date().toISOString(),
+            }),
+        ].join('\r\n'),
+    ]
+    const payload = [`--${boundary}`, `Content-Type: multipart/mixed;boundary=${changeset}`, '', ...requests, `--${changeset}--`, `--${boundary}--`, ''].join('\r\n')
+    const response = await fetch(`${API_URL}/$batch`, {
+        method: 'POST', headers: { ...headers(accessToken), 'Content-Type': `multipart/mixed;boundary=${boundary}` }, body: payload,
+    })
+    const responseText = await response.text()
+    const nestedFailure = [...responseText.matchAll(/HTTP\/1\.1 (\d{3})/g)].map((match) => Number(match[1])).find((status) => status >= 400)
+    if (!response.ok || nestedFailure) throw safeError(nestedFailure || response.status, 'adding the invoice correction')
+    return fetchChargeableInvoiceWorkspace(accessToken, review.gr_chargeableinvoicereviewid)
 }
 
 export async function downloadChargeableInvoiceDocument(accessToken: string, document: ChargeableInvoiceDocument) {

@@ -511,4 +511,9 @@ Process / Do Not Process confirmations are also implemented under the same concu
 boundary; extracted Order No is never adopted automatically, Ready rechecks unresolved
 corrections, and Do Not Process requires a reason. The Invoice tab loads the current Revision's
 immutable source PDF only on deliberate request through delegated Dataverse access, validates its
-byte count and revokes its local object URL when replaced or closed. Correction authoring remains.
+byte count and revokes its local object URL when replaced or closed.
+Structured correction authoring is now implemented for supported header fields, repair/work
+stories, change/remove existing lines and requested new Labour/Parts/Other lines. Draft validation
+requires meaningful changes and captures immutable Revision/Line evidence. Correction creation,
+an ETag-enforcing Review sentinel update and append-only Activity commit atomically; new corrections
+begin Outstanding and block Ready. Phase 4 is complete locally.

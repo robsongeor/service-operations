@@ -4,6 +4,7 @@ import EditDrawerShell from '../../shared/drawer/EditDrawerShell.tsx'
 import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation.tsx'
 import EditDrawerFormDialog from '../../shared/drawer/EditDrawerFormDialog.tsx'
 import DrawerTabs from '../../shared/drawer/DrawerTabs.tsx'
+import ChargeableInvoiceCorrectionDialog from './ChargeableInvoiceCorrectionDialog.tsx'
 import { getReadyToProcessBlockers } from '../domain/chargeableInvoiceState.ts'
 import {
     CHARGEABLE_INVOICE_LINE_TYPES,
@@ -15,6 +16,7 @@ import {
     type ChargeableInvoiceWorkspace as Workspace,
 } from '../types/chargeableInvoice.types.ts'
 import { validateChargeableInvoiceRequirements, type ChargeableInvoiceRequirementsDraft } from '../domain/chargeableInvoiceState.ts'
+import type { ChargeableInvoiceCorrectionDraft } from '../domain/chargeableInvoiceCorrectionDraft.ts'
 
 type Tab = 'summary' | 'invoice' | 'history'
 
@@ -28,6 +30,7 @@ type Props = {
     onSaveRequirements: (draft: ChargeableInvoiceRequirementsDraft) => Promise<void>
     onMarkReady: () => Promise<void>
     onMarkDoNotProcess: (reason: string) => Promise<void>
+    onAddCorrection: (draft: ChargeableInvoiceCorrectionDraft) => Promise<void>
     onLoadDocument: (document: ChargeableInvoiceDocument) => Promise<Blob>
     onDownload: (document: ChargeableInvoiceDocument) => Promise<void>
     onClose: () => void
@@ -107,7 +110,7 @@ function RequirementsEditor({ workspace, saving, onSave }: {
 
 export default function ChargeableInvoiceWorkspace({
     workspace, loading, saving, error, onStart, onSaveWaiting, onSaveRequirements,
-    onMarkReady, onMarkDoNotProcess, onLoadDocument, onDownload, onClose,
+    onMarkReady, onMarkDoNotProcess, onAddCorrection, onLoadDocument, onDownload, onClose,
 }: Props) {
     const [tab, setTab] = useState<Tab>('summary')
     const [showReadyConfirmation, setShowReadyConfirmation] = useState(false)
@@ -116,6 +119,7 @@ export default function ChargeableInvoiceWorkspace({
     const [dispositionError, setDispositionError] = useState('')
     const [previewUrl, setPreviewUrl] = useState('')
     const [previewBusy, setPreviewBusy] = useState(false)
+    const [showCorrectionDialog, setShowCorrectionDialog] = useState(false)
     const review = workspace?.review
 
     const currentRevision = useMemo(() => workspace?.revisions.find((revision) =>
@@ -215,6 +219,10 @@ export default function ChargeableInvoiceWorkspace({
                 <EditDrawerSection title="Invoice lines">
                     <div className="chargeable-workspace-table-wrap"><table className="chargeable-workspace-table"><thead><tr><th>Type</th><th>Description</th><th>Qty</th><th>Rate</th><th>Total</th></tr></thead><tbody>{currentLines.map((line) => <tr key={line.gr_chargeableinvoicelineid}><td>{line.gr_linetype === CHARGEABLE_INVOICE_LINE_TYPES.LABOUR ? 'Labour' : line.gr_linetype === CHARGEABLE_INVOICE_LINE_TYPES.PARTS ? 'Parts' : 'Other'}</td><td>{line.gr_description}</td><td>{line.gr_quantity ?? '—'}</td><td>{line.gr_unitprice == null ? '—' : money.format(line.gr_unitprice)}</td><td>{line.gr_extendedprice == null ? '—' : money.format(line.gr_extendedprice)}</td></tr>)}</tbody></table></div>
                 </EditDrawerSection>
+                <EditDrawerSection title="Corrections">
+                    {workspace?.corrections.length ? <ul className="chargeable-correction-list">{workspace.corrections.map((correction) => <li key={correction.gr_chargeableinvoicecorrectionid}><strong>{correction.gr_requesteddescription || correction.gr_requestedtext || correction.gr_fieldkey || 'Line correction'}</strong><span>{correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.OUTSTANDING ? 'Outstanding' : correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.MATCHED_IN_REVISION ? 'Matched in revision' : correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.NOT_MADE ? 'Not made' : 'Superseded'}</span></li>)}</ul> : <p>No corrections have been recorded.</p>}
+                    {review?.gr_reviewstartedon && review.gr_disposition == null && <button type="button" className="chargeable-secondary" disabled={saving} onClick={() => setShowCorrectionDialog(true)}>Add correction</button>}
+                </EditDrawerSection>
                 <EditDrawerSection title="Documents">
                     <ul className="chargeable-document-list">{workspace?.documents.map((document) => <li key={document.gr_chargeableinvoicedocumentid}><span><strong>{document.gr_filename || document.gr_name}</strong><small>{(document.gr_bytecount / 1024).toFixed(0)} KiB</small></span><button type="button" className="chargeable-secondary" onClick={() => void onDownload(document)}>Download</button></li>)}</ul>
                 </EditDrawerSection>
@@ -228,5 +236,6 @@ export default function ChargeableInvoiceWorkspace({
         </div>
         {showReadyConfirmation && <EditDrawerConfirmation eyebrow="Terminal review decision" title="Mark Ready to Process?" message="This moves the invoice to the Ready queue. It does not change the Job or send a communication." error={dispositionError} isBusy={saving} confirmLabel="Mark Ready" onCancel={() => setShowReadyConfirmation(false)} onConfirm={() => { void onMarkReady().then(() => setShowReadyConfirmation(false)).catch((cause) => setDispositionError(cause instanceof Error ? cause.message : 'The review could not be updated.')) }} />}
         {showDoNotProcess && <EditDrawerFormDialog eyebrow="Terminal review decision" title="Do Not Process" error={dispositionError} isBusy={saving} submitLabel="Confirm Do Not Process" onCancel={() => setShowDoNotProcess(false)} onSubmit={() => { if (!dispositionReason.trim()) { setDispositionError('Enter the reason this invoice must not be processed.'); return } void onMarkDoNotProcess(dispositionReason).then(() => setShowDoNotProcess(false)).catch((cause) => setDispositionError(cause instanceof Error ? cause.message : 'The review could not be updated.')) }}><label className="chargeable-field">Reason<textarea rows={5} value={dispositionReason} maxLength={4000} onChange={(event) => setDispositionReason(event.currentTarget.value)} /></label></EditDrawerFormDialog>}
+        {showCorrectionDialog && workspace && <ChargeableInvoiceCorrectionDialog workspace={workspace} saving={saving} onAdd={onAddCorrection} onClose={() => setShowCorrectionDialog(false)} />}
     </EditDrawerShell>
 }

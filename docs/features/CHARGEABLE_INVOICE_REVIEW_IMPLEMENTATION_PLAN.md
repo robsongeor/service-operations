@@ -267,8 +267,8 @@ Active while a revised document is staged. No automatic retry occurs after an un
 
 ### Phase 4 — queue and split-screen exception review
 
-- **Status:** active queue, workspace, authenticated source-PDF viewing, Start/Waiting, PO/photo
-  decisions and terminal confirmations implemented locally; correction creation remains.
+- **Status:** complete locally: active queue, workspace, authenticated source-PDF viewing,
+  structured correction authoring, Start/Waiting, PO/photo decisions and terminal confirmations.
 - **Scope:** route/navigation, derived table tabs, workspace, Start Review, Waiting, PO/photo
   decisions, corrections and timeline.
 - **Dependencies/areas/schema:** Phase 3; feature screen/table/workspace, route/sidebar; none.
@@ -294,6 +294,12 @@ The Invoice tab resolves the current Revision's immutable Source Document and lo
 after a deliberate manager action through delegated Dataverse access. It validates the returned
 byte count, renders the PDF from a local browser object URL, and revokes that URL when replaced or
 when the workspace closes. No durable or anonymous File URL is exposed.
+
+Review by exception can add supported header/story corrections, change or remove a current
+source line, or request a new Labour/Parts/Other line. Validation requires a meaningful requested
+value and preserves the current Revision/source-Line snapshot; it never mutates extracted data.
+Correction, ETag sentinel Review update and Correction Added Activity share one change set, so a
+stale workspace cannot append a correction. New corrections begin Outstanding and block Ready.
 
 ### Phase 5 — revised invoices, documents and correction comparison
 

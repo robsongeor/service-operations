@@ -67,6 +67,12 @@ immediately before its ETag-protected Review transition. Terminal actions requir
 confirmation; Do Not Process additionally requires a non-empty reason. Extracted Order No is
 display-only evidence and is never copied into the confirmed PO field by service or UI code.
 
+Correction authoring is allowlisted to supported header/story keys and structured line fields.
+It captures the current immutable Revision/Line evidence, validates lengths/numbers, and creates
+Correction plus safe Activity in one change set. A same-value Review sentinel patch under the
+loaded ETag gives correction creation the same stale-workspace protection without changing any
+business value. The feature never updates extracted Revision or Line rows.
+
 ## Security review triggers
 
 Review this architecture before adding a new public route, credential, Application User,

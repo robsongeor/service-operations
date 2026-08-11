@@ -29,6 +29,7 @@ import {
     parseGreenTreeMoney,
 } from '../src/alpha/chargeable-invoices/domain/greenTreeInvoiceExtraction.ts'
 import { compareOutstandingCorrections } from '../src/alpha/chargeable-invoices/domain/chargeableInvoiceRevisionComparison.ts'
+import { buildChargeableInvoiceCorrectionFields } from '../src/alpha/chargeable-invoices/domain/chargeableInvoiceCorrectionDraft.ts'
 import { validateChargeableInvoicePdf } from '../src/alpha/chargeable-invoices/services/chargeableInvoicePreviewApi.ts'
 import { chargeableInvoiceReviewApiTest } from '../src/alpha/chargeable-invoices/services/chargeableInvoiceReviewApi.ts'
 
@@ -253,6 +254,24 @@ test('ambiguous duplicate added lines are not claimed as matched', () => {
     assert.match(results[0].reason, /ambiguous/i)
 })
 
+test('correction drafts preserve source evidence and require meaningful requested changes', () => {
+    const revision = {
+        gr_chargeableinvoicerevisionid: 'revision-id', gr_name: 'VFL00001 rev 1', _gr_review_value: 'review-id',
+        _gr_sourcedocument_value: 'document-id', gr_revisionnumber: 1, gr_extractionversion: 'test',
+        gr_invoicenumber: 'VFL00001', gr_invoicedate: '2026-07-27', gr_greentreereference: '145421',
+        gr_dateofjob: '2026-07-26', gr_extractionjson: '{}',
+    }
+    const base = { fieldKey: '', requestedText: '', sourceLineId: '', requestedLineType: null, requestedDescription: '', requestedQuantity: '', requestedUnitPrice: '' }
+    const header = buildChargeableInvoiceCorrectionFields({ ...base, type: CHARGEABLE_INVOICE_CORRECTION_TYPES.HEADER_FIELD, fieldKey: 'dateOfJob', requestedText: '2026-07-25' }, revision, [sourceLine])
+    assert.equal(header.fields?.gr_originalsnapshot, '2026-07-26')
+    assert.equal(header.fields?.gr_requestedtext, '2026-07-25')
+    const emptyChange = buildChargeableInvoiceCorrectionFields({ ...base, type: CHARGEABLE_INVOICE_CORRECTION_TYPES.CHANGE_LINE, sourceLineId: sourceLine.gr_chargeableinvoicelineid }, revision, [sourceLine])
+    assert.match(emptyChange.error ?? '', /at least one/i)
+    const added = buildChargeableInvoiceCorrectionFields({ ...base, type: CHARGEABLE_INVOICE_CORRECTION_TYPES.ADD_LINE, requestedLineType: CHARGEABLE_INVOICE_LINE_TYPES.OTHER, requestedDescription: 'Consumables', requestedQuantity: '1', requestedUnitPrice: '10' }, revision, [sourceLine])
+    assert.equal(added.fields?.gr_requesteddescription, 'Consumables')
+    assert.equal(added.fields?.gr_requestedunitprice, 10)
+})
+
 test('client PDF validation enforces the approved type and 5 MiB boundary before upload', () => {
     assert.equal(validateChargeableInvoicePdf({ name: 'invoice.pdf', type: 'application/pdf', size: 5 * 1024 * 1024 }), null)
     assert.match(validateChargeableInvoicePdf({ name: 'invoice.pdf', type: 'application/pdf', size: 5 * 1024 * 1024 + 1 }) ?? '', /5 MiB/)
@@ -293,12 +312,14 @@ test('review paging accepts only Dataverse continuation links on the configured 
 })
 
 test('Chargeable Invoice route uses shared page primitives and delegates intake and queue workflows', async () => {
-    const [app, sidebar, screen, queue, workspace] = await Promise.all([
+    const [app, sidebar, screen, queue, workspace, correctionDialog, reviewApi] = await Promise.all([
         readFile(new URL('../src/App.tsx', import.meta.url), 'utf8'),
         readFile(new URL('../src/Sidebar.tsx', import.meta.url), 'utf8'),
         readFile(new URL('../src/alpha/chargeable-invoices/ChargeableInvoiceReviewScreen.tsx', import.meta.url), 'utf8'),
         readFile(new URL('../src/alpha/chargeable-invoices/components/ChargeableInvoiceQueue.tsx', import.meta.url), 'utf8'),
         readFile(new URL('../src/alpha/chargeable-invoices/components/ChargeableInvoiceWorkspace.tsx', import.meta.url), 'utf8'),
+        readFile(new URL('../src/alpha/chargeable-invoices/components/ChargeableInvoiceCorrectionDialog.tsx', import.meta.url), 'utf8'),
+        readFile(new URL('../src/alpha/chargeable-invoices/services/chargeableInvoiceReviewApi.ts', import.meta.url), 'utf8'),
     ])
     assert.match(app, /path="\/chargeable-invoices"/)
     assert.match(sidebar, /Chargeable Invoices/)
@@ -316,5 +337,9 @@ test('Chargeable Invoice route uses shared page primitives and delegates intake 
     assert.match(workspace, /Order No is source evidence only/)
     assert.match(workspace, /View source PDF/)
     assert.match(workspace, /URL\.revokeObjectURL/)
+    assert.match(workspace, /Add correction/)
+    assert.match(correctionDialog, /source revision and line remain immutable/i)
+    assert.match(reviewApi, /POST gr_chargeableinvoicecorrections/)
+    assert.match(reviewApi, /gr_Correction@odata\.bind': '\$2'/)
     assert.doesNotMatch(screen, /fetch\(/)
 })

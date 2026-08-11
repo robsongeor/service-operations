@@ -5,6 +5,7 @@ import { acquireDataverseAccessToken } from '../../../auth/dataverseAuthenticati
 import { deriveChargeableInvoicePrimaryQueue, type ChargeableInvoicePrimaryQueue } from '../domain/chargeableInvoiceState.ts'
 import {
     downloadChargeableInvoiceDocument,
+    createChargeableInvoiceCorrection,
     fetchChargeableInvoiceReviews,
     fetchChargeableInvoiceWorkspace,
     markChargeableInvoiceDoNotProcess,
@@ -20,6 +21,7 @@ import type {
     ChargeableInvoiceWorkspace,
 } from '../types/chargeableInvoice.types.ts'
 import type { ChargeableInvoiceRequirementsDraft } from '../domain/chargeableInvoiceState.ts'
+import type { ChargeableInvoiceCorrectionDraft } from '../domain/chargeableInvoiceCorrectionDraft.ts'
 
 export function useChargeableInvoiceReviews() {
     const { instance } = useMsal()
@@ -146,6 +148,20 @@ export function useChargeableInvoiceReviews() {
         }
     }, [accessToken, applyWorkspace, workspace])
 
+    const addCorrection = useCallback(async (draft: ChargeableInvoiceCorrectionDraft) => {
+        if (!workspace) return
+        setIsSaving(true)
+        setWorkspaceError('')
+        try {
+            applyWorkspace(await createChargeableInvoiceCorrection(await accessToken(), workspace, draft))
+        } catch (error) {
+            setWorkspaceError(error instanceof Error ? error.message : 'The invoice correction could not be added.')
+            throw error
+        } finally {
+            setIsSaving(false)
+        }
+    }, [accessToken, applyWorkspace, workspace])
+
     const loadDocument = useCallback(async (document: ChargeableInvoiceDocument) => {
         setWorkspaceError('')
         try {
@@ -179,6 +195,6 @@ export function useChargeableInvoiceReviews() {
     return {
         reviews, counts, selectedId, workspace, isLoading, isLoadingWorkspace, isSaving,
         loadError, workspaceError, refresh, openReview, closeReview, startReview, saveWaiting,
-        loadDocument, downloadDocument, saveRequirements, markReady, markDoNotProcess,
+        loadDocument, downloadDocument, saveRequirements, markReady, markDoNotProcess, addCorrection,
     }
 }
