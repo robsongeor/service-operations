@@ -295,7 +295,7 @@ export async function allocateJobNumbers(
     })
     lines.push(`--${changeBoundary}--`, `--${batchBoundary}--`, '')
 
-    const response = await fetch(`${DATAVERSE_URL}/$batch`, {
+    const response = await fetch(`${DATAVERSE_URL}/api/data/v9.2/$batch`, {
         method: 'POST',
         headers: {
             Authorization: `Bearer ${token}`,

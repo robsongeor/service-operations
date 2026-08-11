@@ -78,7 +78,9 @@ test('Jobs table supports copying selected visible Job Book rows in sorted order
 test('Job number paste uses one atomic change set in selected-row order', async () => {
     const originalFetch = globalThis.fetch
     let request: RequestInit | undefined
-    globalThis.fetch = async (_url, init) => {
+    let requestUrl = ''
+    globalThis.fetch = async (url, init) => {
+        requestUrl = String(url)
         request = init
         return new Response('HTTP/1.1 204 No Content\r\nHTTP/1.1 204 No Content', { status: 200 })
     }
@@ -87,6 +89,7 @@ test('Job number paste uses one atomic change set in selected-row order', async 
             { job: { gr_jobid: 'job-1', '@odata.etag': 'W/"1"' } as never, jobNumber: '145850' },
             { job: { gr_jobid: 'job-2', '@odata.etag': 'W/"2"' } as never, jobNumber: '145851' },
         ])
+        assert.match(requestUrl, /\/api\/data\/v9\.2\/\$batch$/)
         assert.match(String(request?.body), /PATCH \/api\/data\/v9\.2\/gr_jobs\(job-1\)/)
         assert.match(String(request?.body), /If-Match: W\/"1"/)
         assert.match(String(request?.body), /\{"gr_jobnumber":"145850"\}/)
