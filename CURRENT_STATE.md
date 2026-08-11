@@ -14,10 +14,10 @@ Branch: `codex/chargeable-invoice-review`
 
 ## Unfinished work
 
-- Chargeable Invoice Review Phase 1 contract decisions and read-only preflight are complete.
-  Phase 2 schema and typed-state foundations are complete; extraction/diff, intake, UI and
-  service work remain. The manager role remains unassigned until an explicit manager list and
-  assignment action are approved.
+- Chargeable Invoice Review Phases 1 and 2 are complete. Phase 3 preview, duplicate/revision
+  decisions, manual exact Job recovery and recoverable import are implemented locally. The
+  approved staging columns still require a separately authorised provisioning run; release
+  flags and the manager role remain disabled/unassigned until their explicit gates are met.
 - Approve and provision the minimum Site Check deletion privileges, then smoke-test the
   in-app occurrence deletion action as the intended Service Operations role.
 
@@ -65,6 +65,31 @@ three alternate keys and 5 MiB File contract were provisioned and published. The
 manager role has the approved 30 organisation-depth grants and no new-table Delete/Assign/Share
 grants. A later read-only verification confirmed active keys, the full schema/role contract and
 zero user/team assignments. No business rows were created.
+
+The remaining Phase 2 pure domain foundation is now implemented. A structured GreenTree
+extraction boundary normalises whitespace, currency, Date Only values, line categories and
+stable line keys into immutable Revision/Line drafts while preserving raw evidence. It reports
+required-field, malformed-number and totals/GST mismatches without inventing or repairing
+values. Outstanding header, story, changed-line, added-line and removed-line corrections compare
+conservatively against a later revision; duplicate candidate lines remain Not Made rather than
+being falsely matched. Ten focused tests pass with de-identified synthetic evidence.
+
+Phase 3 preview foundations are implemented locally. The authenticated Azure Function validates
+the delegated identity once, verifies access to the new Review table, enforces PDF signature,
+MIME, exact byte count, 5 MiB, five-page and bounded-text limits, extracts positional text through
+server-side PDF.js, and performs one exact bounded Job Number query using Our Ref. It returns no
+write payload and creates no business row or File. Client validation rejects unsupported files
+before encoding. Both server release flags remain disabled. Local read-only parsing of all four
+supplied PDFs extracted their invoice/reference, Labour/Parts lines and totals with zero domain
+validation issues; the originals were not modified or copied into the repository.
+
+The new `/chargeable-invoices` batch screen is also wired locally in the main route/sidebar. It
+reuses Page Header and Metric Strip, accepts at most 20 PDFs, acquires one silent token per batch
+action, runs at most two previews concurrently, and keeps valid results usable when another file
+fails. Duplicate invoice numbers require an explicit revised-import or skip decision; incomplete
+imports are retryable, and unmatched rows offer a bounded exact Job Number recovery. Import
+re-parses and revalidates server-side, stages Review/Document metadata, uploads the immutable PDF,
+then atomically creates Revision/Lines/Activity and activates the Review. No live import was run.
 
 Phase 19 Checklist Administration is implemented locally and its approved Dataverse
 least-privilege boundary is provisioned. The admin-only `/site-checks/checklists` route
@@ -459,7 +484,7 @@ and fixed the required Dataverse change-set `Content-ID` headers.
 
 ## Next task
 
-Chargeable Invoice Review Phase 2 is underway. On 11 August 2026 the explicitly approved six
+Chargeable Invoice Review Phase 2 is complete. On 11 August 2026 the explicitly approved six
 user-owned tables, columns, Restrict relationships, three alternate keys and 5 MiB File column
 were provisioned and published. The unassigned `Chargeable Invoice Manager` role was created
 with the approved 30 organisation-depth Create/Read/Write/Append/Append To grants and no
@@ -467,8 +492,11 @@ Delete/Assign/Share grants; verification confirmed no user or team assignments. 
 rows were created and the organisation upload limit and `Service Operations` role were not
 changed.
 
-Continue Phase 2 with extraction and revision-diff helpers, then begin authenticated intake.
-Manager role assignments, deployment, server dependency/configuration changes and all real
+Phase 3 is complete locally. The next authorised schema step is to provision and verify the
+approved Review Import Status and Document Upload Status/Error columns. Then perform a
+de-identified manager-role smoke covering new import, revised import, failure recovery and
+access denial before enabling either release flag. Manager role assignments, deployment,
+enabling preview flags, server dependency/configuration changes and all real
 communications retain separate explicit approval gates. The remaining Site Checks release
 gates, production server-settings verification and Technician Job Card smoke test remain
 separate outstanding release work.

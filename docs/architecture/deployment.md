@@ -43,6 +43,23 @@ DATAVERSE_CLIENT_ID
 DATAVERSE_CLIENT_SECRET
 ```
 
+Chargeable Invoice preview release gates are server-only and default to disabled:
+
+```text
+CHARGEABLE_INVOICE_PREVIEW_ENABLED
+CHARGEABLE_INVOICE_MALWARE_SCANNING_READY
+```
+
+Do not set either flag to `true` as part of ordinary deployment. Enable them only after manager
+role assignments are approved and the deployed PDF upload path's malware-scanning readiness is
+verified. The API package installs `pdfjs-dist`; dependency installation is required when the
+managed Function build runs.
+
+Do not enable the intake endpoint until the approved Review Import Status and Document Upload
+Status/Error columns have been provisioned and verified. The deployed smoke must cover a
+de-identified new import, duplicate revision decision, failed-upload recovery and manager denial;
+it must not send a real customer communication.
+
 Do not place the client secret in repository variables, source files, documentation, or
 browser configuration.
 

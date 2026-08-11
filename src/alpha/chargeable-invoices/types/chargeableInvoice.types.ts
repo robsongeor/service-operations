@@ -5,6 +5,12 @@ export const CHARGEABLE_INVOICE_MATCH_STATUSES = {
     AMBIGUOUS: 122830003,
 } as const
 
+export const CHARGEABLE_INVOICE_IMPORT_STATUSES = {
+    STAGING: 122830000,
+    ACTIVE: 122830001,
+    FAILED: 122830002,
+} as const
+
 export const CHARGEABLE_INVOICE_WAITING_ON = {
     TECHNICIAN: 122830000,
     CUSTOMER: 122830001,
@@ -55,9 +61,16 @@ export const CHARGEABLE_INVOICE_DOCUMENT_TYPES = {
     OTHER: 122830005,
 } as const
 
+export const CHARGEABLE_INVOICE_UPLOAD_STATUSES = {
+    PENDING: 122830000,
+    COMPLETE: 122830001,
+    FAILED: 122830002,
+} as const
+
 type ValueOf<T> = T[keyof T]
 
 export type ChargeableInvoiceMatchStatus = ValueOf<typeof CHARGEABLE_INVOICE_MATCH_STATUSES>
+export type ChargeableInvoiceImportStatus = ValueOf<typeof CHARGEABLE_INVOICE_IMPORT_STATUSES>
 export type ChargeableInvoiceWaitingOn = ValueOf<typeof CHARGEABLE_INVOICE_WAITING_ON>
 export type ChargeableInvoicePhotoStatus = ValueOf<typeof CHARGEABLE_INVOICE_PHOTO_STATUSES>
 export type ChargeableInvoiceDisposition = ValueOf<typeof CHARGEABLE_INVOICE_DISPOSITIONS>
@@ -65,6 +78,7 @@ export type ChargeableInvoiceLineType = ValueOf<typeof CHARGEABLE_INVOICE_LINE_T
 export type ChargeableInvoiceCorrectionType = ValueOf<typeof CHARGEABLE_INVOICE_CORRECTION_TYPES>
 export type ChargeableInvoiceCorrectionComparison = ValueOf<typeof CHARGEABLE_INVOICE_CORRECTION_COMPARISONS>
 export type ChargeableInvoiceDocumentType = ValueOf<typeof CHARGEABLE_INVOICE_DOCUMENT_TYPES>
+export type ChargeableInvoiceUploadStatus = ValueOf<typeof CHARGEABLE_INVOICE_UPLOAD_STATUSES>
 
 export type ChargeableInvoiceReview = {
     gr_chargeableinvoicereviewid: string
@@ -73,6 +87,7 @@ export type ChargeableInvoiceReview = {
     gr_invoicedate: string
     gr_greentreereference: string
     gr_matchstatus: ChargeableInvoiceMatchStatus
+    gr_importstatus: ChargeableInvoiceImportStatus
     gr_reviewstartedon?: string | null
     gr_waitingon?: ChargeableInvoiceWaitingOn | null
     gr_waitingnote?: string | null
@@ -97,18 +112,67 @@ export type ChargeableInvoiceReview = {
     modifiedon?: string
 }
 
+export type ChargeableInvoiceDocument = {
+    gr_chargeableinvoicedocumentid: string
+    gr_name: string
+    _gr_review_value: string
+    _gr_revision_value?: string | null
+    gr_documenttype: ChargeableInvoiceDocumentType
+    gr_contenttype: string
+    gr_bytecount: number
+    gr_templateversion?: string | null
+    gr_sourcesnapshothash?: string | null
+    gr_uploadstatus: ChargeableInvoiceUploadStatus
+    gr_uploaderror?: string | null
+    '@odata.etag'?: string
+}
+
 export type ChargeableInvoiceLine = {
     gr_chargeableinvoicelineid: string
     _gr_revision_value: string
     gr_linekey: string
     gr_linetype: ChargeableInvoiceLineType
     gr_description: string
-    gr_quantity: number
-    gr_unitprice: number
-    gr_extendedprice: number
+    gr_quantity?: number | null
+    gr_unitprice?: number | null
+    gr_extendedprice?: number | null
     gr_sortorder: number
     gr_confidence?: number | null
     gr_rawtext?: string | null
+}
+
+export type ChargeableInvoiceLineDraft = Omit<
+    ChargeableInvoiceLine,
+    'gr_chargeableinvoicelineid' | '_gr_revision_value'
+>
+
+export type ChargeableInvoiceRevisionSnapshot = {
+    gr_revisionnumber?: number
+    gr_extractionversion: string
+    gr_extractionconfidence?: number | null
+    gr_invoicenumber: string
+    gr_invoicedate: string
+    gr_rawordernumber?: string | null
+    gr_greentreereference: string
+    gr_accountsnapshot?: string | null
+    gr_customersnapshot?: string | null
+    gr_sitesnapshot?: string | null
+    gr_headline?: string | null
+    gr_fleet?: string | null
+    gr_make?: string | null
+    gr_model?: string | null
+    gr_serial?: string | null
+    gr_meter?: number | null
+    gr_dateofjob?: string | null
+    gr_serviceinterval?: string | null
+    gr_nextdue?: string | null
+    gr_repairdescription?: string | null
+    gr_workcompleted?: string | null
+    gr_subtotal?: number | null
+    gr_gstrate?: number | null
+    gr_gstamount?: number | null
+    gr_total?: number | null
+    gr_extractionjson: string
 }
 
 export type ChargeableInvoiceCorrection = {
@@ -124,6 +188,6 @@ export type ChargeableInvoiceCorrection = {
     gr_requesteddescription?: string | null
     gr_requestedquantity?: number | null
     gr_requestedunitprice?: number | null
-    gr_comparison: ChargeableInvoiceCorrectionComparison
+    gr_comparisonstatus: ChargeableInvoiceCorrectionComparison
     _gr_matchedrevision_value?: string | null
 }

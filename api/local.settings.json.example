@@ -8,6 +8,8 @@
     "DATAVERSE_CLIENT_ID": "your-application-client-id",
     "DATAVERSE_CLIENT_SECRET": "your-application-client-secret",
     "LIFTTRUCKS_API_USERNAME": "your-lifttrucks-api-username",
-    "LIFTTRUCKS_API_PASSWORD": "your-lifttrucks-api-password"
+    "LIFTTRUCKS_API_PASSWORD": "your-lifttrucks-api-password",
+    "CHARGEABLE_INVOICE_PREVIEW_ENABLED": "false",
+    "CHARGEABLE_INVOICE_MALWARE_SCANNING_READY": "false"
   }
 }

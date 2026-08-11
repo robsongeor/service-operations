@@ -30,6 +30,7 @@ The following numeric values were provisioned after collision verification.
 | Choice | Labels and provisioned values |
 | --- | --- |
 | Match status | Matched exactly `122830000`; Matched manually `122830001`; Unmatched `122830002`; Ambiguous `122830003` |
+| Import status | Staging `122830000`; Active `122830001`; Failed `122830002` |
 | Waiting on | Technician `122830000`; Customer `122830001`; Nargiza / Accounts `122830002`; Sales `122830003`; Management `122830004`; Other `122830005` |
 | Photos status | Not requested `122830000`; Requested `122830001`; Received `122830002` |
 | Terminal disposition | Ready to Process `122830000`; Do Not Process `122830001` |
@@ -37,6 +38,7 @@ The following numeric values were provisioned after collision verification.
 | Correction type | Header field `122830000`; Story `122830001`; Change line `122830002`; Add line `122830003`; Remove line `122830004` |
 | Correction comparison | Outstanding `122830000`; Matched in revision `122830001`; Not made `122830002`; Superseded `122830003` |
 | Document type | GreenTree Invoice `122830000`; Approval PDF `122830001`; Supporting Photo `122830002`; Customer PO `122830003`; Job Card `122830004`; Other `122830005` |
+| Upload status | Pending `122830000`; Complete `122830001`; Failed `122830002` |
 
 Activity event is one bounded Choice with sequential named constants for Invoice Uploaded, Job
 Matched, Review Started, Correction Added/Changed, Waiting Changed, Technician Selected, Photo
@@ -59,6 +61,7 @@ Schema `gr_ChargeableInvoiceReview`; expected entity set `gr_chargeableinvoicere
 | Site | `gr_site` | Lookup Site | No | Current context. |
 | Equipment | `gr_equipment` | Lookup Equipment | No | Equipment remains optional. |
 | Match Status | `gr_matchstatus` | Choice | Yes | Import accepts exact/manual matches. |
+| Import Status | `gr_importstatus` | Choice | Yes | Recoverable import state. Staging/Failed rows are excluded from the active queue. |
 | Review Started On | `gr_reviewstartedon` | Date/time | No | Explicit Start Review only. |
 | Waiting On | `gr_waitingon` | Choice | No | Null means not waiting. |
 | Waiting Note | `gr_waitingnote` | Multiline 4,000 | No | App-required while waiting. |
@@ -104,8 +107,17 @@ and optional Matched Revision. Original extracted values are never mutated.
 
 Schema `gr_ChargeableInvoiceDocument`; entity set `gr_chargeableinvoicedocuments`. Require
 Review; Revision is optional. Persist document type, File (`gr_file`), its Dataverse-generated
-`gr_filename` companion, content type, byte count, generated template version and source snapshot hash. Source invoice PDFs are
+`gr_filename` companion, content type, byte count, generated template version, source snapshot hash,
+required upload status and optional safe upload error (Multiline 1,000). A document begins Pending,
+becomes Complete only after the File write succeeds, and becomes Failed when a known failure is
+recorded. Source invoice PDFs are
 immutable and V1 managers have no Delete privilege.
+
+File bytes cannot participate in the metadata change set. A first import therefore creates a
+Staging review and Pending document, uploads the file, and only then atomically creates the
+immutable revision/lines/activity and activates the review. A failed first import remains
+recoverable and hidden from the active queue; retry reuses that review rather than creating a
+duplicate. Existing Active reviews remain Active while a later revision document is staged.
 
 The approved V1 policy keeps the verified **5 MiB per-upload limit** and provides clear client
 and server validation. It does not change the organisation limit or silently compress source
@@ -129,7 +141,8 @@ managers receive no Delete.
 ## Provisioning and verification
 
 `scripts/manage-chargeable-invoice-review-schema.ps1` exposes `Inspect`, `Provision` and
-`Verify`. The approved run created the metadata and unassigned role, published, then verified
+`Verify`. The original approved run created the metadata and unassigned role, published, then verified
 the contract and all 30 organisation-depth grants. It created no business rows, assigned no
 users or teams, did not change the organisation limit, and did not grant the new tables to
-Service Operations.
+Service Operations. The recoverable staging columns above are approved in the authoritative
+contract but remain pending a separately authorised provisioning run.

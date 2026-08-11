@@ -18,6 +18,10 @@ const siteCheckAssignmentService = require('./api/services/siteCheckAssignmentSe
   submitJob: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
   jsonResponse: (status: number, body: object, headers?: Record<string, string>) => LocalFunctionResponse
 }
+const chargeableInvoicePreviewService = require('./api/services/chargeableInvoicePreviewService') as {
+  preview: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
+  jsonResponse: (status: number, body: object, headers?: Record<string, string>) => LocalFunctionResponse
+}
 
 const LIFTTRUCKS_API_ORIGIN = 'https://webview.liftrucks.co.nz'
 const LIFTTRUCKS_API_KEY = '500256'
@@ -50,6 +54,26 @@ async function readJsonBody(request: IncomingMessage) {
     return JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>
   } catch {
     return null
+  }
+}
+
+async function readLimitedJsonBody(request: IncomingMessage, maximumBytes: number) {
+  const chunks: Buffer[] = []
+  let length = 0
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+    length += buffer.length
+    if (length > maximumBytes) return { tooLarge: true as const, body: null }
+    chunks.push(buffer)
+  }
+  if (chunks.length === 0) return { tooLarge: false as const, body: {} }
+  try {
+    return {
+      tooLarge: false as const,
+      body: JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>,
+    }
+  } catch {
+    return { tooLarge: false as const, body: null }
   }
 }
 
@@ -152,6 +176,54 @@ function siteCheckAssignmentProxy(env: Record<string, string | undefined>): Plug
   }
   return {
     name: 'site-check-assignment-api-proxy',
+    configureServer(server) {
+      installMiddleware(server.middlewares)
+    },
+    configurePreviewServer(server) {
+      installMiddleware(server.middlewares)
+    },
+  }
+}
+
+function chargeableInvoicePreviewProxy(env: Record<string, string | undefined>): Plugin {
+  process.env.DATAVERSE_URL ||= env.DATAVERSE_URL || env.VITE_DATAVERSE_URL
+  process.env.CHARGEABLE_INVOICE_PREVIEW_ENABLED ||= env.CHARGEABLE_INVOICE_PREVIEW_ENABLED
+  process.env.CHARGEABLE_INVOICE_MALWARE_SCANNING_READY ||= env.CHARGEABLE_INVOICE_MALWARE_SCANNING_READY
+  const maximumRequestBytes = 7 * 1024 * 1024 + 4096
+
+  const installMiddleware = (middlewares: { use: (handler: (request: IncomingMessage, response: ServerResponse, next: () => void) => void) => void }) => {
+    middlewares.use((request, response, next) => {
+      if (!request.url) return next()
+      const requestUrl = new URL(request.url, 'http://localhost')
+      if (requestUrl.pathname !== '/api/chargeableinvoicepreview') return next()
+
+      void (async () => {
+        if (request.method !== 'POST') {
+          return sendFunctionResponse(response, chargeableInvoicePreviewService.jsonResponse(405, { error: 'Method not allowed.' }, { Allow: 'POST' }))
+        }
+        const parsed = await readLimitedJsonBody(request, maximumRequestBytes)
+        if (parsed.tooLarge) {
+          return sendFunctionResponse(response, chargeableInvoicePreviewService.jsonResponse(413, { error: 'The invoice preview request is too large.' }))
+        }
+        if (parsed.body === null) {
+          return sendFunctionResponse(response, chargeableInvoicePreviewService.jsonResponse(400, { error: 'The request body is invalid.' }))
+        }
+        const result = await chargeableInvoicePreviewService.preview({
+          method: request.method,
+          headers: request.headers,
+          body: parsed.body,
+        })
+        sendFunctionResponse(response, result)
+      })().catch(() => {
+        sendFunctionResponse(response, chargeableInvoicePreviewService.jsonResponse(503, {
+          error: 'Invoice preview is temporarily unavailable.',
+        }))
+      })
+    })
+  }
+
+  return {
+    name: 'chargeable-invoice-preview-api-proxy',
     configureServer(server) {
       installMiddleware(server.middlewares)
     },
@@ -316,6 +388,12 @@ export default defineConfig(({ mode }) => {
 
   return {
     root: import.meta.dirname,
-    plugins: [react(), liftTrucksProxy(env), jobSubmissionProxy(env), siteCheckAssignmentProxy(env)],
+    plugins: [
+      react(),
+      liftTrucksProxy(env),
+      jobSubmissionProxy(env),
+      siteCheckAssignmentProxy(env),
+      chargeableInvoicePreviewProxy(env),
+    ],
   }
 })

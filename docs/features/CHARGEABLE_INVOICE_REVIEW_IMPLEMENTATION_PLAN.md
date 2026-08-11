@@ -14,6 +14,8 @@
   without writes.
 - [x] Six-table schema and unassigned manager role provisioned, published and verified after
   explicit approval on 11 August 2026; no business rows or assignments were created.
+- [x] Phase 3 intake, duplicate/revision decisions, manual exact Job recovery and recoverable
+  server-side import implemented locally; staging-column provisioning and release smoke remain.
 - [ ] Implementation phases below.
 
 ## Problem and V1 scope
@@ -216,20 +218,50 @@ security/deployment gates, never Vite variables.
 
 ### Phase 2 — schema, roles and typed foundation
 
+- **Status:** complete locally and in the approved Dataverse environment on 11 August 2026.
 - **Scope:** idempotent provision/verify, typed contracts and pure state/extraction/diff helpers.
 - **Dependencies/areas:** Phase 1; `scripts/`, `src/alpha/chargeable-invoices/`, schema docs.
 - **Schema:** approved tables/File columns/keys/manager grants.
 - **Acceptance/tests/docs:** one-connection publish/verify without business rows; domain tests;
   schema document and README update.
 
+The extraction boundary accepts structured evidence from the future positional PDF adapter. It
+normalises labelled text, GreenTree dates/currency, stable line keys and typed immutable Revision
+snapshots while preserving raw Order No and exact source evidence. Missing numeric evidence stays
+null. Arithmetic mismatches are explicit issues and never rewrite the extracted values. Revision
+comparison processes only outstanding corrections, uses exact header/story or stable-line
+matching, requires a unique exact match for requested new lines, and leaves missing or ambiguous
+changes as Not Made for manager review.
+
 ### Phase 3 — authenticated intake and import review
 
+- **Status:** implemented locally; staging columns and deployed release gates remain pending.
 - **Scope:** upload/extract preview, batch validation, exact Job matching, per-file selection,
   duplicate choice, atomic confirmation and source-PDF storage.
 - **Dependencies/areas/schema:** Phase 2; `api/chargeableinvoice*`, feature services/hook/UI;
-  no schema beyond Phase 2.
+  approved Review Import Status and Document Upload Status/Error staging columns.
 - **Acceptance/tests/docs:** valid subset imports despite invalid files; no uncertain match;
   immutable revision retrievable; server security/deployment documentation.
+
+The preview endpoint now validates `WhoAmI` and manager table access, enforces the PDF/5 MiB/page/
+text bounds, uses server-side PDF.js positional text extraction, and performs one exact bounded
+Job Number query from GreenTree Our Ref. It returns structured evidence only and performs no
+Review, Revision, Line or Document write. Both server release flags default disabled until
+manager assignments and malware-scanning readiness are separately approved.
+
+The `/chargeable-invoices` screen reuses the shared Page Header and Metric Strip, accepts up to
+20 PDFs, acquires one silent token per preview action, bounds concurrent previews, and preserves
+per-file pending/ready/attention results. Exact, error-free new and retry previews are selected by
+default. Active duplicates require explicit Import as revision or Skip. Unmatched rows can be
+recovered only by another exact bounded Job Number lookup; ambiguous results remain blocked.
+
+The confirmed import resends the source file to the authenticated server, which re-parses it and
+rechecks the invoice identity, exact Job and duplicate decision. Because Dataverse File bytes
+cannot join a metadata change set and V1 grants no Delete, first imports create a Staging Review
+and Pending Document before the File write. One later change set creates immutable Revision,
+Lines and Activity, links the Document, advances Current Revision and activates the Review under
+ETag protection. Known failures retain safe Failed state for retry. Existing Active reviews stay
+Active while a revised document is staged. No automatic retry occurs after an unknown outcome.
 
 ### Phase 4 — queue and split-screen exception review
 

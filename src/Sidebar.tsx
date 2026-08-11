@@ -16,6 +16,7 @@ const menuItems = [
     { label: 'Site Checks', shortLabel: 'S', path: '/site-checks' },
     { label: 'Scheduling', shortLabel: 'C', path: '/scheduling' },
     { label: 'Quotes', shortLabel: 'Q', path: '/quotes' },
+    { label: 'Chargeable Invoices', shortLabel: 'I', path: '/chargeable-invoices' },
     { label: 'Pricing', shortLabel: '$', path: '/pricing' },
 ]
 

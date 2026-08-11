@@ -22,6 +22,7 @@ $tables = @(
 
 $choices = @{
     MatchStatus = @('Matched exactly','Matched manually','Unmatched','Ambiguous')
+    ImportStatus = @('Staging','Active','Failed')
     WaitingOn = @('Technician','Customer','Nargiza / Accounts','Sales','Management','Other')
     PhotosStatus = @('Not requested','Requested','Received')
     Disposition = @('Ready to Process','Do Not Process')
@@ -29,6 +30,7 @@ $choices = @{
     CorrectionType = @('Header field','Story','Change line','Add line','Remove line')
     ComparisonStatus = @('Outstanding','Matched in revision','Not made','Superseded')
     DocumentType = @('GreenTree Invoice','Approval PDF','Supporting Photo','Customer PO','Job Card','Other')
+    UploadStatus = @('Pending','Complete','Failed')
     ActivityEvent = @(
         'Invoice Uploaded','Job Matched','Review Started','Correction Added',
         'Correction Changed','Waiting Changed','Technician Selected','Photo Request Prepared',
@@ -47,6 +49,7 @@ $columns = @(
     C 'gr_chargeableinvoicereview' 'gr_InvoiceDate' 'Invoice Date' DateOnly $true
     C 'gr_chargeableinvoicereview' 'gr_GreenTreeReference' 'GreenTree Reference' Text $true 50
     C 'gr_chargeableinvoicereview' 'gr_MatchStatus' 'Match Status' Choice $true $choices.MatchStatus
+    C 'gr_chargeableinvoicereview' 'gr_ImportStatus' 'Import Status' Choice $true $choices.ImportStatus
     C 'gr_chargeableinvoicereview' 'gr_ReviewStartedOn' 'Review Started On' DateTime
     C 'gr_chargeableinvoicereview' 'gr_WaitingOn' 'Waiting On' Choice $false $choices.WaitingOn
     C 'gr_chargeableinvoicereview' 'gr_WaitingNote' 'Waiting Note' Memo $false 4000
@@ -114,6 +117,8 @@ $columns = @(
     C 'gr_chargeableinvoicedocument' 'gr_ByteCount' 'Byte Count' Integer $true @(0,5242880)
     C 'gr_chargeableinvoicedocument' 'gr_TemplateVersion' 'Template Version' Text $false 100
     C 'gr_chargeableinvoicedocument' 'gr_SourceSnapshotHash' 'Source Snapshot Hash' Text $false 128
+    C 'gr_chargeableinvoicedocument' 'gr_UploadStatus' 'Upload Status' Choice $true $choices.UploadStatus
+    C 'gr_chargeableinvoicedocument' 'gr_UploadError' 'Upload Error' Memo $false 1000
 
     C 'gr_chargeableinvoiceactivity' 'gr_Event' 'Event' Choice $true $choices.ActivityEvent
     C 'gr_chargeableinvoiceactivity' 'gr_Detail' 'Detail' Memo $false 4000
@@ -201,7 +206,21 @@ function Add-Column($Service,$Def,$Attribute) {
 function Ensure-Column($Service,$Def,[bool]$Provision) {
     $logical=$Def.Schema.ToLowerInvariant();$a=Get-Attribute $Service $Def.Entity $logical
     $expected=@{Text='String';Memo='Memo';Boolean='Boolean';Choice='Picklist';DateOnly='DateTime';DateTime='DateTime';Integer='Integer';Decimal='Decimal';Money='Money';File='Virtual'}[$Def.Kind]
-    if($a){if([string]$a.AttributeType -ne $expected){throw "Conflict: $($Def.Entity).$logical type is $($a.AttributeType), expected $expected"};if([string]$a.RequiredLevel.Value -ne $(if($Def.Required){'ApplicationRequired'}else{'None'})){throw "Conflict: $($Def.Entity).$logical required level."};if($Def.Kind -eq 'File' -and $a.MaxSizeInKB -ne 5120){throw "Conflict: $($Def.Entity).$logical file limit."};return}
+    if($a){
+        if([string]$a.AttributeType -ne $expected){throw "Conflict: $($Def.Entity).$logical type is $($a.AttributeType), expected $expected"}
+        if([string]$a.RequiredLevel.Value -ne $(if($Def.Required){'ApplicationRequired'}else{'None'})){throw "Conflict: $($Def.Entity).$logical required level."}
+        if($Def.Kind -in @('Text','Memo') -and $a.MaxLength -ne [int]$Def.Extra){throw "Conflict: $($Def.Entity).$logical maximum length."}
+        if($Def.Kind -eq 'File' -and $a.MaxSizeInKB -ne 5120){throw "Conflict: $($Def.Entity).$logical file limit."}
+        if($Def.Kind -eq 'Choice'){
+            $actual=@($a.OptionSet.Options|Sort-Object Value)
+            if($actual.Count-ne $Def.Extra.Count){throw "Conflict: $($Def.Entity).$logical choice count."}
+            for($i=0;$i-lt$Def.Extra.Count;$i++){
+                $label=[string]$actual[$i].Label.UserLocalizedLabel.Label
+                if($actual[$i].Value-ne 122830000+$i -or $label-ne [string]$Def.Extra[$i]){throw "Conflict: $($Def.Entity).$logical choice value $i."}
+            }
+        }
+        return
+    }
     if(-not $Provision){throw "Missing column: $($Def.Entity).$logical"}
     switch($Def.Kind){
         Text {$a=[Microsoft.Xrm.Sdk.Metadata.StringAttributeMetadata]::new();$a.MaxLength=[int]$Def.Extra}

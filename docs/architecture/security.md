@@ -39,6 +39,17 @@ Job Photos use a Dataverse File column. The public browser sends validated suppo
 data to the server; it receives no Dataverse file URL. Authenticated managers download
 submitted photos through their delegated Dataverse access.
 
+Chargeable Invoice preview accepts only an authenticated manager's PDF with a `.pdf` filename,
+`application/pdf` media type, matching declared/decoded byte length, PDF signature, at most five
+pages, bounded extracted text, and the approved 5 MiB limit. PDF.js runs server-side and returns
+structured preview evidence; preview does not persist a file or Review. Confirmed import re-parses
+the supplied bytes, rechecks exact Job/duplicate state, stages bounded metadata and uses ETag-
+protected atomic finalisation after the File upload. Failed staging records contain only safe
+error text and remain recoverable because managers have no Delete privilege. The endpoint remains
+fail-closed unless both `CHARGEABLE_INVOICE_PREVIEW_ENABLED` and
+`CHARGEABLE_INVOICE_MALWARE_SCANNING_READY` are explicitly `true`. The latter may be enabled only
+after the deployed upload path's malware-scanning readiness has been verified and approved.
+
 ## Security review triggers
 
 Review this architecture before adding a new public route, credential, Application User,

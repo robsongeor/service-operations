@@ -5,5 +5,8 @@
   "type": "commonjs",
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^6.2.108"
   }
 }

@@ -18,6 +18,7 @@ import SiteCheckAssignmentPage from './alpha/portal/SiteCheckAssignmentPage'
 import ChecklistAdminScreen from './alpha/site-checks/ChecklistAdminScreen'
 import { isServiceOperationsAdministrator } from './auth/adminAuthorization'
 import DataverseSessionRecovery from './auth/DataverseSessionRecovery'
+import ChargeableInvoiceReviewScreen from './alpha/chargeable-invoices/ChargeableInvoiceReviewScreen'
 
 function App() {
   const { accounts } = useMsal()
@@ -66,6 +67,7 @@ function App() {
           />
           <Route path="/scheduling" element={<SchedulingScreen />} />
           <Route path="/quotes" element={<QuotesScreen key={signedInUser?.storageId || 'account-pending'} />} />
+          <Route path="/chargeable-invoices" element={<ChargeableInvoiceReviewScreen />} />
           <Route path="/pricing" element={<PricingScreen />} />
           <Route path="/wof" element={<WofScreen key={signedInUser?.storageId || 'account-pending'} accountId={signedInUser?.storageId || 'account-pending'} />} />
         </Routes>

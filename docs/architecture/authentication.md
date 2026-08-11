@@ -82,6 +82,12 @@ Office-only API actions, such as secure technician-link generation and Job looku
 the caller's Dataverse bearer token and validate it with `WhoAmI` before acting. An
 anonymous Function trigger is not authorization by itself.
 
+Chargeable Invoice PDF preview and import additionally perform a bounded Read probe against
+`gr_chargeableinvoicereviews`. Dataverse therefore enforces the dedicated manager-role boundary;
+a generally signed-in office user is not sufficient. The same delegated bearer token is used for
+bounded exact Job, duplicate and revision reads and confirmed writes. The server never stores or
+logs the bearer token or PDF outside the approved Dataverse Document File record.
+
 ## Administrative and provisioning sessions
 
 Existing schema scripts commonly create a `CrmServiceClient` with `LoginPrompt=Auto`. A
