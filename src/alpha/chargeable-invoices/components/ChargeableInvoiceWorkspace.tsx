@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import EditDrawerSection from '../../shared/drawer/EditDrawerSection.tsx'
 import EditDrawerShell from '../../shared/drawer/EditDrawerShell.tsx'
 import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation.tsx'
@@ -28,6 +28,7 @@ type Props = {
     onSaveRequirements: (draft: ChargeableInvoiceRequirementsDraft) => Promise<void>
     onMarkReady: () => Promise<void>
     onMarkDoNotProcess: (reason: string) => Promise<void>
+    onLoadDocument: (document: ChargeableInvoiceDocument) => Promise<Blob>
     onDownload: (document: ChargeableInvoiceDocument) => Promise<void>
     onClose: () => void
 }
@@ -106,13 +107,15 @@ function RequirementsEditor({ workspace, saving, onSave }: {
 
 export default function ChargeableInvoiceWorkspace({
     workspace, loading, saving, error, onStart, onSaveWaiting, onSaveRequirements,
-    onMarkReady, onMarkDoNotProcess, onDownload, onClose,
+    onMarkReady, onMarkDoNotProcess, onLoadDocument, onDownload, onClose,
 }: Props) {
     const [tab, setTab] = useState<Tab>('summary')
     const [showReadyConfirmation, setShowReadyConfirmation] = useState(false)
     const [showDoNotProcess, setShowDoNotProcess] = useState(false)
     const [dispositionReason, setDispositionReason] = useState('')
     const [dispositionError, setDispositionError] = useState('')
+    const [previewUrl, setPreviewUrl] = useState('')
+    const [previewBusy, setPreviewBusy] = useState(false)
     const review = workspace?.review
 
     const currentRevision = useMemo(() => workspace?.revisions.find((revision) =>
@@ -121,6 +124,10 @@ export default function ChargeableInvoiceWorkspace({
     const currentLines = useMemo(() => workspace?.lines.filter((line) =>
         line._gr_revision_value === currentRevision?.gr_chargeableinvoicerevisionid) ?? [],
     [currentRevision?.gr_chargeableinvoicerevisionid, workspace?.lines])
+    const sourceDocument = useMemo(() => workspace?.documents.find((document) =>
+        document.gr_chargeableinvoicedocumentid === currentRevision?._gr_sourcedocument_value
+        && document.gr_contenttype === 'application/pdf'),
+    [currentRevision?._gr_sourcedocument_value, workspace?.documents])
     const blockers = review ? [
         ...getReadyToProcessBlockers(review),
         ...(workspace?.corrections.some((correction) =>
@@ -128,6 +135,20 @@ export default function ChargeableInvoiceWorkspace({
             || correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.NOT_MADE)
             ? ['Resolve all outstanding invoice corrections.'] : []),
     ] : []
+
+    useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl) }, [previewUrl])
+
+    const loadPdfPreview = async () => {
+        if (!sourceDocument) return
+        setPreviewBusy(true)
+        try {
+            const blob = await onLoadDocument(sourceDocument)
+            setPreviewUrl(URL.createObjectURL(new Blob([blob], { type: 'application/pdf' })))
+        } catch { /* the review hook exposes the safe load error */
+        } finally {
+            setPreviewBusy(false)
+        }
+    }
 
     return <EditDrawerShell
         eyebrow="Chargeable invoice"
@@ -176,6 +197,11 @@ export default function ChargeableInvoiceWorkspace({
 
         <div role="tabpanel" id="drawer-tab-panel-invoice" aria-labelledby="drawer-tab-invoice" hidden={tab !== 'invoice'}>
             {currentRevision && <>
+                <EditDrawerSection title="Source PDF">
+                    {!sourceDocument ? <p>The current revision has no available source PDF.</p> : previewUrl
+                        ? <iframe className="chargeable-pdf-viewer" src={previewUrl} title={`Source invoice ${currentRevision.gr_invoicenumber}`} />
+                        : <div className="chargeable-pdf-placeholder"><p>The PDF loads only when requested and remains protected by your delegated Dataverse access.</p><button type="button" className="chargeable-secondary" disabled={previewBusy} onClick={() => void loadPdfPreview()}>{previewBusy ? 'Loading PDF…' : 'View source PDF'}</button></div>}
+                </EditDrawerSection>
                 <EditDrawerSection title={`Revision ${currentRevision.gr_revisionnumber}`}>
                     <dl className="chargeable-detail-grid">
                         <div><dt>Headline</dt><dd>{currentRevision.gr_headline || '—'}</dd></div>

@@ -509,5 +509,6 @@ and Waiting changes use one ETag-protected Review + Activity change set. Staging
 and operational Job mutations are excluded. Deliberate PO/photo decisions and explicit Ready to
 Process / Do Not Process confirmations are also implemented under the same concurrency/audit
 boundary; extracted Order No is never adopted automatically, Ready rechecks unresolved
-corrections, and Do Not Process requires a reason. Correction creation and embedded PDF viewing
-remain.
+corrections, and Do Not Process requires a reason. The Invoice tab loads the current Revision's
+immutable source PDF only on deliberate request through delegated Dataverse access, validates its
+byte count and revokes its local object URL when replaced or closed. Correction authoring remains.

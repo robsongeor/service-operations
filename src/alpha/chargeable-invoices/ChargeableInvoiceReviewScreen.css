@@ -69,5 +69,8 @@
 .chargeable-document-list small, .chargeable-activity-list span { margin-top: 2px; color: #67736f; font-size: 12px; }
 .chargeable-activity-list li { padding: 10px 12px; border-left: 3px solid #8eb5ac; background: #f6f9f8; }
 .chargeable-activity-list p { margin: 6px 0 0; }
+.chargeable-pdf-placeholder { display: grid; justify-items: start; gap: 8px; min-height: 150px; align-content: center; padding: 20px; border: 1px dashed #9fb2ae; border-radius: 9px; background: #f8fbfa; }
+.chargeable-pdf-placeholder p { margin: 0; }
+.chargeable-pdf-viewer { width: 100%; min-height: 620px; border: 1px solid #d9e1df; border-radius: 8px; background: #eef2f1; }
 @media (max-width: 760px) { .chargeable-preview-intro { align-items: flex-start; flex-direction: column; } }
 @media (max-width: 760px) { .chargeable-detail-grid, .chargeable-decision-grid { grid-template-columns: 1fr; } .chargeable-search { flex-basis: 100%; } }

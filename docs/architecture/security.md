@@ -57,6 +57,11 @@ token, verify byte count against metadata, create a browser object URL only for 
 download, and revoke it immediately after handoff. Review transitions require the loaded ETag and
 append Activity atomically; they expose no Job write path.
 
+Embedded invoice viewing uses the current Revision's Source Document only. The File is fetched
+after deliberate manager action, byte count is checked against Dataverse metadata, and the PDF is
+rendered through a local browser object URL that is revoked when replaced or unmounted. The app
+does not expose or retain an anonymous or durable File URL.
+
 Terminal Ready to Process performs a fresh bounded read for Outstanding/Not Made corrections
 immediately before its ETag-protected Review transition. Terminal actions require an explicit
 confirmation; Do Not Process additionally requires a non-empty reason. Extracted Order No is

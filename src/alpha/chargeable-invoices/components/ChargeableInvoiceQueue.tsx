@@ -47,6 +47,6 @@ export default function ChargeableInvoiceQueue() {
                 {!reviews.isLoading && filtered.length === 0 && <tr><td colSpan={8} className="chargeable-no-results">No reviews match this queue and search.</td></tr>}
             </tbody></table></div>
         </section>
-        {reviews.selectedId && <ChargeableInvoiceWorkspace workspace={reviews.workspace} loading={reviews.isLoadingWorkspace} saving={reviews.isSaving} error={reviews.workspaceError} onStart={reviews.startReview} onSaveWaiting={reviews.saveWaiting} onSaveRequirements={reviews.saveRequirements} onMarkReady={reviews.markReady} onMarkDoNotProcess={reviews.markDoNotProcess} onDownload={reviews.downloadDocument} onClose={closeWorkspace} />}
+        {reviews.selectedId && <ChargeableInvoiceWorkspace workspace={reviews.workspace} loading={reviews.isLoadingWorkspace} saving={reviews.isSaving} error={reviews.workspaceError} onStart={reviews.startReview} onSaveWaiting={reviews.saveWaiting} onSaveRequirements={reviews.saveRequirements} onMarkReady={reviews.markReady} onMarkDoNotProcess={reviews.markDoNotProcess} onLoadDocument={reviews.loadDocument} onDownload={reviews.downloadDocument} onClose={closeWorkspace} />}
     </>
 }

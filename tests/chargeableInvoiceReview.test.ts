@@ -314,5 +314,7 @@ test('Chargeable Invoice route uses shared page primitives and delegates intake 
     assert.match(workspace, /Ready to Process/)
     assert.match(workspace, /Do Not Process/)
     assert.match(workspace, /Order No is source evidence only/)
+    assert.match(workspace, /View source PDF/)
+    assert.match(workspace, /URL\.revokeObjectURL/)
     assert.doesNotMatch(screen, /fetch\(/)
 })

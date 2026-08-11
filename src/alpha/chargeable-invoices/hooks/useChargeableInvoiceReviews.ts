@@ -146,20 +146,27 @@ export function useChargeableInvoiceReviews() {
         }
     }, [accessToken, applyWorkspace, workspace])
 
-    const downloadDocument = useCallback(async (document: ChargeableInvoiceDocument) => {
+    const loadDocument = useCallback(async (document: ChargeableInvoiceDocument) => {
         setWorkspaceError('')
         try {
-            const blob = await downloadChargeableInvoiceDocument(await accessToken(), document)
+            return await downloadChargeableInvoiceDocument(await accessToken(), document)
+        } catch (error) {
+            setWorkspaceError(error instanceof Error ? error.message : 'The document could not be loaded.')
+            throw error
+        }
+    }, [accessToken])
+
+    const downloadDocument = useCallback(async (document: ChargeableInvoiceDocument) => {
+        try {
+            const blob = await loadDocument(document)
             const objectUrl = URL.createObjectURL(blob)
             const link = window.document.createElement('a')
             link.href = objectUrl
             link.download = document.gr_filename?.trim() || document.gr_name || 'invoice-document.pdf'
             link.click()
             window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0)
-        } catch (error) {
-            setWorkspaceError(error instanceof Error ? error.message : 'The document could not be downloaded.')
-        }
-    }, [accessToken])
+        } catch { /* loadDocument exposes the safe error */ }
+    }, [loadDocument])
 
     const counts = useMemo(() => {
         const result: Record<ChargeableInvoicePrimaryQueue, number> = {
@@ -172,6 +179,6 @@ export function useChargeableInvoiceReviews() {
     return {
         reviews, counts, selectedId, workspace, isLoading, isLoadingWorkspace, isSaving,
         loadError, workspaceError, refresh, openReview, closeReview, startReview, saveWaiting,
-        downloadDocument, saveRequirements, markReady, markDoNotProcess,
+        loadDocument, downloadDocument, saveRequirements, markReady, markDoNotProcess,
     }
 }
