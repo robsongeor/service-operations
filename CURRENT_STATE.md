@@ -14,8 +14,9 @@ Branch: `codex/chargeable-invoice-review`
 
 ## Unfinished work
 
-- Chargeable Invoice Review Phases 1–6 are complete locally. Phase 7 release readiness remains,
-  followed by explicitly gated role assignment and release validation. The approved staging
+- Chargeable Invoice Review Phases 1–6 and the Phase 7 local release-readiness baseline are
+  complete. Explicitly gated target-environment smoke, role assignment and release validation
+  remain. The approved staging
   columns are provisioned and verified; release flags remain disabled and the manager role remains
   unassigned.
 - Approve and provision the minimum Site Check deletion privileges, then smoke-test the
@@ -564,3 +565,12 @@ ETag transition records preparation timestamp and safe Activity only; recipient/
 persisted and no email is sent. First confirmed PO receipt now records the dedicated PO Received
 Activity, while existing business rules continue to derive Ready. No live data, files or
 communications were created.
+
+Chargeable Invoice Review Phase 7 now has an authoritative local operations baseline. V1 retains
+immutable Complete evidence and recoverable Pending/Failed staging with no automatic cleanup. The
+operator checklist defines explicit role/deployment/flag gates, de-identified business and access
+smoke tests, keyboard/screen-reader/zoom checks, bounded performance evidence, content-safe
+monitoring and flags-first non-destructive rollback. Static release guards protect the disabled
+defaults, least-privilege role, silent authentication, reusable accessible workspace and request/
+file bounds. No role was assigned, flag changed, deployment performed, live row written or
+communication sent.

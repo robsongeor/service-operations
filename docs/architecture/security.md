@@ -78,6 +78,12 @@ resolved Corrections, deliberate photo decision and any required Complete photos
 The UI identifies files for manual download/attachment; `mailto:` cannot attach or send them.
 Only an ETag-protected preparation timestamp and safe Activity are stored.
 
+V1 performs no automatic Chargeable Invoice cleanup. Complete immutable evidence and
+Pending/Failed recovery rows are retained; any privileged retention process requires a separately
+approved policy and role. Release validation records safe status, timing and request-count evidence
+only, never invoice/PDF/PO/email content, tokens or raw Dataverse responses. See the
+[operations checklist](../chargeable-invoice-review-operations.md).
+
 Terminal Ready to Process performs a fresh bounded read for Outstanding/Not Made corrections
 immediately before its ETag-protected Review transition. Terminal actions require an explicit
 confirmation; Do Not Process additionally requires a non-empty reason. Extracted Order No is

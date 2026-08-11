@@ -158,6 +158,11 @@ managers receive no Delete.
 - Current Revision uses Restrict and is set only after revision/document/lines succeed.
 - User ownership does not make the queue private; organisation-depth manager grants share it.
 
+V1 has no automatic retention cleanup. Complete historical records and Pending/Failed recovery
+evidence remain preserved. Any future cleanup process needs a separately approved retention
+policy, privileged role, relationship/alternate-key analysis and recovery plan; it is not an
+application rollback action.
+
 ## Provisioning and verification
 
 `scripts/manage-chargeable-invoice-review-schema.ps1` exposes `Inspect`, `Provision` and

@@ -385,6 +385,14 @@ records the existing PO Received Activity and Ready remains derived from all pre
 - **Acceptance/tests/docs:** non-production fixture run, no real email/accounting mutation,
   `npm test`, lint, build, diff check and release documentation.
 
+The local release-readiness baseline is complete. The approved V1 policy performs no automatic
+cleanup and preserves Complete history plus Pending/Failed recovery evidence. The authoritative
+[operations checklist](../chargeable-invoice-review-operations.md) defines explicit enablement
+gates, de-identified access/business/accessibility/performance smoke tests, safe monitoring and
+non-destructive rollback. Executable release guards keep the flags disabled by default and protect
+the role, authentication, storage and bounded-request contracts. Target-environment smoke, named
+manager role assignment, deployment and flag changes remain separately approved actions.
+
 ## Future extensions
 
 Accounts/Nargiza roles/processed state, GreenTree integration, job-card retention, portal-photo

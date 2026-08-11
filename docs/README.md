@@ -31,7 +31,7 @@ by scanning the repository.
 | Scheduler | [`architecture/scheduler.md`](architecture/scheduler.md) | Job scheduling relationships are documented with Jobs |
 | WOF/REGO | [`architecture/wof.md`](architecture/wof.md) | [`wof-dataverse-schema.md`](wof-dataverse-schema.md) |
 | Quotes and pricing | [`architecture/quotes.md`](architecture/quotes.md) | [`quotes-dataverse-schema.md`](quotes-dataverse-schema.md) |
-| Chargeable Invoice Review (in progress) | [`features/CHARGEABLE_INVOICE_REVIEW_IMPLEMENTATION_PLAN.md`](features/CHARGEABLE_INVOICE_REVIEW_IMPLEMENTATION_PLAN.md) | [`chargeable-invoice-review-dataverse-schema.md`](chargeable-invoice-review-dataverse-schema.md) — provisioned schema and unassigned role |
+| Chargeable Invoice Review (release validation pending) | [`features/CHARGEABLE_INVOICE_REVIEW_IMPLEMENTATION_PLAN.md`](features/CHARGEABLE_INVOICE_REVIEW_IMPLEMENTATION_PLAN.md) | [`chargeable-invoice-review-dataverse-schema.md`](chargeable-invoice-review-dataverse-schema.md) — provisioned schema and unassigned role; [`chargeable-invoice-review-operations.md`](chargeable-invoice-review-operations.md) — release/smoke/rollback checklist |
 
 ## Cross-cutting architecture
 

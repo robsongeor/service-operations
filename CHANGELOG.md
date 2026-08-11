@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added the Chargeable Invoice Review release operations contract with no-cleanup V1 retention,
+  de-identified access/business/accessibility/performance smoke tests, safe monitoring,
+  non-destructive rollback and executable disabled-flag/least-privilege/bounded-request guards.
 - Added the cross-customer Site Checks workspace with a Needs Attention queue, interactive
   state totals, combined filters, direct Start/Open/History actions, and canonical record
   navigation without loading the global Jobs or Equipment collections.

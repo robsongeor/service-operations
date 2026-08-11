@@ -51,7 +51,7 @@ CHARGEABLE_INVOICE_MALWARE_SCANNING_READY
 CHARGEABLE_INVOICE_APPROVAL_ENABLED
 ```
 
-Do not set either flag to `true` as part of ordinary deployment. Enable them only after manager
+Do not set any of these flags to `true` as part of ordinary deployment. Enable them only after manager
 role assignments are approved and the deployed PDF upload path's malware-scanning readiness is
 verified. The API package installs `pdfjs-dist` and `pdf-lib`; dependency installation is required when the
 managed Function build runs.
@@ -64,6 +64,9 @@ Do not enable the intake endpoint until the approved Review Import Status and Do
 Status/Error columns have been provisioned and verified. The deployed smoke must cover a
 de-identified new import, duplicate revision decision, failed-upload recovery and manager denial;
 it must not send a real customer communication.
+
+The authoritative release gates, de-identified smoke matrix and non-destructive rollback order are
+maintained in [`../chargeable-invoice-review-operations.md`](../chargeable-invoice-review-operations.md).
 
 Do not place the client secret in repository variables, source files, documentation, or
 browser configuration.
