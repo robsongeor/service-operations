@@ -11,6 +11,10 @@ Branch: `codex/chargeable-invoice-review`
 - Version `v1.3.0` is the current production release.
 - Production server-only portal settings must be present for public submission endpoints to
   authenticate to Dataverse.
+- Chargeable Invoice Review deployment commit `c9ef102` reached `v1-deployment` on 12 August
+  2026 but Azure build run `31527984996` failed before publication because Vite eagerly loaded the
+  API-only `pdf-lib` dependency during the root build. The local middleware now loads that service
+  only when a development/preview server starts; redeployment validation is in progress.
 
 ## Unfinished work
 

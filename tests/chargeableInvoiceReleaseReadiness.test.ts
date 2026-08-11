@@ -26,10 +26,11 @@ test('release documentation owns retention, smoke, accessibility and rollback ga
 })
 
 test('independent import and approval flags remain server-only and fail closed', async () => {
-    const [settings, preview, approval] = await Promise.all([
+    const [settings, preview, approval, viteConfig] = await Promise.all([
         source('api/local.settings.json.example'),
         source('api/services/chargeableInvoicePreviewService.js'),
         source('api/services/chargeableInvoiceApprovalService.js'),
+        source('vite.config.ts'),
     ])
     const parsed = JSON.parse(settings) as { Values: Record<string, string> }
 
@@ -38,7 +39,9 @@ test('independent import and approval flags remain server-only and fail closed',
     assert.equal(parsed.Values.CHARGEABLE_INVOICE_MALWARE_SCANNING_READY, undefined)
     assert.match(preview, /process\.env\.CHARGEABLE_INVOICE_PREVIEW_ENABLED === 'true'/)
     assert.match(approval, /process\.env\.CHARGEABLE_INVOICE_APPROVAL_ENABLED === 'true'/)
-    assert.doesNotMatch(`${preview}\n${approval}`, /MALWARE_SCANNING_READY/)
+    assert.doesNotMatch(`${preview}\n${approval}\n${viteConfig}`, /MALWARE_SCANNING_READY/)
+    assert.ok(viteConfig.indexOf("require('./api/services/chargeableInvoiceApprovalService')")
+        > viteConfig.indexOf('const installMiddleware'), 'Vite must load API-only PDF dependencies lazily')
 })
 
 test('manager workflow preserves silent authentication and excludes automatic email dispatch', async () => {

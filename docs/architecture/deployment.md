@@ -56,7 +56,9 @@ File persistence. Do not set either flag to `true` as part of ordinary deploymen
 relevant File-write path only after manager role assignments and its target-environment smoke are
 approved. V1 deliberately has no malware-scanning setting or integration. The API package installs
 `pdfjs-dist` and `pdf-lib`; dependency installation is required when the managed Function build
-runs.
+runs. Vite's local approval middleware loads that API service only when a development/preview
+server is configured, so the root production build does not require or duplicate API-only PDF
+packages before Azure builds the managed Functions directory.
 
 Approval generation additionally requires `CHARGEABLE_INVOICE_APPROVAL_ENABLED=true`. Leave it
 false until the generated-PDF File path and manager-role smoke have passed in the target

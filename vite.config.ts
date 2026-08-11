@@ -22,9 +22,6 @@ const chargeableInvoicePreviewService = require('./api/services/chargeableInvoic
   preview: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
   jsonResponse: (status: number, body: object, headers?: Record<string, string>) => LocalFunctionResponse
 }
-const chargeableInvoiceApprovalService = require('./api/services/chargeableInvoiceApprovalService') as {
-  generate: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
-}
 
 const LIFTTRUCKS_API_ORIGIN = 'https://webview.liftrucks.co.nz'
 const LIFTTRUCKS_API_KEY = '500256'
@@ -191,7 +188,6 @@ function siteCheckAssignmentProxy(env: Record<string, string | undefined>): Plug
 function chargeableInvoicePreviewProxy(env: Record<string, string | undefined>): Plugin {
   process.env.DATAVERSE_URL ||= env.DATAVERSE_URL || env.VITE_DATAVERSE_URL
   process.env.CHARGEABLE_INVOICE_PREVIEW_ENABLED ||= env.CHARGEABLE_INVOICE_PREVIEW_ENABLED
-  process.env.CHARGEABLE_INVOICE_MALWARE_SCANNING_READY ||= env.CHARGEABLE_INVOICE_MALWARE_SCANNING_READY
   const maximumRequestBytes = 7 * 1024 * 1024 + 4096
 
   const installMiddleware = (middlewares: { use: (handler: (request: IncomingMessage, response: ServerResponse, next: () => void) => void) => void }) => {
@@ -239,10 +235,14 @@ function chargeableInvoicePreviewProxy(env: Record<string, string | undefined>):
 function chargeableInvoiceApprovalProxy(env: Record<string, string | undefined>): Plugin {
   process.env.DATAVERSE_URL ||= env.DATAVERSE_URL || env.VITE_DATAVERSE_URL
   process.env.CHARGEABLE_INVOICE_APPROVAL_ENABLED ||= env.CHARGEABLE_INVOICE_APPROVAL_ENABLED
-  process.env.CHARGEABLE_INVOICE_MALWARE_SCANNING_READY ||= env.CHARGEABLE_INVOICE_MALWARE_SCANNING_READY
   const maximumRequestBytes = 8192
 
   const installMiddleware = (middlewares: { use: (handler: (request: IncomingMessage, response: ServerResponse, next: () => void) => void) => void }) => {
+    // Azure installs API-only PDF packages when it builds the managed Functions directory.
+    // Load them only when Vite actually starts local middleware, not while production config loads.
+    const chargeableInvoiceApprovalService = require('./api/services/chargeableInvoiceApprovalService') as {
+      generate: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
+    }
     middlewares.use((request, response, next) => {
       if (!request.url) return next()
       const requestUrl = new URL(request.url, 'http://localhost')
