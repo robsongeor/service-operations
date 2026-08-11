@@ -15,6 +15,12 @@ contracts are present and User-owned; `ServiceOperationsNew` is the single unman
 `Service Operations` is the single unmanaged base role with global reference-table access;
 `Chargeable Invoice Manager` does not exist; and maximum upload size is 5,242,880 bytes (5 MiB).
 
+On 12 August 2026, one explicitly approved interactive `Verify` session re-read the provisioned
+contract successfully. All six tables, staging columns, relationships, alternate keys, the 5 MiB
+File contract and all 30 organisation-depth manager-role grants still match this document. The
+manager role remains unassigned with no Delete, Assign or Share. Verify mode made no metadata,
+role-assignment, configuration or business-data writes.
+
 ## Ownership and security
 
 All six tables are **User-owned** to match Job, Customer, Site, Equipment, Contact, Site Contact

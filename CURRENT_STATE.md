@@ -18,7 +18,8 @@ Branch: `codex/chargeable-invoice-review`
   complete. Explicitly gated target-environment smoke, role assignment and release validation
   remain. The approved staging
   columns are provisioned and verified; release flags remain disabled and the manager role remains
-  unassigned.
+  unassigned. One explicitly approved interactive read-only verification passed again on
+  12 August 2026 without any Dataverse write.
 - Approve and provision the minimum Site Check deletion privileges, then smoke-test the
   in-app occurrence deletion action as the intended Service Operations role.
 
@@ -574,3 +575,9 @@ monitoring and flags-first non-destructive rollback. Static release guards prote
 defaults, least-privilege role, silent authentication, reusable accessible workspace and request/
 file bounds. No role was assigned, flag changed, deployment performed, live row written or
 communication sent.
+
+The Phase 7 release preflight reverified the live Dataverse metadata and role contract on
+12 August 2026 through one explicitly approved interactive `Verify` session. All six tables,
+staging fields, relationships, alternate keys, the 5 MiB File contract and all 30 organisation-
+depth grants passed. The manager role remains unassigned with no Delete, Assign or Share. No
+schema, configuration, role assignment or business row was changed.
