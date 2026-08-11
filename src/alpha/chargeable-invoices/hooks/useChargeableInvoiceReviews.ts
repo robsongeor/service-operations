@@ -7,6 +7,9 @@ import {
     downloadChargeableInvoiceDocument,
     fetchChargeableInvoiceReviews,
     fetchChargeableInvoiceWorkspace,
+    markChargeableInvoiceDoNotProcess,
+    markChargeableInvoiceReady,
+    saveChargeableInvoiceRequirements,
     saveChargeableInvoiceWaiting,
     startChargeableInvoiceReview,
 } from '../services/chargeableInvoiceReviewApi.ts'
@@ -16,6 +19,7 @@ import type {
     ChargeableInvoiceWaitingOn,
     ChargeableInvoiceWorkspace,
 } from '../types/chargeableInvoice.types.ts'
+import type { ChargeableInvoiceRequirementsDraft } from '../domain/chargeableInvoiceState.ts'
 
 export function useChargeableInvoiceReviews() {
     const { instance } = useMsal()
@@ -101,6 +105,47 @@ export function useChargeableInvoiceReviews() {
         }
     }, [accessToken, applyWorkspace, workspace])
 
+    const saveRequirements = useCallback(async (draft: ChargeableInvoiceRequirementsDraft) => {
+        if (!workspace) return
+        setIsSaving(true)
+        setWorkspaceError('')
+        try {
+            applyWorkspace(await saveChargeableInvoiceRequirements(await accessToken(), workspace.review, draft))
+        } catch (error) {
+            setWorkspaceError(error instanceof Error ? error.message : 'PO and photo decisions could not be saved.')
+        } finally {
+            setIsSaving(false)
+        }
+    }, [accessToken, applyWorkspace, workspace])
+
+    const markReady = useCallback(async () => {
+        if (!workspace) return
+        setIsSaving(true)
+        setWorkspaceError('')
+        try {
+            applyWorkspace(await markChargeableInvoiceReady(await accessToken(), workspace.review))
+        } catch (error) {
+            setWorkspaceError(error instanceof Error ? error.message : 'The review could not be marked Ready to Process.')
+            throw error
+        } finally {
+            setIsSaving(false)
+        }
+    }, [accessToken, applyWorkspace, workspace])
+
+    const markDoNotProcess = useCallback(async (reason: string) => {
+        if (!workspace) return
+        setIsSaving(true)
+        setWorkspaceError('')
+        try {
+            applyWorkspace(await markChargeableInvoiceDoNotProcess(await accessToken(), workspace.review, reason))
+        } catch (error) {
+            setWorkspaceError(error instanceof Error ? error.message : 'The review could not be marked Do Not Process.')
+            throw error
+        } finally {
+            setIsSaving(false)
+        }
+    }, [accessToken, applyWorkspace, workspace])
+
     const downloadDocument = useCallback(async (document: ChargeableInvoiceDocument) => {
         setWorkspaceError('')
         try {
@@ -127,6 +172,6 @@ export function useChargeableInvoiceReviews() {
     return {
         reviews, counts, selectedId, workspace, isLoading, isLoadingWorkspace, isSaving,
         loadError, workspaceError, refresh, openReview, closeReview, startReview, saveWaiting,
-        downloadDocument,
+        downloadDocument, saveRequirements, markReady, markDoNotProcess,
     }
 }

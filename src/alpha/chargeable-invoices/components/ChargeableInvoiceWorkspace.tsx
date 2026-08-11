@@ -1,15 +1,20 @@
 import { useMemo, useState } from 'react'
 import EditDrawerSection from '../../shared/drawer/EditDrawerSection.tsx'
 import EditDrawerShell from '../../shared/drawer/EditDrawerShell.tsx'
+import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation.tsx'
+import EditDrawerFormDialog from '../../shared/drawer/EditDrawerFormDialog.tsx'
 import DrawerTabs from '../../shared/drawer/DrawerTabs.tsx'
 import { getReadyToProcessBlockers } from '../domain/chargeableInvoiceState.ts'
 import {
     CHARGEABLE_INVOICE_LINE_TYPES,
+    CHARGEABLE_INVOICE_CORRECTION_COMPARISONS,
+    CHARGEABLE_INVOICE_PHOTO_STATUSES,
     CHARGEABLE_INVOICE_WAITING_ON,
     type ChargeableInvoiceDocument,
     type ChargeableInvoiceWaitingOn,
     type ChargeableInvoiceWorkspace as Workspace,
 } from '../types/chargeableInvoice.types.ts'
+import { validateChargeableInvoiceRequirements, type ChargeableInvoiceRequirementsDraft } from '../domain/chargeableInvoiceState.ts'
 
 type Tab = 'summary' | 'invoice' | 'history'
 
@@ -20,6 +25,9 @@ type Props = {
     error: string
     onStart: () => Promise<void>
     onSaveWaiting: (waitingOn: ChargeableInvoiceWaitingOn | null, note: string) => Promise<void>
+    onSaveRequirements: (draft: ChargeableInvoiceRequirementsDraft) => Promise<void>
+    onMarkReady: () => Promise<void>
+    onMarkDoNotProcess: (reason: string) => Promise<void>
     onDownload: (document: ChargeableInvoiceDocument) => Promise<void>
     onClose: () => void
 }
@@ -66,10 +74,45 @@ function WaitingEditor({ workspace, saving, onSave }: {
     </>
 }
 
+function RequirementsEditor({ workspace, saving, onSave }: {
+    workspace: Workspace
+    saving: boolean
+    onSave: (draft: ChargeableInvoiceRequirementsDraft) => Promise<void>
+}) {
+    const review = workspace.review
+    const [draft, setDraft] = useState<ChargeableInvoiceRequirementsDraft>({
+        poRequired: review.gr_porequired ?? null,
+        poNumber: review.gr_ponumber ?? '',
+        poReceived: Boolean(review.gr_poreceivedon),
+        photosRequired: review.gr_photosrequired ?? null,
+        photosStatus: review.gr_photosstatus ?? null,
+    })
+    const validation = validateChargeableInvoiceRequirements(draft)
+    const disabled = saving || !review.gr_reviewstartedon || review.gr_disposition != null
+    const triState = (value: string) => value === '' ? null : value === 'yes'
+    return <>
+        <div className="chargeable-decision-grid">
+            <label className="chargeable-field">PO required<select value={draft.poRequired == null ? '' : draft.poRequired ? 'yes' : 'no'} disabled={disabled} onChange={(event) => setDraft((current) => ({ ...current, poRequired: triState(event.currentTarget.value), poReceived: event.currentTarget.value === 'yes' && current.poReceived }))}><option value="">Undecided</option><option value="yes">Yes</option><option value="no">No</option></select></label>
+            <label className="chargeable-field">Confirmed PO number<input value={draft.poNumber} maxLength={100} disabled={disabled || draft.poRequired !== true} onChange={(event) => setDraft((current) => ({ ...current, poNumber: event.currentTarget.value }))} /></label>
+            <label className="chargeable-check"><input type="checkbox" checked={draft.poReceived} disabled={disabled || draft.poRequired !== true || !draft.poNumber.trim()} onChange={(event) => setDraft((current) => ({ ...current, poReceived: event.currentTarget.checked }))} />PO received from customer</label>
+            <label className="chargeable-field">Supporting photos required<select value={draft.photosRequired == null ? '' : draft.photosRequired ? 'yes' : 'no'} disabled={disabled} onChange={(event) => setDraft((current) => ({ ...current, photosRequired: triState(event.currentTarget.value), photosStatus: event.currentTarget.value === 'yes' ? current.photosStatus ?? CHARGEABLE_INVOICE_PHOTO_STATUSES.NOT_REQUESTED : null }))}><option value="">Undecided</option><option value="yes">Yes</option><option value="no">No</option></select></label>
+            <label className="chargeable-field">Photo status<select value={draft.photosStatus ?? ''} disabled={disabled || draft.photosRequired !== true} onChange={(event) => setDraft((current) => ({ ...current, photosStatus: event.currentTarget.value ? Number(event.currentTarget.value) as typeof current.photosStatus : null }))}><option value="">Choose status</option><option value={CHARGEABLE_INVOICE_PHOTO_STATUSES.NOT_REQUESTED}>Not requested</option><option value={CHARGEABLE_INVOICE_PHOTO_STATUSES.REQUESTED}>Requested</option><option value={CHARGEABLE_INVOICE_PHOTO_STATUSES.RECEIVED}>Received</option></select></label>
+        </div>
+        <p className="chargeable-evidence-note">GreenTree Order No is source evidence only. Enter a confirmed customer PO deliberately.</p>
+        {validation && <p className="chargeable-inline-error" role="alert">{validation}</p>}
+        <button type="button" className="chargeable-secondary" disabled={disabled || Boolean(validation)} onClick={() => void onSave(draft)}>Save PO and photo decisions</button>
+    </>
+}
+
 export default function ChargeableInvoiceWorkspace({
-    workspace, loading, saving, error, onStart, onSaveWaiting, onDownload, onClose,
+    workspace, loading, saving, error, onStart, onSaveWaiting, onSaveRequirements,
+    onMarkReady, onMarkDoNotProcess, onDownload, onClose,
 }: Props) {
     const [tab, setTab] = useState<Tab>('summary')
+    const [showReadyConfirmation, setShowReadyConfirmation] = useState(false)
+    const [showDoNotProcess, setShowDoNotProcess] = useState(false)
+    const [dispositionReason, setDispositionReason] = useState('')
+    const [dispositionError, setDispositionError] = useState('')
     const review = workspace?.review
 
     const currentRevision = useMemo(() => workspace?.revisions.find((revision) =>
@@ -78,7 +121,13 @@ export default function ChargeableInvoiceWorkspace({
     const currentLines = useMemo(() => workspace?.lines.filter((line) =>
         line._gr_revision_value === currentRevision?.gr_chargeableinvoicerevisionid) ?? [],
     [currentRevision?.gr_chargeableinvoicerevisionid, workspace?.lines])
-    const blockers = review ? getReadyToProcessBlockers(review) : []
+    const blockers = review ? [
+        ...getReadyToProcessBlockers(review),
+        ...(workspace?.corrections.some((correction) =>
+            correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.OUTSTANDING
+            || correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.NOT_MADE)
+            ? ['Resolve all outstanding invoice corrections.'] : []),
+    ] : []
 
     return <EditDrawerShell
         eyebrow="Chargeable invoice"
@@ -87,6 +136,8 @@ export default function ChargeableInvoiceWorkspace({
         onClose={onClose}
         footer={<>
             {review && !review.gr_reviewstartedon && <button type="button" className="primary" disabled={saving} onClick={() => void onStart()}>{saving ? 'Starting…' : 'Start review'}</button>}
+            {review?.gr_reviewstartedon && review.gr_disposition == null && <button type="button" className="primary" disabled={saving || blockers.length > 0} onClick={() => { setDispositionError(''); setShowReadyConfirmation(true) }}>Ready to Process</button>}
+            {review?.gr_reviewstartedon && review.gr_disposition == null && <button type="button" className="danger" disabled={saving || review.gr_waitingon != null} onClick={() => { setDispositionReason(''); setDispositionError(''); setShowDoNotProcess(true) }}>Do Not Process</button>}
             <button type="button" disabled={saving} onClick={onClose}>Close</button>
         </>}
     >
@@ -117,6 +168,9 @@ export default function ChargeableInvoiceWorkspace({
                 <EditDrawerSection title="Ready-to-process checks">
                     {blockers.length ? <ul className="chargeable-blockers">{blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul> : <p className="chargeable-ready-message">All recorded prerequisites are satisfied. The terminal Ready action will be added in its confirmation slice.</p>}
                 </EditDrawerSection>
+                <EditDrawerSection title="PO and supporting photos">
+                    <RequirementsEditor key={`${review.gr_chargeableinvoicereviewid}-requirements-${review['@odata.etag']}`} workspace={workspace} saving={saving} onSave={onSaveRequirements} />
+                </EditDrawerSection>
             </>}
         </div>
 
@@ -146,5 +200,7 @@ export default function ChargeableInvoiceWorkspace({
                 {workspace?.activities.length ? <ol className="chargeable-activity-list">{workspace.activities.map((activity) => <li key={activity.gr_chargeableinvoiceactivityid}><strong>{eventLabel(activity.gr_event)}</strong><span>{formatDateTime(activity.gr_occurredon)} · {activity['_createdby_value@OData.Community.Display.V1.FormattedValue'] || 'Manager'}</span>{activity.gr_detail && <p>{activity.gr_detail}</p>}</li>)}</ol> : <p>No activity is available.</p>}
             </EditDrawerSection>
         </div>
+        {showReadyConfirmation && <EditDrawerConfirmation eyebrow="Terminal review decision" title="Mark Ready to Process?" message="This moves the invoice to the Ready queue. It does not change the Job or send a communication." error={dispositionError} isBusy={saving} confirmLabel="Mark Ready" onCancel={() => setShowReadyConfirmation(false)} onConfirm={() => { void onMarkReady().then(() => setShowReadyConfirmation(false)).catch((cause) => setDispositionError(cause instanceof Error ? cause.message : 'The review could not be updated.')) }} />}
+        {showDoNotProcess && <EditDrawerFormDialog eyebrow="Terminal review decision" title="Do Not Process" error={dispositionError} isBusy={saving} submitLabel="Confirm Do Not Process" onCancel={() => setShowDoNotProcess(false)} onSubmit={() => { if (!dispositionReason.trim()) { setDispositionError('Enter the reason this invoice must not be processed.'); return } void onMarkDoNotProcess(dispositionReason).then(() => setShowDoNotProcess(false)).catch((cause) => setDispositionError(cause instanceof Error ? cause.message : 'The review could not be updated.')) }}><label className="chargeable-field">Reason<textarea rows={5} value={dispositionReason} maxLength={4000} onChange={(event) => setDispositionReason(event.currentTarget.value)} /></label></EditDrawerFormDialog>}
     </EditDrawerShell>
 }

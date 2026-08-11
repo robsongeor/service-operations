@@ -57,6 +57,11 @@ token, verify byte count against metadata, create a browser object URL only for 
 download, and revoke it immediately after handoff. Review transitions require the loaded ETag and
 append Activity atomically; they expose no Job write path.
 
+Terminal Ready to Process performs a fresh bounded read for Outstanding/Not Made corrections
+immediately before its ETag-protected Review transition. Terminal actions require an explicit
+confirmation; Do Not Process additionally requires a non-empty reason. Extracted Order No is
+display-only evidence and is never copied into the confirmed PO field by service or UI code.
+
 ## Security review triggers
 
 Review this architecture before adding a new public route, credential, Application User,

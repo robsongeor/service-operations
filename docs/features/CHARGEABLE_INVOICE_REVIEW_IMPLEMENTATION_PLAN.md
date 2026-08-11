@@ -267,8 +267,8 @@ Active while a revised document is staged. No automatic retry occurs after an un
 
 ### Phase 4 — queue and split-screen exception review
 
-- **Status:** active-queue and review-workspace foundation implemented locally; PO/photo edits,
-  correction creation, terminal confirmations and embedded PDF viewing remain.
+- **Status:** active queue, workspace, Start/Waiting, PO/photo decisions and terminal confirmations
+  implemented locally; correction creation and embedded PDF viewing remain.
 - **Scope:** route/navigation, derived table tabs, workspace, Start Review, Waiting, PO/photo
   decisions, corrections and timeline.
 - **Dependencies/areas/schema:** Phase 3; feature screen/table/workspace, route/sidebar; none.
@@ -282,6 +282,13 @@ append-only activities through bounded delegated reads. The accessible drawer re
 the invoking row and exposes Summary, Invoice and History tabs. Start Review and Waiting changes
 use the loaded Review ETag and append Activity in the same Dataverse change set. This foundation
 does not change Job status, treat Order No as a PO, or expose Staging/Failed imports.
+
+PO Required, confirmed PO Number/received state, Photos Required and photo status are deliberate
+manager inputs; changing PO Required never adopts extracted Order No. Ready to Process revalidates
+all prerequisite fields and performs a fresh bounded unresolved-Correction check before its
+explicit terminal confirmation. Do Not Process requires a started review, resolved Waiting and a
+reason in a separate confirmation dialog. Both terminal transitions write disposition/time and
+append Activity atomically under the Review ETag; neither changes Job status or communicates.
 
 ### Phase 5 — revised invoices, documents and correction comparison
 

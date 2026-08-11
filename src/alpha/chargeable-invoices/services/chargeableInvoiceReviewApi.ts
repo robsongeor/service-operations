@@ -1,5 +1,8 @@
 import {
     CHARGEABLE_INVOICE_IMPORT_STATUSES,
+    CHARGEABLE_INVOICE_DISPOSITIONS,
+    CHARGEABLE_INVOICE_PHOTO_STATUSES,
+    CHARGEABLE_INVOICE_CORRECTION_COMPARISONS,
     type ChargeableInvoiceActivity,
     type ChargeableInvoiceCorrection,
     type ChargeableInvoiceDocument,
@@ -9,6 +12,12 @@ import {
     type ChargeableInvoiceWaitingOn,
     type ChargeableInvoiceWorkspace,
 } from '../types/chargeableInvoice.types.ts'
+import {
+    getReadyToProcessBlockers,
+    validateChargeableInvoiceRequirements,
+    validateDoNotProcess,
+    type ChargeableInvoiceRequirementsDraft,
+} from '../domain/chargeableInvoiceState.ts'
 
 const API_URL = `${import.meta.env?.VITE_DATAVERSE_URL ?? 'https://invalid.local'}/api/data/v9.2`
 const MAX_QUEUE_RECORDS = 500
@@ -212,6 +221,65 @@ export function saveChargeableInvoiceWaiting(
         event: 122830005,
         name: waitingOn == null ? 'Waiting resolved' : 'Waiting changed',
         detail: waitingOn == null ? 'Waiting state resolved.' : waitingNote,
+    })
+}
+
+export function saveChargeableInvoiceRequirements(
+    accessToken: string,
+    review: ChargeableInvoiceReview,
+    draft: ChargeableInvoiceRequirementsDraft,
+) {
+    if (!review.gr_reviewstartedon) throw new Error('Start the review before recording PO or photo decisions.')
+    if (review.gr_disposition != null) throw new Error('A historical invoice review cannot be changed.')
+    const validation = validateChargeableInvoiceRequirements(draft)
+    if (validation) throw new Error(validation)
+    const photosStatus = draft.photosRequired === true
+        ? draft.photosStatus ?? CHARGEABLE_INVOICE_PHOTO_STATUSES.NOT_REQUESTED
+        : draft.photosRequired === false ? CHARGEABLE_INVOICE_PHOTO_STATUSES.NOT_REQUESTED : null
+    return applyTransition(accessToken, review, {
+        fields: {
+            gr_porequired: draft.poRequired,
+            gr_ponumber: draft.poRequired ? draft.poNumber.trim() || null : null,
+            gr_poreceivedon: draft.poRequired && draft.poReceived ? review.gr_poreceivedon || new Date().toISOString() : null,
+            gr_photosrequired: draft.photosRequired,
+            gr_photosstatus: photosStatus,
+        },
+        event: 122830011,
+        name: 'PO and photo requirements changed',
+        detail: `PO required: ${draft.poRequired == null ? 'Undecided' : draft.poRequired ? 'Yes' : 'No'}; photos required: ${draft.photosRequired == null ? 'Undecided' : draft.photosRequired ? 'Yes' : 'No'}.`,
+    })
+}
+
+export async function markChargeableInvoiceReady(accessToken: string, review: ChargeableInvoiceReview) {
+    if (review.gr_disposition != null) throw new Error('This invoice review already has a terminal disposition.')
+    const blockers = getReadyToProcessBlockers(review)
+    if (blockers.length) throw new Error(blockers[0])
+    const correctionUrl = new URL(`${API_URL}/gr_chargeableinvoicecorrections`)
+    correctionUrl.searchParams.set('$select', 'gr_chargeableinvoicecorrectionid')
+    correctionUrl.searchParams.set('$filter', `_gr_review_value eq ${review.gr_chargeableinvoicereviewid} and (gr_comparisonstatus eq ${CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.OUTSTANDING} or gr_comparisonstatus eq ${CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.NOT_MADE})`)
+    correctionUrl.searchParams.set('$top', '1')
+    const correctionResponse = await fetch(correctionUrl, { headers: headers(accessToken) })
+    if (!correctionResponse.ok) throw safeError(correctionResponse.status, 'checking outstanding invoice corrections')
+    const correctionBody = await correctionResponse.json() as { value?: unknown[] }
+    if (!Array.isArray(correctionBody.value)) throw new Error('Dataverse returned invalid correction status data.')
+    if (correctionBody.value.length) throw new Error('Resolve all outstanding invoice corrections before marking Ready to Process.')
+    return applyTransition(accessToken, review, {
+        fields: { gr_disposition: CHARGEABLE_INVOICE_DISPOSITIONS.READY_TO_PROCESS, gr_dispositionon: new Date().toISOString(), gr_dispositionreason: null },
+        event: 122830015,
+        name: 'Ready to process',
+    })
+}
+
+export function markChargeableInvoiceDoNotProcess(accessToken: string, review: ChargeableInvoiceReview, reason: string) {
+    if (review.gr_disposition != null) throw new Error('This invoice review already has a terminal disposition.')
+    const candidate = { ...review, gr_dispositionreason: reason }
+    const validation = validateDoNotProcess(candidate)
+    if (validation) throw new Error(validation)
+    return applyTransition(accessToken, review, {
+        fields: { gr_disposition: CHARGEABLE_INVOICE_DISPOSITIONS.DO_NOT_PROCESS, gr_dispositionon: new Date().toISOString(), gr_dispositionreason: reason.trim() },
+        event: 122830016,
+        name: 'Do not process',
+        detail: reason,
     })
 }
 

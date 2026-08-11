@@ -18,6 +18,7 @@ import {
 import {
     deriveChargeableInvoicePrimaryQueue,
     getReadyToProcessBlockers,
+    validateChargeableInvoiceRequirements,
     validateChargeableInvoiceWaiting,
     validateDoNotProcess,
 } from '../src/alpha/chargeable-invoices/domain/chargeableInvoiceState.ts'
@@ -80,6 +81,24 @@ test('PO and photo prerequisites block Ready until the confirmed business events
         gr_photosrequired: true,
         gr_photosstatus: CHARGEABLE_INVOICE_PHOTO_STATUSES.RECEIVED,
     }), [])
+})
+
+test('PO and photo decisions require deliberate, internally consistent confirmation', () => {
+    assert.match(validateChargeableInvoiceRequirements({
+        poRequired: false, poNumber: '', poReceived: true, photosRequired: null, photosStatus: null,
+    }) ?? '', /only when a PO is required/i)
+    assert.match(validateChargeableInvoiceRequirements({
+        poRequired: true, poNumber: '', poReceived: true, photosRequired: true,
+        photosStatus: CHARGEABLE_INVOICE_PHOTO_STATUSES.NOT_REQUESTED,
+    }) ?? '', /confirmed customer PO number/i)
+    assert.match(validateChargeableInvoiceRequirements({
+        poRequired: false, poNumber: '', poReceived: false, photosRequired: false,
+        photosStatus: CHARGEABLE_INVOICE_PHOTO_STATUSES.RECEIVED,
+    }) ?? '', /only when supporting photos are required/i)
+    assert.equal(validateChargeableInvoiceRequirements({
+        poRequired: true, poNumber: 'PO-123', poReceived: true, photosRequired: true,
+        photosStatus: CHARGEABLE_INVOICE_PHOTO_STATUSES.RECEIVED,
+    }), null)
 })
 
 test('Do Not Process requires review, resolved Waiting, and an explanatory reason', () => {
@@ -292,5 +311,8 @@ test('Chargeable Invoice route uses shared page primitives and delegates intake 
     assert.match(workspace, /<EditDrawerShell/)
     assert.match(workspace, /<DrawerTabs/)
     assert.match(workspace, /Start review/)
+    assert.match(workspace, /Ready to Process/)
+    assert.match(workspace, /Do Not Process/)
+    assert.match(workspace, /Order No is source evidence only/)
     assert.doesNotMatch(screen, /fetch\(/)
 })

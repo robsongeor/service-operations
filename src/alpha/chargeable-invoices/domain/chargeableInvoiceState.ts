@@ -2,6 +2,7 @@ import {
     CHARGEABLE_INVOICE_DISPOSITIONS,
     CHARGEABLE_INVOICE_PHOTO_STATUSES,
     type ChargeableInvoiceReview,
+    type ChargeableInvoicePhotoStatus,
 } from '../types/chargeableInvoice.types.ts'
 
 export type ChargeableInvoicePrimaryQueue = 'new' | 'in-progress' | 'waiting' | 'ready-to-process' | 'history'
@@ -64,5 +65,23 @@ export function validateDoNotProcess(
     if (!review.gr_reviewstartedon) return 'Start the review first.'
     if (review.gr_waitingon != null) return 'Resolve the current Waiting state.'
     if (!review.gr_dispositionreason?.trim()) return 'Enter the reason this invoice must not be processed.'
+    return null
+}
+
+export type ChargeableInvoiceRequirementsDraft = {
+    poRequired: boolean | null
+    poNumber: string
+    poReceived: boolean
+    photosRequired: boolean | null
+    photosStatus: ChargeableInvoicePhotoStatus | null
+}
+
+export function validateChargeableInvoiceRequirements(draft: ChargeableInvoiceRequirementsDraft) {
+    if (draft.poReceived && draft.poRequired !== true) return 'PO receipt can be recorded only when a PO is required.'
+    if (draft.poReceived && !draft.poNumber.trim()) return 'Enter the confirmed customer PO number before marking it received.'
+    if (draft.poNumber.trim().length > 100) return 'PO Number must be 100 characters or fewer.'
+    if (draft.photosStatus === CHARGEABLE_INVOICE_PHOTO_STATUSES.RECEIVED && draft.photosRequired !== true) {
+        return 'Photos can be marked received only when supporting photos are required.'
+    }
     return null
 }

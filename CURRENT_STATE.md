@@ -506,5 +506,8 @@ Active-only review queue with derived New/In Progress/Waiting/Ready/History filt
 PDF intake remains an explicit sibling mode. An accessible focus-return workspace loads current
 revision fields, lines, retained documents, corrections and append-only activity. Start Review
 and Waiting changes use one ETag-protected Review + Activity change set. Staging/Failed imports
-and operational Job mutations are excluded. PO/photo editing, correction creation, terminal
-confirmations and embedded PDF viewing remain.
+and operational Job mutations are excluded. Deliberate PO/photo decisions and explicit Ready to
+Process / Do Not Process confirmations are also implemented under the same concurrency/audit
+boundary; extracted Order No is never adopted automatically, Ready rechecks unresolved
+corrections, and Do Not Process requires a reason. Correction creation and embedded PDF viewing
+remain.
