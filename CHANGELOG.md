@@ -4,6 +4,8 @@
 
 - Kept API-only Chargeable Invoice PDF packages out of Vite's production config-load path so the
   Azure root build and managed Functions dependency builds remain correctly separated.
+- Pinned the server PDF parser to audited `pdfjs-dist@5.4.624`, compatible with the deployed
+  Azure Functions Node 20.20 runtime.
 - Removed the Chargeable Invoice malware-readiness setting and gate by explicit product decision;
   import and approval retain independent disabled-by-default server switches and file validation.
 - Allowed authenticated, bounded Chargeable Invoice PDF preview and Job lookup before File-upload

@@ -14,7 +14,10 @@ Branch: `codex/chargeable-invoice-review`
 - Chargeable Invoice Review deployment commit `c9ef102` reached `v1-deployment` on 12 August
   2026 but Azure build run `31527984996` failed before publication because Vite eagerly loaded the
   API-only `pdf-lib` dependency during the root build. The local middleware now loads that service
-  only when a development/preview server starts; redeployment validation is in progress.
+  only when a development/preview server starts; corrected run `31528610871` published `3cdec08`
+  successfully and both new API routes returned safe unauthenticated `401` responses. Azure's
+  managed Functions runtime is Node 20.20, so the release pins audited `pdfjs-dist@5.4.624`
+  rather than the incompatible 6.x line before authenticated PDF smoke testing.
 
 ## Unfinished work
 

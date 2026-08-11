@@ -61,11 +61,12 @@ test('manager workflow preserves silent authentication and excludes automatic em
 })
 
 test('intake, reads, rendering and files retain their bounded contracts', async () => {
-    const [intake, client, preview, approval] = await Promise.all([
+    const [intake, client, preview, approval, apiPackage] = await Promise.all([
         source('src/alpha/chargeable-invoices/hooks/useChargeableInvoiceIntake.ts'),
         source('src/alpha/chargeable-invoices/services/chargeableInvoiceReviewApi.ts'),
         source('api/services/chargeableInvoicePreviewService.js'),
         source('api/services/chargeableInvoiceApprovalService.js'),
+        source('api/package.json'),
     ])
 
     assert.match(intake, /MAX_BATCH_FILES = 20/)
@@ -78,6 +79,7 @@ test('intake, reads, rendering and files retain their bounded contracts', async 
     assert.match(preview, /MAX_PDF_PAGES = 5/)
     assert.match(approval, /MAX_LINES = 200/)
     assert.match(approval, /MAX_PDF_BYTES = 5 \* 1024 \* 1024/)
+    assert.equal((JSON.parse(apiPackage) as { dependencies: Record<string, string> }).dependencies['pdfjs-dist'], '5.4.624')
 })
 
 test('workspace keeps the shared accessible drawer, tabs, selector and focus return', async () => {

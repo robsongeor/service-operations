@@ -58,7 +58,10 @@ approved. V1 deliberately has no malware-scanning setting or integration. The AP
 `pdfjs-dist` and `pdf-lib`; dependency installation is required when the managed Function build
 runs. Vite's local approval middleware loads that API service only when a development/preview
 server is configured, so the root production build does not require or duplicate API-only PDF
-packages before Azure builds the managed Functions directory.
+packages before Azure builds the managed Functions directory. The managed Functions build uses
+Node 20. `pdfjs-dist` is therefore pinned exactly to `5.4.624`, which supports Node 20.16+ and is
+outside the high-severity advisory range affecting `>=5.6.83 <6.2.108`; do not float this package
+without rechecking the Azure runtime, package engine and audit result together.
 
 Approval generation additionally requires `CHARGEABLE_INVOICE_APPROVAL_ENABLED=true`. Leave it
 false until the generated-PDF File path and manager-role smoke have passed in the target
