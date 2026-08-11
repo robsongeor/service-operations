@@ -21,11 +21,12 @@ export function deriveChargeableInvoicePrimaryQueue(
 }
 
 export function validateChargeableInvoiceWaiting(
-    review: Pick<ChargeableInvoiceReview, 'gr_waitingon' | 'gr_waitingnote' | 'gr_disposition'>,
+    review: Pick<ChargeableInvoiceReview, 'gr_reviewstartedon' | 'gr_waitingon' | 'gr_waitingnote' | 'gr_disposition'>,
 ) {
     if (review.gr_disposition != null && review.gr_waitingon != null) {
         return 'A historical invoice review cannot remain in Waiting.'
     }
+    if (review.gr_waitingon != null && !review.gr_reviewstartedon) return 'Start the review before setting Waiting.'
     if (review.gr_waitingon != null && !review.gr_waitingnote?.trim()) {
         return 'Enter a waiting note describing what is outstanding.'
     }

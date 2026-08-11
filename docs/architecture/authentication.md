@@ -88,6 +88,11 @@ a generally signed-in office user is not sufficient. The same delegated bearer t
 bounded exact Job, duplicate and revision reads and confirmed writes. The server never stores or
 logs the bearer token or PDF outside the approved Dataverse Document File record.
 
+The Chargeable Invoice queue and workspace use the same active MSAL account and silent delegated
+token path as the rest of the office application. Dataverse directly enforces the unassigned
+manager-role boundary for bounded Review/child reads, File downloads and ETag-protected Review +
+Activity change sets. No interactive authentication is initiated by the feature hook or service.
+
 ## Administrative and provisioning sessions
 
 Existing schema scripts commonly create a `CrmServiceClient` with `LoginPrompt=Auto`. A

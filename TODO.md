@@ -26,7 +26,7 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
 
 ## Priority 2 — Product improvements
 
-- [ ] Deliver the planned manager-only Chargeable Invoice Review workflow: schema/role foundation, staging columns and local recoverable batch PDF import are complete; build exception review, PO/photo tracking, role assignment, release-gate validation, and the ready-to-process queue. See [`docs/features/CHARGEABLE_INVOICE_REVIEW_IMPLEMENTATION_PLAN.md`](docs/features/CHARGEABLE_INVOICE_REVIEW_IMPLEMENTATION_PLAN.md); role assignment and deployment retain explicit approval gates.
+- [ ] Deliver the planned manager-only Chargeable Invoice Review workflow: schema/role, staging, recoverable PDF import, active queue, workspace, Start Review and Waiting foundations are complete locally; add corrections, PO/photo decisions, terminal confirmations, embedded PDF review, role assignment and release validation. See [`docs/features/CHARGEABLE_INVOICE_REVIEW_IMPLEMENTATION_PLAN.md`](docs/features/CHARGEABLE_INVOICE_REVIEW_IMPLEMENTATION_PLAN.md); role assignment and deployment retain explicit approval gates.
 - [x] Implement Site Check temporary Equipment availability:
   enabled-Site-only marker, In Workshop/Temporarily Off-site exclusion, and occurrence
   exclusion snapshots; no catch-up Jobs.

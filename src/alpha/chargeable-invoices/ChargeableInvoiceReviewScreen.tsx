@@ -1,8 +1,9 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import PageHeader from '../shared/page-header/PageHeader.tsx'
 import MetricStrip from '../shared/metric-strip/MetricStrip.tsx'
 import { CHARGEABLE_INVOICE_MATCH_STATUSES } from './types/chargeableInvoice.types.ts'
 import { useChargeableInvoiceIntake } from './hooks/useChargeableInvoiceIntake.ts'
+import ChargeableInvoiceQueue from './components/ChargeableInvoiceQueue.tsx'
 import './ChargeableInvoiceReviewScreen.css'
 
 const money = new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' })
@@ -18,22 +19,28 @@ function matchLabel(status: number | undefined) {
 export default function ChargeableInvoiceReviewScreen() {
     const inputRef = useRef<HTMLInputElement>(null)
     const intake = useChargeableInvoiceIntake()
+    const [mode, setMode] = useState<'queue' | 'intake'>('queue')
 
     return <main className="chargeable-invoices-screen">
         <PageHeader
             eyebrow="Manager workflow"
             title="Chargeable Invoice Review"
-            subtitle="Preview GreenTree PDFs, confirm exact Jobs, and select valid invoices for a later import. No records are created during preview."
+            subtitle={mode === 'queue'
+                ? 'Work through active chargeable invoices without changing operational Job status.'
+                : 'Preview GreenTree PDFs, confirm exact Jobs, and import only the selected valid invoices.'}
             actions={<>
-                <button type="button" className="chargeable-secondary" onClick={() => inputRef.current?.click()} disabled={intake.isPreviewing}>
+                <button type="button" className={mode === 'queue' ? 'chargeable-primary' : 'chargeable-secondary'} onClick={() => setMode('queue')}>Review queue</button>
+                <button type="button" className={mode === 'intake' ? 'chargeable-primary' : 'chargeable-secondary'} onClick={() => setMode('intake')}>Import PDFs</button>
+                {mode === 'intake' && <button type="button" className="chargeable-secondary" onClick={() => inputRef.current?.click()} disabled={intake.isPreviewing}>
                     Add PDFs
-                </button>
-                <button type="button" className="chargeable-primary" onClick={() => void intake.previewPending()} disabled={intake.isPreviewing || intake.summary.pending === 0}>
+                </button>}
+                {mode === 'intake' && <button type="button" className="chargeable-primary" onClick={() => void intake.previewPending()} disabled={intake.isPreviewing || intake.summary.pending === 0}>
                     {intake.isPreviewing ? 'Previewing…' : `Preview ${intake.summary.pending || ''}`.trim()}
-                </button>
+                </button>}
             </>}
         />
 
+        {mode === 'queue' ? <ChargeableInvoiceQueue /> : <>
         <input
             ref={inputRef}
             className="chargeable-file-input"
@@ -89,5 +96,6 @@ export default function ChargeableInvoiceReviewScreen() {
                 </table>
             </div>
         </section>}
+        </>}
     </main>
 }

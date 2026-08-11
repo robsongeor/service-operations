@@ -267,11 +267,21 @@ Active while a revised document is staged. No automatic retry occurs after an un
 
 ### Phase 4 — queue and split-screen exception review
 
+- **Status:** active-queue and review-workspace foundation implemented locally; PO/photo edits,
+  correction creation, terminal confirmations and embedded PDF viewing remain.
 - **Scope:** route/navigation, derived table tabs, workspace, Start Review, Waiting, PO/photo
   decisions, corrections and timeline.
 - **Dependencies/areas/schema:** Phase 3; feature screen/table/workspace, route/sidebar; none.
 - **Acceptance/tests/docs:** preview changes nothing; prerequisites derive queue; safe ETag
   conflict and keyboard/focus tests; feature architecture update.
+
+The screen now defaults to an Active-import-only review queue and keeps PDF intake as an explicit
+second mode. Derived New/In Progress/Waiting/Ready/History filters and bounded search do not persist
+separate status. Opening a row loads its Review, revisions, lines, corrections, documents and
+append-only activities through bounded delegated reads. The accessible drawer returns focus to
+the invoking row and exposes Summary, Invoice and History tabs. Start Review and Waiting changes
+use the loaded Review ETag and append Activity in the same Dataverse change set. This foundation
+does not change Job status, treat Order No as a PO, or expose Staging/Failed imports.
 
 ### Phase 5 — revised invoices, documents and correction comparison
 

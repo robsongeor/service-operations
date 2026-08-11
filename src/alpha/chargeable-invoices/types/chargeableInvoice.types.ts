@@ -110,6 +110,17 @@ export type ChargeableInvoiceReview = {
     '@odata.etag'?: string
     createdon?: string
     modifiedon?: string
+    gr_CurrentRevision?: ChargeableInvoiceRevision | null
+    gr_Job?: { gr_jobid: string; gr_jobnumber?: string | null; gr_description?: string | null } | null
+    gr_Customer?: { gr_customerid: string; gr_name: string } | null
+    gr_Site?: { gr_siteid: string; gr_name: string } | null
+    gr_Equipment?: {
+        gr_equipmentid: string
+        gr_fleet?: string | null
+        gr_make?: string | null
+        gr_model?: string | null
+        gr_serial?: string | null
+    } | null
 }
 
 export type ChargeableInvoiceDocument = {
@@ -124,7 +135,9 @@ export type ChargeableInvoiceDocument = {
     gr_sourcesnapshothash?: string | null
     gr_uploadstatus: ChargeableInvoiceUploadStatus
     gr_uploaderror?: string | null
+    gr_filename?: string | null
     '@odata.etag'?: string
+    createdon?: string
 }
 
 export type ChargeableInvoiceLine = {
@@ -175,6 +188,15 @@ export type ChargeableInvoiceRevisionSnapshot = {
     gr_extractionjson: string
 }
 
+export type ChargeableInvoiceRevision = ChargeableInvoiceRevisionSnapshot & {
+    gr_chargeableinvoicerevisionid: string
+    gr_name: string
+    _gr_review_value: string
+    _gr_sourcedocument_value: string
+    gr_revisionnumber: number
+    createdon?: string
+}
+
 export type ChargeableInvoiceCorrection = {
     gr_chargeableinvoicecorrectionid: string
     _gr_review_value: string
@@ -190,4 +212,28 @@ export type ChargeableInvoiceCorrection = {
     gr_requestedunitprice?: number | null
     gr_comparisonstatus: ChargeableInvoiceCorrectionComparison
     _gr_matchedrevision_value?: string | null
+}
+
+export type ChargeableInvoiceActivity = {
+    gr_chargeableinvoiceactivityid: string
+    gr_name: string
+    _gr_review_value: string
+    _gr_revision_value?: string | null
+    _gr_document_value?: string | null
+    _gr_correction_value?: string | null
+    gr_event: number
+    gr_detail?: string | null
+    gr_occurredon: string
+    createdon?: string
+    _createdby_value?: string | null
+    '_createdby_value@OData.Community.Display.V1.FormattedValue'?: string
+}
+
+export type ChargeableInvoiceWorkspace = {
+    review: ChargeableInvoiceReview
+    revisions: ChargeableInvoiceRevision[]
+    lines: ChargeableInvoiceLine[]
+    corrections: ChargeableInvoiceCorrection[]
+    documents: ChargeableInvoiceDocument[]
+    activities: ChargeableInvoiceActivity[]
 }

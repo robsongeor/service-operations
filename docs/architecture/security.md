@@ -50,6 +50,13 @@ fail-closed unless both `CHARGEABLE_INVOICE_PREVIEW_ENABLED` and
 `CHARGEABLE_INVOICE_MALWARE_SCANNING_READY` are explicitly `true`. The latter may be enabled only
 after the deployed upload path's malware-scanning readiness has been verified and approved.
 
+The review queue filters to Active imports before returning records. Workspace reads are bounded,
+follow only same-origin Dataverse continuation links, and request only the six review tables plus
+their approved reference display fields. Document File downloads use the manager's delegated
+token, verify byte count against metadata, create a browser object URL only for the deliberate
+download, and revoke it immediately after handoff. Review transitions require the loaded ETag and
+append Activity atomically; they expose no Job write path.
+
 ## Security review triggers
 
 Review this architecture before adding a new public route, credential, Application User,

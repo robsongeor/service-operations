@@ -500,3 +500,11 @@ enabling preview flags, server dependency/configuration changes and all real
 communications retain separate explicit approval gates. The remaining Site Checks release
 gates, production server-settings verification and Technician Job Card smoke test remain
 separate outstanding release work.
+
+Chargeable Invoice Review Phase 4 has started locally. The route now defaults to a bounded
+Active-only review queue with derived New/In Progress/Waiting/Ready/History filters and search;
+PDF intake remains an explicit sibling mode. An accessible focus-return workspace loads current
+revision fields, lines, retained documents, corrections and append-only activity. Start Review
+and Waiting changes use one ETag-protected Review + Activity change set. Staging/Failed imports
+and operational Job mutations are excluded. PO/photo editing, correction creation, terminal
+confirmations and embedded PDF viewing remain.

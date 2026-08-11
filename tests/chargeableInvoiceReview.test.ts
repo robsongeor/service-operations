@@ -6,11 +6,14 @@ import {
     CHARGEABLE_INVOICE_CORRECTION_COMPARISONS,
     CHARGEABLE_INVOICE_CORRECTION_TYPES,
     CHARGEABLE_INVOICE_DISPOSITIONS,
+    CHARGEABLE_INVOICE_IMPORT_STATUSES,
     CHARGEABLE_INVOICE_LINE_TYPES,
     CHARGEABLE_INVOICE_PHOTO_STATUSES,
     CHARGEABLE_INVOICE_WAITING_ON,
+    CHARGEABLE_INVOICE_MATCH_STATUSES,
     type ChargeableInvoiceCorrection,
     type ChargeableInvoiceLine,
+    type ChargeableInvoiceReview,
 } from '../src/alpha/chargeable-invoices/types/chargeableInvoice.types.ts'
 import {
     deriveChargeableInvoicePrimaryQueue,
@@ -26,6 +29,7 @@ import {
 } from '../src/alpha/chargeable-invoices/domain/greenTreeInvoiceExtraction.ts'
 import { compareOutstandingCorrections } from '../src/alpha/chargeable-invoices/domain/chargeableInvoiceRevisionComparison.ts'
 import { validateChargeableInvoicePdf } from '../src/alpha/chargeable-invoices/services/chargeableInvoicePreviewApi.ts'
+import { chargeableInvoiceReviewApiTest } from '../src/alpha/chargeable-invoices/services/chargeableInvoiceReviewApi.ts'
 
 test('queue state requires an explicit start and gives Waiting precedence while active', () => {
     assert.equal(deriveChargeableInvoicePrimaryQueue({}), 'new')
@@ -47,13 +51,19 @@ test('terminal dispositions derive Ready and History without another completion 
 
 test('Waiting requires a useful note and cannot coexist with a terminal disposition', () => {
     assert.match(validateChargeableInvoiceWaiting({
+        gr_reviewstartedon: '2026-08-11T01:00:00Z',
         gr_waitingon: CHARGEABLE_INVOICE_WAITING_ON.SALES,
     }) ?? '', /waiting note/i)
     assert.match(validateChargeableInvoiceWaiting({
+        gr_reviewstartedon: '2026-08-11T01:00:00Z',
         gr_waitingon: CHARGEABLE_INVOICE_WAITING_ON.SALES,
         gr_waitingnote: 'Customer may trade the machine.',
         gr_disposition: CHARGEABLE_INVOICE_DISPOSITIONS.DO_NOT_PROCESS,
     }) ?? '', /cannot remain/i)
+    assert.match(validateChargeableInvoiceWaiting({
+        gr_waitingon: CHARGEABLE_INVOICE_WAITING_ON.SALES,
+        gr_waitingnote: 'Need confirmation.',
+    }) ?? '', /start/i)
 })
 
 test('PO and photo prerequisites block Ready until the confirmed business events occur', () => {
@@ -230,11 +240,46 @@ test('client PDF validation enforces the approved type and 5 MiB boundary before
     assert.match(validateChargeableInvoicePdf({ name: 'invoice.txt', type: 'text/plain', size: 100 }) ?? '', /PDF/)
 })
 
-test('Chargeable Invoice route uses shared page primitives and delegates preview/import writes to services', async () => {
-    const [app, sidebar, screen] = await Promise.all([
+test('review transitions atomically update by ETag and append activity without touching Jobs', () => {
+    const review: ChargeableInvoiceReview = {
+        gr_chargeableinvoicereviewid: 'review-id',
+        gr_name: 'VFL00001',
+        gr_invoicenumber: 'VFL00001',
+        gr_invoicedate: '2026-07-27',
+        gr_greentreereference: '145156',
+        gr_matchstatus: CHARGEABLE_INVOICE_MATCH_STATUSES.MATCHED_EXACTLY,
+        gr_importstatus: CHARGEABLE_INVOICE_IMPORT_STATUSES.ACTIVE,
+        _gr_currentrevision_value: 'revision-id',
+        '@odata.etag': 'W/"7"',
+    }
+    const batch = chargeableInvoiceReviewApiTest.transitionBatch(review, {
+        fields: { gr_waitingon: CHARGEABLE_INVOICE_WAITING_ON.TECHNICIAN, gr_waitingnote: 'Confirm job date.' },
+        event: 122830005,
+        name: 'Waiting changed',
+        detail: 'Confirm job date.',
+    })
+    assert.match(batch.payload, /PATCH gr_chargeableinvoicereviews\(review-id\)/)
+    assert.match(batch.payload, /If-Match: W\/"7"/)
+    assert.match(batch.payload, /POST gr_chargeableinvoiceactivities/)
+    assert.match(batch.payload, /gr_chargeableinvoicerevisions\(revision-id\)/)
+    assert.doesNotMatch(batch.payload, /PATCH gr_jobs|gr_jobstatus|gr_status/)
+})
+
+test('review paging accepts only Dataverse continuation links on the configured API path', () => {
+    assert.equal(
+        chargeableInvoiceReviewApiTest.trustedNextLink('https://invalid.local/api/data/v9.2/gr_chargeableinvoicereviews?$skiptoken=abc'),
+        'https://invalid.local/api/data/v9.2/gr_chargeableinvoicereviews?$skiptoken=abc',
+    )
+    assert.throws(() => chargeableInvoiceReviewApiTest.trustedNextLink('https://attacker.example/api/data/v9.2/reviews'), /untrusted/i)
+})
+
+test('Chargeable Invoice route uses shared page primitives and delegates intake and queue workflows', async () => {
+    const [app, sidebar, screen, queue, workspace] = await Promise.all([
         readFile(new URL('../src/App.tsx', import.meta.url), 'utf8'),
         readFile(new URL('../src/Sidebar.tsx', import.meta.url), 'utf8'),
         readFile(new URL('../src/alpha/chargeable-invoices/ChargeableInvoiceReviewScreen.tsx', import.meta.url), 'utf8'),
+        readFile(new URL('../src/alpha/chargeable-invoices/components/ChargeableInvoiceQueue.tsx', import.meta.url), 'utf8'),
+        readFile(new URL('../src/alpha/chargeable-invoices/components/ChargeableInvoiceWorkspace.tsx', import.meta.url), 'utf8'),
     ])
     assert.match(app, /path="\/chargeable-invoices"/)
     assert.match(sidebar, /Chargeable Invoices/)
@@ -242,5 +287,10 @@ test('Chargeable Invoice route uses shared page primitives and delegates preview
     assert.match(screen, /<MetricStrip/)
     assert.match(screen, /type="file"[\s\S]*multiple/)
     assert.match(screen, /intake\.importSelected/)
+    assert.match(screen, /<ChargeableInvoiceQueue/)
+    assert.match(queue, /deriveChargeableInvoicePrimaryQueue/)
+    assert.match(workspace, /<EditDrawerShell/)
+    assert.match(workspace, /<DrawerTabs/)
+    assert.match(workspace, /Start review/)
     assert.doesNotMatch(screen, /fetch\(/)
 })
