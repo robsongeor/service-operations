@@ -45,7 +45,8 @@ pages, bounded extracted text, and the approved 5 MiB limit. PDF.js runs server-
 structured preview evidence; preview does not persist a file or Review. Confirmed import re-parses
 the supplied bytes, rechecks exact Job/duplicate state, stages bounded metadata and uses ETag-
 protected atomic finalisation after the File upload. Failed staging records contain only safe
-error text and remain recoverable because managers have no Delete privilege. Authenticated,
+error text and remain recoverable because the permanent-delete UI targets loaded Active reviews
+only. Authenticated,
 bounded preview and Job lookup do not persist the supplied file and are available without the
 import release flag. Confirmed import remains fail-closed unless the legacy-named
 `CHARGEABLE_INVOICE_PREVIEW_ENABLED` import switch is explicitly `true`. By explicit product-owner
@@ -81,14 +82,20 @@ resolved Corrections, deliberate photo decision and any required Complete photos
 The UI identifies files for manual download/attachment; `mailto:` cannot attach or send them.
 Only an ETag-protected preparation timestamp and safe Activity are stored.
 
-V1 performs no automatic Chargeable Invoice cleanup. Complete immutable evidence and
-Pending/Failed recovery rows are retained; any privileged retention process requires a separately
-approved policy and role. Release validation records safe status, timing and request-count evidence
+V1 performs no automatic Chargeable Invoice cleanup. Complete evidence is immutable during normal
+review work, and Pending/Failed recovery rows are retained. A manager may permanently delete one
+loaded Active package only after typing its exact invoice number. The bounded ETag-guarded changeset
+deletes only the six review-table graph in dependency order; Restrict relationships, a 900-operation
+ceiling and atomic rollback prevent partial or operational-record deletion. The six table-level
+Delete grants require separate provisioning approval and Assign/Share remain forbidden. Any
+scheduled retention process still requires a separately approved policy and role. Release validation records safe status, timing and request-count evidence
 only, never invoice/PDF/PO/email content, tokens or raw Dataverse responses. See the
 [operations checklist](../chargeable-invoice-review-operations.md).
 
 Terminal Ready to Process performs a fresh bounded read for Outstanding/Not Made corrections
-immediately before its ETag-protected Review transition. Terminal actions require an explicit
+immediately before its ETag-protected Review transition. Up to 200 correction instructions remain
+attached for Accounts processing and the count is recorded in the Ready Activity instead of
+blocking handoff. Terminal actions require an explicit
 confirmation; Do Not Process additionally requires a non-empty reason. Extracted Order No is
 display-only evidence and is never copied into the confirmed PO field by service or UI code.
 

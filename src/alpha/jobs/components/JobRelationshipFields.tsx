@@ -8,6 +8,7 @@ import { deriveSiteNameFromAddress } from '../../shared/siteName'
 type Props = {
     editor: ReturnType<typeof useJobEditor>
     equipmentList: Equipment[]
+    initialEquipmentDraft?: { fleet?: string; serial?: string; make?: string; model?: string }
     onCreateCustomer: (customer: { name: string }) => Promise<string>
     onCreateSite: (site: { customerId: string; name: string; address?: string }) => Promise<string>
     onCreateContact: (contact: { siteId: string; name: string; phone?: string; email?: string }) => Promise<string>
@@ -26,6 +27,7 @@ const equipmentLabel = (item: Equipment) => ({
 export default function JobRelationshipFields({
     editor,
     equipmentList,
+    initialEquipmentDraft,
     onCreateCustomer,
     onCreateSite,
     onCreateContact,
@@ -36,16 +38,35 @@ export default function JobRelationshipFields({
         customerSearchOpen, setCustomerSearchOpen, filteredCustomers,
         filteredSites, filteredContacts, selectCustomer, selectSite,
     } = editor
-    const [panel, setPanel] = useState<Panel>('')
+    const initialEquipment = {
+        fleet: initialEquipmentDraft?.fleet?.trim() ?? '',
+        serial: initialEquipmentDraft?.serial?.trim() ?? '',
+        make: initialEquipmentDraft?.make?.trim() ?? '',
+        model: initialEquipmentDraft?.model?.trim() ?? '',
+    }
+    const hasExactInitialFleetMatch = Boolean(initialEquipment.fleet) && equipmentList.some((item) =>
+        normalizeSearch(item.gr_fleet) === normalizeSearch(initialEquipment.fleet))
+    const hasExactInitialSerialMatch = Boolean(initialEquipment.serial) && equipmentList.some((item) =>
+        normalizeSearch(item.gr_serial) === normalizeSearch(initialEquipment.serial))
+    const initialEquipmentSearch = hasExactInitialFleetMatch
+        ? initialEquipment.fleet
+        : hasExactInitialSerialMatch ? initialEquipment.serial : initialEquipment.fleet || initialEquipment.serial
+    const hasExactInitialEquipmentMatch = hasExactInitialFleetMatch || hasExactInitialSerialMatch
+    const shouldOpenInitialEquipmentCreate = !draft.equipmentId
+        && Boolean(initialEquipmentSearch)
+        && !hasExactInitialEquipmentMatch
+    const [panel, setPanel] = useState<Panel>(shouldOpenInitialEquipmentCreate ? 'equipment' : '')
     const [isCreating, setIsCreating] = useState(false)
     const [createError, setCreateError] = useState('')
     const [createdCustomerId, setCreatedCustomerId] = useState('')
-    const [equipment, setEquipment] = useState({ fleet: '', serial: '', make: '', model: '' })
+    const [equipment, setEquipment] = useState(initialEquipment)
     const [customer, setCustomer] = useState({ name: '', siteName: '', address: '' })
     const [site, setSite] = useState({ name: '', address: '' })
     const [contact, setContact] = useState({ name: '', phone: '', email: '' })
     const selectedEquipment = equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)
-    const [equipmentSearch, setEquipmentSearch] = useState(() => selectedEquipment ? equipmentLabel(selectedEquipment).identifier : '')
+    const [equipmentSearch, setEquipmentSearch] = useState(() => selectedEquipment
+        ? equipmentLabel(selectedEquipment).identifier
+        : initialEquipmentSearch)
     const [equipmentSearchOpen, setEquipmentSearchOpen] = useState(false)
     const [equipmentActiveIndex, setEquipmentActiveIndex] = useState(0)
     const [showLegacyEquipmentSelect] = useState(false)
@@ -241,7 +262,7 @@ export default function JobRelationshipFields({
             </select>}
         </label>
         {panel === 'equipment' && <div className="job-edit-create-panel job-edit-field-wide">
-            <div><h4>New equipment</h4><p>Create and select equipment for this job.</p></div>
+            <div><h4>New equipment</h4><p>{initialEquipmentSearch ? 'Prefilled from the invoice. Confirm the details before creating and selecting this equipment.' : 'Create and select equipment for this job.'}</p></div>
             <label className="job-edit-field"><span>Fleet number</span><input autoFocus value={equipment.fleet} onChange={(e) => setEquipment({ ...equipment, fleet: e.target.value })} /></label>
             <label className="job-edit-field"><span>Serial number</span><input value={equipment.serial} onChange={(e) => setEquipment({ ...equipment, serial: e.target.value })} /></label>
             <label className="job-edit-field"><span>Make</span><input value={equipment.make} onChange={(e) => setEquipment({ ...equipment, make: e.target.value })} /></label>

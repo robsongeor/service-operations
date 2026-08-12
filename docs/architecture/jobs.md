@@ -32,6 +32,18 @@ Detailed tables, columns, and relationship names belong in the relevant schema d
 Job create/edit drawers use shared drawer presentation and shared searchable selectors.
 Scheduling and Customer Dashboard entry points reuse the Jobs workflow. Completion is routed
 through the completion framework rather than screen-specific writes.
+Chargeable Invoice intake also reuses the canonical Job-create drawer when an extracted Our Ref
+has no exact Job match. That entry point requires a Job Number, leaves authoritative relationship
+selection with the manager, and returns the created Job through the invoice feature's existing
+exact-match API before the invoice can be imported. Extracted equipment identifiers initialise the
+shared Equipment selector: one exact compatible fleet/serial match automatically selects the
+existing Equipment and its authoritative Customer/Site; ambiguous or conflicting matches remain
+unselected. No exact identifier match opens the existing new-Equipment panel with invoice values
+prefilled for confirmation. Neither path silently creates Equipment. Its initial Job Description
+uses the concise final segment of the extracted GreenTree headline rather than Work Completed. This
+historical invoice-recovery entry point defaults Job Status to Complete and copies only a meaningful
+extracted GreenTree Order No into the editable Job Order Number; standard Job creation retains its
+existing Unallocated default.
 The feature-owned Jobs table also owns Job Book clipboard exchange. A row click copies one
 job-book row; its explicit multi-select controls copy selected, currently shown Jobs in the
 visible sorted order as tab-separated rows. The paired paste action reads one numeric Job

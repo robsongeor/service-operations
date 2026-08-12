@@ -92,13 +92,17 @@ test('workspace keeps the shared accessible drawer, tabs, selector and focus ret
     assert.match(workspace, /DrawerTabs/)
     assert.match(workspace, /SearchableSelect/)
     assert.match(workspace, /aria-live="polite"/)
+    assert.match(workspace, /Permanently delete/)
+    assert.match(workspace, /deleteConfirmation\.trim\(\) !== review\.gr_invoicenumber/)
     assert.match(queue, /triggerRef\.current\?\.focus\(\)/)
 })
 
-test('manager role remains unassigned and excludes destructive privileges', async () => {
+test('manager role remains unassigned and deletion grants retain a separate provisioning gate', async () => {
     const schema = await source('docs/chargeable-invoice-review-dataverse-schema.md')
 
     assert.match(schema, /unassigned `Chargeable Invoice Manager` role/)
-    assert.match(schema, /no Delete,\s*Assign or Share/)
+    assert.match(schema, /six grants remain\s*unprovisioned until separately approved/i)
+    assert.match(schema, /no\s*Assign or Share/)
+    assert.match(schema, /atomic whole-package workflow/)
     assert.match(schema, /V1 has no automatic retention cleanup/)
 })

@@ -39,8 +39,7 @@ export function getReadyToProcessBlockers(
         | 'gr_reviewstartedon'
         | 'gr_waitingon'
         | 'gr_porequired'
-        | 'gr_ponumber'
-        | 'gr_poreceivedon'
+        | 'gr_porequestpreparedon'
         | 'gr_photosrequired'
         | 'gr_photosstatus'>,
 ) {
@@ -48,13 +47,12 @@ export function getReadyToProcessBlockers(
     if (!review.gr_reviewstartedon) blockers.push('Start the review first.')
     if (review.gr_waitingon != null) blockers.push('Resolve the current Waiting state.')
     if (review.gr_porequired == null) blockers.push('Decide whether a PO is required.')
-    if (review.gr_porequired) {
-        if (!review.gr_ponumber?.trim()) blockers.push('Record the customer PO number.')
-        if (!review.gr_poreceivedon) blockers.push('Mark the customer PO as received.')
-        if (review.gr_photosrequired == null) blockers.push('Decide whether supporting photos are required.')
-    }
+    if (review.gr_photosrequired == null) blockers.push('Decide whether supporting photos are required.')
     if (review.gr_photosrequired && review.gr_photosstatus !== CHARGEABLE_INVOICE_PHOTO_STATUSES.RECEIVED) {
         blockers.push('Receive the required supporting photos.')
+    }
+    if (review.gr_porequired && !review.gr_porequestpreparedon) {
+        blockers.push('Prepare the customer PO request email.')
     }
     return blockers
 }

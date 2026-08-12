@@ -3,6 +3,7 @@ import {
     CHARGEABLE_INVOICE_DISPOSITIONS,
     CHARGEABLE_INVOICE_PHOTO_STATUSES,
     CHARGEABLE_INVOICE_CORRECTION_COMPARISONS,
+    CHARGEABLE_INVOICE_CORRECTION_TYPES,
     CHARGEABLE_INVOICE_DOCUMENT_TYPES,
     CHARGEABLE_INVOICE_UPLOAD_STATUSES,
     type ChargeableInvoiceActivity,
@@ -86,7 +87,7 @@ const reviewSelect = [
 
 const reviewExpand = [
     'gr_CurrentRevision($select=gr_chargeableinvoicerevisionid,gr_revisionnumber,gr_total,gr_rawordernumber,gr_headline,gr_dateofjob)',
-    'gr_Job($select=gr_jobid,gr_jobnumber,gr_description)',
+    'gr_Job($select=gr_jobid,gr_jobnumber,gr_description,_gr_mechanic_value;$expand=gr_Mechanic($select=gr_mechanicid,gr_name,gr_email,statecode))',
     'gr_Customer($select=gr_customerid,gr_name)',
     'gr_Site($select=gr_siteid,gr_name)',
     'gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_serial)',
@@ -232,6 +233,145 @@ async function applyTransition(accessToken: string, review: ChargeableInvoiceRev
     return fetchChargeableInvoiceWorkspace(accessToken, review.gr_chargeableinvoicereviewid)
 }
 
+function permanentDeletionBatch(workspace: ChargeableInvoiceWorkspace) {
+    const review = workspace.review
+    if (!review['@odata.etag']) throw new Error('Refresh the invoice review before deleting it.')
+    const reviewId = review.gr_chargeableinvoicereviewid.toLowerCase()
+    const revisionIds = new Set(workspace.revisions.map((item) => item.gr_chargeableinvoicerevisionid.toLowerCase()))
+    const belongsToReview = (value: string | undefined) => value?.toLowerCase() === reviewId
+    if (workspace.revisions.some((item) => !belongsToReview(item._gr_review_value))
+        || workspace.corrections.some((item) => !belongsToReview(item._gr_review_value))
+        || workspace.documents.some((item) => !belongsToReview(item._gr_review_value))
+        || workspace.activities.some((item) => !belongsToReview(item._gr_review_value))
+        || workspace.lines.some((item) => !revisionIds.has(item._gr_revision_value.toLowerCase()))) {
+        throw new Error('The loaded invoice package is inconsistent and cannot be deleted safely.')
+    }
+
+    const boundary = `batch_${crypto.randomUUID().replaceAll('-', '')}`
+    const changeset = `changeset_${crypto.randomUUID().replaceAll('-', '')}`
+    const requests: string[] = []
+    const add = (method: 'PATCH' | 'DELETE', path: string, body?: object, extraHeaders: string[] = []) => {
+        const contentId = requests.length + 1
+        requests.push([
+            `--${changeset}`, 'Content-Type: application/http', 'Content-Transfer-Encoding: binary', `Content-ID: ${contentId}`, '',
+            `${method} ${path} HTTP/1.1`,
+            ...(body ? ['Content-Type: application/json;type=entry'] : []),
+            ...extraHeaders,
+            '',
+            ...(body ? [JSON.stringify(body)] : []),
+        ].join('\r\n'))
+    }
+
+    add('PATCH', `gr_chargeableinvoicereviews(${review.gr_chargeableinvoicereviewid})`,
+        { gr_name: review.gr_name }, [`If-Match: ${review['@odata.etag']}`])
+    if (review._gr_currentrevision_value) {
+        add('DELETE', `gr_chargeableinvoicereviews(${review.gr_chargeableinvoicereviewid})/gr_CurrentRevision/$ref`)
+    }
+    workspace.documents.filter((item) => item._gr_revision_value).forEach((item) => {
+        add('DELETE', `gr_chargeableinvoicedocuments(${item.gr_chargeableinvoicedocumentid})/gr_Revision/$ref`)
+    })
+    workspace.activities.forEach((item) => add('DELETE', `gr_chargeableinvoiceactivities(${item.gr_chargeableinvoiceactivityid})`))
+    workspace.corrections.forEach((item) => add('DELETE', `gr_chargeableinvoicecorrections(${item.gr_chargeableinvoicecorrectionid})`))
+    workspace.lines.forEach((item) => add('DELETE', `gr_chargeableinvoicelines(${item.gr_chargeableinvoicelineid})`))
+    workspace.revisions.forEach((item) => add('DELETE', `gr_chargeableinvoicerevisions(${item.gr_chargeableinvoicerevisionid})`))
+    workspace.documents.forEach((item) => add('DELETE', `gr_chargeableinvoicedocuments(${item.gr_chargeableinvoicedocumentid})`))
+    add('DELETE', `gr_chargeableinvoicereviews(${review.gr_chargeableinvoicereviewid})`)
+    if (requests.length > 900) throw new Error('This invoice package is too large to delete safely in one transaction.')
+
+    return {
+        boundary,
+        payload: [`--${boundary}`, `Content-Type: multipart/mixed;boundary=${changeset}`, '', ...requests, `--${changeset}--`, `--${boundary}--`, ''].join('\r\n'),
+        operationCount: requests.length,
+    }
+}
+
+export async function permanentlyDeleteChargeableInvoice(accessToken: string, workspace: ChargeableInvoiceWorkspace) {
+    const batch = permanentDeletionBatch(workspace)
+    const response = await fetch(`${API_URL}/$batch`, {
+        method: 'POST',
+        headers: { ...headers(accessToken), 'Content-Type': `multipart/mixed;boundary=${batch.boundary}` },
+        body: batch.payload,
+    })
+    const responseText = await response.text()
+    const nestedFailure = [...responseText.matchAll(/HTTP\/1\.1 (\d{3})/g)]
+        .map((match) => Number(match[1])).find((status) => status >= 400)
+    if (!response.ok || nestedFailure) throw safeError(nestedFailure || response.status, 'permanently deleting the invoice package')
+}
+
+function supportingPhotoDeletionBatch(workspace: ChargeableInvoiceWorkspace, documentIds: string[]) {
+    const review = workspace.review
+    if (!review['@odata.etag']) throw new Error('Refresh the invoice review before deleting a photo.')
+    if (review.gr_disposition != null) throw new Error('Photos cannot be removed from a historical invoice review.')
+    if (review.gr_photosrequired !== true) throw new Error('Supporting photos can be removed only while photo evidence is required.')
+    const requestedIds = new Set(documentIds.map((id) => id.toLowerCase()))
+    if (!requestedIds.size || requestedIds.size !== documentIds.length) throw new Error('Choose one or more distinct retained photos to delete.')
+    const documents = workspace.documents.filter((item) => requestedIds.has(item.gr_chargeableinvoicedocumentid.toLowerCase()))
+    if (documents.length !== requestedIds.size || documents.some((document) =>
+        document._gr_review_value.toLowerCase() !== review.gr_chargeableinvoicereviewid.toLowerCase()
+        || document.gr_documenttype !== CHARGEABLE_INVOICE_DOCUMENT_TYPES.SUPPORTING_PHOTO
+        || document.gr_uploadstatus !== CHARGEABLE_INVOICE_UPLOAD_STATUSES.COMPLETE)) {
+        throw new Error('The selected retained photo is unavailable. Refresh the invoice review and try again.')
+    }
+    if (documents.some((document) => !document['@odata.etag'])) throw new Error('Refresh the invoice review before deleting these photos.')
+    const remaining = workspace.documents.filter((item) =>
+        !requestedIds.has(item.gr_chargeableinvoicedocumentid.toLowerCase())
+        && item.gr_documenttype === CHARGEABLE_INVOICE_DOCUMENT_TYPES.SUPPORTING_PHOTO
+        && item.gr_uploadstatus === CHARGEABLE_INVOICE_UPLOAD_STATUSES.COMPLETE).length
+    const nextPhotoStatus = remaining > 0
+        ? CHARGEABLE_INVOICE_PHOTO_STATUSES.RECEIVED
+        : review.gr_photorequestpreparedon ? CHARGEABLE_INVOICE_PHOTO_STATUSES.REQUESTED : CHARGEABLE_INVOICE_PHOTO_STATUSES.NOT_REQUESTED
+    const boundary = `batch_${crypto.randomUUID().replaceAll('-', '')}`
+    const changeset = `changeset_${crypto.randomUUID().replaceAll('-', '')}`
+    const requests = documents.map((document, index) => [
+        `--${changeset}`, 'Content-Type: application/http', 'Content-Transfer-Encoding: binary', `Content-ID: ${index + 1}`, '',
+        `DELETE gr_chargeableinvoicedocuments(${document.gr_chargeableinvoicedocumentid}) HTTP/1.1`,
+        `If-Match: ${document['@odata.etag']}`, '',
+    ].join('\r\n'))
+    const reviewContentId = documents.length + 1
+    requests.push(
+        [
+            `--${changeset}`, 'Content-Type: application/http', 'Content-Transfer-Encoding: binary', `Content-ID: ${reviewContentId}`, '',
+            `PATCH gr_chargeableinvoicereviews(${review.gr_chargeableinvoicereviewid}) HTTP/1.1`,
+            'Content-Type: application/json;type=entry', `If-Match: ${review['@odata.etag']}`, '',
+            JSON.stringify({ gr_photosstatus: nextPhotoStatus }),
+        ].join('\r\n'),
+        [
+            `--${changeset}`, 'Content-Type: application/http', 'Content-Transfer-Encoding: binary', `Content-ID: ${reviewContentId + 1}`, '',
+            'POST gr_chargeableinvoiceactivities HTTP/1.1', 'Content-Type: application/json;type=entry', '',
+            JSON.stringify({
+                gr_name: documents.length === 1 ? 'Supporting photo removed' : 'Supporting photos removed',
+                'gr_Review@odata.bind': `/gr_chargeableinvoicereviews(${review.gr_chargeableinvoicereviewid})`,
+                ...(review._gr_currentrevision_value ? { 'gr_Revision@odata.bind': `/gr_chargeableinvoicerevisions(${review._gr_currentrevision_value})` } : {}),
+                gr_event: 122830017,
+                gr_detail: `${documents.length} supporting photo${documents.length === 1 ? ' was' : 's were'} permanently removed; ${remaining} retained.`,
+                gr_occurredon: new Date().toISOString(),
+            }),
+        ].join('\r\n'),
+    )
+    return {
+        boundary,
+        payload: [`--${boundary}`, `Content-Type: multipart/mixed;boundary=${changeset}`, '', ...requests, `--${changeset}--`, `--${boundary}--`, ''].join('\r\n'),
+        remaining,
+    }
+}
+
+export async function permanentlyDeleteChargeableInvoiceSupportingPhotos(
+    accessToken: string,
+    workspace: ChargeableInvoiceWorkspace,
+    documentIds: string[],
+) {
+    const batch = supportingPhotoDeletionBatch(workspace, documentIds)
+    const response = await fetch(`${API_URL}/$batch`, {
+        method: 'POST',
+        headers: { ...headers(accessToken), 'Content-Type': `multipart/mixed;boundary=${batch.boundary}` },
+        body: batch.payload,
+    })
+    const responseText = await response.text()
+    const nestedFailure = [...responseText.matchAll(/HTTP\/1\.1 (\d{3})/g)].map((match) => Number(match[1])).find((status) => status >= 400)
+    if (!response.ok || nestedFailure) throw safeError(nestedFailure || response.status, 'deleting the supporting photos')
+    return fetchChargeableInvoiceWorkspace(accessToken, workspace.review.gr_chargeableinvoicereviewid)
+}
+
 export function startChargeableInvoiceReview(accessToken: string, review: ChargeableInvoiceReview) {
     if (review.gr_reviewstartedon) throw new Error('This invoice review has already been started.')
     return applyTransition(accessToken, review, {
@@ -294,6 +434,20 @@ function requirementsTransition(
     }
 }
 
+function readyTransition(correctionCount: number): ReviewTransition {
+    if (!Number.isSafeInteger(correctionCount) || correctionCount < 0 || correctionCount > 200) {
+        throw new Error('This invoice has too many correction instructions to hand over safely.')
+    }
+    return {
+        fields: { gr_disposition: CHARGEABLE_INVOICE_DISPOSITIONS.READY_TO_PROCESS, gr_dispositionon: new Date().toISOString(), gr_dispositionreason: null },
+        event: 122830015,
+        name: 'Ready to process',
+        detail: correctionCount
+            ? `Handed to Nargiza / Accounts with ${correctionCount} outstanding correction instruction${correctionCount === 1 ? '' : 's'}.`
+            : 'Handed to Nargiza / Accounts with no outstanding correction instructions.',
+    }
+}
+
 export async function markChargeableInvoiceReady(accessToken: string, review: ChargeableInvoiceReview) {
     if (review.gr_disposition != null) throw new Error('This invoice review already has a terminal disposition.')
     const blockers = getReadyToProcessBlockers(review)
@@ -301,17 +455,12 @@ export async function markChargeableInvoiceReady(accessToken: string, review: Ch
     const correctionUrl = new URL(`${API_URL}/gr_chargeableinvoicecorrections`)
     correctionUrl.searchParams.set('$select', 'gr_chargeableinvoicecorrectionid')
     correctionUrl.searchParams.set('$filter', `_gr_review_value eq ${review.gr_chargeableinvoicereviewid} and (gr_comparisonstatus eq ${CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.OUTSTANDING} or gr_comparisonstatus eq ${CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.NOT_MADE})`)
-    correctionUrl.searchParams.set('$top', '1')
+    correctionUrl.searchParams.set('$top', '201')
     const correctionResponse = await fetch(correctionUrl, { headers: headers(accessToken) })
     if (!correctionResponse.ok) throw safeError(correctionResponse.status, 'checking outstanding invoice corrections')
     const correctionBody = await correctionResponse.json() as { value?: unknown[] }
     if (!Array.isArray(correctionBody.value)) throw new Error('Dataverse returned invalid correction status data.')
-    if (correctionBody.value.length) throw new Error('Resolve all outstanding invoice corrections before marking Ready to Process.')
-    return applyTransition(accessToken, review, {
-        fields: { gr_disposition: CHARGEABLE_INVOICE_DISPOSITIONS.READY_TO_PROCESS, gr_dispositionon: new Date().toISOString(), gr_dispositionreason: null },
-        event: 122830015,
-        name: 'Ready to process',
-    })
+    return applyTransition(accessToken, review, readyTransition(correctionBody.value.length))
 }
 
 export function markChargeableInvoiceDoNotProcess(accessToken: string, review: ChargeableInvoiceReview, reason: string) {
@@ -386,6 +535,179 @@ export async function createChargeableInvoiceCorrection(
     return fetchChargeableInvoiceWorkspace(accessToken, review.gr_chargeableinvoicereviewid)
 }
 
+function replacementCorrectionBatch(workspace: ChargeableInvoiceWorkspace, correctionId: string, draft: ChargeableInvoiceCorrectionDraft) {
+    const review = workspace.review
+    if (!review.gr_reviewstartedon) throw new Error('Start the review before editing a correction.')
+    if (review.gr_disposition != null) throw new Error('Corrections cannot be edited on a historical review.')
+    if (!review['@odata.etag']) throw new Error('Refresh the invoice review before editing a correction.')
+    const revision = workspace.revisions.find((item) => item.gr_chargeableinvoicerevisionid === review._gr_currentrevision_value)
+        ?? workspace.revisions[0]
+    if (!revision) throw new Error('The current invoice revision is unavailable.')
+    const existing = workspace.corrections.find((item) => item.gr_chargeableinvoicecorrectionid === correctionId)
+    if (!existing || existing._gr_review_value !== review.gr_chargeableinvoicereviewid
+        || existing._gr_sourcerevision_value !== revision.gr_chargeableinvoicerevisionid) {
+        throw new Error('The amendment is not part of the current invoice revision.')
+    }
+    if (existing.gr_comparisonstatus !== CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.OUTSTANDING
+        && existing.gr_comparisonstatus !== CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.NOT_MADE) {
+        throw new Error('Only an active amendment can be edited.')
+    }
+    if (draft.type !== existing.gr_correctiontype) throw new Error('An amendment edit cannot change its correction type.')
+    if (!existing['@odata.etag']) throw new Error('Refresh the invoice review before editing this amendment.')
+    const revisionLines = workspace.lines.filter((line) => line._gr_revision_value === revision.gr_chargeableinvoicerevisionid)
+    const built = buildChargeableInvoiceCorrectionFields(draft, revision, revisionLines)
+    if (built.error || !built.fields) throw new Error(built.error || 'The replacement amendment is invalid.')
+    const draftQuantity = draft.requestedQuantity.trim() === '' ? null : Number(draft.requestedQuantity)
+    const draftUnitPrice = draft.requestedUnitPrice.trim() === '' ? null : Number(draft.requestedUnitPrice)
+    const unchanged = draft.type === existing.gr_correctiontype && (draft.type === CHARGEABLE_INVOICE_CORRECTION_TYPES.STORY
+        ? draft.requestedText.trim() === (existing.gr_requestedtext ?? '')
+        : draft.requestedLineType === (existing.gr_requestedlinetype ?? null)
+            && draft.requestedDescription.trim() === (existing.gr_requesteddescription ?? '')
+            && draftQuantity === (existing.gr_requestedquantity ?? null)
+            && draftUnitPrice === (existing.gr_requestedunitprice ?? null))
+    if (unchanged) throw new Error('Change at least one amendment value before saving.')
+    if (existing._gr_sourceline_value && built.sourceLineId !== existing._gr_sourceline_value) {
+        throw new Error('An amendment cannot be moved to a different source line.')
+    }
+    if (!existing._gr_sourceline_value && built.sourceLineId) {
+        throw new Error('This amendment cannot acquire a different source line.')
+    }
+    const boundary = `batch_${crypto.randomUUID().replaceAll('-', '')}`
+    const changeset = `changeset_${crypto.randomUUID().replaceAll('-', '')}`
+    const replacementName = `Correction - ${review.gr_invoicenumber} - ${new Date().toISOString()}`.slice(0, 200)
+    const requests = [
+        [
+            `--${changeset}`, 'Content-Type: application/http', 'Content-Transfer-Encoding: binary', 'Content-ID: 1', '',
+            `PATCH gr_chargeableinvoicereviews(${review.gr_chargeableinvoicereviewid}) HTTP/1.1`,
+            'Content-Type: application/json;type=entry', `If-Match: ${review['@odata.etag']}`, '', JSON.stringify({ gr_name: review.gr_name }),
+        ].join('\r\n'),
+        [
+            `--${changeset}`, 'Content-Type: application/http', 'Content-Transfer-Encoding: binary', 'Content-ID: 2', '',
+            `PATCH gr_chargeableinvoicecorrections(${existing.gr_chargeableinvoicecorrectionid}) HTTP/1.1`,
+            'Content-Type: application/json;type=entry', `If-Match: ${existing['@odata.etag']}`, '',
+            JSON.stringify({ gr_comparisonstatus: CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.SUPERSEDED }),
+        ].join('\r\n'),
+        [
+            `--${changeset}`, 'Content-Type: application/http', 'Content-Transfer-Encoding: binary', 'Content-ID: 3', '',
+            'POST gr_chargeableinvoicecorrections HTTP/1.1', 'Content-Type: application/json;type=entry', '',
+            JSON.stringify({
+                gr_name: replacementName,
+                'gr_Review@odata.bind': `/gr_chargeableinvoicereviews(${review.gr_chargeableinvoicereviewid})`,
+                'gr_SourceRevision@odata.bind': `/gr_chargeableinvoicerevisions(${revision.gr_chargeableinvoicerevisionid})`,
+                ...(built.sourceLineId ? { 'gr_SourceLine@odata.bind': `/gr_chargeableinvoicelines(${built.sourceLineId})` } : {}),
+                ...built.fields,
+            }),
+        ].join('\r\n'),
+        [
+            `--${changeset}`, 'Content-Type: application/http', 'Content-Transfer-Encoding: binary', 'Content-ID: 4', '',
+            'POST gr_chargeableinvoiceactivities HTTP/1.1', 'Content-Type: application/json;type=entry', '',
+            JSON.stringify({
+                gr_name: 'Correction changed',
+                'gr_Review@odata.bind': `/gr_chargeableinvoicereviews(${review.gr_chargeableinvoicereviewid})`,
+                'gr_Revision@odata.bind': `/gr_chargeableinvoicerevisions(${revision.gr_chargeableinvoicerevisionid})`,
+                'gr_Correction@odata.bind': '$3',
+                gr_event: 122830004,
+                gr_detail: 'An active correction was superseded by an edited replacement.',
+                gr_occurredon: new Date().toISOString(),
+            }),
+        ].join('\r\n'),
+    ]
+    return {
+        boundary,
+        payload: [`--${boundary}`, `Content-Type: multipart/mixed;boundary=${changeset}`, '', ...requests, `--${changeset}--`, `--${boundary}--`, ''].join('\r\n'),
+    }
+}
+
+function supersedeCorrectionBatch(workspace: ChargeableInvoiceWorkspace, correctionId: string) {
+    const review = workspace.review
+    if (!review.gr_reviewstartedon) throw new Error('Start the review before withdrawing a correction.')
+    if (review.gr_disposition != null) throw new Error('Corrections cannot be withdrawn on a historical review.')
+    if (!review['@odata.etag']) throw new Error('Refresh the invoice review before withdrawing a correction.')
+    const revision = workspace.revisions.find((item) => item.gr_chargeableinvoicerevisionid === review._gr_currentrevision_value)
+        ?? workspace.revisions[0]
+    if (!revision) throw new Error('The current invoice revision is unavailable.')
+    const existing = workspace.corrections.find((item) => item.gr_chargeableinvoicecorrectionid === correctionId)
+    if (!existing || existing._gr_review_value !== review.gr_chargeableinvoicereviewid
+        || existing._gr_sourcerevision_value !== revision.gr_chargeableinvoicerevisionid) {
+        throw new Error('The amendment is not part of the current invoice revision.')
+    }
+    if (existing.gr_comparisonstatus !== CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.OUTSTANDING
+        && existing.gr_comparisonstatus !== CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.NOT_MADE) {
+        throw new Error('Only an active amendment can be withdrawn.')
+    }
+    if (!existing['@odata.etag']) throw new Error('Refresh the invoice review before withdrawing this amendment.')
+    const detail = existing.gr_correctiontype === CHARGEABLE_INVOICE_CORRECTION_TYPES.ADD_LINE
+        ? 'The requested new invoice line was withdrawn.'
+        : existing.gr_correctiontype === CHARGEABLE_INVOICE_CORRECTION_TYPES.STORY
+            ? 'The Work completed amendment was withdrawn.'
+            : 'The active line correction was withdrawn and the source invoice line restored.'
+    const boundary = `batch_${crypto.randomUUID().replaceAll('-', '')}`
+    const changeset = `changeset_${crypto.randomUUID().replaceAll('-', '')}`
+    const requests = [
+        [
+            `--${changeset}`, 'Content-Type: application/http', 'Content-Transfer-Encoding: binary', 'Content-ID: 1', '',
+            `PATCH gr_chargeableinvoicereviews(${review.gr_chargeableinvoicereviewid}) HTTP/1.1`,
+            'Content-Type: application/json;type=entry', `If-Match: ${review['@odata.etag']}`, '', JSON.stringify({ gr_name: review.gr_name }),
+        ].join('\r\n'),
+        [
+            `--${changeset}`, 'Content-Type: application/http', 'Content-Transfer-Encoding: binary', 'Content-ID: 2', '',
+            `PATCH gr_chargeableinvoicecorrections(${existing.gr_chargeableinvoicecorrectionid}) HTTP/1.1`,
+            'Content-Type: application/json;type=entry', `If-Match: ${existing['@odata.etag']}`, '',
+            JSON.stringify({ gr_comparisonstatus: CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.SUPERSEDED }),
+        ].join('\r\n'),
+        [
+            `--${changeset}`, 'Content-Type: application/http', 'Content-Transfer-Encoding: binary', 'Content-ID: 3', '',
+            'POST gr_chargeableinvoiceactivities HTTP/1.1', 'Content-Type: application/json;type=entry', '',
+            JSON.stringify({
+                gr_name: 'Correction withdrawn',
+                'gr_Review@odata.bind': `/gr_chargeableinvoicereviews(${review.gr_chargeableinvoicereviewid})`,
+                'gr_Revision@odata.bind': `/gr_chargeableinvoicerevisions(${revision.gr_chargeableinvoicerevisionid})`,
+                'gr_Correction@odata.bind': `/gr_chargeableinvoicecorrections(${existing.gr_chargeableinvoicecorrectionid})`,
+                gr_event: 122830004,
+                gr_detail: detail,
+                gr_occurredon: new Date().toISOString(),
+            }),
+        ].join('\r\n'),
+    ]
+    return {
+        boundary,
+        payload: [`--${boundary}`, `Content-Type: multipart/mixed;boundary=${changeset}`, '', ...requests, `--${changeset}--`, `--${boundary}--`, ''].join('\r\n'),
+    }
+}
+
+export async function replaceChargeableInvoiceCorrection(
+    accessToken: string,
+    workspace: ChargeableInvoiceWorkspace,
+    correctionId: string,
+    draft: ChargeableInvoiceCorrectionDraft,
+) {
+    const reviewId = workspace.review.gr_chargeableinvoicereviewid
+    const batch = replacementCorrectionBatch(workspace, correctionId, draft)
+    const response = await fetch(`${API_URL}/$batch`, {
+        method: 'POST', headers: { ...headers(accessToken), 'Content-Type': `multipart/mixed;boundary=${batch.boundary}` }, body: batch.payload,
+    })
+    const responseText = await response.text()
+    const nestedFailure = [...responseText.matchAll(/HTTP\/1\.1 (\d{3})/g)].map((match) => Number(match[1])).find((status) => status >= 400)
+    if (!response.ok || nestedFailure) throw safeError(nestedFailure || response.status, 'editing the invoice correction')
+    return fetchChargeableInvoiceWorkspace(accessToken, reviewId)
+}
+
+export async function supersedeChargeableInvoiceCorrection(
+    accessToken: string,
+    workspace: ChargeableInvoiceWorkspace,
+    correctionId: string,
+) {
+    const reviewId = workspace.review.gr_chargeableinvoicereviewid
+    const batch = supersedeCorrectionBatch(workspace, correctionId)
+    const response = await fetch(`${API_URL}/$batch`, {
+        method: 'POST', headers: { ...headers(accessToken), 'Content-Type': `multipart/mixed;boundary=${batch.boundary}` }, body: batch.payload,
+    })
+    const responseText = await response.text()
+    const nestedFailure = [...responseText.matchAll(/HTTP\/1\.1 (\d{3})/g)].map((match) => Number(match[1])).find((status) => status >= 400)
+    if (!response.ok || nestedFailure) throw safeError(nestedFailure || response.status, 'withdrawing the invoice correction')
+    return fetchChargeableInvoiceWorkspace(accessToken, reviewId)
+}
+
 function assertPhotoWorkflow(review: ChargeableInvoiceReview) {
     if (!review.gr_reviewstartedon) throw new Error('Start the review before requesting or uploading photos.')
     if (review.gr_disposition != null) throw new Error('Photos cannot be changed on a historical review.')
@@ -398,10 +720,10 @@ export function buildChargeableInvoicePhotoRequestMailto(
 ) {
     const firstName = technician.gr_name.trim().split(/\s+/)[0] || 'there'
     const equipment = [review.gr_Equipment?.gr_make, review.gr_Equipment?.gr_model].filter(Boolean).join(' ').trim()
-    const subject = `Photos required - Job ${review.gr_Job?.gr_jobnumber || review.gr_greentreereference} - Invoice ${review.gr_invoicenumber}`
+    const subject = `Photo evidence required - Job ${review.gr_Job?.gr_jobnumber || review.gr_greentreereference} - Invoice ${review.gr_invoicenumber}`
     const body = [
         `Hi ${firstName},`, '',
-        'Please reply with the supporting photos for the completed work below.', '',
+        'Please reply with clear photos showing the reported fault or damage and, where available, the completed repair.', '',
         `Job: ${review.gr_Job?.gr_jobnumber || review.gr_greentreereference}`,
         `Invoice: ${review.gr_invoicenumber}`,
         `Customer: ${review.gr_Customer?.gr_name || 'Not recorded'}`,
@@ -415,10 +737,12 @@ export function buildChargeableInvoicePhotoRequestMailto(
 
 export function saveChargeableInvoicePhotoTechnician(
     accessToken: string,
-    review: ChargeableInvoiceReview,
+    workspace: ChargeableInvoiceWorkspace,
     technician: ChargeableInvoiceTechnician,
 ) {
+    const review = workspace.review
     assertPhotoWorkflow(review)
+    assertRequestStageAmendmentsComplete(workspace)
     if (technician.statecode !== 0) throw new Error('Choose an active technician.')
     if (!technician.gr_mechanicid) throw new Error('Choose a technician.')
     return applyTransition(accessToken, review, {
@@ -435,6 +759,7 @@ export async function prepareChargeableInvoicePhotoRequest(
 ) {
     const review = workspace.review
     assertPhotoWorkflow(review)
+    assertRequestStageAmendmentsComplete(workspace)
     const technician = workspace.technicians.find((item) => item.gr_mechanicid.toLowerCase()
         === review._gr_photorequesttechnician_value?.toLowerCase())
     if (!technician) throw new Error('Select and save an active technician before preparing the photo request.')
@@ -560,6 +885,7 @@ export async function uploadChargeableInvoiceSupportingPhotos(
 ) {
     const review = workspace.review
     assertPhotoWorkflow(review)
+    assertRequestStageAmendmentsComplete(workspace)
     if (!review._gr_photorequesttechnician_value || !workspace.technicians.some((technician) =>
         technician.gr_mechanicid.toLowerCase() === review._gr_photorequesttechnician_value?.toLowerCase())) {
         throw new Error('Select and save an active photo-request technician before uploading photos.')
@@ -620,14 +946,24 @@ export async function uploadChargeableInvoiceSupportingPhotos(
 
 function poRequestDocuments(workspace: ChargeableInvoiceWorkspace) {
     const currentRevisionId = workspace.review._gr_currentrevision_value
-    const approval = workspace.documents.find((document) =>
-        document.gr_documenttype === CHARGEABLE_INVOICE_DOCUMENT_TYPES.APPROVAL_PDF
+    const currentRevision = workspace.revisions.find((revision) =>
+        revision.gr_chargeableinvoicerevisionid.toLowerCase() === currentRevisionId?.toLowerCase())
+    const greenTreeInvoice = workspace.documents.find((document) =>
+        document.gr_documenttype === CHARGEABLE_INVOICE_DOCUMENT_TYPES.GREENTREE_INVOICE
         && document.gr_uploadstatus === CHARGEABLE_INVOICE_UPLOAD_STATUSES.COMPLETE
-        && document._gr_revision_value?.toLowerCase() === currentRevisionId?.toLowerCase())
+        && document.gr_chargeableinvoicedocumentid.toLowerCase() === currentRevision?._gr_sourcedocument_value?.toLowerCase())
     const photos = workspace.documents.filter((document) =>
         document.gr_documenttype === CHARGEABLE_INVOICE_DOCUMENT_TYPES.SUPPORTING_PHOTO
         && document.gr_uploadstatus === CHARGEABLE_INVOICE_UPLOAD_STATUSES.COMPLETE)
-    return { approval, photos }
+    return { greenTreeInvoice, photos }
+}
+
+function assertRequestStageAmendmentsComplete(workspace: ChargeableInvoiceWorkspace) {
+    if (workspace.corrections.some((correction) =>
+        correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.OUTSTANDING
+        || correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.NOT_MADE)) {
+        throw new Error('Complete the invoice amendments and import the corrected GreenTree invoice before starting customer PO or photo requests.')
+    }
 }
 
 function assertPoRequestWorkflow(workspace: ChargeableInvoiceWorkspace) {
@@ -637,13 +973,9 @@ function assertPoRequestWorkflow(workspace: ChargeableInvoiceWorkspace) {
     if (review.gr_porequired !== true) throw new Error('Record that a customer PO is required before preparing its request.')
     if (review.gr_poreceivedon) throw new Error('A confirmed customer PO has already been received.')
     if (review.gr_photosrequired == null) throw new Error('Record whether supporting photos are required before preparing the PO request.')
-    if (workspace.corrections.some((correction) =>
-        correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.OUTSTANDING
-        || correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.NOT_MADE)) {
-        throw new Error('Resolve all outstanding invoice corrections before preparing the PO request.')
-    }
+    assertRequestStageAmendmentsComplete(workspace)
     const documents = poRequestDocuments(workspace)
-    if (!documents.approval) throw new Error('Generate the current revision approval PDF before preparing the PO request.')
+    if (!documents.greenTreeInvoice) throw new Error('The current GreenTree invoice is unavailable for the PO request.')
     if (review.gr_photosrequired === true
         && (review.gr_photosstatus !== CHARGEABLE_INVOICE_PHOTO_STATUSES.RECEIVED || !documents.photos.length)) {
         throw new Error('Receive and upload the required supporting photos before preparing the PO request.')
@@ -688,20 +1020,19 @@ export function buildChargeableInvoicePoRequestMailto(
     const subject = `Purchase order requested - Job ${jobNumber} - ${customer}`.slice(0, 150)
     const body = [
         `Hi ${firstName},`, '',
-        `Please review the attached customer PO approval document for the completed work on Job ${jobNumber}.`,
+        `Please review the attached GreenTree invoice for the completed work on Job ${jobNumber}.`,
         review.gr_photosrequired === true ? 'Supporting photos are also included for your review.' : '', '',
         `Customer: ${customer}`,
         `Site: ${review.gr_Site?.gr_name || revision.gr_sitesnapshot || 'Not recorded'}`,
         `Equipment: ${equipment || revision.gr_fleet || revision.gr_serial || 'Not recorded'}`,
         `Approval amount (including GST): ${total}`, '',
-        'The approval document is for customer PO approval and is not a tax invoice.',
         'Please reply with your purchase order number so the work can proceed to invoicing.', '',
         'Kind regards,',
         'Liftrucks NZ Ltd',
     ].filter((line, index, all) => line !== '' || all[index - 1] !== '').join('\n')
     return {
         mailto: buildMailtoUrl({ recipient: recipient.email, subject, body }),
-        attachments: [documents.approval, ...(review.gr_photosrequired === true ? documents.photos : [])],
+        attachments: [documents.greenTreeInvoice, ...(review.gr_photosrequired === true ? documents.photos : [])],
     }
 }
 
@@ -769,5 +1100,5 @@ export async function generateChargeableInvoiceApprovalPdf(
 }
 
 export const chargeableInvoiceReviewApiTest = {
-    trustedNextLink, transitionBatch, photoFinalizationBatch, detectedPhotoType, siteContactUrl, requirementsTransition,
+    trustedNextLink, transitionBatch, readyTransition, permanentDeletionBatch, supportingPhotoDeletionBatch, photoFinalizationBatch, detectedPhotoType, siteContactUrl, requirementsTransition, replacementCorrectionBatch, supersedeCorrectionBatch, assertRequestStageAmendmentsComplete,
 }

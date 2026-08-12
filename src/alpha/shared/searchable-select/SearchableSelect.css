@@ -11,6 +11,9 @@
 .searchable-select-results { display: grid; max-height: 260px; overflow-y: auto; }
 .searchable-select-results button { display: grid; gap: 2px; min-height: 44px; padding: 7px 10px; border: 0; border-bottom: 1px solid #edf0ee; background: #fff; color: #354039; font: inherit; text-align: left; cursor: pointer; }
 .searchable-select-results button:hover, .searchable-select-results button.active { background: #eef5f2; }
+.searchable-select-results button.emphasized { background: #e7f3ef; box-shadow: inset 3px 0 #187565; }
+.searchable-select-results button.emphasized:hover, .searchable-select-results button.emphasized.active { background: #dceee8; }
+.searchable-select-results button.emphasized small { color: #376f64; font-weight: 700; }
 .searchable-select-results strong { font-size: .74rem; }
 .searchable-select-results small, .searchable-select-results > span { color: #748079; font-size: .66rem; }
 .searchable-select-results > span { padding: 12px 10px; }

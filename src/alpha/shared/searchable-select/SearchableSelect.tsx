@@ -6,6 +6,7 @@ export type SearchableSelectOption = {
     label: string
     secondary?: string
     searchText?: string
+    emphasized?: boolean
 }
 
 type Props = {
@@ -142,7 +143,7 @@ export default function SearchableSelect({
                             <strong>{placeholder}</strong><small>Clear selection</small>
                         </button>}
                         {results.map((option, index) => (
-                            <button id={`${listboxId}-${index + optionOffset}`} key={option.value} type="button" role="option" aria-selected={activeIndex === index + optionOffset} className={activeIndex === index + optionOffset ? 'active' : ''} onMouseEnter={() => setActiveIndex(index + optionOffset)} onClick={() => choose(option.value)}>
+                            <button id={`${listboxId}-${index + optionOffset}`} key={option.value} type="button" role="option" aria-selected={activeIndex === index + optionOffset} className={[activeIndex === index + optionOffset ? 'active' : '', option.emphasized ? 'emphasized' : ''].filter(Boolean).join(' ')} onMouseEnter={() => setActiveIndex(index + optionOffset)} onClick={() => choose(option.value)}>
                                 <strong>{option.label}</strong>{option.secondary && <small>{option.secondary}</small>}
                             </button>
                         ))}

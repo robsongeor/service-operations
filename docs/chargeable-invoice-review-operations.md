@@ -45,9 +45,11 @@ customer or technician communication as an inferred release step.
 ## Retention and recovery
 
 V1 performs no automatic cleanup. Complete source invoices, approval PDFs, supporting photos,
-Revisions, Lines, Corrections and Activity remain immutable historical evidence. Pending and
-Failed Reviews/Documents also remain as recovery evidence: the manager role intentionally has no
-Delete privilege, and the application either reconciles or deliberately retries staged work.
+Revisions, Lines, Corrections and Activity remain immutable historical evidence unless a manager
+uses the explicit permanent-delete action, types the invoice number, and confirms deletion of the
+entire package. The operation is ETag-guarded and atomic; it never deletes the linked Job, Customer,
+Site, Equipment or Mechanic. Pending and Failed imports remain recovery evidence because they are
+excluded from the active queue and are not targeted by this UI.
 
 Application rollback does not delete Dataverse rows, columns, tables, relationships, alternate
 keys or files. Any future privileged cleanup or retention job requires a separately approved
@@ -59,11 +61,12 @@ raise a backlog item if measured growth makes a retention change necessary.
 
 - Use only de-identified synthetic fixtures in a non-production target.
 - Run `npm test`, `npm run lint`, `npm run build`, and `git diff --check`.
-- Verify the six-table contract, staging columns, alternate keys and all 30 role grants using at
+- After separate approval provisions the deletion grants, verify the six-table contract, staging
+  columns, alternate keys and all 36 role grants using at
   most one approved cached-session schema verification.
 - Confirm the manager role remains unassigned until the named list is approved and has
-  organisation-depth Create, Read, Write, Append and Append To on the six review tables, with no
-  Delete, Assign or Share.
+  organisation-depth Create, Read, Write, Delete, Append and Append To on the six review tables,
+  with no Assign or Share.
 - Confirm the organisation upload limit remains 5 MiB and all three release flags are false before
   the controlled enablement step.
 - Confirm deployment contains no credentials, access tokens, PDFs, PO numbers, recipient/body
@@ -83,16 +86,28 @@ and non-sensitive identifiers. Do not create real accounting mutations or send c
 4. Exercise malformed, unsupported, over-limit and known upload-failure fixtures. Confirm safe
    errors, independent batch progress and recoverable Pending/Failed evidence.
 5. Open the active queue and workspace; verify Start Review, Waiting, correction creation, revised
-   comparison, source-PDF view/download, Ready and Do Not Process business rules. Confirm there is
-   no operational Job write.
-6. Prepare a technician photo request, inspect the editable `mailto:` draft, then discard it. Upload
-   safe supporting-image fixtures when required.
-7. Generate the approval PDF and confirm the current revision, totals, template version, A4 layout,
+   comparison, source-PDF view/download, Ready and Do Not Process business rules. Confirm Ready can
+   hand Outstanding/Not Made corrections to Nargiza / Accounts, retains them on the review, and
+   records their bounded count without an operational Job write.
+6. Import a dedicated disposable fixture, type its invoice number in the permanent-delete dialog,
+   and confirm the complete Review/Revision/Line/Correction/Document/File/Activity package is gone
+   while its linked Job, Customer, Site and Equipment remain unchanged. Verify a stale ETag or any
+   nested delete failure rolls the entire operation back.
+7. Prepare a technician photo request, inspect the editable `mailto:` draft, then discard it. Upload
+   safe supporting-image fixtures when required. Delete one retained thumbnail and confirm only its
+   Review Document/File is removed. Delete the last retained thumbnail and confirm Photos returns to
+   Requested and Ready is blocked again. Repeat with `Remove all` and confirm the entire retained
+   batch is removed atomically; verify the Job and any Job Photos remain unchanged.
+8. Generate the approval PDF and confirm the current revision, totals, template version, A4 layout,
    extractable text and `FOR CUSTOMER PO APPROVAL - NOT A TAX INVOICE` marker.
-8. Select a Site-scoped or deliberate manual PO recipient. Manually download every listed
-   attachment, confirm the list, open the editable `mailto:` draft, then discard it.
-9. Deliberately record a synthetic PO number and confirm Ready derives only after every prerequisite.
-   Verify recipient and email body were not persisted and no Email Dispatch row was created.
+9. Select a Site-scoped or deliberate manual PO recipient. Use `Download supporting documents` and
+   confirm the invoice PDF plus every required photo downloads, open the editable `mailto:` draft,
+   then discard it.
+10. Confirm a PO-required review becomes eligible for Ready after its PO-request draft is prepared;
+    do not enter or receive a PO first. Verify the Ready confirmation hands customer follow-up to
+    Nargiza / Accounts, recipient and email body were not persisted, and no Email Dispatch row was
+    created. Separately record a synthetic PO number to verify the downstream PO Received audit does
+    not alter the completed manager disposition.
 
 ## Accessibility checks
 

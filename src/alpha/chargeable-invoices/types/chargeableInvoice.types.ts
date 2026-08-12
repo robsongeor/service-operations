@@ -111,7 +111,13 @@ export type ChargeableInvoiceReview = {
     createdon?: string
     modifiedon?: string
     gr_CurrentRevision?: ChargeableInvoiceRevision | null
-    gr_Job?: { gr_jobid: string; gr_jobnumber?: string | null; gr_description?: string | null } | null
+    gr_Job?: {
+        gr_jobid: string
+        gr_jobnumber?: string | null
+        gr_description?: string | null
+        _gr_mechanic_value?: string | null
+        gr_Mechanic?: ChargeableInvoiceTechnician | null
+    } | null
     gr_Customer?: { gr_customerid: string; gr_name: string } | null
     gr_Site?: { gr_siteid: string; gr_name: string } | null
     gr_Equipment?: {
@@ -220,6 +226,7 @@ export type ChargeableInvoiceCorrection = {
     gr_comparisonstatus: ChargeableInvoiceCorrectionComparison
     _gr_matchedrevision_value?: string | null
     createdon?: string
+    '@odata.etag'?: string
 }
 
 export type ChargeableInvoiceActivity = {

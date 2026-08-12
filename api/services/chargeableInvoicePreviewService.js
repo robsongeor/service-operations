@@ -2,7 +2,7 @@ const MAX_PDF_BYTES = 5 * 1024 * 1024
 const MAX_PDF_PAGES = 5
 const MAX_TEXT_ITEMS = 20_000
 const PDF_PARSE_TIMEOUT_MS = 15_000
-const EXTRACTION_VERSION = 'greentree-layout-v1'
+const EXTRACTION_VERSION = 'greentree-layout-v3'
 const { createHash, randomBytes } = require('node:crypto')
 const { COMPARISONS, compareUnresolvedCorrections } = require('./chargeableInvoiceComparison')
 
@@ -192,6 +192,27 @@ function lineValue(lines, expression) {
     return null
 }
 
+const EQUIPMENT_FIELD_BOUNDARY = '(?:Fleet\\s+No|Service\\s+Meter\\s+Reading|Meter(?:\\s+Reading)?|Make|Date\\s+of\\s+Job|Model|Service\\s+Interval|Serial(?:\\s+No)?|Next\\s+(?:Service\\s+)?Due)'
+
+function equipmentLineValue(lines, labelExpression) {
+    return lineValue(lines, new RegExp(
+        `\\b${labelExpression}\\s*[:#]?\\s*(.+?)(?=\\s+${EQUIPMENT_FIELD_BOUNDARY}\\s*[:#]|$)`,
+        'i',
+    ))
+}
+
+function extractGreenTreeHeadline(lines) {
+    const fleetIndex = lines.findIndex((line) => /\bFleet\s+No\s*[:#]/i.test(line.text))
+    if (fleetIndex > 0) {
+        for (let index = fleetIndex - 1; index >= 0; index -= 1) {
+            const text = lines[index].text.trim()
+            if (!text || /^Description\s+Quantity\s+Price\s+Total$/i.test(text)) continue
+            return text
+        }
+    }
+    return lineValue(lines, /^Description\s*[:#]\s*(.+)$/i)
+}
+
 function sectionText(lines, startExpression, endExpressions) {
     const start = lines.findIndex((line) => startExpression.test(line.text))
     if (start < 0) return null
@@ -232,13 +253,13 @@ function extractGreenTreeCandidate(pages) {
         rawOrderNumber: lineValue(lines, /\bOrder\s+No\s*[:#]?\s*(.*)$/i),
         greenTreeReference: lineValue(lines, /\bOur\s+Ref\s*[:#]?\s*([A-Z0-9._/-]+)/i),
         accountSnapshot: lineValue(lines, /\bAccount\s*[:#]?\s*([A-Z0-9._/-]+)/i),
-        headline: lineValue(lines, /\bDescription\s*[:#]?\s*(.+)$/i),
-        fleet: lineValue(lines, /\bFleet\s+No\s*[:#]?\s*([^|]+?)(?=\s{2,}|\bMake\b|$)/i),
-        make: lineValue(lines, /\bMake\s*[:#]?\s*([^|]+?)(?=\s{2,}|\bModel\b|$)/i),
-        model: lineValue(lines, /\bModel\s*[:#]?\s*([^|]+?)(?=\s{2,}|\bSerial\b|$)/i),
-        serial: lineValue(lines, /\bSerial(?:\s+No)?\s*[:#]?\s*([^|]+?)(?=\s{2,}|\bMeter\b|$)/i),
-        meter: lineValue(lines, /\bMeter\s*[:#]?\s*([\d,.]+)/i),
-        dateOfJob: lineValue(lines, /\bDate\s+of\s+Job\s*[:#]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/i),
+        headline: extractGreenTreeHeadline(lines),
+        fleet: equipmentLineValue(lines, 'Fleet\\s+No'),
+        make: equipmentLineValue(lines, 'Make'),
+        model: equipmentLineValue(lines, 'Model'),
+        serial: equipmentLineValue(lines, 'Serial(?:\\s+No)?'),
+        meter: lineValue(lines, /\b(?:Service\s+)?Meter(?:\s+Reading)?\s*[:#]?\s*([\d,.]+)/i),
+        dateOfJob: lineValue(lines, /\bDate\s+of\s+Job\s*[:#]?\s*(?:[:#]\s*)?(\d{1,2}(?:[/-]\d{1,2}[/-]\d{2,4}|\s+[A-Za-z]{3,9}\s+\d{4}))/i),
         serviceInterval: lineValue(lines, /\bService\s+Interval\s*[:#]?\s*([^|]+?)(?=\s{2,}|\bNext\b|$)/i),
         nextDue: lineValue(lines, /\bNext\s+(?:Service\s+)?Due\s*[:#]?\s*(.+)$/i),
         repairDescription: sectionText(lines, /Description\s+of\s+Repair\s+Work/i, [/Work\s+Completed/i, /^Labou?r\b/i, /^Parts?\b/i, /^Subtotal\b/i]),
@@ -270,7 +291,14 @@ function parseNumber(value) {
 }
 
 function parseDateOnly(value) {
-    const match = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$/.exec(String(value || '').trim())
+    const normalized = String(value || '').trim()
+    const namedMatch = /^(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})$/.exec(normalized)
+    const monthNames = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december']
+    const namedMonth = namedMatch
+        ? monthNames.findIndex((month) => month.startsWith(namedMatch[2].toLowerCase())) + 1
+        : 0
+    const match = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$/.exec(normalized)
+        || (namedMatch && namedMonth ? [namedMatch[0], namedMatch[1], String(namedMonth), namedMatch[3]] : null)
     if (!match) return null
     const day = Number(match[1]); const month = Number(match[2]); const year = match[3].length === 2 ? 2000 + Number(match[3]) : Number(match[3])
     const date = new Date(Date.UTC(year, month - 1, day))
@@ -500,7 +528,8 @@ async function importInvoice(request, manager) {
                 body: JSON.stringify({
                     gr_name: normalized.invoiceNumber, gr_invoicenumber: normalized.invoiceNumber, gr_invoicedate: normalized.invoiceDate,
                     gr_greentreereference: normalized.reference, gr_matchstatus: jobNumber === normalized.reference ? MATCHED_EXACTLY : 122830001,
-                    gr_importstatus: IMPORT_STAGING, 'gr_Job@odata.bind': `/gr_jobs(${jobId})`,
+                    gr_importstatus: IMPORT_STAGING, gr_porequired: null, gr_photosrequired: null, gr_photosstatus: null,
+                    'gr_Job@odata.bind': `/gr_jobs(${jobId})`,
                     ...(jobMatch.job._gr_site_value ? { 'gr_Site@odata.bind': `/gr_sites(${jobMatch.job._gr_site_value})` } : {}),
                     ...(jobMatch.job._gr_equipment_value ? { 'gr_Equipment@odata.bind': `/gr_equipments(${jobMatch.job._gr_equipment_value})` } : {}),
                     ...(jobMatch.job.gr_Site?.gr_Customer?.gr_customerid ? { 'gr_Customer@odata.bind': `/gr_customers(${jobMatch.job.gr_Site.gr_Customer.gr_customerid})` } : {}),

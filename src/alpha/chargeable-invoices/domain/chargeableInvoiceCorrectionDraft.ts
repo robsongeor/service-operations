@@ -77,6 +77,13 @@ export function buildChargeableInvoiceCorrectionFields(
         && draft.requestedLineType == null && !description && quantity.value == null && unitPrice.value == null) {
         return { error: 'Enter at least one requested line change.' }
     }
+    if (draft.type === CHARGEABLE_INVOICE_CORRECTION_TYPES.CHANGE_LINE && sourceLine
+        && (draft.requestedLineType == null || draft.requestedLineType === sourceLine.gr_linetype)
+        && (!description || description === sourceLine.gr_description)
+        && (quantity.value == null || quantity.value === sourceLine.gr_quantity)
+        && (unitPrice.value == null || unitPrice.value === sourceLine.gr_unitprice)) {
+        return { error: 'Change at least one value from the original invoice line.' }
+    }
     return {
         sourceLineId: sourceLine?.gr_chargeableinvoicelineid,
         fields: {

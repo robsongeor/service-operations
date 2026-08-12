@@ -17,16 +17,20 @@ contracts are present and User-owned; `ServiceOperationsNew` is the single unman
 
 On 12 August 2026, one explicitly approved interactive `Verify` session re-read the provisioned
 contract successfully. All six tables, staging columns, relationships, alternate keys, the 5 MiB
-File contract and all 30 organisation-depth manager-role grants still match this document. The
-manager role remains unassigned with no Delete, Assign or Share. Verify mode made no metadata,
-role-assignment, configuration or business-data writes.
+File contract and all 30 currently provisioned organisation-depth manager-role grants still match
+the pre-delete baseline. The manager role remains unassigned with no Delete, Assign or Share. The
+12 August 2026 product decision to support deliberate whole-package deletion changes the target
+contract to 36 grants by adding Delete on the six owned tables; those six grants remain
+unprovisioned until separately approved. Verify mode made no metadata, role-assignment,
+configuration or business-data writes.
 
 ## Ownership and security
 
 All six tables are **User-owned** to match Job, Customer, Site, Equipment, Contact, Site Contact
 and Mechanic. A new unmanaged **Chargeable Invoice Manager** role supplies the shared queue with
-organisation-depth Create, Read, Write, Append and Append To on the six new tables, but no Delete,
-Assign or Share. V1 does not add new-table privileges to the widely used **Service Operations**
+organisation-depth Create, Read, Write, Delete, Append and Append To on the six new tables, but no
+Assign or Share. Delete exists only for the typed-confirmation, atomic whole-package workflow; the
+application exposes no individual child-row deletion. V1 does not add new-table privileges to the widely used **Service Operations**
 role. Existing global reference access is verified rather than widened. Role assignment is a
 separate approved action using an explicit manager list.
 
@@ -53,6 +57,15 @@ Request Prepared, Photos Received, Revised Invoice Uploaded, Revision Compared, 
 Changed, Approval PDF Generated, PO Request Prepared, PO Received, Ready to Process, Do Not
 Process and Manual Note.
 
+Correction edits preserve append-only evidence. One atomic changeset ETag-checks the Review and
+active Correction, changes the prior comparison state to Superseded, creates the edited replacement
+against the same source Revision/Line, and appends Correction Changed Activity. Working projections
+show Outstanding/Not Made replacements; Superseded records remain retained for audit.
+Removing an amendment/removal instruction, keeping an original source line, or removing a requested new line uses
+the same ETag-guarded Superseded state plus append-only Correction Changed Activity. A changed source
+line is first restored before a separate source-row Remove Line request can be made. No Correction
+row is deleted during these working-invoice reversals.
+
 ## Chargeable Invoice Review
 
 Schema `gr_ChargeableInvoiceReview`; expected entity set `gr_chargeableinvoicereviews`.
@@ -73,13 +86,13 @@ Schema `gr_ChargeableInvoiceReview`; expected entity set `gr_chargeableinvoicere
 | Waiting On | `gr_waitingon` | Choice | No | Null means not waiting. |
 | Waiting Note | `gr_waitingnote` | Multiline 4,000 | No | App-required while waiting. |
 | PO Required | `gr_porequired` | Yes/No | No | Null means undecided. |
-| PO Number | `gr_ponumber` | Text 100 | No | Manager-confirmed, distinct from extracted Order No. |
-| PO Received On | `gr_poreceivedon` | Date/time | No | Requires PO Number. |
-| Photos Required | `gr_photosrequired` | Yes/No | No | Manual V1 decision. |
+| PO Number | `gr_ponumber` | Text 100 | No | Accounts-confirmed downstream state, distinct from extracted Order No; not a manager Ready prerequisite. |
+| PO Received On | `gr_poreceivedon` | Date/time | No | Downstream Accounts state; requires PO Number and does not block manager Ready. |
+| Photos Required | `gr_photosrequired` | Yes/No | No | Null means undecided. |
 | Photos Status | `gr_photosstatus` | Choice | No | Used when photos are required. |
-| Photo Request Technician | `gr_photorequesttechnician` | Lookup Mechanic | No | Deliberate selection, never inferred from allocation. |
+| Photo Request Technician | `gr_photorequesttechnician` | Lookup Mechanic | No | Defaults in the UI from the Job's primary Mechanic; the manager may deliberately choose another active technician before preparing the draft. |
 | Photo Request Prepared On | `gr_photorequestpreparedon` | Date/time | No | Preparation, not delivery proof. |
-| PO Request Prepared On | `gr_porequestpreparedon` | Date/time | No | Preparation, not delivery proof. |
+| PO Request Prepared On | `gr_porequestpreparedon` | Date/time | No | Preparation, not delivery proof; satisfies the manager PO prerequisite when PO Required is Yes. |
 | Current Revision | `gr_currentrevision` | Lookup Revision | No | Set after atomic persistence. |
 | Disposition | `gr_disposition` | Choice | No | Null while active. |
 | Disposition On | `gr_dispositionon` | Date/time | No | Terminal transition time. |
@@ -88,8 +101,9 @@ Schema `gr_ChargeableInvoiceReview`; expected entity set `gr_chargeableinvoicere
 PO-request recipient selection is transient application state. V1 reads existing Site Contacts
 for the Review Site or accepts a deliberately entered manual address; it does not persist an
 email address/body on Review and does not repurpose Email Dispatch. Preparing records the timestamp
-and PO Request Prepared Activity only. The first confirmed PO number/received decision records PO
-Received Activity without copying extracted Order No evidence.
+and PO Request Prepared Activity only and completes the manager-side PO prerequisite. The first
+confirmed PO number/received decision is downstream Accounts state and records PO Received Activity
+without copying extracted Order No evidence; it is not required for the manager Ready transition.
 
 Built-in owner, created/modified user/time and ETag own audit, last-updated display and
 concurrency. Do not duplicate actor display names.
@@ -128,8 +142,8 @@ Review; Revision is optional. Persist document type, File (`gr_file`), its Datav
 `gr_filename` companion, content type, byte count, generated template version, source snapshot hash,
 required upload status and optional safe upload error (Multiline 1,000). A document begins Pending,
 becomes Complete only after the File write succeeds, and becomes Failed when a known failure is
-recorded. Source invoice PDFs are
-immutable and V1 managers have no Delete privilege.
+recorded. Source invoice PDFs are immutable except when a manager deliberately confirms permanent
+deletion of their complete owning invoice package.
 
 File bytes cannot participate in the metadata change set. A first import therefore creates a
 Staging review and Pending document, uploads the file, and only then atomically creates the
@@ -149,25 +163,35 @@ content in one Review. Metadata begins Pending before the File write. One later 
 changeset marks all staged rows Complete, records Photos Received and appends Activity. Known
 failures become Failed; an uncertain finalisation is reconciled before any deliberate retry.
 Pending/Failed documents are visible as recovery evidence but are not downloadable.
+Confirmed retained-photo removal permanently deletes the selected Complete Supporting Photo
+Document/File inside one Review-ETag and Document-ETag guarded changeset, updates Photos Status and
+appends a filename-free Manual Note Activity. If another Complete photo remains, status stays
+Received; otherwise it returns to Requested when Photo Request Prepared On exists, or Not requested.
+The action is unavailable on terminal reviews and requires the separately gated Document Delete
+grant. No Job Photo or linked operational record participates.
+Bulk removal applies the same contract to every retained Complete Supporting Photo in one bounded
+changeset, with each Document ETag, one Review ETag update and one aggregate Manual Note Activity.
 
 ## Review Activity
 
 Schema `gr_ChargeableInvoiceActivity`; entity set `gr_chargeableinvoiceactivities`. Require
 Review; allow optional Revision, Document and Correction. Persist event Choice, safe detail and
-occurred-on; built-in createdby is the actor. Activity is append-only in the application and
-managers receive no Delete.
+occurred-on; built-in createdby is the actor. Activity is append-only during normal review work and
+is deleted only as part of confirmed whole-package deletion.
 
 ## Relationships and preservation
 
 - Job/Customer/Site/Equipment/Mechanic deletion removes the lookup only; reviews survive.
-- Review-to-child relationships use Restrict; no V1 UI/role deletes historical records.
+- Review-to-child relationships remain Restrict. Permanent deletion uses one ETag-guarded atomic
+  change set that disconnects Current Revision and Document Revision pointers, then deletes
+  Activity, Correction, Line, Revision, Document/File and Review in dependency order.
 - Current Revision uses Restrict and is set only after revision/document/lines succeed.
 - User ownership does not make the queue private; organisation-depth manager grants share it.
 
-V1 has no automatic retention cleanup. Complete historical records and Pending/Failed recovery
-evidence remain preserved. Any future cleanup process needs a separately approved retention
-policy, privileged role, relationship/alternate-key analysis and recovery plan; it is not an
-application rollback action.
+V1 has no automatic retention cleanup. Records remain preserved unless a manager deliberately
+types the invoice number and confirms permanent whole-package deletion. This action is not an
+application rollback mechanism and never deletes linked Job, Customer, Site, Equipment or Mechanic
+records. Any future scheduled cleanup still needs a separately approved retention policy.
 
 ## Provisioning and verification
 
@@ -177,4 +201,6 @@ the contract and all 30 organisation-depth grants. It created no business rows, 
 users or teams, did not change the organisation limit, and did not grant the new tables to
 Service Operations. A later explicitly approved idempotent run added and verified Review Import
 Status plus Document Upload Status/Error. It created no business rows, assigned no role, changed
-no organisation setting and left the release flags disabled.
+no organisation setting and left the release flags disabled. The script now defines the approved
+36-grant target contract, but adding and verifying the six Delete grants requires a new explicitly
+approved Provision invocation.

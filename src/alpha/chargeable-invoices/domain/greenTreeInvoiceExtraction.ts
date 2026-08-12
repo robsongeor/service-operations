@@ -63,6 +63,18 @@ export function normalizeGreenTreeText(value: string | null | undefined) {
     return value?.replace(/\s+/g, ' ').trim() ?? ''
 }
 
+export function greenTreeJobDescription(headline: string | null | undefined) {
+    const normalized = normalizeGreenTreeText(headline)
+    if (!normalized) return ''
+    const segments = normalized.split(/\s+-\s+/).map((segment) => segment.trim()).filter(Boolean)
+    return segments.at(-1) ?? normalized
+}
+
+export function greenTreeJobOrderNumber(rawOrderNumber: string | null | undefined) {
+    const normalized = normalizeGreenTreeText(rawOrderNumber)
+    return normalized && /[A-Za-z0-9]/.test(normalized) ? normalized : ''
+}
+
 export function parseGreenTreeMoney(value: string | number | null | undefined) {
     if (typeof value === 'number') return Number.isFinite(value) ? value : null
     const normalized = normalizeGreenTreeText(value)
@@ -76,7 +88,13 @@ export function parseGreenTreeMoney(value: string | number | null | undefined) {
 
 export function parseGreenTreeDateOnly(value: string | null | undefined) {
     const normalized = normalizeGreenTreeText(value)
+    const namedMatch = /^(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})$/.exec(normalized)
+    const monthNames = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december']
+    const namedMonth = namedMatch
+        ? monthNames.findIndex((month) => month.startsWith(namedMatch[2].toLowerCase())) + 1
+        : 0
     const match = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$/.exec(normalized)
+        || (namedMatch && namedMonth ? [namedMatch[0], namedMatch[1], String(namedMonth), namedMatch[3]] : null)
     if (!match) return null
     const day = Number(match[1])
     const month = Number(match[2])

@@ -4,6 +4,13 @@ import MetricStrip from '../shared/metric-strip/MetricStrip.tsx'
 import { CHARGEABLE_INVOICE_MATCH_STATUSES } from './types/chargeableInvoice.types.ts'
 import { useChargeableInvoiceIntake } from './hooks/useChargeableInvoiceIntake.ts'
 import ChargeableInvoiceQueue from './components/ChargeableInvoiceQueue.tsx'
+import JobCreateDrawer from '../jobs/components/JobCreateDrawer.tsx'
+import JobDrawerShell from '../jobs/components/JobDrawerShell.tsx'
+import { useJobs } from '../jobs/hooks/useJobs.ts'
+import type { JobSaveInput } from '../jobs/types/jobSave.types.ts'
+import type { ChargeableInvoiceIntakeItem } from './hooks/useChargeableInvoiceIntake.ts'
+import { greenTreeJobDescription, greenTreeJobOrderNumber } from './domain/greenTreeInvoiceExtraction.ts'
+import { JOB_STATUSES } from '../jobs/types/jobStatus.types.ts'
 import './ChargeableInvoiceReviewScreen.css'
 
 const money = new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' })
@@ -16,10 +23,94 @@ function matchLabel(status: number | undefined) {
     return 'Not checked'
 }
 
+const normalizeEquipmentIdentifier = (value?: string | null) => value?.trim().replace(/\s+/g, ' ').toLocaleLowerCase() ?? ''
+
+function uniqueExactEquipmentMatch<T extends { gr_fleet?: string | null; gr_serial?: string | null }>(
+    equipment: T[],
+    proposed: { fleet?: string | null; serial?: string | null },
+) {
+    const fleet = normalizeEquipmentIdentifier(proposed.fleet)
+    const serial = normalizeEquipmentIdentifier(proposed.serial)
+    if (!fleet && !serial) return null
+    const matches = equipment.filter((item) => {
+        const itemFleet = normalizeEquipmentIdentifier(item.gr_fleet)
+        const itemSerial = normalizeEquipmentIdentifier(item.gr_serial)
+        const exactIdentifier = Boolean((fleet && itemFleet === fleet) || (serial && itemSerial === serial))
+        const fleetCompatible = !fleet || !itemFleet || itemFleet === fleet
+        const serialCompatible = !serial || !itemSerial || itemSerial === serial
+        return exactIdentifier && fleetCompatible && serialCompatible
+    })
+    return matches.length === 1 ? matches[0] : null
+}
+
+type InvoiceJobCreateProps = {
+    item: ChargeableInvoiceIntakeItem
+    onClose: () => void
+    onCreated: (jobId: string, job: JobSaveInput) => Promise<void>
+}
+
+function InvoiceJobCreateDrawer({ item, onClose, onCreated }: InvoiceJobCreateProps) {
+    const jobs = useJobs()
+    const revision = item.extraction?.revision
+    const matchedEquipment = uniqueExactEquipmentMatch(jobs.equipmentList, {
+        fleet: revision?.gr_fleet,
+        serial: revision?.gr_serial,
+    })
+
+    if (jobs.isLoading) return <JobDrawerShell eyebrow="Create job" title={revision?.gr_greentreereference || 'New job'} busy onClose={onClose} footer={<button type="button" onClick={onClose}>Cancel</button>}>
+        <p className="chargeable-job-create-status">Loading Customer, Site and Equipment choices…</p>
+    </JobDrawerShell>
+
+    if (jobs.loadError) return <JobDrawerShell eyebrow="Create job" title={revision?.gr_greentreereference || 'New job'} onClose={onClose} footer={<button type="button" onClick={onClose}>Close</button>}>
+        <div className="chargeable-job-create-status" role="alert">
+            <p>{jobs.loadError}</p>
+            <button type="button" className="chargeable-secondary" onClick={jobs.retryInitialLoad}>Try again</button>
+        </div>
+    </JobDrawerShell>
+
+    return <JobCreateDrawer
+        mechanics={jobs.mechanics}
+        equipmentList={jobs.equipmentList}
+        sites={jobs.sites}
+        customers={jobs.customers}
+        siteContacts={jobs.siteContacts}
+        servicePlans={jobs.servicePlans}
+        onCreateCustomer={jobs.createCustomer}
+        onCreateSite={jobs.createSite}
+        onCreateContact={jobs.createContactForSite}
+        onCreateEquipment={jobs.createEquipment}
+        onCreateJob={jobs.createJob}
+        onCreateScheduleOption={jobs.createScheduleOption}
+        initialValues={{
+            jobNumber: item.jobLookupValue.trim() || revision?.gr_greentreereference || '',
+            orderNumber: greenTreeJobOrderNumber(revision?.gr_rawordernumber),
+            status: JOB_STATUSES.COMPLETE,
+            equipmentId: matchedEquipment?.gr_equipmentid,
+            customerId: matchedEquipment?.gr_Site?.gr_Customer?.gr_customerid,
+            siteId: matchedEquipment?.gr_Site?.gr_siteid,
+            description: greenTreeJobDescription(revision?.gr_headline)
+                || revision?.gr_repairdescription
+                || revision?.gr_workcompleted
+                || '',
+            equipmentDraft: {
+                fleet: revision?.gr_fleet || '',
+                serial: revision?.gr_serial || '',
+                make: revision?.gr_make || '',
+                model: revision?.gr_model || '',
+            },
+        }}
+        requireJobNumber
+        onCreated={onCreated}
+        onClose={onClose}
+    />
+}
+
 export default function ChargeableInvoiceReviewScreen() {
     const inputRef = useRef<HTMLInputElement>(null)
     const intake = useChargeableInvoiceIntake()
     const [mode, setMode] = useState<'queue' | 'intake'>('queue')
+    const [creatingJobForItemId, setCreatingJobForItemId] = useState<string | null>(null)
+    const creatingJobForItem = intake.items.find((item) => item.id === creatingJobForItemId) ?? null
 
     return <main className="chargeable-invoices-screen">
         <PageHeader
@@ -27,15 +118,13 @@ export default function ChargeableInvoiceReviewScreen() {
             title="Chargeable Invoice Review"
             subtitle={mode === 'queue'
                 ? 'Work through active chargeable invoices without changing operational Job status.'
-                : 'Preview GreenTree PDFs, confirm exact Jobs, and import only the selected valid invoices.'}
+                : 'Choose GreenTree PDFs to check their details and Job matches automatically, then import only the selected valid invoices.'}
             actions={<>
-                <button type="button" className={mode === 'queue' ? 'chargeable-primary' : 'chargeable-secondary'} onClick={() => setMode('queue')}>Review queue</button>
-                <button type="button" className={mode === 'intake' ? 'chargeable-primary' : 'chargeable-secondary'} onClick={() => setMode('intake')}>Import PDFs</button>
-                {mode === 'intake' && <button type="button" className="chargeable-secondary" onClick={() => inputRef.current?.click()} disabled={intake.isPreviewing}>
+                {mode === 'queue'
+                    ? <button type="button" className="chargeable-primary" onClick={() => setMode('intake')}>Import PDFs</button>
+                    : <button type="button" className="chargeable-secondary" onClick={() => setMode('queue')}>Back</button>}
+                {mode === 'intake' && intake.summary.total > 0 && <button type="button" className="chargeable-secondary" onClick={() => inputRef.current?.click()} disabled={intake.isPreviewing}>
                     Add PDFs
-                </button>}
-                {mode === 'intake' && <button type="button" className="chargeable-primary" onClick={() => void intake.previewPending()} disabled={intake.isPreviewing || intake.summary.pending === 0}>
-                    {intake.isPreviewing ? 'Previewing…' : `Preview ${intake.summary.pending || ''}`.trim()}
                 </button>}
             </>}
         />
@@ -66,12 +155,12 @@ export default function ChargeableInvoiceReviewScreen() {
 
         {intake.items.length === 0 ? <section className="chargeable-empty">
             <h2>Add GreenTree invoice PDFs</h2>
-            <p>Select up to 20 text-based PDFs. Files are validated independently, so one invalid invoice will not block the rest of the batch.</p>
+            <p>Select up to 20 text-based PDFs. Each file is checked automatically and independently, so one invalid invoice will not block the rest of the batch.</p>
             <button type="button" className="chargeable-primary" onClick={() => inputRef.current?.click()}>Choose PDFs</button>
         </section> : <section className="chargeable-preview-shell" aria-label="Invoice preview batch">
             <div className="chargeable-preview-intro">
                 <div><h2>Import preview</h2><p>Only exact Job matches without extraction errors can be selected.</p></div>
-                <button type="button" className="chargeable-primary" disabled={intake.isImporting || intake.summary.selected === 0} onClick={() => void intake.importSelected()}>
+                <button type="button" className="chargeable-primary" disabled={intake.isImporting || intake.summary.selected === 0} onClick={() => void intake.importSelected().then((allImported) => { if (allImported) setMode('queue') })}>
                     {intake.isImporting ? 'Importing…' : `Import selected (${intake.summary.selected})`}
                 </button>
             </div>
@@ -85,7 +174,7 @@ export default function ChargeableInvoiceReviewScreen() {
                             <td><input type="checkbox" checked={item.selected} disabled={item.state !== 'ready'} aria-label={`Select ${item.file.name} for import`} onChange={(event) => intake.setSelected(item.id, event.currentTarget.checked)} /></td>
                             <td><strong>{item.file.name}</strong><small>{(item.file.size / 1024).toFixed(0)} KiB</small></td>
                             <td><strong>{revision?.gr_invoicenumber || '—'}</strong><small>{revision?.gr_invoicedate || ''}</small>{item.preview?.duplicate.kind === 'revision' && <select aria-label={`Import decision for ${item.file.name}`} value={item.importDecision ?? ''} onChange={(event) => intake.setImportDecision(item.id, event.currentTarget.value as 'revision' | 'skip')}><option value="">Choose…</option><option value="revision">Import as revision {item.preview.duplicate.proposedRevisionNumber}</option><option value="skip">Skip</option></select>}{item.preview?.duplicate.kind === 'retry' && <small>Retry incomplete import as revision {item.preview.duplicate.proposedRevisionNumber}</small>}</td>
-                            <td><strong>{revision?.gr_greentreereference || '—'}</strong><small>{job?.gr_jobnumber || matchLabel(item.preview?.match.status)}</small>{item.preview && !job && <div className="chargeable-job-lookup"><input value={item.jobLookupValue} onChange={(event) => intake.setJobLookupValue(item.id, event.currentTarget.value)} aria-label={`Job Number for ${item.file.name}`} placeholder="Job Number" /><button type="button" className="chargeable-secondary" disabled={item.isLookingUpJob || !item.jobLookupValue.trim()} onClick={() => void intake.lookupJob(item.id)}>{item.isLookingUpJob ? 'Checking…' : 'Set Job'}</button></div>}</td>
+                            <td><strong>{revision?.gr_greentreereference || '—'}</strong><small>{job?.gr_jobnumber || matchLabel(item.preview?.match.status)}</small>{item.preview && !job && <div className="chargeable-job-lookup"><input value={item.jobLookupValue} onChange={(event) => intake.setJobLookupValue(item.id, event.currentTarget.value)} aria-label={`Job Number for ${item.file.name}`} placeholder="Job Number" /><button type="button" className="chargeable-secondary" disabled={item.isLookingUpJob || !item.jobLookupValue.trim()} onClick={() => void intake.lookupJob(item.id)}>{item.isLookingUpJob ? 'Checking…' : 'Set Job'}</button><button type="button" className="chargeable-secondary" disabled={item.isLookingUpJob} onClick={() => setCreatingJobForItemId(item.id)}>Create Job</button></div>}</td>
                             <td><strong>{job?.gr_Site?.gr_Customer?.gr_name || '—'}</strong><small>{job?.gr_Equipment?.gr_fleet || job?.gr_Equipment?.gr_serial || ''}</small></td>
                             <td>{item.extraction?.lines.length ?? '—'}</td>
                             <td className="money">{revision?.gr_total == null ? '—' : money.format(revision.gr_total)}</td>
@@ -97,5 +186,10 @@ export default function ChargeableInvoiceReviewScreen() {
             </div>
         </section>}
         </>}
+        {creatingJobForItem && <InvoiceJobCreateDrawer
+            item={creatingJobForItem}
+            onClose={() => setCreatingJobForItemId(null)}
+            onCreated={(jobId, job) => intake.matchCreatedJob(creatingJobForItem.id, job.jobNumber, jobId)}
+        />}
     </main>
 }

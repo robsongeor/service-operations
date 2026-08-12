@@ -168,6 +168,28 @@ test('authenticated preview extracts labelled text and performs one exact bounde
     assert.equal(jobUrl.searchParams.get('$top'), '2')
 })
 
+test('GreenTree two-column equipment rows stop at the adjacent field labels', () => {
+    const lines = [
+        'Description Quantity Price Total',
+        'Graphic Lamination - FG18HT-16/624404 - Oil leak',
+        'Fleet No : PacificLam Service Meter Reading : 14457',
+        'Make : Komatsu Date of Job : : 02 July 2026',
+        'Model : FG15HT-16 Service Interval : 6',
+        'Serial No : 624404 Next Service Due : 14 August 2023',
+    ].map((text) => ({ text }))
+    const candidate = endpoint._test.extractGreenTreeCandidate([{ lines }])
+    assert.equal(candidate.headline, 'Graphic Lamination - FG18HT-16/624404 - Oil leak')
+    assert.equal(candidate.fleet, 'PacificLam')
+    assert.equal(candidate.make, 'Komatsu')
+    assert.equal(candidate.model, 'FG15HT-16')
+    assert.equal(candidate.serial, '624404')
+    assert.equal(candidate.meter, '14457')
+    assert.equal(candidate.dateOfJob, '02 July 2026')
+    assert.equal(candidate.serviceInterval, '6')
+    assert.equal(candidate.nextDue, '14 August 2023')
+    assert.equal(candidate.extractionVersion, 'greentree-layout-v3')
+})
+
 test('duplicate lookup distinguishes a new revision from a recoverable failed import', { concurrency: false }, async () => {
     const review = { gr_chargeableinvoicereviewid: '00000000-0000-0000-0000-000000000001', gr_invoicenumber: 'VFL00001', gr_importstatus: 122830001 }
     global.fetch = async (url) => String(url).includes('gr_chargeableinvoicerevisions')
@@ -189,10 +211,12 @@ test('server import normalization rejects unbalanced totals and finalization use
     }), /do not balance/i)
     const normalized = endpoint._test.normalizedImport({
         invoiceNumber: 'VFL00001', invoiceDate: '27/07/26', greenTreeReference: '145156',
+        dateOfJob: '02 July 2026',
         subtotal: '100', gstAmount: '15', total: '115',
         lines: [{ type: 'Labour', description: 'Service labour', quantity: '1', unitPrice: '100', extendedPrice: '100' }],
         extractionVersion: 'test', sourceEvidence: {},
     })
+    assert.equal(normalized.revision.gr_dateofjob, '2026-07-02')
     const batch = endpoint._test.finalizationBatch('review-id', 'W/"1"', 'document-id', 2, normalized, false)
     assert.match(batch.payload, /POST gr_chargeableinvoicerevisions/)
     assert.match(batch.payload, /POST gr_chargeableinvoicelines/)
@@ -219,17 +243,26 @@ test('server comparison rechecks unresolved corrections and conservatively class
             gr_correctiontype: 122830003, gr_requestedlinetype: 122830002,
             gr_requesteddescription: 'Consumables', gr_comparisonstatus: 122830000,
         },
+        {
+            gr_chargeableinvoicecorrectionid: 'work-amendment', '@odata.etag': 'W/"5"',
+            gr_correctiontype: 122830001, gr_fieldkey: 'workCompleted',
+            gr_requestedtext: 'Also replaced the damaged seal kit.', gr_comparisonstatus: 122830000,
+        },
     ]
     const lines = [
         { gr_linekey: 'line-parts', gr_linetype: 122830001, gr_description: 'Seal kit', gr_unitprice: 55 },
         { gr_linekey: 'line-other-1', gr_linetype: 122830002, gr_description: 'Consumables' },
         { gr_linekey: 'line-other-2', gr_linetype: 122830002, gr_description: 'Consumables' },
     ]
-    const results = endpoint._test.compareUnresolvedCorrections(corrections, { gr_dateofjob: '2026-07-26' }, lines)
+    const results = endpoint._test.compareUnresolvedCorrections(corrections, {
+        gr_dateofjob: '2026-07-26',
+        gr_workcompleted: 'Inspected the machine. Also replaced the damaged seal kit.',
+    }, lines)
     assert.deepEqual(results.map((item) => [item.correctionId, item.comparison]), [
         ['header-correction', 122830001],
         ['line-correction', 122830001],
         ['ambiguous-add', 122830002],
+        ['work-amendment', 122830001],
     ])
 })
 

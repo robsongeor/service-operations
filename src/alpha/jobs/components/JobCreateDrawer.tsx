@@ -5,7 +5,7 @@ import type { Site } from '../types/site.types'
 import type { Customer } from '../types/customer.types'
 import type { SiteContact } from '../types/siteContact.types'
 import type { JobType } from '../types/jobType.types'
-import { JOB_STATUSES, UNCONFIRMED_OPERATION_MESSAGE } from '../types/jobStatus.types'
+import { JOB_STATUSES, UNCONFIRMED_OPERATION_MESSAGE, type JobStatus } from '../types/jobStatus.types'
 import type { JobSaveInput } from '../types/jobSave.types'
 import { useJobEditor } from '../hooks/useJobEditor'
 import JobDrawerShell from './JobDrawerShell'
@@ -24,6 +24,10 @@ import JobMaintenanceSummary from './JobMaintenanceSummary'
 import { isServiceTypeEnabled } from '../../equipment/servicePlans/maintenanceConfiguration'
 
 export type JobCreateInitialValues = {
+    jobNumber?: string
+    orderNumber?: string
+    status?: JobStatus
+    equipmentDraft?: { fleet?: string; serial?: string; make?: string; model?: string }
     equipmentId?: string
     siteId?: string
     customerId?: string
@@ -44,23 +48,26 @@ type Props = {
     onCreateContact: (contact: { siteId: string; name: string; phone?: string; email?: string }) => Promise<string>
     onCreateEquipment: (equipment: { fleet: string; serial: string; make?: string; model?: string }) => Promise<string>
     onCreateJob: (job: JobSaveInput) => Promise<string>
+    onCreated?: (jobId: string, job: JobSaveInput) => Promise<void> | void
     onCreateScheduleOption: (option: JobScheduleOptionInput) => Promise<void>
     initialValues?: JobCreateInitialValues
     jobTypeOptions?: { label: string; value: JobType }[]
+    requireJobNumber?: boolean
     onClose: () => void
 }
 
 export default function JobCreateDrawer({
     mechanics, equipmentList, sites, customers, siteContacts, servicePlans,
     onCreateCustomer, onCreateSite, onCreateContact, onCreateEquipment,
-    onCreateJob, onCreateScheduleOption, initialValues, jobTypeOptions = STANDARD_JOB_TYPE_OPTIONS, onClose,
+    onCreateJob, onCreated, onCreateScheduleOption, initialValues,
+    jobTypeOptions = STANDARD_JOB_TYPE_OPTIONS, requireJobNumber = false, onClose,
 }: Props) {
     const initialCustomer = customers.find((customer) => customer.gr_customerid === initialValues?.customerId)
     const editor = useJobEditor({
         initialDraft: {
-            jobNumber: '', orderNumber: '', description: initialValues?.description ?? '',
+            jobNumber: initialValues?.jobNumber ?? '', orderNumber: initialValues?.orderNumber ?? '', description: initialValues?.description ?? '',
             jobType: initialValues?.jobType ?? '',
-            status: JOB_STATUSES.UNALLOCATED,
+            status: initialValues?.status ?? JOB_STATUSES.UNALLOCATED,
             mechanicId: '',
             equipmentId: initialValues?.equipmentId ?? '',
             customerId: initialValues?.customerId ?? '',
@@ -85,6 +92,7 @@ export default function JobCreateDrawer({
             setJobTypeError('Select a job type before creating the job.')
             return
         }
+        if (requireJobNumber && !draft.jobNumber.trim()) return setSaveError('Enter a Job Number before creating the job.')
         if (!draft.description.trim()) return setSaveError('Enter a job description before creating the job.')
         if (draft.customerId && !draft.siteId) return setSaveError('Select a site for the chosen customer.')
         const selectedEquipment = equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)
@@ -99,7 +107,7 @@ export default function JobCreateDrawer({
         try {
             setIsSaving(true)
             setSaveError('')
-            const jobId = await onCreateJob({
+            const jobInput: JobSaveInput = {
                 jobNumber: draft.jobNumber.trim(),
                 orderNumber: draft.orderNumber.trim(),
                 description: draft.description.trim(),
@@ -110,7 +118,8 @@ export default function JobCreateDrawer({
                 siteId: draft.siteId || undefined,
                 contactId: draft.contactId || undefined,
                 serviceType: draft.serviceType,
-            })
+            }
+            const jobId = await onCreateJob(jobInput)
 
             createdJob = true
             setJobWasCreated(true)
@@ -126,11 +135,13 @@ export default function JobCreateDrawer({
                 }),
             ))
 
+            await onCreated?.(jobId, jobInput)
+
             onClose()
         } catch (error) {
             console.error(error)
             setSaveError(createdJob
-                ? 'The job was created, but its schedule could not be saved. Close this drawer and add it from Edit Job.'
+                ? 'The job was created, but the follow-up workflow could not be completed. Close this drawer and refresh before continuing.'
                 : error instanceof Error ? error.message : 'The job could not be created. Please try again.')
         } finally { setIsSaving(false) }
     }
@@ -167,6 +178,7 @@ export default function JobCreateDrawer({
                 <JobRelationshipFields
                     editor={editor}
                     equipmentList={equipmentList}
+                    initialEquipmentDraft={initialValues?.equipmentDraft}
                     onCreateCustomer={onCreateCustomer}
                     onCreateSite={onCreateSite}
                     onCreateContact={onCreateContact}

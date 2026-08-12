@@ -6,9 +6,13 @@
 - [x] V1 boundaries, data model, state derivation, security model, and phased delivery proposed.
 - [x] Initial four-file GreenTree extraction fixture set inspected and scenario expectations recorded.
 - [x] Reusable read-only Dataverse preflight script created and locally validated.
-- [x] Product owner approved the proposed schema/role contract, 5 MiB V1 limit, immutable
+- [x] Product owner approved the proposed schema/role contract, 5 MiB V1 limit, default immutable
   retention, extraction contract, approval-document wording, upload allowlists/scanning release
   gate, and deferred manager-role assignment on 11 August 2026.
+- [x] Product owner approved deliberate permanent whole-package deletion on 12 August 2026. The
+  UI requires the exact invoice number, the Dataverse change set is ETag-guarded and atomic, and
+  linked Job/Customer/Site/Equipment records remain untouched. Six manager-role Delete grants
+  require separate provisioning approval.
 - [x] Dataverse read-only preflight completed in one explicitly approved interactive session;
   names, reference contracts, solution, role prerequisites and upload limit were inspected
   without writes.
@@ -67,8 +71,10 @@ note and remains in History.
 | Ready to Process | Terminal disposition is Ready to Process. |
 | History | Ready-to-process and do-not-process reviews plus superseded/replaced revisions. |
 
-Ready is allowed only with no active wait, a PO number when PO is required, and received
-photos when photos are required. Managers explicitly start review, set PO/photos requirements,
+Ready is allowed only with no active wait, a prepared customer PO-request draft when PO is
+required, and received photos when photos are required. Receiving and recording the PO is a
+downstream Accounts responsibility and does not keep the manager review open. Managers explicitly
+start review, set PO/photos requirements,
 create exception corrections and manage Waiting. `Corrections → Process` records correction
 instructions then reaches ready without requiring a returned revision. Further action remains
 open through its actual prerequisite, not another broad status.
@@ -102,7 +108,7 @@ normalise searchable headers and lines into columns.
 `Order No` extracted from GreenTree is immutable revision evidence and is separate from the
 manager-confirmed PO number. It may be `.`, a bare number, or labelled text such as `PO # ...`.
 It can be offered as a candidate for deliberate adoption, but must never automatically mark PO
-Received or satisfy the ready-to-process prerequisite.
+Received. It is not required for the manager's ready-to-process transition.
 
 ## Fixture evidence and scenario acceptance cases
 
@@ -125,7 +131,7 @@ The initial acceptance scenarios are:
 | Our Ref | Workflow fixture |
 | --- | --- |
 | `144849` | Start Review, set Waiting on Sales with a note about sale/trade-in confirmation, then resolve either to Ready to Process or Do Not Process with a required reason. |
-| `145156` | PO Required + Photos Required; deliberately select the actual technician, prepare an unsent photo-request email, upload/mark photos received, generate approval PDF, prepare PO request, record confirmed PO, then derive Ready. The extracted Order No does not satisfy the PO step automatically. |
+| `145156` | PO Required + Photos Required; deliberately select the actual technician, prepare an unsent photo-request email, upload/mark photos received, save the current valid GreenTree invoice and photos, and prepare the customer PO-request draft with Accounts copied once an authoritative internal recipient is configured. Ready then completes the manager handoff; confirmed PO receipt is recorded later by Accounts and is not a manager prerequisite. The extracted Order No is evidence only. |
 | `145421` | Add corrections against existing part pricing and add requested Labour and Consumables lines that do not exist in the source revision. An existing extracted PO does not bypass corrections. |
 | `145554` | Flag Date of Job as a structured header correction, wait on the deliberately selected technician, and compare a later revised invoice against the requested date. |
 
@@ -139,11 +145,36 @@ The browser submits selected PDFs to an authenticated server endpoint; it does n
 persist files directly. The server validates the caller once and enforces PDF signature/page/
 size/batch limits, extracts text/layout with a deterministic GreenTree parser, normalises
 amounts/dates, and returns a review-only batch preview. No record exists before confirmation.
+GreenTree layout parser v3 treats the adjacent right-hand labels in the two-column equipment block
+as explicit field boundaries. It extracts Fleet, Make, Model and Serial independently from Service
+Meter Reading, Date of Job, Service Interval and Next Service Due, and accepts both numeric and
+English written-month job dates. It also owns the descriptive line immediately above Fleet No as
+the GreenTree headline instead of confusing the table's Description column heading for that value.
+The extraction version remains persisted with immutable Revision evidence so later parser behaviour
+is distinguishable.
 
 Match exact normalised GreenTree Job/reference number to `gr_jobs.gr_jobnumber`, then only a
 uniquely corroborated reference proven safe by fixtures. Zero/multiple matches, missing invoice
 number, conflicting totals, unsupported layout or low confidence block that file; they do not
 block confirmed import of other valid files. Never choose a Job from customer/fleet text.
+
+When an exact Job does not yet exist, intake may deliberately open the canonical shared Job-create
+drawer. It prefills only the extracted Our Ref as the editable Job Number. The editable Job
+description uses the concise final segment of the GreenTree headline (for example `Oil leak` from
+`Graphic Lamination - FG18HT-16/624404 - Oil leak`), not the Work Completed narrative; repair/work
+text remains invoice evidence and is only a fallback when no headline exists. Because this recovery
+represents work already completed before its invoice reached Service Operations, Status defaults
+to Complete. A meaningful extracted Order No prefills the editable Job Order Number; punctuation-only
+GreenTree placeholders such as `.` remain blank. A unique exact fleet/serial match with no conflicting
+nonblank identifier automatically selects the existing Equipment and its authoritative Customer/Site.
+Multiple or conflicting matches remain deliberate search suggestions rather than guesses. When no
+exact identifier match exists, the existing inline new-Equipment panel
+opens with fleet, serial, make and model prefilled for confirmation. The manager must deliberately
+select the Job Type and must resolve any unmatched Customer/Site/Equipment; extracted
+customer, Order No and equipment text never create or bind records without that confirmation.
+Job creation uses the existing Jobs service and rules, requires a Job Number in
+this entry point, then reruns the same exact server lookup and binds its authoritative projection
+to the intake row. Creating the Job does not import the PDF or persist invoice records.
 
 Invoice number identifies a Review. Duplicates are previewed as `Skip` or `Import as revised`.
 A revision appends a PDF/value snapshot transactionally and compares header/story/totals and
@@ -151,19 +182,69 @@ lines by stable parser key, with any description-similarity fallback labelled un
 outstanding correction is recorded as matched, not made or unexpected change; ambiguous lines
 remain visible for a manager. A correction may target a header field, story, existing line field,
 line deletion, or a requested new line with category/description/quantity/rate/price. Requested
-new lines compare against later revisions without inventing a source-line relationship.
+new lines compare against later revisions without inventing a source-line relationship. A Work
+completed amendment is append-only: the original extracted narrative stays visible and immutable,
+and a later revision matches when it contains the attached amendment text as part of its Work
+completed narrative rather than requiring the original text to be replaced.
 
 ## Review workspace, documents and email
 
 The table shows invoice/date, Job, customer/site, fleet, total, queue, waiting-on, PO number,
 photo state, revision/change flag and last actor/time. Search covers invoice/reference. A row
-opens a desktop two-pane workspace: authenticated PDF viewer with browser zoom/scroll left;
-structured header, exception corrections, workflow decisions, documents and timeline right.
-Below a practical width, use accessible labelled tabs and preserve focus return.
+opens a desktop two-pane workspace that fills the application viewport beside the persistent main
+menu: authenticated PDF viewer with browser zoom/scroll left; structured header, exception
+corrections, workflow decisions, documents and timeline right. Its feature-owned drawer sizing
+tracks the expanded, collapsed and narrow-screen menu widths without changing other shared drawers.
+Below a practical content width, use accessible labelled tabs and preserve focus return.
 
-Review by exception creates no per-line approvals: flag only a story/line needing correction,
-with original and requested values. Generate consolidated correction instructions for copying
-or download, never sending. A manager uploads photos to Review Document after deliberately
+Review by exception creates no per-line approvals. The workspace exposes focused actions only
+where Accounts corrections are made: `Add amendment` beside Work completed, `Amend line` beside
+each original invoice line, and `Add new line` above the line table. Each action expands an inline
+editor in that same evidence context; correction authoring does not obscure the invoice in a modal.
+Work amendments are attached under the immutable original narrative. Existing-line amendments are
+prefilled from, and displayed directly beneath, their immutable source line. Line authoring uses a
+single compact table row aligned to Type, Description, Qty, Rate, Total and actions; the calculated
+total updates before save. Compact 30px controls and bounded columns fit the normal detail pane;
+the action column remains pinned on the right if the table ever overflows, so Save/Cancel do not
+require horizontal scrolling. New Labour/Parts/Other lines use the same row at the bottom of the
+table and remain integrated there after save as green `New line` rows with type and comparison
+status. When an amendment exists, the immutable source row stays visible but its evidence cells
+are struck through to make the proposed replacement unambiguous. A compact source-total summary
+directly beneath the table compares the immutable PDF Subtotal, `GST (rate%)`, and Total with live
+`After amendments` values. Pricing uses the latest active change/remove request for each source
+line, includes every active requested new line, and reapplies the extracted GST rate; incomplete
+quantity/rate evidence fails visibly instead of presenting a misleading total. Existing-line edit
+actions use a labelled, titled pencil icon instead of repeated text while retaining keyboard and
+screen-reader context. Once an active Work/line/new-line amendment exists, the source action moves
+onto that amendment. Editing never PATCHes away the original request: one ETag-guarded Dataverse
+changeset marks it Superseded, creates one replacement with the same immutable source evidence,
+and appends `Correction changed` Activity. Only the active replacement appears in the working view;
+Superseded history remains auditable. An untouched source line exposes pencil and red trash-can
+actions. A removal instruction transforms its immutable source into one compact red labelled row;
+it does not add a duplicate row beneath it.
+Trash is reserved for removing a source or requested new line. Active amendments and removal
+instructions instead show a green curved restore icon with explicit accessible/hover text; it
+cancels that instruction and restores the immutable source. A manager who restores an amended line
+can then remove the source deliberately. Withdrawal atomically
+marks the active Correction Superseded and appends Activity, so working pricing immediately reverts
+without deleting evidence. Active highlighted rows omit the redundant `Outstanding` label; only
+exceptional comparison state such as Not made remains visible. No-op line amendments are
+rejected. Generate consolidated correction instructions for copying or download, never sending.
+Opening an inline correction editor or saving a correction retains Add new line and all rendered
+row-action controls in place, disabling them until cancel or the authoritative workspace reload.
+This prevents competing editors/duplicate clicks without table or section-header movement.
+Existing-amendment editors render immediately after their owning Work completed block/table row,
+not before it, keeping the clicked evidence and action icons anchored while the editor expands.
+Editor and correction-row entry/exit changes use restrained 160–180ms fade/translate motion, with
+actions disabled during exit and a `prefers-reduced-motion` override that removes all animation.
+Inline invoice-line editor actions use fixed 30px X and save icons with accessible labels/tooltips,
+keeping the pinned action column compact without reducing keyboard or screen-reader clarity.
+Removal instructions use the same one-row visual hierarchy as requested additions: a red `REMOVE`
+label above the original line type, followed by the original description, quantity, rate and total.
+The description, quantity and rate are crossed out in place while the displayed Total is negative,
+matching the adjusted-pricing rule that subtracts the source extended price and recalculates GST.
+The signed Pricing change delta is green when positive, red when negative and neutral at zero.
+A manager uploads photos to Review Document after deliberately
 selecting a technician; `Prepare photo request` opens a `mailto:` draft. `Prepare PO request`
 also opens an editable draft. V1 cannot reliably attach files to `mailto:`, so it presents
 explicit download/attach steps for approval PDFs/photos.
@@ -258,11 +339,18 @@ The `/chargeable-invoices` screen reuses the shared Page Header and Metric Strip
 20 PDFs, acquires one silent token per preview action, bounds concurrent previews, and preserves
 per-file pending/ready/attention results. Exact, error-free new and retry previews are selected by
 default. Active duplicates require explicit Import as revision or Skip. Unmatched rows can be
-recovered only by another exact bounded Job Number lookup; ambiguous results remain blocked.
+recovered by another exact bounded Job Number lookup or deliberate canonical Job creation;
+ambiguous results remain blocked.
+The queue exposes `Import PDFs` as navigation. Inside intake, redundant active-mode navigation is
+removed: the empty state owns `Choose PDFs`, `Add PDFs` appears only after selection, and the
+non-persisting extraction starts automatically for newly selected files. Confirmed import remains
+a separate deliberate action because it creates the Dataverse records and File evidence.
+Successful import of the complete selection returns to a freshly loaded review queue; any per-file
+failure keeps intake visible so the manager can see and address it.
 
 The confirmed import resends the source file to the authenticated server, which re-parses it and
 rechecks the invoice identity, exact Job and duplicate decision. Because Dataverse File bytes
-cannot join a metadata change set and V1 grants no Delete, first imports create a Staging Review
+cannot join a metadata change set, first imports create a Staging Review
 and Pending Document before the File write. One later change set creates immutable Revision,
 Lines and Activity, links the Document, advances Current Revision and activates the Review under
 ETag protection. Known failures retain safe Failed state for retry. Existing Active reviews stay
@@ -282,14 +370,46 @@ The screen now defaults to an Active-import-only review queue and keeps PDF inta
 second mode. Derived New/In Progress/Waiting/Ready/History filters and bounded search do not persist
 separate status. Opening a row loads its Review, revisions, lines, corrections, documents and
 append-only activities through bounded delegated reads. The accessible drawer returns focus to
-the invoking row and exposes Summary, Invoice and History tabs. Start Review and Waiting changes
+the invoking row and exposes task-focused Amendments, Requests, Waiting and History tabs.
+Amendments is the default and owns invoice evidence/corrections; Requests owns a compact PO/photos
+requirement decision followed by the relevant customer PO or technician-photo email workflow;
+Waiting owns the blocking party/note and
+ready-to-process checks. On desktop the widened workspace
+keeps the authenticated source PDF in an independently scrolling left pane while the selected
+review tab, including structured invoice corrections, remains usable on the right. At narrower
+widths the same content collapses beneath the labelled tabs without duplicating the PDF or its
+object URL. Start Review and Waiting changes
 use the loaded Review ETag and append Activity in the same Dataverse change set. This foundation
 does not change Job status, treat Order No as a PO, or expose Staging/Failed imports.
+The Amendments handoff projects only active Outstanding/Not Made Corrections into readable numbered
+actions. `Email amendments` opens an editable draft containing the invoice, Job, requested actions
+and revised totals, with the recipient deliberately blank for the manager to add. `Copy email summary` remains available as a
+fallback. Both actions exclude Matched/Superseded audit history and never send communication
+automatically.
 
-PO Required, confirmed PO Number/received state, Photos Required and photo status are deliberate
-manager inputs; changing PO Required never adopts extracted Order No. Ready to Process revalidates
-all prerequisite fields and performs a fresh bounded unresolved-Correction check before its
-explicit terminal confirmation. Do Not Process requires a started review, resolved Waiting and a
+Requests is sequential when amendments exist. Managers may still record whether a PO or photos are
+required, but Outstanding/Not Made Corrections lock technician selection, photo-request preparation,
+photo upload, approval-PDF generation and customer PO-request preparation. The workspace directs the
+manager back to Amendments; Accounts must make the changes in GreenTree and the corrected invoice
+must be imported so comparison marks every active amendment Matched before customer-facing work
+unlocks. Retained-photo deletion remains available to recover from an incorrect upload.
+
+The workspace also exposes a destructive permanent-delete action for Active Reviews. It requires
+typing the exact invoice number and submits one bounded changeset that verifies the Review ETag,
+disconnects Restrict relationship cycles, and deletes Activity, Correction, Line, Revision,
+Document/File and Review in dependency order. Supporting Photo Documents also have their separately
+confirmed single/bulk recovery deletion; other individual evidence rows cannot be deleted, and no
+linked operational record is included.
+
+PO Required and Photos Required are the only prerequisite decisions exposed at the top of Requests.
+When PO is required, the manager completes their responsibility by preparing the customer PO-request
+draft; Nargiza / Accounts owns follow-up. Confirmed PO Number/receipt remain downstream workflow
+state and do not block Ready. Photo evidence must still be received when explicitly required, and
+changing PO Required never adopts extracted Order No. Ready to Process revalidates
+all prerequisite fields and performs a fresh bounded unresolved-Correction count before its
+explicit terminal confirmation. Outstanding/Not Made corrections are preserved as instructions
+for Nargiza / Accounts and their count is recorded in the Ready Activity; they do not require a
+returned revised invoice before handoff. Do Not Process requires a started review, resolved Waiting and a
 reason in a separate confirmation dialog. Both terminal transitions write disposition/time and
 append Activity atomically under the Review ETag; neither changes Job status or communicates.
 
@@ -324,11 +444,12 @@ reconciliation boundary. A Matched outcome records the new Revision lookup; Not 
 unresolved and is re-evaluated by every later revised import. The workspace shows the matched
 revision number or that the correction was not made in the latest revision.
 
-The workspace reads at most 200 active Mechanics only when a review is opened. A manager must
-deliberately save the photo-request technician before preparing the request or uploading photos;
-selection appends Technician Selected Activity under the Review ETag. Prepare photo request
-validates the selected technician email, records Requested/prepared-on plus Photo Request Prepared
-Activity atomically, then opens an editable `mailto:` draft. It never sends or records delivery.
+The workspace reads at most 200 active Mechanics only when a review is opened. The photo-request
+recipient defaults from the matched Job's primary Mechanic when that active technician is available;
+the manager may choose another technician when the assigned technician did not complete the work.
+Preparing the email persists a changed selection when necessary, validates the selected technician
+email, records Requested/prepared-on plus Photo Request Prepared Activity atomically, then opens an
+editable `mailto:` draft. It never sends or records delivery.
 
 A review retains at most 20 Complete supporting photos. Each selected JPG, PNG, HEIC or HEIF must
 be at most 5 MiB and pass byte-signature, MIME/extension and SHA-256 duplicate checks. Upload uses
@@ -338,6 +459,22 @@ the Review ETag. Known failures retain safe Failed metadata for deliberate retry
 during finalisation reconciles the authoritative Review/Documents and otherwise reports an unknown
 outcome without retrying. Only Complete documents can be downloaded. No Job Photo row, Job status
 write, anonymous URL or automatic communication is created.
+The Requests workspace shows compact local thumbnails immediately after JPG/PNG selection and
+authenticated thumbnails for Complete retained JPG/PNG Documents after upload. Selecting a
+thumbnail opens its temporary object URL at full size. HEIC/HEIF remain accepted evidence but use
+a labelled file tile where the browser cannot render them. All object URLs are revoked when the
+selection, review or workspace changes; the bounded 20-photo retention limit remains unchanged.
+Each retained thumbnail also exposes a deliberate trash action. After confirmation, one atomic
+Dataverse changeset ETag-checks and permanently deletes only that Supporting Photo Document/File,
+updates the Review photo state and appends a filename-free Manual Note Activity. Remaining Complete
+photos keep the state Received; deleting the last returns it to Requested when a request draft was
+prepared, otherwise Not requested, so required evidence blocks Ready again. Historical reviews and
+non-photo Documents cannot use this action. It depends on the separately gated Document Delete
+role grant and never deletes a Job Photo or another operational record.
+The Received photos heading also exposes `Remove all` for an accidentally selected batch. Its
+stronger confirmation names the retained count, then one bounded atomic changeset ETag-checks and
+deletes every retained Supporting Photo Document/File, resets photo state once and appends one
+aggregate audit Activity; it does not issue sequential stale-ETag deletes.
 
 The workspace builds deterministic plain-text correction instructions from its already loaded
 immutable Review, current Revision and structured Correction snapshots. Copy and `.txt` download
@@ -351,13 +488,14 @@ creates no Dataverse row or Activity, and clearly states that nothing was sent a
 
 - **Status:** complete locally: server-authoritative approval snapshot, versioned PDF render,
   idempotent storage/download, Site Contact or manual recipient selection, editable PO-request
-  draft preparation, PO receipt audit and existing Ready derivation.
+  draft preparation, PO receipt audit and manager-to-Accounts Ready handoff.
 - **Scope:** reviewed snapshot, approval PDF render/store/download, recipient selection,
-  PO-request `mailto:`, PO number and Ready derivation.
+  PO-request `mailto:`, downstream PO receipt recording and Ready derivation.
 - **Dependencies/areas/schema:** Phases 2–5 plus approved branding; server renderer and workspace;
   optional contact-purpose decision.
-- **Acceptance/tests/docs:** PDF has non-invoice marker and correct totals; missing PO/photos
-  blocks Ready; renderer/security/manual-compose tests; deployment docs.
+- **Acceptance/tests/docs:** PDF has non-invoice marker and correct totals; an unprepared required
+  PO request or missing required photos blocks Ready, while awaiting the customer's PO does not;
+  renderer/security/manual-compose tests; deployment docs.
 
 The approval endpoint validates the delegated identity and manager-table access once, then
 re-reads the Active Review, current Revision, at most 200 Lines and unresolved Corrections from
@@ -371,13 +509,23 @@ automatic retry. The release flag remains disabled and no live document has been
 
 The workspace loads at most 200 Site Contacts for the Review's authoritative Site after the
 Review is known; it never loads a global recipient list. A manager deliberately chooses an
-emailed Site Contact or manual address. Preparation requires the current Complete approval PDF,
+emailed Site Contact or manual address. Preparation requires the current Complete GreenTree invoice,
 resolved corrections, a recorded photo decision, and received Complete photos when required.
-The UI lists every file that must be downloaded and manually attached and requires confirmation
-before opening the editable `mailto:` draft. The ETag-protected transition records only
+The Customer PO surface explains the workflow in order: choose the responsible customer/site
+recipient, use one always-visible `Save supporting documents` action for the current valid GreenTree
+invoice and every required photo,
+then open the editable email draft. On supported Chrome/Edge secure contexts this opens the native
+folder picker, allows a folder to be created or selected, and saves without overwriting existing
+same-named files; unsupported browsers fall back to normal browser downloads. The informational
+file list no longer repeats a Download button on every row. It also removes the abstract Prepared tile, generic attachment
+creation wording and redundant attachment-confirmation checkbox. Because `mailto:` cannot attach
+files, the save action writes each listed authenticated file to the selected folder (or invokes the
+browser-download fallback) and the email action reminds the manager to attach them manually. The ETag-protected transition records only
 `gr_porequestpreparedon` plus a safe PO Request Prepared Activity; recipient and body are not
 persisted and preparation is not send/delivery proof. The first deliberate confirmed PO number
-records the existing PO Received Activity and Ready remains derived from all prerequisites.
+records the existing PO Received Activity as downstream Accounts state. When a PO is required,
+preparing its request satisfies the manager prerequisite; the manager does not wait for PO receipt
+before marking the review Ready.
 
 ### Phase 7 — release readiness
 

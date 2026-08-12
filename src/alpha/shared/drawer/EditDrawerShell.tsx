@@ -4,6 +4,7 @@ import './EditDrawer.css'
 type Props = {
     eyebrow: string
     title: string
+    className?: string
     busy?: boolean
     children: ReactNode
     footer: ReactNode
@@ -11,7 +12,7 @@ type Props = {
     onClose: () => void
 }
 
-export default function EditDrawerShell({ eyebrow, title, busy = false, children, footer, headerAction, onClose }: Props) {
+export default function EditDrawerShell({ eyebrow, title, className = '', busy = false, children, footer, headerAction, onClose }: Props) {
     const drawerRef = useRef<HTMLElement>(null)
     const titleId = useId()
 
@@ -48,7 +49,7 @@ export default function EditDrawerShell({ eyebrow, title, busy = false, children
     return <div className="edit-drawer-backdrop" role="presentation" onMouseDown={() => { if (!busy) onClose() }}>
         <aside
             ref={drawerRef}
-            className="edit-drawer"
+            className={`edit-drawer ${className}`.trim()}
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}

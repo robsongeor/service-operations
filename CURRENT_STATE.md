@@ -31,6 +31,10 @@ Branch: `codex/chargeable-invoice-review`
   columns are provisioned and verified; release flags remain disabled and the manager role remains
   unassigned. One explicitly approved interactive read-only verification passed again on
   12 August 2026 without any Dataverse write.
+- Permanent Chargeable Invoice package deletion is implemented locally after the 12 August 2026
+  product decision. Provisioning and verifying organisation-depth Delete on the six review tables
+  remains separately gated; the currently unassigned manager role still has only its original 30
+  non-destructive grants.
 - Approve and provision the minimum Site Check deletion privileges, then smoke-test the
   in-app occurrence deletion action as the intended Service Operations role.
 
@@ -525,12 +529,127 @@ Process / Do Not Process confirmations are also implemented under the same concu
 boundary; extracted Order No is never adopted automatically, Ready rechecks unresolved
 corrections, and Do Not Process requires a reason. The Invoice tab loads the current Revision's
 immutable source PDF only on deliberate request through delegated Dataverse access, validates its
-byte count and revokes its local object URL when replaced or closed.
-Structured correction authoring is now implemented for supported header fields, repair/work
-stories, change/remove existing lines and requested new Labour/Parts/Other lines. Draft validation
-requires meaningful changes and captures immutable Revision/Line evidence. Correction creation,
-an ETag-enforcing Review sentinel update and append-only Activity commit atomically; new corrections
-begin Outstanding and block Ready. Phase 4 is complete locally.
+byte count and revokes its local object URL when replaced or closed. The workspace now uses the
+planned desktop split-screen: the source PDF remains visible in an independently scrolling left
+pane while extracted fields, lines and correction controls remain visible on the right; narrower
+screens collapse to the existing accessible tab sequence.
+The workspace now also offers typed-confirmation permanent deletion. One bounded, ETag-guarded
+Dataverse changeset disconnects the Restrict relationship cycles and deletes Activity, Correction,
+Line, Revision, Document/File and Review in dependency order. Any nested failure rolls back the
+whole operation; linked Job, Customer, Site, Equipment and Mechanic records are never included.
+The source and documentation target six additional manager-role Delete grants, but no role,
+metadata or live business data has been changed.
+Correction-dialog inputs now capture their DOM values before invoking React functional state
+updates. This fixes the requested-value crash that previously threw after `currentTarget` became
+null and blanked the page; all header, story and line-correction fields share the safe updater.
+Ready to Process now follows the approved correction-handoff rule: Outstanding/Not Made
+corrections no longer disable Ready, a fresh bounded server read counts up to 200 instructions,
+and the ETag-protected Ready Activity records that they were handed to Nargiza / Accounts. The
+corrections remain structured and visible for processing and later revision comparison.
+Chargeable Invoice intake navigation is simplified: the queue alone shows `Import PDFs`; intake
+shows `Back`, relies on the empty-state `Choose PDFs` action, and reveals `Add PDFs` only after a
+selection. Newly selected PDFs are checked automatically; the separate `Check PDFs` action was
+removed. The non-persisting check and deliberate confirmed-import boundary remain unchanged.
+After every selected PDF imports successfully, intake returns to the freshly mounted review queue.
+If any selected import fails, the user remains in intake with the per-file safe error visible.
+An unmatched intake row can now open the canonical Job-create drawer. Our Ref prefills Job Number;
+the editable Job Description uses the concise final GreenTree headline segment (`Oil leak` for
+invoice `144849`) rather than the Work Completed narrative. This invoice-recovery entry point now
+defaults Status to Complete and prefills a meaningful extracted Order No (`4508217044` on invoice
+`145156`) while dropping punctuation-only placeholders. Ordinary Job creation remains Unallocated.
+Job Type, Customer, Site and optional Equipment remain
+deliberate authoritative selections. Extracted fleet/serial first search the loaded Dataverse
+Equipment projection; one exact compatible record automatically selects that Equipment and its
+authoritative Customer/Site. Multiple or conflicting matches remain unselected. No exact identifier match
+opens the shared new-Equipment panel with fleet, serial, make and model prefilled for explicit
+creation. No Equipment is created silently. After Dataverse Job creation, intake reruns its existing exact
+server lookup and binds the created Job; PDF import remains a separate confirmed action.
+GreenTree layout parser v3 fixes the two-column equipment rows confirmed by invoice `144849`:
+adjacent Service Meter Reading, Date of Job, Service Interval and Next Service Due labels now end
+the Fleet, Make, Model and Serial values instead of being appended to them. Written dates such as
+`02 July 2026` normalise to Dataverse date-only values. The parser also extracts the line directly
+above Fleet No as the headline instead of the invoice table's Description column heading. The supplied PDF was read locally for this
+regression; no invoice or Equipment record was created.
+Structured correction storage remains compatible with supported header/story and line correction
+types, while the manager workspace now focuses authoring on the two operational correction areas.
+The workspace navigation is task-based: Amendments (default invoice evidence and corrections),
+Requests (two compact PO/photo requirement decisions followed by the relevant technician-photo and
+customer-PO email workflows),
+Waiting (blocking party/note plus ready checks), and History. The former generic Summary tab and
+duplicative Invoice label are removed. Waiting guidance gives concrete Sales trade-in,
+technician-photo/date and customer-invoicing examples without persisting new schema.
+The Amendments tab ends with an `Amendment handoff` built only from active Outstanding/Not Made
+Corrections. It shows readable numbered actions for Nargiza, excludes Matched/Superseded history,
+and can open or copy an email-ready greeting, invoice/Job context, active actions and revised pricing
+totals. The email action deliberately leaves `To` blank for the manager to add, opens an editable
+draft and never sends automatically. The explanatory email note is hidden when no handoff exists.
+Its working order mirrors the invoice-review sequence: Work completed first, amended/removed source
+lines by their immutable invoice sort order, then requested new lines by creation order. Any retained
+legacy non-line correction follows those current amendment areas.
+Nothing is sent automatically; full correction/activity history remains retained in History.
+`Add amendment` expands an inline editor beneath the immutable original Work completed narrative;
+`Amend line` inserts one compact editable table row beneath the selected source line, with Type,
+Description, Qty, Rate, live Total and actions aligned horizontally; `Add new line` uses the same
+row at the bottom of the table. Saved additions remain inside Invoice lines as green `New line`
+rows with their requested type and status. A source row with an attached change correction remains
+as immutable evidence above its replacement and is struck through. A removal instead transforms the
+source into a single compact red row, avoiding duplicate evidence rows.
+The table
+now uses compact 30px controls and a 620px bounded layout that fits the normal full-window detail
+pane. Its action column is pinned at the right edge whenever overflow remains, keeping Save/Cancel
+visible without scrolling; narrow screens retain horizontal scrolling for the evidence columns.
+The Invoice lines section now compares the immutable revision's extracted Subtotal, GST amount
+(including the extracted rate in its label), and Total against live `After amendments` values.
+Revision and adjusted-total displays label the final amount `Total (incl. GST)`, and the extracted
+header uses the concise `Order number` label while retaining its evidence-only business semantics.
+The domain calculation starts with source Subtotal, applies the latest active change/remove per
+source line plus every active requested new line, reapplies the extracted GST rate and displays the
+overall pricing delta. Missing quantity/rate inputs make the adjusted result explicitly unavailable
+rather than misleading. Per-source-line edit actions use compact pencil icons with explicit tooltips
+and accessible labels instead of repeated `Amend line` button text.
+Correction editing uses a single-target pattern: the source row offers a pencil only until an active
+amendment exists, after which the pencil moves onto that amendment. Work completed amendments and
+requested new lines follow the same rule. Work completed amendments also expose the same restore
+action as invoice-line amendments; cancelling one restores the immutable original narrative while
+superseding the amendment for audit rather than deleting its history. Saving an edit atomically marks the prior Correction
+Superseded under its ETag, creates one replacement retaining the immutable Revision/Line evidence,
+and appends a `Correction changed` Activity bound to the replacement. Working views and amended
+pricing use active Outstanding/Not Made records only, avoiding visible duplicates while retaining
+Superseded audit history. Untouched source lines expose pencil and red trash-can actions; active
+removal requests transform that source into one explicit red `Remove` row. Red trash
+icons remove source/requested-new lines. A green curved restore icon on active amendments and
+removal instructions explicitly cancels that instruction and restores the immutable source; its
+accessible label and hover title state the result. Restore/withdraw operations ETag-check and supersede
+the active Correction plus append Activity rather than deleting audit evidence, and adjusted totals
+immediately return to the active working state. Highlighted active rows no longer repeat the
+space-consuming `Outstanding` text; exceptional comparison states remain visible.
+While an inline correction editor is open or a correction request is saving, Add new line and all
+row actions remain rendered in their fixed positions but are disabled. This prevents competing
+editors/duplicate requests without shifting table or section-header content.
+Editing an existing Work completed or invoice-line amendment expands the editor after that exact
+amendment rather than before it, so the clicked row and its icons remain anchored in place.
+Inline editors and newly created amendment/add/remove rows use restrained 160–180ms fade/translate
+entry motion. Withdrawing/restoring an active correction plays a 160ms exit before the Dataverse
+request and disables all correction actions during that interval. `prefers-reduced-motion: reduce`
+removes these animations.
+Compact invoice-line editors use fixed 30px X and save-icon controls instead of text Cancel/Save
+buttons, retaining explicit accessible labels and hover titles while reducing action-column pressure.
+Red removal rows mirror the green New line presentation: `REMOVE` sits above the source line type,
+and the removed source description, quantity, rate and total remain visible on that same source row.
+The description, quantity and rate are crossed out in place. Total is rendered as a negative currency
+amount, matching the domain calculation that subtracts the original extended price before GST.
+Pricing change uses green for a positive delta, red for a negative delta, and neutral styling for zero.
+Correction authoring no longer obscures
+the side-by-side invoice in a modal. No-op line amendments are rejected. Correction creation,
+an ETag-enforcing Review sentinel update and append-only Activity commit atomically. New corrections
+begin Outstanding and remain attached when Ready hands the invoice to Accounts; they do not block
+that terminal transition. Later revisions match a Work completed amendment when the revised Work
+completed narrative contains the attached amendment without requiring replacement of the original.
+The Chargeable Invoice review workspace now fills the available viewport beside the persistent main
+menu, tracking its expanded (280px), collapsed (76px) and narrow open (220px) widths. The PDF/detail
+two-pane layout therefore uses the full desktop working area; the existing accessible single-pane
+responsive behavior remains below its practical content width. Other shared drawers are unchanged.
+Phase 4 is complete locally.
 
 The first Phase 5 slice is complete locally. Revised imports now re-evaluate at most 200 unresolved
 Outstanding/Not Made Corrections on the server against the newly parsed immutable Revision. Exact
@@ -571,16 +690,91 @@ release flag was enabled and no deployment or communication occurred.
 
 Chargeable Invoice Review Phase 6 is now complete locally. The workspace loads a bounded Site
 Contact list only for the Review Site, supports deliberate Site Contact or manual recipient entry,
-and gates PO-request preparation on the current Complete approval PDF, resolved Corrections and
+and gates PO-request preparation on the current Complete GreenTree invoice, resolved Corrections and
 received supporting photos when required. It lists every file for manual download/attachment and
 requires explicit attachment confirmation before opening an editable `mailto:` draft. The Review
 ETag transition records preparation timestamp and safe Activity only; recipient/body are not
 persisted and no email is sent. First confirmed PO receipt now records the dedicated PO Received
-Activity, while existing business rules continue to derive Ready. No live data, files or
-communications were created.
+Activity as downstream Accounts state. Preparing a required PO request—not receiving the PO—is the
+manager Ready prerequisite. No live data, files or communications were created.
+
+The Requests workspace has since been simplified around the two real manager decisions: whether a
+customer PO is required and whether supporting photos are required. PO receipt and photo progress
+are no longer exposed as unrelated top-level inputs. Approval-document generation/download now sits
+inside the Customer PO workflow, while received-photo upload remains inside Technician photos; the
+separate generic Documents card is removed, and each workflow is hidden unless its requirement is
+set to Yes. The photo recipient defaults from the matched Job's
+primary active Mechanic, can be changed for the uncommon case where another technician completed
+the work through the shared keyboard-accessible searchable selector. The assigned technician is
+labelled in the results and remains separately visible beside the chosen request recipient, making
+an override explicit. The assigned option is pinned first and uses the shared selector's optional
+authoritative-option emphasis; all other technicians retain their loaded order. The selection is
+persisted automatically when the manager opens the editable photo-request email or
+uploads received photos. The PO flow continues to use Site Contacts or a manual fallback and makes
+the missing customer-recipient configuration explicit. Browser `mailto:` drafts cannot attach files,
+so the approval copy still requires deliberate download, attachment confirmation and sending by the
+manager; no communication is automatic.
+Requests uses a compact workflow layout: the assigned technician appears once in the selector,
+assignment detail appears separately only for a genuine override, preparation/photo counts share a
+single metadata row, and email/upload actions carry short inline explanations. Customer PO uses the
+same compact metadata/action treatment and avoids repeating `Customer` inside its own section.
+The compact layout retains moderate breathing room: status values use small neutral tiles and email,
+document and photo-upload actions sit in lightly bordered groups rather than one compressed line.
+The technician workflow is named `Photo evidence`; its selector and envelope action share one
+explicit row labelled `Technician to email` and `Request photo evidence`. Preparation time and
+received-photo counts are left to History/evidence rather than repeated in this task surface. Both
+the UI introduction and editable email ask for clear images showing the reported
+fault or damage and, where available, the completed repair.
+The two requirement selectors capture their DOM value before entering React's functional state
+updater. This prevents the cleared-event `currentTarget` crash that previously blanked the Requests
+workspace when Customer PO required or Supporting photos required changed.
+Both selectors now persist immediately on change and no longer require a separate Save action.
+While the ETag-protected update is running both selectors are disabled; a failure restores the prior
+choice and exposes the safe workspace error. New Review creation explicitly writes PO Required,
+Photos Required and Photos Status as null, so absent future Customer defaults appear as `Choose`
+rather than being inferred as Yes or No.
+PO Required no longer means the manager waits for the customer PO. If it is Yes, readiness requires
+the current customer PO-request draft to be prepared; PO Number and PO Received On are downstream
+Accounts state and do not block Ready. The Ready confirmation states that Nargiza / Accounts owns
+customer follow-up from that point. Adding Nargiza to CC remains blocked on an authoritative internal
+email address/configuration source—the repository contains her name only, and no address is guessed.
+Photo evidence now includes a compact preview strip. Newly selected JPG/PNG files receive local
+thumbnails before upload; after Dataverse finalises the upload, Complete retained JPG/PNG Documents
+load through the existing delegated, byte-count-checked document service and display as clickable
+thumbnails. HEIC/HEIF use labelled file tiles where browser rendering is unavailable. Temporary
+object URLs are revoked on selection/workspace cleanup, and the existing 20-photo bound is retained.
+Retained photo thumbnails now have an explicit trash action and permanent-deletion confirmation.
+The ETag-protected Dataverse changeset deletes only the selected Complete Supporting Photo
+Document/File, updates Photos Status and writes a filename-free Manual Note Activity atomically.
+One or more remaining photos keep Received; deleting the last returns the review to Requested when
+its request was prepared (otherwise Not requested), so required evidence blocks Ready again.
+Historical reviews and non-photo documents are rejected, and no Job Photo or linked operational
+record is included. Runtime use still depends on the separately gated Document Delete role grant;
+no role or Dataverse metadata was changed.
+The Received photos heading also offers `Remove all` for an accidentally selected batch. One
+confirmation shows the number of permanently deleted files; one bounded changeset ETag-checks every
+retained photo, deletes the full set, resets Photos Status once and writes one aggregate Activity.
+It does not loop through individual deletes with a stale Review ETag.
+
+The Requests workflow is now explicitly sequential. Requirement choices may be recorded early, but
+any active Outstanding/Not Made amendment locks technician selection, photo-request preparation,
+photo upload, approval-PDF generation and customer PO email preparation. A visible stage notice links
+back to Amendments and explains that Accounts must make the GreenTree changes and the corrected
+invoice must be imported until every amendment is Matched. The delegated services enforce the same
+rule, so the UI cannot be bypassed; retained-photo deletion remains available for recovery.
+Customer PO now reads as the actual manager task: choose the responsible customer/site recipient,
+use one always-visible `Save supporting documents` action for the current valid GreenTree invoice
+and every required supporting photo, then open
+an editable customer PO email and attach those files manually. Chrome/Edge opens the native folder
+picker so the manager can create or choose a Windows folder; existing same-named files are preserved
+with a numbered filename, and unsupported browsers fall back to their normal downloads. The vague Prepared tile, generic
+`Create invoice attachment` label, repeated per-file Download buttons and redundant attachment
+checkbox are removed. Future authoritative
+recipient defaults remain tracked separately; no recipient schema or automatic communication was added.
 
 Chargeable Invoice Review Phase 7 now has an authoritative local operations baseline. V1 retains
-immutable Complete evidence and recoverable Pending/Failed staging with no automatic cleanup. The
+immutable Complete evidence and recoverable Pending/Failed staging with no automatic cleanup;
+Active evidence is removed only through the deliberate typed-confirmation whole-package action. The
 operator checklist defines explicit role/deployment/flag gates, de-identified business and access
 smoke tests, keyboard/screen-reader/zoom checks, bounded performance evidence, content-safe
 monitoring and flags-first non-destructive rollback. Static release guards protect the disabled
@@ -598,5 +792,7 @@ none of those controls are represented as malware detection.
 The Phase 7 release preflight reverified the live Dataverse metadata and role contract on
 12 August 2026 through one explicitly approved interactive `Verify` session. All six tables,
 staging fields, relationships, alternate keys, the 5 MiB File contract and all 30 organisation-
-depth grants passed. The manager role remains unassigned with no Delete, Assign or Share. No
+depth grants passed. That verification predates the approved deletion feature: the manager role
+remains unassigned and still has no Delete, Assign or Share until the six new Delete grants receive
+separate provisioning approval. No
 schema, configuration, role assignment or business row was changed.

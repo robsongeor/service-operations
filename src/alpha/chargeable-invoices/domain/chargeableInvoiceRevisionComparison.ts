@@ -85,9 +85,16 @@ export function compareOutstandingCorrections(
             }
             if (correction.gr_correctiontype === CHARGEABLE_INVOICE_CORRECTION_TYPES.STORY) {
                 const requested = canonical(correction.gr_requestedtext)
-                const matched = !!requested && [candidateRevision.gr_repairdescription, candidateRevision.gr_workcompleted]
-                    .some((value) => canonical(value) === requested)
-                return result(id, matched, matched ? 'The requested story text is present.' : 'The requested story text is not present.')
+                const isWorkAmendment = correction.gr_fieldkey === 'workCompleted'
+                const candidateValues = isWorkAmendment
+                    ? [candidateRevision.gr_workcompleted]
+                    : [candidateRevision.gr_repairdescription, candidateRevision.gr_workcompleted]
+                const matched = !!requested && candidateValues.some((value) => {
+                    const candidate = canonical(value)
+                    return isWorkAmendment ? candidate.includes(requested) : candidate === requested
+                })
+                const label = isWorkAmendment ? 'work-completed amendment' : 'requested story text'
+                return result(id, matched, matched ? `The ${label} is present.` : `The ${label} is not present.`)
             }
             if (correction.gr_correctiontype === CHARGEABLE_INVOICE_CORRECTION_TYPES.ADD_LINE) {
                 const matches = candidateLines.filter((line) => matchesRequestedLine(correction, line))

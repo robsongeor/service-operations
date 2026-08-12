@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { useActiveMsalAccount } from '../../../auth/useActiveMsalAccount.ts'
 import { acquireDataverseAccessToken } from '../../../auth/dataverseAuthentication.ts'
@@ -55,9 +55,11 @@ export function useChargeableInvoiceIntake() {
     const [batchError, setBatchError] = useState('')
     const [isPreviewing, setIsPreviewing] = useState(false)
     const [isImporting, setIsImporting] = useState(false)
+    const autoPreviewRequested = useRef(false)
 
     const addFiles = useCallback((files: File[]) => {
         setBatchError('')
+        if (files.length) autoPreviewRequested.current = true
         setItems((current) => {
             const available = Math.max(0, MAX_BATCH_FILES - current.length)
             if (files.length > available) {
@@ -90,13 +92,12 @@ export function useChargeableInvoiceIntake() {
         setItems((current) => current.map((item) => item.id === id ? { ...item, jobLookupValue } : item))
     }, [])
 
-    const lookupJob = useCallback(async (id: string) => {
-        const item = items.find((candidate) => candidate.id === id)
-        if (!item?.jobLookupValue.trim()) return
+    const matchJobNumber = useCallback(async (id: string, jobNumber: string) => {
+        if (!jobNumber.trim()) return null
         setItems((current) => current.map((candidate) => candidate.id === id ? { ...candidate, isLookingUpJob: true, error: null } : candidate))
         try {
             const token = await acquireDataverseAccessToken(instance, activeAccount)
-            const match = await lookupChargeableInvoiceJob(token, item.jobLookupValue)
+            const match = await lookupChargeableInvoiceJob(token, jobNumber)
             setItems((current) => current.map((candidate) => {
                 if (candidate.id !== id || !candidate.preview) return candidate
                 const preview = { ...candidate.preview, match }
@@ -105,13 +106,32 @@ export function useChargeableInvoiceIntake() {
                 return { ...candidate, preview, isLookingUpJob: false, state: canImport ? 'ready' : 'blocked', selected: canImport,
                     error: match.job ? (canImport ? null : candidate.error) : match.reason || 'No exact Job Number match was found.' }
             }))
+            return match
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Job lookup could not be completed.'
             setItems((current) => current.map((candidate) => candidate.id === id
                 ? { ...candidate, isLookingUpJob: false, state: 'blocked', selected: false, error: message }
                 : candidate))
+            throw error
         }
-    }, [activeAccount, instance, items])
+    }, [activeAccount, instance])
+
+    const lookupJob = useCallback(async (id: string) => {
+        const item = items.find((candidate) => candidate.id === id)
+        if (!item?.jobLookupValue.trim()) return
+        try {
+            await matchJobNumber(id, item.jobLookupValue)
+        } catch {
+            // The row already presents the safe lookup error.
+        }
+    }, [items, matchJobNumber])
+
+    const matchCreatedJob = useCallback(async (id: string, jobNumber: string, expectedJobId: string) => {
+        const match = await matchJobNumber(id, jobNumber)
+        if (!match?.job || match.job.gr_jobid.toLowerCase() !== expectedJobId.toLowerCase()) {
+            throw new Error('The Job was created, but the invoice could not confirm its exact match. Refresh before continuing.')
+        }
+    }, [matchJobNumber])
 
     const previewPending = useCallback(async () => {
         const pendingIds = items.filter((item) => item.state === 'pending').map((item) => item.id)
@@ -185,11 +205,25 @@ export function useChargeableInvoiceIntake() {
         }
     }, [activeAccount, instance, items])
 
+    useEffect(() => {
+        if (!autoPreviewRequested.current || isPreviewing) return
+        if (!items.some((item) => item.state === 'pending')) {
+            autoPreviewRequested.current = false
+            return
+        }
+        const timer = window.setTimeout(() => {
+            autoPreviewRequested.current = false
+            void previewPending()
+        }, 0)
+        return () => window.clearTimeout(timer)
+    }, [isPreviewing, items, previewPending])
+
     const importSelected = useCallback(async () => {
         const selected = items.filter((item) => item.selected && item.state === 'ready')
-        if (!selected.length) return
+        if (!selected.length) return false
         setBatchError('')
         setIsImporting(true)
+        let allImported = true
         try {
             const token = await acquireDataverseAccessToken(instance, activeAccount)
             for (const item of selected) {
@@ -205,6 +239,7 @@ export function useChargeableInvoiceIntake() {
                         ? { ...candidate, state: 'imported', selected: false, error: null }
                         : candidate))
                 } catch (error) {
+                    allImported = false
                     const message = error instanceof Error ? error.message : 'Invoice import could not be completed.'
                     setItems((current) => current.map((candidate) => candidate.id === item.id
                         ? { ...candidate, state: 'blocked', selected: false, error: message }
@@ -212,10 +247,12 @@ export function useChargeableInvoiceIntake() {
                 }
             }
         } catch (error) {
+            allImported = false
             setBatchError(error instanceof Error ? error.message : 'Invoice import could not be started.')
         } finally {
             setIsImporting(false)
         }
+        return allImported
     }, [activeAccount, instance, items])
 
     const summary = useMemo(() => ({
@@ -239,6 +276,7 @@ export function useChargeableInvoiceIntake() {
         setImportDecision,
         setJobLookupValue,
         lookupJob,
+        matchCreatedJob,
         previewPending,
         importSelected,
     }

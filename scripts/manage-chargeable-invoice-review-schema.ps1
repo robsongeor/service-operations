@@ -269,7 +269,7 @@ function Ensure-Role($Service,[bool]$Provision) {
         $role=[Microsoft.Xrm.Sdk.Entity]::new('role');$role['name']='Chargeable Invoice Manager';$role['businessunitid']=[Microsoft.Xrm.Sdk.EntityReference]::new('businessunit',$bus[0].Id);$id=$Service.Create($role);$roles=@($Service.Retrieve('role',$id,[Microsoft.Xrm.Sdk.Query.ColumnSet]::new('roleid','name','ismanaged','businessunitid')));Write-Output 'Created unassigned Chargeable Invoice Manager role.'
     }
     $role=$roles[0];if([bool]$role['ismanaged']){throw 'Manager role must be unmanaged.'}
-    $names=@();$forbidden=@();foreach($table in $tables){foreach($verb in 'Create','Read','Write','Append','AppendTo'){$names+="prv$verb$($table.Schema)"};foreach($verb in 'Delete','Assign','Share'){$forbidden+="prv$verb$($table.Schema)"}}
+    $names=@();$forbidden=@();foreach($table in $tables){foreach($verb in 'Create','Read','Write','Delete','Append','AppendTo'){$names+="prv$verb$($table.Schema)"};foreach($verb in 'Assign','Share'){$forbidden+="prv$verb$($table.Schema)"}}
     $q=[Microsoft.Xrm.Sdk.Query.QueryExpression]::new('privilege');$q.ColumnSet=[Microsoft.Xrm.Sdk.Query.ColumnSet]::new('name');$q.PageInfo=[Microsoft.Xrm.Sdk.Query.PagingInfo]::new();$q.PageInfo.Count=5000;$q.PageInfo.PageNumber=1
     $all=[Collections.Generic.List[Microsoft.Xrm.Sdk.Entity]]::new()
     do{$page=$Service.RetrieveMultiple($q);foreach($item in $page.Entities){$all.Add($item)};if($page.MoreRecords){$q.PageInfo.PageNumber++;$q.PageInfo.PagingCookie=$page.PagingCookie}}while($page.MoreRecords)
