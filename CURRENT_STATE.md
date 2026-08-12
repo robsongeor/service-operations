@@ -9,7 +9,7 @@ Branch: `codex/chargeable-invoice-review`
 - The expanded Dataverse schema, relationships, and least-privilege role updates were
   provisioned, published, verified, and passed a second idempotency run on 25 July 2026.
 - Version `v1.3.0` is the current tagged release. The production Static Web App is temporarily
-  running unreleased testing commit `8119fd7` from `v1-deployment`.
+  running the unreleased Chargeable Invoice Review testing release from `v1-deployment`.
 - Production server-only portal settings must be present for public submission endpoints to
   authenticate to Dataverse.
 - Chargeable Invoice Review deployment commit `c9ef102` reached `v1-deployment` on 12 August
@@ -22,6 +22,14 @@ Branch: `codex/chargeable-invoice-review`
   successfully; `/`, `/chargeable-invoices`, preview API and approval API post-deploy checks
   returned `200`, `200`, safe `401` and safe `401` respectively. Authenticated business-flow
   smoke testing remains outstanding.
+- The completed Chargeable Invoice Review workspace and customer-PO evidence workflow were
+  published from commit `4cba35e` by successful Azure run `31584260343` on 12 August 2026.
+  Production-safe verification returned `200` for `/` and `/chargeable-invoices`, found the exact
+  `4cba35e` version marker in the deployed client asset, and confirmed the anonymous preview API
+  boundary still returns safe `401`. No Dataverse provisioning, role assignment, server-setting
+  change or real communication was performed. Authenticated target-role and business-flow smoke
+  testing remains outstanding, so this is an unreleased testing deployment rather than a tagged
+  production-readiness declaration.
 
 ## Unfinished work
 
