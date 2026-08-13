@@ -19,6 +19,7 @@ import {
 } from './types/siteCheck.types'
 import type { Equipment } from '../jobs/types/equipment.types'
 import type { Site } from '../jobs/types/site.types'
+import { canBeAssignedJobs } from '../mechanics/staffDirectory.ts'
 import './SiteChecksScreen.css'
 
 type ViewFilter = 'needs-attention' | 'all' | ReportableSiteCheckState | 'invalid'
@@ -197,7 +198,7 @@ export default function SiteChecksScreen() {
             <label className="site-checks-search"><span>Search</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Customer, Site, or technician" /></label>
             <label><span>Technician</span><select value={technicianId} onChange={(event) => setTechnicianId(event.target.value)}>
                 <option value="">All technicians</option>
-                {workspace.mechanics.filter((item) => item.statecode !== 1).map((item) =>
+                {workspace.mechanics.filter(canBeAssignedJobs).map((item) =>
                     <option value={item.gr_mechanicid.toLowerCase()} key={item.gr_mechanicid}>{item.gr_name}</option>)}
             </select></label>
             <label><span>Frequency</span><select value={frequency} onChange={(event) => setFrequency(event.target.value)}>

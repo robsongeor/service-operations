@@ -27,6 +27,7 @@ import {
     updateJobAssignmentStatus as updateJobAssignmentStatusApi,
 } from '../services/jobAssignmentsApi'
 import type { JobAssignment } from '../types/jobAssignment.types'
+import { fetchMechanics as fetchStaffDirectory } from '../../mechanics/services/mechanicsApi'
 import { createEmailDispatch, waitForEmailDispatch } from '../services/emailDispatchApi'
 import { buildAssignmentJobEmail, buildPrimaryJobEmail } from '../services/jobEmail'
 import { assertJobHasEmailableJobNumber } from '../services/jobEmailRules'
@@ -849,20 +850,7 @@ export function useJobs() {
 
             try {
                 const token = await acquireDataverseAccessToken(instance, account)
-                const mechanicsRequest = fetch(
-                    `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2/gr_mechanics?$select=gr_mechanicid,gr_name,gr_phone,gr_email,gr_camnumber,gr_rego,gr_region`,
-                    {
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                            Accept: 'application/json',
-                        },
-                    },
-                ).then(async (result) => {
-                    if (!result.ok) {
-                        throw new Error(`Failed to fetch mechanics: ${await result.text()}`)
-                    }
-                    return result.json()
-                })
+                const mechanicsRequest = fetchStaffDirectory(token)
 
                 const [
                     initialJobs,
@@ -902,7 +890,7 @@ export function useJobs() {
                 setJobAssignments(initialAssignments)
                 setServicePlans(initialServicePlans)
                 setOfficeUpdates(initialOfficeUpdates)
-                setMechanics(mechanicsData.value ?? [])
+                setMechanics(mechanicsData)
             } catch (error) {
                 if (cancelled) return
 

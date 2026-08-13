@@ -240,8 +240,18 @@ function chargeableInvoiceApprovalProxy(env: Record<string, string | undefined>)
   const installMiddleware = (middlewares: { use: (handler: (request: IncomingMessage, response: ServerResponse, next: () => void) => void) => void }) => {
     // Azure installs API-only PDF packages when it builds the managed Functions directory.
     // Load them only when Vite actually starts local middleware, not while production config loads.
-    const chargeableInvoiceApprovalService = require('./api/services/chargeableInvoiceApprovalService') as {
-      generate: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
+    const approvalServicePath = require.resolve('./api/services/chargeableInvoiceApprovalService')
+    const approvalPdfPath = require.resolve('./api/services/chargeableInvoiceApprovalPdf')
+    const greenTreePartyBlocksPath = require.resolve('./api/services/greenTreePartyBlocks')
+    const loadApprovalService = () => {
+      // Vite hot-reloads the browser, but Node otherwise retains these CommonJS modules until restart.
+      // Reload both modules per local request so client and server template versions cannot diverge.
+      delete require.cache[approvalServicePath]
+      delete require.cache[approvalPdfPath]
+      delete require.cache[greenTreePartyBlocksPath]
+      return require('./api/services/chargeableInvoiceApprovalService') as {
+        generate: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
+      }
     }
     middlewares.use((request, response, next) => {
       if (!request.url) return next()
@@ -259,7 +269,7 @@ function chargeableInvoiceApprovalProxy(env: Record<string, string | undefined>)
         if (parsed.body === null) {
           return sendFunctionResponse(response, chargeableInvoicePreviewService.jsonResponse(400, { error: 'The request body is invalid.' }))
         }
-        sendFunctionResponse(response, await chargeableInvoiceApprovalService.generate({
+        sendFunctionResponse(response, await loadApprovalService().generate({
           method: request.method,
           headers: request.headers,
           body: parsed.body,

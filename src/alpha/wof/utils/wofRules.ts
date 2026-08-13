@@ -2,6 +2,7 @@ import type { JobScheduleOption } from '../../jobs/types/jobSchedule.types'
 import { JOB_STATUSES } from '../../jobs/types/jobStatus.types.ts'
 import type { Equipment } from '../../jobs/types/equipment.types'
 import { WOF_RESULTS, type QualificationStatus, type QualificationType, type TechnicianQualification, type TechnicianQualificationInput, type WofInspection, type WofWorkflowStatus } from '../types/wof.types.ts'
+import { canBeAssignedJobs } from '../../mechanics/staffDirectory.ts'
 
 export const WOF_DUE_SOON_DAYS = 30
 export const WOF_QUALIFICATION_CODE = 'WOF_CERTIFIED'
@@ -129,7 +130,7 @@ export function formatWofDateOnly(value?: string | null) {
 export function isQualificationValid(qualification: TechnicianQualification, date = todayDateOnly()) {
     return getQualificationStatus(qualification, date) === 'valid'
         && qualification.gr_QualificationType?.gr_code === WOF_QUALIFICATION_CODE
-        && qualification.gr_Technician?.statecode !== 1
+        && Boolean(qualification.gr_Technician && canBeAssignedJobs(qualification.gr_Technician))
 }
 
 export function getQualificationStatus(qualification: TechnicianQualification, date = todayDateOnly()): QualificationStatus {

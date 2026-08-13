@@ -19,13 +19,35 @@ import { buildQuoteTableClipboard, copyQuoteTable, isCopyableQuoteLine } from '.
 import SearchableSelect, { type SearchableSelectOption } from '../../shared/searchable-select/SearchableSelect'
 import type { Customer } from '../../jobs/types/customer.types'
 import type { Equipment } from '../../jobs/types/equipment.types'
+import type { Mechanic } from '../../jobs/types/mechanic.types'
 import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation'
-import { renderLiftrucksInvoicePdf } from '../../shared/pdf/renderLiftrucksInvoicePdf'
-import { buildQuotePoRequestInvoiceSnapshot } from '../utils/quotePoRequestInvoice'
+import { MAX_LIFTTRUCKS_INVOICE_LINES, renderLiftrucksInvoicePdf } from '../../shared/pdf/renderLiftrucksInvoicePdf'
+import { buildQuotePoRequestInvoiceSnapshot, buildQuoteProvisionalFilename } from '../utils/quotePoRequestInvoice'
+import { buildQuotePoRequestEmail } from '../utils/quotePoRequestEmail'
+import { buildProtectedQuoteTitle, buildQuoteTitle, extractQuoteTitleAddition, getQuoteJobDefaults } from '../utils/quoteTitle'
+import { usePurchaseOrderRecipients } from '../../customers/usePurchaseOrderRecipients'
+import { customerEmailCcRecipients } from '../../mechanics/staffDirectory'
 import invoiceTemplateUrl from '../../../../api/assets/chargeable-invoice-approval-template.png?url'
 import invoiceLogoUrl from '../../../../api/assets/liftrucks-invoice-logo.jpg?url'
 
 type EditableLine = QuoteLineInput & { key: string }
+
+type QuotePdfFileHandle = {
+    createWritable: () => Promise<{
+        write: (data: Blob) => Promise<void>
+        close: () => Promise<void>
+    }>
+}
+
+type QuotePdfSaveWindow = Window & {
+    showSaveFilePicker?: (options: {
+        id: string
+        suggestedName: string
+        startIn: 'downloads'
+        excludeAcceptAllOption: boolean
+        types: Array<{ description: string, accept: Record<string, string[]> }>
+    }) => Promise<QuotePdfFileHandle>
+}
 
 type QuoteEditorDialogProps = {
     quote: Quote | null
@@ -34,11 +56,12 @@ type QuoteEditorDialogProps = {
     customers: Customer[]
     equipment: Equipment[]
     pricingItems: PricingItem[]
+    staff: Mechanic[]
     initialJobId?: string
     isSaving: boolean
     error: string
     onClose: () => void
-    onSave: (input: QuoteInput) => Promise<void>
+    onSave: (input: QuoteInput) => Promise<QuoteLine[]>
     onDelete: () => Promise<void>
     authorName: string
     authorIdentityAvailable: boolean
@@ -99,6 +122,10 @@ function jobLabel(job: QuoteJob) {
     return `${job.gr_jobnumber || 'Job without number'}${detail ? ` — ${detail}` : ''}`
 }
 
+function jobNumberDescriptionLabel(job: QuoteJob) {
+    return [job.gr_jobnumber || 'Job without number', job.gr_description].filter(Boolean).join(' - ')
+}
+
 export default function QuoteEditorDialog({
     quote,
     existingLines,
@@ -106,6 +133,7 @@ export default function QuoteEditorDialog({
     customers,
     equipment,
     pricingItems,
+    staff,
     initialJobId,
     isSaving,
     error,
@@ -115,13 +143,20 @@ export default function QuoteEditorDialog({
     authorName,
     authorIdentityAvailable,
 }: QuoteEditorDialogProps) {
-    const initialJob = jobs.find((job) => job.gr_jobid === initialJobId)
-    const [name, setName] = useState(
-        quote?.gr_name ?? (initialJob ? `Quote for ${jobLabel(initialJob)}` : ''),
-    )
-    const [jobId, setJobId] = useState(quote?._gr_job_value ?? initialJobId ?? '')
-    const [customerId, setCustomerId] = useState(quote?._gr_customer_value ?? '')
-    const [equipmentId, setEquipmentId] = useState(quote?._gr_equipment_value ?? '')
+    const initialJobIdValue = quote?._gr_job_value ?? initialJobId ?? ''
+    const initialJob = jobs.find((job) => job.gr_jobid === initialJobIdValue)
+        ?? (quote?.gr_Job?.gr_jobid === initialJobIdValue ? quote.gr_Job : undefined)
+    const initialJobDefaults = getQuoteJobDefaults(initialJob)
+    const initialEquipmentIdValue = quote?._gr_equipment_value ?? initialJobDefaults.equipmentId
+    const initialCustomerIdValue = quote?._gr_customer_value ?? initialJobDefaults.customerId
+    const initialEquipment = equipment.find((item) => item.gr_equipmentid === initialEquipmentIdValue)
+        ?? (quote?.gr_Equipment?.gr_equipmentid === initialEquipmentIdValue ? quote.gr_Equipment : undefined)
+        ?? initialJob?.gr_Equipment
+    const initialProtectedTitle = buildProtectedQuoteTitle(initialJob, initialEquipment)
+    const [titleAddition, setTitleAddition] = useState(() => extractQuoteTitleAddition(quote?.gr_name ?? '', initialProtectedTitle))
+    const [jobId, setJobId] = useState(initialJobIdValue)
+    const [customerId, setCustomerId] = useState(initialCustomerIdValue)
+    const [equipmentId, setEquipmentId] = useState(initialEquipmentIdValue)
     const [status, setStatus] = useState<QuoteStatus>(quote?.gr_quotestatus ?? QUOTE_STATUSES.DRAFT)
     const [revision, setRevision] = useState(quote?.gr_revision ?? 1)
     const [quoteDate, setQuoteDate] = useState(quote?.gr_quotedate?.slice(0, 10) ?? localDate())
@@ -136,10 +171,19 @@ export default function QuoteEditorDialog({
     const [confirmDelete, setConfirmDelete] = useState(false)
     const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false)
     const [invoiceFeedback, setInvoiceFeedback] = useState('')
+    const { recipients: poRecipients, isLoading: poRecipientsLoading, error: poRecipientsError } = usePurchaseOrderRecipients(quote ? customerId : undefined)
+
+    const selectedJob = jobs.find((job) => job.gr_jobid === jobId)
+        ?? (quote?.gr_Job?.gr_jobid === jobId ? quote.gr_Job : undefined)
+    const selectedEquipment = equipment.find((item) => item.gr_equipmentid === equipmentId)
+        ?? (quote?.gr_Equipment?.gr_equipmentid === equipmentId ? quote.gr_Equipment : undefined)
+        ?? selectedJob?.gr_Equipment
+    const protectedTitle = buildProtectedQuoteTitle(selectedJob, selectedEquipment)
+    const name = buildQuoteTitle(protectedTitle, titleAddition)
 
     const jobOptions = useMemo<SearchableSelectOption[]>(() => jobs.map((job) => ({
         value: job.gr_jobid,
-        label: job.gr_jobnumber || 'Job without number',
+        label: jobNumberDescriptionLabel(job),
         secondary: [job.gr_Site?.gr_Customer?.gr_name, job.gr_Equipment?.gr_fleet, job.gr_description].filter(Boolean).join(' · '),
         searchText: jobLabel(job),
     })), [jobs])
@@ -211,9 +255,9 @@ export default function QuoteEditorDialog({
         setJobId(nextJobId)
         const job = jobs.find((candidate) => candidate.gr_jobid === nextJobId)
         if (!job) return
-        if (!name.trim()) setName(`Quote for ${jobLabel(job)}`)
-        setCustomerId(job.gr_Site?.gr_Customer?.gr_customerid ?? '')
-        setEquipmentId(job.gr_Equipment?.gr_equipmentid ?? '')
+        const defaults = getQuoteJobDefaults(job)
+        setCustomerId(defaults.customerId)
+        setEquipmentId(defaults.equipmentId)
     }
 
     const generatePoRequestInvoice = async () => {
@@ -239,6 +283,26 @@ export default function QuoteEditorDialog({
                 gst: totals.gst,
                 total: totals.total,
             })
+            const filename = buildQuoteProvisionalFilename(snapshot)
+            const chooseSaveFile = (window as QuotePdfSaveWindow).showSaveFilePicker
+            let saveHandle: QuotePdfFileHandle | undefined
+            if (chooseSaveFile) {
+                try {
+                    saveHandle = await chooseSaveFile.call(window, {
+                        id: 'quote-provisional-pdf',
+                        suggestedName: filename,
+                        startIn: 'downloads',
+                        excludeAcceptAllOption: true,
+                        types: [{ description: 'PDF document', accept: { 'application/pdf': ['.pdf'] } }],
+                    })
+                } catch (pickerError) {
+                    if (pickerError instanceof DOMException && pickerError.name === 'AbortError') {
+                        setInvoiceFeedback('Save cancelled. The provisional quotation was not downloaded.')
+                        return
+                    }
+                    throw pickerError
+                }
+            }
             const [templateResponse, logoResponse] = await Promise.all([
                 fetch(invoiceTemplateUrl),
                 fetch(invoiceLogoUrl),
@@ -248,20 +312,61 @@ export default function QuoteEditorDialog({
                 template: await templateResponse.arrayBuffer(),
                 logo: await logoResponse.arrayBuffer(),
             })
-            const url = URL.createObjectURL(pdf)
-            const anchor = document.createElement('a')
-            anchor.href = url
-            anchor.download = `PO-request-${quote.gr_quotenumber}.pdf`
-            document.body.appendChild(anchor)
-            anchor.click()
-            anchor.remove()
-            window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-            setInvoiceFeedback('PO request invoice saved. Notes were copied into Work Completed.')
+            if (saveHandle) {
+                const writable = await saveHandle.createWritable()
+                try {
+                    await writable.write(pdf)
+                } finally {
+                    await writable.close()
+                }
+                setInvoiceFeedback('Provisional quotation saved to the selected location. Notes were copied into Work Required.')
+            } else {
+                const url = URL.createObjectURL(pdf)
+                const anchor = document.createElement('a')
+                anchor.href = url
+                anchor.download = filename
+                document.body.appendChild(anchor)
+                anchor.click()
+                anchor.remove()
+                window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+                setInvoiceFeedback('Provisional quotation sent to your browser downloads. Notes were copied into Work Required.')
+            }
         } catch (generationError) {
-            setInvoiceFeedback(generationError instanceof Error ? generationError.message : 'Unable to generate the PO request invoice.')
+            setInvoiceFeedback(generationError instanceof Error ? generationError.message : 'Unable to generate the provisional quotation.')
         } finally {
             setIsGeneratingInvoice(false)
         }
+    }
+
+    const openPoRequestEmail = () => {
+        if (!quote) return
+        setInvoiceFeedback('')
+        const jobCustomerId = selectedJob?.gr_Site?.gr_Customer?.gr_customerid ?? ''
+        const siteId = jobCustomerId.toLowerCase() === customerId.toLowerCase()
+            ? selectedJob?.gr_Site?.gr_siteid
+            : undefined
+        const customer = customers.find((item) => item.gr_customerid === customerId)
+            ?? quote.gr_Customer
+            ?? selectedJob?.gr_Site?.gr_Customer
+        const equipmentLabel = [selectedEquipment?.gr_fleet, selectedEquipment?.gr_make, selectedEquipment?.gr_model]
+            .filter(Boolean)
+            .join(' - ')
+        const draft = buildQuotePoRequestEmail({
+            recipients: poRecipients,
+            customerId,
+            siteId,
+            jobNumber: selectedJob?.gr_jobnumber,
+            quoteNumber: quote.gr_quotenumber,
+            customerName: customer?.gr_name,
+            equipmentLabel,
+            total: totals.total,
+            internalCc: customerEmailCcRecipients(staff),
+            workSummary: notes || selectedJob?.gr_description,
+        })
+        window.location.href = draft.mailto
+        setInvoiceFeedback(draft.recipientConfigured
+            ? `An editable PO request email was opened using the ${draft.recipientSource === 'site' ? 'Site' : 'Customer'} PO contacts. Attach the saved provisional quotation before sending.`
+            : 'An editable PO request email was opened with the recipient blank. Attach the saved provisional quotation before sending.')
     }
 
     const selectEquipment = (nextEquipmentId: string) => {
@@ -289,32 +394,37 @@ export default function QuoteEditorDialog({
             setFormError('Add at least one complete quote line before saving the quote.')
             return
         }
-        await onSave({
-            name: name.trim(),
-            jobId,
-            customerId,
-            equipmentId,
-            status,
-            revision,
-            quoteDate,
-            validUntil,
-            notes,
-            gstRate: gstRate / 100,
-            subtotal: totals.subtotal,
-            gst: totals.gst,
-            total: totals.total,
-            lines: lines.map((line, index) => ({
-                id: line.id,
-                pricingItemId: line.pricingItemId,
-                category: line.category,
-                description: line.description,
-                quantity: line.quantity,
-                unitLabel: line.unitLabel,
-                unitPrice: line.unitPrice,
-                taxable: line.taxable,
-                sortOrder: index,
-            })),
-        })
+        try {
+            const savedLines = await onSave({
+                name: name.trim(),
+                jobId,
+                customerId,
+                equipmentId,
+                status,
+                revision,
+                quoteDate,
+                validUntil,
+                notes,
+                gstRate: gstRate / 100,
+                subtotal: totals.subtotal,
+                gst: totals.gst,
+                total: totals.total,
+                lines: lines.map((line, index) => ({
+                    id: line.id,
+                    pricingItemId: line.pricingItemId,
+                    category: line.category,
+                    description: line.description,
+                    quantity: line.quantity,
+                    unitLabel: line.unitLabel,
+                    unitPrice: line.unitPrice,
+                    taxable: line.taxable,
+                    sortOrder: index,
+                })),
+            })
+            setLines(savedLines.map(existingLine))
+        } catch {
+            // The Quotes hook exposes the Dataverse error inside the open editor.
+        }
     }
 
     return (
@@ -336,7 +446,17 @@ export default function QuoteEditorDialog({
                         </label>
                         <label className="quote-field quote-field-wide">
                             <span>Quote title *</span>
-                            <input required value={name} onChange={(event) => setName(event.target.value)} />
+                            <div className="quote-title-composer">
+                                {protectedTitle && <><strong>{protectedTitle}</strong><span aria-hidden="true"> - </span></>}
+                                <input
+                                    aria-label="Additional quote title text"
+                                    required={!protectedTitle}
+                                    value={titleAddition}
+                                    placeholder={protectedTitle ? 'Add optional detail' : 'Enter quote title'}
+                                    onChange={(event) => setTitleAddition(event.target.value)}
+                                />
+                            </div>
+                            {protectedTitle && <small className="quote-title-hint">Job, Equipment and Job description stay in the title. Add any extra wording at the end.</small>}
                         </label>
                         <div className="quote-field-wide">
                             <SearchableSelect
@@ -496,16 +616,29 @@ export default function QuoteEditorDialog({
                     {(formError || error) && <p className="quote-form-error" role="alert">{formError || error}</p>}
                     {quote && <div className="quote-po-request-action">
                         <div>
-                            <strong>PO request invoice</strong>
-                            <span>Uses the Liftrucks invoice layout and copies Notes into Work Completed. This is for PO approval, not a tax invoice.</span>
+                            <strong>Provisional quotation</strong>
+                            <span>Uses the Liftrucks invoice layout, the Job number for Invoice No and Our Ref, and copies Notes into Work Required. This is not a tax invoice.</span>
                         </div>
-                        <button
-                            type="button"
-                            className="quote-secondary-button"
-                            disabled={isSaving || isGeneratingInvoice || lines.length === 0 || lines.length > 15}
-                            onClick={() => void generatePoRequestInvoice()}
-                        >{isGeneratingInvoice ? 'Generating...' : 'Generate and save PDF'}</button>
+                        <div className="quote-po-request-buttons">
+                            <button
+                                type="button"
+                                className="quote-secondary-button"
+                                disabled={isSaving || isGeneratingInvoice || lines.length === 0 || lines.length > MAX_LIFTTRUCKS_INVOICE_LINES}
+                                title={lines.length > MAX_LIFTTRUCKS_INVOICE_LINES
+                                    ? `The invoice template supports up to ${MAX_LIFTTRUCKS_INVOICE_LINES} lines.`
+                                    : 'Generate and save a provisional quotation PDF'}
+                                onClick={() => void generatePoRequestInvoice()}
+                            >{isGeneratingInvoice ? 'Generating...' : 'Generate and save PDF'}</button>
+                            <button
+                                type="button"
+                                className="quote-secondary-button"
+                                disabled={isSaving || poRecipientsLoading || Boolean(poRecipientsError)}
+                                title={poRecipientsError || 'Open an editable purchase-order request email'}
+                                onClick={openPoRequestEmail}
+                            >{poRecipientsLoading ? 'Loading contacts...' : 'Open PO request email'}</button>
+                        </div>
                     </div>}
+                    {quote && poRecipientsError && <p className="quote-form-error" role="alert">{poRecipientsError}</p>}
                     {invoiceFeedback && <p className="quote-po-request-feedback" role="status">{invoiceFeedback}</p>}
 
                     <footer>

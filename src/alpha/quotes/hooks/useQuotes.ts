@@ -5,6 +5,8 @@ import { fetchCustomers } from '../../jobs/services/customersApi'
 import { fetchEquipment } from '../../jobs/services/equipmentApi'
 import type { Customer } from '../../jobs/types/customer.types'
 import type { Equipment } from '../../jobs/types/equipment.types'
+import type { Mechanic } from '../../jobs/types/mechanic.types'
+import { fetchMechanics } from '../../mechanics/services/mechanicsApi'
 import { fetchPricingItems } from '../services/pricingApi'
 import {
     createQuote as createQuoteApi,
@@ -26,6 +28,7 @@ export function useQuotes() {
     const [customers, setCustomers] = useState<Customer[]>([])
     const [equipment, setEquipment] = useState<Equipment[]>([])
     const [pricingItems, setPricingItems] = useState<PricingItem[]>([])
+    const [staff, setStaff] = useState<Mechanic[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [loadError, setLoadError] = useState('')
     const [isSaving, setIsSaving] = useState(false)
@@ -41,18 +44,20 @@ export function useQuotes() {
         setLoadError('')
         try {
             const token = await getAccessToken()
-            const [nextQuotes, nextJobs, nextPricingItems, nextCustomers, nextEquipment] = await Promise.all([
+            const [nextQuotes, nextJobs, nextPricingItems, nextCustomers, nextEquipment, nextStaff] = await Promise.all([
                 fetchQuotes(token),
                 fetchQuoteJobs(token),
                 fetchPricingItems(token),
                 fetchCustomers(token),
                 fetchEquipment(token),
+                fetchMechanics(token),
             ])
             setQuotes(nextQuotes)
             setJobs(nextJobs)
             setPricingItems(nextPricingItems.filter((item) => item.statecode === 0))
             setCustomers(nextCustomers)
             setEquipment(nextEquipment.filter((item) => item.statecode !== 1))
+            setStaff(nextStaff)
         } catch (error) {
             setLoadError(error instanceof Error ? error.message : 'Quotes could not be loaded.')
         } finally {
@@ -68,12 +73,13 @@ export function useQuotes() {
             setLoadError('')
             try {
                 const token = await getAccessToken()
-                const [nextQuotes, nextJobs, nextPricingItems, nextCustomers, nextEquipment] = await Promise.all([
+                const [nextQuotes, nextJobs, nextPricingItems, nextCustomers, nextEquipment, nextStaff] = await Promise.all([
                     fetchQuotes(token),
                     fetchQuoteJobs(token),
                     fetchPricingItems(token),
                     fetchCustomers(token),
                     fetchEquipment(token),
+                    fetchMechanics(token),
                 ])
                 if (cancelled) return
                 setQuotes(nextQuotes)
@@ -81,6 +87,7 @@ export function useQuotes() {
                 setPricingItems(nextPricingItems.filter((item) => item.statecode === 0))
                 setCustomers(nextCustomers)
                 setEquipment(nextEquipment.filter((item) => item.statecode !== 1))
+                setStaff(nextStaff)
             } catch (error) {
                 if (!cancelled) {
                     setLoadError(error instanceof Error ? error.message : 'Quotes could not be loaded.')
@@ -103,12 +110,21 @@ export function useQuotes() {
         setSaveError('')
         try {
             const token = await getAccessToken()
+            let quoteId = existing?.gr_quoteid
             if (existing) {
                 await updateQuoteApi(token, existing.gr_quoteid, previousLines, quote)
             } else {
-                await createQuoteApi(token, quote)
+                quoteId = await createQuoteApi(token, quote)
             }
-            await load()
+            if (!quoteId) throw new Error('The saved Quote identity was not returned by Dataverse.')
+            const [nextQuotes, nextLines] = await Promise.all([
+                fetchQuotes(token),
+                fetchQuoteLines(token, quoteId),
+            ])
+            const savedQuote = nextQuotes.find((candidate) => candidate.gr_quoteid === quoteId)
+            if (!savedQuote) throw new Error('The Quote was saved but could not be refreshed. Reload Quotes and try again.')
+            setQuotes(nextQuotes)
+            return { quote: savedQuote, lines: nextLines }
         } catch (error) {
             const message = error instanceof Error ? error.message : 'The quote could not be saved.'
             setSaveError(message)
@@ -140,6 +156,7 @@ export function useQuotes() {
         customers,
         equipment,
         pricingItems,
+        staff,
         isLoading,
         isSaving,
         loadError,

@@ -6,6 +6,7 @@ import {
     CHARGEABLE_INVOICE_CORRECTION_TYPES,
     CHARGEABLE_INVOICE_DOCUMENT_TYPES,
     CHARGEABLE_INVOICE_UPLOAD_STATUSES,
+    CHARGEABLE_INVOICE_APPROVAL_TEMPLATE_VERSION,
     type ChargeableInvoiceActivity,
     type ChargeableInvoiceCorrection,
     type ChargeableInvoiceDocument,
@@ -23,6 +24,7 @@ import {
     validateDoNotProcess,
     type ChargeableInvoiceRequirementsDraft,
 } from '../domain/chargeableInvoiceState.ts'
+import { fetchMechanics as fetchStaffDirectory } from '../../mechanics/services/mechanicsApi.ts'
 import {
     buildChargeableInvoiceCorrectionFields,
     type ChargeableInvoiceCorrectionDraft,
@@ -30,9 +32,9 @@ import {
 import { buildMailtoUrl, isValidRecipientEmail } from '../../jobs/utils/technicianMailto.ts'
 import type { SiteContact } from '../../jobs/types/siteContact.types.ts'
 import { fetchQuotesForJob } from '../../quotes/services/quotesApi.ts'
-import { buildChargeableInvoiceAmendedTotals } from '../domain/chargeableInvoicePricing.ts'
 import type { PurchaseOrderRecipient } from '../../customers/purchaseOrderRecipient.types.ts'
 import { resolvePurchaseOrderRecipients } from '../../customers/purchaseOrderRecipientRules.ts'
+import { customerEmailCcRecipients } from '../../mechanics/staffDirectory.ts'
 
 const API_URL = `${import.meta.env?.VITE_DATAVERSE_URL ?? 'https://invalid.local'}/api/data/v9.2`
 const MAX_QUEUE_RECORDS = 500
@@ -74,6 +76,26 @@ async function readAll<T>(accessToken: string, initialUrl: string, limit: number
         records.push(...body.value)
         if (records.length > limit) throw new Error(`Chargeable Invoice Review returned more than ${limit} records. Narrow the scope before continuing.`)
         nextUrl = trustedNextLink(body['@odata.nextLink'])
+    }
+    return records
+}
+
+async function readOptionalAll<T>(accessToken: string, initialUrl: string, limit: number) {
+    const response = await fetch(initialUrl, { headers: headers(accessToken) })
+    if (response.status === 404) return []
+    if (!response.ok) throw safeError(response.status, 'loading Chargeable Invoice Review data')
+    const body = await response.json() as { value?: T[]; '@odata.nextLink'?: string }
+    if (!Array.isArray(body.value)) throw new Error('Dataverse returned invalid Chargeable Invoice Review data.')
+    const records = [...body.value]
+    let nextUrl = trustedNextLink(body['@odata.nextLink'])
+    while (nextUrl) {
+        const page = await fetch(nextUrl, { headers: headers(accessToken) })
+        if (!page.ok) throw safeError(page.status, 'loading Chargeable Invoice Review data')
+        const nextBody = await page.json() as { value?: T[]; '@odata.nextLink'?: string }
+        if (!Array.isArray(nextBody.value)) throw new Error('Dataverse returned invalid Chargeable Invoice Review data.')
+        records.push(...nextBody.value)
+        if (records.length > limit) throw new Error(`Chargeable Invoice Review returned more than ${limit} records. Narrow the scope before continuing.`)
+        nextUrl = trustedNextLink(nextBody['@odata.nextLink'])
     }
     return records
 }
@@ -142,10 +164,6 @@ function poRecipientUrl(customerId: string, siteId?: string | null) {
 }
 
 export async function fetchChargeableInvoiceWorkspace(accessToken: string, reviewId: string): Promise<ChargeableInvoiceWorkspace> {
-    const technicianUrl = new URL(`${API_URL}/gr_mechanics`)
-    technicianUrl.searchParams.set('$select', 'gr_mechanicid,gr_name,gr_email,statecode')
-    technicianUrl.searchParams.set('$filter', 'statecode eq 0')
-    technicianUrl.searchParams.set('$orderby', 'gr_name asc')
     const [review, revisions, corrections, documents, activities, technicians] = await Promise.all([
         fetchReview(accessToken, reviewId),
         readAll<ChargeableInvoiceRevision>(accessToken, detailUrl('gr_chargeableinvoicerevisions', [
@@ -174,7 +192,7 @@ export async function fetchChargeableInvoiceWorkspace(accessToken: string, revie
             '_gr_document_value', '_gr_correction_value', 'gr_event', 'gr_detail', 'gr_occurredon',
             'createdon', '_createdby_value',
         ].join(','), reviewId, 'gr_occurredon desc'), MAX_DETAIL_RECORDS),
-        readAll<ChargeableInvoiceTechnician>(accessToken, technicianUrl.toString(), MAX_TECHNICIANS),
+        fetchStaffDirectory(accessToken).then((rows) => rows.filter((row) => row.statecode !== 1).slice(0, MAX_TECHNICIANS) as ChargeableInvoiceTechnician[]),
     ])
     if (revisions.length > 50) throw new Error('This review has more than 50 revisions and cannot be opened safely.')
     const revisionIds = revisions.map((item) => item.gr_chargeableinvoicerevisionid)
@@ -189,7 +207,7 @@ export async function fetchChargeableInvoiceWorkspace(accessToken: string, revie
         ? readAll<SiteContact>(accessToken, siteContactUrl(review._gr_site_value), MAX_SITE_CONTACTS)
         : []
     const poRecipientsPromise = review._gr_customer_value
-        ? readAll<PurchaseOrderRecipient>(accessToken, poRecipientUrl(review._gr_customer_value, review._gr_site_value), MAX_SITE_CONTACTS)
+        ? readOptionalAll<PurchaseOrderRecipient>(accessToken, poRecipientUrl(review._gr_customer_value, review._gr_site_value), MAX_SITE_CONTACTS)
         : []
     let relatedQuotesError = ''
     const relatedQuotesPromise = review._gr_job_value
@@ -471,10 +489,17 @@ function readyTransition(correctionCount: number): ReviewTransition {
     }
 }
 
+function returnToInProgressTransition(): ReviewTransition {
+    return {
+        fields: { gr_disposition: null, gr_dispositionon: null, gr_dispositionreason: null },
+        event: 122830017,
+        name: 'Returned to in progress',
+        detail: 'The Ready to Process decision was reversed and the invoice returned to manager review.',
+    }
+}
+
 export async function markChargeableInvoiceReady(accessToken: string, review: ChargeableInvoiceReview) {
     if (review.gr_disposition != null) throw new Error('This invoice review already has a terminal disposition.')
-    const blockers = getReadyToProcessBlockers(review)
-    if (blockers.length) throw new Error(blockers[0])
     const correctionUrl = new URL(`${API_URL}/gr_chargeableinvoicecorrections`)
     correctionUrl.searchParams.set('$select', 'gr_chargeableinvoicecorrectionid')
     correctionUrl.searchParams.set('$filter', `_gr_review_value eq ${review.gr_chargeableinvoicereviewid} and (gr_comparisonstatus eq ${CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.OUTSTANDING} or gr_comparisonstatus eq ${CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.NOT_MADE})`)
@@ -483,7 +508,17 @@ export async function markChargeableInvoiceReady(accessToken: string, review: Ch
     if (!correctionResponse.ok) throw safeError(correctionResponse.status, 'checking outstanding invoice corrections')
     const correctionBody = await correctionResponse.json() as { value?: unknown[] }
     if (!Array.isArray(correctionBody.value)) throw new Error('Dataverse returned invalid correction status data.')
+    const blockers = getReadyToProcessBlockers(review, correctionBody.value.length > 0)
+    if (blockers.length) throw new Error(blockers[0])
     return applyTransition(accessToken, review, readyTransition(correctionBody.value.length))
+}
+
+export function returnChargeableInvoiceToInProgress(accessToken: string, review: ChargeableInvoiceReview) {
+    if (review.gr_disposition !== CHARGEABLE_INVOICE_DISPOSITIONS.READY_TO_PROCESS) {
+        throw new Error('Only an invoice in the Ready queue can be returned to In progress.')
+    }
+    if (!review.gr_reviewstartedon) throw new Error('This invoice review has not been started.')
+    return applyTransition(accessToken, review, returnToInProgressTransition())
 }
 
 export function markChargeableInvoiceDoNotProcess(accessToken: string, review: ChargeableInvoiceReview, reason: string) {
@@ -1038,30 +1073,34 @@ export function buildChargeableInvoicePoRequestMailto(
     if (!revision) throw new Error('The current invoice revision is unavailable.')
     const jobNumber = review.gr_Job?.gr_jobnumber || review.gr_greentreereference
     const customer = review.gr_Customer?.gr_name || revision.gr_customersnapshot || 'Customer'
-    const equipment = [review.gr_Equipment?.gr_make, review.gr_Equipment?.gr_model,
-        review.gr_Equipment?.gr_fleet ? `Fleet ${review.gr_Equipment.gr_fleet}` : ''].filter(Boolean).join(' - ')
-    const currentLines = workspace.lines.filter((line) =>
-        line._gr_revision_value.toLowerCase() === revision.gr_chargeableinvoicerevisionid.toLowerCase())
-    const amended = buildChargeableInvoiceAmendedTotals(revision, currentLines, workspace.corrections)
-    const total = amended.adjustedTotal == null ? 'Not recorded' : new Intl.NumberFormat('en-NZ', {
-        style: 'currency', currency: 'NZD',
-    }).format(amended.adjustedTotal)
-    const firstName = recipient.name.split(/\s+/)[0] || 'there'
+    const activeStoryAmendments = workspace.corrections
+        .filter((correction) => correction.gr_correctiontype === CHARGEABLE_INVOICE_CORRECTION_TYPES.STORY
+            && (correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.OUTSTANDING
+                || correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.NOT_MADE))
+        .map((correction) => correction.gr_requestedtext?.replace(/\s+/g, ' ').trim() ?? '')
+        .filter(Boolean)
+    const workSummary = [
+        revision.gr_workcompleted?.replace(/\s+/g, ' ').trim()
+            || revision.gr_repairdescription?.replace(/\s+/g, ' ').trim()
+            || '',
+        ...activeStoryAmendments,
+    ].filter(Boolean).join('\n\n')
+    const firstName = recipient.name.trim().split(/\s+/)[0]
     const subject = `Purchase order requested - Job ${jobNumber} - ${customer}`.slice(0, 150)
     const body = [
-        `Hi ${firstName},`, '',
-        `Please review the attached Customer PO Approval document for the completed work on Job ${jobNumber}.`,
-        review.gr_photosrequired === true ? 'Supporting photos are also included for your review.' : '', '',
-        `Customer: ${customer}`,
-        `Site: ${review.gr_Site?.gr_name || revision.gr_sitesnapshot || 'Not recorded'}`,
-        `Equipment: ${equipment || revision.gr_fleet || revision.gr_serial || 'Not recorded'}`,
-        `Approval amount (including GST): ${total}`, '',
-        'Please reply with your purchase order number so the work can proceed to invoicing.', '',
-        'Kind regards,',
-        'Liftrucks NZ Ltd',
+        firstName ? `Hi ${firstName},` : 'Hi,', '',
+        'Could you please process the attached and provide an order number?', '',
+        ...(workSummary ? [workSummary, ''] : []),
+        ...(review.gr_photosrequired === true ? ['Supporting photos are also attached for reference.', ''] : []),
+        'Thanks,',
     ].filter((line, index, all) => line !== '' || all[index - 1] !== '').join('\n')
     return {
-        mailto: buildMailtoUrl({ recipient: recipient.email, cc: recipient.cc, subject, body }),
+        mailto: buildMailtoUrl({
+            recipient: recipient.email,
+            cc: [...recipient.cc, ...customerEmailCcRecipients(workspace.technicians)],
+            subject,
+            body,
+        }),
         attachments: [documents.approvalPdf, ...(review.gr_photosrequired === true ? documents.photos : [])],
     }
 }
@@ -1113,16 +1152,58 @@ export async function generateChargeableInvoiceApprovalPdf(
             reviewEtag: review['@odata.etag'],
         }),
     })
-    const body = await response.json().catch(() => null) as { error?: string } | null
+    const body = await response.json().catch(() => null) as {
+        error?: string
+        document?: ChargeableInvoiceDocument
+    } | null
     if (!response.ok) {
         if ([400, 409, 412].includes(response.status) && body?.error) throw new Error(body.error)
         if (response.status === 401) throw new Error('Your session expired while generating the approval PDF. Sign in again and retry.')
         if (response.status === 403) throw new Error('Chargeable Invoice Manager access is required.')
         throw new Error(body?.error || 'The approval PDF could not be generated safely.')
     }
-    return fetchChargeableInvoiceWorkspace(accessToken, review.gr_chargeableinvoicereviewid)
+    if (!body?.document) throw new Error('The approval PDF service returned no completed document. Refresh the review and retry.')
+    const refreshed = await fetchChargeableInvoiceWorkspace(accessToken, review.gr_chargeableinvoicereviewid)
+    return {
+        ...refreshed,
+        documents: mergeGeneratedApprovalDocument(
+            refreshed.documents,
+            body.document,
+            review.gr_chargeableinvoicereviewid,
+            review._gr_currentrevision_value,
+        ),
+    }
+}
+
+function mergeGeneratedApprovalDocument(
+    documents: ChargeableInvoiceDocument[],
+    generated: ChargeableInvoiceDocument,
+    reviewId: string,
+    revisionId: string,
+) {
+    const mismatches = [
+        !generated.gr_chargeableinvoicedocumentid ? 'document identity' : '',
+        generated._gr_review_value && generated._gr_review_value.toLowerCase() !== reviewId.toLowerCase() ? 'review' : '',
+        generated._gr_revision_value && generated._gr_revision_value.toLowerCase() !== revisionId.toLowerCase() ? 'revision' : '',
+        generated.gr_documenttype !== CHARGEABLE_INVOICE_DOCUMENT_TYPES.APPROVAL_PDF ? 'document type' : '',
+        generated.gr_uploadstatus !== CHARGEABLE_INVOICE_UPLOAD_STATUSES.COMPLETE ? 'upload state' : '',
+        generated.gr_templateversion !== CHARGEABLE_INVOICE_APPROVAL_TEMPLATE_VERSION ? 'template version' : '',
+    ].filter(Boolean)
+    if (mismatches.length) {
+        throw new Error(`The approval PDF service returned incompatible ${mismatches.join(', ')}. Refresh the app and retry.`)
+    }
+    const authoritative = {
+        ...generated,
+        _gr_review_value: generated._gr_review_value || reviewId,
+        _gr_revision_value: generated._gr_revision_value || revisionId,
+    }
+    return [
+        authoritative,
+        ...documents.filter((document) => document.gr_chargeableinvoicedocumentid.toLowerCase()
+            !== generated.gr_chargeableinvoicedocumentid.toLowerCase()),
+    ]
 }
 
 export const chargeableInvoiceReviewApiTest = {
-    trustedNextLink, transitionBatch, readyTransition, permanentDeletionBatch, supportingPhotoDeletionBatch, photoFinalizationBatch, detectedPhotoType, siteContactUrl, requirementsTransition, replacementCorrectionBatch, supersedeCorrectionBatch,
+    trustedNextLink, transitionBatch, readyTransition, returnToInProgressTransition, permanentDeletionBatch, supportingPhotoDeletionBatch, photoFinalizationBatch, detectedPhotoType, siteContactUrl, requirementsTransition, replacementCorrectionBatch, supersedeCorrectionBatch, mergeGeneratedApprovalDocument,
 }

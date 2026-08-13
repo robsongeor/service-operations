@@ -1,5 +1,9 @@
 # Purchase Order Recipient Dataverse Schema
 
+Status: provisioned, published, and verified in the target Dataverse environment on 13 August
+2026. The required organisation-depth privileges were verified for the existing `Service
+Operations` and `Chargeable Invoice Manager` roles; no role assignment was changed.
+
 ## Purpose
 
 `gr_PurchaseOrderRecipient` stores current customer-facing email routing used when requesting a

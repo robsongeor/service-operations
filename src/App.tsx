@@ -55,7 +55,8 @@ function App() {
         <Routes>
           <Route path="/" element={<div>Overview</div>} />
           <Route path="/customers" element={<CustomerDashboardScreen />} />
-          <Route path="/mechanics" element={<MechanicsScreen />} />
+          <Route path="/staff" element={<MechanicsScreen />} />
+          <Route path="/mechanics" element={<Navigate to="/staff" replace />} />
           <Route path="/equipment" element={<EquipmentScreen />} />
           <Route path="/jobs" element={<JobsScreen key={signedInUser?.storageId || 'account-pending'} />} />
           <Route path="/site-checks" element={<SiteChecksScreen />} />

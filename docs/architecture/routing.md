@@ -11,7 +11,8 @@ management shell and a public portal shell.
 | --- | --- |
 | `/` | Overview placeholder |
 | `/customers` | Customer Dashboard |
-| `/mechanics` | Technician management |
+| `/staff` | Internal Staff directory, technician eligibility, and contact details |
+| `/mechanics` | Legacy redirect to `/staff` |
 | `/equipment` | Equipment Management |
 | `/jobs` | Jobs |
 | `/site-checks` | Cross-customer Site Checks workspace |

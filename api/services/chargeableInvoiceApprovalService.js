@@ -61,10 +61,10 @@ async function readAuthoritativeSnapshot(origin, authorization, contract) {
     ].join(','))
     const revisionUrl = selectUrl(origin, 'gr_chargeableinvoicerevisions', contract.revisionId, [
         'gr_chargeableinvoicerevisionid', '_gr_review_value', 'gr_revisionnumber', 'gr_invoicenumber',
-        'gr_invoicedate', 'gr_greentreereference', 'gr_customersnapshot', 'gr_sitesnapshot',
+        'gr_invoicedate', 'gr_greentreereference', 'gr_accountsnapshot', 'gr_customersnapshot', 'gr_sitesnapshot',
         'gr_headline', 'gr_fleet', 'gr_make', 'gr_model', 'gr_serial', 'gr_meter', 'gr_dateofjob',
         'gr_serviceinterval', 'gr_nextdue', 'gr_rawordernumber', 'gr_repairdescription', 'gr_workcompleted',
-        'gr_subtotal', 'gr_gstrate', 'gr_gstamount', 'gr_total',
+        'gr_subtotal', 'gr_gstrate', 'gr_gstamount', 'gr_total', 'gr_extractionjson',
     ].join(','))
     const linesUrl = new URL(`${origin}/api/data/v9.2/gr_chargeableinvoicelines`)
     linesUrl.searchParams.set('$select', 'gr_chargeableinvoicelineid,gr_linekey,gr_linetype,gr_description,gr_quantity,gr_unitprice,gr_extendedprice,gr_sortorder')

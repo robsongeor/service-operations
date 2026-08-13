@@ -104,8 +104,9 @@ and non-sensitive identifiers. Do not create real accounting mutations or send c
    invoice workspace remains open. Confirm an unlinked Job shows the explicit empty state.
 9. Select a Site-scoped or deliberate manual PO recipient. Generate the Customer PO Approval PDF,
    then use `Save supporting documents` and confirm the approval copy plus every required photo is
-   saved. Open the PDF and confirm it is marked `FOR CUSTOMER PO APPROVAL - NOT A TAX INVOICE`,
-   contains active story/line amendments and recalculated totals, and identifies its source invoice.
+   saved. Open the PDF and confirm it is marked `PROVISIONAL QUOTATION`, its header omits Invoice No
+   while retaining Date, Page, Our Ref/Job and Order No, and it contains active story/line amendments
+   with recalculated totals.
    Change or withdraw an amendment and confirm the older approval is treated as stale until it is
    regenerated. Confirm the original Dataverse GreenTree source remains unchanged.
 10. Open the editable customer-PO `mailto:` draft, confirm it names the saved invoice and required
@@ -115,6 +116,13 @@ and non-sensitive identifiers. Do not create real accounting mutations or send c
     Nargiza / Accounts, recipient and email body were not persisted, and no Email Dispatch row was
     created. Separately record a synthetic PO number to verify the downstream PO Received audit does
     not alter the completed manager disposition.
+12. Open a Ready review and choose `Return to In Progress`. Confirm the deliberate confirmation,
+    verify the row moves from Ready to In progress, and confirm amendments, documents, PO/photo
+    decisions and prior Activities remain. Confirm one Manual Note records the reversal and that a
+    Do Not Process review does not expose this recovery action.
+13. On a review with active amendments and both Request decisions still unselected, confirm Ready is
+    available and records the amendment count handed to Accounts. Repeat with Supporting photos or
+    Customer PO explicitly set to Yes and confirm its incomplete workflow still blocks Ready.
 
 ## Accessibility checks
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { useActiveMsalAccount } from '../../../auth/useActiveMsalAccount.ts'
 import { acquireDataverseAccessToken } from '../../../auth/dataverseAuthentication.ts'
+import { canBeAssignedJobs } from '../../mechanics/staffDirectory.ts'
 import { deriveChargeableInvoicePrimaryQueue, type ChargeableInvoicePrimaryQueue } from '../domain/chargeableInvoiceState.ts'
 import {
     downloadChargeableInvoiceDocument,
@@ -11,6 +12,7 @@ import {
     generateChargeableInvoiceApprovalPdf,
     markChargeableInvoiceDoNotProcess,
     markChargeableInvoiceReady,
+    returnChargeableInvoiceToInProgress,
     permanentlyDeleteChargeableInvoice,
     permanentlyDeleteChargeableInvoiceSupportingPhotos,
     prepareChargeableInvoicePoRequest,
@@ -147,6 +149,20 @@ export function useChargeableInvoiceReviews() {
         }
     }, [accessToken, applyWorkspace, workspace])
 
+    const returnToInProgress = useCallback(async () => {
+        if (!workspace) return
+        setIsSaving(true)
+        setWorkspaceError('')
+        try {
+            applyWorkspace(await returnChargeableInvoiceToInProgress(await accessToken(), workspace.review))
+        } catch (error) {
+            setWorkspaceError(error instanceof Error ? error.message : 'The review could not be returned to In progress.')
+            throw error
+        } finally {
+            setIsSaving(false)
+        }
+    }, [accessToken, applyWorkspace, workspace])
+
     const markDoNotProcess = useCallback(async (reason: string) => {
         if (!workspace) return
         setIsSaving(true)
@@ -223,7 +239,7 @@ export function useChargeableInvoiceReviews() {
 
     const preparePhotoRequest = useCallback(async (technicianId: string) => {
         if (!workspace) throw new Error('The invoice review workspace is unavailable.')
-        const technician = workspace.technicians.find((item) => item.gr_mechanicid === technicianId)
+        const technician = workspace.technicians.find((item) => canBeAssignedJobs(item) && item.gr_mechanicid === technicianId)
         if (!technician) throw new Error('Choose an active technician.')
         setIsSaving(true)
         setWorkspaceError('')
@@ -261,7 +277,7 @@ export function useChargeableInvoiceReviews() {
 
     const uploadPhotos = useCallback(async (files: File[], technicianId: string) => {
         if (!workspace) throw new Error('The invoice review workspace is unavailable.')
-        const technician = workspace.technicians.find((item) => item.gr_mechanicid === technicianId)
+        const technician = workspace.technicians.find((item) => canBeAssignedJobs(item) && item.gr_mechanicid === technicianId)
         if (!technician) throw new Error('Choose an active technician.')
         setIsSaving(true)
         setWorkspaceError('')
@@ -363,7 +379,7 @@ export function useChargeableInvoiceReviews() {
     return {
         reviews, counts, selectedId, workspace, isLoading, isLoadingWorkspace, isSaving,
         loadError, workspaceError, refresh, openReview, closeReview, startReview, saveWaiting,
-        loadDocument, downloadDocument, loadQuoteLines, saveRequirements, markReady, markDoNotProcess, deleteReview, addCorrection, replaceCorrection, supersedeCorrection,
+        loadDocument, downloadDocument, loadQuoteLines, saveRequirements, markReady, returnToInProgress, markDoNotProcess, deleteReview, addCorrection, replaceCorrection, supersedeCorrection,
         preparePhotoRequest, preparePoRequest, uploadPhotos, deletePhotos, generateApprovalPdf,
     }
 }

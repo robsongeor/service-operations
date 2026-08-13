@@ -37,6 +37,7 @@ type MechanicPreflight = {
     gr_mechanicid: string
     gr_name: string
     statecode: number
+    gr_jobassignmentenabled?: boolean | null
 }
 
 export type StartSiteCheckWorkflowInput = {
@@ -98,10 +99,16 @@ export async function fetchSiteCheckMechanic(
     options: { apiUrl?: string; fetcher?: typeof fetch } = {},
 ): Promise<MechanicPreflight | null> {
     if (!GUID_PATTERN.test(mechanicId)) throw new Error('A valid technician ID is required.')
-    const response = await (options.fetcher ?? fetch)(
-        `${options.apiUrl ?? DEFAULT_API_URL}/gr_mechanics(${mechanicId})?$select=gr_mechanicid,gr_name,statecode`,
+    let response = await (options.fetcher ?? fetch)(
+        `${options.apiUrl ?? DEFAULT_API_URL}/gr_mechanics(${mechanicId})?$select=gr_mechanicid,gr_name,statecode,gr_jobassignmentenabled`,
         { cache: 'no-store', headers: headers(accessToken) },
     )
+    if (response.status === 400) {
+        response = await (options.fetcher ?? fetch)(
+            `${options.apiUrl ?? DEFAULT_API_URL}/gr_mechanics(${mechanicId})?$select=gr_mechanicid,gr_name,statecode`,
+            { cache: 'no-store', headers: headers(accessToken) },
+        )
+    }
     if (response.status === 404) return null
     if (!response.ok) throw new Error('The selected technician could not be validated.')
     return await response.json() as MechanicPreflight
@@ -180,7 +187,7 @@ export async function startSiteCheckWorkflow(
         fetchMechanic(accessToken, input.technicianId),
         fetchScheduleEquipment(accessToken, [schedule.gr_sitecheckscheduleid]),
     ])
-    if (!mechanic || mechanic.statecode === 1) {
+    if (!mechanic || mechanic.statecode === 1 || mechanic.gr_jobassignmentenabled === false) {
         throw new Error('Select an active technician.')
     }
     const overrides = new Map(

@@ -253,7 +253,7 @@ Generate a server-side approval PDF from an immutable reviewed-revision snapshot
 versioned PDF layout module and the bounded `pdf-lib` runtime. This avoids a browser executable
 and Office dependency in Azure Functions while retaining deterministic layout and extractable
 text. Retain the familiar appearance but add
-`FOR CUSTOMER PO APPROVAL — NOT A TAX INVOICE`, document version and generation time. Store it
+`PROVISIONAL QUOTATION`, document version and generation time. Store it
 as a Review Document. Do not automate Excel: it depends on an Office runtime and is not robust
 in Azure Functions. GreenTree remains the final accounting-invoice owner.
 
@@ -275,7 +275,7 @@ failed staging. Activity is append-only and every success reloads the authoritat
 - Use the six proposed User-owned tables and dedicated Chargeable Invoice Manager role.
 - Keep the verified 5 MiB organisation limit; validate each file clearly and do not change it.
 - Retain imported revisions, corrections and activity history without V1 deletion actions.
-- Label approval documents `FOR CUSTOMER PO APPROVAL — NOT A TAX INVOICE`.
+- Label approval documents `PROVISIONAL QUOTATION` and omit Invoice No from the visible header.
 - Allow only validated PDFs and supported images. V1 has no malware-scanning integration or
   readiness gate by explicit product-owner decision on 12 August 2026.
 - Provision the role unassigned; manager assignments require a later explicit user list/action.
@@ -405,7 +405,8 @@ generated from the current immutable Revision plus the active Outstanding/Not Ma
 and line amendments. Changed lines replace their source values, removed lines are excluded, added
 lines are appended, and Subtotal/GST/Total are recalculated with the source GST rate. The document
 must be regenerated after an amendment is added, changed or withdrawn. It is always labelled
-`FOR CUSTOMER PO APPROVAL - NOT A TAX INVOICE`; GreenTree remains the final accounting-invoice
+`PROVISIONAL QUOTATION`; the visible document header omits Invoice No while retaining Date, Page,
+Our Ref/Job and Order No. GreenTree remains the final accounting-invoice
 authority and the imported source PDF remains immutable evidence.
 
 The workspace also exposes a destructive permanent-delete action for Active Reviews. It requires
@@ -416,16 +417,23 @@ confirmed single/bulk recovery deletion; other individual evidence rows cannot b
 linked operational record is included.
 
 PO Required and Photos Required are the only prerequisite decisions exposed at the top of Requests.
+An invoice with active amendment instructions may instead complete through the manager-to-Accounts
+amendment handoff without first answering those unrelated Request decisions. An explicit Yes remains
+authoritative: required photos must still be received and a required customer PO request must still
+be prepared before Ready.
 When PO is required, the manager completes their responsibility by preparing the customer PO-request
 draft; Nargiza / Accounts owns follow-up. Confirmed PO Number/receipt remain downstream workflow
 state and do not block Ready. Photo evidence must still be received when explicitly required, and
 changing PO Required never adopts extracted Order No. Ready to Process revalidates
 all prerequisite fields and performs a fresh bounded unresolved-Correction count before its
-explicit terminal confirmation. Outstanding/Not Made corrections are preserved as instructions
+explicit confirmation. Outstanding/Not Made corrections are preserved as instructions
 for Nargiza / Accounts and their count is recorded in the Ready Activity; they do not require a
-returned revised invoice before handoff. Do Not Process requires a started review, resolved Waiting and a
-reason in a separate confirmation dialog. Both terminal transitions write disposition/time and
-append Activity atomically under the Review ETag; neither changes Job status or communicates.
+returned revised invoice before handoff. A Ready review exposes a confirmed `Return to In Progress`
+recovery action for mistaken handoffs. It atomically clears only the disposition fields and appends a
+Manual Note Activity; amendments, documents, PO/photo decisions and history remain intact. Do Not
+Process remains terminal and requires a started review, resolved Waiting and a reason in a separate
+confirmation dialog. Every disposition transition is Review-ETag protected; none changes Job status
+or communicates.
 
 The Invoice tab resolves the current Revision's immutable Source Document and loads its File only
 after a deliberate manager action through delegated Dataverse access. It validates the returned
@@ -519,20 +527,43 @@ customer-facing totals. The renderer uses a sanitized raster of the product-owne
 `invoice template.pdf`, retaining that template's static geometry and visual layout while ensuring
 hidden values inherited from its source invoice cannot remain recoverable PDF text. The remaining
 example headline is removed from the application asset; current reviewed values are placed in the
-template's intended blank locations and the output is labelled `FOR CUSTOMER PO APPROVAL - NOT A TAX
-INVOICE`. The generated amended PDF embeds the same Liftrucks JPG at the same 170-point width and
+template's intended blank locations and the output is labelled `PROVISIONAL QUOTATION`. The visible
+document header omits Invoice No while retaining Date, Page, Our Ref/Job and Order No. The generated
+amended PDF embeds the same Liftrucks JPG at the same 170-point width and
 38-point-left/20-point-top placement as the Requests-tab GreenTree evidence export. A SHA-256 hash
-of that snapshot plus `liftrucks-manager-template-v5` makes an existing Complete document
+of that snapshot plus `liftrucks-manager-template-v8` makes an existing Complete document
 reusable instead of creating duplicates. Client selection also requires that exact template version,
 so an older unbranded Approval PDF is not treated as the current amended invoice. A new document stages as Pending, receives the generated
 PDF File, then becomes Complete with its Approval PDF Generated Activity and Review ETag sentinel
 in one change set. Known failures remain Failed; an uncertain finalisation is reconciled without
-automatic retry. The release flag remains disabled and no live document has been generated.
+automatic retry. Approval text uses the measured GreenTree scale shared with Quote-generated approval
+PDFs: 10.92 pt header fields and totals, 12 pt Customer name, and 9.96 pt narrative and normal line
+content. Totals follow the populated line region and dense line sets alone reduce their line font.
+The generation response includes the authoritative completed Document. The client validates its Review,
+Revision, document type, Complete upload state and exact template version, then merges it into the
+refreshed workspace so a briefly stale Dataverse list read cannot turn a successful generation into a
+false client failure.
+The local Vite middleware keeps the production lazy-load boundary but invalidates the approval service
+and renderer CommonJS cache for each development request. This prevents client hot reloads from
+diverging from an older in-process template version without changing the Azure Functions runtime path.
+GreenTree layout parser v4 splits the bounded party box at the stable A4 midpoint and retains the
+left customer/account name plus postal lines and the right Site name plus address lines in the existing
+immutable Revision snapshot fields. Approval template v8 prefers those source blocks over current
+Dataverse display names. Older revisions derive the blocks from their retained positional extraction
+JSON during approval generation; no historical Revision, Customer, or Site row is rewritten.
+The release flag remains disabled and no live document has been generated.
 
 The workspace loads at most 200 Site Contacts and 200 Purchase Order Recipient rows bounded to the
 Review Customer and optional Site after the Review is known; it never loads a global recipient list.
 The effective Site override or Customer default is selected automatically with Primary in To and
 additional Contacts in CC. A manager may choose a Site Contact or manual address for one draft.
+Active Staff explicitly marked `CC on customer emails` are appended as internal CC recipients and
+deduplicated from the customer addresses. This does not change technician-photo or amendment-handoff
+recipient rules.
+The customer draft uses a concise service-manager voice: a direct order-number request followed by
+the current Work completed text (or Repair Description fallback), any active story amendments, and
+a short supporting-photo note when applicable. It does not repeat a rigid customer/site/total field
+list already available in the attachment.
 Preparation requires a current Complete Customer PO Approval
 PDF, a recorded photo decision, and received Complete photos when required. An approval document
 created before the latest correction activity is stale and must be regenerated.
@@ -575,3 +606,6 @@ Accounts/Nargiza roles/processed state, GreenTree integration, job-card retentio
 linkage, automated mail/attachment sending, inbound mail, contact defaults, customer rules,
 assignment, AI summaries and accounting integration extend Review/Revision/Document/Activity
 without rewriting historical records.
+While the separately gated Purchase Order Recipient table is absent, a Dataverse `404` from that
+optional reference query degrades to no configured PO recipients. The review workspace remains
+available and managers can continue with the existing Site Contact or manual-email fallback.

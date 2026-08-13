@@ -12,6 +12,7 @@ import {
     CHARGEABLE_INVOICE_LINE_TYPES,
     CHARGEABLE_INVOICE_PHOTO_STATUSES,
     CHARGEABLE_INVOICE_UPLOAD_STATUSES,
+    CHARGEABLE_INVOICE_APPROVAL_TEMPLATE_VERSION,
     CHARGEABLE_INVOICE_WAITING_ON,
     CHARGEABLE_INVOICE_MATCH_STATUSES,
     type ChargeableInvoiceCorrection,
@@ -48,6 +49,38 @@ import {
     uploadChargeableInvoiceSupportingPhotos,
     validateChargeableInvoiceSupportingPhotos,
 } from '../src/alpha/chargeable-invoices/services/chargeableInvoiceReviewApi.ts'
+
+test('completed approval document is retained across an immediately stale workspace refresh', () => {
+    const generated = {
+        gr_chargeableinvoicedocumentid: 'approval-v6',
+        gr_name: 'PO-approval-145421.pdf',
+        _gr_review_value: 'review-id',
+        _gr_revision_value: 'revision-id',
+        gr_documenttype: CHARGEABLE_INVOICE_DOCUMENT_TYPES.APPROVAL_PDF,
+        gr_contenttype: 'application/pdf',
+        gr_bytecount: 1234,
+        gr_templateversion: CHARGEABLE_INVOICE_APPROVAL_TEMPLATE_VERSION,
+        gr_uploadstatus: CHARGEABLE_INVOICE_UPLOAD_STATUSES.COMPLETE,
+    }
+    const stale = [{ ...generated, gr_chargeableinvoicedocumentid: 'approval-v5', gr_templateversion: 'liftrucks-manager-template-v5' }]
+
+    const merged = chargeableInvoiceReviewApiTest.mergeGeneratedApprovalDocument(stale, generated, 'review-id', 'revision-id')
+
+    assert.deepEqual(merged[0], generated)
+    assert.equal(merged.length, 2)
+    const withoutLookups = chargeableInvoiceReviewApiTest.mergeGeneratedApprovalDocument(
+        stale,
+        { ...generated, _gr_review_value: undefined as unknown as string, _gr_revision_value: undefined },
+        'review-id',
+        'revision-id',
+    )
+    assert.equal(withoutLookups[0]._gr_review_value, 'review-id')
+    assert.equal(withoutLookups[0]._gr_revision_value, 'revision-id')
+    assert.throws(
+        () => chargeableInvoiceReviewApiTest.mergeGeneratedApprovalDocument(stale, { ...generated, _gr_revision_value: 'old-revision' }, 'review-id', 'revision-id'),
+        /incompatible revision/i,
+    )
+})
 
 test('customer evidence export adds Liftrucks letterhead without changing the source PDF', async () => {
     const sourcePdf = await PDFDocument.create()
@@ -160,6 +193,44 @@ test('Ready hands outstanding corrections to Accounts instead of blocking the te
     assert.equal(transition.event, 122830015)
     assert.match(transition.detail ?? '', /Nargiza \/ Accounts with 2 outstanding correction instructions/)
     assert.throws(() => chargeableInvoiceReviewApiTest.readyTransition(201), /too many/i)
+})
+
+test('active amendments provide a Ready handoff path without forcing unrelated Request decisions', () => {
+    const amendmentReview = {
+        gr_reviewstartedon: '2026-08-11T01:00:00Z',
+        gr_porequired: null,
+        gr_photosrequired: null,
+    }
+    assert.deepEqual(getReadyToProcessBlockers(amendmentReview), [
+        'Decide whether a PO is required.',
+        'Decide whether supporting photos are required.',
+    ])
+    assert.deepEqual(getReadyToProcessBlockers(amendmentReview, true), [])
+    assert.deepEqual(getReadyToProcessBlockers({
+        ...amendmentReview,
+        gr_photosrequired: true,
+        gr_photosstatus: CHARGEABLE_INVOICE_PHOTO_STATUSES.REQUESTED,
+    }, true), ['Receive the required supporting photos.'])
+    assert.deepEqual(getReadyToProcessBlockers({
+        ...amendmentReview,
+        gr_porequired: true,
+    }, true), ['Prepare the customer PO request email.'])
+})
+
+test('a mistaken Ready decision returns to In progress without discarding review evidence', () => {
+    const transition = chargeableInvoiceReviewApiTest.returnToInProgressTransition()
+    assert.deepEqual(transition.fields, {
+        gr_disposition: null,
+        gr_dispositionon: null,
+        gr_dispositionreason: null,
+    })
+    assert.equal(transition.event, 122830017)
+    assert.equal(transition.name, 'Returned to in progress')
+    assert.match(transition.detail ?? '', /Ready to Process decision was reversed/)
+    assert.equal(deriveChargeableInvoicePrimaryQueue({
+        gr_reviewstartedon: '2026-08-11T01:00:00Z',
+        gr_disposition: null,
+    }), 'in-progress')
 })
 
 test('PO and photo decisions require deliberate, internally consistent confirmation', () => {
@@ -684,8 +755,17 @@ test('PO request mailto uses the generated approval copy and a deliberate Site r
             _gr_review_value: 'review-id', _gr_sourcedocument_value: 'source-id', gr_revisionnumber: 1,
             gr_extractionversion: 'test', gr_invoicenumber: 'VFL00001', gr_invoicedate: '2026-07-27',
             gr_greentreereference: '145156', gr_total: 432.5, gr_extractionjson: '{}',
+            gr_workcompleted: 'Hydraulic hoses were damaged by impact and two hoses were replaced.',
         }],
-        lines: [], corrections: [], activities: [], technicians: [],
+        lines: [], corrections: [{
+            gr_chargeableinvoicecorrectionid: 'story-amendment', _gr_review_value: 'review-id',
+            _gr_sourcerevision_value: 'revision-id', gr_correctiontype: CHARGEABLE_INVOICE_CORRECTION_TYPES.STORY,
+            gr_requestedtext: 'The machine is awaiting PO approval before final processing.',
+            gr_comparisonstatus: CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.OUTSTANDING,
+        }], activities: [], technicians: [{
+            gr_mechanicid: 'manager-id', gr_name: 'Manager', gr_email: 'manager@liftrucks.co.nz',
+            gr_customeremailccenabled: true, statecode: 0,
+        }],
         documents: [
             { gr_chargeableinvoicedocumentid: 'source-id', gr_name: 'original.pdf', gr_filename: 'original.pdf', _gr_review_value: 'review-id', _gr_revision_value: 'revision-id', gr_documenttype: CHARGEABLE_INVOICE_DOCUMENT_TYPES.GREENTREE_INVOICE, gr_contenttype: 'application/pdf', gr_bytecount: 200, gr_uploadstatus: 122830001 },
             { gr_chargeableinvoicedocumentid: 'approval-id', gr_name: 'approval.pdf', gr_filename: 'approval.pdf', _gr_review_value: 'review-id', _gr_revision_value: 'revision-id', gr_documenttype: CHARGEABLE_INVOICE_DOCUMENT_TYPES.APPROVAL_PDF, gr_contenttype: 'application/pdf', gr_bytecount: 100, gr_uploadstatus: 122830001 },
@@ -702,8 +782,11 @@ test('PO request mailto uses the generated approval copy and a deliberate Site r
     const decoded = decodeURIComponent(prepared.mailto)
     assert.match(decoded, /Purchase order requested - Job 145156 - Example Customer/)
     assert.match(decoded, /Hi Pat/)
-    assert.match(decoded, /Approval amount \(including GST\): \$432\.50/)
-    assert.match(decoded, /attached Customer PO Approval document/)
+    assert.match(decoded, /Could you please process the attached and provide an order number/)
+    assert.match(decoded, /Hydraulic hoses were damaged by impact and two hoses were replaced/)
+    assert.match(decoded, /The machine is awaiting PO approval before final processing/)
+    assert.match(decoded, /Supporting photos are also attached for reference/)
+    assert.match(decoded, /cc=manager@liftrucks\.co\.nz/)
     assert.deepEqual(prepared.attachments.map((document) => document.gr_chargeableinvoicedocumentid), ['approval-id', 'photo-id'])
     assert.throws(() => buildChargeableInvoicePoRequestMailto(workspace, { siteContactId: 'another-site-contact' }), /Site Contact/i)
     assert.throws(() => buildChargeableInvoicePoRequestMailto(workspace, { manualEmail: 'invalid' }), /valid customer recipient/i)
@@ -718,7 +801,7 @@ test('PO request mailto uses the generated approval copy and a deliberate Site r
     const configuredDraft = buildChargeableInvoicePoRequestMailto(configured, { useConfiguredRecipients: true })
     const configuredUrl = new URL(configuredDraft.mailto)
     assert.equal(decodeURIComponent(configuredUrl.pathname), 'primary@example.com')
-    assert.equal(configuredUrl.searchParams.get('cc'), 'accounts@example.com')
+    assert.equal(configuredUrl.searchParams.get('cc'), 'accounts@example.com,manager@liftrucks.co.nz')
 })
 
 test('first confirmed customer PO uses the dedicated PO Received activity event', () => {
@@ -920,6 +1003,8 @@ test('Chargeable Invoice route uses shared page primitives and delegates intake 
     assert.match(workspace, /Sales confirming a trade-in/)
     assert.match(workspace, /Start review/)
     assert.match(workspace, /Ready to Process/)
+    assert.match(workspace, /Return to In Progress/)
+    assert.match(queue, /onReturnToInProgress=\{reviews\.returnToInProgress\}/)
     assert.match(workspace, /Do Not Process/)
     assert.match(workspace, /Delete invoice/)
     assert.match(workspace, /type <strong>\{review\.gr_invoicenumber\}<\/strong> to confirm/i)
@@ -1034,9 +1119,10 @@ test('Chargeable Invoice route uses shared page primitives and delegates intake 
     assert.doesNotMatch(approvalService, /Record that a customer PO is required before generating its approval document/)
     assert.match(workspace, /Email amendments/)
     assert.match(workspace, /Copy email summary/)
-    assert.match(workspace, /Current instructions for Nargiza/)
+    assert.match(workspace, /Current instructions for the selected internal recipient/)
+    assert.match(workspace, /chargeable-amendment-recipient/)
     assert.doesNotMatch(workspace, /VITE_CHARGEABLE_INVOICE_AMENDMENT_RECIPIENT_EMAIL/)
-    assert.match(workspace, /mailto:\?subject=/)
+    assert.match(workspace, /mailto:\$\{encodeURIComponent\(recipient\?\.gr_email/)
     assert.match(workspace, /Invoice amendments required/)
     assert.match(workspace, /recipient blank/)
     assert.doesNotMatch(workspace, /Download correction instructions/)

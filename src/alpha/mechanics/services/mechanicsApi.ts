@@ -1,6 +1,6 @@
 import type { Mechanic } from '../../jobs/types/mechanic.types'
 
-const API_URL = `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2`
+const API_URL = `${import.meta.env?.VITE_DATAVERSE_URL ?? ''}/api/data/v9.2`
 
 export type MechanicInput = {
     name: string
@@ -9,6 +9,9 @@ export type MechanicInput = {
     camNumber: string
     rego: string
     region: string
+    department: number
+    jobAssignmentEnabled: boolean
+    customerEmailCcEnabled: boolean
 }
 
 function headers(token: string, includeContentType = false) {
@@ -33,11 +36,24 @@ async function ensureSuccess(response: Response, action: string) {
 }
 
 export async function fetchMechanics(token: string): Promise<Mechanic[]> {
-    const response = await fetch(
-        `${API_URL}/gr_mechanics?$select=gr_mechanicid,gr_name,gr_phone,gr_email,gr_camnumber,gr_rego,gr_region,statecode&$orderby=gr_name asc`,
+    const baseUrl = `${API_URL}/gr_mechanics?`
+    let response = await fetch(
+        `${baseUrl}$select=gr_mechanicid,gr_name,gr_phone,gr_email,gr_camnumber,gr_rego,gr_region,gr_department,gr_jobassignmentenabled,gr_customeremailccenabled,statecode&$orderby=gr_name asc`,
         { cache: 'no-store', headers: headers(token) },
     )
-    await ensureSuccess(response, 'Failed to load mechanics')
+    if (response.status === 400) {
+        response = await fetch(
+            `${baseUrl}$select=gr_mechanicid,gr_name,gr_phone,gr_email,gr_camnumber,gr_rego,gr_region,gr_department,gr_jobassignmentenabled,statecode&$orderby=gr_name asc`,
+            { cache: 'no-store', headers: headers(token) },
+        )
+        if (response.status === 400) {
+            response = await fetch(
+                `${baseUrl}$select=gr_mechanicid,gr_name,gr_phone,gr_email,gr_camnumber,gr_rego,gr_region,statecode&$orderby=gr_name asc`,
+                { cache: 'no-store', headers: headers(token) },
+            )
+        }
+    }
+    await ensureSuccess(response, 'Failed to load staff')
     const data = await response.json()
     return data.value ?? []
 }
@@ -53,9 +69,12 @@ export async function createMechanic(token: string, mechanic: MechanicInput): Pr
             gr_camnumber: mechanic.camNumber.trim() || null,
             gr_rego: mechanic.rego.trim().replace(/\s+/g, ' ') || null,
             gr_region: mechanic.region.trim() || null,
+            gr_department: mechanic.department,
+            gr_jobassignmentenabled: mechanic.jobAssignmentEnabled,
+            gr_customeremailccenabled: mechanic.customerEmailCcEnabled,
         }),
     })
-    await ensureSuccess(response, 'Failed to create mechanic')
+    await ensureSuccess(response, 'Failed to create staff member')
     return response.json()
 }
 
@@ -74,9 +93,12 @@ export async function updateMechanic(
             gr_camnumber: mechanic.camNumber.trim() || null,
             gr_rego: mechanic.rego.trim().replace(/\s+/g, ' ') || null,
             gr_region: mechanic.region.trim() || null,
+            gr_department: mechanic.department,
+            gr_jobassignmentenabled: mechanic.jobAssignmentEnabled,
+            gr_customeremailccenabled: mechanic.customerEmailCcEnabled,
         }),
     })
-    await ensureSuccess(response, 'Failed to update mechanic')
+    await ensureSuccess(response, 'Failed to update staff member')
 }
 
 export async function setMechanicActive(
@@ -89,5 +111,5 @@ export async function setMechanicActive(
         headers: headers(token, true),
         body: JSON.stringify({ statecode: active ? 0 : 1, statuscode: active ? 1 : 2 }),
     })
-    await ensureSuccess(response, `Failed to ${active ? 'activate' : 'deactivate'} mechanic`)
+    await ensureSuccess(response, `Failed to ${active ? 'activate' : 'deactivate'} staff member`)
 }

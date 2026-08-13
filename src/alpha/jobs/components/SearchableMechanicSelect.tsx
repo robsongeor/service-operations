@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Mechanic } from '../types/mechanic.types'
+import { canBeAssignedJobs } from '../../mechanics/staffDirectory.ts'
 import './SearchableMechanicSelect.css'
 
 type Props = {
@@ -27,7 +28,7 @@ export default function SearchableMechanicSelect({ mechanics, selectedId, isOpen
     const selected = mechanics.find((mechanic) => mechanic.gr_mechanicid === selectedId)
     const results = useMemo(() => {
         const search = normalize(query)
-        return mechanics
+        return mechanics.filter(canBeAssignedJobs)
             .filter((mechanic) => mechanic.statecode !== 1 && (!search || normalize(`${mechanic.gr_name} ${mechanic.gr_email ?? ''} ${mechanic.gr_phone ?? ''}`).includes(search)))
             .sort((a, b) => a.gr_name.localeCompare(b.gr_name))
             .slice(0, 8)

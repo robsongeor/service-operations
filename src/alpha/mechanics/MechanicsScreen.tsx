@@ -7,6 +7,7 @@ import { useMechanics } from './hooks/useMechanics'
 import type { MechanicInput } from './services/mechanicsApi'
 import './MechanicsScreen.css'
 import { getQualificationStatus } from '../wof/utils/wofRules'
+import { canBeAssignedJobs, staffDepartmentLabel } from './staffDirectory.ts'
 
 const createdDate = new Intl.DateTimeFormat('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })
 
@@ -36,6 +37,7 @@ export default function MechanicsScreen() {
     const [selectedId, setSelectedId] = useState('')
     const [search, setSearch] = useState('')
     const [showInactive, setShowInactive] = useState(false)
+    const [staffView, setStaffView] = useState<'all' | 'assignable' | 'office'>('all')
     const [jobView, setJobView] = useState<'open' | 'complete' | 'all'>('open')
     const [editingMechanic, setEditingMechanic] = useState<Mechanic | null | undefined>(undefined)
     const [actionError, setActionError] = useState('')
@@ -44,10 +46,12 @@ export default function MechanicsScreen() {
         const query = search.trim().toLowerCase()
         return mechanics.filter((mechanic) => {
             if (!showInactive && mechanic.statecode !== 0) return false
+            if (staffView === 'assignable' && !canBeAssignedJobs(mechanic)) return false
+            if (staffView === 'office' && canBeAssignedJobs(mechanic)) return false
             return !query || [mechanic.gr_name, mechanic.gr_phone, mechanic.gr_email, mechanic.gr_camnumber, mechanic.gr_rego, mechanic.gr_region]
                 .some((value) => value?.toLowerCase().includes(query))
         })
-    }, [mechanics, search, showInactive])
+    }, [mechanics, search, showInactive, staffView])
 
     const selectedMechanic = mechanics.find((mechanic) => mechanic.gr_mechanicid === selectedId)
         ?? visibleMechanics[0]
@@ -91,31 +95,34 @@ export default function MechanicsScreen() {
         try {
             await setMechanicActive(selectedMechanic.gr_mechanicid, selectedMechanic.statecode !== 0)
         } catch (error) {
-            setActionError(error instanceof Error ? error.message : 'The mechanic status could not be changed.')
+            setActionError(error instanceof Error ? error.message : 'The staff status could not be changed.')
         }
     }
 
     return (
         <div className="mechanics-page">
             <header className="mechanics-page-header">
-                <div><span>People</span><h1>Mechanics</h1></div>
+                <div><span>People</span><h1>Staff</h1></div>
                 <button className="mechanic-primary-button" type="button" onClick={() => { clearSaveError(); setEditingMechanic(null) }}>
-                    + Add mechanic
+                    + Add staff member
                 </button>
             </header>
 
             {isLoading ? (
-                <section className="mechanics-data-state"><h2>Loading mechanics</h2><p>Connecting to Dataverse and finding allocated jobs.</p></section>
+                <section className="mechanics-data-state"><h2>Loading staff</h2><p>Connecting to Dataverse and finding staff and allocated jobs.</p></section>
             ) : loadError ? (
                 <section className="mechanics-data-state mechanics-data-error" role="alert">
-                    <div><h2>Mechanics could not be loaded</h2><p>{loadError}</p></div>
+                    <div><h2>Staff could not be loaded</h2><p>{loadError}</p></div>
                     <button type="button" onClick={() => void reload()}>Try again</button>
                 </section>
             ) : (
                 <div className="mechanics-workspace">
                     <aside className="mechanics-directory">
                         <div className="mechanics-directory-tools">
-                            <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search mechanics" aria-label="Search mechanics" />
+                            <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search staff" aria-label="Search staff" />
+                            <select value={staffView} onChange={(event) => setStaffView(event.target.value as typeof staffView)} aria-label="Filter staff">
+                                <option value="all">All staff</option><option value="assignable">Job assignable</option><option value="office">Office staff</option>
+                            </select>
                             <label><input type="checkbox" checked={showInactive} onChange={(event) => setShowInactive(event.target.checked)} /> Show inactive</label>
                         </div>
                         <div className="mechanics-list">
@@ -132,14 +139,14 @@ export default function MechanicsScreen() {
                                         <span className="mechanic-avatar">{initials(mechanic.gr_name)}</span>
                                         <span className="mechanic-card-copy">
                                             <strong>{mechanic.gr_name}</strong>
-                                            <small>{mechanic.statecode === 0 ? `${count} open ${count === 1 ? 'job' : 'jobs'}` : 'Inactive'}</small>
-                                            {validQualificationsFor(mechanic.gr_mechanicid).length > 0 && <span className="mechanic-qualification-summary">{validQualificationsFor(mechanic.gr_mechanicid)[0].gr_QualificationType?.gr_name}{validQualificationsFor(mechanic.gr_mechanicid).length > 1 ? ` +${validQualificationsFor(mechanic.gr_mechanicid).length - 1}` : ''}</span>}
+                                            <small>{mechanic.statecode !== 0 ? 'Inactive' : canBeAssignedJobs(mechanic) ? `${count} open ${count === 1 ? 'job' : 'jobs'}` : staffDepartmentLabel(mechanic.gr_department)}</small>
+                                            {canBeAssignedJobs(mechanic) && validQualificationsFor(mechanic.gr_mechanicid).length > 0 && <span className="mechanic-qualification-summary">{validQualificationsFor(mechanic.gr_mechanicid)[0].gr_QualificationType?.gr_name}{validQualificationsFor(mechanic.gr_mechanicid).length > 1 ? ` +${validQualificationsFor(mechanic.gr_mechanicid).length - 1}` : ''}</span>}
                                         </span>
                                         <span aria-hidden="true">›</span>
                                     </button>
                                 )
                             })}
-                            {visibleMechanics.length === 0 && <p className="mechanics-list-empty">No mechanics match these filters.</p>}
+                            {visibleMechanics.length === 0 && <p className="mechanics-list-empty">No staff match these filters.</p>}
                         </div>
                     </aside>
 
@@ -156,7 +163,7 @@ export default function MechanicsScreen() {
                                                     {selectedMechanic.statecode === 0 ? 'Active' : 'Inactive'}
                                                 </span>
                                             </div>
-                                            <p>{selectedMechanic.gr_phone || 'No phone'} · {selectedMechanic.gr_email || 'No email'}</p>
+                                            <p>{staffDepartmentLabel(selectedMechanic.gr_department)} · {selectedMechanic.gr_phone || 'No phone'} · {selectedMechanic.gr_email || 'No email'}</p>
                                         </div>
                                     </div>
                                     <div className="mechanic-detail-actions">
@@ -169,7 +176,7 @@ export default function MechanicsScreen() {
 
                                 {actionError && <p className="mechanic-action-error" role="alert">{actionError}</p>}
 
-                                <section className="mechanic-jobs-section">
+                                {canBeAssignedJobs(selectedMechanic) ? <section className="mechanic-jobs-section">
                                     <div className="mechanic-jobs-heading">
                                         <div><span>Work allocation</span><h3>Allocated jobs</h3></div>
                                         <div className="mechanic-job-tabs">
@@ -198,12 +205,12 @@ export default function MechanicsScreen() {
                                                 ))}
                                             </tbody>
                                         </table>
-                                        {selectedJobs.length === 0 && <div className="mechanic-jobs-empty"><strong>No {jobView === 'all' ? '' : jobView} jobs</strong><span>Jobs assigned to this mechanic will appear here.</span></div>}
+                                        {selectedJobs.length === 0 && <div className="mechanic-jobs-empty"><strong>No {jobView === 'all' ? '' : jobView} jobs</strong><span>Jobs assigned to this staff member will appear here.</span></div>}
                                     </div>
-                                </section>
+                                </section> : <div className="staff-non-assignable"><strong>Office staff member</strong><span>This person can be selected for internal email recipients but is not shown in Job or technician assignment lists.</span></div>}
                             </>
                         ) : (
-                            <div className="mechanic-detail-empty"><h2>Select a mechanic</h2><p>Their allocated jobs will appear here.</p></div>
+                            <div className="mechanic-detail-empty"><h2>Select a staff member</h2><p>Their details will appear here.</p></div>
                         )}
                     </main>
                 </div>

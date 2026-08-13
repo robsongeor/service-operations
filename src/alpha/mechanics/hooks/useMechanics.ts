@@ -48,7 +48,7 @@ export function useMechanics() {
             setQualifications(nextQualifications)
             setQualificationTypes(nextQualificationTypes)
         } catch (error) {
-            setLoadError(error instanceof Error ? error.message : 'Mechanics could not be loaded.')
+            setLoadError(error instanceof Error ? error.message : 'Staff could not be loaded.')
         } finally {
             setIsLoading(false)
         }
@@ -76,7 +76,7 @@ export function useMechanics() {
                 }
             } catch (error) {
                 if (!cancelled) {
-                    setLoadError(error instanceof Error ? error.message : 'Mechanics could not be loaded.')
+                    setLoadError(error instanceof Error ? error.message : 'Staff could not be loaded.')
                 }
             } finally {
                 if (!cancelled) setIsLoading(false)
@@ -94,7 +94,7 @@ export function useMechanics() {
             await action(token)
             await load()
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'The mechanic could not be saved.'
+            const message = error instanceof Error ? error.message : 'The staff member could not be saved.'
             setSaveError(message)
             throw error
         } finally {

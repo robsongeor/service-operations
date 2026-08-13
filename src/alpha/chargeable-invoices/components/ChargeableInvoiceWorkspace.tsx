@@ -5,12 +5,14 @@ import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation.t
 import EditDrawerFormDialog from '../../shared/drawer/EditDrawerFormDialog.tsx'
 import DrawerTabs from '../../shared/drawer/DrawerTabs.tsx'
 import SearchableSelect from '../../shared/searchable-select/SearchableSelect.tsx'
+import { canBeAssignedJobs, canReceiveInternalEmail, staffDepartmentLabel, STAFF_DEPARTMENTS } from '../../mechanics/staffDirectory.ts'
 import { getReadyToProcessBlockers } from '../domain/chargeableInvoiceState.ts'
 import {
     CHARGEABLE_INVOICE_LINE_TYPES,
     CHARGEABLE_INVOICE_CORRECTION_TYPES,
     CHARGEABLE_INVOICE_CORRECTION_COMPARISONS,
     CHARGEABLE_INVOICE_DOCUMENT_TYPES,
+    CHARGEABLE_INVOICE_DISPOSITIONS,
     CHARGEABLE_INVOICE_PHOTO_STATUSES,
     CHARGEABLE_INVOICE_UPLOAD_STATUSES,
     CHARGEABLE_INVOICE_APPROVAL_TEMPLATE_VERSION,
@@ -51,6 +53,7 @@ type Props = {
     onUploadPhotos: (files: File[], technicianId: string) => Promise<void>
     onDeletePhotos: (documentIds: string[]) => Promise<void>
     onMarkReady: () => Promise<void>
+    onReturnToInProgress: () => Promise<void>
     onMarkDoNotProcess: (reason: string) => Promise<void>
     onDelete: () => Promise<void>
     onAddCorrection: (draft: ChargeableInvoiceCorrectionDraft) => Promise<void>
@@ -458,7 +461,7 @@ function PhotoWorkflow({ workspace, saving, onPrepare, onUpload, onDelete, onLoa
     const review = workspace.review
     const assignedTechnicianLookupId = review.gr_Job?.gr_Mechanic?.gr_mechanicid ?? review.gr_Job?._gr_mechanic_value ?? ''
     const findTechnician = (technicianId?: string | null) => workspace.technicians.find((technician) =>
-        technician.gr_mechanicid.toLowerCase() === technicianId?.toLowerCase())
+        canBeAssignedJobs(technician) && technician.gr_mechanicid.toLowerCase() === technicianId?.toLowerCase())
     const assignedTechnician = findTechnician(assignedTechnicianLookupId) ?? review.gr_Job?.gr_Mechanic ?? null
     const savedTechnician = findTechnician(review._gr_photorequesttechnician_value)
     const [technicianId, setTechnicianId] = useState(savedTechnician?.gr_mechanicid
@@ -470,7 +473,7 @@ function PhotoWorkflow({ workspace, saving, onPrepare, onUpload, onDelete, onLoa
     const selected = findTechnician(technicianId)
     const isOverride = Boolean(selected && assignedTechnicianLookupId
         && selected.gr_mechanicid.toLowerCase() !== assignedTechnicianLookupId.toLowerCase())
-    const technicianOptions = workspace.technicians.map((technician, originalIndex) => {
+    const technicianOptions = workspace.technicians.filter(canBeAssignedJobs).map((technician, originalIndex) => {
         const isAssigned = Boolean(assignedTechnicianLookupId
             && technician.gr_mechanicid.toLowerCase() === assignedTechnicianLookupId.toLowerCase())
         return {
@@ -723,10 +726,11 @@ function PoRequestWorkflow({ workspace, saving, onPrepare, onLoadDocument, onGen
 export default function ChargeableInvoiceWorkspace({
     workspace, loading, saving, error, onStart, onSaveWaiting, onSaveRequirements,
     onPreparePhotoRequest, onPreparePoRequest, onUploadPhotos, onDeletePhotos,
-    onMarkReady, onMarkDoNotProcess, onDelete, onAddCorrection, onReplaceCorrection, onSupersedeCorrection, onLoadDocument, onDownload, onLoadQuoteLines, onGenerateApprovalPdf, onClose,
+    onMarkReady, onReturnToInProgress, onMarkDoNotProcess, onDelete, onAddCorrection, onReplaceCorrection, onSupersedeCorrection, onLoadDocument, onDownload, onLoadQuoteLines, onGenerateApprovalPdf, onClose,
 }: Props) {
     const [tab, setTab] = useState<Tab>('amendments')
     const [showReadyConfirmation, setShowReadyConfirmation] = useState(false)
+    const [showReturnConfirmation, setShowReturnConfirmation] = useState(false)
     const [showDoNotProcess, setShowDoNotProcess] = useState(false)
     const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false)
     const [deleteConfirmation, setDeleteConfirmation] = useState('')
@@ -738,6 +742,7 @@ export default function ChargeableInvoiceWorkspace({
     const [correctionEditor, setCorrectionEditor] = useState<CorrectionEditorState | null>(null)
     const [departingCorrectionId, setDepartingCorrectionId] = useState<string | null>(null)
     const [instructionFeedback, setInstructionFeedback] = useState('')
+    const [amendmentRecipientId, setAmendmentRecipientId] = useState('')
     const review = workspace?.review
 
     const currentRevision = useMemo(() => workspace?.revisions.find((revision) =>
@@ -769,6 +774,15 @@ export default function ChargeableInvoiceWorkspace({
         if (!workspace) return null
         try { return buildChargeableInvoiceCorrectionInstructions(workspace) } catch { return null }
     }, [workspace])
+    const internalStaff = useMemo(() => workspace?.technicians.filter(canReceiveInternalEmail) ?? [], [workspace?.technicians])
+    const internalStaffOptions = useMemo(() => internalStaff.map((staff) => ({
+        value: staff.gr_mechanicid,
+        label: staff.gr_name,
+        secondary: `${staffDepartmentLabel(staff.gr_department)} · ${staff.gr_email}`,
+        emphasized: staff.gr_department === STAFF_DEPARTMENTS.ACCOUNTS,
+    })), [internalStaff])
+    const accountsStaff = internalStaff.filter((staff) => staff.gr_department === STAFF_DEPARTMENTS.ACCOUNTS)
+    const effectiveAmendmentRecipientId = amendmentRecipientId || (accountsStaff.length === 1 ? accountsStaff[0].gr_mechanicid : '')
     const latestCorrectionChange = Math.max(0, ...(workspace?.activities ?? [])
         .filter((activity) => activity.gr_event === 122830003 || activity.gr_event === 122830004)
         .map((activity) => Date.parse(activity.gr_occurredon) || 0))
@@ -778,7 +792,8 @@ export default function ChargeableInvoiceWorkspace({
         && document.gr_templateversion === CHARGEABLE_INVOICE_APPROVAL_TEMPLATE_VERSION
         && document._gr_revision_value?.toLowerCase() === currentRevision?.gr_chargeableinvoicerevisionid.toLowerCase()
         && (Date.parse(document.createdon || '') || 0) >= latestCorrectionChange)
-    const blockers = review ? getReadyToProcessBlockers(review) : []
+    const unresolvedCorrectionCount = correctionInstructions?.count ?? 0
+    const blockers = review ? getReadyToProcessBlockers(review, unresolvedCorrectionCount > 0) : []
     const canCorrect = Boolean(review?.gr_reviewstartedon && review.gr_disposition == null)
     const correctionActionsDisabled = saving || correctionEditor != null || departingCorrectionId != null
     const saveCorrection = (draft: ChargeableInvoiceCorrectionDraft) => correctionEditor?.correctionId
@@ -790,7 +805,6 @@ export default function ChargeableInvoiceWorkspace({
         try { await onSupersedeCorrection(correctionId) }
         finally { setDepartingCorrectionId(null) }
     }
-    const unresolvedCorrectionCount = correctionInstructions?.count ?? 0
     const deletionRecordCount = workspace ? 1 + workspace.revisions.length + workspace.lines.length
         + workspace.corrections.length + workspace.documents.length + workspace.activities.length : 0
 
@@ -820,10 +834,11 @@ export default function ChargeableInvoiceWorkspace({
 
     const openCorrectionEmail = () => {
         if (!correctionInstructions || !review) return
+        const recipient = internalStaff.find((staff) => staff.gr_mechanicid === effectiveAmendmentRecipientId)
         const jobNumber = review.gr_Job?.gr_jobnumber || review.gr_greentreereference
         const subject = `Invoice amendments required - ${review.gr_invoicenumber}${jobNumber ? ` - Job ${jobNumber}` : ''}`
-        window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(correctionInstructions.emailText)}`
-        setInstructionFeedback('An editable amendment email draft was opened with the recipient blank. Add the recipient before sending.')
+        window.location.href = `mailto:${encodeURIComponent(recipient?.gr_email?.trim() ?? '')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(correctionInstructions.emailText)}`
+        setInstructionFeedback(recipient ? `An editable amendment email draft was opened for ${recipient.gr_name}.` : 'An editable amendment email draft was opened with the recipient blank.')
     }
     const generateAmendedInvoice = async () => {
         setInstructionFeedback('')
@@ -846,6 +861,7 @@ export default function ChargeableInvoiceWorkspace({
             {review && <button type="button" className="danger" disabled={saving} onClick={() => { setDeleteConfirmation(''); setDeleteError(''); setShowDeleteConfirmation(true) }}>Delete invoice</button>}
             {review && !review.gr_reviewstartedon && <button type="button" className="primary" disabled={saving} onClick={() => void onStart()}>{saving ? 'Starting…' : 'Start review'}</button>}
             {review?.gr_reviewstartedon && review.gr_disposition == null && <button type="button" className="primary" disabled={saving || blockers.length > 0} onClick={() => { setDispositionError(''); setShowReadyConfirmation(true) }}>Ready to Process</button>}
+            {review?.gr_disposition === CHARGEABLE_INVOICE_DISPOSITIONS.READY_TO_PROCESS && <button type="button" className="chargeable-secondary" disabled={saving} onClick={() => { setDispositionError(''); setShowReturnConfirmation(true) }}>Return to In Progress</button>}
             {review?.gr_reviewstartedon && review.gr_disposition == null && <button type="button" className="danger" disabled={saving || review.gr_waitingon != null} onClick={() => { setDispositionReason(''); setDispositionError(''); setShowDoNotProcess(true) }}>Do Not Process</button>}
             <button type="button" disabled={saving} onClick={onClose}>Close</button>
         </>}
@@ -934,7 +950,8 @@ export default function ChargeableInvoiceWorkspace({
                 </EditDrawerSection>
                 <EditDrawerSection title="Amendment handoff">
                     {correctionInstructions ? <>
-                        <div className="chargeable-handoff-heading"><div><strong>{correctionInstructions.count} active amendment{correctionInstructions.count === 1 ? '' : 's'}</strong><p>Current instructions for Nargiza. Superseded edits and resolved history are excluded.</p></div><div className="chargeable-handoff-actions"><button type="button" className="chargeable-secondary chargeable-email-action" onClick={openCorrectionEmail}><EmailIcon />Email amendments</button><button type="button" className="chargeable-secondary" onClick={() => void copyCorrectionInstructions()}>Copy email summary</button></div></div>
+                        <SearchableSelect id="chargeable-amendment-recipient" label="Send amendments to" value={effectiveAmendmentRecipientId} options={internalStaffOptions} onChange={setAmendmentRecipientId} placeholder="Choose an internal staff member" searchPlaceholder="Search staff" emptyLabel="No active staff with email addresses" />
+                        <div className="chargeable-handoff-heading"><div><strong>{correctionInstructions.count} active amendment{correctionInstructions.count === 1 ? '' : 's'}</strong><p>Current instructions for the selected internal recipient. Superseded edits and resolved history are excluded.</p></div><div className="chargeable-handoff-actions"><button type="button" className="chargeable-secondary chargeable-email-action" onClick={openCorrectionEmail}><EmailIcon />Email amendments</button><button type="button" className="chargeable-secondary" onClick={() => void copyCorrectionInstructions()}>Copy email summary</button></div></div>
                         <ol className="chargeable-handoff-list">{correctionInstructions.items.map((item) => <li key={item.id}><strong>{item.title}</strong><p>{item.detail}</p>{item.note && <small>{item.note}</small>}</li>)}</ol>
                         <p className="chargeable-evidence-note">Email amendments opens an editable draft with the recipient blank. Nothing is sent automatically.</p>
                         <div className="chargeable-amended-invoice-action">
@@ -987,6 +1004,7 @@ export default function ChargeableInvoiceWorkspace({
             </div>
         </div>
         {showReadyConfirmation && <EditDrawerConfirmation eyebrow="Terminal review decision" title="Mark Ready to Process?" message={`This moves the invoice to the Ready queue for Nargiza / Accounts. ${review?.gr_porequired ? 'The PO request has been prepared and Accounts now owns customer follow-up. ' : ''}${unresolvedCorrectionCount ? `${unresolvedCorrectionCount} correction instruction${unresolvedCorrectionCount === 1 ? '' : 's'} will remain attached for processing. ` : ''}It does not change the Job or send a communication.`} error={dispositionError} isBusy={saving} confirmLabel="Mark Ready" onCancel={() => setShowReadyConfirmation(false)} onConfirm={() => { void onMarkReady().then(() => setShowReadyConfirmation(false)).catch((cause) => setDispositionError(cause instanceof Error ? cause.message : 'The review could not be updated.')) }} />}
+        {showReturnConfirmation && <EditDrawerConfirmation eyebrow="Correct Ready decision" title="Return to In Progress?" message="This removes the Ready to Process decision and returns the invoice to the In progress queue for manager review. Existing amendments, documents, PO/photo decisions and history are retained. It does not change the Job or notify Accounts." error={dispositionError} isBusy={saving} confirmLabel="Return to In Progress" onCancel={() => setShowReturnConfirmation(false)} onConfirm={() => { void onReturnToInProgress().then(() => setShowReturnConfirmation(false)).catch((cause) => setDispositionError(cause instanceof Error ? cause.message : 'The review could not be returned to In progress.')) }} />}
         {showDoNotProcess && <EditDrawerFormDialog eyebrow="Terminal review decision" title="Do Not Process" error={dispositionError} isBusy={saving} submitLabel="Confirm Do Not Process" onCancel={() => setShowDoNotProcess(false)} onSubmit={() => { if (!dispositionReason.trim()) { setDispositionError('Enter the reason this invoice must not be processed.'); return } void onMarkDoNotProcess(dispositionReason).then(() => setShowDoNotProcess(false)).catch((cause) => setDispositionError(cause instanceof Error ? cause.message : 'The review could not be updated.')) }}><label className="chargeable-field">Reason<textarea rows={5} value={dispositionReason} maxLength={4000} onChange={(event) => setDispositionReason(event.currentTarget.value)} /></label></EditDrawerFormDialog>}
         {showDeleteConfirmation && review && <EditDrawerFormDialog eyebrow="Permanent deletion" title={`Delete invoice ${review.gr_invoicenumber}?`} error={deleteError} isBusy={saving} destructive submitDisabled={deleteConfirmation.trim() !== review.gr_invoicenumber} submitLabel={saving ? 'Deleting…' : 'Permanently delete'} onCancel={() => setShowDeleteConfirmation(false)} onSubmit={() => {
             if (deleteConfirmation.trim() !== review.gr_invoicenumber) { setDeleteError(`Type ${review.gr_invoicenumber} exactly to confirm.`); return }

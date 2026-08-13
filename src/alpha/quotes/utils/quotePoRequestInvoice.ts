@@ -1,6 +1,6 @@
 import type { Customer } from '../../jobs/types/customer.types'
 import type { Equipment } from '../../jobs/types/equipment.types'
-import type { LiftrucksInvoiceSnapshot } from '../../shared/pdf/renderLiftrucksInvoicePdf'
+import { MAX_LIFTTRUCKS_INVOICE_LINES, type LiftrucksInvoiceSnapshot } from '../../shared/pdf/renderLiftrucksInvoicePdf.ts'
 import type { PricingCategory } from '../types/pricing.types'
 import type { Quote, QuoteJob, QuoteLineInput } from '../types/quote.types'
 
@@ -35,32 +35,37 @@ export function buildQuotePoRequestInvoiceSnapshot(input: QuotePoRequestInvoiceI
     if (!input.lines.length || input.lines.some((line) => !line.description.trim())) {
         throw new Error('Add at least one complete quote line before generating the invoice.')
     }
-    if (input.lines.length > 15) throw new Error('The invoice template supports at most 15 quote lines.')
+    if (input.lines.length > MAX_LIFTTRUCKS_INVOICE_LINES) {
+        throw new Error(`The invoice template supports at most ${MAX_LIFTTRUCKS_INVOICE_LINES} quote lines.`)
+    }
 
     const job = input.jobs.find((candidate) => candidate.gr_jobid === input.jobId) ?? input.quote.gr_Job
+    const jobNumber = job?.gr_jobnumber?.trim()
+    if (!jobNumber) throw new Error('Link the quote to a numbered Job before generating the provisional quotation.')
     const directEquipment = input.equipment.find((candidate) => candidate.gr_equipmentid === input.equipmentId)
         ?? input.quote.gr_Equipment
     const selectedEquipment = directEquipment ?? job?.gr_Equipment
-    const directSite = directEquipment?.gr_Site ?? input.quote.gr_Equipment?.gr_Site
     const directCustomer = input.customers.find((candidate) => candidate.gr_customerid === input.customerId)
         ?? input.quote.gr_Customer
-    const customer = directCustomer ?? directSite?.gr_Customer ?? job?.gr_Site?.gr_Customer
-    const site = directSite ?? job?.gr_Site
+    const customer = directCustomer ?? job?.gr_Site?.gr_Customer ?? directEquipment?.gr_Site?.gr_Customer
+        ?? input.quote.gr_Equipment?.gr_Site?.gr_Customer
+    const site = job?.gr_Site
 
     return {
-        documentNumber: quoteNumber,
+        documentNumber: jobNumber,
         documentDate: input.quoteDate,
-        jobNumber: job?.gr_jobnumber ?? '',
+        jobNumber,
         orderNumber: '',
         customer: customer?.gr_name ?? '',
-        site: site?.gr_address || site?.gr_name || '',
+        siteName: site?.gr_name ?? '',
+        siteAddress: site?.gr_address ?? '',
         headline: input.title,
         fleet: selectedEquipment?.gr_fleet ?? '',
         make: selectedEquipment?.gr_make ?? '',
         model: selectedEquipment?.gr_model ?? '',
         serial: selectedEquipment?.gr_serial ?? '',
         repairDescription: job?.gr_description || input.title,
-        workCompleted: input.notes,
+        workRequired: input.notes,
         lines: input.lines.map((line, index) => ({
             type: invoiceLineType(line.category),
             description: line.description,
@@ -73,4 +78,22 @@ export function buildQuotePoRequestInvoiceSnapshot(input: QuotePoRequestInvoiceI
         gstAmount: input.gst,
         total: input.total,
     }
+}
+
+const safeFilenamePart = (value: string) => [...value]
+    .map((character) => character.charCodeAt(0) < 32 ? '-' : character)
+    .join('')
+    .replace(/[<>:"/\\|?*]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/\s+/g, ' ')
+    .replace(/[. -]+$/g, '')
+    .trim()
+
+export function buildQuoteProvisionalFilename(snapshot: LiftrucksInvoiceSnapshot) {
+    const equipment = safeFilenamePart(snapshot.fleet
+        || snapshot.serial
+        || [snapshot.make, snapshot.model].filter(Boolean).join(' ')
+        || 'Equipment')
+    const jobNumber = safeFilenamePart(snapshot.jobNumber || snapshot.documentNumber || 'Job')
+    return `${equipment} - ${jobNumber}.pdf`
 }

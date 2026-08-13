@@ -187,7 +187,22 @@ test('GreenTree two-column equipment rows stop at the adjacent field labels', ()
     assert.equal(candidate.dateOfJob, '02 July 2026')
     assert.equal(candidate.serviceInterval, '6')
     assert.equal(candidate.nextDue, '14 August 2023')
-    assert.equal(candidate.extractionVersion, 'greentree-layout-v3')
+    assert.equal(candidate.extractionVersion, 'greentree-layout-v4')
+})
+
+test('GreenTree positional party blocks retain customer and site postal lines', () => {
+    const lines = [
+        { text: 'Order No : 4508216971', words: [{ text: 'Order', x: 398 }, { text: 'No', x: 427 }, { text: '4508216971', x: 465 }] },
+        { text: 'Build Run Repair - Service Visyboard NZ Ltd', words: [{ text: 'Build', x: 49 }, { text: 'Run', x: 81 }, { text: 'Repair', x: 108 }, { text: '-', x: 149 }, { text: 'Service', x: 156 }, { text: 'Visyboard', x: 338 }, { text: 'NZ', x: 399 }, { text: 'Ltd', x: 418 }] },
+        { text: 'PO Box 197 Rosscommon Rd', words: [{ text: 'PO', x: 49 }, { text: 'Box', x: 67 }, { text: '197', x: 87 }, { text: 'Rosscommon', x: 338 }, { text: 'Rd', x: 405 }] },
+        { text: 'Somerton VIC Wiri South Auckland', words: [{ text: 'Somerton', x: 49 }, { text: 'VIC', x: 100 }, { text: 'Wiri', x: 338 }, { text: 'South', x: 361 }, { text: 'Auckland', x: 395 }] },
+        { text: 'Australia 3062', words: [{ text: 'Australia', x: 49 }, { text: '3062', x: 118 }] },
+        { text: 'Description Quantity Price Total', words: [{ text: 'Description', x: 16 }, { text: 'Quantity', x: 307 }, { text: 'Price', x: 405 }, { text: 'Total', x: 485 }] },
+    ]
+    const candidate = endpoint._test.extractGreenTreeCandidate([{ lines }])
+    assert.equal(candidate.accountSnapshot, 'Build Run Repair - Service')
+    assert.equal(candidate.customerSnapshot, 'Build Run Repair - Service\nPO Box 197\nSomerton VIC\nAustralia 3062')
+    assert.equal(candidate.siteSnapshot, 'Visyboard NZ Ltd\nRosscommon Rd\nWiri South Auckland')
 })
 
 test('duplicate lookup distinguishes a new revision from a recoverable failed import', { concurrency: false }, async () => {

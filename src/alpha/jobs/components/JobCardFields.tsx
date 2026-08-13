@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Job } from '../types/job.types'
 import type { Mechanic } from '../types/mechanic.types'
 import type { JobAssignment } from '../types/jobAssignment.types'
+import { canBeAssignedJobs } from '../../mechanics/staffDirectory.ts'
 import {
     getJobCardStatus,
     JOB_CARD_STATUSES,
@@ -317,7 +318,7 @@ export default function JobCardFields({
                                 <select value={mechanicId} onChange={(event) => setMechanicId(event.target.value)}>
                                     <option value="">Select technician</option>
                                     {mechanics.filter((mechanic) =>
-                                        mechanic.statecode !== 1
+                                        canBeAssignedJobs(mechanic)
                                         && mechanic.gr_mechanicid !== job.gr_Mechanic?.gr_mechanicid
                                         && !assignments.some((assignment) =>
                                             assignment.gr_Mechanic?.gr_mechanicid === mechanic.gr_mechanicid,

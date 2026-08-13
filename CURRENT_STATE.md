@@ -1,6 +1,6 @@
 # Current State
 
-Branch: `codex/chargeable-invoice-review`
+Branch: `codex/staff-directory`
 
 ## Deployment status
 
@@ -33,19 +33,52 @@ Branch: `codex/chargeable-invoice-review`
 
 ## Unfinished work
 
-- Quote PO-request invoice generation is implemented locally inside the saved Quote editor. It
+- Staff Directory is implemented locally on `codex/staff-directory`: the UI is renamed from
+  Mechanics to Staff, `/mechanics` redirects to `/staff`, Department, `Can be assigned Jobs`, and
+  `CC on customer emails`
+  are editable, non-assignable office staff are excluded from technician workflows, and active
+  emailed staff can be selected for Chargeable Invoice amendment handoff. Explicitly opted-in active
+  emailed staff are deduplicated into CC on Quote and Chargeable Invoice customer PO drafts. The existing
+  `gr_mechanic` table and relationships are preserved. The approved `gr_department` and
+  `gr_jobassignmentenabled` columns were provisioned, published, and verified in one interactive
+  Dataverse connection on 13 August 2026. The separately approved `gr_customeremailccenabled`
+  column was then provisioned, published, and verified through one deliberate interactive connection
+  after its no-prompt preflight stopped safely. Signed-in Staff and email-draft smoke testing remains;
+  no role, record, deployment, credential, or cloud configuration was changed.
+
+- Quote provisional-quotation generation is implemented locally inside the saved Quote editor. It
   reuses the approved GreenTree-style template and Liftrucks logo, uses the live editor lines and
-  totals, and copies Quote Notes into Work Completed. The generated PDF downloads locally and does
-  not persist a document, send an email, or change Quote/Job workflow state. Deployment and a
+  totals, copies Quote Notes into the provisional document's `Work Required` section, and displays the linked Job number in both the
+  original template's `Invoice No` and `Our Ref` fields. The generated PDF downloads locally and does
+  not persist a document, send an email, or change Quote/Job workflow state. The shared single-page
+  renderer and editor now support up to 20 lines, including the previously blocked 16-line quote;
+  dense rows retain a 7.5 pt minimum. Deployment and a
   signed-in browser smoke test remain outstanding.
+  Its party box now stacks Customer, linked Job Site name and linked Job Site address on the left.
+  Generation opens the browser's native Save File dialog when supported, with a standard-download
+  fallback for other browsers. Its suggested filename is `Equipment - Job number.pdf`, preferring
+  Fleet and falling back to Serial or Make/Model.
+  The saved Quote editor can also open an editable PO request email using the linked Job Site's PO
+  recipient override or the Customer default, including configured CC recipients. Unconfigured routing
+  opens a draft with the recipient blank; the user attaches the saved PDF manually and nothing is sent
+  or recorded automatically. Active Staff explicitly opted into customer emails are appended as
+  deduplicated internal CC recipients. The draft uses a concise human service-manager template:
+  request the order number, include Quote Notes as the work explanation, and state that work awaits
+  PO approval rather than repeating a system-style field list.
+  Quote titles are composed from protected Job number, Equipment fleet/serial and Job description
+  context, followed by optional user wording; Job selection displays both number and description.
+  Selecting or reopening a linked Job populates the Quote Customer and Equipment from the Job when
+  those relationships are available, while saved direct Quote lookups remain authoritative on open.
+  Saving a new or existing Quote refreshes its persisted header and line identities without closing
+  the editor; close remains an explicit user action.
 
 - Customer/Site Purchase Order Recipient configuration is implemented locally: Customer defaults
   contain one Primary plus optional CC Contacts, complete Site overrides replace that default, and
   managers can create and immediately select a new emailed Contact inline using the existing Site
   Contact workflow. Chargeable Invoice Review resolves the effective set into an editable unsent email draft. Approved
-  Dataverse table/role provisioning and a signed-in workflow smoke test remain in progress. The
-  first no-prompt provisioning attempt stopped before any metadata or privilege change because
-  Microsoft requires deliberate account selection; no interactive retry has been started.
+  Dataverse table, relationships, and required organisation-depth Service Operations and Chargeable
+  Invoice Manager permissions were provisioned, published, and verified on 13 August 2026. A
+  signed-in save/resolution workflow smoke test remains. No role assignment was changed.
 
 - Chargeable Invoice Review Phases 1–6 and the Phase 7 local release-readiness baseline are
   complete. Explicitly gated target-environment smoke, role assignment and release validation
@@ -53,6 +86,11 @@ Branch: `codex/chargeable-invoice-review`
   columns are provisioned and verified; release flags remain disabled and the manager role remains
   unassigned. One explicitly approved interactive read-only verification passed again on
   12 August 2026 without any Dataverse write.
+  Ready reviews now have a confirmed `Return to In Progress` recovery action. It clears only the
+  mistaken Ready disposition under the Review ETag, retains all review evidence and decisions, and
+  appends an audited Manual Note; Do Not Process remains terminal.
+  Active amendments now provide their own Ready handoff path to Accounts: undecided PO/photo fields
+  do not block that path, while any requirement explicitly set to Yes remains enforced.
 - Permanent Chargeable Invoice package deletion is implemented locally after the 12 August 2026
   product decision. Provisioning and verifying organisation-depth Delete on the six review tables
   remains separately gated; the currently unassigned manager role still has only its original 30
@@ -711,7 +749,7 @@ requested values, filename and workspace actions.
 The Chargeable Invoice Review Phase 6 endpoint re-reads the current immutable
 Review/Revision/Lines and active Corrections, rejects stale, terminal and non-PO states, applies
 active Work completed and line amendments, recalculates pricing, and renders the familiar Liftrucks
-approval layout with the prominent `FOR CUSTOMER PO APPROVAL - NOT A TAX INVOICE` marker. The
+approval layout with the prominent `PROVISIONAL QUOTATION` marker. The
 versioned `pdf-lib` renderer produces
 extractable A4 PDFs; a canonical SHA-256 snapshot hash reuses an existing matching Complete
 document. New output stages as a Review Document and atomically completes with an Approval PDF
@@ -789,21 +827,36 @@ It does not loop through individual deletes with a stale Review ETag.
 
 The Customer PO Approval workflow now creates a separate provisional document from the current
 immutable GreenTree Revision plus active Work completed and line amendments. Changed, removed and
-added lines are applied to a deterministic `liftrucks-manager-template-v5` snapshot and its Subtotal,
+added lines are applied to a deterministic `liftrucks-manager-template-v8` snapshot and its Subtotal,
 GST and GST-inclusive Total are recalculated. The generated PDF uses the product-owner-supplied
 `invoice template.pdf` as its authoritative visual layout. Because that flat template retained hidden
 text from its source invoice, the application asset is a sanitized raster of its visible appearance;
 the remaining example headline is cleared and all current reviewed values are rendered into the intended
 blank locations. This preserves the supplied rules, labels, spacing and bank details while preventing
-old source values remaining as recoverable PDF text. The output is labelled `FOR CUSTOMER PO APPROVAL -
-NOT A TAX INVOICE` and embeds the same Liftrucks JPG, 170-point width and top-left placement used by
-the Requests-tab GreenTree evidence export; GreenTree remains the final tax-invoice authority and its source PDF is not modified.
+old source values remaining as recoverable PDF text. The output is labelled `PROVISIONAL QUOTATION`;
+its top-right document table intentionally omits the GreenTree Invoice No and retains Date, Page,
+Our Ref/Job and Order No. It embeds the same Liftrucks JPG, 170-point width and top-left placement
+used by the Requests-tab GreenTree evidence export; GreenTree remains the final tax-invoice authority
+and its source PDF is not modified.
+Generated approval text follows the measured GreenTree scale used by Quote approval PDFs: 10.92 pt
+for header fields and totals, 12 pt for the Customer name, and 9.96 pt for narrative and ordinary
+invoice-line content. Totals flow beneath the populated lines, while unusually dense line sets reduce
+line text only as required to stay inside the template body.
+After generation, the client validates and retains the completed Document returned by the authenticated
+server while refreshing the remaining workspace. It no longer falsely reports failure when Dataverse's
+immediate follow-up list query has not yet exposed the newly completed Document.
+Local Vite approval middleware reloads its CommonJS approval service and renderer for each request;
+client hot reloads can therefore no longer expect a newer template version than the cached local API.
+GreenTree parser v4 now retains the complete two-column customer/account and Site postal blocks in
+the immutable Revision snapshots. Approval template v8 renders those lines in their original party
+box positions. Existing revisions recover the same blocks from their retained positional extraction
+JSON, so they do not require re-import; linked Dataverse Customer and Site records remain unchanged.
 Photo and PO request work can proceed with active amendments, but an approval copy
 created before the latest correction activity is stale and must be regenerated.
 The Amendment handoff now ends with a `Generate and save PDF` action that fills the approved
 template directly from the current Revision and active amendments, then sends the PDF to the
 browser's download/save workflow. A current generated document can also be downloaded again or
-regenerated in place. The workspace selects only the current `liftrucks-manager-template-v5`
+regenerated in place. The workspace selects only the current `liftrucks-manager-template-v8`
 document, so an older unbranded approval PDF cannot be presented as the current amended invoice.
 Generation requires a started active review but no longer
 requires `PO Required = Yes`; the separate customer PO email workflow still retains that requirement

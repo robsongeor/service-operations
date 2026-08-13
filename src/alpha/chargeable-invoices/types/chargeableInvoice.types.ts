@@ -70,7 +70,7 @@ export const CHARGEABLE_INVOICE_UPLOAD_STATUSES = {
     FAILED: 122830002,
 } as const
 
-export const CHARGEABLE_INVOICE_APPROVAL_TEMPLATE_VERSION = 'liftrucks-manager-template-v5'
+export const CHARGEABLE_INVOICE_APPROVAL_TEMPLATE_VERSION = 'liftrucks-manager-template-v8'
 
 type ValueOf<T> = T[keyof T]
 
@@ -138,6 +138,9 @@ export type ChargeableInvoiceTechnician = {
     gr_mechanicid: string
     gr_name: string
     gr_email?: string | null
+    gr_department?: number | null
+    gr_jobassignmentenabled?: boolean | null
+    gr_customeremailccenabled?: boolean | null
     statecode?: number
 }
 

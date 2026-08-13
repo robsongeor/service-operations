@@ -27,7 +27,7 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
 ## Priority 2 — Product improvements
 
 - [ ] Deliver the planned manager-only Chargeable Invoice Review workflow: Phases 1–6 and the Phase 7 local retention/recovery, release-guard and rollback baseline are complete; separately approve/provision the six whole-package Delete grants, run the de-identified target-environment manager/deletion/accessibility/performance smoke, then complete separately approved role assignment and release validation. See [`docs/features/CHARGEABLE_INVOICE_REVIEW_IMPLEMENTATION_PLAN.md`](docs/features/CHARGEABLE_INVOICE_REVIEW_IMPLEMENTATION_PLAN.md) and [`docs/chargeable-invoice-review-operations.md`](docs/chargeable-invoice-review-operations.md); role provisioning/assignment, deployment and flag changes retain explicit approval gates.
-- [ ] Configure an authoritative internal Accounts follow-up recipient for Chargeable Invoice PO-request drafts (currently Nargiza), then populate the PO-request `CC` field without hard-coding or guessing a personal email address. Amendment handoff drafts deliberately keep `To` blank for manual entry.
+- [ ] Complete Staff Directory signed-in smoke testing and configure intended staff. All three Staff columns are provisioned and verified; verify Quote and Chargeable Invoice customer drafts include opted-in internal CCs without changing external Customer/Site PO routing. Amendment handoff continues to select an active internal recipient and suggest the sole Accounts record.
 - [x] Implement Site Check temporary Equipment availability:
   enabled-Site-only marker, In Workshop/Temporarily Off-site exclusion, and occurrence
   exclusion snapshots; no catch-up Jobs.

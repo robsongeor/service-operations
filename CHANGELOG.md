@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v1.6.0 — 13 August 2026
+
 - Added inline PO Contact creation to Customer-default and Site-override recipient settings, with
   Main customer ownership by default, optional location-specific Site ownership, required name/email
   validation, and immediate Primary or CC selection before routing save.

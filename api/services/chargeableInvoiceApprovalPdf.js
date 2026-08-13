@@ -1,8 +1,9 @@
 const { PDFDocument, StandardFonts, rgb } = require('pdf-lib')
 const { readFileSync } = require('node:fs')
 const { join } = require('node:path')
+const { partyBlocksFromExtractionJson } = require('./greenTreePartyBlocks')
 
-const TEMPLATE_VERSION = 'liftrucks-manager-template-v5'
+const TEMPLATE_VERSION = 'liftrucks-manager-template-v8'
 const PAGE_WIDTH = 595.28
 const PAGE_HEIGHT = 841.89
 const BLACK = rgb(0.08, 0.08, 0.08)
@@ -11,6 +12,26 @@ const LIFTRUCKS_LOGO = readFileSync(join(__dirname, '..', 'assets', 'liftrucks-i
 const LOGO_WIDTH = 170
 const LOGO_LEFT = 38
 const LOGO_TOP = 20
+const HEADER_TABLE_LEFT = 374
+const HEADER_TABLE_TOP = 35
+const HEADER_TABLE_WIDTH = 186
+const HEADER_TABLE_ROW_HEIGHT = 23
+const SOURCE_HEADER_TABLE_TOP = 31
+const SOURCE_HEADER_TABLE_HEIGHT = 121
+const GREEN_TREE_BODY_SIZE = 9.96
+const GREEN_TREE_FIELD_SIZE = 10.92
+const LINE_START_TOP = 510
+const LINE_REGION_HEIGHT = 150
+
+function calculateApprovalLineLayout(lineCount) {
+    const safeCount = Math.max(1, lineCount)
+    const rowHeight = Math.min(11.55, LINE_REGION_HEIGHT / safeCount)
+    return {
+        rowHeight,
+        fontSize: Math.max(7.5, Math.min(GREEN_TREE_BODY_SIZE, rowHeight - 1.5)),
+        totalsTop: LINE_START_TOP + lineCount * rowHeight + 12,
+    }
+}
 
 function safeText(value, fallback = '') {
     const text = value == null ? '' : String(value)
@@ -21,6 +42,10 @@ function safeText(value, fallback = '') {
         .replace(/[^\x20-\x7e\xa0-\xff]/g, ' ')
         .replace(/\s+/g, ' ')
         .trim() || fallback
+}
+
+function safePartyLines(value) {
+    return String(value || '').split(/\r?\n/).map((line) => safeText(line)).filter(Boolean).slice(0, 5)
 }
 
 function formatDateOnly(value) {
@@ -175,6 +200,9 @@ function effectiveApprovalContent(input) {
 function approvalSnapshot(input) {
     const revision = input.revision
     const effective = effectiveApprovalContent(input)
+    const extractedParty = partyBlocksFromExtractionJson(revision.gr_extractionjson)
+    const customerBlock = safePartyLines(revision.gr_customersnapshot || extractedParty.customerSnapshot || revision.gr_accountsnapshot || input.review.gr_Customer?.gr_name)
+    const siteBlock = safePartyLines(revision.gr_sitesnapshot || extractedParty.siteSnapshot || input.review.gr_Site?.gr_name)
     return {
         templateVersion: TEMPLATE_VERSION,
         reviewId: input.review.gr_chargeableinvoicereviewid,
@@ -184,8 +212,10 @@ function approvalSnapshot(input) {
         invoiceDate: revision.gr_invoicedate || null,
         orderNumber: safeText(revision.gr_rawordernumber),
         jobNumber: safeText(input.review.gr_Job?.gr_jobnumber || revision.gr_greentreereference),
-        customer: safeText(input.review.gr_Customer?.gr_name || revision.gr_customersnapshot),
-        site: safeText(input.review.gr_Site?.gr_name || revision.gr_sitesnapshot),
+        customer: customerBlock[0] || safeText(input.review.gr_Customer?.gr_name),
+        site: safeText(input.review.gr_Site?.gr_name || siteBlock[0]),
+        customerBlock,
+        siteBlock,
         fleet: safeText(input.review.gr_Equipment?.gr_fleet || revision.gr_fleet),
         make: safeText(input.review.gr_Equipment?.gr_make || revision.gr_make),
         model: safeText(input.review.gr_Equipment?.gr_model || revision.gr_model),
@@ -208,8 +238,8 @@ function approvalSnapshot(input) {
 
 async function renderApprovalPdf(snapshot, generatedAt = new Date()) {
     const pdf = await PDFDocument.create()
-    pdf.setTitle(`Customer PO approval - ${safeText(snapshot.jobNumber)}`)
-    pdf.setSubject('Customer purchase-order approval document - not a tax invoice')
+    pdf.setTitle(`Provisional quotation - ${safeText(snapshot.jobNumber)}`)
+    pdf.setSubject('Provisional quotation for customer purchase-order approval')
     pdf.setAuthor('Liftrucks NZ Ltd')
     pdf.setCreator(`Service Operations ${TEMPLATE_VERSION}`)
     pdf.setProducer(`Service Operations ${TEMPLATE_VERSION}`)
@@ -228,93 +258,148 @@ async function renderApprovalPdf(snapshot, generatedAt = new Date()) {
 
     const drawTop = (value, x, top, options = {}) => {
         const font = options.font || regular
-        const size = options.size || 7.5
+        const size = options.size || GREEN_TREE_BODY_SIZE
         const shown = safeText(value)
         if (!shown) return
         page.drawText(shown, { x, y: PAGE_HEIGHT - top - size, size, font, color: options.color || BLACK })
     }
     const drawRightTop = (value, right, top, options = {}) => {
         const font = options.font || regular
-        const size = options.size || 7.5
+        const size = options.size || GREEN_TREE_BODY_SIZE
         const shown = safeText(value)
         if (!shown) return
         drawTop(shown, right - font.widthOfTextAtSize(shown, size), top, { ...options, font, size })
     }
     const drawFitted = (value, x, top, width, options = {}) => {
         const font = options.font || regular
-        let size = options.size || 7.5
+        let size = options.size || GREEN_TREE_BODY_SIZE
         const shown = safeText(value)
         if (!shown) return
-        while (size > (options.minimumSize || 5.5) && font.widthOfTextAtSize(shown, size) > width) size -= 0.25
+        while (size > (options.minimumSize || 8) && font.widthOfTextAtSize(shown, size) > width) size -= 0.25
         drawTop(shown, x, top, { ...options, font, size })
     }
     const drawWrappedRegion = (value, x, top, width, height, options = {}) => {
         const font = options.font || regular
-        let size = options.size || 7
+        let size = options.size || GREEN_TREE_BODY_SIZE
         let lineHeight
         let lines
         do {
             lineHeight = size + (options.leading || 1.2)
             lines = wrapText(value, font, size, width)
-            if (lines.length * lineHeight <= height || size <= (options.minimumSize || 5.25)) break
+            if (lines.length * lineHeight <= height || size <= (options.minimumSize || 8)) break
             size -= 0.25
         } while (true)
         for (const [index, line] of lines.slice(0, Math.floor(height / lineHeight)).entries()) {
             drawTop(line, x, top + index * lineHeight, { font, size })
         }
     }
+    const drawPartyBlock = (lines, x, top, width) => {
+        const values = Array.isArray(lines) ? lines.slice(0, 5) : safePartyLines(lines)
+        values.forEach((value, index) => drawFitted(value, x, top + index * 14, width, {
+            font: index === 0 ? bold : regular,
+            size: index === 0 ? 12 : GREEN_TREE_FIELD_SIZE,
+            minimumSize: index === 0 ? 9.5 : 8.5,
+        }))
+    }
 
-    drawTop('FOR CUSTOMER PO APPROVAL - NOT A TAX INVOICE', LOGO_LEFT, LOGO_TOP + logoHeight + 6, { font: bold, size: 8 })
-    drawFitted(snapshot.invoiceNumber, 465, 39, 76, { size: 8 })
-    drawFitted(formatDateOnly(snapshot.invoiceDate), 465, 62, 76, { size: 8 })
-    drawFitted(snapshot.jobNumber, 465, 107, 76, { size: 8 })
-    drawFitted(snapshot.orderNumber, 465, 129, 76, { size: 8 })
+    const headerRows = [
+        ['Date', formatDateOnly(snapshot.invoiceDate)],
+        ['Page', '1'],
+        ['Our Ref', snapshot.jobNumber],
+        ['Order No', snapshot.orderNumber],
+    ]
+    page.drawRectangle({
+        x: HEADER_TABLE_LEFT - 4,
+        y: PAGE_HEIGHT - SOURCE_HEADER_TABLE_TOP - SOURCE_HEADER_TABLE_HEIGHT,
+        width: HEADER_TABLE_WIDTH + 8,
+        height: SOURCE_HEADER_TABLE_HEIGHT,
+        color: rgb(1, 1, 1),
+    })
+    page.drawLine({
+        start: { x: 8, y: PAGE_HEIGHT - 146 },
+        end: { x: 560, y: PAGE_HEIGHT - 146 },
+        thickness: 0.75,
+        color: BLACK,
+    })
+    page.drawRectangle({
+        x: HEADER_TABLE_LEFT,
+        y: PAGE_HEIGHT - HEADER_TABLE_TOP - (HEADER_TABLE_ROW_HEIGHT * headerRows.length),
+        width: HEADER_TABLE_WIDTH,
+        height: HEADER_TABLE_ROW_HEIGHT * headerRows.length,
+        borderColor: BLACK,
+        borderWidth: 0.75,
+    })
+    headerRows.slice(1).forEach((_, index) => {
+        const top = HEADER_TABLE_TOP + HEADER_TABLE_ROW_HEIGHT * (index + 1)
+        page.drawLine({
+            start: { x: HEADER_TABLE_LEFT, y: PAGE_HEIGHT - top },
+            end: { x: HEADER_TABLE_LEFT + HEADER_TABLE_WIDTH, y: PAGE_HEIGHT - top },
+            thickness: 0.75,
+            color: BLACK,
+        })
+    })
+    headerRows.forEach(([label, value], index) => {
+        const top = HEADER_TABLE_TOP + 5 + HEADER_TABLE_ROW_HEIGHT * index
+        drawTop(label, HEADER_TABLE_LEFT + 15, top, { size: GREEN_TREE_FIELD_SIZE })
+        drawTop(':', HEADER_TABLE_LEFT + 76, top, { size: GREEN_TREE_FIELD_SIZE })
+        drawFitted(value, HEADER_TABLE_LEFT + 91, top, HEADER_TABLE_WIDTH - 98, {
+            size: GREEN_TREE_FIELD_SIZE,
+            minimumSize: 9,
+        })
+    })
 
-    drawFitted(snapshot.customer, 49, 159, 205, { font: bold, size: 9 })
-    drawFitted(snapshot.site, 338, 159, 205, { font: bold, size: 9 })
+    drawTop('PROVISIONAL QUOTATION', LOGO_LEFT, LOGO_TOP + logoHeight + 6, { font: bold, size: 8 })
 
-    drawFitted(snapshot.headline, 24, 271, 520, { size: 8, minimumSize: 5.5 })
-    const headlineWidth = Math.min(regular.widthOfTextAtSize(safeText(snapshot.headline), 8), 520)
+    drawPartyBlock(snapshot.customerBlock || snapshot.customer, 49, 157, 205)
+    drawPartyBlock(snapshot.siteBlock || snapshot.site, 338, 157, 205)
+
+    const headlineSize = (() => {
+        const shown = safeText(snapshot.headline)
+        let size = GREEN_TREE_FIELD_SIZE
+        while (size > 8.5 && regular.widthOfTextAtSize(shown, size) > 520) size -= 0.25
+        drawFitted(shown, 24, 269, 520, { size, minimumSize: 8.5 })
+        return size
+    })()
+    const headlineWidth = Math.min(regular.widthOfTextAtSize(safeText(snapshot.headline), headlineSize), 520)
     if (headlineWidth) {
         page.drawLine({
             start: { x: 24, y: PAGE_HEIGHT - 281 }, end: { x: 24 + headlineWidth, y: PAGE_HEIGHT - 281 },
             thickness: 0.45, color: BLACK,
         })
     }
-    drawFitted(snapshot.fleet, 82.5, 286, 155, { size: 7.5 })
-    drawFitted(snapshot.make, 82.5, 297.5, 155, { size: 7.5 })
-    drawFitted(snapshot.model, 82.5, 309, 155, { size: 7.5 })
-    drawFitted(snapshot.serial, 82.5, 320.5, 155, { size: 7.5 })
-    drawFitted(snapshot.meter == null ? '' : formatNumber(snapshot.meter), 409, 286, 126, { size: 7.5 })
-    drawFitted(formatDateOnly(snapshot.dateOfJob), 409, 297.5, 126, { size: 7.5 })
-    drawFitted(snapshot.serviceInterval, 409, 309, 126, { size: 7.5 })
-    drawFitted(snapshot.nextDue ? formatDateOnly(snapshot.nextDue) : '', 409, 320.5, 126, { size: 7.5 })
+    drawFitted(snapshot.fleet, 82.5, 284, 155, { size: GREEN_TREE_FIELD_SIZE, minimumSize: 8.5 })
+    drawFitted(snapshot.make, 82.5, 295.5, 155, { size: GREEN_TREE_FIELD_SIZE, minimumSize: 8.5 })
+    drawFitted(snapshot.model, 82.5, 307, 155, { size: GREEN_TREE_FIELD_SIZE, minimumSize: 8.5 })
+    drawFitted(snapshot.serial, 82.5, 318.5, 155, { size: GREEN_TREE_FIELD_SIZE, minimumSize: 8.5 })
+    drawFitted(snapshot.meter == null ? '' : formatNumber(snapshot.meter), 409, 284, 126, { size: GREEN_TREE_FIELD_SIZE, minimumSize: 8.5 })
+    drawFitted(formatDateOnly(snapshot.dateOfJob), 409, 295.5, 126, { size: GREEN_TREE_FIELD_SIZE, minimumSize: 8.5 })
+    drawFitted(snapshot.serviceInterval, 409, 307, 126, { size: GREEN_TREE_FIELD_SIZE, minimumSize: 8.5 })
+    drawFitted(snapshot.nextDue ? formatDateOnly(snapshot.nextDue) : '', 409, 318.5, 126, { size: GREEN_TREE_FIELD_SIZE, minimumSize: 8.5 })
 
-    drawWrappedRegion(snapshot.repairDescription || snapshot.headline, 24, 353, 520, 28, { size: 7.5 })
-    drawFitted(`Machine Location: ${snapshot.site}`, 24, 393, 520, { size: 7.5 })
-    drawFitted(`Fleet No: ${snapshot.fleet}`, 24, 407, 520, { size: 7.5 })
-    drawWrappedRegion(snapshot.workCompleted || snapshot.repairDescription, 24, 430, 520, 69, { size: 7 })
+    drawWrappedRegion(snapshot.repairDescription || snapshot.headline, 24, 351, 520, 28, { size: GREEN_TREE_BODY_SIZE })
+    drawFitted(`Machine Location: ${snapshot.site}`, 24, 391, 520, { size: GREEN_TREE_BODY_SIZE, minimumSize: 8 })
+    drawFitted(`Fleet No: ${snapshot.fleet}`, 24, 405, 520, { size: GREEN_TREE_BODY_SIZE, minimumSize: 8 })
+    drawWrappedRegion(snapshot.workCompleted || snapshot.repairDescription, 24, 428, 520, 69, { size: GREEN_TREE_BODY_SIZE })
 
     const rows = snapshot.lines || []
     if (rows.length > 15) throw new Error('The invoice template supports at most 15 amended lines.')
-    const rowHeight = Math.max(6.4, Math.min(10.5, 98 / Math.max(rows.length, 1)))
-    const lineSize = Math.max(5.2, Math.min(7.5, rowHeight - 2.1))
+    const { rowHeight, fontSize: lineSize, totalsTop } = calculateApprovalLineLayout(rows.length)
     for (const [index, line] of rows.slice(0, 15).entries()) {
-        const top = 510 + index * rowHeight
+        const top = LINE_START_TOP + index * rowHeight
         const type = line.type === 122830000 ? 'Labour' : line.type === 122830001 ? 'Parts' : 'Other'
-        drawFitted(type, 25, top, 54, { size: lineSize, minimumSize: 4.75 })
-        drawFitted(line.description, 86, top, 245, { size: lineSize, minimumSize: 4.75 })
+        drawFitted(type, 25, top, 54, { size: lineSize, minimumSize: 7.5 })
+        drawFitted(line.description, 86, top, 245, { size: lineSize, minimumSize: 7.5 })
         drawRightTop(formatNumber(line.quantity), 381, top, { size: lineSize })
         drawRightTop(formatMoney(line.unitPrice), 459, top, { size: lineSize })
         drawRightTop(formatMoney(line.extendedPrice), 548, top, { size: lineSize })
     }
 
-    drawTop('Subtotal', 405, 615, { size: 8 })
-    drawTop(`GST (${Number.isFinite(snapshot.gstRate) ? `${formatNumber(snapshot.gstRate)}%` : ''})`, 405, 628, { size: 8 })
-    drawTop('Total', 405, 645, { font: bold, size: 8.5 })
-    drawRightTop(formatMoney(snapshot.subtotal), 548, 615, { size: 8 })
-    drawRightTop(formatMoney(snapshot.gstAmount), 548, 628, { size: 8 })
-    drawRightTop(formatMoney(snapshot.total), 548, 645, { font: bold, size: 8.5 })
+    drawTop('Subtotal', 405, totalsTop, { size: GREEN_TREE_FIELD_SIZE })
+    drawTop(`GST (${Number.isFinite(snapshot.gstRate) ? `${formatNumber(snapshot.gstRate)}%` : ''})`, 405, totalsTop + 15, { size: GREEN_TREE_FIELD_SIZE })
+    drawTop('Total', 405, totalsTop + 34, { font: bold, size: GREEN_TREE_FIELD_SIZE })
+    drawRightTop(formatMoney(snapshot.subtotal), 548, totalsTop, { size: GREEN_TREE_FIELD_SIZE })
+    drawRightTop(formatMoney(snapshot.gstAmount), 548, totalsTop + 15, { size: GREEN_TREE_FIELD_SIZE })
+    drawRightTop(formatMoney(snapshot.total), 548, totalsTop + 34, { font: bold, size: GREEN_TREE_FIELD_SIZE })
 
     return Buffer.from(await pdf.save({ useObjectStreams: false }))
 }
@@ -325,4 +410,5 @@ module.exports = {
     renderApprovalPdf,
     effectiveApprovalContent,
     safeText,
+    calculateApprovalLineLayout,
 }

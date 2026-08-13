@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict')
 const test = require('node:test')
-const { approvalSnapshot, renderApprovalPdf, effectiveApprovalContent } = require('../api/services/chargeableInvoiceApprovalPdf')
+const { approvalSnapshot, renderApprovalPdf, effectiveApprovalContent, calculateApprovalLineLayout, TEMPLATE_VERSION } = require('../api/services/chargeableInvoiceApprovalPdf')
 const service = require('../api/services/chargeableInvoiceApprovalService').test
 
 const review = {
@@ -18,6 +18,8 @@ const revision = {
     gr_invoicedate: '2026-08-11',
     gr_rawordernumber: 'PO-4508217044',
     gr_greentreereference: '145156',
+    gr_customersnapshot: 'Build Run Repair - Service\nPO Box 197\nSomerton VIC\nAustralia 3062',
+    gr_sitesnapshot: 'Visyboard NZ Ltd\nRosscommon Rd\nWiri South Auckland',
     gr_dateofjob: '2026-08-10',
     gr_meter: 1234,
     gr_serviceinterval: '6 months',
@@ -33,6 +35,16 @@ const lines = [
     { gr_chargeableinvoicelineid: '33333333-3333-4333-8333-333333333331', gr_linekey: 'line-labour', gr_linetype: 122830000, gr_description: 'Labour', gr_quantity: 2.5, gr_unitprice: 105, gr_extendedprice: 262.5, gr_sortorder: 0 },
     { gr_chargeableinvoicelineid: '33333333-3333-4333-8333-333333333332', gr_linekey: 'line-parts', gr_linetype: 122830001, gr_description: 'Hydraulic hose', gr_quantity: 1, gr_unitprice: 62.5, gr_extendedprice: 62.5, gr_sortorder: 1 },
 ]
+
+test('approval typography matches the GreenTree-calibrated invoice line sizing', () => {
+    const common = calculateApprovalLineLayout(9)
+    assert.equal(common.fontSize, 9.96)
+    assert.equal(common.rowHeight, 11.55)
+    assert.equal(common.totalsTop, 625.95)
+    const dense = calculateApprovalLineLayout(15)
+    assert.equal(dense.fontSize, 8.5)
+    assert.equal(TEMPLATE_VERSION, 'liftrucks-manager-template-v8')
+})
 
 test('approval content applies active story, change, removal and addition amendments', () => {
     const corrections = [
@@ -82,13 +94,33 @@ test('approval PDF fills the manager-supplied invoice template with reviewed ame
     }
     await loadingTask.destroy()
     const joined = text.join(' ')
-    assert.match(joined, /CUSTOMER PO APPROVAL/)
-    assert.match(joined, /NOT A TAX INVOICE/)
-    assert.match(joined, /Example Customer/)
+    assert.match(joined, /PROVISIONAL QUOTATION/)
+    assert.doesNotMatch(joined, /CUSTOMER PO APPROVAL|NOT A TAX INVOICE/)
+    assert.doesNotMatch(joined, /INV-TEST/)
+    assert.match(joined, /Build Run Repair - Service/)
+    assert.match(joined, /PO Box 197/)
+    assert.match(joined, /Visyboard NZ Ltd/)
+    assert.match(joined, /Wiri South Auckland/)
     assert.match(joined, /Hydraulic hose/)
     assert.match(joined, /\$373\.75/)
     assert.match(joined, /PO-4508217044/)
     assert.doesNotMatch(joined, /642596|Hubtex Australia/)
+})
+
+test('approval snapshot recovers party blocks from immutable extraction evidence', () => {
+    const sourceLines = [
+        { text: 'Order No : 4508216971', words: [{ text: 'Order', x: 398 }, { text: 'No', x: 427 }] },
+        { text: 'Build Run Repair - Service Visyboard NZ Ltd', words: [{ text: 'Build', x: 49 }, { text: 'Run', x: 81 }, { text: 'Repair', x: 108 }, { text: '-', x: 149 }, { text: 'Service', x: 156 }, { text: 'Visyboard', x: 338 }, { text: 'NZ', x: 399 }, { text: 'Ltd', x: 418 }] },
+        { text: 'PO Box 197 Rosscommon Rd', words: [{ text: 'PO', x: 49 }, { text: 'Box', x: 67 }, { text: '197', x: 87 }, { text: 'Rosscommon', x: 338 }, { text: 'Rd', x: 405 }] },
+        { text: 'Description Quantity Price Total', words: [{ text: 'Description', x: 16 }, { text: 'Quantity', x: 307 }] },
+    ]
+    const snapshot = approvalSnapshot({
+        review,
+        revision: { ...revision, gr_customersnapshot: null, gr_sitesnapshot: null, gr_extractionjson: JSON.stringify({ pages: [{ lines: sourceLines }] }) },
+        lines,
+    })
+    assert.deepEqual(snapshot.customerBlock, ['Build Run Repair - Service', 'PO Box 197'])
+    assert.deepEqual(snapshot.siteBlock, ['Visyboard NZ Ltd', 'Rosscommon Rd'])
 })
 
 test('approval snapshot and hash are stable for the same reviewed revision', () => {

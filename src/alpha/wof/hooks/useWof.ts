@@ -26,6 +26,7 @@ import type { CreateWofInput, ServiceProvider, TechnicianQualification, UpdateWo
 import { createWof as createWofApi, createWofJobFromJobDrawer, deleteWofInspection, fetchTechnicianQualifications, fetchWofInspection, fetchWofInspections, fetchWofProviders, updateWof as updateWofApi } from '../services/wofApi'
 import { getWofDeletionBlockReason } from '../utils/wofRules'
 import { acquireDataverseAccessToken } from '../../../auth/dataverseAuthentication'
+import { fetchMechanics as fetchStaffDirectory } from '../../mechanics/services/mechanicsApi'
 
 export function useWof() {
     const { instance } = useMsal()
@@ -56,12 +57,7 @@ export function useWof() {
         setLoading(true); setError('')
         try {
             const accessToken = await token()
-            const mechanicsRequest = fetch(`${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2/gr_mechanics?$select=gr_mechanicid,gr_name,gr_phone,gr_email,gr_camnumber,gr_rego,gr_region`, {
-                headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
-            }).then(async (response) => {
-                if (!response.ok) throw new Error(`Failed to fetch mechanics: ${await response.text()}`)
-                return response.json() as Promise<{ value?: Mechanic[] }>
-            })
+            const mechanicsRequest = fetchStaffDirectory(accessToken)
             const [equipmentRows, inspectionRows, qualificationRows, providerRows, customerRows, siteRows, jobRows, scheduleRows, planRows, contactRows, mechanicRows] = await Promise.all([
                 fetchEquipment(accessToken), fetchWofInspections(accessToken), fetchTechnicianQualifications(accessToken), fetchWofProviders(accessToken),
                 fetchCustomers(accessToken), fetchSites(accessToken), fetchJobs(accessToken),
@@ -72,7 +68,7 @@ export function useWof() {
             setScheduleOptions(scheduleRows)
             setServicePlans(planRows)
             setSiteContacts(contactRows)
-            setMechanics(mechanicRows.value ?? [])
+            setMechanics(mechanicRows)
         } catch (caught) { setError(caught instanceof Error ? caught.message : 'WOF data could not be loaded.') }
         finally { setLoading(false) }
     }, [account, token])

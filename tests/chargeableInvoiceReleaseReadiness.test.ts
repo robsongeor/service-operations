@@ -42,6 +42,9 @@ test('independent import and approval flags remain server-only and fail closed',
     assert.doesNotMatch(`${preview}\n${approval}\n${viteConfig}`, /MALWARE_SCANNING_READY/)
     assert.ok(viteConfig.indexOf("require('./api/services/chargeableInvoiceApprovalService')")
         > viteConfig.indexOf('const installMiddleware'), 'Vite must load API-only PDF dependencies lazily')
+    assert.match(viteConfig, /delete require\.cache\[approvalServicePath\]/)
+    assert.match(viteConfig, /delete require\.cache\[approvalPdfPath\]/)
+    assert.match(viteConfig, /delete require\.cache\[greenTreePartyBlocksPath\]/)
 })
 
 test('manager workflow preserves silent authentication and excludes automatic email dispatch', async () => {

@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "npm run test:api && npm run test:maintenance && npm run test:wof && npm run test:equipment && npm run test:job-email && npm run test:technician-submission && npm run test:site-check-assignment && npm run test:job-photo && npm run test:customer-dashboard && npm run test:site-checks && npm run test:jobs-site-checks && npm run test:quotes && npm run test:chargeable-invoices",
+    "test": "npm run test:api && npm run test:maintenance && npm run test:wof && npm run test:equipment && npm run test:job-email && npm run test:technician-submission && npm run test:site-check-assignment && npm run test:job-photo && npm run test:customer-dashboard && npm run test:site-checks && npm run test:jobs-site-checks && npm run test:quotes && npm run test:chargeable-invoices && npm run test:staff",
     "test:api": "node --test tests/joblookup.test.cjs tests/jobsubmission.test.cjs tests/chargeableInvoicePreview.test.cjs tests/chargeableInvoiceApproval.test.cjs",
     "test:maintenance": "node --experimental-strip-types --test tests/maintenanceServicePlans.test.ts",
     "test:wof": "node --experimental-strip-types --test tests/wofWorkflow.test.ts",
@@ -21,7 +21,8 @@
     "test:site-checks": "node --experimental-strip-types --test tests/siteChecks.test.ts tests/siteCheckChecklistAdmin.test.ts",
     "test:jobs-site-checks": "node --experimental-strip-types --test tests/jobsSiteChecksIntegration.test.ts",
     "test:quotes": "node --experimental-strip-types --test tests/quotePoRequestInvoice.test.ts",
-    "test:chargeable-invoices": "node --experimental-strip-types --test tests/chargeableInvoiceReview.test.ts tests/chargeableInvoiceReleaseReadiness.test.ts"
+    "test:chargeable-invoices": "node --experimental-strip-types --test tests/chargeableInvoiceReview.test.ts tests/chargeableInvoiceReleaseReadiness.test.ts",
+    "test:staff": "node --experimental-strip-types --test tests/staffDirectory.test.ts"
   },
   "dependencies": {
     "@azure/msal-browser": "^5.9.0",

@@ -12,6 +12,7 @@
 .mechanics-directory { border-right: 1px solid #e0e6e2; background: #f7f9f8; }
 .mechanics-directory-tools { display: grid; gap: 10px; padding: 14px; border-bottom: 1px solid #e0e6e2; }
 .mechanics-directory-tools input[type="search"] { width: 100%; height: 38px; box-sizing: border-box; padding: 0 10px; border: 1px solid #ced7d2; border-radius: 8px; background: #fff; }
+.mechanics-directory-tools select { width: 100%; height: 34px; padding: 0 9px; border: 1px solid #ced7d2; border-radius: 8px; background: #fff; color: #526059; font-size: .68rem; }
 .mechanics-directory-tools label { display: flex; align-items: center; gap: 7px; color: #66716b; font-size: .68rem; font-weight: 650; }
 .mechanics-list { display: grid; padding: 8px; }
 .mechanic-card { display: grid; grid-template-columns: 38px minmax(0,1fr) 12px; gap: 9px; align-items: center; padding: 10px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: #344039; text-align: left; cursor: pointer; }
@@ -83,8 +84,16 @@
 .mechanic-dialog form { display: grid; gap: 14px; padding: 20px 21px; }
 .mechanic-field { display: grid; gap: 6px; }
 .mechanic-field span { color: #526059; font-size: .69rem; font-weight: 750; }
-.mechanic-field input { width: 100%; height: 40px; box-sizing: border-box; padding: 0 10px; border: 1px solid #ced7d2; border-radius: 8px; }
-.mechanic-field input:focus { border-color: #43877a; outline: 3px solid rgba(23,111,102,.12); }
+.mechanic-field input, .mechanic-field select { width: 100%; height: 40px; box-sizing: border-box; padding: 0 10px; border: 1px solid #ced7d2; border-radius: 8px; background: #fff; }
+.mechanic-field input:focus, .mechanic-field select:focus { border-color: #43877a; outline: 3px solid rgba(23,111,102,.12); }
+.mechanic-assignment-toggle { display: flex; align-items: flex-start; gap: 9px; padding: 11px; border: 1px solid #d9e3de; border-radius: 9px; background: #f4f8f6; }
+.mechanic-assignment-toggle input { margin-top: 2px; }
+.mechanic-assignment-toggle span { display: grid; gap: 2px; }
+.mechanic-assignment-toggle strong { font-size: .72rem; }
+.mechanic-assignment-toggle small { color: #748079; font-size: .64rem; line-height: 1.4; }
+.staff-non-assignable { display: grid; gap: 5px; margin-top: 20px; padding: 18px; border: 1px solid #dfe5e1; border-radius: 10px; background: #f7f9f8; }
+.staff-non-assignable strong { font-size: .82rem; }
+.staff-non-assignable span { color: #748079; font-size: .7rem; }
 .mechanic-form-section { display: grid; gap: 3px; padding-top: 12px; border-top: 1px solid #e4e9e6; }
 .mechanic-form-section strong { color: #334039; font-size: .76rem; }
 .mechanic-form-section span { color: #77817b; font-size: .66rem; }

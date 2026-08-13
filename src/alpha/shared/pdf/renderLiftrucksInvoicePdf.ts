@@ -14,7 +14,8 @@ export type LiftrucksInvoiceSnapshot = {
     jobNumber: string
     orderNumber?: string
     customer: string
-    site: string
+    siteName: string
+    siteAddress: string
     headline: string
     fleet?: string
     make?: string
@@ -22,7 +23,7 @@ export type LiftrucksInvoiceSnapshot = {
     serial?: string
     dateOfJob?: string
     repairDescription: string
-    workCompleted: string
+    workRequired: string
     lines: LiftrucksInvoiceLine[]
     subtotal: number
     gstRatePercent: number
@@ -37,6 +38,7 @@ const LINE_START_OFFSET = 510
 const LINE_REGION_HEIGHT = 150
 const GREEN_TREE_BODY_SIZE = 9.96
 const GREEN_TREE_FIELD_SIZE = 10.92
+export const MAX_LIFTTRUCKS_INVOICE_LINES = 20
 
 const safeText = (value?: string | number | null) => String(value ?? '')
     .replace(/[\u2010-\u2015]/g, '-')
@@ -81,10 +83,12 @@ export async function renderLiftrucksInvoicePdf(
     snapshot: LiftrucksInvoiceSnapshot,
     assets: { template: ArrayBuffer; logo: ArrayBuffer },
 ) {
-    if (snapshot.lines.length > 15) throw new Error('The invoice template supports at most 15 quote lines.')
+    if (snapshot.lines.length > MAX_LIFTTRUCKS_INVOICE_LINES) {
+        throw new Error(`The invoice template supports at most ${MAX_LIFTTRUCKS_INVOICE_LINES} quote lines.`)
+    }
     const pdf = await PDFDocument.create()
-    pdf.setTitle(`PO request invoice - ${safeText(snapshot.documentNumber)}`)
-    pdf.setSubject('Customer purchase-order request - not a tax invoice')
+    pdf.setTitle(`Provisional quotation - ${safeText(snapshot.jobNumber || snapshot.documentNumber)}`)
+    pdf.setSubject('Provisional quotation for customer purchase-order approval - not a tax invoice')
     pdf.setAuthor('Liftrucks NZ Ltd')
     pdf.setCreator('Service Operations quote-po-request-v1')
     const regular = await pdf.embedFont(StandardFonts.Helvetica)
@@ -129,13 +133,14 @@ export async function renderLiftrucksInvoicePdf(
         lines.slice(0, Math.floor(height / lineHeight)).forEach((line, index) => top(line, x, offset + index * lineHeight, { size }))
     }
 
-    top('FOR CUSTOMER PO APPROVAL - NOT A TAX INVOICE', 38, 20 + logoHeight + 6, { font: bold, size: 8 })
+    top('PROVISIONAL QUOTATION', 38, 20 + logoHeight + 6, { font: bold, size: 8 })
     fitted(snapshot.documentNumber, 465, 37, 76, { size: GREEN_TREE_FIELD_SIZE, minimum: 9 })
     fitted(dateOnly(snapshot.documentDate), 465, 60, 76, { size: GREEN_TREE_FIELD_SIZE, minimum: 9 })
     fitted(snapshot.jobNumber, 465, 105, 76, { size: GREEN_TREE_FIELD_SIZE, minimum: 9 })
     fitted(snapshot.orderNumber, 465, 127, 76, { size: GREEN_TREE_FIELD_SIZE, minimum: 9 })
-    fitted(snapshot.customer, 49, 157, 205, { font: bold, size: 12, minimum: 9.5 })
-    fitted(snapshot.site, 338, 158, 205, { size: GREEN_TREE_FIELD_SIZE, minimum: 8.5 })
+    fitted(snapshot.customer, 49, 157, 494, { font: bold, size: 12, minimum: 9.5 })
+    fitted(snapshot.siteName, 49, 174, 494, { font: bold, size: GREEN_TREE_FIELD_SIZE, minimum: 8.5 })
+    fitted(snapshot.siteAddress, 49, 190, 494, { size: GREEN_TREE_FIELD_SIZE, minimum: 8.5 })
     const headlineSize = fitted(snapshot.headline, 24, 269, 520, { size: GREEN_TREE_FIELD_SIZE, minimum: 8.5 })
     const headlineWidth = Math.min(regular.widthOfTextAtSize(safeText(snapshot.headline), headlineSize), 520)
     if (headlineWidth) page.drawLine({ start: { x: 24, y: PAGE_HEIGHT - 281 }, end: { x: 24 + headlineWidth, y: PAGE_HEIGHT - 281 }, thickness: .45, color: BLACK })
@@ -145,9 +150,11 @@ export async function renderLiftrucksInvoicePdf(
     fitted(snapshot.serial, 82.5, 318.5, 155, { size: GREEN_TREE_FIELD_SIZE, minimum: 8.5 })
     fitted(dateOnly(snapshot.dateOfJob), 409, 295.5, 126, { size: GREEN_TREE_FIELD_SIZE, minimum: 8.5 })
     wrapped(snapshot.repairDescription || snapshot.headline, 24, 351, 520, 28)
-    fitted(`Machine Location: ${snapshot.site}`, 24, 391, 520, { size: GREEN_TREE_BODY_SIZE, minimum: 8 })
+    fitted(`Machine Location: ${snapshot.siteAddress || snapshot.siteName}`, 24, 391, 520, { size: GREEN_TREE_BODY_SIZE, minimum: 8 })
     fitted(`Fleet No: ${snapshot.fleet ?? ''}`, 24, 405, 520, { size: GREEN_TREE_BODY_SIZE, minimum: 8 })
-    wrapped(snapshot.workCompleted, 24, 428, 520, 69)
+    page.drawRectangle({ x: 20, y: PAGE_HEIGHT - 442, width: 155, height: 40, color: rgb(1, 1, 1) })
+    top('Work Required :', 24, 420, { font: bold, size: GREEN_TREE_FIELD_SIZE })
+    wrapped(snapshot.workRequired, 24, 435, 520, 69)
 
     const { rowHeight, fontSize: lineSize, totalsOffset } = calculateInvoiceLineLayout(snapshot.lines.length)
     snapshot.lines.forEach((line, index) => {

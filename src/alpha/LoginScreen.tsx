@@ -76,7 +76,7 @@ function LoginScreen() {
                         margin: '0 0 28px',
                     }}
                 >
-                    Manage workshop jobs, mechanics, and daily service flow from one clean
+                    Manage workshop jobs, staff, and daily service flow from one clean
                     workspace.
                 </p>
 

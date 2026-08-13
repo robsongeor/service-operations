@@ -2,9 +2,10 @@ const MAX_PDF_BYTES = 5 * 1024 * 1024
 const MAX_PDF_PAGES = 5
 const MAX_TEXT_ITEMS = 20_000
 const PDF_PARSE_TIMEOUT_MS = 15_000
-const EXTRACTION_VERSION = 'greentree-layout-v3'
+const EXTRACTION_VERSION = 'greentree-layout-v4'
 const { createHash, randomBytes } = require('node:crypto')
 const { COMPARISONS, compareUnresolvedCorrections } = require('./chargeableInvoiceComparison')
+const { extractGreenTreePartyBlocks } = require('./greenTreePartyBlocks')
 
 const MATCHED_EXACTLY = 122830000
 const UNMATCHED = 122830002
@@ -247,12 +248,15 @@ function extractLines(lines) {
 
 function extractGreenTreeCandidate(pages) {
     const lines = pages.flatMap((page) => page.lines)
+    const partyBlocks = extractGreenTreePartyBlocks(pages)
     return {
         invoiceNumber: lineValue(lines, /\bInvoice\s+No\s*[:#]?\s*([A-Z0-9._/-]+)/i),
         invoiceDate: lineValue(lines, /^(?!.*Date\s+of\s+Job).*\bDate\s*[:#]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b/i),
         rawOrderNumber: lineValue(lines, /\bOrder\s+No\s*[:#]?\s*(.*)$/i),
         greenTreeReference: lineValue(lines, /\bOur\s+Ref\s*[:#]?\s*([A-Z0-9._/-]+)/i),
-        accountSnapshot: lineValue(lines, /\bAccount\s*[:#]?\s*([A-Z0-9._/-]+)/i),
+        accountSnapshot: partyBlocks.accountSnapshot || lineValue(lines, /\bAccount\s*[:#]?\s*([A-Z0-9._/-]+)/i),
+        customerSnapshot: partyBlocks.customerSnapshot,
+        siteSnapshot: partyBlocks.siteSnapshot,
         headline: extractGreenTreeHeadline(lines),
         fleet: equipmentLineValue(lines, 'Fleet\\s+No'),
         make: equipmentLineValue(lines, 'Make'),
@@ -325,7 +329,11 @@ function normalizedImport(candidate) {
     const invoiceDate = parseDateOnly(candidate.invoiceDate)
     const reference = String(candidate.greenTreeReference || '').trim()
     const subtotal = parseNumber(candidate.subtotal); const gstAmount = parseNumber(candidate.gstAmount); const total = parseNumber(candidate.total)
+    const accountSnapshot = String(candidate.accountSnapshot || '').trim()
+    const customerSnapshot = String(candidate.customerSnapshot || '').trim()
+    const siteSnapshot = String(candidate.siteSnapshot || '').trim()
     if (!invoiceNumber || invoiceNumber.length > 50 || !invoiceDate || !reference || reference.length > 50) throw new Error('Required invoice identity fields are invalid.')
+    if (accountSnapshot.length > 100 || customerSnapshot.length > 500 || siteSnapshot.length > 4000) throw new Error('The invoice customer or Site address block is too large to retain safely.')
     if (subtotal != null && gstAmount != null && total != null && Math.abs(subtotal + gstAmount - total) > 0.02) throw new Error('Invoice totals do not balance.')
     if (!Array.isArray(candidate.lines) || candidate.lines.length > 200) throw new Error('The invoice contains too many lines to import safely.')
     const lineKeys = stableLineKeys(candidate.lines)
@@ -347,8 +355,8 @@ function normalizedImport(candidate) {
         revision: {
             gr_extractionversion: candidate.extractionVersion, gr_extractionconfidence: null,
             gr_invoicenumber: invoiceNumber, gr_invoicedate: invoiceDate, gr_rawordernumber: candidate.rawOrderNumber || null,
-            gr_greentreereference: reference, gr_accountsnapshot: candidate.accountSnapshot || null,
-            gr_customersnapshot: candidate.customerSnapshot || null, gr_sitesnapshot: candidate.siteSnapshot || null,
+            gr_greentreereference: reference, gr_accountsnapshot: accountSnapshot || null,
+            gr_customersnapshot: customerSnapshot || null, gr_sitesnapshot: siteSnapshot || null,
             gr_headline: candidate.headline || null, gr_fleet: candidate.fleet || null, gr_make: candidate.make || null,
             gr_model: candidate.model || null, gr_serial: candidate.serial || null, gr_meter: parseNumber(candidate.meter),
             gr_dateofjob: candidate.dateOfJob ? parseDateOnly(candidate.dateOfJob) : null,

@@ -57,19 +57,19 @@ export function fetchSiteCheckWorkspaceSites(
     )
 }
 
-export function fetchSiteCheckWorkspaceMechanics(
+export async function fetchSiteCheckWorkspaceMechanics(
     accessToken: string,
     options: { apiUrl?: string; fetcher?: typeof fetch } = {},
 ) {
     const apiUrl = options.apiUrl ?? DEFAULT_API_URL
     const query = [
-        '$select=gr_mechanicid,gr_name,gr_email,gr_phone,statecode',
+        '$select=gr_mechanicid,gr_name,gr_email,gr_phone,gr_department,gr_jobassignmentenabled,statecode',
         '$orderby=gr_name asc',
     ].join('&')
-    return readAll<Mechanic>(
-        accessToken,
-        `${apiUrl}/gr_mechanics?${query}`,
-        'Technicians could not be loaded for the Site Checks workspace.',
-        options,
-    )
+    try {
+        return await readAll<Mechanic>(accessToken, `${apiUrl}/gr_mechanics?${query}`, 'Technicians could not be loaded for the Site Checks workspace.', options)
+    } catch {
+        const legacyQuery = ['$select=gr_mechanicid,gr_name,gr_email,gr_phone,statecode', '$orderby=gr_name asc'].join('&')
+        return readAll<Mechanic>(accessToken, `${apiUrl}/gr_mechanics?${legacyQuery}`, 'Technicians could not be loaded for the Site Checks workspace.', options)
+    }
 }

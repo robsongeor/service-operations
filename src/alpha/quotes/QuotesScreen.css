@@ -99,6 +99,13 @@
 .quote-field > span, .quote-line-extended > span { color: #526059; font-size: .68rem; font-weight: 750; }
 .quote-field input, .quote-field select { height: 39px; padding: 0 9px; }
 .quote-field textarea { padding: 9px; resize: vertical; }
+.quote-title-composer { display: flex; height: 39px; min-width: 0; align-items: center; box-sizing: border-box; overflow: hidden; border: 1px solid #ced7d2; border-radius: 7px; background: #fff; }
+.quote-title-composer:focus-within { border-color: #43877a; outline: 2px solid rgba(23,111,102,.12); }
+.quote-title-composer strong { min-width: 0; overflow: hidden; padding-left: 9px; color: #26312b; font-size: .76rem; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.quote-title-composer > span { flex: 0 0 auto; padding-left: 5px; color: #718078; }
+.quote-title-composer input { flex: 1 1 110px; min-width: 80px; height: 37px; border: 0; outline: 0; }
+.quote-title-composer input:focus { border: 0; outline: 0; }
+.quote-title-hint { color: #748079; font-size: .64rem; font-weight: 500; }
 
 .quote-lines-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin: 24px 0 10px; }
 .quote-lines-heading h3, .quote-lines-heading p { margin: 0; }
@@ -150,6 +157,7 @@
 .quote-po-request-action strong { color: #234b40; font-size: .78rem; }
 .quote-po-request-action span { color: #69766f; font-size: .69rem; }
 .quote-po-request-action button { flex: 0 0 auto; background: #176f66; color: #fff; }
+.quote-po-request-buttons { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; }
 .quote-po-request-feedback { margin: 8px 2px 0; color: #28705d; font-size: .7rem; font-weight: 700; }
 .quote-dialog form > footer { display: flex; align-items: center; justify-content: flex-end; gap: 9px; margin-top: 20px; padding-top: 17px; border-top: 1px solid #e7ebe9; }
 .quote-copy-action { display: flex; min-width: 0; align-items: center; gap: 9px; margin-right: auto; }
@@ -174,4 +182,5 @@
     .quote-dialog-backdrop { padding: 0; }
     .quote-dialog { min-height: 100vh; border-radius: 0; }
     .quote-po-request-action { align-items: stretch; flex-direction: column; }
+    .quote-po-request-buttons { align-items: stretch; flex-direction: column; }
 }

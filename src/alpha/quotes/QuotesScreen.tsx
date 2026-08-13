@@ -27,6 +27,7 @@ export default function QuotesScreen() {
         customers,
         equipment,
         pricingItems,
+        staff,
         isLoading,
         isSaving,
         loadError,
@@ -140,14 +141,14 @@ export default function QuotesScreen() {
     }, [clearSaveError, isLoading, loadLines, quotes, requestedQuoteId])
 
     const saveQuote = async (input: QuoteInput) => {
-        try {
-            await save(input, editingQuote || undefined, editingLines)
-            setEditingQuote(undefined)
-            setEditingLines([])
+        const saved = await save(input, editingQuote || undefined, editingLines)
+        setEditingQuote(saved.quote)
+        setEditingLines(saved.lines)
+        openedQuoteId.current = saved.quote.gr_quoteid
+        if (searchParams.size) {
             setSearchParams({})
-        } catch {
-            // The hook exposes the Dataverse message in the editor.
         }
+        return saved.lines
     }
 
     const removeQuote = async () => {
@@ -248,11 +249,13 @@ export default function QuotesScreen() {
                     customers={customers}
                     equipment={equipment}
                     pricingItems={pricingItems}
+                    staff={staff}
                     initialJobId={requestedNewJobId}
                     isSaving={isSaving}
                     error={saveError}
                     onClose={() => {
                         setEditingQuote(undefined)
+                        setEditingLines([])
                         setSearchParams({})
                     }}
                     onSave={saveQuote}

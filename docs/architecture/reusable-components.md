@@ -57,6 +57,7 @@ Business rules must have one owner even when several screens display the result.
 | Service-plan status | `src/alpha/equipment/servicePlans/servicePlanStatus.ts` | Maintenance/service-plan status derivation. |
 | Job completion | `src/alpha/jobs/completion/` and `src/alpha/site-checks/services/siteCheckCompletionApi.ts` | Job-type-owned completion orchestration and atomic completion-side effects, reached through `useJobs`. |
 | Editable email drafts | `src/alpha/jobs/utils/technicianMailto.ts` | Shared recipient-email validation and encoded `mailto:` construction. Feature services own subject/body rules and preparation audit. |
+| Staff eligibility | `src/alpha/mechanics/staffDirectory.ts` | Department labels, backward-compatible Job-assignment eligibility, and active internal-email-recipient eligibility across Staff, Jobs, Site Checks, and Chargeable Invoice Review. |
 | Equipment CSV tools | `src/alpha/equipment/utils/equipmentCsv.ts` | Admin authorization, UTF-8 CSV serialization/parsing, stable-ID matching, blank-safe comparison, and staged Equipment change review. |
 
 Use feature hooks and services for loading and mutations. Components render values and raise
