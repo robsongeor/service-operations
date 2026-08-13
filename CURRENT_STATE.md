@@ -30,10 +30,18 @@ Branch: `codex/staff-directory`
   change or real communication was performed. Authenticated target-role and business-flow smoke
   testing remains outstanding, so this is an unreleased testing deployment rather than a tagged
   production-readiness declaration.
+- Version `v1.6.0` was published from commit `757d11a` by successful Azure run `31682024031` on
+  13 August 2026. Production-safe verification returned `200` for `/` and
+  `/chargeable-invoices`, found the exact `v1.6.0` marker in the deployed client asset, and confirmed
+  both Chargeable Invoice APIs still reject anonymous requests with safe `401` responses. The release
+  includes Staff Directory, customer/site PO routing, Quote provisional quotations and email drafts,
+  Chargeable Invoice PDF/layout and workflow improvements, Ready recovery, and amendment-handoff
+  readiness. No Dataverse role assignment, permission change, server-setting change, credential, or
+  real communication was performed during deployment. Signed-in role/business-flow smoke remains.
 
 ## Unfinished work
 
-- Staff Directory is implemented locally on `codex/staff-directory`: the UI is renamed from
+- Staff Directory is published in `v1.6.0`: the UI is renamed from
   Mechanics to Staff, `/mechanics` redirects to `/staff`, Department, `Can be assigned Jobs`, and
   `CC on customer emails`
   are editable, non-assignable office staff are excluded from technician workflows, and active
@@ -46,7 +54,7 @@ Branch: `codex/staff-directory`
   after its no-prompt preflight stopped safely. Signed-in Staff and email-draft smoke testing remains;
   no role, record, deployment, credential, or cloud configuration was changed.
 
-- Quote provisional-quotation generation is implemented locally inside the saved Quote editor. It
+- Quote provisional-quotation generation is published in `v1.6.0` inside the saved Quote editor. It
   reuses the approved GreenTree-style template and Liftrucks logo, uses the live editor lines and
   totals, copies Quote Notes into the provisional document's `Work Required` section, and displays the linked Job number in both the
   original template's `Invoice No` and `Our Ref` fields. The generated PDF downloads locally and does
@@ -72,7 +80,7 @@ Branch: `codex/staff-directory`
   Saving a new or existing Quote refreshes its persisted header and line identities without closing
   the editor; close remains an explicit user action.
 
-- Customer/Site Purchase Order Recipient configuration is implemented locally: Customer defaults
+- Customer/Site Purchase Order Recipient configuration is published in `v1.6.0`: Customer defaults
   contain one Primary plus optional CC Contacts, complete Site overrides replace that default, and
   managers can create and immediately select a new emailed Contact inline using the existing Site
   Contact workflow. Chargeable Invoice Review resolves the effective set into an editable unsent email draft. Approved
