@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Added inline PO Contact creation to Customer-default and Site-override recipient settings, with
+  Main customer ownership by default, optional location-specific Site ownership, required name/email
+  validation, and immediate Primary or CC selection before routing save.
+
+- Added a saved-Quote action that generates and downloads a Liftrucks-branded customer PO-request
+  invoice from the current editor lines, recalculated totals, linked context, and Notes as Work
+  Completed, without sending communications or changing workflow state.
+- Aligned generated Quote invoice typography with the measured GreenTree source sizes and made
+  subtotal, GST, and total flow directly beneath the populated invoice lines.
+
 - Kept API-only Chargeable Invoice PDF packages out of Vite's production config-load path so the
   Azure root build and managed Functions dependency builds remain correctly separated.
 - Pinned the server PDF parser to audited `pdfjs-dist@5.4.624`, compatible with the deployed

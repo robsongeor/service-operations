@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFile } from 'node:fs/promises'
+import { PDFDocument } from 'pdf-lib'
 
 import {
     CHARGEABLE_INVOICE_CORRECTION_COMPARISONS,
@@ -37,6 +38,8 @@ import { compareOutstandingCorrections } from '../src/alpha/chargeable-invoices/
 import { buildChargeableInvoiceCorrectionFields } from '../src/alpha/chargeable-invoices/domain/chargeableInvoiceCorrectionDraft.ts'
 import { buildChargeableInvoiceCorrectionInstructions } from '../src/alpha/chargeable-invoices/domain/chargeableInvoiceCorrectionInstructions.ts'
 import { buildChargeableInvoiceAmendedTotals } from '../src/alpha/chargeable-invoices/domain/chargeableInvoicePricing.ts'
+import { brandGreenTreeInvoicePdf } from '../src/alpha/chargeable-invoices/domain/brandGreenTreeInvoicePdf.ts'
+import { fetchQuotesForJob } from '../src/alpha/quotes/services/quotesApi.ts'
 import { validateChargeableInvoicePdf } from '../src/alpha/chargeable-invoices/services/chargeableInvoicePreviewApi.ts'
 import {
     buildChargeableInvoicePhotoRequestMailto,
@@ -45,6 +48,51 @@ import {
     uploadChargeableInvoiceSupportingPhotos,
     validateChargeableInvoiceSupportingPhotos,
 } from '../src/alpha/chargeable-invoices/services/chargeableInvoiceReviewApi.ts'
+
+test('customer evidence export adds Liftrucks letterhead without changing the source PDF', async () => {
+    const sourcePdf = await PDFDocument.create()
+    sourcePdf.addPage([595.32, 841.92])
+    sourcePdf.addPage([595.32, 841.92])
+    const sourceBytes = await sourcePdf.save()
+    const sourceCopy = new Uint8Array(sourceBytes.byteLength)
+    sourceCopy.set(sourceBytes)
+    const source = new Blob([sourceCopy.buffer], { type: 'application/octet-stream' })
+
+    const branded = await brandGreenTreeInvoicePdf(source)
+    const loaded = await PDFDocument.load(await branded.arrayBuffer())
+
+    assert.equal(branded.type, 'application/pdf')
+    assert.equal(loaded.getPageCount(), 2)
+    assert.ok(branded.size > source.size)
+    assert.equal(source.size, sourceCopy.byteLength)
+})
+
+test('customer evidence export rejects a non-PDF source', async () => {
+    await assert.rejects(
+        brandGreenTreeInvoicePdf(new Blob(['not a pdf'], { type: 'text/plain' })),
+        /Only a GreenTree PDF can be branded/,
+    )
+})
+
+test('related quote lookup is bounded to the matched Job', async () => {
+    const originalFetch = globalThis.fetch
+    let requestedUrl = ''
+    globalThis.fetch = async (input) => {
+        requestedUrl = String(input)
+        return Response.json({ value: [{ gr_quoteid: 'quote-id', gr_name: 'Repair quote' }] })
+    }
+    try {
+        const quotes = await fetchQuotesForJob('token', 'job-id')
+        const url = new URL(requestedUrl, 'https://local.test')
+        assert.equal(quotes.length, 1)
+        assert.equal(url.searchParams.get('$filter'), '_gr_job_value eq job-id')
+        assert.equal(url.searchParams.get('$top'), '51')
+        assert.equal(url.searchParams.get('$orderby'), 'createdon desc')
+        assert.match(url.searchParams.get('$expand') ?? '', /createdby/)
+    } finally {
+        globalThis.fetch = originalFetch
+    }
+})
 
 test('queue state requires an explicit start and gives Waiting precedence while active', () => {
     assert.equal(deriveChargeableInvoicePrimaryQueue({}), 'new')
@@ -104,15 +152,6 @@ test('a requested customer PO is handed to Accounts and does not wait for the PO
         gr_ponumber: null,
         gr_poreceivedon: null,
     }), [])
-})
-
-test('customer PO and photo request stages wait until active amendments are matched', () => {
-    assert.throws(() => chargeableInvoiceReviewApiTest.assertRequestStageAmendmentsComplete({
-        corrections: [{ gr_comparisonstatus: CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.OUTSTANDING }],
-    } as ChargeableInvoiceWorkspace), /complete the invoice amendments.*corrected GreenTree invoice/i)
-    assert.doesNotThrow(() => chargeableInvoiceReviewApiTest.assertRequestStageAmendmentsComplete({
-        corrections: [{ gr_comparisonstatus: CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.MATCHED_IN_REVISION }],
-    } as ChargeableInvoiceWorkspace))
 })
 
 test('Ready hands outstanding corrections to Accounts instead of blocking the terminal transition', () => {
@@ -625,7 +664,7 @@ test('photo request mailto is explicit, editable, and addressed only to the sele
     assert.match(decoded, /This draft has not been sent automatically/)
 })
 
-test('PO request mailto uses the current GreenTree invoice and a deliberate Site recipient', () => {
+test('PO request mailto uses the generated approval copy and a deliberate Site recipient', () => {
     const workspace = {
         review: {
             gr_chargeableinvoicereviewid: 'review-id', gr_name: 'VFL00001', gr_invoicenumber: 'VFL00001',
@@ -634,7 +673,7 @@ test('PO request mailto uses the current GreenTree invoice and a deliberate Site
             gr_importstatus: CHARGEABLE_INVOICE_IMPORT_STATUSES.ACTIVE,
             gr_reviewstartedon: '2026-08-11T00:00:00Z', gr_porequired: true,
             gr_photosrequired: true, gr_photosstatus: CHARGEABLE_INVOICE_PHOTO_STATUSES.RECEIVED,
-            _gr_currentrevision_value: 'revision-id', _gr_site_value: 'site-id', '@odata.etag': 'W/"8"',
+            _gr_currentrevision_value: 'revision-id', _gr_customer_value: 'customer-id', _gr_site_value: 'site-id', '@odata.etag': 'W/"8"',
             gr_Job: { gr_jobid: 'job-id', gr_jobnumber: '145156', gr_description: 'Repair hydraulic leak' },
             gr_Customer: { gr_customerid: 'customer-id', gr_name: 'Example Customer' },
             gr_Site: { gr_siteid: 'site-id', gr_name: 'Example Site' },
@@ -656,6 +695,7 @@ test('PO request mailto uses the current GreenTree invoice and a deliberate Site
             gr_sitecontactid: 'site-contact-id',
             gr_Contact: { gr_contactid: 'contact-id', gr_name: 'Pat Customer', gr_email: 'pat@example.com' },
         }],
+        poRecipients: [], relatedQuotes: [], relatedQuotesError: '',
     } satisfies import('../src/alpha/chargeable-invoices/types/chargeableInvoice.types.ts').ChargeableInvoiceWorkspace
     const prepared = buildChargeableInvoicePoRequestMailto(workspace, { siteContactId: 'site-contact-id' })
     assert.match(prepared.mailto, /^mailto:pat%40example\.com\?/)
@@ -663,10 +703,22 @@ test('PO request mailto uses the current GreenTree invoice and a deliberate Site
     assert.match(decoded, /Purchase order requested - Job 145156 - Example Customer/)
     assert.match(decoded, /Hi Pat/)
     assert.match(decoded, /Approval amount \(including GST\): \$432\.50/)
-    assert.match(decoded, /attached GreenTree invoice/)
-    assert.deepEqual(prepared.attachments.map((document) => document.gr_chargeableinvoicedocumentid), ['source-id', 'photo-id'])
+    assert.match(decoded, /attached Customer PO Approval document/)
+    assert.deepEqual(prepared.attachments.map((document) => document.gr_chargeableinvoicedocumentid), ['approval-id', 'photo-id'])
     assert.throws(() => buildChargeableInvoicePoRequestMailto(workspace, { siteContactId: 'another-site-contact' }), /Site Contact/i)
     assert.throws(() => buildChargeableInvoicePoRequestMailto(workspace, { manualEmail: 'invalid' }), /valid customer recipient/i)
+
+    const configured = {
+        ...workspace,
+        poRecipients: [
+            { gr_purchaseorderrecipientid: 'po-primary', gr_name: 'Primary', _gr_customer_value: 'customer-id', _gr_site_value: null, _gr_contact_value: 'contact-primary', gr_recipientrole: 122830000, gr_sortorder: 0, '@odata.etag': 'W/"1"', gr_Contact: { gr_contactid: 'contact-primary', gr_name: 'Primary Person', gr_email: 'primary@example.com' } },
+            { gr_purchaseorderrecipientid: 'po-cc', gr_name: 'CC', _gr_customer_value: 'customer-id', _gr_site_value: null, _gr_contact_value: 'contact-cc', gr_recipientrole: 122830001, gr_sortorder: 1, '@odata.etag': 'W/"1"', gr_Contact: { gr_contactid: 'contact-cc', gr_name: 'Accounts Person', gr_email: 'accounts@example.com' } },
+        ],
+    } satisfies import('../src/alpha/chargeable-invoices/types/chargeableInvoice.types.ts').ChargeableInvoiceWorkspace
+    const configuredDraft = buildChargeableInvoicePoRequestMailto(configured, { useConfiguredRecipients: true })
+    const configuredUrl = new URL(configuredDraft.mailto)
+    assert.equal(decodeURIComponent(configuredUrl.pathname), 'primary@example.com')
+    assert.equal(configuredUrl.searchParams.get('cc'), 'accounts@example.com')
 })
 
 test('first confirmed customer PO uses the dedicated PO Received activity event', () => {
@@ -800,7 +852,7 @@ test('known supporting photo upload failure retains a safe Failed staging docume
 })
 
 test('Chargeable Invoice route uses shared page primitives and delegates intake and queue workflows', async () => {
-    const [app, sidebar, screen, intakeHook, intakeService, queue, workspace, workspaceStyles, reviewApi, jobCreateDrawer, jobRelationshipFields] = await Promise.all([
+    const [app, sidebar, screen, intakeHook, intakeService, queue, workspace, workspaceStyles, reviewApi, approvalService, quoteApi, jobCreateDrawer, jobRelationshipFields] = await Promise.all([
         readFile(new URL('../src/App.tsx', import.meta.url), 'utf8'),
         readFile(new URL('../src/Sidebar.tsx', import.meta.url), 'utf8'),
         readFile(new URL('../src/alpha/chargeable-invoices/ChargeableInvoiceReviewScreen.tsx', import.meta.url), 'utf8'),
@@ -810,6 +862,8 @@ test('Chargeable Invoice route uses shared page primitives and delegates intake 
         readFile(new URL('../src/alpha/chargeable-invoices/components/ChargeableInvoiceWorkspace.tsx', import.meta.url), 'utf8'),
         readFile(new URL('../src/alpha/chargeable-invoices/ChargeableInvoiceReviewScreen.css', import.meta.url), 'utf8'),
         readFile(new URL('../src/alpha/chargeable-invoices/services/chargeableInvoiceReviewApi.ts', import.meta.url), 'utf8'),
+        readFile(new URL('../api/services/chargeableInvoiceApprovalService.js', import.meta.url), 'utf8'),
+        readFile(new URL('../src/alpha/quotes/services/quotesApi.ts', import.meta.url), 'utf8'),
         readFile(new URL('../src/alpha/jobs/components/JobCreateDrawer.tsx', import.meta.url), 'utf8'),
         readFile(new URL('../src/alpha/jobs/components/JobRelationshipFields.tsx', import.meta.url), 'utf8'),
     ])
@@ -853,6 +907,7 @@ test('Chargeable Invoice route uses shared page primitives and delegates intake 
     assert.match(screen, /<ChargeableInvoiceQueue/)
     assert.match(queue, /deriveChargeableInvoicePrimaryQueue/)
     assert.match(queue, /onReplaceCorrection=\{reviews\.replaceCorrection\}/)
+    assert.match(queue, /onLoadQuoteLines=\{reviews\.loadQuoteLines\}/)
     assert.match(workspace, /<EditDrawerShell/)
     assert.match(workspace, /className="chargeable-review-drawer"/)
     assert.match(workspace, /chargeable-review-source-pane/)
@@ -884,6 +939,22 @@ test('Chargeable Invoice route uses shared page primitives and delegates intake 
     assert.match(workspace, /Add amendment/)
     assert.match(workspace, /Amend line/)
     assert.match(workspace, /Add new line/)
+    assert.match(workspace, /Related quotes/)
+    assert.match(workspace, /Accepted and sent quotes are shown first/)
+    assert.match(workspace, /No quotes linked to Job/)
+    assert.match(workspace, /quotePriceComparison/)
+    assert.match(workspace, /target="_blank"/)
+    assert.match(workspace, /Open quote/)
+    assert.match(workspace, /onLoadLines\(quote\.gr_quoteid\)/)
+    assert.match(workspace, /PRICING_CATEGORY_LABELS/)
+    assert.match(workspaceStyles, /chargeable-related-quote-status/)
+    assert.match(reviewApi, /fetchQuotesForJob\(accessToken, review\._gr_job_value\)/)
+    assert.match(reviewApi, /Related quotes could not be loaded\. Invoice review remains available\./)
+    assert.match(quoteApi, /\$filter', `_gr_job_value eq \$\{jobId\}`/)
+    assert.match(quoteApi, /\$top', '51'/)
+    assert.match(quoteApi, /more than 50 linked quotes/)
+    assert.match(quoteApi, /\$top', '201'/)
+    assert.match(quoteApi, /more than 200 lines/)
     assert.match(workspace, /Original invoice values remain visible/)
     assert.match(workspace, /Attached amendments/)
     assert.match(workspace, /Cancel Work completed amendment and restore original text/)
@@ -934,23 +1005,33 @@ test('Chargeable Invoice route uses shared page primitives and delegates intake 
     assert.match(workspace, /<SearchableSelect/)
     assert.match(workspace, /Open customer PO email/)
     assert.match(workspace, /No customer or site recipient with a valid email is configured yet/)
-    assert.doesNotMatch(workspace, /Generate invoice PDF/)
+    assert.match(workspace, /Generate approval PDF/)
     assert.match(workspace, /Save supporting documents/)
-    assert.match(workspace, />GreenTree invoice</)
+    assert.match(workspace, /Customer PO Approval PDF/)
     assert.match(workspace, /showDirectoryPicker/)
     assert.match(workspace, /availableSupportingDocumentName/)
     const directoryPickerId = workspace.match(/id: '([^']+)', mode: 'readwrite'/)?.[1]
     assert.ok(directoryPickerId && directoryPickerId.length <= 32)
-    assert.match(workspace, /await writable\.write\(await onLoadDocument\(document\)\)/)
-    assert.match(workspace, /for \(const document of attachments\) await onDownload\(document\)/)
+    assert.match(workspace, /prepareSupportingDocument\(document, onLoadDocument\)/)
+    assert.match(workspace, /brandGreenTreeInvoicePdf\(source\)/)
+    assert.match(workspace, /downloadSupportingDocument/)
     assert.doesNotMatch(workspace, />Download photo</)
-    assert.match(workspace, /Complete amendments first/)
-    assert.match(workspace, /importing the corrected invoice/)
-    assert.match(reviewApi, /assertRequestStageAmendmentsComplete\(workspace\)/)
+    assert.match(workspace, /Approval copy will include active amendments/)
+    assert.match(workspace, /Regenerate the Customer PO Approval PDF/)
     assert.doesNotMatch(workspace, /I will attach the downloaded files before sending/)
     assert.doesNotMatch(workspace, /EditDrawerSection title="Documents"/)
     assert.match(workspace, /attach the downloaded invoice and photos before sending/i)
     assert.match(workspace, /Amendment handoff/)
+    assert.match(workspace, /Generate and save PDF/)
+    assert.match(workspace, /Regenerate and save PDF/)
+    assert.match(workspace, /Download amended invoice/)
+    assert.match(workspace, /await onDownload\(document\)/)
+    assert.match(workspace, /sent to your browser downloads/)
+    assert.match(queue, /onDownload=\{reviews\.downloadDocument\}/)
+    assert.match(await readFile(new URL('../src/alpha/chargeable-invoices/hooks/useChargeableInvoiceReviews.ts', import.meta.url), 'utf8'), /document\.body\.appendChild\(link\)[\s\S]*link\.click\(\)[\s\S]*setTimeout\(\(\) => URL\.revokeObjectURL\(objectUrl\), 1000\)/)
+    assert.match(workspace, /Fill the approved invoice template with these active amendments/)
+    assert.doesNotMatch(reviewApi, /Record that a customer PO is required before generating an approval PDF/)
+    assert.doesNotMatch(approvalService, /Record that a customer PO is required before generating its approval document/)
     assert.match(workspace, /Email amendments/)
     assert.match(workspace, /Copy email summary/)
     assert.match(workspace, /Current instructions for Nargiza/)

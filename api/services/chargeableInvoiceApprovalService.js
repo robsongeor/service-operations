@@ -7,8 +7,6 @@ const UPLOAD_PENDING = 122830000
 const UPLOAD_COMPLETE = 122830001
 const UPLOAD_FAILED = 122830002
 const IMPORT_ACTIVE = 122830001
-const CORRECTION_OUTSTANDING = 122830000
-const CORRECTION_NOT_MADE = 122830002
 const ACTIVITY_APPROVAL_PDF_GENERATED = 122830012
 const MAX_LINES = 200
 const MAX_PDF_BYTES = 5 * 1024 * 1024
@@ -65,17 +63,23 @@ async function readAuthoritativeSnapshot(origin, authorization, contract) {
         'gr_chargeableinvoicerevisionid', '_gr_review_value', 'gr_revisionnumber', 'gr_invoicenumber',
         'gr_invoicedate', 'gr_greentreereference', 'gr_customersnapshot', 'gr_sitesnapshot',
         'gr_headline', 'gr_fleet', 'gr_make', 'gr_model', 'gr_serial', 'gr_meter', 'gr_dateofjob',
-        'gr_repairdescription', 'gr_workcompleted', 'gr_subtotal', 'gr_gstrate', 'gr_gstamount', 'gr_total',
+        'gr_serviceinterval', 'gr_nextdue', 'gr_rawordernumber', 'gr_repairdescription', 'gr_workcompleted',
+        'gr_subtotal', 'gr_gstrate', 'gr_gstamount', 'gr_total',
     ].join(','))
     const linesUrl = new URL(`${origin}/api/data/v9.2/gr_chargeableinvoicelines`)
-    linesUrl.searchParams.set('$select', 'gr_linekey,gr_linetype,gr_description,gr_quantity,gr_unitprice,gr_extendedprice,gr_sortorder')
+    linesUrl.searchParams.set('$select', 'gr_chargeableinvoicelineid,gr_linekey,gr_linetype,gr_description,gr_quantity,gr_unitprice,gr_extendedprice,gr_sortorder')
     linesUrl.searchParams.set('$filter', `_gr_revision_value eq ${contract.revisionId}`)
     linesUrl.searchParams.set('$orderby', 'gr_sortorder asc')
     linesUrl.searchParams.set('$top', String(MAX_LINES + 1))
     const correctionsUrl = new URL(`${origin}/api/data/v9.2/gr_chargeableinvoicecorrections`)
-    correctionsUrl.searchParams.set('$select', 'gr_chargeableinvoicecorrectionid')
-    correctionsUrl.searchParams.set('$filter', `_gr_review_value eq ${contract.reviewId} and (gr_comparisonstatus eq ${CORRECTION_OUTSTANDING} or gr_comparisonstatus eq ${CORRECTION_NOT_MADE})`)
-    correctionsUrl.searchParams.set('$top', '1')
+    correctionsUrl.searchParams.set('$select', [
+        'gr_chargeableinvoicecorrectionid', '_gr_sourceline_value', 'gr_correctiontype',
+        'gr_originalsnapshot', 'gr_requestedtext', 'gr_requestedlinetype', 'gr_requesteddescription',
+        'gr_requestedquantity', 'gr_requestedunitprice', 'gr_comparisonstatus', 'createdon',
+    ].join(','))
+    correctionsUrl.searchParams.set('$filter', `_gr_review_value eq ${contract.reviewId}`)
+    correctionsUrl.searchParams.set('$orderby', 'createdon asc')
+    correctionsUrl.searchParams.set('$top', String(MAX_LINES + 1))
     const [reviewResult, revisionResult, linesResult, correctionsResult] = await Promise.all([
         dataverseResponse(reviewUrl, authorization), dataverseResponse(revisionUrl, authorization),
         dataverseResponse(linesUrl.toString(), authorization), dataverseResponse(correctionsUrl.toString(), authorization),
@@ -97,24 +101,16 @@ async function readAuthoritativeSnapshot(origin, authorization, contract) {
         error.status = 409
         throw error
     }
-    if (review.gr_porequired !== true) {
-        const error = new Error('Record that a customer PO is required before generating its approval document.')
-        error.status = 409
-        throw error
-    }
     if (review._gr_currentrevision_value?.toLowerCase() !== contract.revisionId.toLowerCase()
         || revision._gr_review_value?.toLowerCase() !== contract.reviewId.toLowerCase()) {
         const error = new Error('The selected invoice revision is no longer current.')
         error.status = 412
         throw error
     }
-    if (lines.length > MAX_LINES) throw new Error('The invoice has too many lines to render safely.')
-    if (correctionsResult.body.value.length) {
-        const error = new Error('Resolve all outstanding invoice corrections before generating the approval document.')
-        error.status = 409
-        throw error
+    if (lines.length > MAX_LINES || correctionsResult.body.value.length > MAX_LINES) {
+        throw new Error('The invoice has too many lines or amendments to render safely.')
     }
-    return { review, revision, lines, currentEtag }
+    return { review, revision, lines, corrections: correctionsResult.body.value, currentEtag }
 }
 
 function canonicalSnapshotHash(snapshot) {

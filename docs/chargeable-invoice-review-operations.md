@@ -98,12 +98,19 @@ and non-sensitive identifiers. Do not create real accounting mutations or send c
    Review Document/File is removed. Delete the last retained thumbnail and confirm Photos returns to
    Requested and Ready is blocked again. Repeat with `Remove all` and confirm the entire retained
    batch is removed atomically; verify the Job and any Job Photos remain unchanged.
-8. Generate the approval PDF and confirm the current revision, totals, template version, A4 layout,
-   extractable text and `FOR CUSTOMER PO APPROVAL - NOT A TAX INVOICE` marker.
-9. Select a Site-scoped or deliberate manual PO recipient. Use `Download supporting documents` and
-   confirm the invoice PDF plus every required photo downloads, open the editable `mailto:` draft,
-   then discard it.
-10. Confirm a PO-required review becomes eligible for Ready after its PO-request draft is prepared;
+8. For a Review whose matched Job has linked Quotes, confirm `Related quotes` shows Accepted/Sent
+   first, expands notes and ordered lines on demand, and displays the total difference without
+   creating an amendment or blocking Ready. Open the Quote and confirm it uses a new tab while the
+   invoice workspace remains open. Confirm an unlinked Job shows the explicit empty state.
+9. Select a Site-scoped or deliberate manual PO recipient. Generate the Customer PO Approval PDF,
+   then use `Save supporting documents` and confirm the approval copy plus every required photo is
+   saved. Open the PDF and confirm it is marked `FOR CUSTOMER PO APPROVAL - NOT A TAX INVOICE`,
+   contains active story/line amendments and recalculated totals, and identifies its source invoice.
+   Change or withdraw an amendment and confirm the older approval is treated as stale until it is
+   regenerated. Confirm the original Dataverse GreenTree source remains unchanged.
+10. Open the editable customer-PO `mailto:` draft, confirm it names the saved invoice and required
+   photos for manual attachment, then discard it.
+11. Confirm a PO-required review becomes eligible for Ready after its PO-request draft is prepared;
     do not enter or receive a PO first. Verify the Ready confirmation hands customer follow-up to
     Nargiza / Accounts, recipient and email body were not persisted, and no Email Dispatch row was
     created. Separately record a synthetic PO number to verify the downstream PO Received audit does

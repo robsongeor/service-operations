@@ -17,7 +17,8 @@ $tables = @(
     @{ Schema='gr_ChargeableInvoiceLine'; Display='Chargeable Invoice Line'; Collection='Chargeable Invoice Lines' },
     @{ Schema='gr_ChargeableInvoiceCorrection'; Display='Chargeable Invoice Correction'; Collection='Chargeable Invoice Corrections' },
     @{ Schema='gr_ChargeableInvoiceDocument'; Display='Chargeable Invoice Document'; Collection='Chargeable Invoice Documents' },
-    @{ Schema='gr_ChargeableInvoiceActivity'; Display='Chargeable Invoice Activity'; Collection='Chargeable Invoice Activities' }
+    @{ Schema='gr_ChargeableInvoiceActivity'; Display='Chargeable Invoice Activity'; Collection='Chargeable Invoice Activities' },
+    @{ Schema='gr_PurchaseOrderRecipient'; Display='Purchase Order Recipient'; Collection='Purchase Order Recipients' }
 )
 
 $choices = @{
@@ -31,6 +32,7 @@ $choices = @{
     ComparisonStatus = @('Outstanding','Matched in revision','Not made','Superseded')
     DocumentType = @('GreenTree Invoice','Approval PDF','Supporting Photo','Customer PO','Job Card','Other')
     UploadStatus = @('Pending','Complete','Failed')
+    RecipientRole = @('Primary','CC')
     ActivityEvent = @(
         'Invoice Uploaded','Job Matched','Review Started','Correction Added',
         'Correction Changed','Waiting Changed','Technician Selected','Photo Request Prepared',
@@ -123,6 +125,9 @@ $columns = @(
     C 'gr_chargeableinvoiceactivity' 'gr_Event' 'Event' Choice $true $choices.ActivityEvent
     C 'gr_chargeableinvoiceactivity' 'gr_Detail' 'Detail' Memo $false 4000
     C 'gr_chargeableinvoiceactivity' 'gr_OccurredOn' 'Occurred On' DateTime $true
+
+    C 'gr_purchaseorderrecipient' 'gr_RecipientRole' 'Recipient Role' Choice $true $choices.RecipientRole
+    C 'gr_purchaseorderrecipient' 'gr_SortOrder' 'Sort Order' Integer $true @(0,1000)
 )
 
 function L([string]$From,[string]$Schema,[string]$Display,[string]$To,[string]$Relationship,[bool]$Required=$false) {
@@ -148,6 +153,9 @@ $lookups = @(
     L 'gr_chargeableinvoiceactivity' 'gr_Correction' 'Correction' 'gr_chargeableinvoicecorrection' 'gr_chargeableinvoiceactivity_Correction_gr_chargeableinvoicecorrection'
     L 'gr_chargeableinvoicereview' 'gr_CurrentRevision' 'Current Revision' 'gr_chargeableinvoicerevision' 'gr_chargeableinvoicereview_CurrentRevision_gr_chargeableinvoicerevision'
     L 'gr_chargeableinvoicerevision' 'gr_SourceDocument' 'Source Document' 'gr_chargeableinvoicedocument' 'gr_chargeableinvoicerevision_SourceDocument_gr_chargeableinvoicedocument' $true
+    L 'gr_purchaseorderrecipient' 'gr_Customer' 'Customer' 'gr_customer' 'gr_purchaseorderrecipient_Customer_gr_customer' $true
+    L 'gr_purchaseorderrecipient' 'gr_Site' 'Site' 'gr_site' 'gr_purchaseorderrecipient_Site_gr_site'
+    L 'gr_purchaseorderrecipient' 'gr_Contact' 'Contact' 'gr_contact' 'gr_purchaseorderrecipient_Contact_gr_contact' $true
 )
 
 $keys = @(
@@ -156,7 +164,7 @@ $keys = @(
     @{ Entity='gr_chargeableinvoiceline'; Schema='gr_ChargeableInvoiceLine_RevisionLineKey_Key'; Attributes=@('gr_revision','gr_linekey') }
 )
 
-if (($tables.Schema | Sort-Object -Unique).Count -ne 6 -or ($lookups.Relationship | Sort-Object -Unique).Count -ne $lookups.Count) {
+if (($tables.Schema | Sort-Object -Unique).Count -ne 7 -or ($lookups.Relationship | Sort-Object -Unique).Count -ne $lookups.Count) {
     throw 'Schema definition contains duplicate table or relationship names.'
 }
 if ($ValidateDefinition) { Write-Output 'Chargeable Invoice Review schema definition is valid. No connection was created.'; return }
@@ -269,7 +277,12 @@ function Ensure-Role($Service,[bool]$Provision) {
         $role=[Microsoft.Xrm.Sdk.Entity]::new('role');$role['name']='Chargeable Invoice Manager';$role['businessunitid']=[Microsoft.Xrm.Sdk.EntityReference]::new('businessunit',$bus[0].Id);$id=$Service.Create($role);$roles=@($Service.Retrieve('role',$id,[Microsoft.Xrm.Sdk.Query.ColumnSet]::new('roleid','name','ismanaged','businessunitid')));Write-Output 'Created unassigned Chargeable Invoice Manager role.'
     }
     $role=$roles[0];if([bool]$role['ismanaged']){throw 'Manager role must be unmanaged.'}
-    $names=@();$forbidden=@();foreach($table in $tables){foreach($verb in 'Create','Read','Write','Delete','Append','AppendTo'){$names+="prv$verb$($table.Schema)"};foreach($verb in 'Assign','Share'){$forbidden+="prv$verb$($table.Schema)"}}
+    $names=@();$forbidden=@();foreach($table in $tables){
+        $verbs=if($table.Schema -eq 'gr_PurchaseOrderRecipient'){@('Create','Read','Write','Delete','Append','AppendTo')}else{@('Create','Read','Write','Append','AppendTo')}
+        foreach($verb in $verbs){$names+="prv$verb$($table.Schema)"}
+        foreach($verb in 'Assign','Share'){$forbidden+="prv$verb$($table.Schema)"}
+        if($table.Schema -ne 'gr_PurchaseOrderRecipient'){$forbidden+="prvDelete$($table.Schema)"}
+    }
     $q=[Microsoft.Xrm.Sdk.Query.QueryExpression]::new('privilege');$q.ColumnSet=[Microsoft.Xrm.Sdk.Query.ColumnSet]::new('name');$q.PageInfo=[Microsoft.Xrm.Sdk.Query.PagingInfo]::new();$q.PageInfo.Count=5000;$q.PageInfo.PageNumber=1
     $all=[Collections.Generic.List[Microsoft.Xrm.Sdk.Entity]]::new()
     do{$page=$Service.RetrieveMultiple($q);foreach($item in $page.Entities){$all.Add($item)};if($page.MoreRecords){$q.PageInfo.PageNumber++;$q.PageInfo.PagingCookie=$page.PagingCookie}}while($page.MoreRecords)
@@ -281,6 +294,16 @@ function Ensure-Role($Service,[bool]$Provision) {
     foreach($name in $forbidden){$p=$all|Where-Object{[string]$_['name']-ieq$name}|Select-Object -First 1;if($p -and ($current|Where-Object PrivilegeId -eq $p.Id|Select-Object -First 1)){throw "Manager role has forbidden privilege: $name"}}
     foreach($junction in 'systemuserroles','teamroles'){$q=[Microsoft.Xrm.Sdk.Query.QueryExpression]::new($junction);$q.ColumnSet=[Microsoft.Xrm.Sdk.Query.ColumnSet]::new($false);$q.Criteria.AddCondition('roleid',[Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,$role.Id);if($Service.RetrieveMultiple($q).Entities.Count){throw "Manager role unexpectedly has assignments in $junction."}}
 }
+function Ensure-ServiceOperationsPOPrivileges($Service,[bool]$Provision) {
+    $q=[Microsoft.Xrm.Sdk.Query.QueryExpression]::new('role');$q.ColumnSet=[Microsoft.Xrm.Sdk.Query.ColumnSet]::new('roleid','name','ismanaged');$q.Criteria.AddCondition('name',[Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,'Service Operations');$roles=@($Service.RetrieveMultiple($q).Entities)
+    if($roles.Count-ne 1 -or [bool]$roles[0]['ismanaged']){throw 'Expected exactly one unmanaged Service Operations role.'}
+    $names=@('Create','Read','Write','Delete','Append','AppendTo')|ForEach-Object{"prv$($_)gr_PurchaseOrderRecipient"}
+    $pq=[Microsoft.Xrm.Sdk.Query.QueryExpression]::new('privilege');$pq.ColumnSet=[Microsoft.Xrm.Sdk.Query.ColumnSet]::new('name');$pq.Criteria.AddCondition('name',[Microsoft.Xrm.Sdk.Query.ConditionOperator]::In,[object[]]$names);$metadata=@($Service.RetrieveMultiple($pq).Entities)
+    if($metadata.Count-ne $names.Count){throw 'Purchase Order Recipient generated privileges are incomplete.'}
+    $r=[Microsoft.Crm.Sdk.Messages.RetrieveRolePrivilegesRoleRequest]::new();$r.RoleId=$roles[0].Id;$current=@($Service.Execute($r).RolePrivileges);$add=[Collections.Generic.List[Microsoft.Crm.Sdk.Messages.RolePrivilege]]::new()
+    foreach($name in $names){$p=$metadata|Where-Object{[string]$_['name']-ieq$name}|Select-Object -First 1;$have=$current|Where-Object PrivilegeId -eq $p.Id|Select-Object -First 1;if($have){if([string]$have.Depth-ne 'Global'){throw "Privilege $name has incompatible depth."}}elseif($Provision){$g=[Microsoft.Crm.Sdk.Messages.RolePrivilege]::new();$g.PrivilegeId=$p.Id;$g.Depth='Global';$add.Add($g)}else{throw "Missing Service Operations role privilege: $name"}}
+    if($add.Count){$a=[Microsoft.Crm.Sdk.Messages.AddPrivilegesRoleRequest]::new();$a.RoleId=$roles[0].Id;$a.Privileges=$add.ToArray();$Service.Execute($a)|Out-Null;Write-Output "Granted $($add.Count) Purchase Order Recipient privileges to Service Operations."}
+}
 function Ensure-Contract($Service,[bool]$Provision) {
     foreach($table in $tables){Ensure-Table $Service $table $Provision}
     foreach($column in $columns){Ensure-Column $Service $column $Provision}
@@ -289,6 +312,7 @@ function Ensure-Contract($Service,[bool]$Provision) {
     foreach($key in $keys){Ensure-Key $Service $key $Provision}
     if($Provision){Publish-All $Service}
     Ensure-Role $Service $Provision
+    Ensure-ServiceOperationsPOPrivileges $Service $Provision
 }
 
 Import-Sdk
@@ -300,9 +324,9 @@ try {
     } elseif($Mode -eq 'Provision') {
         Ensure-Contract $service $true
         Ensure-Contract $service $false
-        Write-Output 'Chargeable Invoice Review schema and unassigned manager role provisioned and verified.'
+        Write-Output 'Chargeable Invoice Review and Purchase Order Recipient schema and roles provisioned and verified.'
     } else {
         Ensure-Contract $service $false
-        Write-Output 'Chargeable Invoice Review schema and unassigned manager role verified.'
+        Write-Output 'Chargeable Invoice Review and Purchase Order Recipient schema and roles verified.'
     }
 } finally { if($service -is [IDisposable]){$service.Dispose()} }

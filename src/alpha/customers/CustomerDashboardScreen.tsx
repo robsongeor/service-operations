@@ -26,6 +26,7 @@ import { SERVICE_TYPE_OPTIONS } from '../equipment/servicePlans/equipmentService
 import { MAINTENANCE_PROFILES } from '../equipment/servicePlans/maintenanceConfiguration'
 import CustomerDrawer, { type CustomerDraft, type CustomerDrawerTab } from './CustomerDrawer'
 import { customerContactsFromSiteLinks, type CustomerContact } from './customerContact.types'
+import { usePurchaseOrderRecipients } from './usePurchaseOrderRecipients'
 import CustomerOpenJobsTab from './CustomerOpenJobsTab'
 import CustomerQuotesTab from './CustomerQuotesTab'
 import SearchableSelect from '../shared/searchable-select/SearchableSelect'
@@ -200,6 +201,7 @@ export default function CustomerDashboardScreen() {
     }, [allCustomers])
 
     const selectedCustomer = allCustomers.find((customer) => customer.gr_customerid === selectedCustomerId)
+    const poRecipients = usePurchaseOrderRecipients(selectedCustomer?.gr_customerid)
     const customerSites = allSites
         .filter((site) => site.gr_Customer?.gr_customerid === selectedCustomerId)
         .sort((a, b) => a.gr_name.localeCompare(b.gr_name))
@@ -251,7 +253,14 @@ export default function CustomerDashboardScreen() {
             isPrimary: true,
         }] : []),
         ...customerContactsFromSiteLinks(siteContacts, new Set(customerSites.map((site) => site.gr_siteid))),
-    ]
+        ...poRecipients.recipients.flatMap((recipient) => recipient.gr_Contact ? [{
+            id: recipient.gr_Contact.gr_contactid,
+            name: recipient.gr_Contact.gr_name,
+            phone: recipient.gr_Contact.gr_phone ?? undefined,
+            email: recipient.gr_Contact.gr_email ?? undefined,
+            siteIds: recipient._gr_site_value ? [recipient._gr_site_value] : [],
+        }] : []),
+    ].filter((contact, index, all) => all.findIndex((candidate) => candidate.id.toLowerCase() === contact.id.toLowerCase()) === index)
     const customerEquipment = equipment.filter((item) =>
         item.gr_Site?.gr_Customer?.gr_customerid === selectedCustomerId,
     )
@@ -979,6 +988,13 @@ export default function CustomerDashboardScreen() {
                 setSiteSettingsSite(null)
                 window.setTimeout(() => trigger?.focus(), 0)
             }}
+            customerId={selectedCustomer.gr_customerid}
+            contacts={customerContacts}
+            poRecipients={poRecipients.recipients}
+            poRecipientsBusy={poRecipients.isLoading || poRecipients.isSaving}
+            poRecipientsError={poRecipients.error}
+            onSavePoRecipients={poRecipients.save}
+            onCreateContact={createContactForSite}
         />}
 
         {runSiteCheckSite && selectedCustomer && <RunSiteCheckDrawer
@@ -1088,6 +1104,13 @@ export default function CustomerDashboardScreen() {
             initialTab={customerDrawerInitialTab}
             initialSiteId={editingSiteId || undefined}
             initialValue={customerDrawerMode === 'edit' ? customerDrawerInitialValue : undefined}
+            customerId={selectedCustomer?.gr_customerid}
+            contacts={customerContacts}
+            poRecipients={poRecipients.recipients}
+            poRecipientsBusy={poRecipients.isLoading || poRecipients.isSaving}
+            poRecipientsError={poRecipients.error}
+            onSavePoRecipients={poRecipients.save}
+            onCreateContact={createContactForSite}
             onClose={() => { setCustomerDrawerMode(null); setEditingSiteId('') }}
             onSave={async (draft) => {
                 const savedDraft = await saveCustomerDraft(draft)

@@ -81,16 +81,28 @@ export function buildTechnicianEmailBody(
 
 export function buildMailtoUrl({
     recipient,
+    cc = [],
     subject,
     body,
 }: {
     recipient: string
+    cc?: string[]
     subject: string
     body: string
 }) {
     if (!isValidRecipientEmail(recipient)) {
         throw new Error('A valid recipient email address is required.')
     }
-
-    return `mailto:${encodeURIComponent(recipient.trim())}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    const primary = recipient.trim().toLowerCase()
+    const copied = [...new Set(cc.map((email) => email.trim().toLowerCase()))]
+        .filter((email) => email !== primary)
+    if (copied.some((email) => !isValidRecipientEmail(email))) {
+        throw new Error('Every CC recipient must have a valid email address.')
+    }
+    const query = [
+        ...(copied.length ? [`cc=${encodeURIComponent(copied.join(','))}`] : []),
+        `subject=${encodeURIComponent(subject)}`,
+        `body=${encodeURIComponent(body)}`,
+    ].join('&')
+    return `mailto:${encodeURIComponent(recipient.trim())}?${query}`
 }

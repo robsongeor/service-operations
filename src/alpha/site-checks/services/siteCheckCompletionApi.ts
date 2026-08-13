@@ -3,7 +3,11 @@ import type { JobSaveInput } from '../../jobs/types/jobSave.types.ts'
 import { JOB_STATUSES, type JobStatus } from '../../jobs/types/jobStatus.types.ts'
 import { JOB_TYPES } from '../../jobs/types/jobType.types.ts'
 import { newZealandDateOnly } from '../../shared/dates/dateOnly.ts'
-import { calculateNextSiteCheckDueDate, calculateSiteCheckProgress } from '../domain/siteCheckCalculations.ts'
+import {
+    calculateNextSiteCheckDueDate,
+    calculateSiteCheckProgress,
+    isSiteCheckExpired,
+} from '../domain/siteCheckCalculations.ts'
 import {
     SITE_CHECK_STATUSES,
     type SiteCheck,
@@ -64,6 +68,11 @@ function requireGuid(value: string, label: string) {
 
 function sameId(first?: string | null, second?: string | null) {
     return Boolean(first && second && first.toLowerCase() === second.toLowerCase())
+}
+
+function isRetiredExpiredOccurrence(context: CompletionContext) {
+    return !sameId(context.schedule._gr_activesitecheck_value, context.siteCheck.gr_sitecheckid)
+        && isSiteCheckExpired(context.siteCheck.gr_duedatesnapshot, newZealandDateOnly(new Date().toISOString()))
 }
 
 function requireEtag(record: { '@odata.etag'?: string }, label: string) {
@@ -162,10 +171,12 @@ function validateContext(context: CompletionContext, input: SiteCheckJobStatusIn
         }
     }
     if (context.siteCheck.gr_status !== SITE_CHECK_STATUSES.COMPLETE) {
-        if (!sameId(context.schedule._gr_activesitecheck_value, context.siteCheck.gr_sitecheckid)) {
+        if (!sameId(context.schedule._gr_activesitecheck_value, context.siteCheck.gr_sitecheckid)
+            && !isRetiredExpiredOccurrence(context)) {
             throw new Error('The Site Check is not the active occurrence on its Schedule.')
         }
-        if (context.schedule.gr_frequency !== context.siteCheck.gr_frequencysnapshot) {
+        if (!isRetiredExpiredOccurrence(context)
+            && context.schedule.gr_frequency !== context.siteCheck.gr_frequencysnapshot) {
             throw new Error('The Site Check cadence no longer matches its Schedule. Refresh before completing it.')
         }
     }
@@ -266,7 +277,7 @@ function completionRequests(
     completedOn: string,
 ): ChangeRequest[] {
     const completedDate = newZealandDateOnly(completedOn)
-    return [
+    const requests: ChangeRequest[] = [
         {
             entityPath: `gr_jobs(${context.job.gr_jobid})`,
             etag: requireEtag(context.job, 'The Job'),
@@ -280,7 +291,8 @@ function completionRequests(
                 gr_completedon: completedOn,
             },
         },
-        {
+    ]
+    if (!isRetiredExpiredOccurrence(context)) requests.push({
             entityPath: `gr_sitecheckschedules(${context.schedule.gr_sitecheckscheduleid})`,
             etag: requireEtag(context.schedule, 'The Site Check Schedule'),
             fields: {
@@ -291,8 +303,8 @@ function completionRequests(
                 ),
                 'gr_ActiveSiteCheck@odata.bind': null,
             },
-        },
-    ]
+    })
+    return requests
 }
 
 async function patchJob(
@@ -326,7 +338,8 @@ function completionCommitted(context: CompletionContext) {
     return context.siteCheck.gr_status === SITE_CHECK_STATUSES.COMPLETE
         && context.jobs.length === context.siteCheck.gr_expectedjobcount
         && context.jobs.every((job) => job.gr_status === JOB_STATUSES.COMPLETE)
-        && !context.schedule._gr_activesitecheck_value
+        && (isRetiredExpiredOccurrence(context)
+            || !context.schedule._gr_activesitecheck_value)
         && Boolean(context.siteCheck.gr_completedon)
 }
 
@@ -344,7 +357,7 @@ async function reconcileCompletedOccurrence(
         .sort()
         .at(-1) ?? new Date().toISOString()
     const completedDate = newZealandDateOnly(completedOn)
-    await executeAtomicChanges(token, [
+    const requests: ChangeRequest[] = [
         {
             entityPath: `gr_sitechecks(${context.siteCheck.gr_sitecheckid})`,
             etag: requireEtag(context.siteCheck, 'The Site Check'),
@@ -362,7 +375,9 @@ async function reconcileCompletedOccurrence(
                 'gr_ActiveSiteCheck@odata.bind': null,
             },
         },
-    ], options)
+    ]
+    if (isRetiredExpiredOccurrence(context)) requests.pop()
+    await executeAtomicChanges(token, requests, options)
     return true
 }
 

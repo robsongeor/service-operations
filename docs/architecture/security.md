@@ -55,8 +55,11 @@ manager-only access, file signature/type/size/page/text allowlists, bounded pars
 staging; this does not claim to detect malicious content.
 
 The review queue filters to Active imports before returning records. Workspace reads are bounded,
-follow only same-origin Dataverse continuation links, and request only the six review tables plus
-their approved reference display fields. Document File downloads use the manager's delegated
+follow only same-origin Dataverse continuation links, and request the six review tables plus their
+approved reference display fields. For a matched Job, the Amendments tab additionally performs one
+read-only delegated query capped at 50 directly linked Quotes; Quote Lines are capped at 200 and load
+only after deliberate expansion. Existing Quote table privileges apply and no Quote or Job write is
+introduced. Document File downloads use the manager's delegated
 token, verify byte count against metadata, create a browser object URL only for the deliberate
 download, and revoke it immediately after handoff. Review transitions require the loaded ETag and
 append Activity atomically; they expose no Job write path.
@@ -77,9 +80,12 @@ existing recoverable pattern; no generated file receives an anonymous URL.
 
 PO-request preparation loads at most 200 Site Contacts for the authoritative Review Site and also
 allows a deliberately entered, syntactically validated recipient. It never persists the recipient
-or email body and does not use Email Dispatch. The current Revision's Complete approval PDF,
+or email body and does not use Email Dispatch. The current Revision's Complete GreenTree source PDF,
 resolved Corrections, deliberate photo decision and any required Complete photos are prerequisites.
-The UI identifies files for manual download/attachment; `mailto:` cannot attach or send them.
+The UI identifies files for manual download/attachment; `mailto:` cannot attach or send them. When
+the manager saves those files, the browser adds the approved Liftrucks logo to an in-memory copy of
+the GreenTree PDF only. It does not PATCH the immutable Review Document/File, create another
+Dataverse document or expose an anonymous file URL; a transformation failure stops the export.
 Only an ETag-protected preparation timestamp and safe Activity are stored.
 
 V1 performs no automatic Chargeable Invoice cleanup. Complete evidence is immutable during normal

@@ -94,7 +94,11 @@ Expected entity set: `gr_quotes`.
 | GST | `gr_gst` | Currency | Yes | Rounded to two decimals |
 | Total | `gr_total` | Currency | Yes | Subtotal plus GST |
 
-Customer, site, contact, and equipment can be selected directly or displayed from the linked job. A later PDF/versioning phase can add snapshot fields if historical documents must remain unchanged after job details are edited.
+Customer, site, contact, and equipment can be selected directly or displayed from the linked job.
+The current PO-request invoice generator downloads a client-local document from the current Quote
+editor values and does not create a Dataverse document record or snapshot. A later document-history
+phase can add snapshot fields or a related document table if generated copies must be retained and
+reproduced after source details are edited.
 
 ## Independent quote relationships
 
@@ -161,7 +165,9 @@ total    = 4340.85
 - `/quotes` — quote list, filters, totals, and quote editor
 - `/pricing` — pricing catalogue and standard rate maintenance
 
-The job editor will show linked quotes and provide a **Create quote** action after the standalone Quotes page is working.
+The Job editor shows linked quotes and provides a **Create quote** action. Chargeable Invoice Review
+also shows a read-only, Job-scoped related-quote summary and lazily loads its lines for comparison;
+editing remains owned by the standalone Quotes page.
 
 ## Build sequence
 
@@ -172,4 +178,5 @@ The job editor will show linked quotes and provide a **Create quote** action aft
 5. Build the Pricing page.
 6. Build the Quotes list and editor with automatic totals.
 7. Add quote access to the job editor.
-8. Add PDF generation, revisions, and email in a later phase.
+8. PO-request PDF generation is implemented for saved Quotes; retained document history, formal
+   revision snapshots, recipient resolution, and email remain later phases.

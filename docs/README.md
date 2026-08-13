@@ -27,7 +27,7 @@ by scanning the repository.
 | Technician submission | [`architecture/technician-job-submission.md`](architecture/technician-job-submission.md) | [`technician-job-submission-schema.md`](technician-job-submission-schema.md), [`public-portal-service-identity.md`](public-portal-service-identity.md) |
 | Equipment | [`architecture/equipment.md`](architecture/equipment.md) | [`hour-meter-recorded-date-schema.md`](hour-meter-recorded-date-schema.md) |
 | Maintenance | [`architecture/maintenance.md`](architecture/maintenance.md) | [`maintenance-programmes-dataverse.md`](maintenance-programmes-dataverse.md), [`site-maintenance-settings-schema.md`](site-maintenance-settings-schema.md) |
-| Customers | [`architecture/customer-dashboard.md`](architecture/customer-dashboard.md) | Site and Equipment schemas linked from their owning documents |
+| Customers | [`architecture/customer-dashboard.md`](architecture/customer-dashboard.md) | [`purchase-order-recipient-schema.md`](purchase-order-recipient-schema.md); Site and Equipment schemas linked from their owning documents |
 | Scheduler | [`architecture/scheduler.md`](architecture/scheduler.md) | Job scheduling relationships are documented with Jobs |
 | WOF/REGO | [`architecture/wof.md`](architecture/wof.md) | [`wof-dataverse-schema.md`](wof-dataverse-schema.md) |
 | Quotes and pricing | [`architecture/quotes.md`](architecture/quotes.md) | [`quotes-dataverse-schema.md`](quotes-dataverse-schema.md) |

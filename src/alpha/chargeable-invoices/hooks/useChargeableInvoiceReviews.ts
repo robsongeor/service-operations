@@ -30,6 +30,8 @@ import type {
     ChargeableInvoiceWaitingOn,
     ChargeableInvoiceWorkspace,
 } from '../types/chargeableInvoice.types.ts'
+import { CHARGEABLE_INVOICE_APPROVAL_TEMPLATE_VERSION, CHARGEABLE_INVOICE_DOCUMENT_TYPES, CHARGEABLE_INVOICE_UPLOAD_STATUSES } from '../types/chargeableInvoice.types.ts'
+import { fetchQuoteLines } from '../../quotes/services/quotesApi.ts'
 import type { ChargeableInvoiceRequirementsDraft } from '../domain/chargeableInvoiceState.ts'
 import type { ChargeableInvoiceCorrectionDraft } from '../domain/chargeableInvoiceCorrectionDraft.ts'
 
@@ -296,7 +298,17 @@ export function useChargeableInvoiceReviews() {
         setIsSaving(true)
         setWorkspaceError('')
         try {
-            applyWorkspace(await generateChargeableInvoiceApprovalPdf(await accessToken(), workspace))
+            const next = await generateChargeableInvoiceApprovalPdf(await accessToken(), workspace)
+            applyWorkspace(next)
+            const currentRevisionId = next.review._gr_currentrevision_value?.toLowerCase()
+            const document = next.documents
+                .filter((candidate) => candidate.gr_documenttype === CHARGEABLE_INVOICE_DOCUMENT_TYPES.APPROVAL_PDF
+                    && candidate.gr_uploadstatus === CHARGEABLE_INVOICE_UPLOAD_STATUSES.COMPLETE
+                    && candidate.gr_templateversion === CHARGEABLE_INVOICE_APPROVAL_TEMPLATE_VERSION
+                    && candidate._gr_revision_value?.toLowerCase() === currentRevisionId)
+                .sort((left, right) => (Date.parse(right.createdon || '') || 0) - (Date.parse(left.createdon || '') || 0))[0]
+            if (!document) throw new Error('The amended invoice was generated but could not be loaded. Refresh the review and retry.')
+            return document
         } catch (error) {
             setWorkspaceError(error instanceof Error ? error.message : 'The approval PDF could not be generated.')
             throw error
@@ -321,11 +333,24 @@ export function useChargeableInvoiceReviews() {
             const objectUrl = URL.createObjectURL(blob)
             const link = window.document.createElement('a')
             link.href = objectUrl
-            link.download = document.gr_filename?.trim() || document.gr_name || 'invoice-document.pdf'
-            link.click()
-            window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0)
-        } catch { /* loadDocument exposes the safe error */ }
+            const sourceName = document.gr_filename?.trim() || document.gr_name?.trim() || 'amended-invoice.pdf'
+            link.download = sourceName.toLowerCase().endsWith('.pdf') ? sourceName : `${sourceName}.pdf`
+            link.style.display = 'none'
+            window.document.body.appendChild(link)
+            try {
+                link.click()
+            } finally {
+                link.remove()
+                window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+            }
+        } catch (error) {
+            throw error instanceof Error ? error : new Error('The amended invoice PDF could not be saved.')
+        }
     }, [loadDocument])
+
+    const loadQuoteLines = useCallback(async (quoteId: string) => {
+        return fetchQuoteLines(await accessToken(), quoteId)
+    }, [accessToken])
 
     const counts = useMemo(() => {
         const result: Record<ChargeableInvoicePrimaryQueue, number> = {
@@ -338,7 +363,7 @@ export function useChargeableInvoiceReviews() {
     return {
         reviews, counts, selectedId, workspace, isLoading, isLoadingWorkspace, isSaving,
         loadError, workspaceError, refresh, openReview, closeReview, startReview, saveWaiting,
-        loadDocument, downloadDocument, saveRequirements, markReady, markDoNotProcess, deleteReview, addCorrection, replaceCorrection, supersedeCorrection,
+        loadDocument, downloadDocument, loadQuoteLines, saveRequirements, markReady, markDoNotProcess, deleteReview, addCorrection, replaceCorrection, supersedeCorrection,
         preparePhotoRequest, preparePoRequest, uploadPhotos, deletePhotos, generateApprovalPdf,
     }
 }

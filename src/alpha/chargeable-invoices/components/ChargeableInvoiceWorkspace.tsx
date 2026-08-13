@@ -13,6 +13,7 @@ import {
     CHARGEABLE_INVOICE_DOCUMENT_TYPES,
     CHARGEABLE_INVOICE_PHOTO_STATUSES,
     CHARGEABLE_INVOICE_UPLOAD_STATUSES,
+    CHARGEABLE_INVOICE_APPROVAL_TEMPLATE_VERSION,
     CHARGEABLE_INVOICE_WAITING_ON,
     type ChargeableInvoiceDocument,
     type ChargeableInvoiceCorrection,
@@ -25,7 +26,11 @@ import { validateChargeableInvoiceRequirements, type ChargeableInvoiceRequiremen
 import type { ChargeableInvoiceCorrectionDraft } from '../domain/chargeableInvoiceCorrectionDraft.ts'
 import { buildChargeableInvoiceCorrectionInstructions } from '../domain/chargeableInvoiceCorrectionInstructions.ts'
 import { buildChargeableInvoiceAmendedTotals } from '../domain/chargeableInvoicePricing.ts'
+import { brandGreenTreeInvoicePdf } from '../domain/brandGreenTreeInvoicePdf.ts'
 import { isValidRecipientEmail } from '../../jobs/utils/technicianMailto.ts'
+import { resolvePurchaseOrderRecipients } from '../../customers/purchaseOrderRecipientRules.ts'
+import { QUOTE_STATUS_LABELS, QUOTE_STATUSES, type Quote, type QuoteLine } from '../../quotes/types/quote.types.ts'
+import { PRICING_CATEGORY_LABELS } from '../../quotes/types/pricing.types.ts'
 
 type Tab = 'amendments' | 'requests' | 'waiting' | 'history'
 type CorrectionEditorState =
@@ -53,6 +58,8 @@ type Props = {
     onSupersedeCorrection: (correctionId: string) => Promise<void>
     onLoadDocument: (document: ChargeableInvoiceDocument) => Promise<Blob>
     onDownload: (document: ChargeableInvoiceDocument) => Promise<void>
+    onLoadQuoteLines: (quoteId: string) => Promise<QuoteLine[]>
+    onGenerateApprovalPdf: () => Promise<ChargeableInvoiceDocument>
     onClose: () => void
 }
 
@@ -132,6 +139,85 @@ function EmailIcon() {
     return <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 5h18v14H3V5Zm2 2v.4l7 4.7 7-4.7V7H5Zm14 10V9.8l-7 4.7-7-4.7V17h14Z" /></svg>
 }
 
+const relatedQuoteStatusRank: Record<number, number> = {
+    [QUOTE_STATUSES.ACCEPTED]: 0,
+    [QUOTE_STATUSES.SENT]: 1,
+    [QUOTE_STATUSES.DRAFT]: 2,
+    [QUOTE_STATUSES.DECLINED]: 3,
+    [QUOTE_STATUSES.EXPIRED]: 4,
+}
+
+function quotePriceComparison(quoteTotal: number, invoiceTotal?: number | null) {
+    if (invoiceTotal == null) return 'Invoice comparison unavailable'
+    const difference = quoteTotal - invoiceTotal
+    if (Math.abs(difference) < 0.005) return 'Matches current invoice total'
+    return `${money.format(Math.abs(difference))} ${difference > 0 ? 'above' : 'below'} current invoice`
+}
+
+function RelatedQuotes({ quotes, error, jobNumber, invoiceTotal, onLoadLines }: {
+    quotes: Quote[]
+    error?: string
+    jobNumber?: string | null
+    invoiceTotal?: number | null
+    onLoadLines: (quoteId: string) => Promise<QuoteLine[]>
+}) {
+    const [expandedId, setExpandedId] = useState<string | null>(null)
+    const [linesByQuote, setLinesByQuote] = useState<Record<string, QuoteLine[]>>({})
+    const [loadingId, setLoadingId] = useState<string | null>(null)
+    const [lineError, setLineError] = useState('')
+    const orderedQuotes = useMemo(() => [...quotes].sort((left, right) => {
+        const statusDifference = (relatedQuoteStatusRank[left.gr_quotestatus] ?? 99) - (relatedQuoteStatusRank[right.gr_quotestatus] ?? 99)
+        return statusDifference || right.createdon.localeCompare(left.createdon)
+    }), [quotes])
+    const toggle = async (quote: Quote) => {
+        if (expandedId === quote.gr_quoteid) {
+            setExpandedId(null)
+            return
+        }
+        setExpandedId(quote.gr_quoteid)
+        setLineError('')
+        if (linesByQuote[quote.gr_quoteid]) return
+        setLoadingId(quote.gr_quoteid)
+        try {
+            const lines = await onLoadLines(quote.gr_quoteid)
+            setLinesByQuote((current) => ({ ...current, [quote.gr_quoteid]: lines }))
+        } catch (cause) {
+            setLineError(cause instanceof Error ? cause.message : 'The quote lines could not be loaded.')
+        } finally {
+            setLoadingId(null)
+        }
+    }
+    if (error) return <div className="chargeable-banner error" role="status">{error}</div>
+    if (!orderedQuotes.length) {
+        return <div className="chargeable-related-quotes-empty"><strong>No quotes linked to Job {jobNumber || '—'}</strong><p>There is no quote context to compare with this invoice.</p></div>
+    }
+    return <div className="chargeable-related-quotes">
+        <p className="chargeable-section-intro">Accepted and sent quotes are shown first. Quotes are supporting context only and do not control invoice readiness.</p>
+        {orderedQuotes.map((quote) => {
+            const expanded = expandedId === quote.gr_quoteid
+            const subdued = quote.gr_quotestatus === QUOTE_STATUSES.DECLINED || quote.gr_quotestatus === QUOTE_STATUSES.EXPIRED
+            const lines = linesByQuote[quote.gr_quoteid]
+            return <article key={quote.gr_quoteid} className={`chargeable-related-quote${subdued ? ' subdued' : ''}`}>
+                <div className="chargeable-related-quote-summary">
+                    <button type="button" className="chargeable-related-quote-toggle" aria-expanded={expanded} onClick={() => void toggle(quote)}>
+                        <span><strong>{quote.gr_quotenumber || 'Pending number'}</strong><small>{quote.gr_name || 'Untitled quote'}</small></span>
+                        <span className={`chargeable-related-quote-status status-${quote.gr_quotestatus}`}>{QUOTE_STATUS_LABELS[quote.gr_quotestatus] ?? 'Unknown'}</span>
+                        <span><strong>Rev {quote.gr_revision}</strong><small>{quote.gr_quotedate ? new Date(`${quote.gr_quotedate.slice(0, 10)}T00:00:00`).toLocaleDateString('en-NZ') : 'No date'}</small></span>
+                        <span><strong>{money.format(quote.gr_total)}</strong><small>{quotePriceComparison(quote.gr_total, invoiceTotal)}</small></span>
+                        <span className="chargeable-related-quote-chevron" aria-hidden="true">⌄</span>
+                    </button>
+                    <a className="chargeable-secondary chargeable-related-quote-open" href={`/quotes?quoteId=${encodeURIComponent(quote.gr_quoteid)}`} target="_blank" rel="noopener noreferrer">Open quote</a>
+                </div>
+                {expanded && <div className="chargeable-related-quote-detail">
+                    <dl><div><dt>Author</dt><dd>{quote.createdby?.fullname || 'Not recorded'}</dd></div><div><dt>Valid until</dt><dd>{quote.gr_validuntil || 'Not set'}</dd></div></dl>
+                    {quote.gr_notes && <div><strong>Notes</strong><p>{quote.gr_notes}</p></div>}
+                    {loadingId === quote.gr_quoteid ? <p>Loading quote lines…</p> : lineError && !lines ? <p className="chargeable-inline-error" role="alert">{lineError}</p> : lines && lines.length > 0 ? <div className="chargeable-related-quote-lines"><table><thead><tr><th>Type</th><th>Description</th><th>Qty</th><th>Rate</th><th>Total</th></tr></thead><tbody>{lines.map((line) => <tr key={line.gr_quotelineid}><td>{PRICING_CATEGORY_LABELS[line.gr_category]}</td><td>{line.gr_description}</td><td>{line.gr_quantity}</td><td>{money.format(line.gr_unitprice)}</td><td>{money.format(line.gr_extendedprice)}</td></tr>)}</tbody></table></div> : lines ? <p>No lines recorded on this quote.</p> : null}
+                </div>}
+            </article>
+        })}
+    </div>
+}
+
 function lineAmendmentDraft(line: ChargeableInvoiceLine, correction?: ChargeableInvoiceCorrection): ChargeableInvoiceCorrectionDraft {
     return {
         type: CHARGEABLE_INVOICE_CORRECTION_TYPES.CHANGE_LINE,
@@ -207,6 +293,27 @@ async function availableSupportingDocumentName(directory: SupportingDocumentDire
         }
     }
     throw new Error('The selected folder contains too many files with the same name.')
+}
+
+function downloadSupportingDocument(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = filename
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    window.setTimeout(() => URL.revokeObjectURL(url), 0)
+}
+
+async function prepareSupportingDocument(
+    document: ChargeableInvoiceDocument,
+    onLoadDocument: (document: ChargeableInvoiceDocument) => Promise<Blob>,
+) {
+    const source = await onLoadDocument(document)
+    return document.gr_documenttype === CHARGEABLE_INVOICE_DOCUMENT_TYPES.GREENTREE_INVOICE
+        ? brandGreenTreeInvoicePdf(source)
+        : source
 }
 
 function InlineWorkAmendmentEditor({ initialText = '', saving, onSave, onCancel }: {
@@ -480,21 +587,31 @@ function UploadedPhotoPreviews({ documents, disabled, onDelete, onLoadDocument }
     </div>
 }
 
-function PoRequestWorkflow({ workspace, saving, onPrepare, onLoadDocument, onDownload }: {
+function PoRequestWorkflow({ workspace, saving, onPrepare, onLoadDocument, onGenerateApprovalPdf }: {
     workspace: Workspace
     saving: boolean
     onPrepare: (draft: ChargeableInvoicePoRecipientDraft) => Promise<string>
     onLoadDocument: (document: ChargeableInvoiceDocument) => Promise<Blob>
-    onDownload: (document: ChargeableInvoiceDocument) => Promise<void>
+    onGenerateApprovalPdf: () => Promise<ChargeableInvoiceDocument>
 }) {
     const review = workspace.review
-    const [recipientChoice, setRecipientChoice] = useState('')
+    const configuredRecipients = resolvePurchaseOrderRecipients(workspace.poRecipients,
+        review._gr_customer_value, review._gr_site_value)
+    const configuredReady = Boolean(configuredRecipients.primary?.gr_Contact
+        && isValidRecipientEmail(configuredRecipients.primary.gr_Contact.gr_email))
+    const [recipientChoice, setRecipientChoice] = useState(configuredReady ? '__configured__' : '')
     const [manualEmail, setManualEmail] = useState('')
     const [savingDocuments, setSavingDocuments] = useState(false)
     const [documentSaveFeedback, setDocumentSaveFeedback] = useState('')
     const validContacts = workspace.siteContacts.filter((siteContact) =>
         siteContact.gr_Contact && isValidRecipientEmail(siteContact.gr_Contact.gr_email))
     const options = [
+        ...(configuredReady ? [{
+            value: '__configured__',
+            label: `${configuredRecipients.primary!.gr_Contact!.gr_name} — ${configuredRecipients.source === 'site' ? 'Site override' : 'Customer default'}`,
+            secondary: `${configuredRecipients.primary!.gr_Contact!.gr_email}${configuredRecipients.cc.length ? ` · CC ${configuredRecipients.cc.map((row) => row.gr_Contact?.gr_name).filter(Boolean).join(', ')}` : ''}`,
+            emphasized: true,
+        }] : []),
         ...validContacts.map((siteContact) => ({
             value: siteContact.gr_sitecontactid,
             label: siteContact.gr_Contact?.gr_name || 'Site Contact',
@@ -505,37 +622,42 @@ function PoRequestWorkflow({ workspace, saving, onPrepare, onLoadDocument, onDow
     ]
     const currentRevision = workspace.revisions.find((revision) =>
         revision.gr_chargeableinvoicerevisionid.toLowerCase() === review._gr_currentrevision_value?.toLowerCase())
-    const greenTreeInvoice = workspace.documents.find((document) =>
-        document.gr_documenttype === CHARGEABLE_INVOICE_DOCUMENT_TYPES.GREENTREE_INVOICE
+    const latestCorrectionChange = Math.max(0, ...workspace.activities
+        .filter((activity) => activity.gr_event === 122830003 || activity.gr_event === 122830004)
+        .map((activity) => Date.parse(activity.gr_occurredon) || 0))
+    const approvalPdf = workspace.documents.find((document) =>
+        document.gr_documenttype === CHARGEABLE_INVOICE_DOCUMENT_TYPES.APPROVAL_PDF
         && document.gr_uploadstatus === CHARGEABLE_INVOICE_UPLOAD_STATUSES.COMPLETE
-        && document.gr_chargeableinvoicedocumentid.toLowerCase() === currentRevision?._gr_sourcedocument_value?.toLowerCase())
+        && document.gr_templateversion === CHARGEABLE_INVOICE_APPROVAL_TEMPLATE_VERSION
+        && document._gr_revision_value?.toLowerCase() === currentRevision?.gr_chargeableinvoicerevisionid.toLowerCase()
+        && (Date.parse(document.createdon || '') || 0) >= latestCorrectionChange)
     const photos = workspace.documents.filter((document) =>
         document.gr_documenttype === CHARGEABLE_INVOICE_DOCUMENT_TYPES.SUPPORTING_PHOTO
         && document.gr_uploadstatus === CHARGEABLE_INVOICE_UPLOAD_STATUSES.COMPLETE)
     const attachments = [
-        ...(greenTreeInvoice ? [greenTreeInvoice] : []),
+        ...(approvalPdf ? [approvalPdf] : []),
         ...(review.gr_photosrequired === true ? photos : []),
     ]
-    const unresolved = workspace.corrections.some((correction) =>
-        correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.OUTSTANDING
-        || correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.NOT_MADE)
     const prerequisites = [
         !review.gr_reviewstartedon ? 'Start the review.' : '',
         review.gr_porequired !== true ? 'Record that a customer PO is required.' : '',
         review.gr_photosrequired == null ? 'Record whether supporting photos are required.' : '',
-        unresolved ? 'Complete the invoice amendments and import the corrected GreenTree invoice.' : '',
-        !greenTreeInvoice ? 'The current GreenTree invoice is unavailable.' : '',
+        !approvalPdf ? 'Generate the Customer PO Approval PDF for the current revision.' : '',
         review.gr_photosrequired === true && (review.gr_photosstatus !== CHARGEABLE_INVOICE_PHOTO_STATUSES.RECEIVED || photos.length === 0)
             ? 'Receive and upload the required supporting photos.' : '',
         review.gr_poreceivedon ? 'A confirmed customer PO has already been received.' : '',
     ].filter(Boolean)
     const recipientReady = recipientChoice === '__manual__'
         ? isValidRecipientEmail(manualEmail)
+        : recipientChoice === '__configured__'
+        ? configuredReady
         : validContacts.some((siteContact) => siteContact.gr_sitecontactid === recipientChoice)
     const prepare = async () => {
         try {
             const draft = recipientChoice === '__manual__'
                 ? { manualEmail }
+                : recipientChoice === '__configured__'
+                ? { useConfiguredRecipients: true }
                 : { siteContactId: recipientChoice }
             window.location.href = await onPrepare(draft)
         } catch { /* workspace error contains the safe detail */ }
@@ -546,7 +668,12 @@ function PoRequestWorkflow({ workspace, saving, onPrepare, onLoadDocument, onDow
         try {
             const chooseDirectory = (window as DirectoryPickerWindow).showDirectoryPicker
             if (!chooseDirectory) {
-                for (const document of attachments) await onDownload(document)
+                for (const [index, document] of attachments.entries()) {
+                    downloadSupportingDocument(
+                        await prepareSupportingDocument(document, onLoadDocument),
+                        safeSupportingDocumentName(document, index),
+                    )
+                }
                 setDocumentSaveFeedback(`${attachments.length} supporting document${attachments.length === 1 ? '' : 's'} sent to your browser downloads.`)
                 return
             }
@@ -554,11 +681,15 @@ function PoRequestWorkflow({ workspace, saving, onPrepare, onLoadDocument, onDow
                 id: 'invoice-support-documents', mode: 'readwrite', startIn: 'downloads',
             })
             for (const [index, document] of attachments.entries()) {
+                const blob = await prepareSupportingDocument(document, onLoadDocument)
                 const filename = await availableSupportingDocumentName(directory, safeSupportingDocumentName(document, index))
                 const fileHandle = await directory.getFileHandle(filename, { create: true })
                 const writable = await fileHandle.createWritable()
-                await writable.write(await onLoadDocument(document))
-                await writable.close()
+                try {
+                    await writable.write(blob)
+                } finally {
+                    await writable.close()
+                }
             }
             setDocumentSaveFeedback(`${attachments.length} supporting document${attachments.length === 1 ? '' : 's'} saved to the selected folder.`)
         } catch (cause) {
@@ -571,15 +702,15 @@ function PoRequestWorkflow({ workspace, saving, onPrepare, onLoadDocument, onDow
     }
     if (review.gr_porequired !== true) return <p>Record that a customer PO is required to enable this workflow.</p>
     return <div className="chargeable-compact-workflow">
-        <p className="chargeable-compact-intro">Choose the customer or site contact responsible for the PO, save the current GreenTree invoice and any required photos, then open the email and attach those files manually.</p>
-        {validContacts.length === 0 && <p className="chargeable-evidence-note">No customer or site recipient with a valid email is configured yet. You can enter an address manually until recipient records are available.</p>}
-        <SearchableSelect id="chargeable-po-recipient" label="Customer PO recipient" value={recipientChoice} options={options} onChange={setRecipientChoice} placeholder="Choose a Site Contact or enter an email" searchPlaceholder="Search Site Contacts" emptyLabel="No matching Site Contacts" disabled={saving || unresolved || review.gr_disposition != null || Boolean(review.gr_poreceivedon)} required />
+        <p className="chargeable-compact-intro">Generate the provisional Customer PO Approval PDF from the current invoice and active amendments, choose the responsible contact, then save and attach the supporting documents.</p>
+        {!configuredReady && validContacts.length === 0 && <p className="chargeable-evidence-note">No customer or site recipient with a valid email is configured yet. Add PO Contacts in the Customer screen, or enter an address manually for this draft.</p>}
+        <SearchableSelect id="chargeable-po-recipient" label="Customer PO recipients" value={recipientChoice} options={options} onChange={setRecipientChoice} placeholder="Choose configured recipients, a Site Contact, or manual email" searchPlaceholder="Search recipients" emptyLabel="No matching recipients" disabled={saving || review.gr_disposition != null || Boolean(review.gr_poreceivedon)} required />
         {recipientChoice === '__manual__' && <label className="chargeable-field">Recipient email<input type="email" value={manualEmail} maxLength={320} autoComplete="email" disabled={saving} onChange={(event) => setManualEmail(event.currentTarget.value)} /></label>}
         {prerequisites.length > 0 && <ul className="chargeable-blockers">{prerequisites.map((item) => <li key={item}>{item}</li>)}</ul>}
         <div className="chargeable-po-files">
-            <div className="chargeable-po-files-heading"><div><h4>Files for the customer email</h4><p>Save these to a folder before opening the email. Your email app cannot attach them automatically.</p></div><button type="button" className="chargeable-secondary" disabled={saving || savingDocuments || attachments.length === 0} onClick={() => void saveAll()}>{savingDocuments ? 'Saving…' : `Save supporting documents (${attachments.length})`}</button></div>
+            <div className="chargeable-po-files-heading"><div><h4>Files for the customer email</h4><p>The approval document is provisional, is not a tax invoice, and leaves the original GreenTree evidence unchanged.</p></div><div className="chargeable-po-file-actions"><button type="button" className="chargeable-secondary" disabled={saving || savingDocuments || !currentRevision} onClick={() => void onGenerateApprovalPdf()}>{approvalPdf ? 'Regenerate approval PDF' : 'Generate approval PDF'}</button><button type="button" className="chargeable-secondary" disabled={saving || savingDocuments || attachments.length === 0 || !approvalPdf} onClick={() => void saveAll()}>{savingDocuments ? 'Saving…' : `Save supporting documents (${attachments.length})`}</button></div></div>
             <ul className="chargeable-document-list">
-                <li className={greenTreeInvoice ? undefined : 'chargeable-document-missing'}><span><strong>GreenTree invoice</strong><small>{greenTreeInvoice ? greenTreeInvoice.gr_filename || greenTreeInvoice.gr_name : 'The current GreenTree invoice is unavailable.'}</small></span>{greenTreeInvoice && <small>Ready to save</small>}</li>
+                <li className={approvalPdf ? undefined : 'chargeable-document-missing'}><span><strong>Customer PO Approval PDF</strong><small>{approvalPdf ? approvalPdf.gr_filename || approvalPdf.gr_name : 'Generate this from the current revision and active amendments.'}</small></span>{approvalPdf && <small>For PO approval - not a tax invoice</small>}</li>
                 {review.gr_photosrequired === true && photos.map((document, index) => <li key={document.gr_chargeableinvoicedocumentid}><span><strong>Supporting photo {index + 1}</strong><small>{document.gr_filename || document.gr_name}</small></span></li>)}
                 {review.gr_photosrequired === true && photos.length === 0 && <li className="chargeable-document-missing"><span><strong>Supporting photos</strong><small>Upload the required photo evidence first.</small></span></li>}
             </ul>
@@ -592,7 +723,7 @@ function PoRequestWorkflow({ workspace, saving, onPrepare, onLoadDocument, onDow
 export default function ChargeableInvoiceWorkspace({
     workspace, loading, saving, error, onStart, onSaveWaiting, onSaveRequirements,
     onPreparePhotoRequest, onPreparePoRequest, onUploadPhotos, onDeletePhotos,
-    onMarkReady, onMarkDoNotProcess, onDelete, onAddCorrection, onReplaceCorrection, onSupersedeCorrection, onLoadDocument, onDownload, onClose,
+    onMarkReady, onMarkDoNotProcess, onDelete, onAddCorrection, onReplaceCorrection, onSupersedeCorrection, onLoadDocument, onDownload, onLoadQuoteLines, onGenerateApprovalPdf, onClose,
 }: Props) {
     const [tab, setTab] = useState<Tab>('amendments')
     const [showReadyConfirmation, setShowReadyConfirmation] = useState(false)
@@ -638,6 +769,15 @@ export default function ChargeableInvoiceWorkspace({
         if (!workspace) return null
         try { return buildChargeableInvoiceCorrectionInstructions(workspace) } catch { return null }
     }, [workspace])
+    const latestCorrectionChange = Math.max(0, ...(workspace?.activities ?? [])
+        .filter((activity) => activity.gr_event === 122830003 || activity.gr_event === 122830004)
+        .map((activity) => Date.parse(activity.gr_occurredon) || 0))
+    const amendedInvoicePdf = workspace?.documents.find((document) =>
+        document.gr_documenttype === CHARGEABLE_INVOICE_DOCUMENT_TYPES.APPROVAL_PDF
+        && document.gr_uploadstatus === CHARGEABLE_INVOICE_UPLOAD_STATUSES.COMPLETE
+        && document.gr_templateversion === CHARGEABLE_INVOICE_APPROVAL_TEMPLATE_VERSION
+        && document._gr_revision_value?.toLowerCase() === currentRevision?.gr_chargeableinvoicerevisionid.toLowerCase()
+        && (Date.parse(document.createdon || '') || 0) >= latestCorrectionChange)
     const blockers = review ? getReadyToProcessBlockers(review) : []
     const canCorrect = Boolean(review?.gr_reviewstartedon && review.gr_disposition == null)
     const correctionActionsDisabled = saving || correctionEditor != null || departingCorrectionId != null
@@ -684,6 +824,16 @@ export default function ChargeableInvoiceWorkspace({
         const subject = `Invoice amendments required - ${review.gr_invoicenumber}${jobNumber ? ` - Job ${jobNumber}` : ''}`
         window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(correctionInstructions.emailText)}`
         setInstructionFeedback('An editable amendment email draft was opened with the recipient blank. Add the recipient before sending.')
+    }
+    const generateAmendedInvoice = async () => {
+        setInstructionFeedback('')
+        try {
+            const document = await onGenerateApprovalPdf()
+            await onDownload(document)
+            setInstructionFeedback('The amended invoice PDF was generated and sent to your browser downloads.')
+        } catch (error) {
+            setInstructionFeedback(error instanceof Error ? error.message : 'The amended invoice PDF could not be saved.')
+        }
     }
 
     return <EditDrawerShell
@@ -739,6 +889,9 @@ export default function ChargeableInvoiceWorkspace({
                         {workAmendments.length > 0 && <div className="chargeable-amendments"><strong>Attached amendments</strong>{workAmendments.map((correction) => <div key={correction.gr_chargeableinvoicecorrectionid} className={departingCorrectionId === correction.gr_chargeableinvoicecorrectionid ? 'chargeable-row-departing' : undefined}><div className="chargeable-correction-row-actions">{visibleCorrectionStatus(correction, revisionNumbers) && <span>{visibleCorrectionStatus(correction, revisionNumbers)}</span>}{canCorrect && <><button type="button" className="chargeable-line-edit-button" disabled={correctionActionsDisabled} aria-label="Edit Work completed amendment" title="Edit amendment" onClick={() => setCorrectionEditor({ kind: 'work', correctionId: correction.gr_chargeableinvoicecorrectionid })}><PencilIcon /></button><button type="button" className="chargeable-line-restore-button" disabled={correctionActionsDisabled} aria-label="Cancel Work completed amendment and restore original text" title="Cancel amendment — restore original" onClick={() => void removeCorrection(correction.gr_chargeableinvoicecorrectionid).catch(() => {})}><RestoreIcon /></button></>}</div><p>{correction.gr_requestedtext}</p>{correctionEditor?.kind === 'work' && correctionEditor.correctionId === correction.gr_chargeableinvoicecorrectionid && <InlineWorkAmendmentEditor initialText={correction.gr_requestedtext ?? ''} saving={saving} onSave={saveCorrection} onCancel={() => setCorrectionEditor(null)} />}</div>)}</div>}
                     </div>
                 </EditDrawerSection>
+                <EditDrawerSection title={`Related quotes (${workspace?.relatedQuotes.length ?? 0})`}>
+                    <RelatedQuotes quotes={workspace?.relatedQuotes ?? []} error={workspace?.relatedQuotesError} jobNumber={review?.gr_Job?.gr_jobnumber || review?.gr_greentreereference} invoiceTotal={currentRevision.gr_total} onLoadLines={onLoadQuoteLines} />
+                </EditDrawerSection>
                 <EditDrawerSection title="Invoice lines">
                     <div className="chargeable-section-heading"><p>Original invoice values remain visible. Amendments appear directly beneath their source line.</p>{canCorrect && <button type="button" className="chargeable-secondary" disabled={correctionActionsDisabled} onClick={() => setCorrectionEditor({ kind: 'add-line' })}>Add new line</button>}</div>
                     <div className="chargeable-workspace-table-wrap"><table className="chargeable-workspace-table">
@@ -784,6 +937,13 @@ export default function ChargeableInvoiceWorkspace({
                         <div className="chargeable-handoff-heading"><div><strong>{correctionInstructions.count} active amendment{correctionInstructions.count === 1 ? '' : 's'}</strong><p>Current instructions for Nargiza. Superseded edits and resolved history are excluded.</p></div><div className="chargeable-handoff-actions"><button type="button" className="chargeable-secondary chargeable-email-action" onClick={openCorrectionEmail}><EmailIcon />Email amendments</button><button type="button" className="chargeable-secondary" onClick={() => void copyCorrectionInstructions()}>Copy email summary</button></div></div>
                         <ol className="chargeable-handoff-list">{correctionInstructions.items.map((item) => <li key={item.id}><strong>{item.title}</strong><p>{item.detail}</p>{item.note && <small>{item.note}</small>}</li>)}</ol>
                         <p className="chargeable-evidence-note">Email amendments opens an editable draft with the recipient blank. Nothing is sent automatically.</p>
+                        <div className="chargeable-amended-invoice-action">
+                            <div><strong>Amended invoice</strong><p>Fill the approved invoice template with these active amendments and the recalculated totals.</p></div>
+                            <div className="chargeable-handoff-actions">
+                                {amendedInvoicePdf && <button type="button" className="chargeable-secondary" disabled={saving} onClick={() => void onDownload(amendedInvoicePdf)}>Download amended invoice</button>}
+                                <button type="button" className="chargeable-primary" disabled={saving || !currentRevision || amendedTotals?.complete === false} onClick={() => void generateAmendedInvoice()}>{saving ? 'Generating PDF…' : amendedInvoicePdf ? 'Regenerate and save PDF' : 'Generate and save PDF'}</button>
+                            </div>
+                        </div>
                     </> : <div className="chargeable-handoff-empty"><strong>No active amendments</strong><p>There is nothing to hand off from the current working revision.</p></div>}
                     {instructionFeedback && <p role="status" aria-live="polite">{instructionFeedback}</p>}
                 </EditDrawerSection>
@@ -796,12 +956,12 @@ export default function ChargeableInvoiceWorkspace({
                     <p>Choose only what must be obtained before Accounts can process this invoice.</p>
                     <RequirementsEditor key={`${review.gr_chargeableinvoicereviewid}-requirements-${review['@odata.etag']}`} workspace={workspace} saving={saving} onSave={onSaveRequirements} />
                 </EditDrawerSection>
-                {unresolvedCorrectionCount > 0 && <div className="chargeable-request-stage-lock" role="status"><div><strong>Complete amendments first</strong><p>{unresolvedCorrectionCount} active amendment{unresolvedCorrectionCount === 1 ? '' : 's'} must be made in GreenTree and matched by importing the corrected invoice before photo or customer PO requests can begin.</p></div><button type="button" className="chargeable-secondary" onClick={() => setTab('amendments')}>View amendments</button></div>}
+                {unresolvedCorrectionCount > 0 && <div className="chargeable-request-stage-lock" role="status"><div><strong>Approval copy will include active amendments</strong><p>Regenerate the Customer PO Approval PDF after changing any amendment. GreenTree remains the final tax-invoice authority.</p></div><button type="button" className="chargeable-secondary" onClick={() => setTab('amendments')}>View amendments</button></div>}
                 {review.gr_photosrequired === true && <EditDrawerSection title="Photo evidence">
                     <PhotoWorkflow key={`${review.gr_chargeableinvoicereviewid}-photos-${review['@odata.etag']}`} workspace={workspace} saving={saving} onPrepare={onPreparePhotoRequest} onUpload={onUploadPhotos} onDelete={onDeletePhotos} onLoadDocument={onLoadDocument} />
                 </EditDrawerSection>}
                 {review.gr_porequired === true && <EditDrawerSection title="Customer PO">
-                    <PoRequestWorkflow key={`${review.gr_chargeableinvoicereviewid}-po-${review['@odata.etag']}`} workspace={workspace} saving={saving} onPrepare={onPreparePoRequest} onLoadDocument={onLoadDocument} onDownload={onDownload} />
+                    <PoRequestWorkflow key={`${review.gr_chargeableinvoicereviewid}-po-${review['@odata.etag']}`} workspace={workspace} saving={saving} onPrepare={onPreparePoRequest} onLoadDocument={onLoadDocument} onGenerateApprovalPdf={onGenerateApprovalPdf} />
                 </EditDrawerSection>}
             </>}
         </div>

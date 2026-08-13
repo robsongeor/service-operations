@@ -11,6 +11,10 @@ import EditDrawerSection from '../shared/drawer/EditDrawerSection'
 import EditDrawerShell from '../shared/drawer/EditDrawerShell'
 import SearchableSelect from '../shared/searchable-select/SearchableSelect'
 import FormSwitch from '../shared/form-switch/FormSwitch'
+import PurchaseOrderRecipientEditor from './PurchaseOrderRecipientEditor'
+import type { CustomerContact } from './customerContact.types'
+import type { PurchaseOrderRecipient, PurchaseOrderRecipientSaveInput } from './purchaseOrderRecipient.types'
+import type { NewPurchaseOrderContactInput } from './purchaseOrderContactRules'
 import {
     resolveSiteCheckEquipmentScope,
     SITE_CHECK_EQUIPMENT_SCOPE_OPTIONS,
@@ -29,7 +33,7 @@ import {
 import './SiteMaintenanceSettingsDrawer.css'
 import './SiteSettingsDrawer.css'
 
-export type SiteSettingsTab = 'details' | 'settings' | 'site-checks' | 'bulk-equipment'
+export type SiteSettingsTab = 'details' | 'settings' | 'po-contacts' | 'site-checks' | 'bulk-equipment'
 
 type Props = {
     site: Site
@@ -49,6 +53,13 @@ type Props = {
     onSettingsComplete: () => void
     onOpenBulkImport: () => void
     onClose: () => void
+    customerId: string
+    contacts: CustomerContact[]
+    poRecipients: PurchaseOrderRecipient[]
+    poRecipientsBusy: boolean
+    poRecipientsError: string
+    onSavePoRecipients: (input: PurchaseOrderRecipientSaveInput, contacts: CustomerContact[]) => Promise<unknown>
+    onCreateContact: (input: NewPurchaseOrderContactInput) => Promise<string>
 }
 
 const profileOptions = [
@@ -81,6 +92,13 @@ export default function SiteSettingsDrawer({
     onSettingsComplete,
     onOpenBulkImport,
     onClose,
+    customerId,
+    contacts,
+    poRecipients,
+    poRecipientsBusy,
+    poRecipientsError,
+    onSavePoRecipients,
+    onCreateContact,
 }: Props) {
     const [activeTab, setActiveTab] = useState<SiteSettingsTab>('details')
     const [name, setName] = useState(site.gr_name)
@@ -245,6 +263,7 @@ export default function SiteSettingsDrawer({
     const tabs = [
         { id: 'details' as const, label: 'Details', hasError: activeTab === 'details' && Boolean(localError) },
         { id: 'settings' as const, label: 'Settings', hasError: activeTab === 'settings' && Boolean(localError || error) },
+        { id: 'po-contacts' as const, label: 'PO Contacts', hasError: activeTab === 'po-contacts' && Boolean(poRecipientsError) },
         { id: 'site-checks' as const, label: 'Site Checks', hasError: activeTab === 'site-checks' && Boolean(localError || siteChecksError) },
         ...(bulkImportAllowed ? [{ id: 'bulk-equipment' as const, label: 'Bulk Add Equipment' }] : []),
     ]
@@ -469,6 +488,13 @@ export default function SiteSettingsDrawer({
                         <button type="button" onClick={() => setSelectedIds((current) => current.filter((id) => id !== item.gr_equipmentid))} disabled={busy}>Remove</button>
                     </li>)}</ul>}
                 </section>
+            </div>
+
+            <div role="tabpanel" aria-labelledby="drawer-tab-po-contacts" hidden={activeTab !== 'po-contacts'}>
+                <EditDrawerSection title="Site PO contacts">
+                    <p>Use the Customer default, or replace it completely for this Site with a different primary recipient and CC list.</p>
+                    <PurchaseOrderRecipientEditor customerId={customerId} siteId={site.gr_siteid} contacts={contacts} recipients={poRecipients} busy={poRecipientsBusy} error={poRecipientsError} sites={[{ id: site.gr_siteid, name: site.gr_name }]} onSave={onSavePoRecipients} onCreateContact={onCreateContact} />
+                </EditDrawerSection>
             </div>
 
             <div role="tabpanel" aria-labelledby="drawer-tab-bulk-equipment" hidden={activeTab !== 'bulk-equipment'} className="site-settings-bulk-launch">

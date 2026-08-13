@@ -141,6 +141,16 @@
 .quote-totals strong { font-variant-numeric: tabular-nums; }
 .quote-totals .quote-total { min-height: 49px; background: #edf6f2; color: #164e40; font-size: .9rem; }
 .quote-form-error { margin-top: 16px; }
+.quote-po-request-action {
+    display: flex; align-items: center; justify-content: space-between; gap: 18px;
+    margin-top: 18px; padding: 13px 14px; border: 1px solid #cfe0d9; border-radius: 10px;
+    background: #f2f8f5;
+}
+.quote-po-request-action > div { display: grid; gap: 3px; }
+.quote-po-request-action strong { color: #234b40; font-size: .78rem; }
+.quote-po-request-action span { color: #69766f; font-size: .69rem; }
+.quote-po-request-action button { flex: 0 0 auto; background: #176f66; color: #fff; }
+.quote-po-request-feedback { margin: 8px 2px 0; color: #28705d; font-size: .7rem; font-weight: 700; }
 .quote-dialog form > footer { display: flex; align-items: center; justify-content: flex-end; gap: 9px; margin-top: 20px; padding-top: 17px; border-top: 1px solid #e7ebe9; }
 .quote-copy-action { display: flex; min-width: 0; align-items: center; gap: 9px; margin-right: auto; }
 .quote-copy-feedback { color: #28705d; font-size: .7rem; font-weight: 700; }
@@ -163,4 +173,5 @@
     .quote-field-wide { grid-column: span 1; }
     .quote-dialog-backdrop { padding: 0; }
     .quote-dialog { min-height: 100vh; border-radius: 0; }
+    .quote-po-request-action { align-items: stretch; flex-direction: column; }
 }

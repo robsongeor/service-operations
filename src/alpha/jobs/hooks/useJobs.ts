@@ -265,7 +265,7 @@ export function useJobs() {
     }
 
     const createContactForSite = async (contact: {
-        siteId: string
+        siteId?: string
         name: string
         phone?: string
         email?: string
@@ -278,7 +278,7 @@ export function useJobs() {
             email: contact.email,
         })
 
-        await createSiteContactApi(token, contact.siteId, contactId)
+        if (contact.siteId) await createSiteContactApi(token, contact.siteId, contactId)
 
         await fetchSiteContacts()
 

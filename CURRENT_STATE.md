@@ -33,6 +33,20 @@ Branch: `codex/chargeable-invoice-review`
 
 ## Unfinished work
 
+- Quote PO-request invoice generation is implemented locally inside the saved Quote editor. It
+  reuses the approved GreenTree-style template and Liftrucks logo, uses the live editor lines and
+  totals, and copies Quote Notes into Work Completed. The generated PDF downloads locally and does
+  not persist a document, send an email, or change Quote/Job workflow state. Deployment and a
+  signed-in browser smoke test remain outstanding.
+
+- Customer/Site Purchase Order Recipient configuration is implemented locally: Customer defaults
+  contain one Primary plus optional CC Contacts, complete Site overrides replace that default, and
+  managers can create and immediately select a new emailed Contact inline using the existing Site
+  Contact workflow. Chargeable Invoice Review resolves the effective set into an editable unsent email draft. Approved
+  Dataverse table/role provisioning and a signed-in workflow smoke test remain in progress. The
+  first no-prompt provisioning attempt stopped before any metadata or privilege change because
+  Microsoft requires deliberate account selection; no interactive retry has been started.
+
 - Chargeable Invoice Review Phases 1–6 and the Phase 7 local release-readiness baseline are
   complete. Explicitly gated target-environment smoke, role assignment and release validation
   remain. The approved staging
@@ -659,6 +673,14 @@ two-pane layout therefore uses the full desktop working area; the existing acces
 responsive behavior remains below its practical content width. Other shared drawers are unchanged.
 Phase 4 is complete locally.
 
+The Amendments tab now includes a read-only `Related quotes` section for the matched Job. The review
+loads at most 50 directly linked Quote headers, prioritises Accepted and Sent commercial context,
+and shows status, revision, date, author, GST-inclusive total and the difference from the current
+invoice. Quote notes and at most 200 ordered Quote Lines load only when expanded. The full Quote opens
+in a new tab so invoice-review state remains intact. This reuses the existing Quote relationships,
+types, status/category labels and line service; it adds no schema, Quote/Job mutation or readiness rule.
+A Quote-read failure is contained in the panel and cannot make the invoice workspace unavailable.
+
 The first Phase 5 slice is complete locally. Revised imports now re-evaluate at most 200 unresolved
 Outstanding/Not Made Corrections on the server against the newly parsed immutable Revision. Exact
 normalised header/story matching, stable source-line keys and unique structured added-line matches
@@ -686,21 +708,22 @@ snapshots use a safe unavailable label. Generation creates no Dataverse mutation
 states that nothing was sent automatically. Focused tests cover filtering, evidence wording,
 requested values, filename and workspace actions.
 
-The first Chargeable Invoice Review Phase 6 slice added an authenticated server endpoint that
-re-reads the current immutable Review/Revision/Lines, rejects stale, terminal, non-PO and
-unresolved-correction states, and renders the familiar Liftrucks approval layout with the prominent
-`FOR CUSTOMER PO APPROVAL - NOT A TAX INVOICE` marker. The versioned `pdf-lib` renderer produces
+The Chargeable Invoice Review Phase 6 endpoint re-reads the current immutable
+Review/Revision/Lines and active Corrections, rejects stale, terminal and non-PO states, applies
+active Work completed and line amendments, recalculates pricing, and renders the familiar Liftrucks
+approval layout with the prominent `FOR CUSTOMER PO APPROVAL - NOT A TAX INVOICE` marker. The
+versioned `pdf-lib` renderer produces
 extractable A4 PDFs; a canonical SHA-256 snapshot hash reuses an existing matching Complete
 document. New output stages as a Review Document and atomically completes with an Approval PDF
 Generated Activity under the Review ETag. The workspace can generate and download the document.
 De-identified extracted-text and visual render checks pass. No live document was generated, no
 release flag was enabled and no deployment or communication occurred.
 
-Chargeable Invoice Review Phase 6 is now complete locally. The workspace loads a bounded Site
-Contact list only for the Review Site, supports deliberate Site Contact or manual recipient entry,
-and gates PO-request preparation on the current Complete GreenTree invoice, resolved Corrections and
-received supporting photos when required. It lists every file for manual download/attachment and
-requires explicit attachment confirmation before opening an editable `mailto:` draft. The Review
+Chargeable Invoice Review Phase 6 is complete locally. The workspace loads a bounded Site Contact
+list only for the Review Site, supports deliberate Site Contact or manual recipient entry, and gates
+PO-request preparation on a current Complete Customer PO Approval PDF plus received supporting
+photos when required. It saves those supporting documents for manual attachment before opening an
+editable `mailto:` draft. The Review
 ETag transition records preparation timestamp and safe Activity only; recipient/body are not
 persisted and no email is sent. First confirmed PO receipt now records the dedicated PO Received
 Activity as downstream Accounts state. Preparing a required PO request—not receiving the PO—is the
@@ -764,18 +787,34 @@ confirmation shows the number of permanently deleted files; one bounded changese
 retained photo, deletes the full set, resets Photos Status once and writes one aggregate Activity.
 It does not loop through individual deletes with a stale Review ETag.
 
-The Requests workflow is now explicitly sequential. Requirement choices may be recorded early, but
-any active Outstanding/Not Made amendment locks technician selection, photo-request preparation,
-photo upload, approval-PDF generation and customer PO email preparation. A visible stage notice links
-back to Amendments and explains that Accounts must make the GreenTree changes and the corrected
-invoice must be imported until every amendment is Matched. The delegated services enforce the same
-rule, so the UI cannot be bypassed; retained-photo deletion remains available for recovery.
-Customer PO now reads as the actual manager task: choose the responsible customer/site recipient,
-use one always-visible `Save supporting documents` action for the current valid GreenTree invoice
+The Customer PO Approval workflow now creates a separate provisional document from the current
+immutable GreenTree Revision plus active Work completed and line amendments. Changed, removed and
+added lines are applied to a deterministic `liftrucks-manager-template-v5` snapshot and its Subtotal,
+GST and GST-inclusive Total are recalculated. The generated PDF uses the product-owner-supplied
+`invoice template.pdf` as its authoritative visual layout. Because that flat template retained hidden
+text from its source invoice, the application asset is a sanitized raster of its visible appearance;
+the remaining example headline is cleared and all current reviewed values are rendered into the intended
+blank locations. This preserves the supplied rules, labels, spacing and bank details while preventing
+old source values remaining as recoverable PDF text. The output is labelled `FOR CUSTOMER PO APPROVAL -
+NOT A TAX INVOICE` and embeds the same Liftrucks JPG, 170-point width and top-left placement used by
+the Requests-tab GreenTree evidence export; GreenTree remains the final tax-invoice authority and its source PDF is not modified.
+Photo and PO request work can proceed with active amendments, but an approval copy
+created before the latest correction activity is stale and must be regenerated.
+The Amendment handoff now ends with a `Generate and save PDF` action that fills the approved
+template directly from the current Revision and active amendments, then sends the PDF to the
+browser's download/save workflow. A current generated document can also be downloaded again or
+regenerated in place. The workspace selects only the current `liftrucks-manager-template-v5`
+document, so an older unbranded approval PDF cannot be presented as the current amended invoice.
+Generation requires a started active review but no longer
+requires `PO Required = Yes`; the separate customer PO email workflow still retains that requirement
+and all of its recipient, photo and preparation checks.
+Customer PO reads as the actual manager task: choose the responsible customer/site recipient,
+generate the current approval PDF, use one always-visible `Save supporting documents` action for it
 and every required supporting photo, then open
 an editable customer PO email and attach those files manually. Chrome/Edge opens the native folder
 picker so the manager can create or choose a Windows folder; existing same-named files are preserved
-with a numbered filename, and unsupported browsers fall back to their normal downloads. The vague Prepared tile, generic
+with a numbered filename, and unsupported browsers fall back to their normal downloads.
+The vague Prepared tile, generic
 `Create invoice attachment` label, repeated per-file Download buttons and redundant attachment
 checkbox are removed. Future authoritative
 recipient defaults remain tracked separately; no recipient schema or automatic communication was added.

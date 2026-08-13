@@ -7,6 +7,7 @@ import {
     addCalendarDaysDateOnly,
     addCalendarMonthsDateOnly,
     calculateNextSiteCheckDueDate,
+    calculateNextUpcomingSiteCheckDueDate,
     calculateInitialSiteCheckDate,
     calculateSiteCheckProgress,
     classifySiteCheckCreationConflict,
@@ -546,7 +547,7 @@ test('dashboard projection calculates active progress from operational Job Statu
             gr_name: 'Active',
             gr_enabled: true,
             gr_frequency: SITE_CHECK_FREQUENCIES.WEEKLY,
-            gr_nextduedate: '2026-07-20',
+            gr_nextduedate: '2026-07-27',
             _gr_site_value: IDS.site,
             _gr_activesitecheck_value: IDS.siteCheck,
         }],
@@ -556,7 +557,7 @@ test('dashboard projection calculates active progress from operational Job Statu
             gr_status: 122830000,
             gr_startedon: '2026-07-26T01:00:00Z',
             gr_frequencysnapshot: SITE_CHECK_FREQUENCIES.WEEKLY,
-            gr_duedatesnapshot: '2026-07-20',
+            gr_duedatesnapshot: '2026-07-27',
             gr_expectedjobcount: 2,
             gr_creationrequestkey: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
             _gr_sitecheckschedule_value: IDS.schedule,
@@ -637,6 +638,23 @@ test('22-Equipment creation includes per-Job snapshots in one atomic change set'
     )
     assert.match(batch.body, /"gr_Job@odata.bind":"\$3"/)
     assert.match(batch.body, /Weekly checks for 20\/07\/2026/)
+})
+
+test('creation replaces an expired active check and gives the new occurrence its next due date', () => {
+    const input = creationInput(1)
+    const batch = buildSiteCheckCreationChangeSet({
+        ...input,
+        schedule: {
+            ...input.schedule,
+            gr_frequency: SITE_CHECK_FREQUENCIES.FORTNIGHTLY,
+            gr_nextduedate: '2026-07-27',
+            _gr_activesitecheck_value: IDS.siteCheck,
+        },
+        startedOn: '2026-08-13T01:00:00.000Z',
+    })
+    assert.match(batch.body, /"gr_duedatesnapshot":"2026-08-24"/)
+    assert.match(batch.body, /"gr_nextduedate":"2026-08-24"/)
+    assert.match(batch.body, /"gr_ActiveSiteCheck@odata.bind":"\$1"/)
 })
 
 test('22 ICE machines with the full 23-item checklist remain within atomic limits', () => {
@@ -1025,6 +1043,7 @@ test('schedule state applies disabled, invalid, active, overdue, due, and curren
     assert.equal(getSiteCheckScheduleState({ ...valid, enabled: false }), 'disabled')
     assert.equal(getSiteCheckScheduleState({ ...valid, frequency: null }), 'invalid')
     assert.equal(getSiteCheckScheduleState({ ...valid, activeSiteCheckId: 'check-1' }), 'in-progress')
+    assert.equal(getSiteCheckScheduleState({ ...valid, nextDueDate: '2026-07-25', activeSiteCheckId: 'check-1' }), 'overdue')
     assert.equal(getSiteCheckScheduleState({ ...valid, nextDueDate: '2026-07-25' }), 'overdue')
     assert.equal(getSiteCheckScheduleState(valid), 'due')
     assert.equal(getSiteCheckScheduleState({ ...valid, nextDueDate: '2026-07-27' }), 'up-to-date')
@@ -1083,7 +1102,12 @@ test('start validation blocks every confirmed precondition and accepts a reload-
     }).valid, true)
 
     const blocked = validateSiteCheckStart({
-        schedule: { ...schedule, gr_enabled: false, _gr_activesitecheck_value: IDS.siteCheck },
+        schedule: {
+            ...schedule,
+            gr_enabled: false,
+            gr_nextduedate: '2099-07-26',
+            _gr_activesitecheck_value: IDS.siteCheck,
+        },
         technicianId: '',
         equipmentCount: 0,
         requestKey: 'retry-1',
@@ -1305,6 +1329,13 @@ test('Site Checks hook uses the shared Dataverse authentication recovery path', 
     assert.match(authenticationSource, /SILENT_AUTH_REDIRECT_URI/)
     assert.match(authenticationSource, /timed_out/)
     assert.match(authenticationSource, /acquireTokenPopup/)
+})
+
+test('expired Site Checks roll forward to the next future cadence date', () => {
+    assert.equal(
+        calculateNextUpcomingSiteCheckDueDate('2026-07-27', SITE_CHECK_FREQUENCIES.FORTNIGHTLY, '2026-08-13'),
+        '2026-08-24',
+    )
 })
 
 test('schedule creation uses the Site relationship and preserves disabled cadence values', async () => {

@@ -20,6 +20,10 @@ import SearchableSelect, { type SearchableSelectOption } from '../../shared/sear
 import type { Customer } from '../../jobs/types/customer.types'
 import type { Equipment } from '../../jobs/types/equipment.types'
 import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation'
+import { renderLiftrucksInvoicePdf } from '../../shared/pdf/renderLiftrucksInvoicePdf'
+import { buildQuotePoRequestInvoiceSnapshot } from '../utils/quotePoRequestInvoice'
+import invoiceTemplateUrl from '../../../../api/assets/chargeable-invoice-approval-template.png?url'
+import invoiceLogoUrl from '../../../../api/assets/liftrucks-invoice-logo.jpg?url'
 
 type EditableLine = QuoteLineInput & { key: string }
 
@@ -130,6 +134,8 @@ export default function QuoteEditorDialog({
     const [copyFeedback, setCopyFeedback] = useState<'success' | 'error' | ''>('')
     const [formError, setFormError] = useState('')
     const [confirmDelete, setConfirmDelete] = useState(false)
+    const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false)
+    const [invoiceFeedback, setInvoiceFeedback] = useState('')
 
     const jobOptions = useMemo<SearchableSelectOption[]>(() => jobs.map((job) => ({
         value: job.gr_jobid,
@@ -208,6 +214,54 @@ export default function QuoteEditorDialog({
         if (!name.trim()) setName(`Quote for ${jobLabel(job)}`)
         setCustomerId(job.gr_Site?.gr_Customer?.gr_customerid ?? '')
         setEquipmentId(job.gr_Equipment?.gr_equipmentid ?? '')
+    }
+
+    const generatePoRequestInvoice = async () => {
+        if (!quote) return
+        setInvoiceFeedback('')
+        setIsGeneratingInvoice(true)
+        try {
+            const snapshot = buildQuotePoRequestInvoiceSnapshot({
+                quote,
+                title: name.trim(),
+                quoteDate,
+                notes,
+                jobId,
+                customerId,
+                equipmentId,
+                jobs,
+                customers,
+                equipment,
+                lines,
+                extendedPrices: totals.extended,
+                subtotal: totals.subtotal,
+                gstRatePercent: gstRate,
+                gst: totals.gst,
+                total: totals.total,
+            })
+            const [templateResponse, logoResponse] = await Promise.all([
+                fetch(invoiceTemplateUrl),
+                fetch(invoiceLogoUrl),
+            ])
+            if (!templateResponse.ok || !logoResponse.ok) throw new Error('The invoice template assets could not be loaded.')
+            const pdf = await renderLiftrucksInvoicePdf(snapshot, {
+                template: await templateResponse.arrayBuffer(),
+                logo: await logoResponse.arrayBuffer(),
+            })
+            const url = URL.createObjectURL(pdf)
+            const anchor = document.createElement('a')
+            anchor.href = url
+            anchor.download = `PO-request-${quote.gr_quotenumber}.pdf`
+            document.body.appendChild(anchor)
+            anchor.click()
+            anchor.remove()
+            window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+            setInvoiceFeedback('PO request invoice saved. Notes were copied into Work Completed.')
+        } catch (generationError) {
+            setInvoiceFeedback(generationError instanceof Error ? generationError.message : 'Unable to generate the PO request invoice.')
+        } finally {
+            setIsGeneratingInvoice(false)
+        }
     }
 
     const selectEquipment = (nextEquipmentId: string) => {
@@ -440,6 +494,19 @@ export default function QuoteEditorDialog({
                     </div>
 
                     {(formError || error) && <p className="quote-form-error" role="alert">{formError || error}</p>}
+                    {quote && <div className="quote-po-request-action">
+                        <div>
+                            <strong>PO request invoice</strong>
+                            <span>Uses the Liftrucks invoice layout and copies Notes into Work Completed. This is for PO approval, not a tax invoice.</span>
+                        </div>
+                        <button
+                            type="button"
+                            className="quote-secondary-button"
+                            disabled={isSaving || isGeneratingInvoice || lines.length === 0 || lines.length > 15}
+                            onClick={() => void generatePoRequestInvoice()}
+                        >{isGeneratingInvoice ? 'Generating...' : 'Generate and save PDF'}</button>
+                    </div>}
+                    {invoiceFeedback && <p className="quote-po-request-feedback" role="status">{invoiceFeedback}</p>}
 
                     <footer>
                         <div className="quote-copy-action">

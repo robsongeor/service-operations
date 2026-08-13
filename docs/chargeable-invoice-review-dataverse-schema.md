@@ -98,9 +98,12 @@ Schema `gr_ChargeableInvoiceReview`; expected entity set `gr_chargeableinvoicere
 | Disposition On | `gr_dispositionon` | Date/time | No | Terminal transition time. |
 | Disposition Reason | `gr_dispositionreason` | Multiline 4,000 | No | Required for Do Not Process. |
 
-PO-request recipient selection is transient application state. V1 reads existing Site Contacts
-for the Review Site or accepts a deliberately entered manual address; it does not persist an
-email address/body on Review and does not repurpose Email Dispatch. Preparing records the timestamp
+PO-request recipient selection resolves the current `gr_PurchaseOrderRecipient` Site override or
+Customer default documented in [`purchase-order-recipient-schema.md`](purchase-order-recipient-schema.md).
+Primary populates To and additional configured recipients populate CC. A manager may still choose a
+Site Contact or manual address for one draft; that choice remains transient and does not overwrite
+saved defaults. The feature does not persist an email address/body on Review and does not repurpose
+Email Dispatch. Preparing records the timestamp
 and PO Request Prepared Activity only and completes the manager-side PO prerequisite. The first
 confirmed PO number/received decision is downstream Accounts state and records PO Received Activity
 without copying extracted Order No evidence; it is not required for the manager Ready transition.

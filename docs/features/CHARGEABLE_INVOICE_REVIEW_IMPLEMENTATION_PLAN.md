@@ -135,9 +135,9 @@ The initial acceptance scenarios are:
 | `145421` | Add corrections against existing part pricing and add requested Labour and Consumables lines that do not exist in the source revision. An existing extracted PO does not bypass corrections. |
 | `145554` | Flag Date of Job as a structured header correction, wait on the deliberately selected technician, and compare a later revised invoice against the requested date. |
 
-V1 reads existing Site Contacts. A future contact-purpose relationship/choice (PO/accounts)
-needs a separate decision after confirming global contact reuse; do not add customer-email
-columns to Review. V1 can require deliberate recipient entry/selection when no contact fits.
+The Customer-owned Purchase Order Recipient configuration supplies one Primary and optional CC
+Contacts. A complete Site override takes precedence over the Customer default. The review retains a
+deliberate Site Contact/manual fallback for one draft and never copies transient recipients to Review.
 
 ## Import, matching, revisions, and comparison
 
@@ -381,18 +381,32 @@ widths the same content collapses beneath the labelled tabs without duplicating 
 object URL. Start Review and Waiting changes
 use the loaded Review ETag and append Activity in the same Dataverse change set. This foundation
 does not change Job status, treat Order No as a PO, or expose Staging/Failed imports.
+The Amendments tab also shows read-only Quotes linked directly to the matched Job. One focused read
+returns at most 50 Quote headers with immutable creator identity; Accepted and Sent appear first,
+while Declined and Expired remain visible but subdued. Expanding a Quote lazily reads at most 200
+ordered Quote Lines and shows notes, totals and the difference from the current invoice total.
+`Open quote` opens the feature-owned editor in a new tab. Quote context never creates an amendment,
+changes Quote/Job state or blocks Ready to Process. A related-Quote read failure is contained within
+that panel and does not prevent the authoritative invoice workspace from opening.
 The Amendments handoff projects only active Outstanding/Not Made Corrections into readable numbered
 actions. `Email amendments` opens an editable draft containing the invoice, Job, requested actions
 and revised totals, with the recipient deliberately blank for the manager to add. `Copy email summary` remains available as a
 fallback. Both actions exclude Matched/Superseded audit history and never send communication
 automatically.
+The handoff also exposes `Generate and save PDF` after the active instruction list. It uses the
+same authenticated, versioned Approval PDF service as Requests, immediately invokes the existing
+protected PDF download helper, then exposes download/regeneration for the retained current document.
+This generation is available for any started non-terminal review
+with active amendments and does not require the PO decision to be Yes. Customer PO email preparation
+remains a separate workflow and still requires PO Required plus its existing recipient/photo checks.
 
-Requests is sequential when amendments exist. Managers may still record whether a PO or photos are
-required, but Outstanding/Not Made Corrections lock technician selection, photo-request preparation,
-photo upload, approval-PDF generation and customer PO-request preparation. The workspace directs the
-manager back to Amendments; Accounts must make the changes in GreenTree and the corrected invoice
-must be imported so comparison marks every active amendment Matched before customer-facing work
-unlocks. Retained-photo deletion remains available to recover from an incorrect upload.
+Requests can proceed while amendments exist because the customer-facing approval document is
+generated from the current immutable Revision plus the active Outstanding/Not Made Work completed
+and line amendments. Changed lines replace their source values, removed lines are excluded, added
+lines are appended, and Subtotal/GST/Total are recalculated with the source GST rate. The document
+must be regenerated after an amendment is added, changed or withdrawn. It is always labelled
+`FOR CUSTOMER PO APPROVAL - NOT A TAX INVOICE`; GreenTree remains the final accounting-invoice
+authority and the imported source PDF remains immutable evidence.
 
 The workspace also exposes a destructive permanent-delete action for Active Reviews. It requires
 typing the exact invoice number and submits one bounded changeset that verifies the Review ETag,
@@ -498,25 +512,38 @@ creates no Dataverse row or Activity, and clearly states that nothing was sent a
   renderer/security/manual-compose tests; deployment docs.
 
 The approval endpoint validates the delegated identity and manager-table access once, then
-re-reads the Active Review, current Revision, at most 200 Lines and unresolved Corrections from
-Dataverse. Generation requires a started, non-terminal, PO-required review with no Outstanding or
-Not Made correction and an exact current Review ETag/revision match. A SHA-256 hash of the
-canonical reviewed snapshot plus `liftrucks-approval-v1` makes an existing Complete document
-reusable instead of creating duplicates. A new document stages as Pending, receives the generated
+re-reads the Active Review, current Revision, at most 200 Lines and Corrections from Dataverse.
+Generation requires a started, non-terminal, PO-required review and an exact current Review
+ETag/revision match. The canonical snapshot applies only active amendments and recalculates the
+customer-facing totals. The renderer uses a sanitized raster of the product-owner-supplied
+`invoice template.pdf`, retaining that template's static geometry and visual layout while ensuring
+hidden values inherited from its source invoice cannot remain recoverable PDF text. The remaining
+example headline is removed from the application asset; current reviewed values are placed in the
+template's intended blank locations and the output is labelled `FOR CUSTOMER PO APPROVAL - NOT A TAX
+INVOICE`. The generated amended PDF embeds the same Liftrucks JPG at the same 170-point width and
+38-point-left/20-point-top placement as the Requests-tab GreenTree evidence export. A SHA-256 hash
+of that snapshot plus `liftrucks-manager-template-v5` makes an existing Complete document
+reusable instead of creating duplicates. Client selection also requires that exact template version,
+so an older unbranded Approval PDF is not treated as the current amended invoice. A new document stages as Pending, receives the generated
 PDF File, then becomes Complete with its Approval PDF Generated Activity and Review ETag sentinel
 in one change set. Known failures remain Failed; an uncertain finalisation is reconciled without
 automatic retry. The release flag remains disabled and no live document has been generated.
 
-The workspace loads at most 200 Site Contacts for the Review's authoritative Site after the
-Review is known; it never loads a global recipient list. A manager deliberately chooses an
-emailed Site Contact or manual address. Preparation requires the current Complete GreenTree invoice,
-resolved corrections, a recorded photo decision, and received Complete photos when required.
+The workspace loads at most 200 Site Contacts and 200 Purchase Order Recipient rows bounded to the
+Review Customer and optional Site after the Review is known; it never loads a global recipient list.
+The effective Site override or Customer default is selected automatically with Primary in To and
+additional Contacts in CC. A manager may choose a Site Contact or manual address for one draft.
+Preparation requires a current Complete Customer PO Approval
+PDF, a recorded photo decision, and received Complete photos when required. An approval document
+created before the latest correction activity is stale and must be regenerated.
 The Customer PO surface explains the workflow in order: choose the responsible customer/site
-recipient, use one always-visible `Save supporting documents` action for the current valid GreenTree
-invoice and every required photo,
+recipient, generate or regenerate the Customer PO Approval PDF, then use one always-visible
+`Save supporting documents` action for that approval document and every required photo,
 then open the editable email draft. On supported Chrome/Edge secure contexts this opens the native
 folder picker, allows a folder to be created or selected, and saves without overwriting existing
-same-named files; unsupported browsers fall back to normal browser downloads. The informational
+same-named files; unsupported browsers fall back to normal browser downloads. The original Complete
+GreenTree Review Document/File remains immutable and is not included as the editable customer copy.
+The informational
 file list no longer repeats a Download button on every row. It also removes the abstract Prepared tile, generic attachment
 creation wording and redundant attachment-confirmation checkbox. Because `mailto:` cannot attach
 files, the save action writes each listed authenticated file to the selected folder (or invokes the

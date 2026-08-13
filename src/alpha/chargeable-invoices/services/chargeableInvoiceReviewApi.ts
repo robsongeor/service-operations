@@ -29,6 +29,10 @@ import {
 } from '../domain/chargeableInvoiceCorrectionDraft.ts'
 import { buildMailtoUrl, isValidRecipientEmail } from '../../jobs/utils/technicianMailto.ts'
 import type { SiteContact } from '../../jobs/types/siteContact.types.ts'
+import { fetchQuotesForJob } from '../../quotes/services/quotesApi.ts'
+import { buildChargeableInvoiceAmendedTotals } from '../domain/chargeableInvoicePricing.ts'
+import type { PurchaseOrderRecipient } from '../../customers/purchaseOrderRecipient.types.ts'
+import { resolvePurchaseOrderRecipients } from '../../customers/purchaseOrderRecipientRules.ts'
 
 const API_URL = `${import.meta.env?.VITE_DATAVERSE_URL ?? 'https://invalid.local'}/api/data/v9.2`
 const MAX_QUEUE_RECORDS = 500
@@ -128,6 +132,15 @@ function siteContactUrl(siteId: string) {
     return url.toString()
 }
 
+function poRecipientUrl(customerId: string, siteId?: string | null) {
+    const url = new URL(`${API_URL}/gr_purchaseorderrecipients`)
+    url.searchParams.set('$select', 'gr_purchaseorderrecipientid,gr_name,_gr_customer_value,_gr_site_value,_gr_contact_value,gr_recipientrole,gr_sortorder,createdon')
+    url.searchParams.set('$expand', 'gr_Contact($select=gr_contactid,gr_name,gr_phone,gr_email)')
+    url.searchParams.set('$filter', `_gr_customer_value eq ${customerId}${siteId ? ` and (_gr_site_value eq ${siteId} or _gr_site_value eq null)` : ' and _gr_site_value eq null'}`)
+    url.searchParams.set('$orderby', 'gr_sortorder asc,createdon asc')
+    return url.toString()
+}
+
 export async function fetchChargeableInvoiceWorkspace(accessToken: string, reviewId: string): Promise<ChargeableInvoiceWorkspace> {
     const technicianUrl = new URL(`${API_URL}/gr_mechanics`)
     technicianUrl.searchParams.set('$select', 'gr_mechanicid,gr_name,gr_email,statecode')
@@ -175,8 +188,18 @@ export async function fetchChargeableInvoiceWorkspace(accessToken: string, revie
     const siteContactsPromise = review._gr_site_value
         ? readAll<SiteContact>(accessToken, siteContactUrl(review._gr_site_value), MAX_SITE_CONTACTS)
         : []
-    const [lines, siteContacts] = await Promise.all([linesPromise, siteContactsPromise])
-    return { review, revisions, lines, corrections, documents, activities, technicians, siteContacts }
+    const poRecipientsPromise = review._gr_customer_value
+        ? readAll<PurchaseOrderRecipient>(accessToken, poRecipientUrl(review._gr_customer_value, review._gr_site_value), MAX_SITE_CONTACTS)
+        : []
+    let relatedQuotesError = ''
+    const relatedQuotesPromise = review._gr_job_value
+        ? fetchQuotesForJob(accessToken, review._gr_job_value).catch(() => {
+            relatedQuotesError = 'Related quotes could not be loaded. Invoice review remains available.'
+            return []
+        })
+        : []
+    const [lines, siteContacts, poRecipients, relatedQuotes] = await Promise.all([linesPromise, siteContactsPromise, poRecipientsPromise, relatedQuotesPromise])
+    return { review, revisions, lines, corrections, documents, activities, technicians, siteContacts, poRecipients, relatedQuotes, relatedQuotesError }
 }
 
 type ReviewTransition = {
@@ -742,7 +765,6 @@ export function saveChargeableInvoicePhotoTechnician(
 ) {
     const review = workspace.review
     assertPhotoWorkflow(review)
-    assertRequestStageAmendmentsComplete(workspace)
     if (technician.statecode !== 0) throw new Error('Choose an active technician.')
     if (!technician.gr_mechanicid) throw new Error('Choose a technician.')
     return applyTransition(accessToken, review, {
@@ -759,7 +781,6 @@ export async function prepareChargeableInvoicePhotoRequest(
 ) {
     const review = workspace.review
     assertPhotoWorkflow(review)
-    assertRequestStageAmendmentsComplete(workspace)
     const technician = workspace.technicians.find((item) => item.gr_mechanicid.toLowerCase()
         === review._gr_photorequesttechnician_value?.toLowerCase())
     if (!technician) throw new Error('Select and save an active technician before preparing the photo request.')
@@ -885,7 +906,6 @@ export async function uploadChargeableInvoiceSupportingPhotos(
 ) {
     const review = workspace.review
     assertPhotoWorkflow(review)
-    assertRequestStageAmendmentsComplete(workspace)
     if (!review._gr_photorequesttechnician_value || !workspace.technicians.some((technician) =>
         technician.gr_mechanicid.toLowerCase() === review._gr_photorequesttechnician_value?.toLowerCase())) {
         throw new Error('Select and save an active photo-request technician before uploading photos.')
@@ -948,22 +968,18 @@ function poRequestDocuments(workspace: ChargeableInvoiceWorkspace) {
     const currentRevisionId = workspace.review._gr_currentrevision_value
     const currentRevision = workspace.revisions.find((revision) =>
         revision.gr_chargeableinvoicerevisionid.toLowerCase() === currentRevisionId?.toLowerCase())
-    const greenTreeInvoice = workspace.documents.find((document) =>
-        document.gr_documenttype === CHARGEABLE_INVOICE_DOCUMENT_TYPES.GREENTREE_INVOICE
+    const latestCorrectionChange = Math.max(0, ...workspace.activities
+        .filter((activity) => activity.gr_event === 122830003 || activity.gr_event === 122830004)
+        .map((activity) => Date.parse(activity.gr_occurredon) || 0))
+    const approvalPdf = workspace.documents.find((document) =>
+        document.gr_documenttype === CHARGEABLE_INVOICE_DOCUMENT_TYPES.APPROVAL_PDF
         && document.gr_uploadstatus === CHARGEABLE_INVOICE_UPLOAD_STATUSES.COMPLETE
-        && document.gr_chargeableinvoicedocumentid.toLowerCase() === currentRevision?._gr_sourcedocument_value?.toLowerCase())
+        && document._gr_revision_value?.toLowerCase() === currentRevision?.gr_chargeableinvoicerevisionid.toLowerCase()
+        && (Date.parse(document.createdon || '') || 0) >= latestCorrectionChange)
     const photos = workspace.documents.filter((document) =>
         document.gr_documenttype === CHARGEABLE_INVOICE_DOCUMENT_TYPES.SUPPORTING_PHOTO
         && document.gr_uploadstatus === CHARGEABLE_INVOICE_UPLOAD_STATUSES.COMPLETE)
-    return { greenTreeInvoice, photos }
-}
-
-function assertRequestStageAmendmentsComplete(workspace: ChargeableInvoiceWorkspace) {
-    if (workspace.corrections.some((correction) =>
-        correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.OUTSTANDING
-        || correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.NOT_MADE)) {
-        throw new Error('Complete the invoice amendments and import the corrected GreenTree invoice before starting customer PO or photo requests.')
-    }
+    return { approvalPdf, photos }
 }
 
 function assertPoRequestWorkflow(workspace: ChargeableInvoiceWorkspace) {
@@ -973,9 +989,8 @@ function assertPoRequestWorkflow(workspace: ChargeableInvoiceWorkspace) {
     if (review.gr_porequired !== true) throw new Error('Record that a customer PO is required before preparing its request.')
     if (review.gr_poreceivedon) throw new Error('A confirmed customer PO has already been received.')
     if (review.gr_photosrequired == null) throw new Error('Record whether supporting photos are required before preparing the PO request.')
-    assertRequestStageAmendmentsComplete(workspace)
     const documents = poRequestDocuments(workspace)
-    if (!documents.greenTreeInvoice) throw new Error('The current GreenTree invoice is unavailable for the PO request.')
+    if (!documents.approvalPdf) throw new Error('Generate the current Customer PO Approval PDF before preparing the PO request.')
     if (review.gr_photosrequired === true
         && (review.gr_photosstatus !== CHARGEABLE_INVOICE_PHOTO_STATUSES.RECEIVED || !documents.photos.length)) {
         throw new Error('Receive and upload the required supporting photos before preparing the PO request.')
@@ -984,19 +999,31 @@ function assertPoRequestWorkflow(workspace: ChargeableInvoiceWorkspace) {
 }
 
 function resolvePoRecipient(workspace: ChargeableInvoiceWorkspace, draft: ChargeableInvoicePoRecipientDraft) {
+    if (draft.useConfiguredRecipients) {
+        const configured = resolvePurchaseOrderRecipients(workspace.poRecipients,
+            workspace.review._gr_customer_value, workspace.review._gr_site_value)
+        if (!configured.primary?.gr_Contact || !isValidRecipientEmail(configured.primary.gr_Contact.gr_email)) {
+            throw new Error('The configured PO recipient is unavailable. Update the Customer PO contacts or choose another recipient.')
+        }
+        return {
+            email: configured.primary.gr_Contact.gr_email!.trim(),
+            name: configured.primary.gr_Contact.gr_name.trim(),
+            cc: configured.cc.map((recipient) => recipient.gr_Contact?.gr_email?.trim()).filter((email): email is string => Boolean(email)),
+        }
+    }
     if (draft.siteContactId) {
         const siteContact = workspace.siteContacts.find((candidate) =>
             candidate.gr_sitecontactid.toLowerCase() === draft.siteContactId?.toLowerCase())
         if (!siteContact?.gr_Contact || !isValidRecipientEmail(siteContact.gr_Contact.gr_email)) {
             throw new Error('Choose a Site Contact with a valid email address.')
         }
-        return { email: (siteContact.gr_Contact.gr_email ?? '').trim(), name: siteContact.gr_Contact.gr_name.trim() }
+        return { email: (siteContact.gr_Contact.gr_email ?? '').trim(), name: siteContact.gr_Contact.gr_name.trim(), cc: [] }
     }
     const email = draft.manualEmail?.trim() ?? ''
     if (email.length > 320 || !isValidRecipientEmail(email)) {
         throw new Error('Enter a valid customer recipient email address.')
     }
-    return { email, name: '' }
+    return { email, name: '', cc: [] }
 }
 
 export function buildChargeableInvoicePoRequestMailto(
@@ -1013,14 +1040,17 @@ export function buildChargeableInvoicePoRequestMailto(
     const customer = review.gr_Customer?.gr_name || revision.gr_customersnapshot || 'Customer'
     const equipment = [review.gr_Equipment?.gr_make, review.gr_Equipment?.gr_model,
         review.gr_Equipment?.gr_fleet ? `Fleet ${review.gr_Equipment.gr_fleet}` : ''].filter(Boolean).join(' - ')
-    const total = revision.gr_total == null ? 'Not recorded' : new Intl.NumberFormat('en-NZ', {
+    const currentLines = workspace.lines.filter((line) =>
+        line._gr_revision_value.toLowerCase() === revision.gr_chargeableinvoicerevisionid.toLowerCase())
+    const amended = buildChargeableInvoiceAmendedTotals(revision, currentLines, workspace.corrections)
+    const total = amended.adjustedTotal == null ? 'Not recorded' : new Intl.NumberFormat('en-NZ', {
         style: 'currency', currency: 'NZD',
-    }).format(revision.gr_total)
+    }).format(amended.adjustedTotal)
     const firstName = recipient.name.split(/\s+/)[0] || 'there'
     const subject = `Purchase order requested - Job ${jobNumber} - ${customer}`.slice(0, 150)
     const body = [
         `Hi ${firstName},`, '',
-        `Please review the attached GreenTree invoice for the completed work on Job ${jobNumber}.`,
+        `Please review the attached Customer PO Approval document for the completed work on Job ${jobNumber}.`,
         review.gr_photosrequired === true ? 'Supporting photos are also included for your review.' : '', '',
         `Customer: ${customer}`,
         `Site: ${review.gr_Site?.gr_name || revision.gr_sitesnapshot || 'Not recorded'}`,
@@ -1031,8 +1061,8 @@ export function buildChargeableInvoicePoRequestMailto(
         'Liftrucks NZ Ltd',
     ].filter((line, index, all) => line !== '' || all[index - 1] !== '').join('\n')
     return {
-        mailto: buildMailtoUrl({ recipient: recipient.email, subject, body }),
-        attachments: [documents.greenTreeInvoice, ...(review.gr_photosrequired === true ? documents.photos : [])],
+        mailto: buildMailtoUrl({ recipient: recipient.email, cc: recipient.cc, subject, body }),
+        attachments: [documents.approvalPdf, ...(review.gr_photosrequired === true ? documents.photos : [])],
     }
 }
 
@@ -1071,14 +1101,8 @@ export async function generateChargeableInvoiceApprovalPdf(
     const review = workspace.review
     if (!review.gr_reviewstartedon) throw new Error('Start the review before generating an approval PDF.')
     if (review.gr_disposition != null) throw new Error('Approval PDFs cannot be generated for a historical review.')
-    if (review.gr_porequired !== true) throw new Error('Record that a customer PO is required before generating an approval PDF.')
     if (!review._gr_currentrevision_value || !review['@odata.etag']) {
         throw new Error('Refresh the invoice review before generating an approval PDF.')
-    }
-    if (workspace.corrections.some((correction) =>
-        correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.OUTSTANDING
-        || correction.gr_comparisonstatus === CHARGEABLE_INVOICE_CORRECTION_COMPARISONS.NOT_MADE)) {
-        throw new Error('Resolve all outstanding invoice corrections before generating the approval PDF.')
     }
     const response = await fetch('/api/chargeableinvoiceapproval', {
         method: 'POST',
@@ -1100,5 +1124,5 @@ export async function generateChargeableInvoiceApprovalPdf(
 }
 
 export const chargeableInvoiceReviewApiTest = {
-    trustedNextLink, transitionBatch, readyTransition, permanentDeletionBatch, supportingPhotoDeletionBatch, photoFinalizationBatch, detectedPhotoType, siteContactUrl, requirementsTransition, replacementCorrectionBatch, supersedeCorrectionBatch, assertRequestStageAmendmentsComplete,
+    trustedNextLink, transitionBatch, readyTransition, permanentDeletionBatch, supportingPhotoDeletionBatch, photoFinalizationBatch, detectedPhotoType, siteContactUrl, requirementsTransition, replacementCorrectionBatch, supersedeCorrectionBatch,
 }

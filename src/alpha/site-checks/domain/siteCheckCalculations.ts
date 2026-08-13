@@ -158,6 +158,26 @@ export function calculateNextSiteCheckDueDate(
     }
 }
 
+export function calculateNextUpcomingSiteCheckDueDate(
+    dueDate: string,
+    frequency: SiteCheckFrequency,
+    today: string,
+) {
+    if (!isValidDateOnly(dueDate) || !isValidDateOnly(today)) {
+        throw new Error('A valid Site Check due date is required.')
+    }
+    let nextDueDate = dueDate
+    // A retired occurrence must not create another already-expired occurrence.
+    while (nextDueDate <= today) {
+        nextDueDate = calculateNextSiteCheckDueDate(nextDueDate, frequency)
+    }
+    return nextDueDate
+}
+
+export function isSiteCheckExpired(dueDate?: string | null, today?: string | null) {
+    return isValidDateOnly(dueDate) && isValidDateOnly(today) && dueDate < today
+}
+
 export function calculateInitialSiteCheckDate(
     dueDate: string,
     frequency: SiteCheckFrequency,
@@ -201,7 +221,7 @@ export function getSiteCheckScheduleState(input: {
 }): SiteCheckScheduleState {
     if (!input.enabled) return 'disabled'
     if (!validateSiteCheckSchedule(input).valid || !isValidDateOnly(input.today)) return 'invalid'
-    if (input.activeSiteCheckId) return 'in-progress'
+    if (input.activeSiteCheckId && !isSiteCheckExpired(input.nextDueDate, input.today)) return 'in-progress'
     if (input.nextDueDate! < input.today) return 'overdue'
     if (input.nextDueDate === input.today) return 'due'
     return 'up-to-date'
@@ -262,7 +282,8 @@ export function validateSiteCheckStart(input: {
         })
         if (!schedule.gr_enabled) errors.push('Site Checks are disabled for this Site.')
         else if (!scheduleValidation.valid) errors.push('The Site Check Schedule is incomplete.')
-        if (schedule._gr_activesitecheck_value) {
+        if (schedule._gr_activesitecheck_value
+            && !isSiteCheckExpired(schedule.gr_nextduedate, newZealandDateOnly(new Date().toISOString()))) {
             errors.push('Another Site Check is already in progress for this Site.')
         }
         if (!schedule['@odata.etag']) {

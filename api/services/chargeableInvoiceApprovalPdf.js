@@ -1,15 +1,16 @@
 const { PDFDocument, StandardFonts, rgb } = require('pdf-lib')
+const { readFileSync } = require('node:fs')
+const { join } = require('node:path')
 
-const TEMPLATE_VERSION = 'liftrucks-approval-v1'
+const TEMPLATE_VERSION = 'liftrucks-manager-template-v5'
 const PAGE_WIDTH = 595.28
 const PAGE_HEIGHT = 841.89
-const MARGIN = 48
-const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2
 const BLACK = rgb(0.08, 0.08, 0.08)
-const MUTED = rgb(0.36, 0.38, 0.41)
-const RED = rgb(0.84, 0.08, 0.08)
-const AMBER = rgb(1, 0.76, 0.16)
-const LIGHT_GREY = rgb(0.95, 0.95, 0.95)
+const TEMPLATE_BACKGROUND = readFileSync(join(__dirname, '..', 'assets', 'chargeable-invoice-approval-template.png'))
+const LIFTRUCKS_LOGO = readFileSync(join(__dirname, '..', 'assets', 'liftrucks-invoice-logo.jpg'))
+const LOGO_WIDTH = 170
+const LOGO_LEFT = 38
+const LOGO_TOP = 20
 
 function safeText(value, fallback = '') {
     const text = value == null ? '' : String(value)
@@ -27,17 +28,10 @@ function formatDateOnly(value) {
     return match ? `${match[3]}/${match[2]}/${match[1]}` : safeText(value, 'Not recorded')
 }
 
-function formatDateTime(value) {
-    const date = value instanceof Date ? value : new Date(value)
-    if (Number.isNaN(date.getTime())) return 'Not recorded'
-    return new Intl.DateTimeFormat('en-NZ', {
-        timeZone: 'Pacific/Auckland', year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit', hour12: false,
-    }).format(date).replace(',', '') + ' NZ time'
-}
-
 function formatMoney(value) {
-    return Number.isFinite(value) ? `$${Number(value).toFixed(2)}` : '-'
+    return Number.isFinite(value)
+        ? `$${Number(value).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        : '-'
 }
 
 function formatNumber(value) {
@@ -61,8 +55,126 @@ function wrapText(text, font, size, width) {
     return lines
 }
 
+const CORRECTION_TYPES = {
+    STORY: 122830001,
+    CHANGE_LINE: 122830002,
+    ADD_LINE: 122830003,
+    REMOVE_LINE: 122830004,
+}
+const ACTIVE_CORRECTION_STATUSES = new Set([122830000, 122830002])
+
+function lineTotal(quantity, unitPrice, fallback) {
+    if (Number.isFinite(quantity) && Number.isFinite(unitPrice)) {
+        return Math.round((Number(quantity) * Number(unitPrice) + Number.EPSILON) * 100) / 100
+    }
+    return Number.isFinite(fallback) ? Number(fallback) : null
+}
+
+function effectiveApprovalContent(input) {
+    const sourceLines = [...input.lines].sort((left, right) => left.gr_sortorder - right.gr_sortorder)
+    const active = (input.corrections || []).filter((correction) =>
+        ACTIVE_CORRECTION_STATUSES.has(correction.gr_comparisonstatus))
+    const latestBySource = new Map()
+    const latestByLineKey = new Map()
+    const additions = []
+    const storyAmendments = []
+    for (const correction of active) {
+        if (correction.gr_correctiontype === CORRECTION_TYPES.STORY && correction.gr_requestedtext) {
+            storyAmendments.push(correction)
+        } else if (correction.gr_correctiontype === CORRECTION_TYPES.ADD_LINE) {
+            additions.push(correction)
+        } else if (correction._gr_sourceline_value) {
+            latestBySource.set(correction._gr_sourceline_value.toLowerCase(), correction)
+            try {
+                const source = JSON.parse(correction.gr_originalsnapshot || 'null')
+                if (typeof source?.gr_linekey === 'string' && source.gr_linekey) {
+                    latestByLineKey.set(source.gr_linekey, correction)
+                }
+            } catch { /* malformed historic snapshots do not override current lines */ }
+        }
+    }
+    const lines = []
+    for (const source of sourceLines) {
+        const correction = latestBySource.get(String(source.gr_chargeableinvoicelineid || '').toLowerCase())
+            || latestByLineKey.get(source.gr_linekey)
+        if (correction?.gr_correctiontype === CORRECTION_TYPES.REMOVE_LINE) continue
+        const quantity = correction?.gr_correctiontype === CORRECTION_TYPES.CHANGE_LINE
+            ? correction.gr_requestedquantity ?? source.gr_quantity : source.gr_quantity
+        const unitPrice = correction?.gr_correctiontype === CORRECTION_TYPES.CHANGE_LINE
+            ? correction.gr_requestedunitprice ?? source.gr_unitprice : source.gr_unitprice
+        lines.push({
+            key: safeText(source.gr_linekey),
+            type: correction?.gr_requestedlinetype ?? source.gr_linetype,
+            description: safeText(correction?.gr_requesteddescription || source.gr_description),
+            quantity: quantity ?? null,
+            unitPrice: unitPrice ?? null,
+            extendedPrice: lineTotal(quantity, unitPrice, source.gr_extendedprice),
+        })
+    }
+    for (const correction of additions) {
+        lines.push({
+            key: `addition-${correction.gr_chargeableinvoicecorrectionid}`,
+            type: correction.gr_requestedlinetype,
+            description: safeText(correction.gr_requesteddescription),
+            quantity: correction.gr_requestedquantity ?? null,
+            unitPrice: correction.gr_requestedunitprice ?? null,
+            extendedPrice: lineTotal(correction.gr_requestedquantity, correction.gr_requestedunitprice, null),
+        })
+    }
+    const workCompleted = [safeText(input.revision.gr_workcompleted),
+        ...storyAmendments.map((correction) => safeText(correction.gr_requestedtext))].filter(Boolean).join('\n\n')
+    const sourceLineTotal = (line) => lineTotal(line?.gr_quantity, line?.gr_unitprice, line?.gr_extendedprice)
+    const summedSourceSubtotal = sourceLines.every((line) => Number.isFinite(sourceLineTotal(line)))
+        ? Math.round((sourceLines.reduce((sum, line) => sum + sourceLineTotal(line), 0) + Number.EPSILON) * 100) / 100
+        : null
+    const sourceSubtotal = Number.isFinite(input.revision.gr_subtotal)
+        ? Number(input.revision.gr_subtotal) : summedSourceSubtotal
+    const pricingCorrections = active.filter((correction) => [
+        CORRECTION_TYPES.CHANGE_LINE, CORRECTION_TYPES.ADD_LINE, CORRECTION_TYPES.REMOVE_LINE,
+    ].includes(correction.gr_correctiontype))
+    let adjustment = 0
+    let pricingComplete = sourceSubtotal != null
+    for (const correction of pricingCorrections) {
+        if (correction.gr_correctiontype === CORRECTION_TYPES.ADD_LINE) {
+            const added = lineTotal(correction.gr_requestedquantity, correction.gr_requestedunitprice, null)
+            if (added == null) pricingComplete = false
+            else adjustment += added
+            continue
+        }
+        let snapshot = null
+        try { snapshot = JSON.parse(correction.gr_originalsnapshot || 'null') } catch { /* handled below */ }
+        const source = sourceLines.find((line) =>
+            String(line.gr_chargeableinvoicelineid || '').toLowerCase() === String(correction._gr_sourceline_value || '').toLowerCase()
+            || (snapshot?.gr_linekey && line.gr_linekey === snapshot.gr_linekey))
+        const original = sourceLineTotal(source)
+        if (!source || original == null) { pricingComplete = false; continue }
+        if (correction.gr_correctiontype === CORRECTION_TYPES.REMOVE_LINE) {
+            adjustment -= original
+            continue
+        }
+        const replacement = lineTotal(correction.gr_requestedquantity ?? source.gr_quantity,
+            correction.gr_requestedunitprice ?? source.gr_unitprice, null)
+        if (replacement == null) pricingComplete = false
+        else adjustment += replacement - original
+    }
+    const subtotal = pricingCorrections.length
+        ? (pricingComplete ? Math.round((sourceSubtotal + adjustment + Number.EPSILON) * 100) / 100 : null)
+        : sourceSubtotal
+    const gstRate = Number.isFinite(input.revision.gr_gstrate) ? Number(input.revision.gr_gstrate) : null
+    const gstAmount = !pricingCorrections.length && Number.isFinite(input.revision.gr_gstamount)
+        ? Number(input.revision.gr_gstamount)
+        : subtotal != null && gstRate != null
+            ? Math.round((subtotal * gstRate / 100 + Number.EPSILON) * 100) / 100 : null
+    const total = !pricingCorrections.length && Number.isFinite(input.revision.gr_total)
+        ? Number(input.revision.gr_total)
+        : subtotal != null && gstAmount != null
+            ? Math.round((subtotal + gstAmount + Number.EPSILON) * 100) / 100 : null
+    return { workCompleted, lines, subtotal, gstRate, gstAmount, total, amendmentCount: active.length }
+}
+
 function approvalSnapshot(input) {
     const revision = input.revision
+    const effective = effectiveApprovalContent(input)
     return {
         templateVersion: TEMPLATE_VERSION,
         reviewId: input.review.gr_chargeableinvoicereviewid,
@@ -70,6 +182,7 @@ function approvalSnapshot(input) {
         revisionNumber: revision.gr_revisionnumber,
         invoiceNumber: safeText(revision.gr_invoicenumber),
         invoiceDate: revision.gr_invoicedate || null,
+        orderNumber: safeText(revision.gr_rawordernumber),
         jobNumber: safeText(input.review.gr_Job?.gr_jobnumber || revision.gr_greentreereference),
         customer: safeText(input.review.gr_Customer?.gr_name || revision.gr_customersnapshot),
         site: safeText(input.review.gr_Site?.gr_name || revision.gr_sitesnapshot),
@@ -79,20 +192,17 @@ function approvalSnapshot(input) {
         serial: safeText(input.review.gr_Equipment?.gr_serial || revision.gr_serial),
         meter: revision.gr_meter ?? null,
         dateOfJob: revision.gr_dateofjob || null,
+        serviceInterval: safeText(revision.gr_serviceinterval),
+        nextDue: revision.gr_nextdue || null,
         headline: safeText(revision.gr_headline),
         repairDescription: safeText(revision.gr_repairdescription),
-        workCompleted: safeText(revision.gr_workcompleted),
-        lines: [...input.lines]
-            .sort((left, right) => left.gr_sortorder - right.gr_sortorder)
-            .map((line) => ({
-                key: safeText(line.gr_linekey), type: line.gr_linetype,
-                description: safeText(line.gr_description), quantity: line.gr_quantity ?? null,
-                unitPrice: line.gr_unitprice ?? null, extendedPrice: line.gr_extendedprice ?? null,
-            })),
-        subtotal: revision.gr_subtotal ?? null,
-        gstRate: revision.gr_gstrate ?? null,
-        gstAmount: revision.gr_gstamount ?? null,
-        total: revision.gr_total ?? null,
+        workCompleted: effective.workCompleted,
+        lines: effective.lines,
+        subtotal: effective.subtotal,
+        gstRate: effective.gstRate,
+        gstAmount: effective.gstAmount,
+        total: effective.total,
+        amendmentCount: effective.amendmentCount,
     }
 }
 
@@ -107,117 +217,104 @@ async function renderApprovalPdf(snapshot, generatedAt = new Date()) {
     pdf.setModificationDate(generatedAt)
     const regular = await pdf.embedFont(StandardFonts.Helvetica)
     const bold = await pdf.embedFont(StandardFonts.HelveticaBold)
+    const background = await pdf.embedPng(TEMPLATE_BACKGROUND)
+    const logo = await pdf.embedJpg(LIFTRUCKS_LOGO)
+    const page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT])
+    page.drawImage(background, { x: 0, y: 0, width: PAGE_WIDTH, height: PAGE_HEIGHT })
+    const logoHeight = LOGO_WIDTH * (logo.height / logo.width)
+    page.drawImage(logo, {
+        x: LOGO_LEFT, y: PAGE_HEIGHT - LOGO_TOP - logoHeight, width: LOGO_WIDTH, height: logoHeight,
+    })
 
-    let page
-    let y
-    let pageNumber = 0
-    const addPage = () => {
-        page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT])
-        pageNumber += 1
-        y = PAGE_HEIGHT - MARGIN
-        page.drawText('LIF', { x: MARGIN, y: y - 18, size: 25, font: bold, color: BLACK })
-        const lifWidth = bold.widthOfTextAtSize('LIF', 25)
-        page.drawText('T', { x: MARGIN + lifWidth - 1, y: y - 18, size: 25, font: bold, color: RED })
-        const liftWidth = bold.widthOfTextAtSize('LIFT', 25)
-        page.drawText('RUCKS', { x: MARGIN + liftWidth - 2, y: y - 18, size: 25, font: bold, color: BLACK })
-        page.drawText(`Page ${pageNumber}`, { x: PAGE_WIDTH - MARGIN - 38, y: y - 14, size: 8, font: regular, color: MUTED })
-        y -= 42
-        page.drawRectangle({ x: MARGIN, y: y - 27, width: CONTENT_WIDTH, height: 30, color: AMBER })
-        const marker = 'FOR CUSTOMER PO APPROVAL - NOT A TAX INVOICE'
-        page.drawText(marker, {
-            x: MARGIN + (CONTENT_WIDTH - bold.widthOfTextAtSize(marker, 12)) / 2,
-            y: y - 17, size: 12, font: bold, color: BLACK,
-        })
-        y -= 43
+    const drawTop = (value, x, top, options = {}) => {
+        const font = options.font || regular
+        const size = options.size || 7.5
+        const shown = safeText(value)
+        if (!shown) return
+        page.drawText(shown, { x, y: PAGE_HEIGHT - top - size, size, font, color: options.color || BLACK })
     }
-    const ensure = (height) => { if (y - height < 75) addPage() }
-    const drawLine = (label, value, x, labelWidth, valueWidth) => {
-        page.drawText(label, { x, y, size: 9, font: bold, color: BLACK })
-        const shown = safeText(value, 'Not recorded')
-        const clipped = wrapText(shown, regular, 9, valueWidth)[0]
-        page.drawText(clipped, { x: x + labelWidth, y, size: 9, font: regular, color: BLACK })
+    const drawRightTop = (value, right, top, options = {}) => {
+        const font = options.font || regular
+        const size = options.size || 7.5
+        const shown = safeText(value)
+        if (!shown) return
+        drawTop(shown, right - font.widthOfTextAtSize(shown, size), top, { ...options, font, size })
     }
-    const section = (title, text) => {
-        const lines = wrapText(text, regular, 9, CONTENT_WIDTH)
-        ensure(23 + lines.length * 12)
-        page.drawText(title, { x: MARGIN, y, size: 10, font: bold, color: BLACK })
-        y -= 14
-        for (const line of lines) {
-            page.drawText(line, { x: MARGIN, y, size: 9, font: regular, color: BLACK })
-            y -= 12
-        }
-        y -= 7
+    const drawFitted = (value, x, top, width, options = {}) => {
+        const font = options.font || regular
+        let size = options.size || 7.5
+        const shown = safeText(value)
+        if (!shown) return
+        while (size > (options.minimumSize || 5.5) && font.widthOfTextAtSize(shown, size) > width) size -= 0.25
+        drawTop(shown, x, top, { ...options, font, size })
     }
-
-    addPage()
-    const leftX = MARGIN
-    const rightX = MARGIN + 275
-    drawLine('Job Date:', formatDateOnly(snapshot.dateOfJob || snapshot.invoiceDate), leftX, 92, 160)
-    drawLine('Customer:', snapshot.customer, rightX, 62, 155)
-    y -= 14
-    drawLine('Estimate Number:', snapshot.jobNumber, leftX, 92, 160)
-    drawLine('Site:', snapshot.site, rightX, 62, 155)
-    y -= 14
-    drawLine('Job Reference No:', snapshot.jobNumber, leftX, 92, 160)
-    drawLine('Fleet No:', snapshot.fleet, rightX, 62, 155)
-    y -= 14
-    drawLine('Document Ref:', snapshot.invoiceNumber, leftX, 92, 160)
-    drawLine('Hours:', snapshot.meter == null ? '' : formatNumber(snapshot.meter), rightX, 62, 155)
-    y -= 22
-
-    section('Fault Reported', snapshot.headline)
-    section('Work Required / Completed', snapshot.workCompleted || snapshot.repairDescription)
-
-    ensure(52)
-    const columns = [MARGIN, MARGIN + 255, MARGIN + 320, MARGIN + 405, MARGIN + CONTENT_WIDTH]
-    const row = (values, height, options = {}) => {
-        ensure(height)
-        if (options.fill) page.drawRectangle({ x: MARGIN, y: y - height + 3, width: CONTENT_WIDTH, height, color: options.fill })
-        page.drawLine({ start: { x: MARGIN, y: y + 3 }, end: { x: MARGIN + CONTENT_WIDTH, y: y + 3 }, thickness: options.thick ? 1.4 : 0.65, color: BLACK })
-        for (const x of columns) page.drawLine({ start: { x, y: y + 3 }, end: { x, y: y - height + 3 }, thickness: 0.65, color: BLACK })
-        values.forEach((value, index) => {
-            const font = options.bold ? bold : regular
-            const text = safeText(value, '-')
-            const width = columns[index + 1] - columns[index] - 8
-            const textWidth = font.widthOfTextAtSize(text, 8.5)
-            const x = options.numeric?.includes(index) ? columns[index + 1] - textWidth - 4 : columns[index] + 4
-            page.drawText(text, { x: Math.max(columns[index] + 4, x), y: y - height + 9, size: 8.5, font, color: options.red ? RED : BLACK })
-        })
-        y -= height
-    }
-    row(['Description', 'Qty', 'Unit Price', 'Extended Price'], 24, { bold: true, fill: LIGHT_GREY, thick: true })
-    for (const line of snapshot.lines) {
-        const descriptions = wrapText(line.description, regular, 8.5, columns[1] - columns[0] - 8)
-        const height = Math.max(20, descriptions.length * 10 + 8)
-        row([descriptions[0], formatNumber(line.quantity), formatMoney(line.unitPrice), formatMoney(line.extendedPrice)], height, { numeric: [1, 2, 3] })
-        for (let index = 1; index < descriptions.length; index += 1) {
-            page.drawText(descriptions[index], { x: MARGIN + 4, y: y + height - 11 - index * 10, size: 8.5, font: regular, color: BLACK })
+    const drawWrappedRegion = (value, x, top, width, height, options = {}) => {
+        const font = options.font || regular
+        let size = options.size || 7
+        let lineHeight
+        let lines
+        do {
+            lineHeight = size + (options.leading || 1.2)
+            lines = wrapText(value, font, size, width)
+            if (lines.length * lineHeight <= height || size <= (options.minimumSize || 5.25)) break
+            size -= 0.25
+        } while (true)
+        for (const [index, line] of lines.slice(0, Math.floor(height / lineHeight)).entries()) {
+            drawTop(line, x, top + index * lineHeight, { font, size })
         }
     }
-    page.drawLine({ start: { x: MARGIN, y: y + 3 }, end: { x: MARGIN + CONTENT_WIDTH, y: y + 3 }, thickness: 0.65, color: BLACK })
-    y -= 14
-    ensure(62)
-    const totalsX = MARGIN + 320
-    const totalRow = (label, value, red = false) => {
-        page.drawText(label, { x: totalsX, y, size: 9, font: red ? bold : regular, color: red ? RED : BLACK })
-        const shown = formatMoney(value)
-        page.drawText(shown, { x: MARGIN + CONTENT_WIDTH - (red ? bold : regular).widthOfTextAtSize(shown, 9), y, size: 9, font: red ? bold : regular, color: red ? RED : BLACK })
-        y -= 15
-    }
-    totalRow('Sub Total', snapshot.subtotal)
-    totalRow(`GST ${Number.isFinite(snapshot.gstRate) ? `${formatNumber(snapshot.gstRate)}%` : ''}`.trim(), snapshot.gstAmount)
-    page.drawLine({ start: { x: totalsX, y: y + 6 }, end: { x: MARGIN + CONTENT_WIDTH, y: y + 6 }, thickness: 1.1, color: BLACK })
-    totalRow('Total', snapshot.total, true)
 
-    ensure(76)
-    y -= 12
-    page.drawText(`Template: ${TEMPLATE_VERSION}`, { x: MARGIN, y, size: 7.5, font: regular, color: MUTED })
-    y -= 11
-    page.drawText(`Generated: ${formatDateTime(generatedAt)} | Revision ${snapshot.revisionNumber}`, { x: MARGIN, y, size: 7.5, font: regular, color: MUTED })
-    y -= 20
-    page.drawText('Liftrucks NZ Ltd - Camson Hoist Hire Ltd', { x: MARGIN, y, size: 8.5, font: bold, color: BLACK })
-    y -= 12
-    page.drawText('114 Captain Springs Road, Onehunga, Auckland | Phone 09 634 2140 | www.liftrucks.co.nz', { x: MARGIN, y, size: 8, font: regular, color: BLACK })
+    drawTop('FOR CUSTOMER PO APPROVAL - NOT A TAX INVOICE', LOGO_LEFT, LOGO_TOP + logoHeight + 6, { font: bold, size: 8 })
+    drawFitted(snapshot.invoiceNumber, 465, 39, 76, { size: 8 })
+    drawFitted(formatDateOnly(snapshot.invoiceDate), 465, 62, 76, { size: 8 })
+    drawFitted(snapshot.jobNumber, 465, 107, 76, { size: 8 })
+    drawFitted(snapshot.orderNumber, 465, 129, 76, { size: 8 })
+
+    drawFitted(snapshot.customer, 49, 159, 205, { font: bold, size: 9 })
+    drawFitted(snapshot.site, 338, 159, 205, { font: bold, size: 9 })
+
+    drawFitted(snapshot.headline, 24, 271, 520, { size: 8, minimumSize: 5.5 })
+    const headlineWidth = Math.min(regular.widthOfTextAtSize(safeText(snapshot.headline), 8), 520)
+    if (headlineWidth) {
+        page.drawLine({
+            start: { x: 24, y: PAGE_HEIGHT - 281 }, end: { x: 24 + headlineWidth, y: PAGE_HEIGHT - 281 },
+            thickness: 0.45, color: BLACK,
+        })
+    }
+    drawFitted(snapshot.fleet, 82.5, 286, 155, { size: 7.5 })
+    drawFitted(snapshot.make, 82.5, 297.5, 155, { size: 7.5 })
+    drawFitted(snapshot.model, 82.5, 309, 155, { size: 7.5 })
+    drawFitted(snapshot.serial, 82.5, 320.5, 155, { size: 7.5 })
+    drawFitted(snapshot.meter == null ? '' : formatNumber(snapshot.meter), 409, 286, 126, { size: 7.5 })
+    drawFitted(formatDateOnly(snapshot.dateOfJob), 409, 297.5, 126, { size: 7.5 })
+    drawFitted(snapshot.serviceInterval, 409, 309, 126, { size: 7.5 })
+    drawFitted(snapshot.nextDue ? formatDateOnly(snapshot.nextDue) : '', 409, 320.5, 126, { size: 7.5 })
+
+    drawWrappedRegion(snapshot.repairDescription || snapshot.headline, 24, 353, 520, 28, { size: 7.5 })
+    drawFitted(`Machine Location: ${snapshot.site}`, 24, 393, 520, { size: 7.5 })
+    drawFitted(`Fleet No: ${snapshot.fleet}`, 24, 407, 520, { size: 7.5 })
+    drawWrappedRegion(snapshot.workCompleted || snapshot.repairDescription, 24, 430, 520, 69, { size: 7 })
+
+    const rows = snapshot.lines || []
+    if (rows.length > 15) throw new Error('The invoice template supports at most 15 amended lines.')
+    const rowHeight = Math.max(6.4, Math.min(10.5, 98 / Math.max(rows.length, 1)))
+    const lineSize = Math.max(5.2, Math.min(7.5, rowHeight - 2.1))
+    for (const [index, line] of rows.slice(0, 15).entries()) {
+        const top = 510 + index * rowHeight
+        const type = line.type === 122830000 ? 'Labour' : line.type === 122830001 ? 'Parts' : 'Other'
+        drawFitted(type, 25, top, 54, { size: lineSize, minimumSize: 4.75 })
+        drawFitted(line.description, 86, top, 245, { size: lineSize, minimumSize: 4.75 })
+        drawRightTop(formatNumber(line.quantity), 381, top, { size: lineSize })
+        drawRightTop(formatMoney(line.unitPrice), 459, top, { size: lineSize })
+        drawRightTop(formatMoney(line.extendedPrice), 548, top, { size: lineSize })
+    }
+
+    drawTop('Subtotal', 405, 615, { size: 8 })
+    drawTop(`GST (${Number.isFinite(snapshot.gstRate) ? `${formatNumber(snapshot.gstRate)}%` : ''})`, 405, 628, { size: 8 })
+    drawTop('Total', 405, 645, { font: bold, size: 8.5 })
+    drawRightTop(formatMoney(snapshot.subtotal), 548, 615, { size: 8 })
+    drawRightTop(formatMoney(snapshot.gstAmount), 548, 628, { size: 8 })
+    drawRightTop(formatMoney(snapshot.total), 548, 645, { font: bold, size: 8.5 })
 
     return Buffer.from(await pdf.save({ useObjectStreams: false }))
 }
@@ -226,5 +323,6 @@ module.exports = {
     TEMPLATE_VERSION,
     approvalSnapshot,
     renderApprovalPdf,
+    effectiveApprovalContent,
     safeText,
 }

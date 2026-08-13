@@ -6,8 +6,10 @@ import {
 import {
     calculateSiteCheckProgress,
     filterSiteCheckEquipment,
+    isSiteCheckExpired,
     siteCheckUnavailableEquipment,
 } from '../domain/siteCheckCalculations.ts'
+import { newZealandDateOnly } from '../../shared/dates/dateOnly.ts'
 import {
     resolveSiteCheckChecklistTemplate,
     validateSiteCheckChecklistTemplate,
@@ -120,7 +122,8 @@ async function reconcileCreation(
             : dependencies.fetchByRequestKey(accessToken, input.requestKey),
     ])
     if (!occurrence) {
-        if (schedule?._gr_activesitecheck_value) {
+        if (schedule?._gr_activesitecheck_value
+            && !isSiteCheckExpired(schedule.gr_nextduedate, newZealandDateOnly(input.startedOn))) {
             throw new Error('Another manager started a Site Check for this Site.')
         }
         return null
@@ -168,7 +171,8 @@ export async function startSiteCheckWorkflow(
     const schedules = await fetchSchedules(accessToken, [input.siteId])
     const schedule = schedules[0]
     if (!schedule) throw new Error('A Site Check Schedule is required.')
-    if (schedule._gr_activesitecheck_value) {
+    if (schedule._gr_activesitecheck_value
+        && !isSiteCheckExpired(schedule.gr_nextduedate, newZealandDateOnly(input.startedOn))) {
         throw new Error('Another Site Check is already in progress for this Site.')
     }
     const [equipment, mechanic, selections] = await Promise.all([

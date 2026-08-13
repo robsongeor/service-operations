@@ -24,6 +24,12 @@ Customer selection uses the shared searchable selector. Customer and Site editin
 shared drawer presentation while retaining Customer-owned forms and services. Embedded Job
 and Equipment actions delegate to their feature workflows.
 
+The Customer edit drawer owns Customer-default PO Contacts: exactly one primary emailed Contact
+plus optional CC Contacts selected through the shared searchable selector. Site Settings reuses the
+editor with an explicit inherit-or-override choice. Site overrides are limited to Contacts linked to
+that Site and replace the complete Customer default. Both saves replace only their scope in one
+ETag-guarded Dataverse changeset; removing an override restores inheritance.
+
 Each persisted Site section can transfer multiple existing Equipment records to that Site.
 The transfer uses the shared drawer and confirmation presentation, displays each machine's
 current Customer and Site, and delegates the narrow Site-lookup mutation to the Equipment
@@ -142,6 +148,14 @@ Checks and Jobs projections.
   Job containing an hour-meter reading, avoiding per-row Dataverse requests.
 - Disabled Site Check schedules do not participate in status reporting or allow new checks,
   but their historical data is never cleared.
+- PO routing is current configuration. It never proves email delivery or PO receipt and does not
+  rewrite historical invoices when recipients change.
+- The PO Contacts editor can create an emailed Dataverse Contact inline through the canonical
+  Contact workflow. Customer-default contacts belong to the Main customer by default and need no
+  Site link; the manager chooses a Site only for a location-specific contact. A Site override fixes
+  the new Contact to that Site through the existing Site Contact relationship. The new Contact is
+  immediately selected as Primary or CC, but the routing rows are not changed until the manager
+  separately saves PO recipients.
 
 ## Extension Points
 

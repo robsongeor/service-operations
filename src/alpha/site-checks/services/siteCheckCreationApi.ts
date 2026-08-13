@@ -9,10 +9,13 @@ import { buildJobCreatePayload } from '../../jobs/services/jobsApi.ts'
 import { JOB_STATUSES } from '../../jobs/types/jobStatus.types.ts'
 import { JOB_TYPES } from '../../jobs/types/jobType.types.ts'
 import {
+    calculateNextUpcomingSiteCheckDueDate,
     isValidDateOnly,
+    isSiteCheckExpired,
     isValidSiteCheckRequestKey,
     siteCheckJobDescription,
 } from '../domain/siteCheckCalculations.ts'
+import { newZealandDateOnly } from '../../shared/dates/dateOnly.ts'
 import {
     SITE_CHECK_STATUSES,
     type SiteCheckSchedule,
@@ -82,7 +85,8 @@ function validateInput(input: SiteCheckCreationInput) {
     if (!schedule.gr_enabled || !schedule.gr_frequency || !isValidDateOnly(schedule.gr_nextduedate)) {
         throw new Error('The Site Check Schedule is disabled or incomplete.')
     }
-    if (schedule._gr_activesitecheck_value) {
+    if (schedule._gr_activesitecheck_value
+        && !isSiteCheckExpired(schedule.gr_nextduedate, newZealandDateOnly(input.startedOn))) {
         throw new Error('Another Site Check is already in progress for this Site.')
     }
     if (!schedule['@odata.etag']) {
@@ -126,13 +130,22 @@ function creationRequests(input: SiteCheckCreationInput): AtomicRequest[] {
     validateInput(input)
     const schedule = input.schedule
     const siteId = schedule._gr_site_value.toLowerCase()
+    const replacingExpiredCheck = Boolean(schedule._gr_activesitecheck_value)
+        && isSiteCheckExpired(schedule.gr_nextduedate, newZealandDateOnly(input.startedOn))
+    const occurrenceDueDate = replacingExpiredCheck
+        ? calculateNextUpcomingSiteCheckDueDate(
+            schedule.gr_nextduedate!,
+            schedule.gr_frequency!,
+            newZealandDateOnly(input.startedOn),
+        )
+        : schedule.gr_nextduedate
     const jobDescription = siteCheckJobDescription(schedule.gr_frequency!, input.startedOn)
     const occurrence = {
         gr_name: `Site Check — ${input.siteName.trim() || siteId}`,
         gr_status: SITE_CHECK_STATUSES.IN_PROGRESS,
         gr_startedon: input.startedOn,
         gr_frequencysnapshot: schedule.gr_frequency,
-        gr_duedatesnapshot: schedule.gr_nextduedate,
+        gr_duedatesnapshot: occurrenceDueDate,
         gr_expectedjobcount: input.equipment.length,
         gr_creationrequestkey: input.requestKey,
         'gr_SiteCheckSchedule@odata.bind': `/gr_sitecheckschedules(${schedule.gr_sitecheckscheduleid})`,
@@ -141,6 +154,7 @@ function creationRequests(input: SiteCheckCreationInput): AtomicRequest[] {
     }
     const scheduleLock = {
         'gr_ActiveSiteCheck@odata.bind': '$1',
+        ...(replacingExpiredCheck ? { gr_nextduedate: occurrenceDueDate } : {}),
     }
     const jobs = input.equipment.map((item) => ({
         ...buildJobCreatePayload({

@@ -25,12 +25,35 @@ Quote forms use shared presentation and selection components where applicable. R
 rows should obtain related Customer, Equipment, Job, and Author data through the existing
 query and lookup expansions.
 
+The saved Quote editor can generate a customer PO-request invoice locally in the browser. It
+reuses the approved GreenTree-style invoice template and the same Liftrucks logo used by
+Chargeable Invoice Review. Generation reads the current editor draft, maps Quote Notes verbatim
+to `Work Completed`, maps the current Quote lines and recalculated totals to the invoice body,
+and downloads a PDF without changing Quote, Job, or invoice-review state. The document is clearly
+marked for customer PO approval and is not a tax invoice. Direct Quote Customer and Equipment
+selections take precedence; the linked Job supplies fallback Customer, Site, Equipment, Job number,
+and repair-description context.
+Generated text follows the measured GreenTree typographic scale: approximately 10.92 pt for header
+fields and totals, 12 pt for the Customer name, and 9.96 pt for narrative and ordinary invoice-line
+content. Totals flow beneath the populated lines; only unusually dense line sets reduce line text.
+
+Chargeable Invoice Review reuses the Quote identity, status labels, pricing-category labels and
+line reader in a read-only `Related quotes` panel. It performs one bounded header query for the
+matched Job when the review opens (maximum 50 Quotes), then loads at most 200 Quote Lines only when
+the manager expands a Quote. The full editor opens through `/quotes?quoteId=...` in a new tab so the
+invoice review state is preserved.
+
 ## Important Business Rules
 
 - A Job may be linked to a Quote but does not require one.
 - Quote linkage must not alter Job Status.
+- Related Quotes are supporting invoice-review context only; status and price differences do not
+  create Corrections or block Ready to Process.
 - Author identity is the persisted creator, never a display-name inference.
 - Revisions and historical Quotes are preserved.
+- PO-request invoice generation is available only after the Quote has a persisted Quote number.
+- The generated PDF reflects unsaved values currently visible in the editor. The user remains
+  responsible for saving the Quote separately when those edits should persist to Dataverse.
 
 ## Extension Points
 
@@ -40,7 +63,8 @@ Quote identity and revision model while coordinating explicitly with Jobs.
 ## Implementation Constraints
 
 Avoid per-row Dataverse lookup requests. Preserve creator and revision history. Keep
-commercial state distinct from operational Job and Job Card state.
+commercial state distinct from operational Job and Job Card state. Quote PDF generation must
+remain client-local and must not require Chargeable Invoice server flags or authentication.
 
 ## Related Files and Documents
 

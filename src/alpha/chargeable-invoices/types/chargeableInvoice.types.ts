@@ -1,3 +1,6 @@
+import type { Quote } from '../../quotes/types/quote.types.ts'
+import type { PurchaseOrderRecipient } from '../../customers/purchaseOrderRecipient.types.ts'
+
 export const CHARGEABLE_INVOICE_MATCH_STATUSES = {
     MATCHED_EXACTLY: 122830000,
     MATCHED_MANUALLY: 122830001,
@@ -66,6 +69,8 @@ export const CHARGEABLE_INVOICE_UPLOAD_STATUSES = {
     COMPLETE: 122830001,
     FAILED: 122830002,
 } as const
+
+export const CHARGEABLE_INVOICE_APPROVAL_TEMPLATE_VERSION = 'liftrucks-manager-template-v5'
 
 type ValueOf<T> = T[keyof T]
 
@@ -253,9 +258,13 @@ export type ChargeableInvoiceWorkspace = {
     activities: ChargeableInvoiceActivity[]
     technicians: ChargeableInvoiceTechnician[]
     siteContacts: SiteContact[]
+    poRecipients: PurchaseOrderRecipient[]
+    relatedQuotes: Quote[]
+    relatedQuotesError: string
 }
 
 export type ChargeableInvoicePoRecipientDraft = {
+    useConfiguredRecipients?: boolean
     siteContactId?: string
     manualEmail?: string
 }

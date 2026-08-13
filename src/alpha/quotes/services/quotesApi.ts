@@ -6,7 +6,7 @@ import type {
     QuoteLineInput,
 } from '../types/quote.types'
 
-const DATAVERSE_URL = import.meta.env.VITE_DATAVERSE_URL
+const DATAVERSE_URL = import.meta.env?.VITE_DATAVERSE_URL ?? 'https://dataverse.invalid'
 const API_URL = `${DATAVERSE_URL}/api/data/v9.2`
 
 function headers(accessToken: string, includeContentType = false) {
@@ -32,7 +32,7 @@ async function ensureSuccess(response: Response, action: string) {
 
 export async function fetchQuoteJobs(accessToken: string): Promise<QuoteJob[]> {
     const response = await fetch(
-        `${API_URL}/gr_jobs?$select=gr_jobid,gr_jobnumber,gr_description&$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_serial),gr_Site($select=gr_siteid,gr_name;$expand=gr_Customer($select=gr_customerid,gr_name))&$orderby=createdon desc`,
+        `${API_URL}/gr_jobs?$select=gr_jobid,gr_jobnumber,gr_description&$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_serial),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name))&$orderby=createdon desc`,
         { cache: 'no-store', headers: headers(accessToken) },
     )
     await ensureSuccess(response, 'Failed to load jobs for quotes')
@@ -48,12 +48,35 @@ export async function fetchQuotes(accessToken: string): Promise<Quote[]> {
         '_gr_equipment_value', '_createdby_value',
     ].join(',')
     const response = await fetch(
-        `${API_URL}/gr_quotes?$select=${fields}&$expand=gr_Job($select=gr_jobid,gr_jobnumber,gr_description;$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_serial),gr_Site($select=gr_siteid,gr_name;$expand=gr_Customer($select=gr_customerid,gr_name))),gr_Customer($select=gr_customerid,gr_name),gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_serial;$expand=gr_Site($select=gr_siteid,gr_name;$expand=gr_Customer($select=gr_customerid,gr_name))),createdby($select=systemuserid,fullname,azureactivedirectoryobjectid)&$orderby=createdon desc`,
+        `${API_URL}/gr_quotes?$select=${fields}&$expand=gr_Job($select=gr_jobid,gr_jobnumber,gr_description;$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_serial),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name))),gr_Customer($select=gr_customerid,gr_name),gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_serial;$expand=gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name))),createdby($select=systemuserid,fullname,azureactivedirectoryobjectid)&$orderby=createdon desc`,
         { cache: 'no-store', headers: headers(accessToken) },
     )
     await ensureSuccess(response, 'Failed to load quotes')
     const data = await response.json()
     return data.value ?? []
+}
+
+export async function fetchQuotesForJob(accessToken: string, jobId: string): Promise<Quote[]> {
+    const fields = [
+        'gr_quoteid', 'gr_name', 'gr_quotenumber', 'gr_quotestatus', 'gr_revision',
+        'gr_quotedate', 'gr_validuntil', 'gr_notes', 'gr_gstrate', 'gr_subtotal',
+        'gr_gst', 'gr_total', 'createdon', '_gr_job_value', '_gr_customer_value',
+        '_gr_equipment_value', '_createdby_value',
+    ].join(',')
+    const url = new URL(`${API_URL}/gr_quotes`)
+    url.searchParams.set('$select', fields)
+    url.searchParams.set('$expand', 'createdby($select=systemuserid,fullname,azureactivedirectoryobjectid)')
+    url.searchParams.set('$filter', `_gr_job_value eq ${jobId}`)
+    url.searchParams.set('$orderby', 'createdon desc')
+    url.searchParams.set('$top', '51')
+    const response = await fetch(url.toString(), { cache: 'no-store', headers: headers(accessToken) })
+    await ensureSuccess(response, 'Failed to load quotes for this Job')
+    const data = await response.json()
+    const quotes = (data.value ?? []) as Quote[]
+    if (quotes.length > 50 || data['@odata.nextLink']) {
+        throw new Error('This Job has more than 50 linked quotes and cannot be displayed safely.')
+    }
+    return quotes
 }
 
 export async function fetchQuoteLines(
@@ -65,13 +88,19 @@ export async function fetchQuoteLines(
         'gr_category', 'gr_description', 'gr_quantity', 'gr_unitlabel',
         'gr_unitprice', 'gr_extendedprice', 'gr_taxable', 'gr_sortorder',
     ].join(',')
-    const response = await fetch(
-        `${API_URL}/gr_quotelines?$select=${fields}&$filter=_gr_quote_value eq ${quoteId}&$orderby=gr_sortorder asc`,
-        { cache: 'no-store', headers: headers(accessToken) },
-    )
+    const url = new URL(`${API_URL}/gr_quotelines`)
+    url.searchParams.set('$select', fields)
+    url.searchParams.set('$filter', `_gr_quote_value eq ${quoteId}`)
+    url.searchParams.set('$orderby', 'gr_sortorder asc')
+    url.searchParams.set('$top', '201')
+    const response = await fetch(url.toString(), { cache: 'no-store', headers: headers(accessToken) })
     await ensureSuccess(response, 'Failed to load quote lines')
     const data = await response.json()
-    return data.value ?? []
+    const lines = (data.value ?? []) as QuoteLine[]
+    if (lines.length > 200 || data['@odata.nextLink']) {
+        throw new Error('This Quote has more than 200 lines and cannot be displayed safely.')
+    }
+    return lines
 }
 
 function quotePayload(quote: QuoteInput) {

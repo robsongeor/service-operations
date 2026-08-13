@@ -1,6 +1,10 @@
 import { type FormEvent, useState } from 'react'
 import EditDrawerSection from '../shared/drawer/EditDrawerSection'
 import EditDrawerShell from '../shared/drawer/EditDrawerShell'
+import PurchaseOrderRecipientEditor from './PurchaseOrderRecipientEditor'
+import type { CustomerContact } from './customerContact.types'
+import type { PurchaseOrderRecipient, PurchaseOrderRecipientSaveInput } from './purchaseOrderRecipient.types'
+import type { NewPurchaseOrderContactInput } from './purchaseOrderContactRules'
 import './CustomerDrawer.css'
 
 export type CustomerSiteDraft = {
@@ -20,7 +24,7 @@ export type CustomerDraft = {
     sites: CustomerSiteDraft[]
 }
 
-export type CustomerDrawerTab = 'info' | 'sites'
+export type CustomerDrawerTab = 'info' | 'sites' | 'po-contacts'
 
 type Props = {
     mode: 'create' | 'edit'
@@ -29,6 +33,13 @@ type Props = {
     initialSiteId?: string
     onClose: () => void
     onSave: (value: CustomerDraft) => Promise<CustomerDraft>
+    customerId?: string
+    contacts?: CustomerContact[]
+    poRecipients?: PurchaseOrderRecipient[]
+    poRecipientsBusy?: boolean
+    poRecipientsError?: string
+    onSavePoRecipients?: (input: PurchaseOrderRecipientSaveInput, contacts: CustomerContact[]) => Promise<unknown>
+    onCreateContact?: (input: NewPurchaseOrderContactInput) => Promise<string>
 }
 
 const newSite = (): CustomerSiteDraft => ({
@@ -48,7 +59,8 @@ const emptyCustomer = (): CustomerDraft => ({
     sites: [newSite()],
 })
 
-export default function CustomerDrawer({ mode, initialValue, initialTab = 'info', initialSiteId, onClose, onSave }: Props) {
+export default function CustomerDrawer({ mode, initialValue, initialTab = 'info', initialSiteId, onClose, onSave,
+    customerId, contacts = [], poRecipients = [], poRecipientsBusy = false, poRecipientsError = '', onSavePoRecipients, onCreateContact }: Props) {
     const [savedDraft, setSavedDraft] = useState<CustomerDraft>(() => initialValue ?? emptyCustomer())
     const [draft, setDraft] = useState<CustomerDraft>(savedDraft)
     const [activeTab, setActiveTab] = useState<CustomerDrawerTab>(initialTab)
@@ -186,6 +198,7 @@ export default function CustomerDrawer({ mode, initialValue, initialTab = 'info'
             <nav className="customer-drawer-tabs" aria-label="Customer drawer sections" role="tablist">
                 <button type="button" role="tab" aria-selected={activeTab === 'info'} className={activeTab === 'info' ? 'active' : ''} onClick={() => setActiveTab('info')}>Info</button>
                 <button type="button" role="tab" aria-selected={activeTab === 'sites'} className={activeTab === 'sites' ? 'active' : ''} onClick={() => setActiveTab('sites')}>Sites <span>{draft.sites.length}</span></button>
+                {mode === 'edit' && <button type="button" role="tab" aria-selected={activeTab === 'po-contacts'} className={activeTab === 'po-contacts' ? 'active' : ''} onClick={() => setActiveTab('po-contacts')}>PO Contacts</button>}
             </nav>
 
             {activeTab === 'info' && <div className="customer-drawer-tab-panel" role="tabpanel"><EditDrawerSection title="Customer information" meta={<span>{draft.sites.length} {draft.sites.length === 1 ? 'Site' : 'Sites'}</span>}>
@@ -236,6 +249,13 @@ export default function CustomerDrawer({ mode, initialValue, initialTab = 'info'
                     </div>
                 )}
             </EditDrawerSection></div>}
+
+            {activeTab === 'po-contacts' && mode === 'edit' && customerId && onSavePoRecipients && onCreateContact && <div className="customer-drawer-tab-panel" role="tabpanel">
+                <EditDrawerSection title="Customer default PO contacts">
+                    <p>This primary recipient and CC list are inherited by every Site unless that Site has its own override.</p>
+                    <PurchaseOrderRecipientEditor customerId={customerId} contacts={contacts} recipients={poRecipients} busy={poRecipientsBusy} error={poRecipientsError} sites={draft.sites.map((site) => ({ id: site.id, name: site.name }))} onSave={onSavePoRecipients} onCreateContact={onCreateContact} />
+                </EditDrawerSection>
+            </div>}
         </form>
     </EditDrawerShell>
 }
