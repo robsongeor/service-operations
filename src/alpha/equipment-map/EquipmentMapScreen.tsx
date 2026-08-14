@@ -8,8 +8,7 @@ import { useEquipmentManager } from '../equipment/hooks/useEquipmentManager'
 import PageHeader from '../shared/page-header/PageHeader'
 import { equipmentIdentity, groupEquipmentBySite } from './equipmentMap'
 import { geocodeEquipmentSites } from './equipmentGeocodingApi'
-import { equipmentMapCacheKey, restoreEquipmentMapCache, saveEquipmentMapCache } from './equipmentMapCache'
-import type { EquipmentMapCoordinate } from './equipmentMap.types'
+import { equipmentMapCacheKey, restoreEquipmentMapCache, saveEquipmentMapCache, type CachedCoordinate } from './equipmentMapCache'
 import './EquipmentMapScreen.css'
 
 const EquipmentLocationMap = lazy(() => import('./EquipmentLocationMap'))
@@ -24,7 +23,7 @@ export default function EquipmentMapScreen() {
     const signedInUser = getSignedInUserInfo(account)
     const { equipment, customers, sites, isLoading, loadError, reload } = useEquipmentManager()
     const storageKey = equipmentMapCacheKey(signedInUser?.storageId || 'account-pending')
-    const [coordinates, setCoordinates] = useState<Record<string, { address: string; coordinate: EquipmentMapCoordinate | null }>>(() => restoreEquipmentMapCache(storageKey))
+    const [coordinates, setCoordinates] = useState<Record<string, CachedCoordinate>>(() => restoreEquipmentMapCache(storageKey))
     const [geocodingError, setGeocodingError] = useState('')
     const [search, setSearch] = useState('')
     const [customerId, setCustomerId] = useState('')
@@ -36,7 +35,7 @@ export default function EquipmentMapScreen() {
     const groupedSites = useMemo(() => groupEquipmentBySite(equipment), [equipment])
 
     useEffect(() => {
-        if (isLoading || loadError || !account || groupedSites.length === 0) return
+        if (isLoading || loadError || geocodingError || !account || groupedSites.length === 0) return
         const missing = groupedSites
             .filter((site) => site.address && coordinates[site.siteId]?.address !== site.address)
             .slice(0, 20)
@@ -48,26 +47,32 @@ export default function EquipmentMapScreen() {
                 .then((token) => geocodeEquipmentSites(token, missing.map((site) => ({ siteId: site.siteId, address: site.address }))))
                 .then((results) => {
                     if (cancelled) return
+                    const providerFailureCount = results.filter((result) => result.status === 'provider_failed').length
                     setCoordinates((current) => {
                         const next = { ...current }
                         const resultsBySite = new Map(results.map((result) => [result.siteId, result]))
                         missing.forEach((site) => {
                             const result = resultsBySite.get(site.siteId)
+                            if (!result || result.status === 'provider_failed') return
                             next[site.siteId] = {
                                 address: site.address,
                                 coordinate: result?.address === site.address ? result.coordinate : null,
+                                status: result.coordinate ? 'matched' : 'not_found',
                             }
                         })
                         saveEquipmentMapCache(storageKey, next)
                         return next
                     })
+                    if (providerFailureCount > 0) {
+                        setGeocodingError(`The map provider failed for ${providerFailureCount} of ${missing.length} Site addresses. Check the local Geoapify key and restart Vite before retrying.`)
+                    }
                 })
                 .catch((error) => {
                     if (!cancelled) setGeocodingError(error instanceof Error ? error.message : 'Equipment locations could not be resolved.')
                 })
         }, 0)
         return () => { cancelled = true; window.clearTimeout(timer) }
-    }, [account, coordinates, groupedSites, instance, isLoading, loadError, storageKey])
+    }, [account, coordinates, geocodingError, groupedSites, instance, isLoading, loadError, storageKey])
 
     const filteredSites = useMemo(() => {
         const query = normalized(search)
@@ -92,7 +97,6 @@ export default function EquipmentMapScreen() {
         site.address && coordinates[site.siteId]?.address === site.address,
     ).length
     const pendingAddressCount = addressedSiteCount - resolvedAddressCount
-    const mapSites = pendingAddressCount === 0 || geocodingError ? mappedSites : []
     const selectedSite = filteredSites.find((site) => site.siteId === selectedSiteId) ?? filteredSites[0]
     const visibleEquipmentCount = filteredSites.reduce((total, site) => total + site.equipment.length, 0)
     const siteOptions = sites.filter((site) => !customerId || site.gr_Customer?.gr_customerid === customerId)
@@ -113,12 +117,12 @@ export default function EquipmentMapScreen() {
         </section>
 
         {isLoading ? <section className="equipment-map-state">Loading Equipment locations…</section> : loadError ? <section className="equipment-map-state error"><div><strong>Equipment locations could not be loaded.</strong><p>{loadError}</p></div><button type="button" onClick={() => void reload()}>Try again</button></section> : <>
-            {pendingAddressCount > 0 && !geocodingError && <p className="equipment-map-notice" role="status">Resolving Site addresses… {resolvedAddressCount} of {addressedSiteCount}</p>}
+            {pendingAddressCount > 0 && !geocodingError && <p className="equipment-map-notice" role="status">Resolving Site addresses… {resolvedAddressCount} of {addressedSiteCount} · {mappedSites.length} mapped</p>}
             {geocodingError && <p className="equipment-map-notice warning" role="alert">{geocodingError} Any locations already resolved remain available.</p>}
             <div className="equipment-map-layout">
                 <Suspense fallback={<div className="equipment-map-canvas-shell"><div className="equipment-map-overlay">Loading map…</div></div>}>
                     <EquipmentLocationMap
-                        sites={mapSites}
+                        sites={mappedSites}
                         selectedSiteId={selectedSite?.siteId ?? ''}
                         onSelectSite={(nextSiteId) => { setSelectedSiteId(nextSiteId); setDetailsOpen(true) }}
                     />

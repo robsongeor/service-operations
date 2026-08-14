@@ -24,7 +24,6 @@ export function useActiveMsalAccount() {
         const nextAccount = currentAccount ?? accounts[0] ?? null
 
         if (!currentAccount && nextAccount) instance.setActiveAccount(nextAccount)
-        setActiveAccount(nextAccount)
 
         return () => {
             if (callbackId) instance.removeEventCallback(callbackId)

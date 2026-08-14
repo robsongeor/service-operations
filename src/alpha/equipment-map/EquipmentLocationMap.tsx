@@ -11,7 +11,7 @@ type Props = {
     onSelectSite: (siteId: string) => void
 }
 
-type SiteMarker = { siteId: string; marker: LeafletMarker; equipmentCount: number }
+type SiteMarker = { siteId: string; marker: LeafletMarker }
 
 const DEFAULT_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
 const NEW_ZEALAND_CENTER: [number, number] = [-41, 172.5]
@@ -115,7 +115,7 @@ export default function EquipmentLocationMap({ sites, selectedSiteId, onSelectSi
                 }).on('click', () => onSelectSiteRef.current(site.siteId))
                 clusterGroup.addLayer(marker)
                 bounds.extend([coordinate.latitude, coordinate.longitude])
-                return { siteId: site.siteId, marker, equipmentCount: site.equipment.length }
+                return { siteId: site.siteId, marker }
             })
             clusterGroup.addTo(map)
             clusterGroupRef.current = clusterGroup
@@ -128,8 +128,8 @@ export default function EquipmentLocationMap({ sites, selectedSiteId, onSelectSi
     }, [mapReady, sites])
 
     useEffect(() => {
-        markersRef.current.forEach(({ siteId, marker, equipmentCount }) => {
-            marker.setIcon(markerIcon(equipmentCount, siteId === selectedSiteId))
+        markersRef.current.forEach(({ siteId, marker }) => {
+            marker.getElement()?.classList.toggle('selected', siteId === selectedSiteId)
         })
     }, [selectedSiteId, sites])
 

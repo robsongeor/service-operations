@@ -1,7 +1,11 @@
 import type { EquipmentMapCoordinate } from './equipmentMap.types'
 
 const KEY_PREFIX = 'service-operations.equipment-map-geocoding.v1'
-type CachedCoordinate = { address: string; coordinate: EquipmentMapCoordinate | null }
+export type CachedCoordinate = {
+    address: string
+    coordinate: EquipmentMapCoordinate | null
+    status?: 'matched' | 'not_found'
+}
 
 function validCoordinate(value: unknown): value is EquipmentMapCoordinate {
     const coordinate = value as Partial<EquipmentMapCoordinate> | null
@@ -22,7 +26,8 @@ export function restoreEquipmentMapCache(storageKey: string): Record<string, Cac
         const raw = sessionStorage.getItem(storageKey)
         const parsed = raw ? JSON.parse(raw) as Record<string, Partial<CachedCoordinate>> : {}
         return Object.fromEntries(Object.entries(parsed).filter(([, value]) =>
-            typeof value.address === 'string' && (value.coordinate === null || validCoordinate(value.coordinate)),
+            typeof value.address === 'string'
+            && (validCoordinate(value.coordinate) || (value.coordinate === null && value.status === 'not_found')),
         )) as Record<string, CachedCoordinate>
     } catch {
         return {}
