@@ -38,35 +38,48 @@ Branch: `codex/next-development`
   Chargeable Invoice PDF/layout and workflow improvements, Ready recovery, and amendment-handoff
   readiness. No Dataverse role assignment, permission change, server-setting change, credential, or
   real communication was performed during deployment. Signed-in role/business-flow smoke remains.
+- Version `v1.7.0` was published from commit `438aba6` by successful Azure run `31799755036` on
+  15 August 2026. Production-safe verification returned `200` for `/` and `/equipment-map`, found
+  the exact `v1.7.0` marker in the deployed client asset, and confirmed the Equipment geocoding API
+  rejects anonymous requests with a safe `401`. The release includes Customer Dashboard selection
+  persistence, Equipment Map, searchable Equipment relationships, all-Job hour-meter completion,
+  date-aware meter history and estimates, machine-usage forecasts, usage-adjusted service intervals,
+  compact maintenance summaries, Equipment Job counts/history, and duplicate Job Number protection.
+  The deployed hour-meter classification flag remains unchanged. Signed-in business-flow smoke and
+  verification or configuration of the server-only `GEOAPIFY_API_KEY` remain outstanding; the smoke
+  check stopped at Microsoft sign-in without initiating authentication. No Dataverse provisioning,
+  role assignment, cloud-setting change, credential creation, or real communication was performed.
 
 ## Unfinished work
 
-- The Service Job completion hour-meter dialog now uses bounded responsive columns so Equipment
+- The published Service Job completion hour-meter dialog now uses bounded responsive columns so Equipment
   labels, maintenance summaries, and numeric inputs cannot overlap or escape the modal at narrow
   widths or increased browser scaling. It also blocks incomplete maintenance schedules before
   submission and lets the user configure and synchronize the Equipment maintenance setup directly
   in the completion dialog before retrying. Plan-dependent schedule, hour-meter, effects, and
   completion controls remain hidden until synchronization succeeds.
 
-- All Job types now require linked Equipment and an hour-meter reading when moving to Complete.
+- All Job types in the published application now require linked Equipment and an hour-meter reading
+  when moving to Complete.
   Breakdown, Workshop, and Site Check use the general completion dialog; WOF captures hours with its
   expiry; Service retains its additional plan checks and atomic maintenance updates. Completion
   readings are stored on both the Job and the Equipment so machine usage can inform service timing.
 
-- Equipment create and edit drawers now share the searchable Customer/Site relationship workflow.
+- Published Equipment create and edit drawers now share the searchable Customer/Site relationship
+  workflow.
   Either mode can create a Customer and its first Site inline with duplicate-name protection; the
   Equipment record continues to persist only its authoritative Site lookup.
 
-- Equipment Map is implemented locally on `/equipment-map`. It groups Equipment by current assigned
+- Equipment Map is published on `/equipment-map`. It groups Equipment by current assigned
   Site, resolves Site addresses through an authenticated server-only Geoapify boundary, and renders
   a Leaflet/OpenStreetMap view. Addresses resolve and cache in 20-Site batches; an individual provider
   failure settles as Not mapped instead of blocking the batch, and markers fit once after the initial
   pass to avoid repeated map movement. Nearby markers cluster and split/spiderfy during zoom so dense
   areas remain readable; Site and Equipment details open in a closable floating map window, and the
   desktop map fills the remaining viewport beneath the filters.
-  Production markers require a separately created and restricted `GEOAPIFY_API_KEY` server setting,
-  deployment, and signed-in smoke testing. No Dataverse schema, role, record, credential, or cloud
-  configuration has been changed.
+  Production markers still require verification or configuration of the separately created and
+  restricted `GEOAPIFY_API_KEY` server setting plus signed-in smoke testing. No Dataverse schema,
+  role, record, credential, or cloud configuration was changed during deployment.
 
 - Staff Directory is published in `v1.6.0`: the UI is renamed from
   Mechanics to Staff, `/mechanics` redirects to `/staff`, Department, `Can be assigned Jobs`, and
