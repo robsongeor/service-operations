@@ -55,8 +55,16 @@
 .quotes-tabs button.active { border-color: #dfe4e1; border-bottom-color: #202421; background: #f4f5f2; color: #202421; }
 .quotes-tabs + .quotes-table-shell, .quotes-tabs + .quotes-data-state { border-radius: 0 0 13px 13px; }
 
-.quotes-table-shell { overflow: hidden; border: 1px solid #dfe5e1; border-radius: 13px; background: #fff; box-shadow: 0 8px 28px rgba(25,36,30,.06); }
-.quotes-table { width: 100%; border-collapse: collapse; font-size: .76rem; }
+.quotes-table-shell { overflow-x: auto; border: 1px solid #dfe5e1; border-radius: 13px; background: #fff; box-shadow: 0 8px 28px rgba(25,36,30,.06); }
+.quotes-table { width: 100%; min-width: 1400px; border-collapse: collapse; table-layout: fixed; font-size: .76rem; }
+.quotes-table .quotes-equipment-col { width: 150px; }
+.quotes-table .quotes-job-col { width: 260px; }
+.quotes-table .quotes-customer-col { width: 180px; }
+.quotes-table .quotes-author-col { width: 170px; }
+.quotes-table .quotes-date-col { width: 125px; }
+.quotes-table .quotes-status-col { width: 100px; }
+.quotes-table .quotes-revision-col { width: 85px; }
+.quotes-table .quotes-total-col { width: 120px; }
 .quotes-table th, .quotes-table td { padding: 13px 14px; border-bottom: 1px solid #e8ece9; text-align: left; }
 .quotes-table th { background: #f6f8f7; color: #68736d; font-size: .65rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
 .quotes-sort { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
@@ -68,6 +76,8 @@
 .quotes-table td strong, .quotes-table td small { display: block; }
 .quotes-table .quote-title { color: #1e3029; font-size: .8rem; font-weight: 800; }
 .quotes-table td small { max-width: 300px; overflow: hidden; margin-top: 3px; color: #7a847e; text-overflow: ellipsis; white-space: nowrap; }
+.quotes-table .quotes-author-column, .quotes-table .quotes-author-column strong { white-space: nowrap; }
+.quotes-table .quotes-date-column { white-space: nowrap; }
 .quotes-money { text-align: right !important; font-variant-numeric: tabular-nums; }
 .quote-status { display: inline-block; padding: 4px 8px; border-radius: 999px; background: #eef0ef; color: #626b66; font-size: .64rem; font-weight: 750; }
 .quote-status.status-122830000 { background: #eef0ef; }
@@ -175,8 +185,7 @@
     .quotes-summary-totals { width: 100%; justify-content: space-between; }
     .quotes-toolbar { align-items: stretch; flex-direction: column; }
     .quotes-status-filter { justify-content: flex-start; }
-    .quotes-table-shell { overflow-x: auto; }
-    .quotes-table { min-width: 800px; }
+    .quotes-table { min-width: 1400px; }
     .quote-form-grid { grid-template-columns: 1fr; }
     .quote-field-wide { grid-column: span 1; }
     .quote-dialog-backdrop { padding: 0; }

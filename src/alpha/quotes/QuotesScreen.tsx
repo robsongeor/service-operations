@@ -216,7 +216,18 @@ export default function QuotesScreen() {
                     </section>
                 ) : <div className="quotes-table-shell">
                     <table className="quotes-table">
-                        <thead><tr><th>Quote</th><th>Equipment</th><th>Job</th><th>Customer</th><th>Author</th><th aria-sort={viewState.dateSort}><button type="button" className="quotes-sort" onClick={() => setViewState((current) => ({ ...current, dateSort: current.dateSort === 'ascending' ? 'descending' : 'ascending' }))}>Date <JobsTableSortIcon active direction={viewState.dateSort} /></button></th><th>Status</th><th>Revision</th><th className="quotes-money">Total</th></tr></thead>
+                        <colgroup>
+                            <col />
+                            <col className="quotes-equipment-col" />
+                            <col className="quotes-job-col" />
+                            <col className="quotes-customer-col" />
+                            <col className="quotes-author-col" />
+                            <col className="quotes-date-col" />
+                            <col className="quotes-status-col" />
+                            <col className="quotes-revision-col" />
+                            <col className="quotes-total-col" />
+                        </colgroup>
+                        <thead><tr><th>Quote</th><th>Equipment</th><th>Job</th><th>Customer</th><th className="quotes-author-column">Author</th><th className="quotes-date-column" aria-sort={viewState.dateSort}><button type="button" className="quotes-sort" onClick={() => setViewState((current) => ({ ...current, dateSort: current.dateSort === 'ascending' ? 'descending' : 'ascending' }))}>Date <JobsTableSortIcon active direction={viewState.dateSort} /></button></th><th>Status</th><th>Revision</th><th className="quotes-money">Total</th></tr></thead>
                         <tbody>
                             {visibleQuotes.map((quote) => (
                                 <tr key={quote.gr_quoteid} onClick={() => void openExisting(quote)}>
@@ -224,8 +235,8 @@ export default function QuotesScreen() {
                                     <td><strong>{quote.gr_Equipment?.gr_fleet || quote.gr_Job?.gr_Equipment?.gr_fleet || '—'}</strong><small>{quote.gr_Equipment?.gr_serial || quote.gr_Job?.gr_Equipment?.gr_serial || ''}</small></td>
                                     <td><strong>{quote.gr_Job?.gr_jobnumber || '—'}</strong><small>{quote.gr_Job?.gr_description || ''}</small></td>
                                     <td><strong>{quote.gr_Customer?.gr_name || quote.gr_Job?.gr_Site?.gr_Customer?.gr_name || quote.gr_Equipment?.gr_Site?.gr_Customer?.gr_name || '—'}</strong></td>
-                                    <td><strong>{quote.createdby?.fullname || 'Unknown'}</strong></td>
-                                    <td>{quote.gr_quotedate ? date.format(new Date(`${quote.gr_quotedate.slice(0, 10)}T00:00:00`)) : '—'}</td>
+                                    <td className="quotes-author-column"><strong>{quote.createdby?.fullname || 'Unknown'}</strong></td>
+                                    <td className="quotes-date-column">{quote.gr_quotedate ? date.format(new Date(`${quote.gr_quotedate.slice(0, 10)}T00:00:00`)) : '—'}</td>
                                     <td><span className={`quote-status status-${quote.gr_quotestatus}`}>{QUOTE_STATUS_LABELS[quote.gr_quotestatus] ?? 'Unknown'}</span></td>
                                     <td>Rev {quote.gr_revision}</td>
                                     <td className="quotes-money"><strong>{money.format(quote.gr_total)}</strong></td>
