@@ -17,6 +17,7 @@ by scanning the repository.
 | Reusable UI and business-rule owners | [`architecture/reusable-components.md`](architecture/reusable-components.md) |
 | Local development and validation | [`architecture/development-workflow.md`](architecture/development-workflow.md) |
 | Deployment and environment configuration | [`architecture/deployment.md`](architecture/deployment.md) |
+| Sanitized PDF development templates | [`templates/README.md`](templates/README.md) |
 
 ## Feature architecture
 

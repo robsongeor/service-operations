@@ -42,6 +42,11 @@ marked `Provisional Quotation`, uses the linked Job number for both `Invoice No`
 and is not a tax invoice. Direct Quote Customer and Equipment
 selections take precedence; the linked Job supplies fallback Customer, Site, Equipment, Job number,
 and repair-description context.
+The sanitized source PDF is tracked at
+[`../templates/liftrucks-invoice-template.pdf`](../templates/liftrucks-invoice-template.pdf) so a
+new development checkout has the portable design reference. Runtime rendering intentionally uses
+the flattened `api/assets/chargeable-invoice-approval-template.png` copy so hidden source-invoice
+text cannot survive in generated documents.
 The PDF party box stacks Customer, linked Job Site name, and linked Job Site address on the left.
 Site identity for this document comes from the Job rather than an independently selected Equipment Site.
 Completed GreenTree and Chargeable Invoice documents retain their existing `Work Completed` wording.
