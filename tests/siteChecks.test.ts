@@ -1722,7 +1722,7 @@ test('completed Site Checks block Job reopening and Job Card remains outside com
         hook.indexOf('const updateJobFields'),
     )
     assert.doesNotMatch(cardStatusMethod, /updateSiteCheckJobStatus/)
-    assert.equal((hook.match(/updateSiteCheckJobStatus\(token/g) ?? []).length, 2)
+    assert.equal((hook.match(/updateSiteCheckJobStatus\(token/g) ?? []).length, 3)
 })
 
 test('history and generated Job detail reads are bounded, expanded, and continuation-safe', async () => {

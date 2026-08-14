@@ -27,6 +27,7 @@ import type { JobAssignment, JobAssignmentInput } from '../types/jobAssignment.t
 import { SERVICE_TYPES, type EquipmentServicePlan } from '../../equipment/servicePlans/equipmentServicePlan.types'
 import JobMaintenanceSummary from './JobMaintenanceSummary'
 import { isServiceTypeEnabled } from '../../equipment/servicePlans/maintenanceConfiguration'
+import { HOUR_METER_READING_TYPES } from '../../equipment/hourMeter/hourMeterReading.types'
 import { JOB_CARD_STATUSES, getJobCardStatus } from '../types/jobCardStatus.types'
 import { JOB_NUMBER_REQUIRED_EMAIL_MESSAGE, jobHasEmailableJobNumber } from '../services/jobEmailRules'
 import { OFFICE_ACTIONS, type JobOfficeUpdate } from '../types/officeAction.types'
@@ -381,9 +382,10 @@ export default function JobEditDrawer({
                             equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)}
                             servicePlans={servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === draft.equipmentId.toLowerCase())}
                         />}
-                        {job.gr_status === JOB_STATUSES.COMPLETE && jobRequiresMaintenance(job.gr_jobtype) && <div className="job-completion-history job-edit-field-wide">
+                        {job.gr_status === JOB_STATUSES.COMPLETE && <div className="job-completion-history job-edit-field-wide">
                             <span>Hour Meter at Completion</span>
-                            <strong>{job.gr_hourmeter == null ? 'Not recorded' : `${job.gr_hourmeter.toLocaleString('en-NZ')} hours`}</strong>
+                            <strong>{job.gr_hourmeter == null ? 'Not recorded' : `${job.gr_hourmeter.toLocaleString('en-NZ')} hours${job.gr_hourmeterreadingtype === HOUR_METER_READING_TYPES.ESTIMATED ? ' · Estimated' : ''}`}</strong>
+                            <small>Reading date: {(job.gr_hourmeterrecordeddate ?? job.gr_completeddate)?.slice(0, 10) || 'Not recorded'}</small>
                         </div>}
 
                         <JobRelationshipFields

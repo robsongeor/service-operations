@@ -39,6 +39,16 @@ Job Photos use a Dataverse File column. The public browser sends validated suppo
 data to the server; it receives no Dataverse file URL. Authenticated managers download
 submitted photos through their delegated Dataverse access.
 
+## Equipment Map external boundary
+
+The authenticated Equipment Map sends current Site address text to Geoapify only through the
+server `/api/equipmentgeocode` route. The server validates the office user's delegated Dataverse
+token with `WhoAmI`, bounds and deduplicates the request, restricts lookup to New Zealand, rate
+limits provider calls, and returns only Site IDs, submitted addresses, coordinates, and bounded
+formatted addresses. `GEOAPIFY_API_KEY` is server-only and is never logged or returned. Safe errors
+contain neither upstream response bodies nor Site addresses. OpenStreetMap receives ordinary map-tile
+requests from the browser but no Dataverse token or Site address payload.
+
 Chargeable Invoice preview accepts only an authenticated manager's PDF with a `.pdf` filename,
 `application/pdf` media type, matching declared/decoded byte length, PDF signature, at most five
 pages, bounded extracted text, and the approved 5 MiB limit. PDF.js runs server-side and returns

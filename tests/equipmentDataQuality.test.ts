@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { EQUIPMENT_COMPLIANCE_STATUSES } from '../src/alpha/equipment/compliance/equipmentCompliance.ts'
@@ -225,4 +226,69 @@ test('changing Road Use away from Road Registered explicitly reviews compliance-
             ['WOF Expiry', ''],
         ],
     )
+})
+
+test('Equipment Job History labels created, completed, and hour-meter evidence', () => {
+    const drawer = readFileSync(new URL('../src/alpha/equipment/components/EquipmentDrawer.tsx', import.meta.url), 'utf8')
+    assert.match(drawer, /Created \{formatDate\(job\.createdon\)\}/)
+    assert.match(drawer, /<dt>Completed Date<\/dt>/)
+    assert.match(drawer, /job\.gr_completeddate \? formatDate\(job\.gr_completeddate\) : 'Not completed'/)
+    assert.match(drawer, /<dt>Hours Recorded<\/dt>/)
+    assert.match(drawer, /job\.gr_hourmeter == null \? 'Not recorded'/)
+    assert.match(drawer, /HOUR_METER_READING_TYPES\.ESTIMATED/)
+    assert.match(drawer, /<span title=\{job\.gr_description \|\| 'No description'\}>/)
+    assert.match(drawer, /className="equipment-history-status" data-status=\{job\.gr_status\}/)
+    const styles = readFileSync(new URL('../src/alpha/equipment/EquipmentScreen.css', import.meta.url), 'utf8')
+    for (const status of ['122830000', '122830001', '122830002', '122830003', '122830004', '122830005']) {
+        assert.match(styles, new RegExp(`equipment-history-status\\[data-status="${status}"\\]`))
+    }
+})
+
+test('Equipment table displays and sorts case-insensitive linked Job counts', () => {
+    const screen = readFileSync(new URL('../src/alpha/equipment/EquipmentScreen.tsx', import.meta.url), 'utf8')
+    const table = readFileSync(new URL('../src/alpha/equipment/components/EquipmentTable.tsx', import.meta.url), 'utf8')
+    const types = readFileSync(new URL('../src/alpha/equipment/types/equipmentManager.types.ts', import.meta.url), 'utf8')
+    assert.match(screen, /job\.gr_Equipment\?\.gr_equipmentid\.toLowerCase\(\)/)
+    assert.match(screen, /if \(sortKey === 'jobs'\)/)
+    assert.match(screen, /jobCounts\.get\(a\.gr_equipmentid\.toLowerCase\(\)\)/)
+    assert.match(table, /\{ key: 'jobs', label: 'Jobs' \}/)
+    assert.match(table, /className="equipment-job-count"/)
+    assert.match(types, /'jobs' \| 'dataStatus'/)
+})
+
+test('Equipment Maintenance separates usage insight from legacy service baseline setup', () => {
+    const drawer = readFileSync(new URL('../src/alpha/equipment/components/EquipmentDrawer.tsx', import.meta.url), 'utf8')
+    const usageIndex = drawer.indexOf('Average Machine Usage')
+    const serviceHistoryIndex = drawer.indexOf('Service history and due dates')
+    assert.ok(usageIndex >= 0 && serviceHistoryIndex > usageIndex)
+    assert.match(drawer, /Set historical baseline/)
+    assert.match(drawer, /only when earlier maintenance is not represented by Jobs/)
+    assert.match(drawer, /title="Set Historical Service Baseline"/)
+    assert.match(drawer, /latestHourMeterReading\?\.source === 'job'/)
+    assert.doesNotMatch(drawer, />Edit history</)
+    assert.match(drawer, /Default Maintenance Profile/)
+    assert.match(drawer, /<details className="equipment-usage-forecast-card">/)
+    assert.match(drawer, /<details className="equipment-service-plan-card"/)
+    assert.match(drawer, /<span>Last completed<\/span>/)
+    assert.match(drawer, /<span>Next due by<\/span>/)
+    assert.match(drawer, /equipment-service-plan-interval/)
+    assert.match(drawer, /lastCompletedSummary/)
+    assert.match(drawer, /hours not recorded/)
+    assert.match(drawer, /Usage-adjusted · default/)
+    assert.match(drawer, /Projected hours/)
+    assert.doesNotMatch(drawer, /<dt>Estimated Hour Due<\/dt>/)
+    const styles = readFileSync(new URL('../src/alpha/equipment/EquipmentScreen.css', import.meta.url), 'utf8')
+    assert.match(styles, /\.equipment-maintenance-plans dl \{ display: grid; grid-template-columns: repeat\(3,/)
+    assert.match(styles, /\.equipment-service-plan-glance/)
+    assert.match(styles, /details\[open\] > summary::after/)
+})
+
+test('linked Job deletion guidance is attached to the disabled Equipment delete control', () => {
+    const drawer = readFileSync(new URL('../src/alpha/equipment/components/EquipmentDrawer.tsx', import.meta.url), 'utf8')
+    const styles = readFileSync(new URL('../src/alpha/equipment/EquipmentScreen.css', import.meta.url), 'utf8')
+    assert.doesNotMatch(drawer, /equipment-delete-blocked/)
+    assert.match(drawer, /className="equipment-delete-tooltip" role="tooltip"/)
+    assert.match(drawer, /aria-describedby=\{history\.length > 0 \? 'equipment-delete-explanation'/)
+    assert.match(styles, /\.equipment-delete-control:hover \.equipment-delete-tooltip/)
+    assert.match(styles, /\.equipment-delete-control:focus \.equipment-delete-tooltip/)
 })

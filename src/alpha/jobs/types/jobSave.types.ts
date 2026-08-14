@@ -2,6 +2,7 @@ import type { JobType } from './jobType.types'
 import type { JobStatus } from './jobStatus.types'
 import type { ServiceType } from '../../equipment/servicePlans/equipmentServicePlan.types'
 import type { OfficeAction } from './officeAction.types'
+import type { HourMeterReadingType } from '../../equipment/hourMeter/hourMeterReading.types'
 
 export type JobSaveInput = {
     jobNumber: string
@@ -14,6 +15,8 @@ export type JobSaveInput = {
     siteId?: string
     contactId?: string
     hourMeter?: number
+    hourMeterReadingType?: HourMeterReadingType
+    hourMeterRecordedDate?: string
     completedDate?: string
     serviceType: ServiceType
     currentOfficeAction?: OfficeAction

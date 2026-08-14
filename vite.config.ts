@@ -22,6 +22,10 @@ const chargeableInvoicePreviewService = require('./api/services/chargeableInvoic
   preview: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
   jsonResponse: (status: number, body: object, headers?: Record<string, string>) => LocalFunctionResponse
 }
+const equipmentGeocodingService = require('./api/services/equipmentGeocodingService') as {
+  geocode: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
+  jsonResponse: (status: number, body: object, headers?: Record<string, string>) => LocalFunctionResponse
+}
 
 const LIFTTRUCKS_API_ORIGIN = 'https://webview.liftrucks.co.nz'
 const LIFTTRUCKS_API_KEY = '500256'
@@ -289,6 +293,48 @@ function chargeableInvoiceApprovalProxy(env: Record<string, string | undefined>)
   }
 }
 
+function equipmentGeocodingProxy(env: Record<string, string | undefined>): Plugin {
+  process.env.DATAVERSE_URL ||= env.DATAVERSE_URL || env.VITE_DATAVERSE_URL
+  process.env.GEOAPIFY_API_KEY ||= env.GEOAPIFY_API_KEY
+  const maximumRequestBytes = 128 * 1024
+
+  const installMiddleware = (middlewares: { use: (handler: (request: IncomingMessage, response: ServerResponse, next: () => void) => void) => void }) => {
+    middlewares.use((request, response, next) => {
+      if (!request.url) return next()
+      const requestUrl = new URL(request.url, 'http://localhost')
+      if (requestUrl.pathname !== '/api/equipmentgeocode') return next()
+
+      void (async () => {
+        if (request.method !== 'POST') {
+          return sendFunctionResponse(response, equipmentGeocodingService.jsonResponse(405, { error: 'Method not allowed.' }, { Allow: 'POST' }))
+        }
+        const parsed = await readLimitedJsonBody(request, maximumRequestBytes)
+        if (parsed.tooLarge) {
+          return sendFunctionResponse(response, equipmentGeocodingService.jsonResponse(413, { error: 'The location request is too large.' }))
+        }
+        if (parsed.body === null) {
+          return sendFunctionResponse(response, equipmentGeocodingService.jsonResponse(400, { error: 'The request body is invalid.' }))
+        }
+        sendFunctionResponse(response, await equipmentGeocodingService.geocode({
+          method: request.method,
+          headers: request.headers,
+          body: parsed.body,
+        }))
+      })().catch(() => {
+        sendFunctionResponse(response, equipmentGeocodingService.jsonResponse(503, {
+          error: 'Equipment map geocoding is temporarily unavailable.',
+        }))
+      })
+    })
+  }
+
+  return {
+    name: 'equipment-geocoding-api-proxy',
+    configureServer(server) { installMiddleware(server.middlewares) },
+    configurePreviewServer(server) { installMiddleware(server.middlewares) },
+  }
+}
+
 function liftTrucksProxy(env: Record<string, string | undefined>): Plugin {
   const validateAuthenticatedUser = async (request: IncomingMessage, response: ServerResponse) => {
     const authorization = request.headers.authorization?.trim() ?? ''
@@ -451,6 +497,7 @@ export default defineConfig(({ mode }) => {
       siteCheckAssignmentProxy(env),
       chargeableInvoicePreviewProxy(env),
       chargeableInvoiceApprovalProxy(env),
+      equipmentGeocodingProxy(env),
     ],
   }
 })

@@ -1,8 +1,10 @@
 import type { Job } from '../types/job.types.ts'
 import type { JobSaveInput } from '../types/jobSave.types.ts'
 import { assertJobTypeAllowedForCreation, type JobCreationSource } from '../types/jobType.types.ts'
+import { HOUR_METER_CLASSIFICATION_ENABLED, type HourMeterReadingType } from '../../equipment/hourMeter/hourMeterReading.types.ts'
 
 const DATAVERSE_URL = import.meta.env?.VITE_DATAVERSE_URL ?? ''
+const HOUR_METER_READING_SELECT = HOUR_METER_CLASSIFICATION_ENABLED ? ',gr_hourmeterreadingtype,gr_hourmeterrecordeddate' : ''
 
 function blobDataUrl(blob: Blob) {
     return new Promise<string>((resolve, reject) => {
@@ -40,7 +42,7 @@ export async function fetchJobPhotos(accessToken: string, jobId: string): Promis
 
 export async function fetchJobs(accessToken: string): Promise<Job[]> {
     const result = await fetch(
-        `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=gr_jobid,createdon,gr_jobnumber,gr_status,gr_ordernumber,gr_description,gr_jobtype,gr_jobcardstatus,gr_jobcardsenton,gr_jobcardsubmittedon,gr_jobcardclosedon,gr_hourmeter,gr_completeddate,gr_servicetype,gr_currentofficeaction,gr_officeactionowner,gr_officeattentionrequired,gr_techniciansubmissiontokenhash,gr_techniciansubmissiontokencreatedon,gr_techniciansubmissiontokenexpireson,gr_techniciansubmissiontokenused,gr_techniciansubmissionsubmittedon,gr_techniciansubmissionhourmeter,gr_techniciansubmissionstory,_gr_sitecheck_value&$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_serial,gr_currenthourmeter,gr_currenthourmeterrecordeddate,gr_servicetrackingenabled),gr_Mechanic($select=gr_mechanicid,gr_name,gr_phone,gr_email),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name,gr_phone,gr_email)`,
+        `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=gr_jobid,createdon,gr_jobnumber,gr_status,gr_ordernumber,gr_description,gr_jobtype,gr_jobcardstatus,gr_jobcardsenton,gr_jobcardsubmittedon,gr_jobcardclosedon,gr_hourmeter${HOUR_METER_READING_SELECT},gr_completeddate,gr_servicetype,gr_currentofficeaction,gr_officeactionowner,gr_officeattentionrequired,gr_techniciansubmissiontokenhash,gr_techniciansubmissiontokencreatedon,gr_techniciansubmissiontokenexpireson,gr_techniciansubmissiontokenused,gr_techniciansubmissionsubmittedon,gr_techniciansubmissionhourmeter,gr_techniciansubmissionstory,_gr_sitecheck_value&$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_serial,gr_currenthourmeter,gr_currenthourmeterrecordeddate,gr_servicetrackingenabled),gr_Mechanic($select=gr_mechanicid,gr_name,gr_phone,gr_email),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name,gr_phone,gr_email)`,
         {
             cache: 'no-store',
             headers: {
@@ -132,6 +134,8 @@ export function buildJobCreatePayload(
     if (job.currentOfficeAction != null) newJob.gr_currentofficeaction = job.currentOfficeAction
     if (job.officeActionOwner != null) newJob.gr_officeactionowner = job.officeActionOwner
     if (job.hourMeter != null) newJob.gr_hourmeter = job.hourMeter
+    if (HOUR_METER_CLASSIFICATION_ENABLED && job.hourMeterReadingType != null) newJob.gr_hourmeterreadingtype = job.hourMeterReadingType
+    if (HOUR_METER_CLASSIFICATION_ENABLED && job.hourMeterRecordedDate) newJob.gr_hourmeterrecordeddate = job.hourMeterRecordedDate
     if (job.completedDate) newJob.gr_completeddate = job.completedDate
     return newJob
 }
@@ -142,6 +146,7 @@ export async function createJob(
     source: JobCreationSource = 'standard',
 ): Promise<string> {
     const newJob = buildJobCreatePayload(job, source)
+    await assertJobNumberAvailable(accessToken, job.jobNumber)
     const result = await fetch(
         `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2/gr_jobs`,
         {
@@ -165,11 +170,37 @@ export async function createJob(
     return createdJob.gr_jobid
 }
 
+function escapeODataString(value: string) {
+    return value.replaceAll("'", "''")
+}
+
+export async function assertJobNumberAvailable(accessToken: string, jobNumber: string) {
+    const normalized = jobNumber.trim()
+    if (!normalized) return
+    const query = new URLSearchParams({
+        '$select': 'gr_jobid,gr_jobnumber',
+        '$filter': `gr_jobnumber eq '${escapeODataString(normalized)}'`,
+        '$top': '1',
+    })
+    const response = await fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobs?${query}`, {
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+    })
+    if (!response.ok) throw new Error('The Job Number could not be checked. No Job was created.')
+    const result = await response.json() as { value?: Array<{ gr_jobid: string }> }
+    if (result.value?.length) {
+        throw new Error(`Job Number ${normalized} already exists. Open the existing Job or enter a different number.`)
+    }
+}
+
 export async function updateJobStatus(
     token: string,
     jobId: string,
     status: number,
     completedDate?: string,
+    hourMeter?: number,
+    hourMeterReadingType?: HourMeterReadingType,
+    hourMeterRecordedDate?: string,
 ) {
     const response = await fetch(
         `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2/gr_jobs(${jobId})`,
@@ -183,6 +214,9 @@ export async function updateJobStatus(
             body: JSON.stringify({
                 gr_status: status,
                 ...(completedDate ? { gr_completeddate: completedDate } : {}),
+                ...(hourMeter != null ? { gr_hourmeter: hourMeter } : {}),
+                ...(HOUR_METER_CLASSIFICATION_ENABLED && hourMeterReadingType != null ? { gr_hourmeterreadingtype: hourMeterReadingType } : {}),
+                ...(HOUR_METER_CLASSIFICATION_ENABLED && hourMeterRecordedDate ? { gr_hourmeterrecordeddate: hourMeterRecordedDate } : {}),
             }),
         }
     )
@@ -393,6 +427,8 @@ export function buildJobUpdateFields(job: JobSaveInput): Record<string, string |
             : null,
     }
     if (job.completedDate) fields.gr_completeddate = job.completedDate
+    if (HOUR_METER_CLASSIFICATION_ENABLED && job.hourMeterReadingType != null) fields.gr_hourmeterreadingtype = job.hourMeterReadingType
+    if (HOUR_METER_CLASSIFICATION_ENABLED && job.hourMeterRecordedDate) fields.gr_hourmeterrecordeddate = job.hourMeterRecordedDate
     return fields
 }
 

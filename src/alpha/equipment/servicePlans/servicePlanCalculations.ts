@@ -27,7 +27,7 @@ export function selectSatisfiedServicePlans<T extends { gr_servicetype: PlannedS
     const plansByType = new Map(plans.map((plan) => [plan.gr_servicetype, plan]))
     const missingType = requiredTypes.find((type) => !plansByType.has(type))
     if (missingType != null) {
-        throw new Error('The Equipment maintenance schedule is incomplete. Refresh or repair its service plans before completing the Job.')
+        throw new Error('The Equipment maintenance schedule is incomplete. Save its maintenance setup in the Job completion dialog before retrying.')
     }
     return requiredTypes.map((type) => plansByType.get(type)!)
 }

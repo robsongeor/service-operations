@@ -4,7 +4,16 @@ import test from 'node:test'
 
 import { JOB_STATUSES } from '../src/alpha/jobs/types/jobStatus.types.ts'
 import { JOB_TYPES } from '../src/alpha/jobs/types/jobType.types.ts'
-import { getJobCompletionKind, runWofCompletion, validateWofCompletionExpiry } from '../src/alpha/jobs/completion/jobCompletion.ts'
+import {
+    getJobCompletionKind,
+    isHistoricalHourMeterReading,
+    jobCompletionDateTime,
+    runWofCompletion,
+    validateCompletionHourMeter,
+    validateHourMeterRecordedDate,
+    validateJobCompletionDate,
+    validateWofCompletionExpiry,
+} from '../src/alpha/jobs/completion/jobCompletion.ts'
 import {
     addCalendarYearsDateOnly,
     defaultWofExpiryDate,
@@ -28,6 +37,22 @@ const equipment = {
     gr_equipmentid: 'equipment-1',
     gr_currentwofexpiry: '2026-07-01',
 } as Equipment
+
+test('hour-meter reading dates are valid past dates and own historical chronology', () => {
+    assert.equal(validateHourMeterRecordedDate('2026-07-24', '2026-08-14'), '')
+    assert.match(validateHourMeterRecordedDate('2026-02-30', '2026-08-14'), /valid/)
+    assert.match(validateHourMeterRecordedDate('2026-08-15', '2026-08-14'), /future/)
+    assert.equal(isHistoricalHourMeterReading('2026-07-24', '2026-08-01'), true)
+    assert.equal(isHistoricalHourMeterReading('2026-08-01', '2026-08-01'), false)
+    assert.equal(validateCompletionHourMeter('900', 1_000, '2026-07-24', '2026-08-01'), '')
+})
+
+test('every completion uses a visible valid Job completion date', () => {
+    assert.equal(validateJobCompletionDate('2026-08-14', '2026-08-14'), '')
+    assert.match(validateJobCompletionDate('2026-02-30', '2026-08-14'), /valid/)
+    assert.match(validateJobCompletionDate('2026-08-15', '2026-08-14'), /future/)
+    assert.equal(jobCompletionDateTime('2026-08-14'), '2026-08-14T00:00:00.000Z')
+})
 
 function inspection(overrides: Partial<WofInspection> = {}): WofInspection {
     return {
@@ -208,21 +233,33 @@ test('non-WOF completion kinds remain unchanged', () => {
     assert.equal(getJobCompletionKind(JOB_TYPES.BREAKDOWN), 'standard')
 })
 
-test('WOF expiry is saved before the Job is completed', async () => {
+test('WOF expiry and hour meter are saved before the Job is completed', async () => {
     const operations: string[] = []
     await runWofCompletion(
         async () => { operations.push('expiry') },
+        async () => { operations.push('hour meter') },
         async () => { operations.push('job') },
     )
-    assert.deepEqual(operations, ['expiry', 'job'])
+    assert.deepEqual(operations, ['expiry', 'hour meter', 'job'])
 })
 
 test('failed WOF expiry update prevents Job completion', async () => {
     let completed = false
     await assert.rejects(() => runWofCompletion(
         async () => { throw new Error('expiry failed') },
+        async () => undefined,
         async () => { completed = true },
     ), /expiry failed/)
+    assert.equal(completed, false)
+})
+
+test('failed WOF hour-meter update prevents Job completion', async () => {
+    let completed = false
+    await assert.rejects(() => runWofCompletion(
+        async () => undefined,
+        async () => { throw new Error('hour meter failed') },
+        async () => { completed = true },
+    ), /hour meter failed/)
     assert.equal(completed, false)
 })
 

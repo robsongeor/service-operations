@@ -14,6 +14,7 @@ management shell and a public portal shell.
 | `/staff` | Internal Staff directory, technician eligibility, and contact details |
 | `/mechanics` | Legacy redirect to `/staff` |
 | `/equipment` | Equipment Management |
+| `/equipment-map` | Equipment assigned-Site map |
 | `/jobs` | Jobs |
 | `/site-checks` | Cross-customer Site Checks workspace |
 | `/scheduling` | Scheduler |

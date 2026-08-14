@@ -7,7 +7,8 @@ import { JOB_TYPES } from '../src/alpha/jobs/types/jobType.types.ts'
 import { jobIsSchedulerEligible } from '../src/alpha/jobs/types/jobSchedulerEligibility.ts'
 import { APPLICATION_DEFAULT_JOBS_VIEW, getJobsDefaultViewKey, restoreJobsDefaultView } from '../src/alpha/jobs/types/jobsDefaultView.types.ts'
 import { getJobsViewStateKey, restoreJobsViewState } from '../src/alpha/jobs/types/jobsViewState.types.ts'
-import { allocateJobNumbers } from '../src/alpha/jobs/services/jobsApi.ts'
+import { allocateJobNumbers, assertJobNumberAvailable } from '../src/alpha/jobs/services/jobsApi.ts'
+import { findDuplicateJobNumber, normalizeJobNumber } from '../src/alpha/jobs/utils/jobNumber.ts'
 
 class MemoryStorage {
     values = new Map<string, string>()
@@ -97,4 +98,35 @@ test('Job number paste uses one atomic change set in selected-row order', async 
     } finally {
         globalThis.fetch = originalFetch
     }
+})
+
+test('Job creation rejects duplicate numbers in loaded state and authoritative Dataverse', async () => {
+    assert.equal(normalizeJobNumber('  ab-123  '), 'AB-123')
+    assert.equal(findDuplicateJobNumber([
+        { gr_jobid: 'existing', gr_jobnumber: 'Ab-123' } as never,
+    ], ' ab-123 ')?.gr_jobid, 'existing')
+
+    const originalFetch = globalThis.fetch
+    let requestUrl = ''
+    globalThis.fetch = async (url) => {
+        requestUrl = String(url)
+        return Response.json({ value: [{ gr_jobid: 'existing' }] })
+    }
+    try {
+        await assert.rejects(
+            assertJobNumberAvailable('token', "AB'123"),
+            /Job Number AB'123 already exists/,
+        )
+        assert.match(decodeURIComponent(requestUrl), /\$filter=gr_jobnumber\+eq\+%?['"]?AB''123/)
+    } finally {
+        globalThis.fetch = originalFetch
+    }
+})
+
+test('every Job creation performs the Dataverse duplicate preflight before POST', () => {
+    const api = readFileSync(new URL('../src/alpha/jobs/services/jobsApi.ts', import.meta.url), 'utf8')
+    const drawer = readFileSync(new URL('../src/alpha/jobs/components/JobCreateDrawer.tsx', import.meta.url), 'utf8')
+    assert.match(api, /await assertJobNumberAvailable\(accessToken, job\.jobNumber\)/)
+    assert.match(drawer, /findDuplicateJobNumber\(existingJobs, draft\.jobNumber\)/)
+    assert.match(drawer, /already exists\. Open the existing Job or enter a different number/)
 })

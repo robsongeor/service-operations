@@ -22,6 +22,8 @@ import type { EquipmentServicePlan } from '../../equipment/servicePlans/equipmen
 import { jobRequiresMaintenance, STANDARD_JOB_TYPE_OPTIONS } from '../types/jobType.types'
 import JobMaintenanceSummary from './JobMaintenanceSummary'
 import { isServiceTypeEnabled } from '../../equipment/servicePlans/maintenanceConfiguration'
+import type { Job } from '../types/job.types'
+import { findDuplicateJobNumber } from '../utils/jobNumber'
 
 export type JobCreateInitialValues = {
     jobNumber?: string
@@ -43,6 +45,7 @@ type Props = {
     customers: Customer[]
     siteContacts: SiteContact[]
     servicePlans: EquipmentServicePlan[]
+    existingJobs?: readonly Job[]
     onCreateCustomer: (customer: { name: string }) => Promise<string>
     onCreateSite: (site: { customerId: string; name: string; address?: string }) => Promise<string>
     onCreateContact: (contact: { siteId: string; name: string; phone?: string; email?: string }) => Promise<string>
@@ -60,7 +63,7 @@ export default function JobCreateDrawer({
     mechanics, equipmentList, sites, customers, siteContacts, servicePlans,
     onCreateCustomer, onCreateSite, onCreateContact, onCreateEquipment,
     onCreateJob, onCreated, onCreateScheduleOption, initialValues,
-    jobTypeOptions = STANDARD_JOB_TYPE_OPTIONS, requireJobNumber = false, onClose,
+    jobTypeOptions = STANDARD_JOB_TYPE_OPTIONS, requireJobNumber = false, existingJobs = [], onClose,
 }: Props) {
     const initialCustomer = customers.find((customer) => customer.gr_customerid === initialValues?.customerId)
     const editor = useJobEditor({
@@ -93,6 +96,8 @@ export default function JobCreateDrawer({
             return
         }
         if (requireJobNumber && !draft.jobNumber.trim()) return setSaveError('Enter a Job Number before creating the job.')
+        const duplicateJob = findDuplicateJobNumber(existingJobs, draft.jobNumber)
+        if (duplicateJob) return setSaveError(`Job Number ${duplicateJob.gr_jobnumber?.trim()} already exists. Open the existing Job or enter a different number.`)
         if (!draft.description.trim()) return setSaveError('Enter a job description before creating the job.')
         if (draft.customerId && !draft.siteId) return setSaveError('Select a site for the chosen customer.')
         const selectedEquipment = equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)

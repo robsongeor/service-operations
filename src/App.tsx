@@ -19,6 +19,7 @@ import ChecklistAdminScreen from './alpha/site-checks/ChecklistAdminScreen'
 import { isServiceOperationsAdministrator } from './auth/adminAuthorization'
 import DataverseSessionRecovery from './auth/DataverseSessionRecovery'
 import ChargeableInvoiceReviewScreen from './alpha/chargeable-invoices/ChargeableInvoiceReviewScreen'
+import EquipmentMapScreen from './alpha/equipment-map/EquipmentMapScreen'
 
 function App() {
   const { accounts } = useMsal()
@@ -58,6 +59,7 @@ function App() {
           <Route path="/staff" element={<MechanicsScreen />} />
           <Route path="/mechanics" element={<Navigate to="/staff" replace />} />
           <Route path="/equipment" element={<EquipmentScreen />} />
+          <Route path="/equipment-map" element={<EquipmentMapScreen key={signedInUser?.storageId || 'account-pending'} />} />
           <Route path="/jobs" element={<JobsScreen key={signedInUser?.storageId || 'account-pending'} />} />
           <Route path="/site-checks" element={<SiteChecksScreen />} />
           <Route

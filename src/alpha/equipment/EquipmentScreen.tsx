@@ -74,6 +74,14 @@ export default function EquipmentScreen() {
     }, [editingEquipment, equipment, isLoading, searchParams, setSearchParams])
 
     const siteOptions = sites.filter((site) => !customerId || site.gr_Customer?.gr_customerid === customerId)
+    const jobCounts = useMemo(() => {
+        const counts = new Map<string, number>()
+        jobs.forEach((job) => {
+            const equipmentId = job.gr_Equipment?.gr_equipmentid.toLowerCase()
+            if (equipmentId) counts.set(equipmentId, (counts.get(equipmentId) ?? 0) + 1)
+        })
+        return counts
+    }, [jobs])
     const rows = useMemo(() => {
         const query = search.trim().toLocaleLowerCase()
         const sortValue = (item: Equipment) => {
@@ -98,9 +106,15 @@ export default function EquipmentScreen() {
                 )
                 return compareEquipmentDataQuality(a, plansFor(a), b, plansFor(b), sortDirection)
             }
+            if (sortKey === 'jobs') {
+                const difference = (jobCounts.get(a.gr_equipmentid.toLowerCase()) ?? 0)
+                    - (jobCounts.get(b.gr_equipmentid.toLowerCase()) ?? 0)
+                const fleetFallback = text(a.gr_fleet).localeCompare(text(b.gr_fleet), undefined, { numeric: true })
+                return (difference || fleetFallback) * (sortDirection === 'asc' ? 1 : -1)
+            }
             return text(sortValue(a)).localeCompare(text(sortValue(b)), undefined, { numeric: true }) * (sortDirection === 'asc' ? 1 : -1)
         })
-    }, [customerId, equipment, search, servicePlans, siteId, sortDirection, sortKey, stateFilter])
+    }, [customerId, equipment, jobCounts, search, servicePlans, siteId, sortDirection, sortKey, stateFilter])
 
     const changeSort = (key: EquipmentSortKey) => {
         if (key === sortKey) setSortDirection((current) => current === 'asc' ? 'desc' : 'asc')
@@ -174,10 +188,10 @@ export default function EquipmentScreen() {
                     <label>State<select value={stateFilter} onChange={(event) => setStateFilter(event.target.value as StateFilter)}><option value="all">All states</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
                 </div>
                 <div className="equipment-results-count">Showing {rows.length} of {equipment.length}</div>
-                <EquipmentTable equipment={rows} servicePlans={servicePlans} sortKey={sortKey} sortDirection={sortDirection} onSort={changeSort} onEdit={(item) => { clearSaveError(); setEditingEquipment(item) }} />
+                <EquipmentTable equipment={rows} servicePlans={servicePlans} jobCounts={jobCounts} sortKey={sortKey} sortDirection={sortDirection} onSort={changeSort} onEdit={(item) => { clearSaveError(); setEditingEquipment(item) }} />
             </section>}
             {isCreatingEquipment && <EquipmentDrawer mode="create" customers={customers} sites={sites} equipmentList={equipment} jobs={jobs} isSaving={isSaving} saveError={saveError} onClose={() => setIsCreatingEquipment(false)} onCreateCustomer={createCustomer} onCreateSite={createSite} onCreate={async (input, resolvedSite) => { await createEquipment(input, resolvedSite); setIsCreatingEquipment(false) }} />}
-            {editingEquipment && <EquipmentDrawer mode="edit" equipment={editingEquipment} equipmentList={equipment} servicePlans={servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === editingEquipment.gr_equipmentid.toLowerCase())} customers={customers} sites={sites} jobs={jobs} isSaving={isSaving} saveError={saveError} onClose={() => setEditingEquipment(null)} onSave={async (input) => { const updated = await updateEquipment(editingEquipment, input); setEditingEquipment(updated) }} onSaveMaintenanceHistory={async (plans, input) => { const updated = await saveEquipmentMaintenanceHistory(editingEquipment, plans, input); setEditingEquipment(updated.equipment) }} onCreateJob={openJobCreateForEquipment} onDelete={async () => { await deleteEquipment(editingEquipment.gr_equipmentid); setEditingEquipment(null) }} />}
+            {editingEquipment && <EquipmentDrawer mode="edit" equipment={editingEquipment} equipmentList={equipment} servicePlans={servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === editingEquipment.gr_equipmentid.toLowerCase())} customers={customers} sites={sites} jobs={jobs} isSaving={isSaving} saveError={saveError} onClose={() => setEditingEquipment(null)} onCreateCustomer={createCustomer} onCreateSite={createSite} onSave={async (input, resolvedSite) => { const updated = await updateEquipment(editingEquipment, input, resolvedSite); setEditingEquipment(updated) }} onSaveMaintenanceHistory={async (plans, input) => { const updated = await saveEquipmentMaintenanceHistory(editingEquipment, plans, input); setEditingEquipment(updated.equipment) }} onCreateJob={openJobCreateForEquipment} onDelete={async () => { await deleteEquipment(editingEquipment.gr_equipmentid); setEditingEquipment(null) }} />}
             {creatingJobForEquipment && <JobCreateDrawer
                 mechanics={mechanics}
                 equipmentList={jobEquipmentList}

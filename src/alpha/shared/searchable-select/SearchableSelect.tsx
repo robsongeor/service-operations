@@ -19,6 +19,7 @@ type Props = {
     searchPlaceholder?: string
     emptyLabel?: string
     disabled?: boolean
+    autoFocus?: boolean
     required?: boolean
     error?: string
     multiple?: boolean
@@ -38,6 +39,7 @@ export default function SearchableSelect({
     searchPlaceholder = 'Search…',
     emptyLabel = 'No matching options',
     disabled = false,
+    autoFocus = false,
     required = false,
     error = '',
     multiple = false,
@@ -46,7 +48,7 @@ export default function SearchableSelect({
 }: Props) {
     const rootRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLInputElement>(null)
-    const [open, setOpen] = useState(false)
+    const [open, setOpen] = useState(autoFocus && !disabled)
     const [query, setQuery] = useState('')
     const [activeIndex, setActiveIndex] = useState(0)
     const selected = options.find((option) => option.value === value)

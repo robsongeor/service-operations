@@ -38,12 +38,12 @@ export default function JobsScreen() {
         sendPrimaryJobEmail, sendAssignmentJobEmail, prepareTechnicianJobEmail,
         createJobAssignment, deleteJobAssignment,
         createContactForSite, createEquipment, createSite, createCustomer,
-        updateEquipment, saveEquipmentMaintenanceHistory, deleteEquipment,
+        updateEquipment, setupEquipmentMaintenance, saveEquipmentMaintenanceHistory, deleteEquipment,
         isEquipmentSaving, equipmentSaveError, clearEquipmentSaveError,
         createScheduleOption, updateScheduleOption, deleteScheduleOption,
         createJobOfficeUpdate,
         updateJobOfficeAttention,
-        completionRequest, isCompletingJob, completionError, completeServiceJob, completeWofJob, cancelJobCompletion,
+        completionRequest, isCompletingJob, completionError, completeStandardJob, completeServiceJob, completeWofJob, cancelJobCompletion,
         isLoading, loadError, retryInitialLoad, fetchJobForDrawer,
     } = useJobs()
     const [editingJob, setEditingJob] = useState<Job | null>(null)
@@ -340,6 +340,7 @@ export default function JobsScreen() {
             {isCreatingJob && (
                 <JobCreateDrawer
                     {...sharedDrawerProps}
+                    existingJobs={jobs}
                     onCreateJob={createJob}
                     onCreateScheduleOption={createScheduleOption}
                     onClose={() => setIsCreatingJob(false)}
@@ -411,10 +412,13 @@ export default function JobsScreen() {
                 key={completionRequest?.job.gr_jobid ?? 'no-completion'}
                 request={completionRequest}
                 equipment={equipmentList}
+                jobs={jobs}
                 servicePlans={servicePlans}
                 isCompleting={isCompletingJob}
                 error={completionError}
                 onCancel={cancelJobCompletion}
+                onSetupMaintenance={setupEquipmentMaintenance}
+                onCompleteStandard={completeStandardJob}
                 onCompleteService={completeServiceJob}
                 onCompleteWof={completeWofJob}
             />

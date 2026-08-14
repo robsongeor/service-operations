@@ -24,6 +24,13 @@ Customer selection uses the shared searchable selector. Customer and Site editin
 shared drawer presentation while retaining Customer-owned forms and services. Embedded Job
 and Equipment actions delegate to their feature workflows.
 
+The Customer search opens with its input focused when the dashboard route mounts, so keyboard
+input can begin immediately. The selected Customer ID is retained in account-scoped browser
+session storage. Leaving the Customer route and returning during the same signed-in browser
+session restores that Customer after the authoritative Customer collection loads, while an
+explicit route `customerId` remains able to select a different Customer. Missing or stale stored
+IDs are discarded without creating local Customer state or issuing an additional Dataverse request.
+
 The Customer edit drawer owns Customer-default PO Contacts: exactly one primary emailed Contact
 plus optional CC Contacts selected through the shared searchable selector. Site Settings reuses the
 editor with an explicit inherit-or-override choice. Site overrides are limited to Contacts linked to

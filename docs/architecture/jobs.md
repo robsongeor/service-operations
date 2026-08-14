@@ -32,6 +32,49 @@ Detailed tables, columns, and relationship names belong in the relevant schema d
 Job create/edit drawers use shared drawer presentation and shared searchable selectors.
 Scheduling and Customer Dashboard entry points reuse the Jobs workflow. Completion is routed
 through the completion framework rather than screen-specific writes.
+Every transition into Complete requires linked Equipment and a whole-number hour-meter reading.
+Every completion dialog also displays a required Job Completion Date, initially today and editable
+to a valid non-future date. The selected calendar date is stored in the existing Job Completed Date
+column for every Job type. That same calendar date is stored as the Job's meter-recorded date, so the
+completion dialog does not ask for a duplicate date. The latest dated completed Job with usable meter evidence is the operational current
+reading. The Equipment current-meter fields are used only when no completed Job reading exists.
+Completion advances the Equipment snapshot only when the new reading date is the same as or later
+than that operational date; meter value and form-submission order do not determine which reading is current.
+Before a non-Service completion updates Equipment, the shared write service re-reads the Dataverse
+row and uses its ETag so a stale browser or concurrent completion cannot replace a newer-dated
+reading. Breakdown, Workshop, and Site Check completions use the general hour-meter dialog; WOF
+collects the hour meter alongside its new expiry; Service additionally updates maintenance history
+and plans. Generated Site Check Jobs retain their occurrence/schedule completion orchestration.
+When the optional Hour Meter Reading Type schema is enabled, a manager may use a clearly marked
+estimate when a physical reading is unavailable. Actual is the default; estimated values remain in
+history and forecasting with a confidence penalty. Both columns are provisioned in the target
+Dataverse environment, but the application still omits them unless its release gate is enabled.
+The completion control is worded for the operational case where a technician did not record hours.
+It is enabled only when an accepted previous completed Job reading exists. With sufficient history
+the value is projected to the completion date; with limited history the last accepted Job value is
+carried forward conservatively. With no usable prior Job evidence the application refuses to invent
+an estimate. One combined control owns this choice and, when selected, displays the calculated value,
+confidence, non-editable state, and Estimated classification together. The classification remains
+visible in later history. Both actual and estimated readings use the selected Job Completion Date.
+The same gated schema stores that value as a Date Only meter-recorded date, and—not Job number or
+office processing order—it owns forecast chronology. A late-entered historical Job is retained
+without replacing a newer Equipment current reading.
+When that optional schema gate is disabled, the visible Job Completion Date is also the effective
+meter reading date. Lower readings from an earlier completion date are therefore accepted as
+historical evidence without a reset warning or regression of the Equipment current meter.
+The completion dialog shows the value and date from the latest dated completed Job reading. It falls
+back to the Equipment current-meter snapshot only when no completed Job has usable meter evidence.
+  The Service completion hour-meter dialog uses a bounded two-column layout at normal widths and a
+  single-column layout on narrow viewports; long Equipment labels and native number inputs must shrink
+  inside the dialog rather than expanding its grid tracks. It displays the effective Job Number as a
+  prominent full-width reference so office users can match the completion to external systems; an
+  unsaved edited Job Number takes precedence over the last loaded Dataverse value.
+It preflights every service-plan level that the selected service will satisfy. Missing plans disable
+completion and expose the canonical Power Type, Service Programme, Maintenance Profile, and custom
+configuration controls inline. Saving patches only those Equipment maintenance fields and runs the
+shared service-programme synchronizer; the dialog remains open and enables completion only after all
+required active plan rows exist. Until then, plan-dependent content—including the schedule summary,
+hour-meter entry, completion effects, and completion action—is not rendered.
 Chargeable Invoice intake also reuses the canonical Job-create drawer when an extracted Our Ref
 has no exact Job match. That entry point requires a Job Number, leaves authoritative relationship
 selection with the manager, and returns the created Job through the invoice feature's existing
@@ -53,6 +96,11 @@ Jobs projection.
 
 ## Important Business Rules
 
+- A non-empty Job Number must be unique across Jobs. The canonical create service performs an exact,
+  authenticated Dataverse preflight for every creation entry point before POST; the main Jobs drawer
+  also rejects a normalized duplicate from its loaded projection immediately. Blank Job Numbers
+  remain allowed where the originating workflow permits them. A Dataverse alternate key is still
+  required for a hard guarantee against two simultaneous first-time submissions of the same number.
 - Breakdown, Service, and Workshop Jobs may exist without Equipment.
 - Site Check is a protected Job Type created only by the Site Check workflow. It is excluded
   from ordinary Job creation options, requires Equipment, and reuses the canonical Job
@@ -63,6 +111,10 @@ Jobs projection.
   office/scheduled filters, reset behavior, and sticky-column preferences.
 - Job Status and Job Card Status are never interchangeable.
 - Completion Review is not completion.
+- Every newly completed Job must have linked Equipment and must capture its completion hour meter.
+- Completed Job readings are accepted by default. Sequence analysis may display an isolated value
+  as Potentially incorrect, an unresolved drop as Possible reset, or a sustained lower increasing
+  sequence as Confirmed reset; these assessments are derived and do not rewrite history.
 - Unconfirmed Jobs are visible history but unavailable for allocation and scheduling.
 - Moving allocated work to Unconfirmed removes allocations and schedules through existing
   APIs before changing status.
@@ -128,6 +180,8 @@ is cross-feature.
 Use named Dataverse Choice constants. Keep Dataverse requests in services and multi-record
 transitions in workflow APIs. Update local state after mutations. Do not duplicate completion,
 allocation, or schedule logic inside tables or drawers.
+Job creation must call the shared duplicate-number preflight; feature entry points must not issue a
+Job POST directly.
 
 ## Related Files and Documents
 
@@ -138,3 +192,4 @@ allocation, or schedule logic inside tables or drawers.
 - [Technician Job Card Submission](technician-job-submission.md)
 - [Scheduler](scheduler.md)
 - [Dataverse](dataverse.md)
+- [Hour-meter reading classification schema](../hour-meter-reading-classification-schema.md)

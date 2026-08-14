@@ -11,6 +11,7 @@ const menuItems = [
     { label: 'Customers', shortLabel: 'C', path: '/customers' },
     { label: 'Staff', shortLabel: 'S', path: '/staff' },
     { label: 'Equipment', shortLabel: 'E', path: '/equipment' },
+    { label: 'Equipment Map', shortLabel: 'M', path: '/equipment-map' },
     { label: 'WOF / REGO', shortLabel: 'W', path: '/wof' },
     { label: 'Jobs', shortLabel: 'J', path: '/jobs' },
     { label: 'Site Checks', shortLabel: 'S', path: '/site-checks' },

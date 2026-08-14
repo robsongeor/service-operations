@@ -14,7 +14,7 @@
 .equipment-toolbar input, .equipment-toolbar select { box-sizing: border-box; width: 100%; height: 36px; padding: 0 10px; border: 1px solid #d8ddd9; border-radius: 8px; background: #fff; color: #202421; font: inherit; font-size: .75rem; }
 .equipment-results-count { padding: 0 20px 10px; }
 .equipment-table-scroll { overflow-x: auto; }
-.equipment-table { width: 100%; min-width: 940px; border-collapse: collapse; table-layout: fixed; font-size: .75rem; }
+.equipment-table { width: 100%; min-width: 1010px; border-collapse: collapse; table-layout: fixed; font-size: .75rem; }
 .equipment-table th { padding: 9px 10px; border-top: 1px solid #dfe4e1; border-bottom: 1px solid #dfe4e1; background: #f4f5f2; color: #6b726e; font-size: .66rem; text-align: left; text-transform: uppercase; }
 .equipment-table th button { padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-transform: inherit; cursor: pointer; }
 .equipment-table td { height: 48px; padding: 7px 10px; border-bottom: 1px solid #e1e5e2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -25,6 +25,8 @@
 .equipment-table .equipment-data-quality-heading,
 .equipment-table .equipment-data-quality-cell { width: 42px; padding-right: 5px; padding-left: 5px; text-align: center; }
 .equipment-table .equipment-data-quality-cell { overflow: visible; }
+.equipment-table .equipment-jobs-heading, .equipment-table .equipment-jobs-cell { width: 58px; text-align: center; }
+.equipment-job-count { display: inline-grid; min-width: 24px; height: 24px; box-sizing: border-box; place-items: center; padding: 0 6px; border-radius: 999px; background: #e5eeea; color: #315f55; font-size: .68rem; font-weight: 800; }
 .equipment-state { display: inline-flex; padding: 4px 8px; border: 1px solid #c8ceca; border-radius: 999px; background: #f0f2f0; color: #606762; font-size: .68rem; font-weight: 700; }
 .equipment-state.active { border-color: #9bc5a7; background: #e3f1e7; color: #326d43; }
 .equipment-edit-action { padding: 5px 9px; border: 1px solid #cfd4d0; border-radius: 999px; background: transparent; color: #333936; font-size: .68rem; font-weight: 700; cursor: pointer; }
@@ -58,11 +60,20 @@
 .equipment-history-list { display: grid; gap: 10px; }
 .equipment-history-list article { padding: 12px; border: 1px solid #e0e5e2; border-radius: 9px; background: #fafbf9; }
 .equipment-history-title { display: flex; justify-content: space-between; gap: 12px; }
-.equipment-history-title time { color: #6e756f; font-size: .7rem; }
+.equipment-history-title > div { display: flex; min-width: 0; align-items: baseline; gap: 8px; }
+.equipment-history-title > div strong { flex: 0 0 auto; }
+.equipment-history-title > div span { min-width: 0; overflow: hidden; color: #66716b; font-size: .72rem; text-overflow: ellipsis; white-space: nowrap; }
+.equipment-history-title time { flex: 0 0 auto; color: #6e756f; font-size: .7rem; }
 .equipment-history-meta { display: flex; gap: 6px; flex-wrap: wrap; margin: 7px 0; }
 .equipment-history-meta span { padding: 3px 7px; border-radius: 999px; background: #e9ece9; color: #555d58; font-size: .66rem; font-weight: 700; }
+.equipment-history-meta .equipment-history-status[data-status="122830000"] { background: #e5f2eb; color: #2f6840; }
+.equipment-history-meta .equipment-history-status[data-status="122830001"] { background: #fff0c2; color: #705500; }
+.equipment-history-meta .equipment-history-status[data-status="122830002"] { background: #e5f0f8; color: #456d87; }
+.equipment-history-meta .equipment-history-status[data-status="122830003"] { background: #edf0ee; color: #515854; }
+.equipment-history-meta .equipment-history-status[data-status="122830004"] { background: #f0edfb; color: #604f88; }
+.equipment-history-meta .equipment-history-status[data-status="122830005"] { background: #fff0c2; color: #704b08; }
 .equipment-history-list dl { display: grid; gap: 4px; margin: 0; }
-.equipment-history-list dl div { display: grid; grid-template-columns: 82px 1fr; gap: 8px; }
+.equipment-history-list dl div { display: grid; grid-template-columns: 100px 1fr; gap: 8px; }
 .equipment-history-list dt { color: #737a76; font-size: .68rem; font-weight: 700; }
 .equipment-history-list dd { margin: 0; font-size: .72rem; white-space: pre-wrap; }
 .equipment-history-empty { padding: 24px; border-radius: 8px; background: #f5f6f4; color: #737a76; text-align: center; font-size: .75rem; }
@@ -88,13 +99,17 @@
 .equipment-edit-tabs button.active { border-bottom-color: #176f66; color: #155f56; }
 .equipment-edit-tabs button span { display: grid; min-width: 18px; height: 18px; place-items: center; padding: 0 3px; border-radius: 999px; background: #e5eeea; color: #46645a; font-size: .58rem; }
 .equipment-edit-tab-panel { min-height: 320px; }
+.equipment-edit-tab-panel > .edit-drawer-section:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
 .equipment-footer-leading { display: flex; min-width: 0; align-items: center; gap: 10px; }
 .equipment-footer-leading > span { color: #7b827d; font-size: .72rem; }
 .equipment-footer-leading .equipment-footer-error { color: #9b3636; }
-.equipment-footer-leading .equipment-delete-blocked { color: #835b2a; }
 .equipment-footer-actions { display: flex; flex: 0 0 auto; gap: 8px; }
+.equipment-delete-control { position: relative; display: inline-flex; flex: 0 0 auto; outline: none; }
 .equipment-delete-button { flex: 0 0 auto; border-color: #dfb9b9 !important; color: #963e3e !important; }
 .equipment-delete-button:hover:not(:disabled) { border-color: #9f3f3f !important; background: #9f3f3f !important; color: #fff !important; }
+.equipment-delete-tooltip { position: absolute; z-index: 20; bottom: calc(100% + 8px); left: 0; width: max-content; max-width: min(260px, 75vw); box-sizing: border-box; padding: 8px 10px; border-radius: 7px; background: #26302a; color: #fff; font-size: .7rem; font-weight: 600; line-height: 1.35; opacity: 0; pointer-events: none; transform: translateY(3px); transition: opacity .12s ease, transform .12s ease; }
+.equipment-delete-control:hover .equipment-delete-tooltip, .equipment-delete-control:focus .equipment-delete-tooltip, .equipment-delete-control:focus-within .equipment-delete-tooltip { opacity: 1; transform: translateY(0); }
+.equipment-delete-control:focus-visible { border-radius: 8px; box-shadow: 0 0 0 3px rgba(23,111,102,.18); }
 .equipment-related-create-panel { display: grid; gap: 12px; margin-top: 16px; padding: 16px; border: 1px solid #d3d9d5; border-radius: 10px; background: #f8faf8; }
 .equipment-related-create-panel h4, .equipment-related-create-panel p { margin: 0; }.equipment-related-create-panel h4 { color: #303833; font-size: .84rem; }.equipment-related-create-panel p { margin-top: 3px; color: #747d77; font-size: .72rem; }
 .equipment-related-create-panel label { display: grid; gap: 6px; color: #3c4540; font-size: .75rem; font-weight: 700; }.equipment-related-create-panel input { min-height: 40px; box-sizing: border-box; padding: 0 11px; border: 1px solid #d0d7d2; border-radius: 8px; background: #fff; color: #202421; font: inherit; font-size: .85rem; outline: none; }.equipment-related-create-panel input:focus { border-color: #68736d; box-shadow: 0 0 0 3px rgba(80,90,84,.1); }
@@ -125,18 +140,52 @@
 
 .equipment-maintenance-summary { display: grid; gap: .15rem; white-space: nowrap; }
 .equipment-maintenance-summary small { color: #64748b; }
-.equipment-maintenance-plans { display: grid; gap: .75rem; }
-.equipment-maintenance-plans article { border: 1px solid #dbe3ec; border-radius: 8px; padding: .85rem; }
+.equipment-maintenance-plans { display: grid; gap: .75rem; margin-top: .85rem; }
+.equipment-maintenance-plans article, .equipment-maintenance-plans details { border: 1px solid #dbe3ec; border-radius: 8px; }
+.equipment-maintenance-plans article { padding: .85rem; }
 .equipment-maintenance-plans article > div { display: flex; justify-content: space-between; gap: 1rem; }
-.equipment-maintenance-plans dl { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .75rem; margin: .75rem 0 0; }
+.equipment-maintenance-plans dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; margin: .75rem 0 0; }
 .equipment-maintenance-plans dt { color: #64748b; font-size: .75rem; }
 .equipment-maintenance-plans dd { margin: .2rem 0 0; font-weight: 600; }
+.equipment-maintenance-plans dl dd small { display: block; margin-top: 3px; color: #64748b; font-size: .65rem; font-weight: 600; line-height: 1.35; }
+.equipment-maintenance-plans details > summary { position: relative; padding-right: 2.35rem; list-style: none; cursor: pointer; }
+.equipment-maintenance-plans details > summary::-webkit-details-marker { display: none; }
+.equipment-maintenance-plans details > summary::after { position: absolute; top: .8rem; right: .85rem; content: '+'; color: #61706a; font-size: 1rem; font-weight: 800; line-height: 1; }
+.equipment-maintenance-plans details[open] > summary::after { content: '−'; }
+.equipment-maintenance-plans details > summary:focus-visible { outline: 2px solid #176f66; outline-offset: -2px; border-radius: 8px; }
 .equipment-maintenance-plans .equipment-hour-meter-card { border-color: #bfd3e4; background: #f1f7fb; }
+.equipment-maintenance-plans .equipment-usage-forecast-card { border-color: #b8d6ce; background: #f1f8f6; }
+.equipment-usage-forecast-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: .8rem; color: #175f57; }
+.equipment-usage-forecast-heading > span:first-child { display: grid; gap: 2px; }
+.equipment-usage-forecast-heading > span:first-child small { color: #5f7483; font-size: .7rem; font-weight: 650; }
+.equipment-usage-forecast-heading > span:nth-child(2) { padding: 4px 8px; border-radius: 999px; font-size: .68rem; font-weight: 800; }
+.equipment-usage-forecast-heading .confidence-high { background: #d9f0e5; color: #17633f; }
+.equipment-usage-forecast-heading .confidence-moderate { background: #fff0c9; color: #7a5312; }
+.equipment-usage-forecast-heading .confidence-low { background: #f7dddd; color: #923e3e; }
+.equipment-usage-forecast-details { padding: 0 .8rem .8rem; border-top: 1px solid #cfe2dc; }
+.equipment-usage-confidence-note { margin: .7rem 0 0; color: #5b716a; font-size: .7rem; line-height: 1.45; }
+.equipment-usage-signals { display: grid !important; gap: 6px; margin-top: .75rem; padding-top: .7rem; border-top: 1px solid #cfe2dc; }
+.equipment-usage-signals > strong { color: #315f57; font-size: .72rem; }
+.equipment-usage-signals > div { display: grid !important; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; color: #5b716a; font-size: .68rem; }
+.equipment-usage-signals em { padding: 3px 6px; border-radius: 999px; font-style: normal; font-weight: 800; }
+.equipment-usage-signals .signal-estimated { background: #e7eef8; color: #34577d; }
+.equipment-usage-signals .signal-potentially-incorrect { background: #f7dddd; color: #923e3e; }
+.equipment-usage-signals .signal-possible-reset { background: #fff0c9; color: #7a5312; }
+.equipment-usage-signals .signal-confirmed-reset { background: #e5ddf5; color: #654494; }
 .equipment-hour-meter-heading { align-items: center; color: #244b68; }
 .equipment-hour-meter-heading button { min-height: 30px; padding: 0 10px; border: 1px solid #8baec7; border-radius: 7px; background: #fff; color: #285a7c; font: inherit; font-size: .7rem; font-weight: 750; cursor: pointer; }
 .equipment-hour-meter-heading button:hover { background: #e7f1f7; }
 .equipment-hour-meter-heading button:focus-visible { outline: 2px solid #285a7c; outline-offset: 2px; }
 .equipment-hour-meter-heading button:disabled { cursor: wait; opacity: .55; }
+.equipment-maintenance-service-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: .15rem; }
+.equipment-maintenance-service-heading > div { display: grid !important; gap: 2px; }
+.equipment-maintenance-service-heading strong { color: #26302a; font-size: .82rem; }
+.equipment-maintenance-service-heading span { color: #66736c; font-size: .7rem; }
+.equipment-maintenance-service-heading button { flex: 0 0 auto; min-height: 32px; padding: 0 10px; border: 1px solid #b88936; border-radius: 7px; background: #fffaf0; color: #704b14; font: inherit; font-size: .7rem; font-weight: 750; cursor: pointer; }
+.equipment-maintenance-service-heading button:hover { background: #fff3d8; }
+.equipment-maintenance-service-heading button:focus-visible { outline: 2px solid #8a611d; outline-offset: 2px; }
+.equipment-maintenance-service-heading button:disabled { cursor: wait; opacity: .55; }
+.equipment-historical-baseline-note { margin: -.35rem 0 0; padding: .55rem .7rem; border: 1px dashed #d7b878; border-radius: 7px; background: #fffaf0; color: #7c6543; font-size: .68rem; line-height: 1.4; }
 .equipment-maintenance-plans .equipment-hour-meter-reading { display: grid; justify-content: start; gap: .2rem; margin-top: .65rem; }
 .equipment-hour-meter-reading > strong { color: #173f5b; font-size: 1.35rem; line-height: 1.15; }
 .equipment-hour-meter-reading > strong small { font-size: .78rem; font-weight: 700; }
@@ -147,12 +196,27 @@
 .equipment-maintenance-status.status-ok { background: #dcfce7; color: #166534; }
 .equipment-maintenance-status.status-due-soon { background: #fef3c7; color: #92400e; }
 .equipment-maintenance-status.status-due, .equipment-maintenance-status.status-overdue { background: #fee2e2; color: #991b1b; }
+.equipment-service-plan-card { overflow: hidden; background: #fff; }
+.equipment-service-plan-card > summary { display: grid; gap: 10px; padding: .75rem .8rem; }
+.equipment-service-plan-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.equipment-service-plan-heading > div { display: flex; min-width: 0; align-items: center; gap: 7px; }
+.equipment-service-plan-heading strong { color: #56635d; font-size: .82rem; }
+.equipment-service-plan-interval { padding: 3px 6px; border-radius: 999px; background: #e8f2ee; color: #39685d; font-size: .62rem; font-weight: 750; }
+.equipment-service-plan-glance { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.equipment-service-plan-glance > div { display: grid; gap: 2px; min-width: 0; padding: .55rem .65rem; border-radius: 7px; background: #f5f8f6; }
+.equipment-service-plan-glance span { color: #65736c; font-size: .65rem; }
+.equipment-service-plan-glance strong { overflow: hidden; color: #175f57; font-size: .8rem; text-overflow: ellipsis; white-space: nowrap; }
+.equipment-service-plan-glance small { overflow: hidden; color: #65736c; font-size: .64rem; text-overflow: ellipsis; white-space: nowrap; }
+.equipment-service-plan-details { padding: 0 .8rem .8rem; border-top: 1px solid #e1e7e3; }
+.equipment-service-plan-interval-detail { display: flex; flex-wrap: wrap; gap: 4px; margin: .7rem 0 0; color: #56635d; font-size: .7rem; }
+.equipment-service-plan-interval-detail span { color: #718078; }
 .equipment-maintenance-history-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 12px; border: 1px solid #dde4e0; border-radius: 10px; background: #f8faf8; }
 .equipment-maintenance-history-group legend { grid-column: 1 / -1; padding: 0 4px; color: #26302a; font-size: .78rem; font-weight: 800; }
 .equipment-maintenance-history-group label { min-width: 0; }
 .equipment-maintenance-history-group input { width: 100%; min-width: 0; }
 .equipment-maintenance-history-group.hour-meter { border-color: #bfd3e4; background: #f1f7fb; }
 .equipment-maintenance-history-group.hour-meter legend { color: #244b68; }
+.equipment-maintenance-job-meter-note { margin: 0; padding: 10px 12px; border: 1px solid #bfd3e4; border-radius: 8px; background: #f1f7fb; color: #35566c; font-size: .72rem; line-height: 1.45; }
 .equipment-csv-settings { display: grid; gap: 12px; }
 .equipment-csv-settings h3,
 .equipment-csv-settings p { margin: 0; }
@@ -197,6 +261,7 @@
 .equipment-csv-results li { display: grid; gap: 3px; padding: 9px; border: 1px solid #e6bcbc; border-radius: 8px; background: #fff5f5; font-size: .7rem; }
 @media (max-width: 900px) { .equipment-maintenance-plans dl { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 520px) { .equipment-maintenance-history-group { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .equipment-maintenance-service-heading { align-items: stretch; flex-direction: column; } .equipment-maintenance-service-heading button { width: 100%; } }
 @media (max-width: 520px) {
   .equipment-csv-review-heading,
   .equipment-csv-review article header { align-items: stretch; flex-direction: column; }

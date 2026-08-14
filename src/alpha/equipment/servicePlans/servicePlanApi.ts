@@ -5,6 +5,7 @@ import {
 } from './equipmentServicePlan.types'
 import type { Equipment } from '../../jobs/types/equipment.types'
 import { calculateNextDueDate, resolveMaintenanceConfiguration } from './maintenanceConfiguration'
+import { shouldAdvanceCurrentHourMeter } from './equipmentUsageForecast'
 
 const API_URL = `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2`
 const PLAN_SELECT = 'gr_equipmentserviceplanid,gr_servicetype,gr_intervalhours,gr_lastcompleteddate,gr_lastcompletedhours,gr_nextduehours,gr_nextduedate,gr_active,_gr_equipment_value'
@@ -116,16 +117,57 @@ export async function saveEquipmentMaintenanceHistory(
     return nextPlans
 }
 
-export async function updateEquipmentCurrentHourMeter(token: string, equipmentId: string, hourMeter: number, readingRecordedDate: string) {
-    const response = await fetch(`${API_URL}/gr_equipments(${equipmentId})`, {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            gr_currenthourmeter: hourMeter,
-            gr_currenthourmeterrecordeddate: readingRecordedDate,
-        }),
-    })
-    await ensureSuccess(response, 'Failed to update equipment current hour meter')
+export async function updateEquipmentCurrentHourMeter(
+    token: string,
+    equipmentId: string,
+    hourMeter: number,
+    readingRecordedDate: string,
+    authoritativeCurrentRecordedDate?: string | null,
+) {
+    const equipmentUrl = `${API_URL}/gr_equipments(${equipmentId})`
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+        const currentResponse = await fetch(
+            `${equipmentUrl}?$select=gr_currenthourmeter,gr_currenthourmeterrecordeddate`,
+            { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } },
+        )
+        await ensureSuccess(currentResponse, 'Failed to verify equipment current hour meter')
+        const current = await currentResponse.json() as {
+            '@odata.etag'?: string
+            gr_currenthourmeter?: number | null
+            gr_currenthourmeterrecordeddate?: string | null
+        }
+
+        const currentRecordedDate = authoritativeCurrentRecordedDate ?? current.gr_currenthourmeterrecordeddate
+        if (!shouldAdvanceCurrentHourMeter(readingRecordedDate, currentRecordedDate)) {
+            return
+        }
+        if (current.gr_currenthourmeter === hourMeter
+            && current.gr_currenthourmeterrecordeddate?.slice(0, 10) === readingRecordedDate.slice(0, 10)) {
+            return
+        }
+        const etag = current['@odata.etag']
+        if (!etag) throw new Error('Failed to verify equipment current hour meter version. Refresh and retry.')
+
+        const response = await fetch(equipmentUrl, {
+            method: 'PATCH',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                'If-Match': etag,
+            },
+            body: JSON.stringify({
+                gr_currenthourmeter: hourMeter,
+                gr_currenthourmeterrecordeddate: readingRecordedDate,
+            }),
+        })
+        if (response.status === 412 && attempt === 0) continue
+        await ensureSuccess(response, 'Failed to update equipment current hour meter')
+        return
+    }
+
+    throw new Error('Failed to update equipment current hour meter because the Equipment changed. Refresh and retry.')
 }
 
 export async function syncEquipmentServiceProgramme(

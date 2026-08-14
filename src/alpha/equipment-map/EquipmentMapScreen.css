@@ -1,0 +1,70 @@
+.equipment-map-page { display: flex; height: calc(100vh - 48px); min-width: 0; flex-direction: column; overflow: hidden; color: #17231e; }
+.equipment-map-total { color: #51615a; font-size: .82rem; font-weight: 700; }
+.equipment-map-toolbar {
+    display: grid;
+    grid-template-columns: minmax(240px, 1.5fr) repeat(3, minmax(150px, .7fr));
+    gap: 12px;
+    margin-bottom: 14px;
+    padding: 14px;
+    border: 1px solid #dde5e1;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 4px 16px rgba(25, 44, 35, .04);
+}
+.equipment-map-toolbar label { display: grid; gap: 5px; color: #58675f; font-size: .7rem; font-weight: 750; }
+.equipment-map-toolbar input, .equipment-map-toolbar select {
+    width: 100%; min-height: 40px; box-sizing: border-box; padding: 0 11px;
+    border: 1px solid #cdd8d2; border-radius: 8px; background: #fff; color: #17231e; font: inherit; font-size: .8rem;
+}
+.equipment-map-toolbar input:focus, .equipment-map-toolbar select:focus { outline: 3px solid rgba(23, 111, 102, .18); border-color: #176f66; }
+.equipment-map-layout { position: relative; min-height: 320px; flex: 1 1 auto; border: 1px solid #dce5e0; border-radius: 14px; overflow: hidden; background: #fff; box-shadow: 0 10px 28px rgba(25, 44, 35, .08); }
+.equipment-map-canvas-shell { position: relative; height: 100%; min-width: 0; min-height: 320px; background: #e8efeb; }
+.equipment-map-canvas { position: absolute; inset: 0; }
+.equipment-map-overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(240, 245, 242, .88); color: #4f5e56; font-weight: 700; text-align: center; }
+.equipment-map-overlay.error { color: #8b352d; }
+.equipment-map-marker-host { border: 0; background: transparent; }
+.equipment-map-marker-host .equipment-map-marker {
+    display: grid; width: 34px; height: 34px; place-items: center; padding: 0;
+    border: 3px solid #fff; border-radius: 50%; background: #176f66; color: #fff;
+    box-shadow: 0 3px 10px rgba(10, 47, 42, .35); font: inherit; font-size: .72rem; font-weight: 800; cursor: pointer;
+}
+.equipment-map-marker-host:hover .equipment-map-marker, .equipment-map-marker-host:focus-visible .equipment-map-marker, .equipment-map-marker-host.selected .equipment-map-marker { background: #d9722c; transform: scale(1.12); }
+.equipment-map-marker-host:focus-visible { outline: 3px solid #17231e; outline-offset: 2px; }
+.equipment-map-cluster-host { border: 0; background: transparent; }
+.equipment-map-cluster-host > span {
+    display: grid; width: 100%; height: 100%; place-content: center; border: 3px solid #fff;
+    border-radius: 50%; background: #d9722c; color: #fff; box-shadow: 0 4px 14px rgba(74, 39, 15, .35);
+    font-size: .78rem; font-weight: 850; line-height: 1; text-align: center;
+}
+.equipment-map-cluster-host small { display: block; margin-top: 2px; font-size: .48rem; font-weight: 750; text-transform: uppercase; }
+.equipment-map-details { position: absolute; z-index: 700; top: 16px; right: 16px; display: flex; width: min(340px, calc(100% - 32px)); max-height: calc(100% - 32px); min-width: 0; flex-direction: column; overflow: hidden; border: 1px solid #d5dfda; border-radius: 12px; background: rgba(251, 252, 251, .97); box-shadow: 0 12px 34px rgba(16, 41, 31, .24); backdrop-filter: blur(6px); }
+.equipment-map-details header { position: relative; padding: 20px 52px 20px 20px; border-bottom: 1px solid #e2e9e5; }
+.equipment-map-details header > span, .equipment-map-site-list header div > span { color: #176f66; font-size: .67rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+.equipment-map-details h2, .equipment-map-site-list h2 { margin: 4px 0; font-size: 1.12rem; }
+.equipment-map-details header p { margin: 5px 0 0; color: #637169; font-size: .78rem; line-height: 1.45; }
+.equipment-map-details ul { min-height: 0; margin: 0; padding: 8px; overflow: auto; list-style: none; }
+.equipment-map-details-close { position: absolute; top: 12px; right: 12px; display: grid; width: 30px; height: 30px; place-items: center; padding: 0; border: 1px solid #cbd6d1; border-radius: 50%; background: #fff; color: #536159; font: inherit; font-size: 1.25rem; line-height: 1; cursor: pointer; }
+.equipment-map-details-close:hover, .equipment-map-details-close:focus-visible { border-color: #176f66; color: #176f66; outline: none; }
+.equipment-map-details li + li { border-top: 1px solid #e5ebe8; }
+.equipment-map-details li button { display: grid; width: 100%; gap: 3px; padding: 12px; border: 0; border-radius: 8px; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.equipment-map-details li button:hover, .equipment-map-details li button:focus-visible { background: #edf5f1; outline: none; }
+.equipment-map-details li strong { font-size: .86rem; }
+.equipment-map-details li span { color: #65736c; font-size: .73rem; }
+.equipment-map-empty { padding: 24px; color: #64726b; }
+.equipment-map-empty p { margin: 6px 0 0; font-size: .8rem; }
+.equipment-map-state { display: flex; min-height: 280px; align-items: center; justify-content: center; gap: 16px; padding: 24px; border: 1px solid #dce5e0; border-radius: 12px; background: #fff; color: #58675f; text-align: center; }
+.equipment-map-state.error { color: #8b352d; }
+.equipment-map-state p { margin: 5px 0; }
+.equipment-map-state button { min-height: 38px; padding: 0 13px; border: 1px solid #176f66; border-radius: 8px; background: #fff; color: #176f66; font-weight: 750; cursor: pointer; }
+.equipment-map-notice { margin: 0 0 12px; padding: 9px 12px; border-radius: 8px; background: #eef6f2; color: #356155; font-size: .78rem; }
+.equipment-map-notice.warning { background: #fff5df; color: #785317; }
+
+@media (max-width: 1050px) {
+    .equipment-map-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+    .equipment-map-page { height: auto; min-height: calc(100vh - 48px); overflow: visible; }
+    .equipment-map-toolbar { grid-template-columns: 1fr; }
+    .equipment-map-layout, .equipment-map-canvas-shell { min-height: 520px; }
+    .equipment-map-details { top: auto; right: 12px; bottom: 12px; left: 12px; width: auto; max-height: 55%; }
+}

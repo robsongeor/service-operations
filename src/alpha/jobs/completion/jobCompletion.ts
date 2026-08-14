@@ -3,7 +3,7 @@ import type { Job } from '../types/job.types.ts'
 import type { JobSaveInput } from '../types/jobSave.types.ts'
 import { JOB_TYPES, jobRequiresMaintenance } from '../types/jobType.types.ts'
 import { SERVICE_TYPES, type PlannedServiceType } from '../../equipment/servicePlans/equipmentServicePlan.types.ts'
-import { newZealandDateOnly } from '../../shared/dates/dateOnly.ts'
+import { currentNewZealandDateOnly, newZealandDateOnly } from '../../shared/dates/dateOnly.ts'
 
 export const LARGE_HOUR_METER_INCREASE = 1000
 
@@ -48,9 +48,11 @@ export function validateWofCompletionExpiry(
 
 export async function runWofCompletion(
     updateExpiry: () => Promise<void>,
+    updateHourMeter: () => Promise<void>,
     completeJob: () => Promise<void>,
 ) {
     await updateExpiry()
+    await updateHourMeter()
     await completeJob()
 }
 
@@ -62,12 +64,53 @@ export function validateServiceCompletionContext(job: Job, pendingSave?: JobSave
     return ''
 }
 
-export function validateCompletionHourMeter(value: string, currentHourMeter: number) {
+export function validateEquipmentCompletionContext(job: Job, pendingSave?: JobSaveInput) {
+    const equipmentId = pendingSave?.equipmentId ?? job.gr_Equipment?.gr_equipmentid
+    return equipmentId ? '' : 'Select Equipment before completing this Job.'
+}
+
+export function validateHourMeterRecordedDate(value: string, today = currentNewZealandDateOnly()) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+    const parsed = match && new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])))
+    if (!match || !parsed
+        || parsed.getUTCFullYear() !== Number(match[1])
+        || parsed.getUTCMonth() !== Number(match[2]) - 1
+        || parsed.getUTCDate() !== Number(match[3])) return 'Enter a valid hour-meter reading date.'
+    if (value > today) return 'The hour-meter reading date cannot be in the future.'
+    return ''
+}
+
+export function validateJobCompletionDate(value: string, today = currentNewZealandDateOnly()) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+    const parsed = match && new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])))
+    if (!match || !parsed
+        || parsed.getUTCFullYear() !== Number(match[1])
+        || parsed.getUTCMonth() !== Number(match[2]) - 1
+        || parsed.getUTCDate() !== Number(match[3])) return 'Enter a valid Job completion date.'
+    if (value > today) return 'The Job completion date cannot be in the future.'
+    return ''
+}
+
+export function jobCompletionDateTime(value: string) {
+    return `${value}T00:00:00.000Z`
+}
+
+export function isHistoricalHourMeterReading(readingDate: string, currentRecordedDate: string | null | undefined) {
+    return Boolean(currentRecordedDate && readingDate < currentRecordedDate.slice(0, 10))
+}
+
+export function validateCompletionHourMeter(
+    value: string,
+    currentHourMeter: number,
+    readingDate?: string,
+    currentRecordedDate?: string | null,
+) {
     if (!value.trim()) return 'Hour meter is required.'
     if (!/^\d+$/.test(value.trim())) return 'Hour meter must be a whole number.'
     const reading = Number(value)
     if (!Number.isSafeInteger(reading) || reading < 0) return 'Hour meter must be a non-negative whole number.'
-    if (reading < currentHourMeter) return 'Hour meter cannot be lower than the current equipment hour meter.'
+    if (reading < currentHourMeter && !readingDate) return 'Hour meter cannot be lower than the current equipment hour meter.'
+    if (readingDate && currentRecordedDate && isHistoricalHourMeterReading(readingDate, currentRecordedDate)) return ''
     return ''
 }
 

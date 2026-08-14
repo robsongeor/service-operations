@@ -12,7 +12,7 @@
     "test:api": "node --test tests/joblookup.test.cjs tests/jobsubmission.test.cjs tests/chargeableInvoicePreview.test.cjs tests/chargeableInvoiceApproval.test.cjs",
     "test:maintenance": "node --experimental-strip-types --test tests/maintenanceServicePlans.test.ts",
     "test:wof": "node --experimental-strip-types --test tests/wofWorkflow.test.ts",
-    "test:equipment": "node --experimental-strip-types --test tests/equipmentDataQuality.test.ts",
+    "test:equipment": "node --experimental-strip-types --test tests/equipmentDataQuality.test.ts tests/equipmentMap.test.ts",
     "test:job-email": "node --experimental-strip-types --test tests/jobEmail.test.ts",
     "test:technician-submission": "node --experimental-strip-types --test tests/technicianSubmission.test.ts",
     "test:site-check-assignment": "node --experimental-strip-types --test tests/siteCheckAssignment.test.ts",
@@ -27,6 +27,8 @@
   "dependencies": {
     "@azure/msal-browser": "^5.9.0",
     "@azure/msal-react": "^5.3.2",
+    "leaflet": "^1.9.4",
+    "leaflet.markercluster": "^1.5.3",
     "pdf-lib": "^1.17.1",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
@@ -34,6 +36,8 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/leaflet": "^1.9.21",
+    "@types/leaflet.markercluster": "^1.5.6",
     "@types/node": "^24.12.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

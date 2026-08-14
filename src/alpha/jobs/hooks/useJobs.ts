@@ -86,21 +86,32 @@ import {
     fetchEquipmentServicePlans,
     saveEquipmentMaintenanceHistory as saveEquipmentMaintenanceHistoryApi,
     syncEquipmentServiceProgramme,
+    updateEquipmentCurrentHourMeter,
     type MaintenanceHistoryInput,
 } from '../../equipment/servicePlans/servicePlanApi'
 import type { EquipmentServicePlan } from '../../equipment/servicePlans/equipmentServicePlan.types'
+import { resolveLatestHourMeterReading } from '../../equipment/servicePlans/equipmentUsageForecast'
 import {
     applyEquipmentUpdate,
     deleteEquipment as deleteEquipmentApi,
     updateEquipment as updateEquipmentApi,
+    updateEquipmentMaintenanceSetup as updateEquipmentMaintenanceSetupApi,
 } from '../../equipment/services/equipmentManagerApi'
 import type { EquipmentUpdateInput } from '../../equipment/types/equipmentManager.types'
 import {
+    validateMaintenanceConfiguration,
+    type EquipmentMaintenanceSetupInput,
+} from '../../equipment/servicePlans/maintenanceConfiguration'
+import {
     getJobCompletionKind,
+    jobCompletionDateTime,
     resolveCompletionEquipment,
     resolveCompletionServiceType,
     runWofCompletion,
     validateCompletionHourMeter,
+    validateHourMeterRecordedDate,
+    validateJobCompletionDate,
+    validateEquipmentCompletionContext,
     validateServiceCompletionContext,
     validateWofCompletionExpiry,
     type JobCompletionRequest,
@@ -108,6 +119,7 @@ import {
 import { completeServiceJobAtomically } from '../completion/serviceCompletionApi'
 import { updateWofExpiryForCompletion } from '../../wof/services/wofApi'
 import { acquireDataverseAccessToken } from '../../../auth/dataverseAuthentication'
+import type { HourMeterReadingType } from '../../equipment/hourMeter/hourMeterReading.types'
 
 
 
@@ -178,6 +190,49 @@ export function useJobs() {
             return updated
         } catch (error) {
             setEquipmentSaveError(error instanceof Error ? error.message : 'Equipment could not be saved.')
+            throw error
+        } finally {
+            setIsEquipmentSaving(false)
+        }
+    }
+
+    const setupEquipmentMaintenance = async (record: Equipment, input: EquipmentMaintenanceSetupInput) => {
+        setIsEquipmentSaving(true)
+        setEquipmentSaveError('')
+        try {
+            const updated: Equipment = {
+                ...record,
+                gr_powertype: input.powerType,
+                gr_serviceprogramme: input.serviceProgramme,
+                gr_maintenanceprofile: input.maintenanceProfile,
+                gr_customaenabled: input.customAEnabled,
+                gr_custombenabled: input.customBEnabled,
+                gr_customcenabled: input.customCEnabled,
+                gr_customaintervaldays: input.customAIntervalDays,
+                gr_custombintervaldays: input.customBIntervalDays,
+                gr_customcintervaldays: input.customCIntervalDays,
+            }
+            const configurationError = validateMaintenanceConfiguration(updated)
+            if (configurationError) throw new Error(configurationError)
+
+            const token = await getAccessToken()
+            await updateEquipmentMaintenanceSetupApi(token, record.gr_equipmentid, input)
+            const recordPlans = servicePlans.filter((plan) =>
+                plan._gr_equipment_value?.toLowerCase() === record.gr_equipmentid.toLowerCase())
+            const syncedPlans = await syncEquipmentServiceProgramme(token, updated, recordPlans)
+            setServicePlans((current) => [
+                ...current.filter((plan) => plan._gr_equipment_value?.toLowerCase() !== record.gr_equipmentid.toLowerCase()),
+                ...syncedPlans,
+            ])
+            setEquipmentList((current) => current.map((item) =>
+                item.gr_equipmentid === updated.gr_equipmentid ? updated : item))
+            setJobs((current) => current.map((job) =>
+                job.gr_Equipment?.gr_equipmentid === updated.gr_equipmentid
+                    ? { ...job, gr_Equipment: updated }
+                    : job))
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Equipment maintenance setup could not be saved.'
+            setEquipmentSaveError(message)
             throw error
         } finally {
             setIsEquipmentSaving(false)
@@ -474,6 +529,13 @@ export function useJobs() {
             setCompletionRequest({ kind: 'wof', job: currentJob })
             return false
         }
+        if (isCompleting) {
+            const contextError = validateEquipmentCompletionContext(currentJob)
+            if (contextError) throw new Error(contextError)
+            setCompletionError('')
+            setCompletionRequest({ kind: 'standard', job: currentJob })
+            return false
+        }
         const token = await getAccessToken()
         if (currentJob._gr_sitecheck_value) {
             const result = await updateSiteCheckJobStatus(token, { jobId, status })
@@ -625,6 +687,13 @@ export function useJobs() {
             setCompletionRequest({ kind: 'wof', job: currentJob, pendingSave: job })
             return false
         }
+        if (isCompleting) {
+            const contextError = validateEquipmentCompletionContext(currentJob, job)
+            if (contextError) throw new Error(contextError)
+            setCompletionError('')
+            setCompletionRequest({ kind: 'standard', job: currentJob, pendingSave: job })
+            return false
+        }
         const token = await getAccessToken()
         if (currentJob._gr_sitecheck_value) {
             const completedDate = job.completedDate || (isCompleting ? new Date().toISOString() : undefined)
@@ -680,6 +749,8 @@ export function useJobs() {
                     gr_status: job.status,
                     gr_servicetype: job.serviceType,
                     gr_hourmeter: job.hourMeter ?? currentJob.gr_hourmeter ?? null,
+                    gr_hourmeterreadingtype: job.hourMeterReadingType ?? currentJob.gr_hourmeterreadingtype ?? null,
+                    gr_hourmeterrecordeddate: job.hourMeterRecordedDate ?? currentJob.gr_hourmeterrecordeddate ?? null,
                     gr_completeddate: completedDate ?? currentJob.gr_completeddate ?? null,
                     gr_currentofficeaction: job.currentOfficeAction ?? currentJob.gr_currentofficeaction ?? null,
                     gr_officeactionowner: job.officeActionOwner?.trim() || null,
@@ -700,13 +771,102 @@ export function useJobs() {
         setCompletionError('')
     }
 
-    const completeServiceJob = async (hourMeter: number) => {
+    const completeStandardJob = async (
+        hourMeter: number,
+        hourMeterReadingType: HourMeterReadingType,
+        hourMeterRecordedDate: string,
+        completionDate: string,
+    ) => {
+        const request = completionRequest
+        if (!request || request.kind !== 'standard') return
+        const equipment = resolveCompletionEquipment(request, equipmentList)
+        const latestHourMeterReading = equipment ? resolveLatestHourMeterReading(equipment, jobs) : null
+        const currentHourMeter = latestHourMeterReading?.hours ?? 0
+        const currentHourMeterRecordedDate = latestHourMeterReading?.date ?? null
+        const validationError = validateJobCompletionDate(completionDate)
+            || validateHourMeterRecordedDate(hourMeterRecordedDate)
+            || validateCompletionHourMeter(String(hourMeter), currentHourMeter, hourMeterRecordedDate, currentHourMeterRecordedDate)
+        if (validationError) {
+            setCompletionError(validationError)
+            return
+        }
+        if (!equipment) {
+            setCompletionError(validateEquipmentCompletionContext(request.job, request.pendingSave))
+            return
+        }
+
+        setIsCompletingJob(true)
+        setCompletionError('')
+        try {
+            const token = await getAccessToken()
+            const completionTimestamp = jobCompletionDateTime(completionDate)
+            await updateEquipmentCurrentHourMeter(token, equipment.gr_equipmentid, hourMeter, hourMeterRecordedDate, currentHourMeterRecordedDate)
+            if (request.job._gr_sitecheck_value) {
+                const result = await updateSiteCheckJobStatus(token, {
+                    jobId: request.job.gr_jobid,
+                    status: JOB_STATUSES.COMPLETE,
+                    pendingSave: request.pendingSave
+                        ? { ...request.pendingSave, hourMeter, hourMeterReadingType, hourMeterRecordedDate, completedDate: completionTimestamp }
+                        : undefined,
+                    completedOn: completionTimestamp,
+                    hourMeter,
+                    hourMeterReadingType,
+                    hourMeterRecordedDate,
+                })
+                if (result) window.dispatchEvent(new CustomEvent('site-checks-changed'))
+            } else if (request.pendingSave) {
+                await updateJobApi(token, request.job.gr_jobid, {
+                    ...request.pendingSave,
+                    status: JOB_STATUSES.COMPLETE,
+                    hourMeter,
+                    hourMeterReadingType,
+                    hourMeterRecordedDate,
+                    completedDate: completionTimestamp,
+                })
+            } else {
+                await updateJobStatusApi(token, request.job.gr_jobid, JOB_STATUSES.COMPLETE, completionTimestamp, hourMeter, hourMeterReadingType, hourMeterRecordedDate)
+            }
+            const [nextJobs, nextEquipment] = await Promise.all([
+                fetchJobsApi(token),
+                fetchEquipmentApi(token),
+            ])
+            setJobs(nextJobs)
+            setEquipmentList(nextEquipment)
+            setCompletionRequest(null)
+        } catch (error) {
+            try {
+                const token = await getAccessToken()
+                const [jobsResult, equipmentResult] = await Promise.allSettled([
+                    fetchJobsApi(token),
+                    fetchEquipmentApi(token),
+                ])
+                if (jobsResult.status === 'fulfilled') setJobs(jobsResult.value)
+                if (equipmentResult.status === 'fulfilled') setEquipmentList(equipmentResult.value)
+            } catch {
+                // Keep the completion dialog open with the original error when refresh is unavailable.
+            }
+            setCompletionError(`${error instanceof Error ? error.message : 'The Job could not be completed.'} Refresh before retrying if the hour reading was already saved.`)
+        } finally {
+            setIsCompletingJob(false)
+        }
+    }
+
+    const completeServiceJob = async (
+        hourMeter: number,
+        hourMeterReadingType: HourMeterReadingType,
+        hourMeterRecordedDate: string,
+        completionDate: string,
+    ) => {
         const request = completionRequest
         if (!request || request.kind !== 'service') return
         const equipment = resolveCompletionEquipment(request, equipmentList)
         const serviceType = resolveCompletionServiceType(request)
-        const currentHourMeter = equipment?.gr_currenthourmeter ?? 0
-        const validationError = validateCompletionHourMeter(String(hourMeter), currentHourMeter)
+        const latestHourMeterReading = equipment ? resolveLatestHourMeterReading(equipment, jobs) : null
+        const currentHourMeter = latestHourMeterReading?.hours ?? 0
+        const currentHourMeterRecordedDate = latestHourMeterReading?.date ?? null
+        const validationError = validateJobCompletionDate(completionDate)
+            || validateHourMeterRecordedDate(hourMeterRecordedDate)
+            || validateCompletionHourMeter(String(hourMeter), currentHourMeter, hourMeterRecordedDate, currentHourMeterRecordedDate)
         if (validationError) {
             setCompletionError(validationError)
             return
@@ -724,6 +884,11 @@ export function useJobs() {
                 jobId: request.job.gr_jobid,
                 equipmentId: equipment.gr_equipmentid,
                 hourMeter,
+                hourMeterReadingType,
+                hourMeterRecordedDate,
+                currentHourMeterRecordedDateHint: currentHourMeterRecordedDate,
+                currentHourMeterHint: currentHourMeter,
+                completedDate: jobCompletionDateTime(completionDate),
                 expectedServiceType: serviceType,
                 pendingSave: request.pendingSave,
             })
@@ -757,15 +922,21 @@ export function useJobs() {
         }
     }
 
-    const completeWofJob = async (newExpiry: string) => {
+    const completeWofJob = async (
+        newExpiry: string,
+        hourMeter: number,
+        hourMeterReadingType: HourMeterReadingType,
+        hourMeterRecordedDate: string,
+        completionDate: string,
+    ) => {
         const request = completionRequest
         if (!request || request.kind !== 'wof') return
         const equipment = resolveCompletionEquipment(request, equipmentList)
-        const completionDate = request.pendingSave?.completedDate || request.job.gr_completeddate || new Date().toISOString()
-        const validationError = validateWofCompletionExpiry(
+        const completionTimestamp = jobCompletionDateTime(completionDate)
+        const validationError = validateJobCompletionDate(completionDate) || validateWofCompletionExpiry(
             newExpiry,
             equipment?.gr_currentwofexpiry,
-            completionDate,
+            completionTimestamp,
         )
         if (validationError) {
             setCompletionError(validationError)
@@ -773,6 +944,15 @@ export function useJobs() {
         }
         if (!equipment) {
             setCompletionError('The linked Equipment could not be loaded. The Job was not completed.')
+            return
+        }
+        const latestHourMeterReading = resolveLatestHourMeterReading(equipment, jobs)
+        const currentHourMeter = latestHourMeterReading?.hours ?? 0
+        const currentHourMeterRecordedDate = latestHourMeterReading?.date ?? null
+        const hourMeterError = validateHourMeterRecordedDate(hourMeterRecordedDate)
+            || validateCompletionHourMeter(String(hourMeter), currentHourMeter, hourMeterRecordedDate, currentHourMeterRecordedDate)
+        if (hourMeterError) {
+            setCompletionError(hourMeterError)
             return
         }
 
@@ -785,14 +965,18 @@ export function useJobs() {
                     jobId: request.job.gr_jobid,
                     equipmentId: equipment.gr_equipmentid,
                     newExpiry,
-                    completionDate,
+                    completionDate: completionTimestamp,
                 }),
+                () => updateEquipmentCurrentHourMeter(token, equipment.gr_equipmentid, hourMeter, hourMeterRecordedDate, currentHourMeterRecordedDate),
                 () => request.pendingSave
                     ? updateJobApi(token, request.job.gr_jobid, {
                         ...request.pendingSave,
-                        completedDate: completionDate,
+                        hourMeter,
+                        hourMeterReadingType,
+                        hourMeterRecordedDate,
+                        completedDate: completionTimestamp,
                     })
-                    : updateJobStatusApi(token, request.job.gr_jobid, JOB_STATUSES.COMPLETE, completionDate),
+                    : updateJobStatusApi(token, request.job.gr_jobid, JOB_STATUSES.COMPLETE, completionTimestamp, hourMeter, hourMeterReadingType, hourMeterRecordedDate),
             )
             const [nextJobs, nextEquipment] = await Promise.all([
                 fetchJobsApi(token),
@@ -802,7 +986,7 @@ export function useJobs() {
             setEquipmentList(nextEquipment)
             setCompletionRequest(null)
         } catch (error) {
-            setCompletionError(`${error instanceof Error ? error.message : 'The WOF Job could not be completed.'} Refresh before retrying if the expiry was already saved.`)
+            setCompletionError(`${error instanceof Error ? error.message : 'The WOF Job could not be completed.'} Refresh before retrying if the expiry or hour reading was already saved.`)
         } finally {
             setIsCompletingJob(false)
         }
@@ -930,6 +1114,7 @@ export function useJobs() {
         createJob,
         createEquipment,
         updateEquipment,
+        setupEquipmentMaintenance,
         saveEquipmentMaintenanceHistory,
         deleteEquipment,
         isEquipmentSaving,
@@ -954,6 +1139,7 @@ export function useJobs() {
         completionRequest,
         isCompletingJob,
         completionError,
+        completeStandardJob,
         completeServiceJob,
         completeWofJob,
         cancelJobCompletion,

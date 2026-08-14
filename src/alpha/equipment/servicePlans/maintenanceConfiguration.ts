@@ -15,6 +15,18 @@ export type ServiceProgramme = typeof SERVICE_PROGRAMMES[keyof typeof SERVICE_PR
 export type MaintenanceProfile = typeof MAINTENANCE_PROFILES[keyof typeof MAINTENANCE_PROFILES]
 export type MaintenanceInterval = { unit: 'weeks' | 'months' | 'days'; value: number }
 
+export type EquipmentMaintenanceSetupInput = {
+    powerType: PowerType
+    serviceProgramme: ServiceProgramme
+    maintenanceProfile: MaintenanceProfile
+    customAEnabled: boolean
+    customBEnabled: boolean
+    customCEnabled: boolean
+    customAIntervalDays: number | null
+    customBIntervalDays: number | null
+    customCIntervalDays: number | null
+}
+
 const ALL_LEVELS: PlannedServiceType[] = [SERVICE_TYPES.A, SERVICE_TYPES.B, SERVICE_TYPES.C]
 
 const PROFILE_INTERVALS: Record<Exclude<MaintenanceProfile, typeof MAINTENANCE_PROFILES.CUSTOM>, Record<PlannedServiceType, MaintenanceInterval>> = {

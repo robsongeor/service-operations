@@ -112,7 +112,7 @@ export function normalizeEquipmentInput(input: EquipmentUpdateInput): EquipmentU
     }
 }
 
-export type EquipmentSortKey = 'fleet' | 'customer' | 'site' | 'make' | 'model' | 'serial' | 'dataStatus'
+export type EquipmentSortKey = 'fleet' | 'customer' | 'site' | 'make' | 'model' | 'serial' | 'jobs' | 'dataStatus'
 export type SortDirection = 'asc' | 'desc'
 
 export type EquipmentRecord = Equipment

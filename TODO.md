@@ -14,6 +14,9 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
 
 ## Priority 1 — Security and reliability
 
+- [ ] Approve, provision, and verify a Dataverse alternate key for non-empty Job Number so two
+  simultaneous first-time creates cannot bypass the application duplicate preflight. Confirm the
+  existing data set contains no duplicates before provisioning; this is a separate Dataverse change.
 - [ ] Replace the client-side Equipment CSV administrator email restriction with an
   authoritative server or Dataverse permission boundary.
 - [ ] Review non-atomic multi-record workflows outside Service completion and Technician
@@ -25,6 +28,13 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
   repeated temporary errors without logging secrets or submission content.
 
 ## Priority 2 — Product improvements
+
+- [ ] Complete release validation for the provisioned Job `gr_hourmeterreadingtype` Choice and
+  `gr_hourmeterrecordeddate` Date Only column: verify intended-manager read/write, smoke-test Actual
+  and Estimated completion for every Job type, then separately approve the deployed
+  `VITE_HOUR_METER_CLASSIFICATION_ENABLED` setting. Local development is enabled; deployment remains
+  unchanged. See
+  [`docs/hour-meter-reading-classification-schema.md`](docs/hour-meter-reading-classification-schema.md).
 
 - [ ] Deliver the planned manager-only Chargeable Invoice Review workflow: Phases 1–6 and the Phase 7 local retention/recovery, release-guard and rollback baseline are complete; separately approve/provision the six whole-package Delete grants, run the de-identified target-environment manager/deletion/accessibility/performance smoke, then complete separately approved role assignment and release validation. See [`docs/features/CHARGEABLE_INVOICE_REVIEW_IMPLEMENTATION_PLAN.md`](docs/features/CHARGEABLE_INVOICE_REVIEW_IMPLEMENTATION_PLAN.md) and [`docs/chargeable-invoice-review-operations.md`](docs/chargeable-invoice-review-operations.md); role provisioning/assignment, deployment and flag changes retain explicit approval gates.
 - [ ] Complete Staff Directory signed-in smoke testing and configure intended staff. All three Staff columns are provisioned and verified; verify Quote and Chargeable Invoice customer drafts include opted-in internal CCs without changing external Customer/Site PO routing. Amendment handoff continues to select an active internal recipient and suggest the sole Accounts record.

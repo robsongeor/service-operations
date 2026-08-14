@@ -7,10 +7,10 @@ how completed Service Jobs advance maintenance state.
 
 ## Architecture
 
-Maintenance Profile and Service Programme are independent inputs resolved into one
+Default Maintenance Profile and Service Programme are independent inputs resolved into one
 configuration by the shared maintenance domain module. Programme selects applicable service
-levels; Profile selects time intervals. Pure calculation and status helpers remain separate
-from Dataverse reads and writes.
+levels; Profile supplies maximum/fallback time intervals. Pure calculation and status helpers
+remain separate from Dataverse reads and writes.
 
 Service completion is a coordinated workflow under the generic Jobs completion framework.
 It reloads authoritative records, validates the request, and applies Job, Equipment, and
@@ -22,7 +22,8 @@ plan updates atomically.
 - Equipment stores the Date Only value `gr_currenthourmeterrecordeddate` alongside its
   current hour reading. The two values are saved together; `modifiedon` is not a substitute.
 - Equipment Service Plan records represent A, B, and C state.
-- Service Jobs reference Equipment and save their Service Type and completion reading.
+- Every completed Job references Equipment and saves its completion reading. Service Jobs also
+  save Service Type and advance the applicable maintenance plans.
 - Historical Jobs and inactive plans remain readable.
 
 ## Shared Components and APIs
@@ -47,7 +48,40 @@ helpers feed Equipment, Jobs, and Customer views. All Service completion entry p
 - Programme changes never delete history or invent a completion.
 - A Service completion requires the expected Equipment, saved Service Type, and a whole,
   non-decreasing hour reading.
-- Manual Maintenance History edits require a reading date. New manual readings default to
+- Every Job type contributes completion readings equally to the Equipment usage forecast.
+  Estimated readings remain usable but reduce confidence. Isolated bad readings are ignored,
+  while a sustained lower sequence is treated as a meter reset and starts a new segment.
+- When completed Jobs contain usable meter evidence, the reading from the latest dated completed
+  Job is the operational Last Known Hour Meter for displays, completion comparisons, service-due
+  calculations, and forecasts. The Equipment current-meter fields are a fallback only when no such
+  Job reading exists; a stale Equipment snapshot is not appended to Job evidence.
+- Job meter dates are Date Only, so time-of-day precision is unavailable. Forecasting retains
+  closely dated readings as evidence but does not calculate a usage rate until accepted readings
+  span at least seven calendar days; this avoids treating an overnight interval as a full day.
+  Interval rates and their consistency influence are weighted by elapsed days, so longer baselines
+  carry proportionally more weight than adjacent-day observations.
+- Usage history is ordered by the Job meter-recorded date, falling back to Completed Date only for
+  legacy rows. Older Service readings do not roll current Equipment or newer active plan state back.
+- Each configured service plan derives a read-only Next Service recommendation from the earlier of
+  its stored calendar due date and the forecast date when average usage reaches its due-hour threshold.
+  The compact service disclosure keeps the effective interval beside the A, B, or C Service title and
+  shows Last Completed and Next Due By dates at a glance. When Last Completed is linked to a Job, its
+  compact summary also shows that Job number and recorded completion hours; due-hour calculations, interval reasoning,
+  and other saved completion history expand on demand. The summary states whether
+  calendar, projected hours, or both determined the recommendation and carries forecast confidence
+  when hours determine it. An overdue recommendation says Book now. Missing or unsafe usage forecasts
+  fall back to the stored calendar date. Suggestions do not mutate plans, create Jobs, or create
+  Scheduler options.
+- Once the usage forecast reaches Moderate confidence (score 50 or higher), has a positive average,
+  and has no confirmed meter reset, each service level converts its fixed hour interval into a live
+  usage-adjusted time interval. That interval overrides the default profile only when it is shorter;
+  it never extends servicing beyond the manager-selected profile. The UI labels the saved selection
+  Default Maintenance Profile and shows whether each Suggested Interval is usage-adjusted or still
+  using the profile because it remains earlier or reliable history is unavailable.
+- The historical service baseline workflow is a temporary/manual bridge for maintenance not
+  represented by Jobs, especially newly entered Equipment. It is labelled separately from Job-backed
+  usage forecasting. When completed Job meter evidence exists, the form does not offer to replace
+  the Job-authoritative Last Known Hour Meter. New fallback readings require a date and default to
   the current New Zealand calendar date, while existing saved dates remain unchanged.
 
 ## Extension Points

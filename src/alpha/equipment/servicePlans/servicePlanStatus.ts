@@ -4,6 +4,33 @@ import { resolveMaintenanceConfiguration } from './maintenanceConfiguration.ts'
 
 export const SERVICE_STATUS_THRESHOLDS = { dueSoonHours: 50 } as const
 
+export type SuggestedServiceDate = {
+    date: string
+    basis: 'hours' | 'calendar' | 'both'
+    isOverdue: boolean
+    isDueToday: boolean
+}
+
+function validDateOnly(value?: string | null) {
+    const date = value?.slice(0, 10) ?? ''
+    return /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(Date.parse(`${date}T12:00:00Z`))
+        ? date
+        : null
+}
+
+export function calculateSuggestedServiceDate(
+    calendarDueDate?: string | null,
+    estimatedHourDueDate?: string | null,
+    today = new Date().toISOString().slice(0, 10),
+): SuggestedServiceDate | null {
+    const calendar = validDateOnly(calendarDueDate)
+    const hours = validDateOnly(estimatedHourDueDate)
+    if (!calendar && !hours) return null
+    const date = calendar && hours ? (calendar < hours ? calendar : hours) : calendar ?? hours!
+    const basis = calendar === date && hours === date ? 'both' : hours === date ? 'hours' : 'calendar'
+    return { date, basis, isOverdue: date < today, isDueToday: date === today }
+}
+
 export function calculateHoursRemaining(currentHours: number, nextDueHours?: number | null) {
     return nextDueHours == null ? null : nextDueHours - currentHours
 }

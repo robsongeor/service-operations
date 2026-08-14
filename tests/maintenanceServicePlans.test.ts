@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import {
@@ -19,8 +20,23 @@ import {
 } from '../src/alpha/equipment/servicePlans/equipmentServicePlan.types.ts'
 import {
     calculatePrimaryNextService,
+    calculateSuggestedServiceDate,
     calculateServiceStatus,
 } from '../src/alpha/equipment/servicePlans/servicePlanStatus.ts'
+import {
+    calculateEquipmentUsageForecast,
+    calculateUsageAdjustedServiceInterval,
+    estimateUsageThresholdDate,
+    MINIMUM_USAGE_SPAN_DAYS,
+    resolveCurrentHourMeterRecordedDate,
+    resolveLatestHourMeterReading,
+    shouldAdvanceCurrentHourMeter,
+} from '../src/alpha/equipment/servicePlans/equipmentUsageForecast.ts'
+import { JOB_STATUSES } from '../src/alpha/jobs/types/jobStatus.types.ts'
+import { JOB_TYPES, type JobType } from '../src/alpha/jobs/types/jobType.types.ts'
+import type { Job } from '../src/alpha/jobs/types/job.types.ts'
+import type { Equipment } from '../src/alpha/jobs/types/equipment.types.ts'
+import { HOUR_METER_READING_TYPES, type HourMeterReadingType } from '../src/alpha/equipment/hourMeter/hourMeterReading.types.ts'
 
 const ICE = {
     gr_serviceprogramme: SERVICE_PROGRAMMES.ICE_STANDARD,
@@ -41,6 +57,244 @@ function plan(type: PlannedServiceType, dueHours: number, dueDate = '2026-01-01'
         gr_active: true,
     }
 }
+
+const forecastEquipment = { gr_equipmentid: 'equipment-1', gr_fleet: 'F1', gr_serial: null, gr_make: null, gr_model: null } as Equipment
+
+function meterJob(
+    type: JobType,
+    date: string,
+    hours: number,
+    status = JOB_STATUSES.COMPLETE,
+    readingType: HourMeterReadingType = HOUR_METER_READING_TYPES.ACTUAL,
+): Job {
+    return {
+        gr_jobid: `${type}-${date}`,
+        createdon: date,
+        gr_jobnumber: null,
+        gr_status: status,
+        gr_ordernumber: null,
+        gr_description: null,
+        gr_jobtype: type,
+        gr_completeddate: date,
+        gr_hourmeter: hours,
+        gr_hourmeterreadingtype: readingType,
+        gr_Equipment: { gr_equipmentid: forecastEquipment.gr_equipmentid, gr_fleet: 'F1', gr_serial: null, gr_make: null, gr_model: null },
+    }
+}
+
+test('usage forecast treats valid readings from every completed Job type equally', () => {
+    const forecast = calculateEquipmentUsageForecast(forecastEquipment, [
+        meterJob(JOB_TYPES.SERVICE, '2026-01-01T00:00:00Z', 100),
+        meterJob(JOB_TYPES.BREAKDOWN, '2026-01-21T00:00:00Z', 200),
+        meterJob(JOB_TYPES.WOF, '2026-02-10T00:00:00Z', 300),
+        meterJob(JOB_TYPES.SITE_CHECK, '2026-03-02T00:00:00Z', 400),
+        meterJob(JOB_TYPES.WORKSHOP, '2026-03-03T00:00:00Z', 900, JOB_STATUSES.ALLOCATED),
+    ], new Date('2026-03-02T12:00:00Z'))
+
+    assert.equal(forecast.readingCount, 4)
+    assert.equal(forecast.averageHoursPerDay, 5)
+    assert.equal(forecast.averageHoursPerWeek, 35)
+})
+
+test('usage forecast orders readings by their recorded date rather than completion or Job order', () => {
+    const enteredLater = meterJob(JOB_TYPES.BREAKDOWN, '2026-03-01T00:00:00Z', 100)
+    enteredLater.gr_hourmeterrecordeddate = '2026-01-01'
+    const enteredEarlier = meterJob(JOB_TYPES.SERVICE, '2026-02-01T00:00:00Z', 200)
+    enteredEarlier.gr_hourmeterrecordeddate = '2026-02-01'
+
+    const forecast = calculateEquipmentUsageForecast(forecastEquipment, [enteredEarlier, enteredLater], new Date('2026-03-01T00:00:00Z'))
+    assert.deepEqual(forecast.readings.map((reading) => reading.date), ['2026-01-01', '2026-02-01'])
+    assert.equal(forecast.averageHoursPerDay, 100 / 31)
+})
+
+test('latest dated completed Job is authoritative over the Equipment meter snapshot', () => {
+    const equipmentWithoutDate = { ...forecastEquipment, gr_currenthourmeter: 300, gr_currenthourmeterrecordeddate: null }
+    const currentReading = meterJob(JOB_TYPES.BREAKDOWN, '2026-08-10T00:00:00Z', 300)
+    currentReading.gr_hourmeterrecordeddate = '2026-08-01'
+    const unrelatedReading = meterJob(JOB_TYPES.SERVICE, '2026-08-12T00:00:00Z', 250)
+    unrelatedReading.gr_hourmeterrecordeddate = '2026-08-12'
+
+    assert.deepEqual(resolveLatestHourMeterReading(equipmentWithoutDate, [unrelatedReading, currentReading]), {
+        id: unrelatedReading.gr_jobid,
+        hours: 250,
+        date: '2026-08-12',
+        source: 'job',
+    })
+    assert.equal(resolveCurrentHourMeterRecordedDate(equipmentWithoutDate, [unrelatedReading, currentReading]), '2026-08-12')
+})
+
+test('stale Equipment snapshot does not mark later valid Job readings as incorrect', () => {
+    const equipment = {
+        ...forecastEquipment,
+        gr_currenthourmeter: 2425,
+        gr_currenthourmeterrecordeddate: '2026-08-14',
+    }
+    const jobs = [
+        meterJob(JOB_TYPES.BREAKDOWN, '2026-03-13T00:00:00Z', 1840),
+        meterJob(JOB_TYPES.BREAKDOWN, '2026-04-13T00:00:00Z', 1966),
+        meterJob(JOB_TYPES.BREAKDOWN, '2026-07-23T00:00:00Z', 2426),
+        meterJob(JOB_TYPES.WOF, '2026-07-24T00:00:00Z', 2425),
+        meterJob(JOB_TYPES.BREAKDOWN, '2026-08-12T00:00:00Z', 2527),
+    ]
+
+    assert.equal(resolveLatestHourMeterReading(equipment, jobs)?.hours, 2527)
+    const forecast = calculateEquipmentUsageForecast(equipment, jobs, new Date('2026-08-14T00:00:00Z'))
+    assert.equal(forecast.anomalyCount, 1)
+    assert.equal(forecast.readings.find((reading) => reading.date === '2026-07-23')?.assessment, 'Potentially incorrect')
+    assert.equal(forecast.readings.find((reading) => reading.date === '2026-07-24')?.assessment, 'Accepted')
+    assert.equal(forecast.readings.at(-1)?.hours, 2527)
+    assert.equal(forecast.readings.some((reading) => reading.id === 'equipment-current'), false)
+})
+
+test('Equipment current meter advances by recorded date rather than submission order or meter value', () => {
+    assert.equal(shouldAdvanceCurrentHourMeter('2026-07-30', '2026-08-10'), false)
+    assert.equal(shouldAdvanceCurrentHourMeter('2026-08-10', '2026-08-10'), true)
+    assert.equal(shouldAdvanceCurrentHourMeter('2026-08-11', '2026-08-10'), true)
+    assert.equal(shouldAdvanceCurrentHourMeter('2026-08-11', null), true)
+})
+
+test('usage confidence reaches High only with broad recent consistent evidence', () => {
+    const jobs = Array.from({ length: 6 }, (_, index) => meterJob(
+        index % 2 ? JOB_TYPES.BREAKDOWN : JOB_TYPES.WORKSHOP,
+        new Date(Date.UTC(2026, 0, 1 + index * 18)).toISOString(),
+        100 + index * 180,
+    ))
+    const forecast = calculateEquipmentUsageForecast(forecastEquipment, jobs, new Date('2026-04-01T00:00:00Z'))
+    assert.equal(forecast.confidenceScore, 100)
+    assert.equal(forecast.confidence, 'High')
+    assert.equal(forecast.spanDays, 90)
+})
+
+test('usage forecast fails safely with insufficient history and estimates thresholds when available', () => {
+    const insufficient = calculateEquipmentUsageForecast(forecastEquipment, [
+        meterJob(JOB_TYPES.SERVICE, '2026-04-01T00:00:00Z', 1_000),
+    ], new Date('2026-04-01T00:00:00Z'))
+    assert.equal(insufficient.averageHoursPerDay, null)
+    assert.equal(insufficient.confidence, 'Low')
+
+    const forecast = calculateEquipmentUsageForecast(forecastEquipment, [
+        meterJob(JOB_TYPES.SERVICE, '2026-03-02T00:00:00Z', 700),
+        meterJob(JOB_TYPES.BREAKDOWN, '2026-04-01T00:00:00Z', 1_000),
+    ], new Date('2026-04-01T00:00:00Z'))
+    assert.equal(estimateUsageThresholdDate(forecast, 1_000, 1_300), '2026-05-01')
+})
+
+test('suggested service date uses the earlier calendar or projected-hour limit', () => {
+    assert.deepEqual(calculateSuggestedServiceDate('2026-09-01', '2026-08-20', '2026-08-14'), {
+        date: '2026-08-20', basis: 'hours', isOverdue: false, isDueToday: false,
+    })
+    assert.deepEqual(calculateSuggestedServiceDate('2026-08-10', '2026-08-20', '2026-08-14'), {
+        date: '2026-08-10', basis: 'calendar', isOverdue: true, isDueToday: false,
+    })
+    assert.deepEqual(calculateSuggestedServiceDate('2026-08-14', '2026-08-14', '2026-08-14'), {
+        date: '2026-08-14', basis: 'both', isOverdue: false, isDueToday: true,
+    })
+    assert.equal(calculateSuggestedServiceDate(null, null, '2026-08-14'), null)
+})
+
+test('reliable usage may shorten but never extend the default maintenance interval', () => {
+    const highUsage = calculateEquipmentUsageForecast(forecastEquipment, [
+        meterJob(JOB_TYPES.SERVICE, '2026-04-01T00:00:00Z', 1_000),
+        meterJob(JOB_TYPES.BREAKDOWN, '2026-07-01T00:00:00Z', 1_455),
+    ], new Date('2026-07-01T00:00:00Z'))
+    assert.deepEqual(calculateUsageAdjustedServiceInterval(highUsage, 250, { unit: 'months', value: 3 }), {
+        days: 50, label: 'about 7 weeks', source: 'usage', hasReliableUsage: true,
+    })
+
+    const lowUsage = calculateEquipmentUsageForecast(forecastEquipment, [
+        meterJob(JOB_TYPES.SERVICE, '2026-01-01T00:00:00Z', 1_000),
+        meterJob(JOB_TYPES.BREAKDOWN, '2026-07-01T00:00:00Z', 1_100),
+    ], new Date('2026-07-01T00:00:00Z'))
+    const defaultLimited = calculateUsageAdjustedServiceInterval(lowUsage, 250, { unit: 'months', value: 3 })
+    assert.equal(defaultLimited.source, 'profile')
+    assert.equal(defaultLimited.label, '3 months')
+
+    const insufficient = calculateEquipmentUsageForecast(forecastEquipment, [
+        meterJob(JOB_TYPES.SERVICE, '2026-07-01T00:00:00Z', 1_000),
+    ], new Date('2026-07-01T00:00:00Z'))
+    assert.equal(calculateUsageAdjustedServiceInterval(insufficient, 250, { unit: 'months', value: 3 }).hasReliableUsage, false)
+})
+
+test('date-only readings do not calculate usage from an ambiguous overnight interval', () => {
+    const overnight = calculateEquipmentUsageForecast(forecastEquipment, [
+        meterJob(JOB_TYPES.SERVICE, '2026-08-13T00:00:00Z', 1_000),
+        meterJob(JOB_TYPES.BREAKDOWN, '2026-08-14T00:00:00Z', 1_002),
+    ], new Date('2026-08-14T00:00:00Z'))
+    assert.equal(overnight.spanDays, 1)
+    assert.equal(overnight.averageHoursPerDay, null)
+    assert.equal(overnight.confidence, 'Low')
+
+    const sufficientSpan = calculateEquipmentUsageForecast(forecastEquipment, [
+        meterJob(JOB_TYPES.SERVICE, '2026-08-07T00:00:00Z', 1_000),
+        meterJob(JOB_TYPES.BREAKDOWN, '2026-08-14T00:00:00Z', 1_035),
+    ], new Date('2026-08-14T00:00:00Z'))
+    assert.equal(sufficientSpan.spanDays, MINIMUM_USAGE_SPAN_DAYS)
+    assert.equal(sufficientSpan.averageHoursPerDay, 5)
+})
+
+test('longer reading intervals carry proportionally more weight than adjacent-day readings', () => {
+    const forecast = calculateEquipmentUsageForecast(forecastEquipment, [
+        meterJob(JOB_TYPES.SERVICE, '2026-07-14T00:00:00Z', 1_000),
+        meterJob(JOB_TYPES.BREAKDOWN, '2026-07-15T00:00:00Z', 1_010),
+        meterJob(JOB_TYPES.WOF, '2026-08-14T00:00:00Z', 1_040),
+    ], new Date('2026-08-14T00:00:00Z'))
+
+    assert.equal(forecast.spanDays, 31)
+    assert.equal(forecast.averageHoursPerDay, 40 / 31)
+    assert.notEqual(forecast.averageHoursPerDay, (10 + 1) / 2)
+})
+
+test('usage forecast ignores one isolated incorrect reading without questioning later valid readings', () => {
+    const forecast = calculateEquipmentUsageForecast(forecastEquipment, [
+        meterJob(JOB_TYPES.SERVICE, '2026-01-01T00:00:00Z', 5_000),
+        meterJob(JOB_TYPES.BREAKDOWN, '2026-01-11T00:00:00Z', 8_000),
+        meterJob(JOB_TYPES.WOF, '2026-01-21T00:00:00Z', 5_100),
+        meterJob(JOB_TYPES.WORKSHOP, '2026-01-31T00:00:00Z', 5_200),
+    ], new Date('2026-01-31T00:00:00Z'))
+
+    assert.equal(forecast.anomalyCount, 1)
+    assert.equal(forecast.readings[1].assessment, 'Potentially incorrect')
+    assert.equal(forecast.readings[2].assessment, 'Accepted')
+    assert.equal(forecast.averageHoursPerDay, 200 / 30)
+})
+
+test('usage forecast distinguishes an unconfirmed drop from a confirmed reset sequence', () => {
+    const possible = calculateEquipmentUsageForecast(forecastEquipment, [
+        meterJob(JOB_TYPES.SERVICE, '2026-01-01T00:00:00Z', 5_000),
+        meterJob(JOB_TYPES.BREAKDOWN, '2026-01-11T00:00:00Z', 20),
+    ], new Date('2026-01-11T00:00:00Z'))
+    assert.equal(possible.readings[1].assessment, 'Possible reset')
+    assert.equal(possible.resetCount, 0)
+
+    const confirmed = calculateEquipmentUsageForecast(forecastEquipment, [
+        meterJob(JOB_TYPES.SERVICE, '2026-01-01T00:00:00Z', 5_000),
+        meterJob(JOB_TYPES.BREAKDOWN, '2026-01-11T00:00:00Z', 20),
+        meterJob(JOB_TYPES.WOF, '2026-01-21T00:00:00Z', 120),
+        meterJob(JOB_TYPES.WORKSHOP, '2026-01-31T00:00:00Z', 230),
+    ], new Date('2026-01-31T00:00:00Z'))
+    assert.equal(confirmed.readings[1].assessment, 'Confirmed reset')
+    assert.equal(confirmed.resetCount, 1)
+    assert.equal(confirmed.averageHoursPerDay, 10.5)
+    assert.equal(estimateUsageThresholdDate(confirmed, 230, 500), null)
+})
+
+test('estimated readings are clearly classified and reduce confidence without being discarded', () => {
+    const actualOnly = calculateEquipmentUsageForecast(forecastEquipment, [
+        meterJob(JOB_TYPES.SERVICE, '2026-01-01T00:00:00Z', 100),
+        meterJob(JOB_TYPES.BREAKDOWN, '2026-02-01T00:00:00Z', 200),
+        meterJob(JOB_TYPES.WOF, '2026-03-01T00:00:00Z', 300),
+    ], new Date('2026-03-01T00:00:00Z'))
+    const withEstimate = calculateEquipmentUsageForecast(forecastEquipment, [
+        meterJob(JOB_TYPES.SERVICE, '2026-01-01T00:00:00Z', 100),
+        meterJob(JOB_TYPES.BREAKDOWN, '2026-02-01T00:00:00Z', 200, JOB_STATUSES.COMPLETE, HOUR_METER_READING_TYPES.ESTIMATED),
+        meterJob(JOB_TYPES.WOF, '2026-03-01T00:00:00Z', 300),
+    ], new Date('2026-03-01T00:00:00Z'))
+
+    assert.equal(withEstimate.readings[1].assessment, 'Estimated')
+    assert.equal(withEstimate.estimatedCount, 1)
+    assert.ok(withEstimate.confidenceScore < actualOnly.confidenceScore)
+    assert.ok(withEstimate.averageHoursPerDay != null)
+})
 
 const ALL_PLANS = [
     plan(SERVICE_TYPES.A, 1000),
@@ -120,4 +374,52 @@ test('completion refuses an atomic plan set when any satisfied level is missing'
         ),
         /maintenance schedule is incomplete/,
     )
+})
+
+test('Service completion dialog constrains responsive hour-meter fields', () => {
+    const workflow = readFileSync(new URL('../src/alpha/jobs/components/JobCompletionWorkflow.tsx', import.meta.url), 'utf8')
+    const styles = readFileSync(new URL('../src/alpha/jobs/components/JobCompletionWorkflow.css', import.meta.url), 'utf8')
+    const managerApi = readFileSync(new URL('../src/alpha/equipment/services/equipmentManagerApi.ts', import.meta.url), 'utf8')
+    const jobsHook = readFileSync(new URL('../src/alpha/jobs/hooks/useJobs.ts', import.meta.url), 'utf8')
+    const servicePlanApi = readFileSync(new URL('../src/alpha/equipment/servicePlans/servicePlanApi.ts', import.meta.url), 'utf8')
+  assert.match(workflow, /fieldsClassName="job-completion-fields"/)
+  assert.match(workflow, /dialogClassName="job-completion-dialog"/)
+  assert.match(workflow, /request\.pendingSave\?\.jobNumber\.trim\(\)/)
+  assert.equal(workflow.match(/<span>Job Number<\/span>/g)?.length, 3)
+  assert.match(workflow, /submitDisabled=\{missingServicePlans\.length > 0 \|\| isSavingMaintenance\}/)
+  assert.match(workflow, /hideSubmit=\{missingServicePlans\.length > 0\}/)
+  assert.match(workflow, /missingServicePlans\.length === 0 && <>/)
+  assert.match(workflow, /request\.kind === 'standard'/)
+  assert.match(workflow, /onCompleteStandard\(reading, readingType, readingDate, completionDate\)/)
+  assert.match(workflow, /onCompleteWof\(wofExpiry, reading, readingType, readingDate, completionDate\)/)
+  assert.equal(workflow.match(/Job Completion Date \*/g)?.length, 1)
+  assert.match(workflow, /const readingDate = completionDate/)
+  assert.doesNotMatch(workflow, /Hour Meter Reading Date \*/)
+  assert.doesNotMatch(workflow, /readingDateInput/)
+  assert.match(workflow, /This Job is earlier than the Equipment's current reading/)
+  assert.match(workflow, /<strong>Technician did not record hours<\/strong>/)
+  assert.match(workflow, /job-completion-estimate-value/)
+  assert.match(workflow, /Calculated from previous Jobs, not editable, and saved as Estimated/)
+  assert.match(workflow, /No usable previous Job reading is available, so an estimate cannot be generated/)
+  assert.match(workflow, /const isUsingEstimatedReading = useEstimatedReading && canUseEstimatedReading/)
+  assert.match(workflow, /disabled=\{!canUseEstimatedReading\}/)
+  assert.doesNotMatch(workflow, /placeholder="4936"/)
+  assert.match(workflow, /onSetupMaintenance\(selectedEquipment/)
+  assert.match(workflow, /Save maintenance setup/)
+  assert.match(workflow, /Default Maintenance Profile/)
+  assert.match(workflow, /Maintenance setup required/)
+  assert.match(managerApi, /export async function updateEquipmentMaintenanceSetup/)
+  assert.match(jobsHook, /await updateEquipmentMaintenanceSetupApi\(token, record\.gr_equipmentid, input\)/)
+  assert.match(jobsHook, /await syncEquipmentServiceProgramme\(token, updated, recordPlans\)/)
+  assert.match(servicePlanApi, /\?\$select=gr_currenthourmeter,gr_currenthourmeterrecordeddate/)
+  assert.match(servicePlanApi, /'If-Match': etag/)
+  assert.match(servicePlanApi, /response\.status === 412 && attempt === 0/)
+    assert.match(styles, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/)
+    assert.match(styles, /\.edit-form-dialog\.job-completion-dialog \{ width: min\(560px, calc\(100vw - 32px\)\); \}/)
+    assert.match(styles, /\.job-completion-fields output small, \.job-completion-wof-fields output small \{ display: block;/)
+    assert.match(styles, /\.job-completion-hour-entry/)
+    assert.match(styles, /\.job-completion-estimate-value/)
+    assert.match(styles, /\.job-completion-summary \{ grid-column: 1 \/ -1; \}/)
+    assert.match(styles, /\.job-completion-summary ul \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/)
+    assert.match(styles, /@media \(max-width: 480px\)/)
 })

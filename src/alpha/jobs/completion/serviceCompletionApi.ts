@@ -7,10 +7,10 @@ import { buildJobUpdateFields } from '../services/jobsApi'
 import type { JobSaveInput } from '../types/jobSave.types'
 import { JOB_STATUSES } from '../types/jobStatus.types'
 import { JOB_TYPES } from '../types/jobType.types'
-import { validateCompletionHourMeter } from './jobCompletion'
+import { isHistoricalHourMeterReading, validateCompletionHourMeter, validateHourMeterRecordedDate, validateJobCompletionDate } from './jobCompletion'
 import { calculateNextDueDate, isServiceTypeEnabled, resolveMaintenanceConfiguration } from '../../equipment/servicePlans/maintenanceConfiguration'
 import type { MaintenanceProfile, ServiceProgramme } from '../../equipment/servicePlans/maintenanceConfiguration'
-import { newZealandDateOnly } from '../../shared/dates/dateOnly'
+import { HOUR_METER_CLASSIFICATION_ENABLED, type HourMeterReadingType } from '../../equipment/hourMeter/hourMeterReading.types'
 
 const API_URL = `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2`
 
@@ -25,12 +25,14 @@ type CompletionJob = DataverseRecord & {
     gr_servicetype?: number | null
     gr_hourmeter?: number | null
     gr_completeddate?: string | null
+    gr_hourmeterrecordeddate?: string | null
     _gr_equipment_value?: string | null
 }
 
 type CompletionEquipment = DataverseRecord & {
     gr_equipmentid: string
     gr_currenthourmeter?: number | null
+    gr_currenthourmeterrecordeddate?: string | null
     gr_serviceprogramme?: ServiceProgramme | null
     gr_maintenanceprofile?: MaintenanceProfile | null
     gr_customaenabled?: boolean | null
@@ -55,6 +57,11 @@ export type AtomicServiceCompletionInput = {
     jobId: string
     equipmentId: string
     hourMeter: number
+    hourMeterReadingType?: HourMeterReadingType
+    hourMeterRecordedDate: string
+    currentHourMeterRecordedDateHint?: string | null
+    currentHourMeterHint?: number | null
+    completedDate: string
     expectedServiceType: PlannedServiceType
     pendingSave?: JobSaveInput
 }
@@ -117,7 +124,7 @@ async function loadCompletionContext(
 ): Promise<CompletionContext> {
     const job = await dataverseJson<CompletionJob>(
         token,
-        `gr_jobs(${jobId})?$select=gr_jobid,gr_jobtype,gr_status,gr_servicetype,gr_hourmeter,gr_completeddate,_gr_equipment_value`,
+        `gr_jobs(${jobId})?$select=gr_jobid,gr_jobtype,gr_status,gr_servicetype,gr_hourmeter,gr_completeddate${HOUR_METER_CLASSIFICATION_ENABLED ? ',gr_hourmeterrecordeddate' : ''},_gr_equipment_value`,
         'The authoritative Service Job could not be loaded.',
     )
     if (!sameId(job._gr_equipment_value, expectedEquipmentId)) {
@@ -128,7 +135,7 @@ async function loadCompletionContext(
     const [equipment, plansResponse] = await Promise.all([
         dataverseJson<CompletionEquipment>(
             token,
-            `gr_equipments(${expectedEquipmentId})?$select=gr_equipmentid,gr_currenthourmeter,gr_serviceprogramme,gr_maintenanceprofile,gr_customaenabled,gr_custombenabled,gr_customcenabled,gr_customaintervaldays,gr_custombintervaldays,gr_customcintervaldays`,
+            `gr_equipments(${expectedEquipmentId})?$select=gr_equipmentid,gr_currenthourmeter,gr_currenthourmeterrecordeddate,gr_serviceprogramme,gr_maintenanceprofile,gr_customaenabled,gr_custombenabled,gr_customcenabled,gr_customaintervaldays,gr_custombintervaldays,gr_customcintervaldays`,
             'The authoritative Equipment record could not be loaded.',
         ),
         dataverseJson<{ value?: CompletionPlan[] }>(
@@ -146,6 +153,8 @@ function validateContext(context: CompletionContext, input: AtomicServiceComplet
         throw new Error('Only an authoritative Service Job can use Service completion.')
     }
     if (context.job.gr_status === JOB_STATUSES.COMPLETE) return
+    const completionDateError = validateJobCompletionDate(input.completedDate.slice(0, 10))
+    if (completionDateError) throw new Error(completionDateError)
     if (context.job.gr_servicetype == null || context.job.gr_servicetype === SERVICE_TYPES.NONE) {
         throw new Error('Select and save a Service Type before completing this Service Job.')
     }
@@ -167,9 +176,13 @@ function validateContext(context: CompletionContext, input: AtomicServiceComplet
             throw new Error('Save the Service Type change before completing this Service Job.')
         }
     }
-    const meterError = validateCompletionHourMeter(
+    const currentRecordedDate = input.currentHourMeterRecordedDateHint
+        ?? context.equipment.gr_currenthourmeterrecordeddate?.slice(0, 10)
+    const meterError = validateHourMeterRecordedDate(input.hourMeterRecordedDate) || validateCompletionHourMeter(
         String(input.hourMeter),
-        context.equipment.gr_currenthourmeter ?? 0,
+        input.currentHourMeterHint ?? context.equipment.gr_currenthourmeter ?? 0,
+        input.hourMeterRecordedDate,
+        currentRecordedDate,
     )
     if (meterError) throw new Error(meterError)
 }
@@ -177,16 +190,21 @@ function validateContext(context: CompletionContext, input: AtomicServiceComplet
 function completionAlreadyCommitted(context: CompletionContext, input: AtomicServiceCompletionInput) {
     if (context.job.gr_status !== JOB_STATUSES.COMPLETE) return false
     if (context.job.gr_hourmeter !== input.hourMeter || !context.job.gr_completeddate) return false
+    if (HOUR_METER_CLASSIFICATION_ENABLED && context.job.gr_hourmeterrecordeddate !== input.hourMeterRecordedDate) return false
     if (context.job.gr_servicetype !== input.expectedServiceType) return false
     if (!sameId(context.job._gr_equipment_value, input.equipmentId)) return false
-    if ((context.equipment.gr_currenthourmeter ?? 0) < input.hourMeter) return false
+    const currentRecordedDate = input.currentHourMeterRecordedDateHint
+        ?? context.equipment.gr_currenthourmeterrecordeddate?.slice(0, 10)
+    if (!isHistoricalHourMeterReading(input.hourMeterRecordedDate, currentRecordedDate)
+        && (input.currentHourMeterHint ?? context.equipment.gr_currenthourmeter ?? 0) < input.hourMeter) return false
 
     const requiredPlans = selectSatisfiedServicePlans(context.plans, input.expectedServiceType, context.equipment)
-    return requiredPlans.every((plan) =>
+    return requiredPlans.every((plan) => (plan.gr_lastcompleteddate
+        && plan.gr_lastcompleteddate.slice(0, 10) > input.hourMeterRecordedDate) || (
             sameId(plan._gr_lastcompletedjob_value, input.jobId)
             && plan.gr_lastcompletedhours === input.hourMeter
-            && plan.gr_nextduehours === calculateNextDueHours(plan.gr_servicetype, input.hourMeter),
-        )
+            && plan.gr_nextduehours === calculateNextDueHours(plan.gr_servicetype, input.hourMeter)
+        ))
 }
 
 function buildChangeSet(requests: ChangeRequest[]) {
@@ -264,45 +282,57 @@ function completionRequests(
             ...input.pendingSave,
             status: JOB_STATUSES.COMPLETE,
             hourMeter: input.hourMeter,
+            hourMeterReadingType: input.hourMeterReadingType,
+            hourMeterRecordedDate: input.hourMeterRecordedDate,
             completedDate,
         })
         : {
             gr_status: JOB_STATUSES.COMPLETE,
             gr_hourmeter: input.hourMeter,
             gr_completeddate: completedDate,
+            ...(HOUR_METER_CLASSIFICATION_ENABLED && input.hourMeterReadingType != null
+                ? { gr_hourmeterreadingtype: input.hourMeterReadingType }
+                : {}),
+            ...(HOUR_METER_CLASSIFICATION_ENABLED
+                ? { gr_hourmeterrecordeddate: input.hourMeterRecordedDate }
+                : {}),
         }
 
-    const equipmentFields: Record<string, string | number | boolean | null> = {
-        gr_currenthourmeter: Math.max(context.equipment.gr_currenthourmeter ?? 0, input.hourMeter),
-        gr_currenthourmeterrecordeddate: newZealandDateOnly(completedDate),
+    const currentRecordedDate = input.currentHourMeterRecordedDateHint
+        ?? context.equipment.gr_currenthourmeterrecordeddate?.slice(0, 10)
+    const equipmentFields: Record<string, string | number | boolean | null> = isHistoricalHourMeterReading(
+        input.hourMeterRecordedDate,
+        currentRecordedDate,
+    ) ? {} : {
+        gr_currenthourmeter: input.hourMeter,
+        gr_currenthourmeterrecordeddate: input.hourMeterRecordedDate,
     }
     if (input.pendingSave?.siteId) {
         equipmentFields['gr_Site@odata.bind'] = `/gr_sites(${recordId(input.pendingSave.siteId, 'Site identifier')})`
     }
 
-    const requests: ChangeRequest[] = [
-        {
-            entityPath: `gr_jobs(${input.jobId})`,
-            etag: requireEtag(context.job, 'The Job'),
-            fields: jobFields,
-        },
-        {
+    const requests: ChangeRequest[] = [{
+        entityPath: `gr_jobs(${input.jobId})`,
+        etag: requireEtag(context.job, 'The Job'),
+        fields: jobFields,
+    }]
+    if (Object.keys(equipmentFields).length) requests.push({
             entityPath: `gr_equipments(${input.equipmentId})`,
             etag: requireEtag(context.equipment, 'The Equipment'),
             fields: equipmentFields,
-        },
-    ]
+        })
 
     const configuration = resolveMaintenanceConfiguration(context.equipment)
     const requiredPlans = selectSatisfiedServicePlans(context.plans, input.expectedServiceType, context.equipment)
-    requiredPlans.forEach((plan) => requests.push({
+    requiredPlans.filter((plan) => !plan.gr_lastcompleteddate
+        || input.hourMeterRecordedDate >= plan.gr_lastcompleteddate.slice(0, 10)).forEach((plan) => requests.push({
             entityPath: `gr_equipmentserviceplans(${recordId(plan.gr_equipmentserviceplanid, 'Service plan identifier')})`,
             etag: requireEtag(plan, 'A service plan'),
             fields: {
-                gr_lastcompleteddate: completedDate,
+                gr_lastcompleteddate: input.hourMeterRecordedDate,
                 gr_lastcompletedhours: input.hourMeter,
                 gr_nextduehours: calculateNextDueHours(plan.gr_servicetype, input.hourMeter),
-                gr_nextduedate: calculateNextDueDate(completedDate, configuration.serviceLevels[plan.gr_servicetype]?.timeInterval ?? { unit: 'months', value: 12 }),
+                gr_nextduedate: calculateNextDueDate(input.hourMeterRecordedDate, configuration.serviceLevels[plan.gr_servicetype]?.timeInterval ?? { unit: 'months', value: 12 }),
                 'gr_LastCompletedJob@odata.bind': `/gr_jobs(${input.jobId})`,
             },
         }))
@@ -329,7 +359,7 @@ export async function completeServiceJobAtomically(
         throw new Error('This Service Job is already complete with different completion data. Refresh before continuing.')
     }
 
-    const completedDate = new Date().toISOString()
+    const completedDate = input.completedDate
     try {
         await executeAtomicChanges(token, completionRequests(context, input, completedDate))
         return { completedDate, alreadyCompleted: false }

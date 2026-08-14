@@ -105,13 +105,13 @@ export function useEquipmentManager() {
         return () => { cancelled = true }
     }, [account, getToken])
 
-    const updateEquipment = async (record: Equipment, input: EquipmentUpdateInput) => {
+    const updateEquipment = async (record: Equipment, input: EquipmentUpdateInput, resolvedSite?: Site) => {
         setIsSaving(true)
         setSaveError('')
         try {
             const token = await getToken()
             await updateEquipmentApi(token, record.gr_equipmentid, input)
-            const selectedSite = sites.find((site) => site.gr_siteid === input.siteId)
+            const selectedSite = resolvedSite ?? sites.find((site) => site.gr_siteid === input.siteId)
             const updated = applyEquipmentUpdate(record, input, selectedSite)
             const recordPlans = servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === record.gr_equipmentid.toLowerCase())
             const syncedPlans = await syncEquipmentServiceProgramme(token, updated, recordPlans)

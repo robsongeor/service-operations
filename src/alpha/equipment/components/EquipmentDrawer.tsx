@@ -14,11 +14,12 @@ import FormSwitch from '../../shared/form-switch/FormSwitch'
 import type { EquipmentServicePlan } from '../servicePlans/equipmentServicePlan.types'
 import { SERVICE_TYPES, SERVICE_TYPE_OPTIONS, type PlannedServiceType } from '../servicePlans/equipmentServicePlan.types'
 import type { MaintenanceHistoryInput } from '../servicePlans/servicePlanApi'
-import { calculateHoursRemaining, calculateServiceStatus } from '../servicePlans/servicePlanStatus'
+import { calculateHoursRemaining, calculateServiceStatus, calculateSuggestedServiceDate } from '../servicePlans/servicePlanStatus'
 import { normalizeEquipmentInput, toEquipmentDateOnlyValue, type EquipmentCreateInitialValues, type EquipmentUpdateInput } from '../types/equipmentManager.types'
 import { classifyEquipmentIdentifier, deriveSiteNameFromAddress, normalizeCustomerName, parseSpreadsheetRow, type IdentifierClassification, type SpreadsheetRow } from '../utils/equipmentCreateHelpers'
 import SearchableSelect, { type SearchableSelectOption } from '../../shared/searchable-select/SearchableSelect'
 import { formatMaintenanceInterval, MAINTENANCE_PROFILES, POWER_TYPES, resolveMaintenanceConfiguration, SERVICE_PROGRAMMES, type MaintenanceProfile, type PowerType, type ServiceProgramme } from '../servicePlans/maintenanceConfiguration'
+import { calculateEquipmentUsageForecast, calculateUsageAdjustedServiceInterval, estimateUsageThresholdDate, MINIMUM_USAGE_SPAN_DAYS, resolveLatestHourMeterReading } from '../servicePlans/equipmentUsageForecast'
 import {
     EQUIPMENT_COMPLIANCE_STATUSES,
     getEquipmentComplianceStatus,
@@ -33,6 +34,7 @@ import {
     EQUIPMENT_SITE_CHECK_AVAILABILITY_OPTIONS,
     type EquipmentSiteCheckAvailability,
 } from '../types/equipmentSiteCheckAvailability.types'
+import { HOUR_METER_READING_TYPES } from '../hourMeter/hourMeterReading.types'
 
 type SharedProps = {
     customers: Customer[]
@@ -57,10 +59,12 @@ type EditProps = SharedProps & {
     mode: 'edit'
     equipment: Equipment
     servicePlans: EquipmentServicePlan[]
-    onSave: (input: EquipmentUpdateInput) => Promise<void>
+    onSave: (input: EquipmentUpdateInput, resolvedSite?: Site) => Promise<void>
     onSaveMaintenanceHistory: (plans: EquipmentServicePlan[], input: MaintenanceHistoryInput) => Promise<void>
     onCreateJob?: (equipment: Equipment) => void
     onDelete: () => Promise<void>
+    onCreateCustomer?: (input: { name: string }) => Promise<Customer>
+    onCreateSite?: (input: { customerId: string; name: string; address?: string }, customer?: Customer) => Promise<Site>
 }
 
 type Props = CreateProps | EditProps
@@ -84,6 +88,7 @@ export default function EquipmentDrawer(props: Props) {
     const { customers, sites, jobs, isSaving, saveError, onClose } = props
     const isCreate = props.mode === 'create'
     const equipment = isCreate ? undefined : props.equipment
+    const canCreateRelationships = Boolean(props.onCreateCustomer && props.onCreateSite)
     const initialValues = isCreate ? props.initialValues : undefined
     const initialSite = isCreate && initialValues?.siteId
         ? sites.find((site) => site.gr_siteid === initialValues.siteId)
@@ -127,7 +132,7 @@ export default function EquipmentDrawer(props: Props) {
     })
     const maintenanceProfileTouched = useRef(false)
     const [customerId, setCustomerId] = useState(equipment?.gr_Site?.gr_Customer?.gr_customerid ?? initialCustomer?.gr_customerid ?? '')
-    const [customerMode, setCustomerMode] = useState<CustomerMode>(equipment || initialCustomer ? 'existing' : 'none')
+    const [customerMode, setCustomerMode] = useState<CustomerMode>(equipment?.gr_Site?.gr_Customer || initialCustomer ? 'existing' : 'none')
     const [siteMode, setSiteMode] = useState<SiteMode>(equipment?.gr_Site || initialSite ? 'existing' : 'none')
     const [customerQuery, setCustomerQuery] = useState(equipment?.gr_Site?.gr_Customer?.gr_name ?? initialCustomer?.gr_name ?? initialValues?.customerName ?? '')
     const [, setSiteQuery] = useState(equipment?.gr_Site?.gr_name ?? initialSite?.gr_name ?? initialValues?.siteName ?? '')
@@ -171,6 +176,8 @@ export default function EquipmentDrawer(props: Props) {
             .filter((job) => job.gr_Equipment?.gr_equipmentid.toLowerCase() === equipment.gr_equipmentid.toLowerCase())
             .sort((a, b) => b.createdon.localeCompare(a.createdon))
         : []
+    const usageForecast = equipment ? calculateEquipmentUsageForecast(equipment, history) : null
+    const latestHourMeterReading = equipment ? resolveLatestHourMeterReading(equipment, history) : null
     const selectedCustomer = customers.find((customer) => customer.gr_customerid === customerId)
     const siteChecksEnabled = Boolean(form.siteId) && Boolean(
         props.siteCheckEnabledSiteIds?.some((id) => id.toLowerCase() === form.siteId.toLowerCase()),
@@ -219,8 +226,8 @@ export default function EquipmentDrawer(props: Props) {
     const openMaintenanceDialog = () => {
         if (isCreate) return
         setMaintenanceForm({
-            currentHourMeter: String(equipment?.gr_currenthourmeter ?? 0),
-            readingRecordedDate: equipment?.gr_currenthourmeterrecordeddate?.slice(0, 10) ?? currentNewZealandDateOnly(),
+            currentHourMeter: String(latestHourMeterReading?.hours ?? 0),
+            readingRecordedDate: latestHourMeterReading?.date ?? currentNewZealandDateOnly(),
             plans: {
                 [SERVICE_TYPES.A]: {
                     lastCompletedDate: plans.find((plan) => plan.gr_servicetype === SERVICE_TYPES.A)?.gr_lastcompleteddate?.slice(0, 10) ?? '',
@@ -446,27 +453,25 @@ export default function EquipmentDrawer(props: Props) {
             setFormError(`Equipment ${matchingEquipment.gr_fleet || matchingEquipment.gr_serial || ''} already exists. Change the Fleet Number or Serial Number before creating Equipment.`)
             return
         }
-        if (isCreate) {
-            if (customerMode === 'none') {
-                setRelatedError('Select an existing Customer or enter a new Customer name.')
-                return
-            }
-            if (customerMode === 'new' && !customerQuery.trim()) {
-                setRelatedError('Enter a Customer name.')
-                return
-            }
-            if (siteMode === 'none') {
-                setRelatedError('Select an existing Site or enter a new Site.')
-                return
-            }
-            if (siteMode === 'new' && !effectiveNewSiteName) {
-                setRelatedError('Enter a Site Name, or an Address that can be used to generate one.')
-                return
-            }
-            if (siteMode === 'existing' && !visibleSites.some((site) => site.gr_siteid === trimmed.siteId)) {
-                setRelatedError('Select a Site belonging to the selected Customer.')
-                return
-            }
+        if (isCreate && customerMode === 'none') {
+            setRelatedError('Select an existing Customer or enter a new Customer name.')
+            return
+        }
+        if (customerMode === 'new' && !customerQuery.trim()) {
+            setRelatedError('Enter a Customer name.')
+            return
+        }
+        if (customerMode !== 'none' && siteMode === 'none') {
+            setRelatedError('Select an existing Site or enter a new Site.')
+            return
+        }
+        if (siteMode === 'new' && !effectiveNewSiteName) {
+            setRelatedError('Enter a Site Name, or an Address that can be used to generate one.')
+            return
+        }
+        if (siteMode === 'existing' && !visibleSites.some((site) => site.gr_siteid === trimmed.siteId)) {
+            setRelatedError('Select a Site belonging to the selected Customer.')
+            return
         }
         const originalProgramme = equipment?.gr_serviceprogramme ?? SERVICE_PROGRAMMES.ICE_STANDARD
         if (!isCreate && history.length > 0 && trimmed.serviceProgramme !== originalProgramme && !programmeChangeConfirmedRef.current) {
@@ -476,23 +481,23 @@ export default function EquipmentDrawer(props: Props) {
         try {
             setFormError('')
             setRelatedError('')
-            if (isCreate) {
-                let createdRelatedRecords = false
+            let createdRelatedRecords = false
+            let resolvedSite = sites.find((site) => site.gr_siteid === trimmed.siteId)
+            if (customerMode !== 'none') {
                 let resolvedCustomer = selectedCustomer
                 if (customerMode === 'new') {
+                    if (!props.onCreateCustomer) throw new Error('Customer creation is not available from this Equipment view.')
                     const duplicate = customers.find((customer) => normalizeCustomerName(customer.gr_name) === normalizeCustomerName(customerQuery))
                     resolvedCustomer = duplicate ?? await props.onCreateCustomer({ name: customerQuery.trim() })
                     createdRelatedRecords = !duplicate
-                    if (!duplicate) {
-                        setCustomerId(resolvedCustomer.gr_customerid)
-                        setCustomerMode('existing')
-                        setCustomerQuery(resolvedCustomer.gr_name)
-                    }
+                    setCustomerId(resolvedCustomer.gr_customerid)
+                    setCustomerMode('existing')
+                    setCustomerQuery(resolvedCustomer.gr_name)
                 }
                 if (!resolvedCustomer) throw new Error('The selected Customer could not be found.')
 
-                let resolvedSite = visibleSites.find((site) => site.gr_siteid === trimmed.siteId)
                 if (siteMode === 'new') {
+                    if (!props.onCreateSite) throw new Error('Site creation is not available from this Equipment view.')
                     const duplicateSite = sites.find((site) =>
                         site.gr_Customer?.gr_customerid === resolvedCustomer?.gr_customerid
                         && normalizeCustomerName(site.gr_name) === normalizeCustomerName(effectiveNewSiteName)
@@ -513,24 +518,26 @@ export default function EquipmentDrawer(props: Props) {
                 }
                 if (!resolvedSite) throw new Error('The selected Site could not be found.')
                 trimmed = { ...trimmed, siteId: resolvedSite.gr_siteid }
-                try {
+            } else {
+                trimmed = { ...trimmed, siteId: '' }
+                resolvedSite = undefined
+            }
+            try {
+                if (isCreate) {
                     await props.onCreate(trimmed, resolvedSite)
                     clearSpreadsheetSource()
-                } catch (error) {
-                    if (createdRelatedRecords) {
-                        throw new Error(`The Customer and Site were created, but Equipment could not be created. ${error instanceof Error ? error.message : 'Please review the form and try again.'}`, { cause: error })
-                    }
-                    throw error
+                } else {
+                    await props.onSave(trimmed, resolvedSite)
+                    programmeChangeConfirmedRef.current = false
                 }
-            }
-            else {
-                await props.onSave(trimmed)
-                programmeChangeConfirmedRef.current = false
+            } catch (error) {
+                if (createdRelatedRecords) {
+                    throw new Error(`The Customer and Site were created, but Equipment could not be ${isCreate ? 'created' : 'saved'}. ${error instanceof Error ? error.message : 'Please review the form and try again.'}`, { cause: error })
+                }
+                throw error
             }
         } catch (error) {
-            if (isCreate) {
-                setFormError(error instanceof Error ? error.message : 'Equipment could not be created. Please try again.')
-            }
+            setFormError(error instanceof Error ? error.message : `Equipment could not be ${isCreate ? 'created' : 'saved'}. Please try again.`)
         }
     }
 
@@ -613,8 +620,10 @@ export default function EquipmentDrawer(props: Props) {
             headerAction={!isCreate && props.onCreateJob && <button type="button" className="equipment-create-job-button" onClick={() => props.onCreateJob?.(props.equipment)} disabled={busy}>Create Job</button>}
             footer={<>
                 <div className="equipment-footer-leading">
-                    {!isCreate && <button type="button" className="equipment-delete-button" disabled={busy || history.length > 0} onClick={() => { setDeleteError(''); setShowDeleteConfirm(true) }}>Delete equipment</button>}
-                    {!isCreate && history.length > 0 && <span className="equipment-delete-blocked" role="status">This equipment cannot be deleted because it has linked job history. Historical records must be preserved.</span>}
+                    {!isCreate && <div className="equipment-delete-control" tabIndex={history.length > 0 ? 0 : undefined}>
+                        <button type="button" className="equipment-delete-button" disabled={busy || history.length > 0} aria-describedby={history.length > 0 ? 'equipment-delete-explanation' : undefined} onClick={() => { setDeleteError(''); setShowDeleteConfirm(true) }}>Delete equipment</button>
+                        {history.length > 0 && <span id="equipment-delete-explanation" className="equipment-delete-tooltip" role="tooltip">This Equipment cannot be deleted because it has linked Job history. Historical records must be preserved.</span>}
+                    </div>}
                     {formError || saveError
                         ? <span className="equipment-footer-error" role="alert">{formError || saveError}</span>
                         : !isCreate && history.length === 0 && <span>Save to update this equipment in Dataverse.</span>}
@@ -703,10 +712,10 @@ export default function EquipmentDrawer(props: Props) {
                             {isCreate && <><label>Power Type<select value={form.powerType} onChange={(event) => {
                                 const powerType = Number(event.target.value) as PowerType
                                 setForm((current) => ({ ...current, powerType, serviceProgramme: current.serviceProgramme === SERVICE_PROGRAMMES.CUSTOM ? current.serviceProgramme : powerType === POWER_TYPES.ELECTRIC ? SERVICE_PROGRAMMES.ELECTRIC_STANDARD : SERVICE_PROGRAMMES.ICE_STANDARD }))
-                            }}><option value={POWER_TYPES.ICE}>ICE</option><option value={POWER_TYPES.ELECTRIC}>Electric</option><option value={POWER_TYPES.OTHER_UNKNOWN}>Other / Unknown</option></select></label><label>Service Programme<select value={form.serviceProgramme} onChange={(event) => updateField('serviceProgramme', Number(event.target.value) as ServiceProgramme)}><option value={SERVICE_PROGRAMMES.ICE_STANDARD}>ICE Standard — A/B/C</option><option value={SERVICE_PROGRAMMES.ELECTRIC_STANDARD}>Electric Standard — A/C</option><option value={SERVICE_PROGRAMMES.CUSTOM}>Custom</option></select></label><label>Maintenance Profile<select value={form.maintenanceProfile} onChange={(event) => { maintenanceProfileTouched.current = true; updateField('maintenanceProfile', Number(event.target.value) as MaintenanceProfile) }}><option value={MAINTENANCE_PROFILES.HIGH_USAGE}>High Usage</option><option value={MAINTENANCE_PROFILES.STANDARD}>Standard</option><option value={MAINTENANCE_PROFILES.LOW_USAGE}>Low Usage</option><option value={MAINTENANCE_PROFILES.CUSTOM}>Custom</option></select></label></>}
+                            }}><option value={POWER_TYPES.ICE}>ICE</option><option value={POWER_TYPES.ELECTRIC}>Electric</option><option value={POWER_TYPES.OTHER_UNKNOWN}>Other / Unknown</option></select></label><label>Service Programme<select value={form.serviceProgramme} onChange={(event) => updateField('serviceProgramme', Number(event.target.value) as ServiceProgramme)}><option value={SERVICE_PROGRAMMES.ICE_STANDARD}>ICE Standard — A/B/C</option><option value={SERVICE_PROGRAMMES.ELECTRIC_STANDARD}>Electric Standard — A/C</option><option value={SERVICE_PROGRAMMES.CUSTOM}>Custom</option></select></label><label>Default Maintenance Profile<select value={form.maintenanceProfile} onChange={(event) => { maintenanceProfileTouched.current = true; updateField('maintenanceProfile', Number(event.target.value) as MaintenanceProfile) }}><option value={MAINTENANCE_PROFILES.HIGH_USAGE}>High Usage</option><option value={MAINTENANCE_PROFILES.STANDARD}>Standard</option><option value={MAINTENANCE_PROFILES.LOW_USAGE}>Low Usage</option><option value={MAINTENANCE_PROFILES.CUSTOM}>Custom</option></select></label></>}
                             {isCreate && form.serviceProgramme === SERVICE_PROGRAMMES.CUSTOM && <>{([['A', 'customAEnabled'], ['B', 'customBEnabled'], ['C', 'customCEnabled']] as const).map(([label, field]) => <label className="equipment-wof-required" key={field}><input type="checkbox" checked={form[field]} onChange={(event) => updateField(field, event.target.checked)} /> {label} Service enabled</label>)}</>}
                             {isCreate && form.maintenanceProfile === MAINTENANCE_PROFILES.CUSTOM && <>{form.customAEnabled && <label>Custom A interval (days)<input type="number" min="1" value={form.customAIntervalDays} onChange={(event) => updateField('customAIntervalDays', event.target.value)} /></label>}{form.customBEnabled && form.serviceProgramme === SERVICE_PROGRAMMES.CUSTOM && <label>Custom B interval (days)<input type="number" min="1" value={form.customBIntervalDays} onChange={(event) => updateField('customBIntervalDays', event.target.value)} /></label>}{form.customCEnabled && <label>Custom C interval (days)<input type="number" min="1" value={form.customCIntervalDays} onChange={(event) => updateField('customCIntervalDays', event.target.value)} /></label>}</>}
-                            {isCreate ? <div className="equipment-relationship-fields">
+                            <div className="equipment-relationship-fields">
                                 <SearchableSelect
                                     id="equipment-customer"
                                     label="Customer"
@@ -731,7 +740,7 @@ export default function EquipmentDrawer(props: Props) {
                                     searchPlaceholder="Search customers"
                                     emptyLabel="No matching customers"
                                 />
-                                {customerMode !== 'new' && <button className="equipment-autocomplete-create" type="button" onClick={() => {
+                                {canCreateRelationships && customerMode !== 'new' && <button className="equipment-autocomplete-create" type="button" onClick={() => {
                                     if (customerMode === 'existing') setCustomerQuery('')
                                     setCustomerMode('new')
                                     setCustomerId('')
@@ -767,11 +776,11 @@ export default function EquipmentDrawer(props: Props) {
                                     emptyLabel={selectedCustomer ? 'No matching Sites' : 'Select a customer before choosing a Site.'}
                                     disabled={!selectedCustomer}
                                 />}
-                                {selectedCustomer && siteMode !== 'new' && <button className="equipment-autocomplete-create" type="button" onClick={() => { updateField('siteId', ''); setSiteMode('new'); setNewSite({ name: '', address: '' }); setRelatedError('') }}>+ Add new site</button>}
-                                {customerMode === 'new' && siteMode !== 'new' && <button className="equipment-autocomplete-create" type="button" onClick={() => { setSiteMode('new'); setNewSite({ name: '', address: '' }) }}>+ Add first site</button>}
+                                {canCreateRelationships && selectedCustomer && siteMode !== 'new' && <button className="equipment-autocomplete-create" type="button" onClick={() => { updateField('siteId', ''); setSiteMode('new'); setNewSite({ name: '', address: '' }); setRelatedError('') }}>+ Add new site</button>}
+                                {canCreateRelationships && customerMode === 'new' && siteMode !== 'new' && <button className="equipment-autocomplete-create" type="button" onClick={() => { setSiteMode('new'); setNewSite({ name: '', address: '' }) }}>+ Add first site</button>}
                                 {siteMode === 'new' && <div className="equipment-inline-site-fields"><label>Site Name<input value={newSite.name} onChange={(event) => { setNewSite((current) => ({ ...current, name: event.target.value })); setRelatedError('') }} /></label><label>Address<input value={newSite.address} onChange={(event) => { const address = event.target.value; setNewSite((current) => ({ ...current, address, name: current.name.trim() || deriveSiteNameFromAddress(address) })); setRelatedError('') }} /></label>{derivedSiteName && newSite.name === derivedSiteName && <p>Site Name generated from address.</p>}{matchingSiteAddress && <p>Possible existing Site at this address: <button type="button" onClick={() => { updateField('siteId', matchingSiteAddress.gr_siteid); setSiteMode('existing'); setSiteQuery(matchingSiteAddress.gr_name); setRelatedError('') }}>{matchingSiteAddress.gr_name}</button></p>}</div>}
                                 {relatedError && <p className="equipment-related-error" role="alert">{relatedError}</p>}
-                            </div> : <><label>Customer (site filter)<select value={customerId} onChange={(event) => { const next = event.target.value; setCustomerId(next); if (form.siteId && !sites.some((site) => site.gr_siteid === form.siteId && (!next || site.gr_Customer?.gr_customerid === next))) updateField('siteId', '') }}><option value="">All customers</option>{customers.map((customer) => <option key={customer.gr_customerid} value={customer.gr_customerid}>{customer.gr_name}</option>)}</select></label><label>Current Site<select value={form.siteId} onChange={(event) => updateField('siteId', event.target.value)}><option value="">No Site</option>{visibleSites.map((site) => <option key={site.gr_siteid} value={site.gr_siteid}>{siteOptionLabel(site)}</option>)}</select></label></>}
+                            </div>
                         </div>
                     </EditDrawerSection>}
 
@@ -814,7 +823,7 @@ export default function EquipmentDrawer(props: Props) {
                                 setForm((current) => ({ ...current, powerType, serviceProgramme: current.serviceProgramme === SERVICE_PROGRAMMES.CUSTOM ? current.serviceProgramme : powerType === POWER_TYPES.ELECTRIC ? SERVICE_PROGRAMMES.ELECTRIC_STANDARD : SERVICE_PROGRAMMES.ICE_STANDARD }))
                             }}><option value={POWER_TYPES.ICE}>ICE</option><option value={POWER_TYPES.ELECTRIC}>Electric</option><option value={POWER_TYPES.OTHER_UNKNOWN}>Other / Unknown</option></select></label>
                             <label>Service Programme<select value={form.serviceProgramme} onChange={(event) => updateField('serviceProgramme', Number(event.target.value) as ServiceProgramme)}><option value={SERVICE_PROGRAMMES.ICE_STANDARD}>ICE Standard — A/B/C</option><option value={SERVICE_PROGRAMMES.ELECTRIC_STANDARD}>Electric Standard — A/C</option><option value={SERVICE_PROGRAMMES.CUSTOM}>Custom</option></select></label>
-                            <label>Maintenance Profile<select value={form.maintenanceProfile} onChange={(event) => updateField('maintenanceProfile', Number(event.target.value) as MaintenanceProfile)}><option value={MAINTENANCE_PROFILES.HIGH_USAGE}>High Usage</option><option value={MAINTENANCE_PROFILES.STANDARD}>Standard</option><option value={MAINTENANCE_PROFILES.LOW_USAGE}>Low Usage</option><option value={MAINTENANCE_PROFILES.CUSTOM}>Custom</option></select></label>
+                            <label>Default Maintenance Profile<select value={form.maintenanceProfile} onChange={(event) => updateField('maintenanceProfile', Number(event.target.value) as MaintenanceProfile)}><option value={MAINTENANCE_PROFILES.HIGH_USAGE}>High Usage</option><option value={MAINTENANCE_PROFILES.STANDARD}>Standard</option><option value={MAINTENANCE_PROFILES.LOW_USAGE}>Low Usage</option><option value={MAINTENANCE_PROFILES.CUSTOM}>Custom</option></select></label>
                         </div>
                         {form.serviceProgramme === SERVICE_PROGRAMMES.CUSTOM && <div className="equipment-form-grid">{([['A', 'customAEnabled'], ['B', 'customBEnabled'], ['C', 'customCEnabled']] as const).map(([label, field]) => <label className="equipment-wof-required" key={field}><input type="checkbox" checked={form[field]} onChange={(event) => updateField(field, event.target.checked)} /> {label} Service enabled</label>)}</div>}
                         {form.maintenanceProfile === MAINTENANCE_PROFILES.CUSTOM && <div className="equipment-form-grid">
@@ -826,33 +835,111 @@ export default function EquipmentDrawer(props: Props) {
                             <article className="equipment-hour-meter-card">
                                 <div className="equipment-hour-meter-heading">
                                     <strong>Last Known Hour Meter</strong>
-                                    <button type="button" onClick={openMaintenanceDialog} disabled={busy}>Edit history</button>
                                 </div>
-                                {equipment?.gr_currenthourmeter == null
+                                {!latestHourMeterReading
                                     ? <p className="equipment-hour-meter-empty">No hour-meter reading recorded</p>
                                     : <div className="equipment-hour-meter-reading">
-                                        <strong>{equipment.gr_currenthourmeter.toLocaleString('en-NZ')} <small>h</small></strong>
-                                        <span>{equipment.gr_currenthourmeterrecordeddate
-                                            ? `Recorded ${formatDate(equipment.gr_currenthourmeterrecordeddate)}`
-                                            : 'Recorded date unavailable'}</span>
+                                        <strong>{latestHourMeterReading.hours.toLocaleString('en-NZ')} <small>h</small></strong>
+                                        <span>Recorded {formatDate(latestHourMeterReading.date)}{latestHourMeterReading.source === 'job' ? ' from latest Job' : ''}</span>
                                     </div>}
                             </article>
+                            {usageForecast && <details className="equipment-usage-forecast-card">
+                                <summary className="equipment-usage-forecast-heading">
+                                    <span><strong>Average Machine Usage</strong><small>{usageForecast.averageHoursPerDay == null ? 'Not enough reliable history' : `${usageForecast.averageHoursPerDay.toFixed(1)} h per day`}</small></span>
+                                    <span className={`confidence-${usageForecast.confidence.toLowerCase()}`}>{usageForecast.confidenceScore}% {usageForecast.confidence} confidence</span>
+                                </summary>
+                                <div className="equipment-usage-forecast-details">
+                                    {usageForecast.averageHoursPerDay == null
+                                        ? <p className="equipment-hour-meter-empty">Valid completed Job readings must span at least {MINIMUM_USAGE_SPAN_DAYS} days before usage can be estimated.</p>
+                                        : <dl>
+                                            <div><dt>Per Day</dt><dd>{usageForecast.averageHoursPerDay.toFixed(1)} h</dd></div>
+                                            <div><dt>Per Week</dt><dd>{usageForecast.averageHoursPerWeek!.toFixed(1)} h</dd></div>
+                                            <div><dt>Per Month</dt><dd>{usageForecast.averageHoursPerMonth!.toFixed(0)} h</dd></div>
+                                            <div><dt>Evidence</dt><dd>{usageForecast.readingCount} readings / {usageForecast.spanDays} days</dd></div>
+                                            <div><dt>Estimated</dt><dd>{usageForecast.estimatedCount}</dd></div>
+                                            <div><dt>Ignored anomalies</dt><dd>{usageForecast.anomalyCount}</dd></div>
+                                            <div><dt>Detected resets</dt><dd>{usageForecast.resetCount}</dd></div>
+                                            <div><dt>Latest Reading</dt><dd>{usageForecast.latestReadingDate ? formatDate(usageForecast.latestReadingDate) : '-'}</dd></div>
+                                        </dl>}
+                                    <p className="equipment-usage-confidence-note">Confidence reflects reading count, history span, recency, and usage consistency across all completed Job types.</p>
+                                    {usageForecast.readings.some((reading) => reading.assessment !== 'Accepted') && <div className="equipment-usage-signals" aria-label="Hour meter reading signals">
+                                        <strong>Reading signals</strong>
+                                        {usageForecast.readings.filter((reading) => reading.assessment !== 'Accepted').slice(-6).map((reading) => {
+                                            const sourceJob = history.find((job) => job.gr_jobid === reading.id)
+                                            return <div key={`${reading.id}-${reading.date}-${reading.hours}`}>
+                                                <span>{sourceJob?.gr_jobnumber || (reading.id === 'equipment-current' ? 'Current Equipment reading' : 'Job')}</span>
+                                                <span>{formatDate(reading.date)} · {reading.hours.toLocaleString('en-NZ')} h</span>
+                                                <em className={`signal-${reading.assessment.toLowerCase().replaceAll(' ', '-')}`}>{reading.assessment}</em>
+                                            </div>
+                                        })}
+                                    </div>}
+                                </div>
+                            </details>}
+                            <div className="equipment-maintenance-service-heading">
+                                <div>
+                                    <strong>Service history and due dates</strong>
+                                    <span>Saved service baselines and completed Service Jobs</span>
+                                </div>
+                                <button type="button" onClick={openMaintenanceDialog} disabled={busy}>Set historical baseline</button>
+                            </div>
+                            <p className="equipment-historical-baseline-note">Use the historical baseline only when earlier maintenance is not represented by Jobs in this app.</p>
                             {maintenanceConfiguration.activeServiceTypes.map((serviceType) => {
                                 const plan = plans.find((item) => item.gr_servicetype === serviceType)
-                                const remaining = plan ? calculateHoursRemaining(equipment?.gr_currenthourmeter ?? 0, plan.gr_nextduehours) : null
-                                const status = plan ? calculateServiceStatus(equipment?.gr_currenthourmeter ?? 0, plan.gr_nextduehours, plan.gr_nextduedate) : null
-                                return <article key={serviceType}>
-                                    <div><strong>{SERVICE_TYPE_OPTIONS.find((option) => option.value === serviceType)?.label}</strong><span className={`equipment-maintenance-status status-${status?.toLowerCase().replace(' ', '-') ?? 'unknown'}`}>{status ?? 'Not Configured'}</span></div>
-                                    <dl>
-                                        <div><dt>Due Hour</dt><dd>{plan?.gr_nextduehours ?? '-'}</dd></div>
-                                        <div><dt>Interval</dt><dd>{maintenanceConfiguration.serviceLevels[serviceType]?.hours} hours or {formatMaintenanceInterval(maintenanceConfiguration.serviceLevels[serviceType]!.timeInterval)}</dd></div>
-                                        <div><dt>Due Date</dt><dd>{plan?.gr_nextduedate ? formatDate(plan.gr_nextduedate) : '-'}</dd></div>
-                                        <div><dt>Hours Remaining</dt><dd>{remaining == null ? '-' : remaining < 0 ? `${Math.abs(remaining)} overdue` : remaining}</dd></div>
-                                        <div><dt>Last Completed Date</dt><dd>{plan?.gr_lastcompleteddate ? formatDate(plan.gr_lastcompleteddate) : '-'}</dd></div>
-                                        <div><dt>Last Completed Hours</dt><dd>{plan?.gr_lastcompletedhours ?? '-'}</dd></div>
-                                        <div><dt>Last Completed Job</dt><dd>{plan?.gr_LastCompletedJob?.gr_jobnumber || '-'}</dd></div>
-                                    </dl>
-                                </article>
+                                const serviceLevel = maintenanceConfiguration.serviceLevels[serviceType]!
+                                const currentHours = latestHourMeterReading?.hours ?? 0
+                                const remaining = plan ? calculateHoursRemaining(currentHours, plan.gr_nextduehours) : null
+                                const status = plan ? calculateServiceStatus(currentHours, plan.gr_nextduehours, plan.gr_nextduedate) : null
+                                const adjustedInterval = usageForecast
+                                    ? calculateUsageAdjustedServiceInterval(usageForecast, serviceLevel.hours, serviceLevel.timeInterval)
+                                    : null
+                                const estimatedHourDueDate = usageForecast && plan && adjustedInterval?.hasReliableUsage
+                                    ? estimateUsageThresholdDate(usageForecast, currentHours, plan.gr_nextduehours)
+                                    : null
+                                const suggestedService = calculateSuggestedServiceDate(
+                                    plan?.gr_nextduedate,
+                                    estimatedHourDueDate,
+                                    currentNewZealandDateOnly(),
+                                )
+                                const nextDueLabel = suggestedService ? formatDate(suggestedService.date) : 'Not configured'
+                                const nextServiceBasis = suggestedService?.basis === 'hours'
+                                    ? `Projected hours · ${usageForecast?.confidenceScore ?? 0}% confidence`
+                                    : suggestedService?.basis === 'both'
+                                        ? 'Calendar and projected hours align'
+                                        : suggestedService ? `Calendar due ${formatDate(suggestedService.date)}` : 'No due date available'
+                                const nextDueStatus = suggestedService?.isOverdue
+                                    ? `Overdue — book now · ${nextServiceBasis}`
+                                    : suggestedService?.isDueToday ? `Due today · ${nextServiceBasis}` : nextServiceBasis
+                                const intervalLabel = adjustedInterval?.label ?? formatMaintenanceInterval(serviceLevel.timeInterval)
+                                const intervalBasis = adjustedInterval?.source === 'usage'
+                                    ? `Usage-adjusted · default ${formatMaintenanceInterval(serviceLevel.timeInterval)}`
+                                    : adjustedInterval?.hasReliableUsage ? 'Default remains earlier than usage forecast' : 'Default profile'
+                                const lastCompletedSummary = plan?.gr_LastCompletedJob?.gr_jobnumber
+                                    ? `Job ${plan.gr_LastCompletedJob.gr_jobnumber} · ${plan.gr_lastcompletedhours != null ? `${plan.gr_lastcompletedhours.toLocaleString('en-NZ')} hours` : 'hours not recorded'}`
+                                    : 'No completed Job linked'
+                                return <details className="equipment-service-plan-card" key={serviceType}>
+                                    <summary>
+                                        <div className="equipment-service-plan-heading">
+                                            <div><strong>{SERVICE_TYPE_OPTIONS.find((option) => option.value === serviceType)?.label}</strong><span className="equipment-service-plan-interval">{intervalLabel}</span></div>
+                                            <span className={`equipment-maintenance-status status-${status?.toLowerCase().replace(' ', '-') ?? 'unknown'}`}>{status ?? 'Not Configured'}</span>
+                                        </div>
+                                        <div className="equipment-service-plan-glance">
+                                            <div><span>Last completed</span><strong>{plan?.gr_lastcompleteddate ? formatDate(plan.gr_lastcompleteddate) : 'Not recorded'}</strong><small>{lastCompletedSummary}</small></div>
+                                            <div><span>Next due by</span><strong>{nextDueLabel}</strong><small>{nextDueStatus}</small></div>
+                                        </div>
+                                    </summary>
+                                    <div className="equipment-service-plan-details">
+                                        <p className="equipment-service-plan-interval-detail">Interval: <strong>{intervalLabel}</strong> <span>{intervalBasis}</span></p>
+                                        <dl>
+                                            <div><dt>Due Hour</dt><dd>{plan?.gr_nextduehours ?? '-'}</dd></div>
+                                            <div><dt>Default Due Date</dt><dd>{plan?.gr_nextduedate ? formatDate(plan.gr_nextduedate) : '-'}</dd></div>
+                                            <div><dt>Hours Remaining</dt><dd>{remaining == null ? '-' : remaining < 0 ? `${Math.abs(remaining)} overdue` : remaining}</dd></div>
+                                            <div><dt>Projected Hour Date</dt><dd>{estimatedHourDueDate ? formatDate(estimatedHourDueDate) : '-'}</dd></div>
+                                            <div><dt>Last Completed Date</dt><dd>{plan?.gr_lastcompleteddate ? formatDate(plan.gr_lastcompleteddate) : '-'}</dd></div>
+                                            <div><dt>Last Completed Hours</dt><dd>{plan?.gr_lastcompletedhours ?? '-'}</dd></div>
+                                            <div><dt>Last Completed Job</dt><dd>{plan?.gr_LastCompletedJob?.gr_jobnumber || '-'}</dd></div>
+                                        </dl>
+                                    </div>
+                                </details>
                             })}
                         </div>
                     </EditDrawerSection>}
@@ -860,9 +947,17 @@ export default function EquipmentDrawer(props: Props) {
                     {!isCreate && activeTab === 'history' && <EditDrawerSection title="Job History" meta={<span className="equipment-history-count">{history.length} {history.length === 1 ? 'job' : 'jobs'}</span>}>
                         <p className="equipment-history-note">Historical rows use each Job's recorded Site and are not changed when this Equipment moves.</p>
                         {history.length === 0 ? <div className="equipment-history-empty">No linked jobs found.</div> : <div className="equipment-history-list">{history.map((job) => <article key={job.gr_jobid}>
-                            <div className="equipment-history-title"><strong>{job.gr_jobnumber || 'Job number not set'}</strong><time>{formatDate(job.createdon)}</time></div>
-                            <div className="equipment-history-meta"><span>{getJobTypeLabel(job.gr_jobtype)}</span><span>{JOB_STATUS_OPTIONS.find((option) => option.value === job.gr_status)?.label ?? 'Status not set'}</span><span>{JOB_CARD_STATUS_OPTIONS.find((option) => option.value === getJobCardStatus(job.gr_jobcardstatus))?.label}</span></div>
-                            <dl><div><dt>Job Site</dt><dd>{job.gr_Site?.gr_name || 'No Site recorded'}</dd></div><div><dt>Mechanic</dt><dd>{job.gr_Mechanic?.gr_name || 'Unassigned'}</dd></div><div><dt>Description</dt><dd>{job.gr_description || 'No description'}</dd></div></dl>
+                            <div className="equipment-history-title">
+                                <div><strong>{job.gr_jobnumber || 'Job number not set'}</strong><span title={job.gr_description || 'No description'}>{job.gr_description || 'No description'}</span></div>
+                                <time dateTime={job.createdon}>Created {formatDate(job.createdon)}</time>
+                            </div>
+                            <div className="equipment-history-meta"><span>{getJobTypeLabel(job.gr_jobtype)}</span><span className="equipment-history-status" data-status={job.gr_status}>{JOB_STATUS_OPTIONS.find((option) => option.value === job.gr_status)?.label ?? 'Status not set'}</span><span>{JOB_CARD_STATUS_OPTIONS.find((option) => option.value === getJobCardStatus(job.gr_jobcardstatus))?.label}</span></div>
+                            <dl>
+                                <div><dt>Completed Date</dt><dd>{job.gr_completeddate ? formatDate(job.gr_completeddate) : 'Not completed'}</dd></div>
+                                <div><dt>Hours Recorded</dt><dd>{job.gr_hourmeter == null ? 'Not recorded' : `${job.gr_hourmeter.toLocaleString('en-NZ')} hours${job.gr_hourmeterreadingtype === HOUR_METER_READING_TYPES.ESTIMATED ? ' · Estimated' : ''}`}</dd></div>
+                                <div><dt>Job Site</dt><dd>{job.gr_Site?.gr_name || 'No Site recorded'}</dd></div>
+                                <div><dt>Mechanic</dt><dd>{job.gr_Mechanic?.gr_name || 'Unassigned'}</dd></div>
+                            </dl>
                         </article>)}</div>}
                     </EditDrawerSection>}
                 </div>
@@ -906,20 +1001,22 @@ export default function EquipmentDrawer(props: Props) {
         />}
 
         {!isCreate && maintenanceDialogOpen && <EditDrawerFormDialog
-            eyebrow="Maintenance"
-            title="Edit Maintenance History"
+            eyebrow="Historical setup"
+            title="Set Historical Service Baseline"
             error={maintenanceError}
             isBusy={busy}
-            submitLabel={isSaving ? 'Saving...' : 'Save'}
+            submitLabel={isSaving ? 'Saving...' : 'Save baseline'}
             onCancel={() => { if (!busy) setMaintenanceDialogOpen(false) }}
             onSubmit={() => void saveMaintenanceHistory()}
         >
-            <p className="edit-form-dialog-context">Update the last known meter reading and historical service completions. Next due hours are calculated automatically.</p>
-            <fieldset className="equipment-maintenance-history-group hour-meter">
+            <p className="edit-form-dialog-context">Use this only for maintenance completed before its Jobs were recorded in this app. Future completed Service Jobs update service history automatically.</p>
+            {latestHourMeterReading?.source === 'job'
+                ? <p className="equipment-maintenance-job-meter-note">The Last Known Hour Meter comes from the latest completed Job and is not replaced by this historical baseline.</p>
+                : <fieldset className="equipment-maintenance-history-group hour-meter">
                 <legend>Last Known Hour Meter</legend>
-                <label>Hour Meter<input type="number" min="0" value={maintenanceForm.currentHourMeter} onChange={(event) => { setMaintenanceForm((current) => ({ ...current, currentHourMeter: event.target.value })); setMaintenanceError('') }} /></label>
+                <label>Fallback Hour Meter<input type="number" min="0" value={maintenanceForm.currentHourMeter} onChange={(event) => { setMaintenanceForm((current) => ({ ...current, currentHourMeter: event.target.value })); setMaintenanceError('') }} /></label>
                 <label>Reading recorded date<input type="date" required value={maintenanceForm.readingRecordedDate} onChange={(event) => { setMaintenanceForm((current) => ({ ...current, readingRecordedDate: event.target.value })); setMaintenanceError('') }} /></label>
-            </fieldset>
+                </fieldset>}
             {maintenanceConfiguration.activeServiceTypes.map((serviceType) => {
                 const label = SERVICE_TYPE_OPTIONS.find((option) => option.value === serviceType)?.label
                 return <fieldset className="equipment-maintenance-history-group" key={serviceType}>

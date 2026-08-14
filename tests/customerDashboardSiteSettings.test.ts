@@ -1,10 +1,53 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import {
+    getCustomerDashboardViewStateKey,
+    restoreCustomerDashboardSelection,
+    saveCustomerDashboardSelection,
+} from '../src/alpha/customers/customerDashboardViewState.ts'
 
 const dashboardSource = readFileSync(new URL('../src/alpha/customers/CustomerDashboardScreen.tsx', import.meta.url), 'utf8')
 const drawerSource = readFileSync(new URL('../src/alpha/customers/SiteSettingsDrawer.tsx', import.meta.url), 'utf8')
 const runDrawerSource = readFileSync(new URL('../src/alpha/site-checks/components/RunSiteCheckDrawer.tsx', import.meta.url), 'utf8')
+const searchableSelectSource = readFileSync(new URL('../src/alpha/shared/searchable-select/SearchableSelect.tsx', import.meta.url), 'utf8')
+
+function createStorage() {
+    const values = new Map<string, string>()
+    return {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => { values.set(key, value) },
+        removeItem: (key: string) => { values.delete(key) },
+    }
+}
+
+test('Customer Dashboard selection persists per signed-in user for the browser session', () => {
+    const storage = createStorage()
+    const firstUserKey = getCustomerDashboardViewStateKey('first-user')
+    const secondUserKey = getCustomerDashboardViewStateKey('second-user')
+
+    saveCustomerDashboardSelection(firstUserKey, 'customer-123', storage)
+
+    assert.equal(restoreCustomerDashboardSelection(firstUserKey, storage), 'customer-123')
+    assert.equal(restoreCustomerDashboardSelection(secondUserKey, storage), '')
+})
+
+test('Customer Dashboard selection storage fails safely and clears an explicit deselection', () => {
+    const storage = createStorage()
+    const storageKey = getCustomerDashboardViewStateKey('user')
+    saveCustomerDashboardSelection(storageKey, 'customer-123', storage)
+    saveCustomerDashboardSelection(storageKey, '', storage)
+    assert.equal(restoreCustomerDashboardSelection(storageKey, storage), '')
+
+    storage.setItem(storageKey, '{invalid json')
+    assert.equal(restoreCustomerDashboardSelection(storageKey, storage), '')
+})
+
+test('Customer Dashboard opens and focuses the Customer search when the page mounts', () => {
+    assert.match(dashboardSource, /<SearchableSelect[\s\S]*?id="customer-dashboard-customer"[\s\S]*?autoFocus/)
+    assert.match(searchableSelectSource, /const \[open, setOpen\] = useState\(autoFocus && !disabled\)/)
+    assert.match(searchableSelectSource, /requestAnimationFrame\(\(\) => inputRef\.current\?\.focus\(\)\)/)
+})
 
 test('Sites tab uses one accessible settings-icon entry point', () => {
     assert.match(dashboardSource, /<PageSettingsButton/)

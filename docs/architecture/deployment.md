@@ -28,11 +28,18 @@ VITE_MSAL_CLIENT_ID
 VITE_MSAL_TENANT_ID
 VITE_DATAVERSE_URL
 VITE_MSAL_SILENT_REDIRECT_URI (optional)
+VITE_HOUR_METER_CLASSIFICATION_ENABLED (optional; default false)
 ```
 
 When `VITE_MSAL_SILENT_REDIRECT_URI` is configured, its exact
 `https://<application-origin>/auth/silent.html` value must also be registered as a
 Single-page application redirect URI in Microsoft Entra.
+
+The Job `gr_hourmeterreadingtype` Choice and `gr_hourmeterrecordeddate` Date Only column were
+provisioned and structurally verified in the target Dataverse environment on 14 August 2026. Local
+development may set `VITE_HOUR_METER_CLASSIFICATION_ENABLED=true`; keep deployed settings unchanged
+until manager read/write and Actual/Estimated completion smoke testing passes. A build with the flag
+disabled continues to omit both columns.
 
 Server-only portal variables:
 
@@ -42,6 +49,17 @@ DATAVERSE_TENANT_ID
 DATAVERSE_CLIENT_ID
 DATAVERSE_CLIENT_SECRET
 ```
+
+Equipment Map geocoding uses one additional server-only setting:
+
+```text
+GEOAPIFY_API_KEY
+```
+
+Without this setting, the page shows a safe configuration warning and address markers remain
+unavailable. Create and restrict the provider key separately; never expose it through a `VITE_`
+variable. `VITE_EQUIPMENT_MAP_TILE_URL` may optionally select a different Leaflet raster-tile template;
+it is a public URL, not a credential.
 
 Chargeable Invoice File-write release gates are server-only and default to disabled:
 

@@ -1,11 +1,52 @@
 .job-completion-equipment,
 .job-completion-service,
 .job-completion-summary { padding: 12px; border: 1px solid #dce5e0; border-radius: 9px; background: #f7faf8; }
+.edit-form-dialog.job-completion-dialog { width: min(560px, calc(100vw - 32px)); }
+.job-completion-fields, .job-completion-wof-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: calc(100vh - 190px); overflow-y: auto; padding-right: 3px; }
+.job-completion-fields > *, .job-completion-wof-fields > * { min-width: 0; }
+.job-completion-reference { grid-column: 1 / -1; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid #b9d4cc; border-radius: 9px; background: #edf7f4; }
+.job-completion-reference span { color: #5d716a; font-size: .66rem; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.job-completion-reference strong { overflow-wrap: anywhere; color: #176f66; font-size: 1rem; }
+.job-completion-fields input, .job-completion-fields output, .job-completion-wof-fields input, .job-completion-wof-fields output { width: 100%; min-width: 0; max-width: 100%; }
+.job-completion-hour-entry { display: grid; align-content: start; gap: 8px; }
+.job-completion-hour-entry > label { min-width: 0; }
+.job-completion-estimate-toggle { display: grid !important; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 7px !important; padding: 9px 10px; border: 1px solid #c7d7e8; border-radius: 8px; background: #f3f7fb; color: #34577d !important; }
+.job-completion-estimate-toggle input { width: auto; min-width: auto; min-height: auto; }
+.job-completion-estimate-toggle > span { display: grid; gap: 3px; }
+.job-completion-estimate-toggle strong { font-size: .72rem; }
+.job-completion-estimate-value { font-size: .82rem; color: #24517f; }
+.job-completion-estimate-toggle small { color: #61758d; font-size: .68rem; font-weight: 500; line-height: 1.35; }
+.job-completion-estimate-toggle:has(input:disabled) { opacity: .72; }
+.job-completion-historical-note { margin: 0; padding: 8px 10px; border-left: 3px solid #d2a04d; background: #fff8e8; color: #76551d; font-size: .7rem; line-height: 1.4; }
 .job-completion-equipment span,
 .job-completion-service span { display: block; color: #737d77; font-size: .66rem; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
 .job-completion-equipment strong,
-.job-completion-service strong { display: block; margin-top: 4px; color: #26362f; }
+.job-completion-service strong { display: block; margin-top: 4px; overflow-wrap: anywhere; color: #26362f; }
+.job-completion-equipment strong { overflow-wrap: anywhere; }
 .job-completion-equipment p { margin: 3px 0 0; color: #68736d; font-size: .76rem; }
 .edit-form-dialog-fields label output { display: block; min-height: 38px; box-sizing: border-box; padding: 9px 10px; border: 1px solid #d8dfdb; border-radius: 7px; background: #f2f5f3; color: #35433c; font-weight: 700; }
+.job-completion-fields output small, .job-completion-wof-fields output small { display: block; margin-top: 3px; color: #6b756f; font-size: .66rem; font-weight: 600; line-height: 1.25; }
+.job-completion-summary { grid-column: 1 / -1; }
 .job-completion-summary strong { color: #35433c; font-size: .76rem; }
-.job-completion-summary ul { display: grid; gap: 5px; margin: 8px 0 0; padding-left: 20px; color: #5d6962; font-size: .74rem; }
+.job-completion-summary ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 24px; margin: 8px 0 0; padding-left: 20px; color: #5d6962; font-size: .74rem; line-height: 1.35; }
+.job-completion-schedule-warning { padding: 11px 12px; border: 1px solid #e3b36c; border-radius: 9px; background: #fff8e8; color: #77501c; }
+.job-completion-schedule-warning strong, .job-completion-schedule-warning small { display: block; }
+.job-completion-schedule-warning p { margin: 5px 0; font-size: .75rem; line-height: 1.45; }
+.job-completion-schedule-warning small { color: #8a642d; font-size: .68rem; }
+.job-completion-maintenance-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin-top: 10px; }
+.job-completion-maintenance-grid label { gap: 4px; color: #69491f; font-size: .68rem; }
+.job-completion-maintenance-grid select { width: 100%; min-width: 0; min-height: 36px; box-sizing: border-box; padding: 0 8px; border: 1px solid #d8b77e; border-radius: 7px; background: #fff; color: #3e3426; font: inherit; }
+.job-completion-maintenance-levels { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 10px; }
+.job-completion-maintenance-levels label { display: flex; grid-template-columns: auto 1fr; align-items: center; gap: 5px; color: #69491f; font-size: .7rem; }
+.job-completion-maintenance-levels input { width: auto; min-height: auto; }
+.job-completion-maintenance-error { color: #a23b35; font-weight: 700; }
+.job-completion-maintenance-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 11px; }
+.job-completion-maintenance-actions button { min-height: 34px; padding: 0 11px; border: 1px solid #a86e22; border-radius: 7px; background: #a86e22; color: #fff; font: inherit; font-size: .72rem; font-weight: 750; cursor: pointer; }
+.job-completion-maintenance-actions button:disabled { cursor: default; opacity: .58; }
+@media (max-width: 480px) {
+    .job-completion-fields, .job-completion-wof-fields { grid-template-columns: minmax(0, 1fr); }
+    .job-completion-fields .job-edit-field-wide, .job-completion-wof-fields .job-edit-field-wide { grid-column: 1; }
+    .job-completion-summary ul { grid-template-columns: minmax(0, 1fr); }
+    .job-completion-maintenance-grid { grid-template-columns: minmax(0, 1fr); }
+    .job-completion-maintenance-actions { align-items: stretch; flex-direction: column; }
+}

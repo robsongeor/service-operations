@@ -1,6 +1,6 @@
 # Current State
 
-Branch: `codex/staff-directory`
+Branch: `codex/next-development`
 
 ## Deployment status
 
@@ -40,6 +40,33 @@ Branch: `codex/staff-directory`
   real communication was performed during deployment. Signed-in role/business-flow smoke remains.
 
 ## Unfinished work
+
+- The Service Job completion hour-meter dialog now uses bounded responsive columns so Equipment
+  labels, maintenance summaries, and numeric inputs cannot overlap or escape the modal at narrow
+  widths or increased browser scaling. It also blocks incomplete maintenance schedules before
+  submission and lets the user configure and synchronize the Equipment maintenance setup directly
+  in the completion dialog before retrying. Plan-dependent schedule, hour-meter, effects, and
+  completion controls remain hidden until synchronization succeeds.
+
+- All Job types now require linked Equipment and an hour-meter reading when moving to Complete.
+  Breakdown, Workshop, and Site Check use the general completion dialog; WOF captures hours with its
+  expiry; Service retains its additional plan checks and atomic maintenance updates. Completion
+  readings are stored on both the Job and the Equipment so machine usage can inform service timing.
+
+- Equipment create and edit drawers now share the searchable Customer/Site relationship workflow.
+  Either mode can create a Customer and its first Site inline with duplicate-name protection; the
+  Equipment record continues to persist only its authoritative Site lookup.
+
+- Equipment Map is implemented locally on `/equipment-map`. It groups Equipment by current assigned
+  Site, resolves Site addresses through an authenticated server-only Geoapify boundary, and renders
+  a Leaflet/OpenStreetMap view. Addresses resolve and cache in 20-Site batches; an individual provider
+  failure settles as Not mapped instead of blocking the batch, and markers fit once after the initial
+  pass to avoid repeated map movement. Nearby markers cluster and split/spiderfy during zoom so dense
+  areas remain readable; Site and Equipment details open in a closable floating map window, and the
+  desktop map fills the remaining viewport beneath the filters.
+  Production markers require a separately created and restricted `GEOAPIFY_API_KEY` server setting,
+  deployment, and signed-in smoke testing. No Dataverse schema, role, record, credential, or cloud
+  configuration has been changed.
 
 - Staff Directory is published in `v1.6.0`: the UI is renamed from
   Mechanics to Staff, `/mechanics` redirects to `/staff`, Department, `Can be assigned Jobs`, and
@@ -904,3 +931,97 @@ depth grants passed. That verification predates the approved deletion feature: t
 remains unassigned and still has no Delete, Assign or Share until the six new Delete grants receive
 separate provisioning approval. No
 schema, configuration, role assignment or business row was changed.
+
+The local branch now contains an hour-meter evidence and usage-forecast workflow. Every completed
+Job type contributes equally; ordinary readings are accepted by default, estimates are explicitly
+marked, isolated suspect readings are ignored, and sustained lower readings form a confirmed reset
+segment. Equipment Maintenance shows average daily/weekly/monthly usage, evidence signals, and a
+confidence score. Completion can offer a clearly marked estimated value only when
+`VITE_HOUR_METER_CLASSIFICATION_ENABLED=true`.
+
+The gated completion option now explicitly reads “Technician did not record hours — estimate from
+previous Jobs”. It enables only when usable previous completed Job evidence exists, populates a
+read-only estimate, and states that the saved Job will remain labelled Estimated. If no previous Job
+reading is available, the disabled control explains that an estimate cannot be generated rather than
+using a misleading zero. This remains gated until the proposed Dataverse Choice and Date Only fields
+are provisioned and verified.
+
+The supporting Job Choice `gr_hourmeterreadingtype` and Date Only
+`gr_hourmeterrecordeddate` were provisioned, published, and structurally verified in
+`org0d4246d7.crm6.dynamics.com` / `ServiceOperationsNew` on 14 August 2026 through the approved
+idempotent combined schema workflow. Exact Choice values Actual `122830000` and Estimated
+`122830001`, optionality, local Choice ownership, and Date Only behavior were read back successfully.
+The local development gate is enabled. No role was broadened, no business row was changed, and no
+application deployment or real-Job completion smoke was performed.
+
+A signed-in read-only local smoke on 14 August 2026 confirmed the general Breakdown completion
+dialog renders the effective Job Number, linked Equipment, Job Type, current meter, required
+completion meter, and update summary without overlap. The Equipment Manager then loaded all 358
+current records with the classification gate disabled. No completion was submitted and no
+Dataverse row was changed. Estimated-reading persistence remains intentionally unavailable until
+the proposed Choice is provisioned and the gate is separately enabled.
+
+The gated hour-meter schema and completion UI now also include a Job `gr_hourmeterrecordeddate`
+Date Only value. Its initial value is the Job created date, not the office completion timestamp, and
+the manager may correct it before completing. Forecasts sort by this date. Late-entered older readings
+remain Job history but do not overwrite a newer Equipment current reading or newer Service Plan state.
+Legacy/null rows continue to fall back to Job Completed Date. The columns are now provisioned and
+the local development build includes them; deployed builds remain unchanged pending smoke testing.
+
+Current-meter comparison is date-aware and completed Job evidence is authoritative. When usable
+completed Job readings exist, the latest dated Job supplies the Last Known Hour Meter value and date
+for the Maintenance display, completion comparisons, service-due calculations, and forecasts. The
+Equipment current-meter snapshot is a fallback only when no completed Job reading exists. A stale
+snapshot is not appended to forecast evidence, so it cannot make later valid Jobs appear anomalous;
+one isolated suspect reading also does not cascade into the following reading.
+
+Because Job completion supplies a Date Only value rather than an event timestamp, readings separated
+by only a day may represent much less or more than 24 elapsed hours. They remain visible evidence, but
+average usage and service-date projections now wait until accepted readings span at least seven
+calendar days, preventing an ambiguous overnight pair from producing a misleading daily rate.
+Both the average and its consistency score weight intervals by elapsed days, so a longer observation
+period has proportionally more influence than a next-day reading.
+
+Equipment Maintenance now keeps Average Machine Usage prominent immediately after Last Known Hour
+Meter, then introduces a separate Service History and Due Dates section. The former Edit History
+action is renamed Set Historical Baseline and explains that it is only a bridge for maintenance not
+represented by Jobs, particularly newly entered Equipment. Its dialog is titled Historical Service
+Baseline; when completed Job meter evidence exists, it states that the Job-authoritative current
+meter will not be replaced and hides the fallback meter inputs.
+
+New Job creation now rejects non-empty duplicate Job Numbers. The main Jobs drawer compares a
+trimmed, case-normalized value against its loaded Jobs for immediate feedback, and the canonical
+Dataverse create service performs an exact authenticated duplicate query before every Job POST so
+WOF, Equipment, Customer Dashboard, Chargeable Invoice, and other shared-drawer entry points receive
+the same protection. Query failure fails closed without creating a Job. No schema was changed; the
+remaining exact-simultaneous-create race requires a separately approved Dataverse Job Number
+alternate key and is recorded in the authoritative backlog.
+
+The Equipment current-meter write also enforces that chronology using the latest completed Job date
+when Job evidence exists, otherwise the re-read Equipment date. Standard and WOF completion paths
+re-read the Equipment row immediately before PATCH, skip Equipment mutation for older-dated readings
+while retaining them in Job history, and use the Equipment ETag with one safe retry. Service
+completion retains the same Job-authoritative date rule inside its atomic transaction.
+
+All shared Job completion dialogs now show a required Job Completion Date instead of silently using
+the office submission timestamp. It defaults to the current New Zealand date, rejects future or
+invalid dates, and persists to the existing Job Completed Date for Standard, Service, and WOF
+completions. WOF additionally uses the selected completion date as its Inspection date while keeping
+the WOF expiry and optional hour-meter reading date as separate business dates.
+
+Equipment Job History cards now label their existing header date as the Job Created date and add
+Completed Date and Hours Recorded fields. Incomplete or legacy Jobs show explicit Not completed or
+Not recorded values, and estimated meter evidence remains visibly marked. Job descriptions now sit
+beside the Job number, truncate with an ellipsis, and expose their full text on hover. The operational
+Job Status badge is colour-coded with the established status palette; the neighbouring Job Type and
+Job Card status badges remain neutral.
+The linked-history deletion explanation has moved from persistent footer text to an accessible
+hover/focus tooltip on the disabled Delete Equipment control, preventing footer overlap.
+
+Shared Job completion dialogs now use a wider bounded desktop layout. Current hour-meter values and
+their recorded dates render on separate lines, completion summaries span the full dialog in readable
+columns, and both the WOF fields and summaries collapse to one column on narrow screens.
+
+When the separate hour-meter reading-date schema is gated off, Job Completion Date now supplies the
+effective reading date. A lower reading dated before the Equipment's current recorded date is saved
+as historical Job evidence without showing a reset warning or replacing the current Equipment meter.

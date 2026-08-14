@@ -175,7 +175,8 @@ export default function SchedulingScreen() {
         createScheduleOption,
         updateScheduleOption,
         deleteScheduleOption,
-        completionRequest, isCompletingJob, completionError, completeServiceJob, completeWofJob, cancelJobCompletion,
+        completionRequest, isCompletingJob, completionError, completeStandardJob, completeServiceJob, completeWofJob, cancelJobCompletion,
+        setupEquipmentMaintenance,
         isLoading,
         loadError,
         retryInitialLoad,
@@ -432,10 +433,13 @@ export default function SchedulingScreen() {
                 key={completionRequest?.job.gr_jobid ?? 'no-completion'}
                 request={completionRequest}
                 equipment={equipmentList}
+                jobs={jobs}
                 servicePlans={servicePlans}
                 isCompleting={isCompletingJob}
                 error={completionError}
                 onCancel={cancelJobCompletion}
+                onSetupMaintenance={setupEquipmentMaintenance}
+                onCompleteStandard={completeStandardJob}
                 onCompleteService={completeServiceJob}
                 onCompleteWof={completeWofJob}
             />

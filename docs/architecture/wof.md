@@ -51,6 +51,9 @@ helpers parse, format, load, and save WOF and registration dates without timezon
 - A completed Inspection remains ready for office administration until its new expiry is
   written to the Equipment record. The Equipment then returns to normal expiry monitoring.
 - A WOF Job cannot transition to Complete until a valid new expiry is supplied. Completion
+  also requires the shared, visible Job Completion Date. That date defaults to today, may be
+  corrected to a non-future date, is written to the Job Completed Date, and owns the WOF Inspection
+  date. The hour-meter reading date remains separate when its gated schema is enabled. Completion
   resolves the Inspection through its explicit Job lookup, verifies its Equipment against
   the Job Equipment, updates and confirms the Inspection and authoritative Equipment
   expiry, and only then completes the Job. Never infer this relationship from text fields.

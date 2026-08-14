@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+## v1.7.0 — 15 August 2026
+
+- Added an Equipment Map that groups Equipment at their assigned Site address, clusters dense
+  locations, and opens Site and Equipment information in a closable map panel through a
+  server-only geocoding boundary.
+- Preserved the selected Customer Dashboard context while navigating between screens and focused
+  Customer search when the screen opens without a selection.
+- Added searchable Customer selection and inline Customer/Site creation to the Equipment drawer.
+- Required linked Equipment and an hour-meter reading when completing every Job type, with an
+  explicit Job Completion Date and date-aware protection for late-entered historical readings.
+- Added clearly labelled estimated readings when technicians did not record hours and sufficient
+  previous Job evidence exists, while keeping the production classification flag gated.
+- Added Equipment machine-usage forecasts with weighted evidence, confidence scoring, anomaly and
+  meter-reset handling, and usage-adjusted service intervals that can shorten but never extend the
+  selected maintenance profile.
+- Simplified Equipment maintenance summaries around effective A/B/C intervals, last completed
+  dates, linked Job hours, and next-due dates, with supporting calculations available on expansion.
+- Added completed dates, recorded hours, descriptions, and colour-coded status to Equipment Job
+  History, plus a sortable linked-Job count on the Equipment table.
+- Prevented duplicate non-empty Job Numbers through immediate drawer validation and the canonical
+  Dataverse create service; an alternate key remains the separate concurrency-hardening backlog item.
+- Improved Job completion dialog responsiveness, Job-number visibility, inline maintenance setup,
+  WOF completion consistency, and chronology-aware current-meter updates.
+
 ## v1.6.0 — 13 August 2026
 
 - Added inline PO Contact creation to Customer-default and Site-override recipient settings, with

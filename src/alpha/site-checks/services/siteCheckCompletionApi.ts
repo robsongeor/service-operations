@@ -14,6 +14,7 @@ import {
     type SiteCheckJobProgressInput,
     type SiteCheckSchedule,
 } from '../types/siteCheck.types.ts'
+import { HOUR_METER_CLASSIFICATION_ENABLED, type HourMeterReadingType } from '../../equipment/hourMeter/hourMeterReading.types.ts'
 
 const DEFAULT_API_URL = `${import.meta.env?.VITE_DATAVERSE_URL ?? ''}/api/data/v9.2`
 const GUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -45,6 +46,9 @@ export type SiteCheckJobStatusInput = {
     status: JobStatus
     pendingSave?: JobSaveInput
     completedOn?: string
+    hourMeter?: number
+    hourMeterReadingType?: HourMeterReadingType
+    hourMeterRecordedDate?: string
 }
 
 export type SiteCheckJobStatusResult = {
@@ -260,6 +264,13 @@ function jobFields(input: SiteCheckJobStatusInput, completedDate?: string) {
     return {
         gr_status: input.status,
         ...(completedDate ? { gr_completeddate: completedDate } : {}),
+        ...(input.hourMeter != null ? { gr_hourmeter: input.hourMeter } : {}),
+        ...(HOUR_METER_CLASSIFICATION_ENABLED && input.hourMeterReadingType != null
+            ? { gr_hourmeterreadingtype: input.hourMeterReadingType }
+            : {}),
+        ...(HOUR_METER_CLASSIFICATION_ENABLED && input.hourMeterRecordedDate
+            ? { gr_hourmeterrecordeddate: input.hourMeterRecordedDate }
+            : {}),
     }
 }
 

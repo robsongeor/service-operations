@@ -63,6 +63,9 @@ without repeating the lookup.
 - A current-state field does not replace historical records.
 - Equipment Customer is derived, not duplicated.
 - Atomic workflows use ETags to reject stale changes.
+- Application Job creation performs an exact duplicate-number read before create. This protects
+  ordinary workflows but is not a database uniqueness constraint; an approved Job Number alternate
+  key is required to reject simultaneous same-number creates authoritatively.
 - Interactive authentication is never a Dataverse retry strategy.
 - `WhoAmI`, metadata, and record reads are not repeated per child row when one validation or
   batched query can cover the operation.

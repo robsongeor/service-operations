@@ -94,16 +94,19 @@ export default function WofJobDrawer({ jobId, onChanged, onClose }: Props) {
             key={manager.completionRequest?.job.gr_jobid ?? 'no-completion'}
             request={manager.completionRequest}
             equipment={manager.equipmentList}
+            jobs={manager.jobs}
             servicePlans={manager.servicePlans}
             isCompleting={manager.isCompletingJob}
             error={manager.completionError}
             onCancel={manager.cancelJobCompletion}
-            onCompleteService={async (hourMeter) => {
-                await manager.completeServiceJob(hourMeter)
+            onSetupMaintenance={manager.setupEquipmentMaintenance}
+            onCompleteStandard={manager.completeStandardJob}
+            onCompleteService={async (hourMeter, readingType, readingDate, completionDate) => {
+                await manager.completeServiceJob(hourMeter, readingType, readingDate, completionDate)
                 await onChanged()
             }}
-            onCompleteWof={async (newExpiry) => {
-                await manager.completeWofJob(newExpiry)
+            onCompleteWof={async (newExpiry, hourMeter, readingType, readingDate, completionDate) => {
+                await manager.completeWofJob(newExpiry, hourMeter, readingType, readingDate, completionDate)
                 await onChanged()
             }}
         />

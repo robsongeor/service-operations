@@ -41,6 +41,11 @@ import { currentNewZealandDateOnly } from '../shared/dates/dateOnly'
 import RunSiteCheckDrawer from '../site-checks/components/RunSiteCheckDrawer'
 import SiteCheckDetailsDrawer from '../site-checks/components/SiteCheckDetailsDrawer'
 import type { SiteCheck } from '../site-checks/types/siteCheck.types'
+import {
+    getCustomerDashboardViewStateKey,
+    restoreCustomerDashboardSelection,
+    saveCustomerDashboardSelection,
+} from './customerDashboardViewState'
 import './CustomerDashboardScreen.css'
 
 const dateFormatter = new Intl.DateTimeFormat('en-NZ', { dateStyle: 'medium' })
@@ -60,6 +65,7 @@ export default function CustomerDashboardScreen() {
     const [searchParams, setSearchParams] = useSearchParams()
     const activeAccount = useActiveMsalAccount()
     const signedInUser = getSignedInUserInfo(activeAccount)
+    const viewStorageKey = signedInUser ? getCustomerDashboardViewStateKey(signedInUser.storageId) : null
     const bulkImportAllowed = canUseBulkEquipmentImport(signedInUser)
     const {
         equipment,
@@ -115,15 +121,19 @@ export default function CustomerDashboardScreen() {
         completionRequest,
         isCompletingJob,
         completionError,
+        completeStandardJob,
         completeServiceJob,
         completeWofJob,
+        setupEquipmentMaintenance,
         cancelJobCompletion,
         isLoading: isJobsLoading,
         loadError: jobsLoadError,
         fetchJobs,
     } = useJobs()
 
-    const [selectedCustomerId, setSelectedCustomerId] = useState('')
+    const [selectedCustomerId, setSelectedCustomerId] = useState(() => viewStorageKey
+        ? restoreCustomerDashboardSelection(viewStorageKey)
+        : '')
     const [editingEquipment, setEditingEquipment] = useState<Equipment | null>(null)
     const [creatingEquipmentInitialValues, setCreatingEquipmentInitialValues] = useState<EquipmentCreateInitialValues | null>(null)
     const [bulkImportSite, setBulkImportSite] = useState<Site | null>(null)
@@ -153,6 +163,11 @@ export default function CustomerDashboardScreen() {
     const siteCheckDetailsTriggerRef = useRef<HTMLButtonElement | null>(null)
     const siteSettingsTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({})
     const sitesHeadingRef = useRef<HTMLHeadingElement>(null)
+
+    useEffect(() => {
+        if (!viewStorageKey) return
+        saveCustomerDashboardSelection(viewStorageKey, selectedCustomerId)
+    }, [selectedCustomerId, viewStorageKey])
 
     useEffect(() => {
         const customerId = searchParams.get('customerId')
@@ -201,6 +216,10 @@ export default function CustomerDashboardScreen() {
     }, [allCustomers])
 
     const selectedCustomer = allCustomers.find((customer) => customer.gr_customerid === selectedCustomerId)
+    useEffect(() => {
+        if (!viewStorageKey || isLoading || loadError || !selectedCustomerId || selectedCustomer) return
+        saveCustomerDashboardSelection(viewStorageKey, '')
+    }, [isLoading, loadError, selectedCustomer, selectedCustomerId, viewStorageKey])
     const poRecipients = usePurchaseOrderRecipients(selectedCustomer?.gr_customerid)
     const customerSites = allSites
         .filter((site) => site.gr_Customer?.gr_customerid === selectedCustomerId)
@@ -499,9 +518,10 @@ export default function CustomerDashboardScreen() {
                 <SearchableSelect
                     id="customer-dashboard-customer"
                     label="Customer"
-                    value={selectedCustomerId}
+                    value={selectedCustomer?.gr_customerid ?? ''}
                     options={customerOptions}
                     onChange={(customerId) => { initialiseCustomerSiteState(customerId); setSelectedCustomerId(customerId); setActiveTab('sites'); setSiteSuccess('') }}
+                    autoFocus
                     placeholder="Select a customer"
                     searchPlaceholder="Search customers"
                     emptyLabel="No matching customers"
@@ -1090,10 +1110,13 @@ export default function CustomerDashboardScreen() {
             key={completionRequest?.job.gr_jobid ?? 'no-completion'}
             request={completionRequest}
             equipment={jobEquipmentList}
+            jobs={operationalJobs}
             servicePlans={jobServicePlans}
             isCompleting={isCompletingJob}
             error={completionError}
             onCancel={cancelJobCompletion}
+            onSetupMaintenance={setupEquipmentMaintenance}
+            onCompleteStandard={completeStandardJob}
             onCompleteService={completeServiceJob}
             onCompleteWof={completeWofJob}
         />
