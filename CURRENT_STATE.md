@@ -45,10 +45,11 @@ Branch: `codex/next-development`
   persistence, Equipment Map, searchable Equipment relationships, all-Job hour-meter completion,
   date-aware meter history and estimates, machine-usage forecasts, usage-adjusted service intervals,
   compact maintenance summaries, Equipment Job counts/history, and duplicate Job Number protection.
-  The deployed hour-meter classification flag remains unchanged. Signed-in business-flow smoke and
-  verification or configuration of the server-only `GEOAPIFY_API_KEY` remain outstanding; the smoke
-  check stopped at Microsoft sign-in without initiating authentication. No Dataverse provisioning,
-  role assignment, cloud-setting change, credential creation, or real communication was performed.
+  The deployed hour-meter classification flag remains unchanged. The production server-only
+  `GEOAPIFY_API_KEY` Static Web App environment variable was configured manually on 15 August 2026;
+  its value remains outside source control and client configuration. Signed-in Equipment Map and
+  business-flow smoke testing remain outstanding. No Dataverse provisioning, role assignment,
+  credential creation, or real communication was performed.
 
 ## Unfinished work
 
@@ -77,9 +78,9 @@ Branch: `codex/next-development`
   pass to avoid repeated map movement. Nearby markers cluster and split/spiderfy during zoom so dense
   areas remain readable; Site and Equipment details open in a closable floating map window, and the
   desktop map fills the remaining viewport beneath the filters.
-  Production markers still require verification or configuration of the separately created and
-  restricted `GEOAPIFY_API_KEY` server setting plus signed-in smoke testing. No Dataverse schema,
-  role, record, credential, or cloud configuration was changed during deployment.
+  The separately created `GEOAPIFY_API_KEY` was added manually to the production server-only Static
+  Web App environment variables on 15 August 2026. Signed-in verification that markers resolve in
+  production remains outstanding. No Dataverse schema, role, record, or credential was changed.
 
 - Staff Directory is published in `v1.6.0`: the UI is renamed from
   Mechanics to Staff, `/mechanics` redirects to `/staff`, Department, `Can be assigned Jobs`, and
