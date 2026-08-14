@@ -33,7 +33,11 @@ function dataverseOrigin() {
 }
 
 async function validateAuthenticatedUser(request) {
-    const authorization = requestHeader(request, 'authorization')
+    // Azure Static Web Apps reserves the standard Authorization header for its
+    // platform authentication. Use a dedicated header for the delegated
+    // Dataverse token, while retaining the standard header for local/tests.
+    const authorization = requestHeader(request, 'x-dataverse-authorization')
+        || requestHeader(request, 'authorization')
     if (!/^Bearer\s+\S+$/i.test(authorization)) {
         return { error: jsonResponse(401, { error: 'Authentication is required.' }, { 'WWW-Authenticate': 'Bearer' }) }
     }

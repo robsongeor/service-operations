@@ -68,6 +68,14 @@ test('Equipment geocoding rejects anonymous callers before provider access', asy
     assert.match(response.body, /Authentication is required/)
 })
 
+test('Equipment geocoding reads the dedicated Dataverse bearer header case-insensitively', () => {
+    assert.equal(service.test.requestHeader({
+        method: 'POST',
+        headers: { 'X-Dataverse-Authorization': ' Bearer delegated-token ' },
+        body: {},
+    }, 'x-dataverse-authorization'), 'Bearer delegated-token')
+})
+
 test('Equipment Map keeps Geoapify credentials out of client code and uses canonical routing', () => {
     const screen = readFileSync(new URL('../src/alpha/equipment-map/EquipmentMapScreen.tsx', import.meta.url), 'utf8')
     const clientApi = readFileSync(new URL('../src/alpha/equipment-map/equipmentGeocodingApi.ts', import.meta.url), 'utf8')
@@ -75,6 +83,7 @@ test('Equipment Map keeps Geoapify credentials out of client code and uses canon
     const mapCache = readFileSync(new URL('../src/alpha/equipment-map/equipmentMapCache.ts', import.meta.url), 'utf8')
     const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
     assert.doesNotMatch(screen + clientApi, /GEOAPIFY_API_KEY/)
+    assert.match(clientApi, /'X-Dataverse-Authorization': `Bearer \$\{accessToken\}`/)
     assert.match(screen, /navigate\(`\/equipment\?equipmentId=/)
     assert.match(screen, /\.slice\(0, 20\)/)
     assert.match(screen, /sites=\{mappedSites\}/)

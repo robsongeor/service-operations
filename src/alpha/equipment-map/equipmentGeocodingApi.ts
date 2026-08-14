@@ -14,7 +14,7 @@ export async function geocodeEquipmentSites(
     const response = await fetch('/api/equipmentgeocode', {
         method: 'POST',
         headers: {
-            Authorization: `Bearer ${accessToken}`,
+            'X-Dataverse-Authorization': `Bearer ${accessToken}`,
             Accept: 'application/json',
             'Content-Type': 'application/json',
         },
