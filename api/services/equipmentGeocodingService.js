@@ -4,6 +4,7 @@ const MAXIMUM_LOCATIONS = 200
 const MAXIMUM_ADDRESS_LENGTH = 500
 const PROVIDER_REQUEST_INTERVAL_MS = 250
 const MAXIMUM_CACHE_ENTRIES = 2_000
+const MAXIMUM_AUTOCOMPLETE_RESULTS = 6
 const cache = new Map()
 
 function jsonResponse(status, body, headers = {}) {
@@ -131,6 +132,67 @@ async function geocodeAddressWithRetry(address, apiKey) {
     throw lastError
 }
 
+function normalizeAddressQuery(body) {
+    if (!body || typeof body.query !== 'string') return ''
+    const query = body.query.trim().replace(/\s+/g, ' ')
+    return query.length >= 3 && query.length <= 200 ? query : ''
+}
+
+function addressSuggestionFromGeoapify(value) {
+    if (!value || typeof value !== 'object' || typeof value.formatted !== 'string') return null
+    const formattedAddress = value.formatted.trim().slice(0, 500)
+    if (!formattedAddress) return null
+    const latitude = value.lat
+    const longitude = value.lon
+    if (typeof latitude !== 'number' || !Number.isFinite(latitude) || latitude < -90 || latitude > 90) return null
+    if (typeof longitude !== 'number' || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) return null
+    const siteName = ['suburb', 'quarter', 'neighbourhood', 'hamlet', 'village', 'town', 'city', 'municipality', 'county']
+        .map((field) => typeof value[field] === 'string' ? value[field].trim() : '')
+        .find(Boolean) || ''
+    return {
+        id: typeof value.place_id === 'string' && value.place_id ? value.place_id.slice(0, 200) : `${latitude},${longitude}:${formattedAddress}`,
+        formattedAddress,
+        addressLine1: typeof value.address_line1 === 'string' ? value.address_line1.trim().slice(0, 250) : '',
+        addressLine2: typeof value.address_line2 === 'string' ? value.address_line2.trim().slice(0, 250) : '',
+        siteName: siteName.slice(0, 200),
+        latitude,
+        longitude,
+    }
+}
+
+async function searchAddresses(request) {
+    if (request.method !== 'POST') return jsonResponse(405, { error: 'Method not allowed.' }, { Allow: 'POST' })
+    const authentication = await validateAuthenticatedUser(request)
+    if (authentication.error) return authentication.error
+    const query = normalizeAddressQuery(request.body)
+    if (!query) return jsonResponse(400, { error: 'Enter at least three characters of an address.' })
+    const apiKey = (process.env.GEOAPIFY_API_KEY || '').trim()
+    if (!apiKey) return jsonResponse(503, { error: 'Address verification is not configured.' })
+
+    const url = new URL('/v1/geocode/autocomplete', GEOAPIFY_ORIGIN)
+    url.searchParams.set('text', query)
+    url.searchParams.set('format', 'json')
+    url.searchParams.set('limit', String(MAXIMUM_AUTOCOMPLETE_RESULTS))
+    url.searchParams.set('filter', 'countrycode:nz')
+    url.searchParams.set('lang', 'en')
+    url.searchParams.set('apiKey', apiKey)
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), GEOAPIFY_TIMEOUT_MS)
+    try {
+        const response = await fetch(url, { headers: { Accept: 'application/json' }, signal: controller.signal })
+        if (!response.ok) return jsonResponse(503, { error: 'The address provider is temporarily unavailable.' })
+        const body = await response.json()
+        const suggestions = (Array.isArray(body?.results) ? body.results : [])
+            .map(addressSuggestionFromGeoapify)
+            .filter(Boolean)
+        return jsonResponse(200, { suggestions })
+    } catch {
+        return jsonResponse(503, { error: 'The address provider is temporarily unavailable.' })
+    } finally {
+        clearTimeout(timeout)
+    }
+}
+
 async function resolveLocations(locations, resolveCoordinate) {
     return Promise.all(locations.map(async (location) => {
         try {
@@ -176,6 +238,7 @@ async function geocode(request) {
 
 module.exports = {
     geocode,
+    searchAddresses,
     jsonResponse,
-    test: { coordinateFromGeoapify, dataverseOrigin, normalizeLocations, requestHeader, resolveLocations },
+    test: { addressSuggestionFromGeoapify, coordinateFromGeoapify, dataverseOrigin, normalizeAddressQuery, normalizeLocations, requestHeader, resolveLocations },
 }

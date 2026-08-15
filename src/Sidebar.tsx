@@ -15,6 +15,7 @@ const menuItems = [
     { label: 'Equipment Map', shortLabel: 'M', path: '/equipment-map' },
     { label: 'WOF / REGO', shortLabel: 'W', path: '/wof' },
     { label: 'Jobs', shortLabel: 'J', path: '/jobs' },
+    { label: 'Job Book Prototype', shortLabel: 'JB', path: '/job-book' },
     { label: 'Site Checks', shortLabel: 'S', path: '/site-checks' },
     { label: 'Scheduling', shortLabel: 'C', path: '/scheduling' },
     { label: 'Quotes', shortLabel: 'Q', path: '/quotes' },

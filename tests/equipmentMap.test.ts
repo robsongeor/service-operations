@@ -9,7 +9,9 @@ const require = createRequire(import.meta.url)
 const service = require('../api/services/equipmentGeocodingService.js') as {
     geocode: (request: { method: string; headers: Record<string, string>; body: unknown }) => Promise<{ status: number; body: string }>
     test: {
+        addressSuggestionFromGeoapify: (value: unknown) => unknown
         coordinateFromGeoapify: (value: unknown) => unknown
+        normalizeAddressQuery: (value: unknown) => string
         normalizeLocations: (body: unknown) => unknown
         resolveLocations: (
             locations: Array<{ siteId: string; address: string }>,
@@ -17,6 +19,19 @@ const service = require('../api/services/equipmentGeocodingService.js') as {
         ) => Promise<Array<{ siteId: string; coordinate: unknown; status: string }>>
     }
 }
+
+test('Geoapify autocomplete input and results are bounded and sanitized', () => {
+    assert.equal(service.test.normalizeAddressQuery({ query: '  12   Queen Street  ' }), '12 Queen Street')
+    assert.equal(service.test.normalizeAddressQuery({ query: 'ab' }), '')
+    assert.deepEqual(service.test.addressSuggestionFromGeoapify({
+        place_id: 'place-1', formatted: '12 Queen Street, Auckland 1010, New Zealand',
+        address_line1: '12 Queen Street', address_line2: 'Auckland 1010, New Zealand', suburb: 'Auckland Central', lat: -36.85, lon: 174.76,
+    }), {
+        id: 'place-1', formattedAddress: '12 Queen Street, Auckland 1010, New Zealand',
+        addressLine1: '12 Queen Street', addressLine2: 'Auckland 1010, New Zealand', siteName: 'Auckland Central', latitude: -36.85, longitude: 174.76,
+    })
+    assert.equal(service.test.addressSuggestionFromGeoapify({ formatted: 'Invalid', lat: -91, lon: 174.76 }), null)
+})
 
 test('Equipment Map groups Equipment by the authoritative Site relationship', () => {
     const equipment = [

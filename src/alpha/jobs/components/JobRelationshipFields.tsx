@@ -4,6 +4,8 @@ import { SERVICE_TYPES } from '../../equipment/servicePlans/equipmentServicePlan
 import { isServiceTypeEnabled } from '../../equipment/servicePlans/maintenanceConfiguration'
 import type { useJobEditor } from '../hooks/useJobEditor'
 import { deriveSiteNameFromAddress } from '../../shared/siteName'
+import VerifiedAddressField from './VerifiedAddressField'
+import type { VerifiedAddressSuggestion } from '../services/addressSearchApi'
 
 type Props = {
     editor: ReturnType<typeof useJobEditor>
@@ -62,6 +64,8 @@ export default function JobRelationshipFields({
     const [equipment, setEquipment] = useState(initialEquipment)
     const [customer, setCustomer] = useState({ name: '', siteName: '', address: '' })
     const [site, setSite] = useState({ name: '', address: '' })
+    const [customerAddressSelection, setCustomerAddressSelection] = useState<VerifiedAddressSuggestion | null>(null)
+    const [siteAddressSelection, setSiteAddressSelection] = useState<VerifiedAddressSuggestion | null>(null)
     const [contact, setContact] = useState({ name: '', phone: '', email: '' })
     const selectedEquipment = equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)
     const [equipmentSearch, setEquipmentSearch] = useState(() => selectedEquipment
@@ -151,6 +155,7 @@ export default function JobRelationshipFields({
 
     const createCustomerAndSite = async () => {
         if (!customer.name.trim()) return setCreateError('Enter a customer name.')
+        if (!customerAddressSelection || customerAddressSelection.formattedAddress !== customer.address) return setCreateError('Select a verified address from the Geoapify suggestions.')
         const siteName = customer.siteName.trim() || deriveSiteNameFromAddress(customer.address)
         if (!siteName) return setCreateError('Enter a Site Name, or an Address that can be used to generate one.')
         try {
@@ -166,6 +171,7 @@ export default function JobRelationshipFields({
             setDraft((current) => ({ ...current, customerId, siteId, contactId: '' }))
             setCustomerSearch(customer.name.trim())
             setCustomer({ name: '', siteName: '', address: '' })
+            setCustomerAddressSelection(null)
             setCreatedCustomerId('')
             setPanel('')
         } catch (error) {
@@ -178,6 +184,7 @@ export default function JobRelationshipFields({
 
     const createSite = async () => {
         if (!draft.customerId) return setCreateError('Select a customer first.')
+        if (!siteAddressSelection || siteAddressSelection.formattedAddress !== site.address) return setCreateError('Select a verified address from the Geoapify suggestions.')
         const siteName = site.name.trim() || deriveSiteNameFromAddress(site.address)
         if (!siteName) return setCreateError('Enter a Site Name, or an Address that can be used to generate one.')
         try {
@@ -190,6 +197,7 @@ export default function JobRelationshipFields({
             if (equipmentConflictsWithSite(siteId)) clearEquipment()
             setDraft((current) => ({ ...current, siteId, contactId: '' }))
             setSite({ name: '', address: '' })
+            setSiteAddressSelection(null)
             setPanel('')
         } catch (error) {
             console.error(error)
@@ -217,10 +225,10 @@ export default function JobRelationshipFields({
         } finally { setIsCreating(false) }
     }
 
-    const actions = (create: () => void, label: string) => (
+    const actions = (create: () => void, label: string, disabled = false) => (
         <div className="job-edit-create-actions">
             <button type="button" onClick={() => setPanel('')} disabled={isCreating}>Cancel</button>
-            <button type="button" className="primary" onClick={create} disabled={isCreating}>
+            <button type="button" className="primary" onClick={create} disabled={isCreating || disabled}>
                 {isCreating ? 'Creating...' : label}
             </button>
         </div>
@@ -298,10 +306,10 @@ export default function JobRelationshipFields({
             <div><h4>New customer and site</h4><p>Create both records together and select them for this job.</p></div>
             <label className="job-edit-field"><span>Customer name</span><input autoFocus value={customer.name} onChange={(e) => { setCustomer({ ...customer, name: e.target.value }); setCreatedCustomerId('') }} /></label>
             <label className="job-edit-field"><span>Site name</span><input value={customer.siteName} onChange={(e) => setCustomer({ ...customer, siteName: e.target.value })} /></label>
-            <label className="job-edit-field"><span>Site address</span><input value={customer.address} onChange={(e) => { const address = e.target.value; const previousDerived = deriveSiteNameFromAddress(customer.address); setCustomer({ ...customer, address, siteName: !customer.siteName.trim() || customer.siteName === previousDerived ? deriveSiteNameFromAddress(address) : customer.siteName }) }} /></label>
+            <VerifiedAddressField value={customer.address} onChange={(address, selection) => { const previousDerived = deriveSiteNameFromAddress(customer.address); const nextDerived = selection?.siteName || deriveSiteNameFromAddress(address); setCustomerAddressSelection(selection); setCreateError(''); setCustomer({ ...customer, address, siteName: !customer.siteName.trim() || customer.siteName === previousDerived ? nextDerived : customer.siteName }) }} />
             {customer.siteName && customer.siteName === deriveSiteNameFromAddress(customer.address) && <p>Site Name generated from address.</p>}
             {createError && <p className="job-edit-error" role="alert">{createError}</p>}
-            {actions(createCustomerAndSite, 'Create customer and site')}
+            {actions(createCustomerAndSite, 'Create customer and site', !customerAddressSelection || customerAddressSelection.formattedAddress !== customer.address)}
         </div>}
 
         <label className="job-edit-field job-edit-field-wide"><span>Site</span>
@@ -318,10 +326,10 @@ export default function JobRelationshipFields({
         {panel === 'site' && <div className="job-edit-create-panel job-edit-field-wide">
             <div><h4>New site</h4><p>Create a site for {customerSearch} and select it for this job.</p></div>
             <label className="job-edit-field"><span>Site name</span><input autoFocus value={site.name} onChange={(e) => setSite({ ...site, name: e.target.value })} /></label>
-            <label className="job-edit-field"><span>Site address</span><input value={site.address} onChange={(e) => { const address = e.target.value; const previousDerived = deriveSiteNameFromAddress(site.address); setSite({ ...site, address, name: !site.name.trim() || site.name === previousDerived ? deriveSiteNameFromAddress(address) : site.name }) }} /></label>
+            <VerifiedAddressField value={site.address} onChange={(address, selection) => { const previousDerived = deriveSiteNameFromAddress(site.address); const nextDerived = selection?.siteName || deriveSiteNameFromAddress(address); setSiteAddressSelection(selection); setCreateError(''); setSite({ ...site, address, name: !site.name.trim() || site.name === previousDerived ? nextDerived : site.name }) }} />
             {site.name && site.name === deriveSiteNameFromAddress(site.address) && <p>Site Name generated from address.</p>}
             {createError && <p className="job-edit-error" role="alert">{createError}</p>}
-            {actions(createSite, 'Create site')}
+            {actions(createSite, 'Create site', !siteAddressSelection || siteAddressSelection.formattedAddress !== site.address)}
         </div>}
 
         <label className="job-edit-field job-edit-field-wide"><span>Contact</span>

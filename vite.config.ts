@@ -24,6 +24,7 @@ const chargeableInvoicePreviewService = require('./api/services/chargeableInvoic
 }
 const equipmentGeocodingService = require('./api/services/equipmentGeocodingService') as {
   geocode: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
+  searchAddresses: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
   jsonResponse: (status: number, body: object, headers?: Record<string, string>) => LocalFunctionResponse
 }
 
@@ -302,7 +303,7 @@ function equipmentGeocodingProxy(env: Record<string, string | undefined>): Plugi
     middlewares.use((request, response, next) => {
       if (!request.url) return next()
       const requestUrl = new URL(request.url, 'http://localhost')
-      if (requestUrl.pathname !== '/api/equipmentgeocode') return next()
+      if (requestUrl.pathname !== '/api/equipmentgeocode' && requestUrl.pathname !== '/api/addresssearch') return next()
 
       void (async () => {
         if (request.method !== 'POST') {
@@ -315,7 +316,10 @@ function equipmentGeocodingProxy(env: Record<string, string | undefined>): Plugi
         if (parsed.body === null) {
           return sendFunctionResponse(response, equipmentGeocodingService.jsonResponse(400, { error: 'The request body is invalid.' }))
         }
-        sendFunctionResponse(response, await equipmentGeocodingService.geocode({
+        const handler = requestUrl.pathname === '/api/addresssearch'
+          ? equipmentGeocodingService.searchAddresses
+          : equipmentGeocodingService.geocode
+        sendFunctionResponse(response, await handler({
           method: request.method,
           headers: request.headers,
           body: parsed.body,

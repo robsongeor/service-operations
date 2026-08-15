@@ -229,6 +229,13 @@
     color: #176f66;
     font-weight: 750;
 }
+.job-address-field { position: relative; }
+.job-address-status { color: #68736d; font-size: .7rem; font-weight: 650; }
+.job-address-status.verified { color: #176f66; }
+.job-address-status.error { color: #9b3636; }
+.job-address-results { z-index: 30; top: calc(100% - 2px); }
+.job-address-results button { display: grid; gap: 2px; padding: 8px 11px; text-align: left; }
+.job-address-results button small { color: #68736d; font-size: .7rem; font-weight: 500; }
 .job-equipment-results { max-height: 300px; overflow-y: auto; }
 .job-equipment-results button:not(.job-edit-add-result) { display: grid; gap: 2px; min-height: 54px; padding: 8px 11px; }
 .job-equipment-results button strong { color: #28342d; font-size: .78rem; }
