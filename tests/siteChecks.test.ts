@@ -28,6 +28,7 @@ import { EQUIPMENT_OWNERSHIP_TYPES } from '../src/alpha/equipment/types/equipmen
 import { EQUIPMENT_SITE_CHECK_AVAILABILITIES } from '../src/alpha/equipment/types/equipmentSiteCheckAvailability.types.ts'
 import {
     allocateSiteCheckJobNumbers,
+    clearSiteCheckJobNumber,
     deleteSiteCheckOccurrence,
     fetchSiteCheckJobs,
     fetchSiteCheckDetailJobsPage,
@@ -352,6 +353,44 @@ test('Site Check Job Book export and number allocation preserve one deterministi
     assert.match(requestBody, /PATCH \/api\/data\/v9\.2\/gr_jobs\(55555555-5555-5555-5555-555555555555\)/)
     assert.match(requestBody, /If-Match: W\/"1"/)
     assert.match(requestBody, /"gr_jobnumber":"145410"/)
+})
+
+test('clearing a duplicate Site Check Job Number preserves the generated Job', async () => {
+    const job = {
+        gr_jobid: IDS.job,
+        gr_jobnumber: '145567',
+        gr_status: JOB_STATUSES.ALLOCATED,
+        _gr_sitecheck_value: IDS.siteCheck,
+        gr_Equipment: null,
+        gr_Mechanic: null,
+        '@odata.etag': 'W/"21"',
+    }
+    let requestUrl = ''
+    let requestInit: RequestInit | undefined
+    await clearSiteCheckJobNumber('token', job, {
+        apiUrl: 'https://example.test',
+        fetcher: (async (input, init) => {
+            requestUrl = String(input)
+            requestInit = init
+            return new Response(null, { status: 204 })
+        }) as typeof fetch,
+    })
+    assert.equal(requestUrl, `https://example.test/gr_jobs(${IDS.job})`)
+    assert.equal(requestInit?.method, 'PATCH')
+    assert.equal((requestInit?.headers as Record<string, string>)['If-Match'], 'W/"21"')
+    assert.equal(requestInit?.body, JSON.stringify({ gr_jobnumber: null }))
+})
+
+test('clearing a Site Check Job Number requires a number and concurrency version', async () => {
+    const base = {
+        gr_jobid: IDS.job,
+        gr_status: JOB_STATUSES.ALLOCATED,
+        _gr_sitecheck_value: IDS.siteCheck,
+        gr_Equipment: null,
+        gr_Mechanic: null,
+    }
+    await assert.rejects(() => clearSiteCheckJobNumber('token', { ...base, gr_jobnumber: null }), /does not have/)
+    await assert.rejects(() => clearSiteCheckJobNumber('token', { ...base, gr_jobnumber: '145567' }), /Reload/)
 })
 
 test('Site Check deletion atomically clears an active pointer and deletes Jobs before occurrence', async () => {

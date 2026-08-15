@@ -74,6 +74,21 @@
     cursor: not-allowed;
 }
 
+.jobs-intake-button {
+    min-height: 38px;
+    padding: 0 13px;
+    border: 1px solid #9fcfc5;
+    border-radius: 9px;
+    background: #eef8f5;
+    color: #17695f;
+    font: inherit;
+    font-size: .78rem;
+    font-weight: 750;
+    cursor: pointer;
+}
+
+.jobs-intake-button:hover { border-color: #6ca99b; background: #e2f3ee; }
+
 .jobs-data-state {
     display: flex;
     min-height: 180px;

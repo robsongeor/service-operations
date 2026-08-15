@@ -304,6 +304,7 @@ export default function SiteChecksScreen() {
             loadAllJobs={workspace.loadAllDetailJobs}
             loadAllEquipmentExclusions={workspace.loadAllEquipmentExclusions}
             allocateJobNumbers={workspace.allocateJobNumbers}
+            clearJobNumber={workspace.clearJobNumber}
             prepareAssignmentEmail={workspace.prepareAssignmentEmail}
             onDelete={async (check) => {
                 await workspace.deleteOccurrence(check)

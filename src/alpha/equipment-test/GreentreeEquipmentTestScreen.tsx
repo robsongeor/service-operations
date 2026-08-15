@@ -16,6 +16,7 @@ import {
 } from './greentreeEquipmentImport'
 import {
     mapGreentreeEquipmentRecords,
+    duplicateSerialCorrectionCsv,
     profileGreentreeEquipment,
     reconcileGreentreeEquipment,
     reconciliationReviewCount,
@@ -31,6 +32,7 @@ const REVIEW_PAGE_SIZE = 50
 type ReviewTab = 'all' | ReconciliationStatus | 'app-only'
 type ReviewRequirement = 'all' | 'none' | 'has'
 type ReviewCountFilter = 'all' | '0' | '1' | '2' | '3' | '4+'
+type SerialFilter = 'all' | 'duplicates'
 type ImportScope = 'selected' | 'filtered' | null
 type ImportProgress = { total: number; processed: number; currentBatch: number; totalBatches: number }
 type Workspace = { reconciliation: ReconciliationResult; sourceCount: number; appCount: number; logicalName: string; profile: GreentreeSourceProfile }
@@ -85,6 +87,7 @@ export default function GreentreeEquipmentTestScreen() {
     const [page, setPage] = useState(1)
     const [reviewRequirement, setReviewRequirement] = useState<ReviewRequirement>('all')
     const [reviewCountFilter, setReviewCountFilter] = useState<ReviewCountFilter>('all')
+    const [serialFilter, setSerialFilter] = useState<SerialFilter>('all')
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
     const [selectedSourceIds, setSelectedSourceIds] = useState<Set<string>>(new Set())
@@ -118,8 +121,20 @@ export default function GreentreeEquipmentTestScreen() {
         return { all: rows.length, exact: rows.filter((row) => row.status === 'exact').length, probable: rows.filter((row) => row.status === 'probable').length, new: rows.filter((row) => row.status === 'new').length, conflict: rows.filter((row) => row.status === 'conflict').length, 'app-only': workspace?.reconciliation.appOnly.length ?? 0 }
     }, [workspace])
     const query = search.trim().toLocaleLowerCase()
+    const duplicateSerials = useMemo(() => {
+        const counts = new Map<string, number>()
+        for (const row of workspace?.reconciliation.rows ?? []) {
+            const serial = row.source.serial.trim().toLocaleLowerCase().replace(/\s+/g, ' ')
+            if (serial) counts.set(serial, (counts.get(serial) ?? 0) + 1)
+        }
+        return new Set([...counts.entries()].filter(([, count]) => count > 1).map(([serial]) => serial))
+    }, [workspace])
     const visibleRows = useMemo(() => (workspace?.reconciliation.rows ?? []).filter((row) => {
         if (!(tab === 'all' || tab === 'app-only' || row.status === tab)) return false
+        if (serialFilter === 'duplicates') {
+            const serial = row.source.serial.trim().toLocaleLowerCase().replace(/\s+/g, ' ')
+            if (!serial || !duplicateSerials.has(serial)) return false
+        }
         const reviewCount = reconciliationReviewCount(row)
         if (reviewRequirement === 'none' && reviewCount !== 0) return false
         if (reviewRequirement === 'has' && reviewCount === 0) return false
@@ -127,7 +142,7 @@ export default function GreentreeEquipmentTestScreen() {
             if (reviewCountFilter === '4+' ? reviewCount < 4 : reviewCount !== Number(reviewCountFilter)) return false
         }
         return !query || searchable([row.source.fleet, row.source.serial, row.source.make, row.source.model, row.source.siteName, row.source.siteAddress1, row.source.siteAddress2, row.appEquipment?.gr_fleet, row.appEquipment?.gr_serial], query)
-    }), [query, reviewCountFilter, reviewRequirement, tab, workspace])
+    }), [duplicateSerials, query, reviewCountFilter, reviewRequirement, serialFilter, tab, workspace])
     const visibleAppOnly = useMemo(() => (workspace?.reconciliation.appOnly ?? []).filter((item) => !query || searchable([item.gr_fleet, item.gr_serial, item.gr_make, item.gr_model, item.gr_Site?.gr_name, item.gr_Site?.gr_address], query)), [query, workspace])
     const resultCount = tab === 'app-only' ? visibleAppOnly.length : visibleRows.length
     const totalPages = Math.max(1, Math.ceil(resultCount / REVIEW_PAGE_SIZE))
@@ -135,10 +150,25 @@ export default function GreentreeEquipmentTestScreen() {
     const pageStart = (currentPage - 1) * REVIEW_PAGE_SIZE
     const pageRows = useMemo(() => visibleRows.slice(pageStart, pageStart + REVIEW_PAGE_SIZE), [pageStart, visibleRows])
     const pageAppOnly = useMemo(() => visibleAppOnly.slice(pageStart, pageStart + REVIEW_PAGE_SIZE), [pageStart, visibleAppOnly])
-    const safePageRows = useMemo(() => pageRows.filter((row) => row.status === 'new' && greentreeImportIssues(row).length === 0), [pageRows])
-    const safeFilteredRows = useMemo(() => visibleRows.filter((row) => row.status === 'new' && greentreeImportIssues(row).length === 0), [visibleRows])
+    const importablePageRows = useMemo(() => pageRows.filter((row) => greentreeImportIssues(row).length === 0), [pageRows])
+    const importableFilteredRows = useMemo(() => visibleRows.filter((row) => greentreeImportIssues(row).length === 0), [visibleRows])
     const selectedRows = useMemo(() => (workspace?.reconciliation.rows ?? []).filter((row) => selectedSourceIds.has(row.source.sourceId)), [selectedSourceIds, workspace])
-    const confirmRows = confirmImport === 'filtered' ? safeFilteredRows : selectedRows
+    const confirmRows = confirmImport === 'filtered' ? importableFilteredRows : selectedRows
+    const duplicateSerialRowCount = useMemo(() => (workspace?.reconciliation.rows ?? []).filter((row) => {
+        const serial = row.source.serial.trim().toLocaleLowerCase().replace(/\s+/g, ' ')
+        return serial ? duplicateSerials.has(serial) : false
+    }).length, [duplicateSerials, workspace])
+
+    const exportDuplicateSerials = () => {
+        if (!workspace || duplicateSerialRowCount === 0) return
+        const csv = duplicateSerialCorrectionCsv(workspace.reconciliation.rows.map((row) => row.source))
+        const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `greentree-duplicate-serials-${new Date().toISOString().slice(0, 10)}.csv`
+        link.click()
+        URL.revokeObjectURL(url)
+    }
 
     const toggleSelection = (sourceId: string) => setSelectedSourceIds((current) => {
         const next = new Set(current)
@@ -162,7 +192,7 @@ export default function GreentreeEquipmentTestScreen() {
                 if (stopImport.current) break
                 setImportProgress({ total: confirmRows.length, processed, currentBatch: index + 1, totalBatches: batches.length })
                 const token = await acquireDataverseAccessToken(instance, account)
-                const result = await importGreentreeEquipmentBatch(signedInUser, token, batches[index], fetchEquipment)
+                const result = await importGreentreeEquipmentBatch(signedInUser, token, batches[index])
                 aggregate.succeeded.push(...result.succeeded)
                 aggregate.failed.push(...result.failed)
                 processed += batches[index].length
@@ -173,7 +203,7 @@ export default function GreentreeEquipmentTestScreen() {
             setSelectedSourceIds(new Set())
             setConfirmImport(null)
             await load()
-            setTab('new')
+            setTab('all')
             setPage(1)
         } catch (caught) {
             setImportResult({ succeeded: [...aggregate.succeeded], failed: [...aggregate.failed] })
@@ -186,17 +216,19 @@ export default function GreentreeEquipmentTestScreen() {
         }
     }
 
-    const selectable = tab === 'new' && importAllowed
+    const selectable = tab !== 'app-only' && importAllowed
+    const createdCount = importResult?.succeeded.filter((item) => item.action === 'created').length ?? 0
+    const updatedCount = importResult?.succeeded.filter((item) => item.action === 'updated').length ?? 0
     return <main className="equipment-page greentree-test-page">
-        <header className="equipment-page-header"><div><p>Controlled reconciliation</p><h1>Greentree Equipment Review</h1></div><div className="equipment-page-header-actions"><span>{workspace?.sourceCount ?? 0} Greentree / {workspace?.appCount ?? 0} app</span><span className="greentree-readonly-badge">{importAllowed ? 'Creation only' : 'Review only'}</span></div></header>
-        <aside className="greentree-test-notice" role="note"><strong>Equipment only</strong><span>This workspace can create reviewed New Equipment using fleet, serial, make and model only. It never creates Customers or Sites and cannot update, link or delete existing records.</span></aside>
+        <header className="equipment-page-header"><div><p>Controlled reconciliation</p><h1>Greentree Equipment Review</h1></div><div className="equipment-page-header-actions"><span>{workspace?.sourceCount ?? 0} Greentree / {workspace?.appCount ?? 0} app</span><span className="greentree-readonly-badge">{importAllowed ? 'Greentree authoritative' : 'Review only'}</span></div></header>
+        <aside className="greentree-test-notice" role="note"><strong>Equipment only</strong><span>Import creates unmatched Equipment and updates a single clear app match using Greentree fleet, serial, make and model. It never creates or assigns Customers or Sites. Duplicate Greentree serials and ambiguous multiple app matches remain blocked.</span></aside>
         {loading ? <div className="equipment-data-state">Comparing Greentree with current Equipment…</div> : error ? <div className="equipment-data-state error"><div><strong>Reconciliation could not be loaded.</strong><p>{error}</p></div><button type="button" onClick={() => void load()}>Try again</button></div> : <section className="equipment-list-card">
-            {importResult && <div className={`greentree-import-result ${importResult.failed.length || importStopped ? 'warning' : 'success'}`} role="status"><strong>{importResult.succeeded.length} Equipment created.</strong><span>{importStopped ? 'Import stopped after the current batch. Run Import all filtered again to resume safely.' : importResult.failed.length ? `${importResult.failed.length} skipped or failed.` : 'All processed records were created successfully.'}</span>{importResult.failed.length > 0 && <details><summary>View failures</summary><ul>{importResult.failed.map((item) => <li key={item.sourceId}><strong>{item.fleet || item.sourceId}</strong> — {item.message}</li>)}</ul></details>}</div>}
+            {importResult && <div className={`greentree-import-result ${importResult.failed.length || importStopped ? 'warning' : 'success'}`} role="status"><strong>{createdCount} created · {updatedCount} updated.</strong><span>{importStopped ? 'Import stopped after the current batch. Run Import all filtered again to resume safely.' : importResult.failed.length ? `${importResult.failed.length} skipped or failed.` : 'All processed records were synchronized successfully.'}</span>{importResult.failed.length > 0 && <details><summary>View failures</summary><ul>{importResult.failed.map((item) => <li key={item.sourceId}><strong>{item.fleet || item.sourceId}</strong> — {item.message}</li>)}</ul></details>}</div>}
             {workspace && <SourceProfile profile={workspace.profile} />}
             <div className="greentree-summary" aria-label="Reconciliation summary">{(Object.keys(tabLabels) as ReviewTab[]).filter((item) => item !== 'all').map((item) => <div key={item} data-status={item}><span>{tabLabels[item]}</span><strong>{counts[item]}</strong></div>)}</div>
             <div className="greentree-review-tabs" role="tablist" aria-label="Reconciliation categories">{(Object.keys(tabLabels) as ReviewTab[]).map((item) => <button key={item} type="button" role="tab" aria-selected={tab === item} className={tab === item ? 'active' : ''} onClick={() => { setTab(item); setPage(1) }}>{tabLabels[item]} <span>{counts[item]}</span></button>)}</div>
-            <div className="equipment-toolbar greentree-test-toolbar"><label className="equipment-search"><span>Search review</span><input type="search" placeholder="Search fleet, serial, make, model or site" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1) }} /></label><label>Review requirement<select value={reviewRequirement} disabled={tab === 'app-only'} onChange={(event) => { setReviewRequirement(event.target.value as ReviewRequirement); setPage(1) }}><option value="all">All records</option><option value="none">No review needed</option><option value="has">Needs review</option></select></label><label>Review item count<select value={reviewCountFilter} disabled={tab === 'app-only'} onChange={(event) => { setReviewCountFilter(event.target.value as ReviewCountFilter); setPage(1) }}><option value="all">All counts</option><option value="0">0 items</option><option value="1">1 item</option><option value="2">2 items</option><option value="3">3 items</option><option value="4+">4+ items</option></select></label><div><span>Source table</span><strong>{workspace?.logicalName}</strong></div></div>
-            {selectable && <div className="greentree-import-toolbar"><div><strong>{selectedRows.length} selected</strong><span>Complete New records only · {GREENTREE_IMPORT_BATCH_LIMIT} per guarded batch · no Site or Customer</span></div><div><button type="button" onClick={() => setSelectedSourceIds(new Set(safePageRows.map((row) => row.source.sourceId)))} disabled={!safePageRows.length || importing}>Select safe on page</button><button type="button" onClick={() => setSelectedSourceIds(new Set())} disabled={!selectedRows.length || importing}>Clear</button><button type="button" onClick={() => setConfirmImport('selected')} disabled={!selectedRows.length || importing}>Import selected</button>{reviewRequirement === 'none' && <button type="button" className="primary" onClick={() => setConfirmImport('filtered')} disabled={!safeFilteredRows.length || importing}>Import all filtered ({safeFilteredRows.length})</button>}</div></div>}
+            <div className="equipment-toolbar greentree-test-toolbar"><label className="equipment-search"><span>Search review</span><input type="search" placeholder="Search fleet, serial, make, model or site" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1) }} /></label><label>Serial filter<select value={serialFilter} disabled={tab === 'app-only'} onChange={(event) => { setSerialFilter(event.target.value as SerialFilter); setPage(1) }}><option value="all">All serials</option><option value="duplicates">Duplicate serials only</option></select></label><label>Review requirement<select value={reviewRequirement} disabled={tab === 'app-only'} onChange={(event) => { setReviewRequirement(event.target.value as ReviewRequirement); setPage(1) }}><option value="all">All records</option><option value="none">No review needed</option><option value="has">Needs review</option></select></label><label>Review item count<select value={reviewCountFilter} disabled={tab === 'app-only'} onChange={(event) => { setReviewCountFilter(event.target.value as ReviewCountFilter); setPage(1) }}><option value="all">All counts</option><option value="0">0 items</option><option value="1">1 item</option><option value="2">2 items</option><option value="3">3 items</option><option value="4+">4+ items</option></select></label><div><span>Source table</span><strong>{workspace?.logicalName}</strong></div></div>
+            {selectable && <div className="greentree-import-toolbar"><div><strong>{selectedRows.length} selected</strong><span>Create unmatched or update one clear match · {GREENTREE_IMPORT_BATCH_LIMIT} per guarded batch · no Site or Customer</span></div><div><button type="button" onClick={exportDuplicateSerials} disabled={!duplicateSerialRowCount || importing}>Export duplicate serials ({duplicateSerialRowCount})</button><button type="button" onClick={() => setSelectedSourceIds(new Set(importablePageRows.map((row) => row.source.sourceId)))} disabled={!importablePageRows.length || importing}>Select importable on page</button><button type="button" onClick={() => setSelectedSourceIds(new Set())} disabled={!selectedRows.length || importing}>Clear</button><button type="button" onClick={() => setConfirmImport('selected')} disabled={!selectedRows.length || importing}>Import selected</button><button type="button" className="primary" onClick={() => setConfirmImport('filtered')} disabled={!importableFilteredRows.length || importing}>Import all filtered ({importableFilteredRows.length})</button></div></div>}
             <div className="equipment-results-count">Showing {resultCount ? pageStart + 1 : 0}–{Math.min(pageStart + REVIEW_PAGE_SIZE, resultCount)} of {resultCount}{query && resultCount !== counts[tab] ? ` filtered (${counts[tab]} total)` : ''}</div>
             <div className="equipment-table-scroll">
                 {tab === 'app-only' ? <table className="equipment-table greentree-review-table app-only"><thead><tr><th>App fleet</th><th>Serial</th><th>Make / Model</th><th>Current Site</th><th>Assessment</th></tr></thead><tbody>{pageAppOnly.length ? pageAppOnly.map((item) => <tr key={item.gr_equipmentid}><td><strong>{valueOrDash(item.gr_fleet)}</strong></td><td>{valueOrDash(item.gr_serial)}</td><td>{[item.gr_make, item.gr_model].filter(Boolean).join(' ') || '—'}</td><td><strong>{valueOrDash(item.gr_Site?.gr_name)}</strong><small>{valueOrDash(item.gr_Site?.gr_address)}</small></td><td><span className="greentree-status app-only">App only / possible pending</span></td></tr>) : <tr><td className="equipment-empty" colSpan={5}>No app-only records match the current search.</td></tr>}</tbody></table> :
@@ -204,6 +236,6 @@ export default function GreentreeEquipmentTestScreen() {
             </div>
             {resultCount > REVIEW_PAGE_SIZE && <nav className="greentree-pagination" aria-label="Review pages"><button type="button" onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={currentPage === 1}>Previous</button><span>Page <strong>{currentPage}</strong> of <strong>{totalPages}</strong></span><button type="button" onClick={() => setPage((value) => Math.min(totalPages, value + 1))} disabled={currentPage === totalPages}>Next</button></nav>}
         </section>}
-        {confirmImport && <div className="greentree-confirm-backdrop"><section className="greentree-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="greentree-confirm-title"><div><p>Creation-only import</p><h2 id="greentree-confirm-title">Create {confirmRows.length} Equipment record{confirmRows.length === 1 ? '' : 's'}?</h2></div><p>Only Fleet Number Code, Serial, Make and Model will be copied. No Customer or Site will be created or assigned. Existing Equipment will not be changed.</p><div className="greentree-confirm-summary"><span>Records <strong>{confirmRows.length}</strong></span><span>Guarded batches <strong>{Math.ceil(confirmRows.length / GREENTREE_IMPORT_BATCH_LIMIT)}</strong></span></div>{importProgress && <div className="greentree-import-progress"><div><span>Batch {importProgress.currentBatch} of {importProgress.totalBatches}</span><strong>{importProgress.processed} / {importProgress.total}</strong></div><progress max={importProgress.total} value={importProgress.processed} /></div>}<div className="greentree-confirm-actions">{importing ? <button type="button" onClick={() => { stopImport.current = true }}>Stop after current batch</button> : <button type="button" onClick={() => setConfirmImport(null)}>Cancel</button>}<button type="button" className="primary" onClick={() => void runImport()} disabled={importing}>{importing ? 'Importing…' : 'Create Equipment'}</button></div></section></div>}
+        {confirmImport && <div className="greentree-confirm-backdrop"><section className="greentree-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="greentree-confirm-title"><div><p>Authoritative Greentree import</p><h2 id="greentree-confirm-title">Synchronize {confirmRows.length} Equipment record{confirmRows.length === 1 ? '' : 's'}?</h2></div><p>Fleet Number Code, Serial, Make and Model will be copied from Greentree. Unmatched Equipment will be created and one clear app match will be updated. No Customer or Site will be created or assigned.</p><div className="greentree-confirm-summary"><span>Records <strong>{confirmRows.length}</strong></span><span>Guarded batches <strong>{Math.ceil(confirmRows.length / GREENTREE_IMPORT_BATCH_LIMIT)}</strong></span></div>{importProgress && <div className="greentree-import-progress"><div><span>Batch {importProgress.currentBatch} of {importProgress.totalBatches}</span><strong>{importProgress.processed} / {importProgress.total}</strong></div><progress max={importProgress.total} value={importProgress.processed} /></div>}<div className="greentree-confirm-actions">{importing ? <button type="button" onClick={() => { stopImport.current = true }}>Stop after current batch</button> : <button type="button" onClick={() => setConfirmImport(null)}>Cancel</button>}<button type="button" className="primary" onClick={() => void runImport()} disabled={importing}>{importing ? 'Importing…' : 'Synchronize Equipment'}</button></div></section></div>}
     </main>
 }

@@ -29,6 +29,12 @@ Management routes require an MSAL account and render with the shared navigation 
 gate and intentionally render without the Sidebar or office navigation. The proposed Site
 Check assignment route must use the same public-shell boundary if Phase 15 is approved.
 
+Every feature screen and public portal screen is a route-level lazy import. The authenticated
+shell, authentication boundary, Sidebar, and small route-loading fallback remain in the initial
+bundle; a feature's JavaScript and CSS load only when that route is opened. Public portal routes
+retain their pre-authentication routing checks and their own Suspense boundary, so code splitting
+does not move them into the management shell or expose office navigation.
+
 ## Navigation rules
 
 - Reuse existing feature drawers when one management feature opens another record.

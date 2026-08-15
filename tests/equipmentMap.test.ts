@@ -3,6 +3,7 @@ import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { groupEquipmentBySite } from '../src/alpha/equipment-map/equipmentMap.ts'
+import { equipmentMapCacheKey, restoreEquipmentMapCache, saveEquipmentMapCache } from '../src/alpha/equipment-map/equipmentMapCache.ts'
 import type { Equipment } from '../src/alpha/jobs/types/equipment.types.ts'
 
 const require = createRequire(import.meta.url)
@@ -11,6 +12,8 @@ const service = require('../api/services/equipmentGeocodingService.js') as {
     test: {
         addressSuggestionFromGeoapify: (value: unknown) => unknown
         coordinateFromGeoapify: (value: unknown) => unknown
+        geocodePersistencePayload: (result: { address: string; coordinate: { latitude: number; longitude: number; formattedAddress: string } | null }, resolvedOn: string) => Record<string, unknown>
+        isDataverseSiteId: (value: unknown) => boolean
         normalizeAddressQuery: (value: unknown) => string
         normalizeLocations: (body: unknown) => unknown
         resolveLocations: (
@@ -44,6 +47,34 @@ test('Equipment Map groups Equipment by the authoritative Site relationship', ()
     assert.equal(sites.length, 1)
     assert.equal(sites[0].customerId, 'c1')
     assert.deepEqual(sites[0].equipment.map((item) => item.gr_equipmentid), ['e1', 'e2'])
+})
+
+test('shared geocode persistence never overwrites the authoritative Site address', () => {
+    const payload = service.test.geocodePersistencePayload({
+        address: '1 Main Road',
+        coordinate: { latitude: -36.85, longitude: 174.76, formattedAddress: '1 Main Road, Auckland' },
+    }, '2026-08-16T00:00:00.000Z')
+    assert.equal(payload.gr_geocodesourceaddress, '1 Main Road')
+    assert.equal(payload.gr_geocodelatitude, -36.85)
+    assert.equal(payload.gr_geocodelongitude, 174.76)
+    assert.equal('gr_address' in payload, false)
+})
+
+test('shared geocode persistence accepts Dataverse GUIDs without requiring RFC version bits', () => {
+    assert.equal(service.test.isDataverseSiteId('00000000-0000-0000-0000-000000000000'), true)
+    assert.equal(service.test.isDataverseSiteId('00000000-0000-0000-0000-000000000000) HTTP/1.1'), false)
+})
+
+test('Equipment Map cache is isolated by account and Dataverse environment', () => {
+    assert.notEqual(equipmentMapCacheKey('account-a', 'https://org-a.crm6.dynamics.com'), equipmentMapCacheKey('account-b', 'https://org-a.crm6.dynamics.com'))
+    assert.notEqual(equipmentMapCacheKey('account-a', 'https://org-a.crm6.dynamics.com'), equipmentMapCacheKey('account-a', 'https://org-b.crm6.dynamics.com'))
+    assert.equal(equipmentMapCacheKey('account-a', 'https://ORG-A.crm6.dynamics.com/'), equipmentMapCacheKey('account-a', 'https://org-a.crm6.dynamics.com'))
+})
+
+test('Equipment Map persistence safely becomes a no-op when IndexedDB is unavailable', async () => {
+    if (globalThis.indexedDB) return
+    assert.deepEqual(await restoreEquipmentMapCache('scope'), {})
+    await saveEquipmentMapCache('scope', {})
 })
 
 test('geocoding input is bounded, distinct, and address-safe', () => {
@@ -108,7 +139,11 @@ test('Equipment Map keeps Geoapify credentials out of client code and uses canon
     assert.match(locationMap, /markerClusterGroup/)
     assert.match(locationMap, /leaflet\.markercluster/)
     assert.match(screen, /result\.status === 'provider_failed'\) return/)
-    assert.match(mapCache, /value\.status === 'not_found'/)
+    assert.match(mapCache, /coordinate\.status === 'not_found'/)
+    assert.match(mapCache, /indexedDB/)
+    assert.match(screen, /if \(!cacheReady/)
+    assert.match(screen, /site\.gr_geocodesourceaddress === address/)
+    assert.match(screen, /sharedCoordinates\[site\.siteId\]/)
     assert.match(screen, /Resolving Site addresses… \{resolvedAddressCount\} of \{addressedSiteCount\}/)
     assert.match(app, /path="\/equipment-map"/)
 })

@@ -37,6 +37,7 @@ type Props = {
         job: SiteCheckDetailJob
         jobNumber: string
     }[]) => Promise<void>
+    clearJobNumber: (job: SiteCheckDetailJob) => Promise<void>
     prepareAssignmentEmail: (input: SiteCheckAssignmentEmailInput) => Promise<string>
     onDelete: (siteCheck: SiteCheck) => Promise<void>
     onOpenJob: (jobId: string, trigger: HTMLButtonElement) => void
@@ -96,6 +97,7 @@ export default function SiteCheckDetailsDrawer({
     loadAllJobs,
     loadAllEquipmentExclusions,
     allocateJobNumbers,
+    clearJobNumber,
     prepareAssignmentEmail,
     onDelete,
     onOpenJob,
@@ -120,6 +122,9 @@ export default function SiteCheckDetailsDrawer({
     const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false)
     const [deleteBusy, setDeleteBusy] = useState(false)
     const [deleteError, setDeleteError] = useState('')
+    const [jobNumberToClear, setJobNumberToClear] = useState<SiteCheckDetailJob | null>(null)
+    const [clearNumberBusy, setClearNumberBusy] = useState(false)
+    const [clearNumberError, setClearNumberError] = useState('')
     const [emailBusy, setEmailBusy] = useState(false)
     const selectedId = selected?.gr_sitecheckid
     const loadedJobsFor = useRef('')
@@ -262,6 +267,25 @@ export default function SiteCheckDetailsDrawer({
         }
     }
 
+    const confirmClearJobNumber = async () => {
+        if (!jobNumberToClear || !selectedId) return
+        setClearNumberBusy(true)
+        setClearNumberError('')
+        try {
+            await clearJobNumber(jobNumberToClear)
+            const refreshedJobs = await loadAllJobs(selectedId)
+            setJobs(refreshedJobs)
+            setJobsNext(undefined)
+            loadedJobsFor.current = selectedId
+            setJobNumberToClear(null)
+            setJobBookFeedback(`Job Number ${jobNumberToClear.gr_jobnumber?.trim()} was removed. The Site Check Job was preserved.`)
+        } catch (cause) {
+            setClearNumberError(cause instanceof Error ? cause.message : 'The Job Number could not be removed.')
+        } finally {
+            setClearNumberBusy(false)
+        }
+    }
+
     const deleteSelectedSiteCheck = async () => {
         if (!selected) return
         setDeleteBusy(true)
@@ -398,6 +422,16 @@ export default function SiteCheckDetailsDrawer({
                                         >
                                             Open Equipment
                                         </button>
+                                        {job.gr_jobnumber?.trim() && <button
+                                            type="button"
+                                            className="site-check-clear-number"
+                                            onClick={() => {
+                                                setClearNumberError('')
+                                                setJobNumberToClear(job)
+                                            }}
+                                        >
+                                            Clear Job number
+                                        </button>}
                                     </div>
                                 </article>
                             })}
@@ -492,6 +526,22 @@ export default function SiteCheckDetailsDrawer({
             <p>The first number is assigned to the first Job shown in the generated list. This update is atomic: either every number is saved or none are.</p>
             {jobs.some((job) => job.gr_jobnumber?.trim()) && <p><strong>Some Jobs already have numbers.</strong> Applying this list will replace them.</p>}
         </EditDrawerFormDialog>}
+        {jobNumberToClear && <EditDrawerConfirmation
+            eyebrow="Duplicate Job number"
+            title={`Clear Job Number ${jobNumberToClear.gr_jobnumber?.trim()}?`}
+            message={<>
+                <p>This removes only the Job Number from this generated Site Check Job.</p>
+                <p>The Job, Equipment relationship, Site Check progress, and any existing history will be preserved.</p>
+            </>}
+            error={clearNumberError}
+            isBusy={clearNumberBusy}
+            confirmLabel={clearNumberBusy ? 'Clearing…' : 'Clear Job number'}
+            onCancel={() => {
+                setJobNumberToClear(null)
+                setClearNumberError('')
+            }}
+            onConfirm={() => void confirmClearJobNumber()}
+        />}
         {showDeleteConfirmation && selected && <EditDrawerConfirmation
             eyebrow="Permanent deletion"
             title="Delete this Site Check and its Jobs?"

@@ -649,6 +649,35 @@ export async function deleteSiteCheckOccurrence(
     }
 }
 
+export async function clearSiteCheckJobNumber(
+    accessToken: string,
+    job: SiteCheckDetailJob,
+    options: { apiUrl?: string; fetcher?: typeof fetch } = {},
+) {
+    const jobId = requireGuid(job.gr_jobid, 'Job ID')
+    if (!job._gr_sitecheck_value) throw new Error('Only a generated Site Check Job can have its number cleared here.')
+    if (!job.gr_jobnumber?.trim()) throw new Error('This Site Check Job does not have a Job Number.')
+    if (!job['@odata.etag']) throw new Error('Reload the generated Jobs before clearing this Job Number.')
+    const response = await (options.fetcher ?? fetch)(
+        `${options.apiUrl ?? DEFAULT_API_URL}/gr_jobs(${jobId})`,
+        {
+            method: 'PATCH',
+            headers: {
+                ...headers(accessToken),
+                'Content-Type': 'application/json',
+                'If-Match': job['@odata.etag'],
+            },
+            body: JSON.stringify({ gr_jobnumber: null }),
+        },
+    )
+    if (response.status === 412) {
+        throw new Error('This Job changed elsewhere. Reload the Site Check before clearing its number.')
+    }
+    if (!response.ok) {
+        throw new Error('Dataverse rejected the Job Number removal. The Site Check Job was not changed.')
+    }
+}
+
 export async function saveSiteCheckSchedule(
     accessToken: string,
     input: SiteCheckScheduleSaveInput,

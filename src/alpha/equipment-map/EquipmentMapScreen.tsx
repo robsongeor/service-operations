@@ -21,9 +21,12 @@ export default function EquipmentMapScreen() {
     const { instance } = useMsal()
     const account = useActiveMsalAccount()
     const signedInUser = getSignedInUserInfo(account)
-    const { equipment, customers, sites, isLoading, loadError, reload } = useEquipmentManager()
-    const storageKey = equipmentMapCacheKey(signedInUser?.storageId || 'account-pending')
-    const [coordinates, setCoordinates] = useState<Record<string, CachedCoordinate>>(() => restoreEquipmentMapCache(storageKey))
+    const { equipment, customers, sites, equipmentCacheStatus, isLoading, loadError, reload } = useEquipmentManager()
+    const storageId = signedInUser?.storageId || 'account-pending'
+    const storageKey = equipmentMapCacheKey(storageId, import.meta.env.VITE_DATAVERSE_URL)
+    const [coordinates, setCoordinates] = useState<Record<string, CachedCoordinate>>({})
+    const [sharedResolutionAttempts, setSharedResolutionAttempts] = useState<Record<string, string>>({})
+    const [cacheReady, setCacheReady] = useState(false)
     const [geocodingError, setGeocodingError] = useState('')
     const [search, setSearch] = useState('')
     const [customerId, setCustomerId] = useState('')
@@ -33,11 +36,44 @@ export default function EquipmentMapScreen() {
     const [detailsOpen, setDetailsOpen] = useState(true)
 
     const groupedSites = useMemo(() => groupEquipmentBySite(equipment), [equipment])
+    const sharedCoordinates = useMemo(() => Object.fromEntries(sites.flatMap((site) => {
+        const address = site.gr_address?.trim() || ''
+        const resolved = Boolean(address && site.gr_geocodesourceaddress === address && site.gr_geocoderesolvedon)
+        const coordinate = resolved
+            && typeof site.gr_geocodelatitude === 'number'
+            && typeof site.gr_geocodelongitude === 'number'
+            ? {
+                latitude: site.gr_geocodelatitude,
+                longitude: site.gr_geocodelongitude,
+                formattedAddress: site.gr_geocodeformattedaddress || address,
+            }
+            : null
+        return resolved
+            ? [[site.gr_siteid, {
+                address,
+                coordinate,
+                status: coordinate ? 'matched' as const : 'not_found' as const,
+            }]]
+            : []
+    })), [sites])
+    const effectiveCoordinates = useMemo(() => ({ ...coordinates, ...sharedCoordinates }), [coordinates, sharedCoordinates])
 
     useEffect(() => {
-        if (isLoading || loadError || geocodingError || !account || groupedSites.length === 0) return
+        let cancelled = false
+        void restoreEquipmentMapCache(storageKey, storageId).then((cached) => {
+            if (cancelled) return
+            setCoordinates(cached)
+            setCacheReady(true)
+        })
+        return () => { cancelled = true }
+    }, [storageId, storageKey])
+
+    useEffect(() => {
+        if (!cacheReady || equipmentCacheStatus?.refreshing || isLoading || loadError || !account || groupedSites.length === 0 || sites.length === 0) return
         const missing = groupedSites
-            .filter((site) => site.address && coordinates[site.siteId]?.address !== site.address)
+            .filter((site) => site.address
+                && sharedCoordinates[site.siteId]?.address !== site.address
+                && sharedResolutionAttempts[site.siteId] !== site.address)
             .slice(0, 20)
         if (!missing.length) return
         let cancelled = false
@@ -48,6 +84,10 @@ export default function EquipmentMapScreen() {
                 .then((results) => {
                     if (cancelled) return
                     const providerFailureCount = results.filter((result) => result.status === 'provider_failed').length
+                    setSharedResolutionAttempts((current) => ({
+                        ...current,
+                        ...Object.fromEntries(results.map((result) => [result.siteId, result.address])),
+                    }))
                     setCoordinates((current) => {
                         const next = { ...current }
                         const resultsBySite = new Map(results.map((result) => [result.siteId, result]))
@@ -60,7 +100,7 @@ export default function EquipmentMapScreen() {
                                 status: result.coordinate ? 'matched' : 'not_found',
                             }
                         })
-                        saveEquipmentMapCache(storageKey, next)
+                        void saveEquipmentMapCache(storageKey, next)
                         return next
                     })
                     if (providerFailureCount > 0) {
@@ -72,7 +112,7 @@ export default function EquipmentMapScreen() {
                 })
         }, 0)
         return () => { cancelled = true; window.clearTimeout(timer) }
-    }, [account, coordinates, geocodingError, groupedSites, instance, isLoading, loadError, storageKey])
+    }, [account, cacheReady, equipmentCacheStatus?.refreshing, groupedSites, instance, isLoading, loadError, sharedCoordinates, sharedResolutionAttempts, sites.length, storageKey])
 
     const filteredSites = useMemo(() => {
         const query = normalized(search)
@@ -86,15 +126,15 @@ export default function EquipmentMapScreen() {
                     .some((value) => normalized(value).includes(query))
             })
             if (!matchingEquipment.length) return []
-            const cached = coordinates[site.siteId]
+            const cached = effectiveCoordinates[site.siteId]
             return [{ ...site, equipment: matchingEquipment, coordinate: cached?.address === site.address ? cached.coordinate : undefined }]
         })
-    }, [coordinates, customerId, groupedSites, search, siteId, stateFilter])
+    }, [customerId, effectiveCoordinates, groupedSites, search, siteId, stateFilter])
 
     const mappedSites = useMemo(() => filteredSites.filter((site) => site.coordinate), [filteredSites])
     const addressedSiteCount = groupedSites.filter((site) => site.address).length
     const resolvedAddressCount = groupedSites.filter((site) =>
-        site.address && coordinates[site.siteId]?.address === site.address,
+        site.address && effectiveCoordinates[site.siteId]?.address === site.address,
     ).length
     const pendingAddressCount = addressedSiteCount - resolvedAddressCount
     const selectedSite = filteredSites.find((site) => site.siteId === selectedSiteId) ?? filteredSites[0]

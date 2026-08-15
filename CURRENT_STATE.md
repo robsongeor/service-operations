@@ -63,6 +63,27 @@ Branch: `codex/job-book-integration`
 
 ## Unfinished work
 
+- Job Book Intake now has a provisioned, published, and verified organization-owned
+  `gr_jobbookentry` Dataverse ledger in `ServiceOperationsNew`. Its primary Job Number is an
+  AutoNumber with Active alternate key, seeded at `145969`; the Service Operations role has only
+  organization-depth Create/Read/Write/Append/Append To. The local Intake screen creates records
+  without submitting a number and accepts only Dataverse's returned allocation; ETag-protected
+  editing is implemented locally. `gr_jobbookentry.gr_entered` is displayed as GT Entry, while
+  Timecloud Entry remains a separate boolean. Managed `gr_job` records now have matching independent
+  `gr_gtentered` and `gr_timecloudentered` booleans; the Job Book Legacy table reads and saves both
+  with ETag protection. Obsolete browser-only draft rows and overrides are no longer loaded or
+  written, and the Reset local drafts control has been removed. Its initial Equipment request now
+  uses a lightweight account/environment-scoped IndexedDB picker index instead of the full Equipment
+  management payload; Customer and Site suggestions load only when the add-machine dialog opens.
+  On 16 August 2026, the latest preflight found 399 numbered Jobs with no
+  duplicate Job Numbers, and `gr_job_jobnumber_key` was provisioned and verified Active without
+  changing an existing Job. Promotion remains disabled until its atomic server operation exists.
+
+- All management and public portal feature screens are now route-level lazy imports. The measured
+  local production entry bundle fell from approximately 1.79 MB minified / 540 KB gzip to 465 KB /
+  134 KB gzip, while initial CSS fell from approximately 258 KB to 5 KB. Feature code and styles now
+  load when their route is opened; authentication, routing boundaries, and the Sidebar remain eager.
+
 - Jobs now follows the Equipment data-loading model locally. An account/environment-scoped
   IndexedDB snapshot gives the Jobs table an immediate first render, an in-memory cache deduplicates
   same-session requests, and a complete paged Dataverse refresh replaces the snapshot in the
@@ -99,9 +120,19 @@ Branch: `codex/job-book-integration`
   pass to avoid repeated map movement. Nearby markers cluster and split/spiderfy during zoom so dense
   areas remain readable; Site and Equipment details open in a closable floating map window, and the
   desktop map fills the remaining viewport beneath the filters.
+  Account/environment-scoped IndexedDB now restores coordinates before geocoding begins. Five
+  optional derived geocode fields on `gr_site` were provisioned, published, and verified on
+  16 August 2026; the authenticated geocoding endpoint writes them with bounded Dataverse concurrency so
+  unchanged Site addresses are shared across devices. Exact source-address matching invalidates a
+  stored coordinate after an address edit, while the authoritative `gr_address` is never rewritten.
+  Signed-in localhost smoke testing on 16 August 2026 populated shared coordinates for all 142
+  addressed Sites with assigned Equipment. Six addressed Sites without Equipment were intentionally
+  left unresolved. The smoke also verified direct derived-field read-back, non-RFC Dataverse GUID
+  handling, bounded independent writes, and continuation after an individual provider failure.
   The separately created `GEOAPIFY_API_KEY` was added manually to the production server-only Static
   Web App environment variables on 15 August 2026. Signed-in verification that markers resolve in
-  production remains outstanding. No Dataverse schema, role, record, or credential was changed.
+  production remains outstanding. No role, business record, credential, deployment, or cloud
+  configuration was changed by the shared-cache work.
 
 - Staff Directory is published in `v1.6.0`: the UI is renamed from
   Mechanics to Staff, `/mechanics` redirects to `/staff`, Department, `Can be assigned Jobs`, and

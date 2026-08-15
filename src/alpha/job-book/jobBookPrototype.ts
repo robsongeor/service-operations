@@ -7,12 +7,29 @@ export type PrototypeEquipment = {
     make: string
     model: string
     customer: string
+    customerId: string
     site: string
+    siteId: string
     address: string
     addressVerified: boolean
     addressNotFoundConfirmed: boolean
     isLocal: boolean
 }
+
+export const JOB_BOOK_ENTRY_STAGES = {
+    INTAKE: 'intake',
+    PROMOTED: 'promoted',
+    LEGACY: 'legacy',
+    VOID: 'void',
+} as const
+
+export type JobBookEntryStage = typeof JOB_BOOK_ENTRY_STAGES[keyof typeof JOB_BOOK_ENTRY_STAGES]
+export type JobBookEntrySource = 'local-intake' | 'dataverse-intake' | 'dataverse-job'
+
+export const MANAGED_JOB_ENTRY_MARKER_COLUMNS = {
+    entered: 'gr_gtentered',
+    timecloudEntered: 'gr_timecloudentered',
+} as const
 
 export type JobBookRow = {
     id: string
@@ -26,8 +43,10 @@ export type JobBookRow = {
     make: string
     model: string
     customer: string
+    customerId: string
     description: string
     site: string
+    siteId: string
     address: string
     addressVerified: boolean
     addressNotFoundConfirmed: boolean
@@ -36,6 +55,11 @@ export type JobBookRow = {
     timecloudEntered: boolean
     equipmentConfigured: boolean
     equipmentReviewRequired: boolean
+    entryStage: JobBookEntryStage
+    entrySource: JobBookEntrySource
+    linkedJobId: string
+    intakeRecordId: string
+    etag: string
 }
 
 export function equipmentToPrototype(record: Equipment): PrototypeEquipment {
@@ -46,7 +70,9 @@ export function equipmentToPrototype(record: Equipment): PrototypeEquipment {
         make: record.gr_make?.trim() ?? '',
         model: record.gr_model?.trim() ?? '',
         customer: record.gr_Site?.gr_Customer?.gr_name?.trim() ?? '',
+        customerId: record.gr_Site?.gr_Customer?.gr_customerid ?? '',
         site: record.gr_Site?.gr_name?.trim() ?? '',
+        siteId: record.gr_Site?.gr_siteid ?? '',
         address: record.gr_Site?.gr_address?.trim() ?? '',
         addressVerified: Boolean(record.gr_Site?.gr_address?.trim()),
         addressNotFoundConfirmed: false,
@@ -56,6 +82,13 @@ export function equipmentToPrototype(record: Equipment): PrototypeEquipment {
 
 export function isEquipmentConfigured(equipment: Pick<PrototypeEquipment, 'fleet' | 'serial'>) {
     return Boolean(equipment.fleet.trim() || equipment.serial.trim())
+}
+
+export function splitSiteAddress(value: string) {
+    const lines = value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+    if (lines.length > 1) return { street: lines[0], locality: lines.slice(1).join(', ') }
+    const [street = '', ...rest] = value.split(',').map((part) => part.trim())
+    return { street, locality: rest.join(', ') }
 }
 
 export function createBlankJobBookRow(jobNumber: number): JobBookRow {
@@ -71,8 +104,10 @@ export function createBlankJobBookRow(jobNumber: number): JobBookRow {
         make: '',
         model: '',
         customer: '',
+        customerId: '',
         description: '',
         site: '',
+        siteId: '',
         address: '',
         addressVerified: false,
         addressNotFoundConfirmed: false,
@@ -81,7 +116,22 @@ export function createBlankJobBookRow(jobNumber: number): JobBookRow {
         timecloudEntered: false,
         equipmentConfigured: false,
         equipmentReviewRequired: false,
+        entryStage: JOB_BOOK_ENTRY_STAGES.INTAKE,
+        entrySource: 'local-intake',
+        linkedJobId: '',
+        intakeRecordId: '',
+        etag: '',
     }
+}
+
+export function getPromotionReadiness(row: JobBookRow) {
+    const reasons: string[] = []
+    if (row.entryStage !== JOB_BOOK_ENTRY_STAGES.INTAKE) reasons.push('Only Intake entries can be promoted.')
+    if (!Number.isFinite(Number(row.jobNumber)) || Number(row.jobNumber) <= 0) reasons.push('A Job Number must be allocated first.')
+    if (!row.description.trim()) reasons.push('A Job description is required.')
+    if (!row.equipmentConfigured && !row.equipmentReviewRequired) reasons.push('Equipment must be selected or marked unconfigured.')
+    if (row.address.trim() && !row.addressVerified && !row.addressNotFoundConfirmed) reasons.push('The address must be verified or marked not found.')
+    return { ready: reasons.length === 0, reasons }
 }
 
 export function applyEquipmentToRow(row: JobBookRow, equipment: PrototypeEquipment): JobBookRow {
@@ -93,7 +143,9 @@ export function applyEquipmentToRow(row: JobBookRow, equipment: PrototypeEquipme
         make: equipment.make,
         model: equipment.model,
         customer: equipment.customer,
+        customerId: equipment.customerId,
         site: equipment.site,
+        siteId: equipment.siteId,
         address: equipment.address,
         addressVerified: equipment.addressVerified,
         addressNotFoundConfirmed: equipment.addressNotFoundConfirmed,

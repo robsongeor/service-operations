@@ -1,15 +1,13 @@
-import type { Equipment } from '../jobs/types/equipment.types.ts'
 import { isServiceOperationsAdministrator } from '../../auth/adminAuthorization.ts'
 import type { SignedInUserInfo } from '../../auth/signedInUser.ts'
 import type { GreentreeEquipmentSnapshot, ReconciliationRow } from './greentreeReconciliation.ts'
-import { normalizeIdentity } from './greentreeReconciliation.ts'
 import { invalidateSharedEquipmentDataCache } from '../equipment/services/equipmentDataCache.ts'
 
 const DATAVERSE_URL = import.meta.env?.VITE_DATAVERSE_URL ?? ''
 export const GREENTREE_IMPORT_BATCH_LIMIT = 50
 
 export type GreentreeImportResult = {
-    succeeded: Array<{ sourceId: string; equipmentId: string }>
+    succeeded: Array<{ sourceId: string; equipmentId: string; action: 'created' | 'updated' }>
     failed: Array<{ sourceId: string; fleet: string; message: string }>
 }
 
@@ -23,19 +21,14 @@ export function greentreeImportBatches(rows: ReconciliationRow[]) {
 
 export function greentreeImportIssues(row: ReconciliationRow) {
     const issues: string[] = []
-    if (row.status !== 'new') issues.push('Only New records can be imported.')
     if (!row.source.fleet.trim()) issues.push('Fleet Number Code is required.')
-    if (!row.source.serial.trim()) issues.push('Serial is required.')
-    if (!row.source.make.trim()) issues.push('Make is required.')
-    if (!row.source.model.trim()) issues.push('Model is required.')
-    return issues
-}
-
-function existingIdentity(equipment: Equipment[]) {
-    return {
-        fleets: new Set(equipment.map((item) => normalizeIdentity(item.gr_fleet)).filter(Boolean)),
-        serials: new Set(equipment.map((item) => normalizeIdentity(item.gr_serial)).filter(Boolean)),
+    if (row.reasons.includes('Serial is duplicated in Greentree')) {
+        issues.push('Serial is duplicated in Greentree. Resolve the duplicate before importing.')
     }
+    if (!row.appEquipment && row.candidateEquipment.length > 1) {
+        issues.push('Multiple app records are possible matches. Resolve the duplicate app records before importing.')
+    }
+    return issues
 }
 
 async function dataverseMessage(response: Response) {
@@ -78,11 +71,35 @@ async function createEquipmentFromGreentree(accessToken: string, source: Greentr
     return id
 }
 
+async function updateEquipmentFromGreentree(accessToken: string, equipmentId: string, source: GreentreeEquipmentSnapshot) {
+    const response = await fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_equipments(${equipmentId})`, {
+        method: 'PATCH',
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            gr_fleet: source.fleet.trim(),
+            gr_serial: source.serial.trim(),
+            gr_make: source.make.trim(),
+            gr_model: source.model.trim(),
+        }),
+    })
+    if (!response.ok) throw new Error(await dataverseMessage(response))
+    invalidateSharedEquipmentDataCache(accessToken)
+    return equipmentId
+}
+
+function importTarget(row: ReconciliationRow) {
+    if (row.appEquipment) return row.appEquipment
+    return row.candidateEquipment.length === 1 ? row.candidateEquipment[0] : null
+}
+
 export async function importGreentreeEquipmentBatch(
     user: SignedInUserInfo | null,
     accessToken: string,
     rows: ReconciliationRow[],
-    fetchCurrentEquipment: (token: string) => Promise<Equipment[]>,
 ): Promise<GreentreeImportResult> {
     if (!isServiceOperationsAdministrator(user)) throw new Error('You are not authorised to import Greentree Equipment.')
     if (rows.length === 0) throw new Error('Select at least one Equipment record.')
@@ -90,27 +107,16 @@ export async function importGreentreeEquipmentBatch(
     const ineligible = rows.find((row) => greentreeImportIssues(row).length > 0)
     if (ineligible) throw new Error(`${ineligible.source.fleet || ineligible.source.sourceId}: ${greentreeImportIssues(ineligible).join(' ')}`)
 
-    const current = await fetchCurrentEquipment(accessToken)
-    const identities = existingIdentity(current)
     const succeeded: GreentreeImportResult['succeeded'] = []
     const failed: GreentreeImportResult['failed'] = []
 
     for (const row of rows) {
-        const fleet = normalizeIdentity(row.source.fleet)
-        const serial = normalizeIdentity(row.source.serial)
-        if (identities.fleets.has(fleet)) {
-            failed.push({ sourceId: row.source.sourceId, fleet: row.source.fleet, message: 'Fleet Number Code now exists in the app. Nothing was created.' })
-            continue
-        }
-        if (identities.serials.has(serial)) {
-            failed.push({ sourceId: row.source.sourceId, fleet: row.source.fleet, message: 'Serial now exists in the app. Nothing was created.' })
-            continue
-        }
         try {
-            const equipmentId = await createEquipmentFromGreentree(accessToken, row.source)
-            identities.fleets.add(fleet)
-            identities.serials.add(serial)
-            succeeded.push({ sourceId: row.source.sourceId, equipmentId })
+            const target = importTarget(row)
+            const equipmentId = target
+                ? await updateEquipmentFromGreentree(accessToken, target.gr_equipmentid, row.source)
+                : await createEquipmentFromGreentree(accessToken, row.source)
+            succeeded.push({ sourceId: row.source.sourceId, equipmentId, action: target ? 'updated' : 'created' })
         } catch (error) {
             failed.push({
                 sourceId: row.source.sourceId,

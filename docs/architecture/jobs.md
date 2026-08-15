@@ -101,13 +101,28 @@ number per clipboard line and atomically assigns them to that same sorted select
 validates count, uniqueness, and ETags before any write, then refreshes the authoritative
 Jobs projection.
 
+Job Book Intake is a separate organization-owned Dataverse ledger, not an Unset Job type. Creating
+an Intake row atomically receives its Job Number from the `gr_jobbookentry.gr_jobnumber` AutoNumber;
+the browser never calculates the next number. Intake, Legacy, Void, and Promoted stages remain
+outside managed Job type tabs. GT Entry and Timecloud Entry are independent administrative booleans
+on both Intake and managed Job records; neither is inferred from Job status or from the other marker.
+The Job Book Legacy table saves them individually with ETag concurrency protection. Promotion is
+intentionally disabled until one server-side idempotent operation can create the Job and mark the
+Intake row Promoted together; both Job Number alternate keys are Active.
+
+Job Book uses a dedicated lightweight Equipment picker projection rather than the full Equipment
+management payload. That index contains Equipment identity plus its authoritative Site/Customer
+display context, is scoped by Dataverse environment and signed-in account, and uses an IndexedDB
+snapshot for immediate repeat loads followed by a background refresh. Customer and Site suggestion
+lists are not part of the initial Job Book load; they load only when the add-machine dialog opens.
+
 ## Important Business Rules
 
 - A non-empty Job Number must be unique across Jobs. The canonical create service performs an exact,
   authenticated Dataverse preflight for every creation entry point before POST; the main Jobs drawer
   also rejects a normalized duplicate from its loaded projection immediately. Blank Job Numbers
-  remain allowed where the originating workflow permits them. A Dataverse alternate key is still
-  required for a hard guarantee against two simultaneous first-time submissions of the same number.
+  remain allowed where the originating workflow permits them. The Active `gr_job_jobnumber_key`
+  alternate key provides the hard guarantee against simultaneous duplicate submissions.
 - Breakdown, Service, and Workshop Jobs may exist without Equipment.
 - Site Check is a protected Job Type created only by the Site Check workflow. It is excluded
   from ordinary Job creation options, requires Equipment, and reuses the canonical Job
@@ -141,6 +156,9 @@ Jobs projection.
 - Generated Site Check Jobs may receive externally allocated numeric Job numbers through
   the Site Check details drawer. Exact-count/format validation and stable creation order are
   domain-owned; all numbers are written atomically with Job ETags and then reloaded.
+- A duplicate allocation may be corrected from that same generated-Job list by clearing only the
+  selected Job Number after explicit confirmation. The write is ETag-protected and preserves the
+  generated Job, parent occurrence, expected count, Equipment relationship, status, and history.
 - New Site Check Jobs share an occurrence description in the form
   `<Frequency> checks for <dd/mm/yyyy>`, where the date is the Monday starting the
   occurrence's New Zealand-local week. Historical descriptions are not backfilled.

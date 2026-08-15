@@ -20,9 +20,13 @@ sends batches of at most 20 Sites and caches each completed batch immediately. T
 initial address pass to settle before fitting its markers, avoiding repeated refits while batches arrive.
 Within a batch, provider requests start at a bounded four-per-second rate; temporary failures receive
 one bounded retry and then settle only that Site as Not mapped rather than rejecting the batch. Results
-are cached in a bounded Function process cache. The client also caches
-results for the signed-in browser session, keyed by the Site ID and exact current address, so an
-address change invalidates the prior coordinate without a Dataverse schema change.
+are cached in a bounded Function process cache. The client also persists results in IndexedDB,
+scoped by signed-in account and Dataverse environment and keyed by the Site ID and exact current
+address. The persisted cache is restored before any geocoding request begins, so reopening the app
+on the same device does not repeat Geoapify requests for unchanged addresses. Resolved coordinates
+are also persisted as derived fields on the authoritative Site, allowing every device to reuse them.
+An exact source-address comparison invalidates prior coordinates when `gr_address` changes. Browser
+storage or shared persistence failure remains non-fatal and falls back to resolving addresses normally.
 
 Leaflet renders an interactive raster-tile map from configurable
 `VITE_EQUIPMENT_MAP_TILE_URL`, defaulting to the standard OpenStreetMap tile endpoint for normal,
@@ -59,11 +63,15 @@ configuration without changing feature code.
 
 - Read-only Equipment: `gr_equipment` / `gr_equipments`.
 - Read-only current Site relationship: `gr_Site`.
-- Read-only Site address: `gr_address`.
+- Authoritative Site address: `gr_address`.
+- Derived Site geocode cache: `gr_geocodelatitude`, `gr_geocodelongitude`,
+  `gr_geocodesourceaddress`, `gr_geocodeformattedaddress`, and `gr_geocoderesolvedon`.
 - Read-only derived Customer: `gr_Site.gr_Customer`.
 - Authenticated server route: `POST /api/equipmentgeocode`, maximum 200 distinct locations.
 
-No Dataverse field, relationship, permission, record, or role change is required.
+No relationship or new table is required. Existing Site read/update permission protects the derived
+cache fields; the endpoint writes with the authenticated office user's delegated Dataverse token.
+See [Equipment Map Dataverse schema](../equipment-map-dataverse-schema.md).
 
 ## Deployment Readiness
 
@@ -77,6 +85,7 @@ the key. Deployment and signed-in smoke testing remain explicit approval gates.
 - [`../../src/alpha/equipment-map/EquipmentMapScreen.tsx`](../../src/alpha/equipment-map/EquipmentMapScreen.tsx)
 - [`../../src/alpha/equipment-map/EquipmentLocationMap.tsx`](../../src/alpha/equipment-map/EquipmentLocationMap.tsx)
 - [`../../api/services/equipmentGeocodingService.js`](../../api/services/equipmentGeocodingService.js)
+- [Equipment Map Dataverse schema](../equipment-map-dataverse-schema.md)
 - [Equipment](equipment.md)
 - [Routing](routing.md)
 - [Security](security.md)

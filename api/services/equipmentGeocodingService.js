@@ -5,7 +5,13 @@ const MAXIMUM_ADDRESS_LENGTH = 500
 const PROVIDER_REQUEST_INTERVAL_MS = 250
 const MAXIMUM_CACHE_ENTRIES = 2_000
 const MAXIMUM_AUTOCOMPLETE_RESULTS = 6
+const MAXIMUM_DATAVERSE_WRITE_CONCURRENCY = 4
 const cache = new Map()
+const DATAVERSE_SITE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function isDataverseSiteId(value) {
+    return typeof value === 'string' && DATAVERSE_SITE_ID.test(value)
+}
 
 function jsonResponse(status, body, headers = {}) {
     return {
@@ -214,6 +220,59 @@ async function resolveLocations(locations, resolveCoordinate) {
     }))
 }
 
+function geocodePersistencePayload(result, resolvedOn) {
+    return {
+        gr_geocodelatitude: result.coordinate?.latitude ?? null,
+        gr_geocodelongitude: result.coordinate?.longitude ?? null,
+        gr_geocodesourceaddress: result.address,
+        gr_geocodeformattedaddress: result.coordinate?.formattedAddress || null,
+        gr_geocoderesolvedon: resolvedOn,
+    }
+}
+
+async function persistResolvedLocations(results, authorization) {
+    const persistable = results.filter((result) =>
+        result.status !== 'provider_failed' && isDataverseSiteId(result.siteId),
+    )
+    const origin = dataverseOrigin()
+    if (!origin || !persistable.length) return false
+
+    const resolvedOn = new Date().toISOString()
+    let nextIndex = 0
+    let allSucceeded = true
+    const worker = async () => {
+        while (nextIndex < persistable.length) {
+            const result = persistable[nextIndex]
+            nextIndex += 1
+            const controller = new AbortController()
+            const timeout = setTimeout(() => controller.abort(), GEOAPIFY_TIMEOUT_MS)
+            try {
+                const response = await fetch(`${origin}/api/data/v9.2/gr_sites(${result.siteId})`, {
+                    method: 'PATCH',
+                    headers: {
+                        Authorization: authorization,
+                        Accept: 'application/json',
+                        'Content-Type': 'application/json; charset=utf-8',
+                        'If-Match': '*',
+                    },
+                    body: JSON.stringify(geocodePersistencePayload(result, resolvedOn)),
+                    signal: controller.signal,
+                })
+                if (!response.ok) allSucceeded = false
+            } catch {
+                allSucceeded = false
+            } finally {
+                clearTimeout(timeout)
+            }
+        }
+    }
+    await Promise.all(Array.from(
+        { length: Math.min(MAXIMUM_DATAVERSE_WRITE_CONCURRENCY, persistable.length) },
+        () => worker(),
+    ))
+    return allSucceeded
+}
+
 async function geocode(request) {
     if (request.method !== 'POST') return jsonResponse(405, { error: 'Method not allowed.' }, { Allow: 'POST' })
     const authentication = await validateAuthenticatedUser(request)
@@ -233,6 +292,7 @@ async function geocode(request) {
             }
             return geocodeAddressWithRetry(location.address, apiKey)
         })
+    await persistResolvedLocations(results, authentication.authorization)
     return jsonResponse(200, { results })
 }
 
@@ -240,5 +300,5 @@ module.exports = {
     geocode,
     searchAddresses,
     jsonResponse,
-    test: { addressSuggestionFromGeoapify, coordinateFromGeoapify, dataverseOrigin, normalizeAddressQuery, normalizeLocations, requestHeader, resolveLocations },
+    test: { addressSuggestionFromGeoapify, coordinateFromGeoapify, dataverseOrigin, geocodePersistencePayload, isDataverseSiteId, normalizeAddressQuery, normalizeLocations, requestHeader, resolveLocations },
 }

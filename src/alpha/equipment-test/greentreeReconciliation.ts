@@ -5,6 +5,7 @@ const FORMATTED_VALUE = '@OData.Community.Display.V1.FormattedValue'
 
 const fieldAliases = {
     fleet: ['greentreecode', 'code', 'fleetnumbercode', 'fleetnumber', 'fleetno', 'fleet'],
+    name: ['name', 'equipmentname'],
     make: ['make'],
     model: ['model'],
     serial: ['serial', 'serialnumber'],
@@ -17,6 +18,7 @@ const fieldAliases = {
 export type GreentreeEquipmentSnapshot = {
     sourceId: string
     fleet: string
+    name?: string
     make: string
     model: string
     serial: string
@@ -107,6 +109,7 @@ export function mapGreentreeEquipmentRecords(records: GreentreeRecord[], primary
     )))]
     const resolved = {
         fleet: resolveKey(keys, fieldAliases.fleet),
+        name: resolveKey(keys, fieldAliases.name),
         make: resolveKey(keys, fieldAliases.make),
         model: resolveKey(keys, fieldAliases.model),
         serial: resolveKey(keys, fieldAliases.serial),
@@ -119,6 +122,7 @@ export function mapGreentreeEquipmentRecords(records: GreentreeRecord[], primary
     return records.map((record, index): GreentreeEquipmentSnapshot => ({
         sourceId: recordText(record, resolved.sourceKey) || recordText(record, primaryIdAttribute) || `source-row-${index + 1}`,
         fleet: recordText(record, resolved.fleet),
+        name: recordText(record, resolved.name),
         make: recordText(record, resolved.make),
         model: recordText(record, resolved.model),
         serial: recordText(record, resolved.serial),
@@ -126,6 +130,40 @@ export function mapGreentreeEquipmentRecords(records: GreentreeRecord[], primary
         siteAddress2: recordText(record, resolved.siteAddress2),
         siteName: recordText(record, resolved.siteName),
     }))
+}
+
+function csvCell(value: unknown) {
+    const text = value == null ? '' : String(value)
+    return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+}
+
+export function duplicateSerialCorrectionCsv(source: GreentreeEquipmentSnapshot[]) {
+    const groups = new Map<string, GreentreeEquipmentSnapshot[]>()
+    for (const item of source) {
+        const serial = normalizeIdentity(item.serial)
+        if (serial) groups.set(serial, [...(groups.get(serial) ?? []), item])
+    }
+    const duplicateRows = [...groups.entries()]
+        .filter(([, items]) => items.length > 1)
+        .flatMap(([normalizedSerial, items]) => items.map((item) => ({ normalizedSerial, item, group: items })))
+        .sort((left, right) => left.normalizedSerial.localeCompare(right.normalizedSerial)
+            || left.item.fleet.localeCompare(right.item.fleet))
+    const headers = [
+        'Serial', 'Greentree Code', 'Equipment Name', 'Make', 'Model', 'Site',
+        'Site Address 1', 'Site Address 2', 'Other Fleet Numbers Sharing Serial',
+        'Duplicate Count', 'Greentree Source Key',
+    ]
+    const rows = duplicateRows.map(({ item, group }) => {
+        const otherFleets = [...new Set(group
+            .filter((candidate) => candidate.sourceId !== item.sourceId)
+            .map((candidate) => candidate.fleet.trim())
+            .filter(Boolean))].join(' | ')
+        return [
+            item.serial, item.fleet, item.name, item.make, item.model, item.siteName,
+            item.siteAddress1, item.siteAddress2, otherFleets, group.length, item.sourceId,
+        ].map(csvCell).join(',')
+    })
+    return `\uFEFF${headers.map(csvCell).join(',')}\r\n${rows.join('\r\n')}${rows.length ? '\r\n' : ''}`
 }
 
 function indexEquipment(equipment: Equipment[], value: (item: Equipment) => string | null) {

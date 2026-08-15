@@ -1,27 +1,33 @@
+import { lazy, Suspense } from 'react'
 import { useMsal } from '@azure/msal-react'
 import LoginScreen from './alpha/LoginScreen'
 import { Navigate, Routes, Route, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
-import JobsScreen from './alpha/jobs/JobsScreen'
-import SchedulingScreen from './alpha/scheduling/SchedulingScreen'
-import PricingScreen from './alpha/quotes/PricingScreen'
-import QuotesScreen from './alpha/quotes/QuotesScreen'
-import MechanicsScreen from './alpha/mechanics/MechanicsScreen'
-import EquipmentScreen from './alpha/equipment/EquipmentScreen'
-import CustomerDashboardScreen from './alpha/customers/CustomerDashboardScreen'
-import WofScreen from './alpha/wof/WofScreen'
 import { getSignedInUserInfo } from './auth/signedInUser'
 import { useActiveMsalAccount } from './auth/useActiveMsalAccount'
-import TechnicianJobSubmissionPage from './alpha/portal/TechnicianJobSubmissionPage'
-import SiteChecksScreen from './alpha/site-checks/SiteChecksScreen'
-import SiteCheckAssignmentPage from './alpha/portal/SiteCheckAssignmentPage'
-import ChecklistAdminScreen from './alpha/site-checks/ChecklistAdminScreen'
 import { isServiceOperationsAdministrator } from './auth/adminAuthorization'
 import DataverseSessionRecovery from './auth/DataverseSessionRecovery'
-import ChargeableInvoiceReviewScreen from './alpha/chargeable-invoices/ChargeableInvoiceReviewScreen'
-import EquipmentMapScreen from './alpha/equipment-map/EquipmentMapScreen'
-import GreentreeEquipmentTestScreen from './alpha/equipment-test/GreentreeEquipmentTestScreen'
-import JobBookPrototypeScreen from './alpha/job-book/JobBookPrototypeScreen'
+
+const JobsScreen = lazy(() => import('./alpha/jobs/JobsScreen'))
+const SchedulingScreen = lazy(() => import('./alpha/scheduling/SchedulingScreen'))
+const PricingScreen = lazy(() => import('./alpha/quotes/PricingScreen'))
+const QuotesScreen = lazy(() => import('./alpha/quotes/QuotesScreen'))
+const MechanicsScreen = lazy(() => import('./alpha/mechanics/MechanicsScreen'))
+const EquipmentScreen = lazy(() => import('./alpha/equipment/EquipmentScreen'))
+const CustomerDashboardScreen = lazy(() => import('./alpha/customers/CustomerDashboardScreen'))
+const WofScreen = lazy(() => import('./alpha/wof/WofScreen'))
+const TechnicianJobSubmissionPage = lazy(() => import('./alpha/portal/TechnicianJobSubmissionPage'))
+const SiteChecksScreen = lazy(() => import('./alpha/site-checks/SiteChecksScreen'))
+const SiteCheckAssignmentPage = lazy(() => import('./alpha/portal/SiteCheckAssignmentPage'))
+const ChecklistAdminScreen = lazy(() => import('./alpha/site-checks/ChecklistAdminScreen'))
+const ChargeableInvoiceReviewScreen = lazy(() => import('./alpha/chargeable-invoices/ChargeableInvoiceReviewScreen'))
+const EquipmentMapScreen = lazy(() => import('./alpha/equipment-map/EquipmentMapScreen'))
+const GreentreeEquipmentTestScreen = lazy(() => import('./alpha/equipment-test/GreentreeEquipmentTestScreen'))
+const JobBookPrototypeScreen = lazy(() => import('./alpha/job-book/JobBookPrototypeScreen'))
+
+function RouteLoadingFallback() {
+  return <div role="status" aria-live="polite" style={{ padding: '24px', color: '#66736c', fontSize: '.8rem' }}>Loading page…</div>
+}
 
 function App() {
   const { accounts } = useMsal()
@@ -30,17 +36,21 @@ function App() {
   const signedInUser = getSignedInUserInfo(activeAccount)
 
   if (location.pathname === '/portal/job' || location.pathname.startsWith('/portal/job/')) {
-    return <Routes>
-      <Route path="/portal/job/:token" element={<TechnicianJobSubmissionPage />} />
-      <Route path="/portal/job" element={<TechnicianJobSubmissionPage />} />
-    </Routes>
+    return <Suspense fallback={<RouteLoadingFallback />}>
+      <Routes>
+        <Route path="/portal/job/:token" element={<TechnicianJobSubmissionPage />} />
+        <Route path="/portal/job" element={<TechnicianJobSubmissionPage />} />
+      </Routes>
+    </Suspense>
   }
 
   if (location.pathname === '/portal/site-check' || location.pathname.startsWith('/portal/site-check/')) {
-    return <Routes>
-      <Route path="/portal/site-check/:token" element={<SiteCheckAssignmentPage />} />
-      <Route path="/portal/site-check" element={<SiteCheckAssignmentPage />} />
-    </Routes>
+    return <Suspense fallback={<RouteLoadingFallback />}>
+      <Routes>
+        <Route path="/portal/site-check/:token" element={<SiteCheckAssignmentPage />} />
+        <Route path="/portal/site-check" element={<SiteCheckAssignmentPage />} />
+      </Routes>
+    </Suspense>
   }
 
   if (accounts.length === 0) {
@@ -55,29 +65,31 @@ function App() {
 
       {/* Main Content */}
       <div style={{ flex: 1, minWidth: 0, padding: '24px' }}>
-        <Routes>
-          <Route path="/" element={<div>Overview</div>} />
-          <Route path="/customers" element={<CustomerDashboardScreen />} />
-          <Route path="/staff" element={<MechanicsScreen />} />
-          <Route path="/mechanics" element={<Navigate to="/staff" replace />} />
-          <Route path="/equipment" element={<EquipmentScreen />} />
-          <Route path="/equipment/greentree-test" element={<GreentreeEquipmentTestScreen />} />
-          <Route path="/equipment-map" element={<EquipmentMapScreen key={signedInUser?.storageId || 'account-pending'} />} />
-          <Route path="/jobs" element={<JobsScreen key={signedInUser?.storageId || 'account-pending'} />} />
-          <Route path="/job-book" element={<JobBookPrototypeScreen />} />
-          <Route path="/site-checks" element={<SiteChecksScreen />} />
-          <Route
-            path="/site-checks/checklists"
-            element={isServiceOperationsAdministrator(signedInUser)
-              ? <ChecklistAdminScreen />
-              : <Navigate to="/site-checks" replace />}
-          />
-          <Route path="/scheduling" element={<SchedulingScreen />} />
-          <Route path="/quotes" element={<QuotesScreen key={signedInUser?.storageId || 'account-pending'} />} />
-          <Route path="/chargeable-invoices" element={<ChargeableInvoiceReviewScreen />} />
-          <Route path="/pricing" element={<PricingScreen />} />
-          <Route path="/wof" element={<WofScreen key={signedInUser?.storageId || 'account-pending'} accountId={signedInUser?.storageId || 'account-pending'} />} />
-        </Routes>
+        <Suspense fallback={<RouteLoadingFallback />}>
+          <Routes>
+            <Route path="/" element={<div>Overview</div>} />
+            <Route path="/customers" element={<CustomerDashboardScreen />} />
+            <Route path="/staff" element={<MechanicsScreen />} />
+            <Route path="/mechanics" element={<Navigate to="/staff" replace />} />
+            <Route path="/equipment" element={<EquipmentScreen />} />
+            <Route path="/equipment/greentree-test" element={<GreentreeEquipmentTestScreen />} />
+            <Route path="/equipment-map" element={<EquipmentMapScreen key={signedInUser?.storageId || 'account-pending'} />} />
+            <Route path="/jobs" element={<JobsScreen key={signedInUser?.storageId || 'account-pending'} />} />
+            <Route path="/job-book" element={<JobBookPrototypeScreen key={signedInUser?.storageId || 'account-pending'} />} />
+            <Route path="/site-checks" element={<SiteChecksScreen />} />
+            <Route
+              path="/site-checks/checklists"
+              element={isServiceOperationsAdministrator(signedInUser)
+                ? <ChecklistAdminScreen />
+                : <Navigate to="/site-checks" replace />}
+            />
+            <Route path="/scheduling" element={<SchedulingScreen />} />
+            <Route path="/quotes" element={<QuotesScreen key={signedInUser?.storageId || 'account-pending'} />} />
+            <Route path="/chargeable-invoices" element={<ChargeableInvoiceReviewScreen />} />
+            <Route path="/pricing" element={<PricingScreen />} />
+            <Route path="/wof" element={<WofScreen key={signedInUser?.storageId || 'account-pending'} accountId={signedInUser?.storageId || 'account-pending'} />} />
+          </Routes>
+        </Suspense>
       </div>
     </div>
   )

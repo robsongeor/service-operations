@@ -111,6 +111,12 @@
     grid-auto-flow: column;
 }
 
+.site-check-job-list .site-check-clear-number {
+    border-color: #d8a6a6;
+    background: #fff7f7;
+    color: #8d3030;
+}
+
 .site-check-history button {
     display: grid;
     width: 100%;

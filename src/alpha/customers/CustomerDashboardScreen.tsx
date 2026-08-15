@@ -855,6 +855,7 @@ export default function CustomerDashboardScreen() {
             loadAllJobs={siteChecks.loadAllDetailJobs}
             loadAllEquipmentExclusions={siteChecks.loadAllEquipmentExclusions}
             allocateJobNumbers={siteChecks.allocateJobNumbers}
+            clearJobNumber={siteChecks.clearJobNumber}
             prepareAssignmentEmail={siteChecks.prepareAssignmentEmail}
             onDelete={async (check) => {
                 await siteChecks.deleteOccurrence(check)

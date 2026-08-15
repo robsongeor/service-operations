@@ -197,6 +197,13 @@ export default function JobsScreen() {
                         }}
                     />
                     <button
+                        className="jobs-intake-button"
+                        type="button"
+                        onClick={() => navigate('/job-book')}
+                    >
+                        Job Book Legacy
+                    </button>
+                    <button
                         className="jobs-create-button"
                         type="button"
                         onClick={() => setIsCreatingJob(true)}
