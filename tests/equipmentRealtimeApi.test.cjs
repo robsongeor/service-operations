@@ -9,7 +9,9 @@ test('realtime CORS accepts explicit production and localhost origins only', () 
     const originalOrigins = process.env.APP_ORIGINS
     process.env.APP_ORIGINS = 'https://yellow-cliff-068680700.7.azurestaticapps.net,http://localhost:5173'
     try {
-        assert.equal(corsHeaders({ headers: { origin: 'http://localhost:5173' } })['Access-Control-Allow-Origin'], 'http://localhost:5173')
+        const localhostHeaders = corsHeaders({ headers: { origin: 'http://localhost:5173' } })
+        assert.equal(localhostHeaders['Access-Control-Allow-Origin'], 'http://localhost:5173')
+        assert.equal(localhostHeaders['Access-Control-Allow-Credentials'], 'true')
         assert.equal(corsHeaders({ headers: { origin: 'https://yellow-cliff-068680700.7.azurestaticapps.net' } })['Access-Control-Allow-Origin'], 'https://yellow-cliff-068680700.7.azurestaticapps.net')
         assert.deepEqual(corsHeaders({ headers: { origin: 'https://example.invalid' } }), {})
     } finally {

@@ -22,6 +22,7 @@ function corsHeaders(request) {
     if (!requestOrigin || !allowedOrigins().includes(requestOrigin)) return {}
     return {
         'Access-Control-Allow-Origin': requestOrigin,
+        'Access-Control-Allow-Credentials': 'true',
         'Access-Control-Allow-Headers': 'authorization,content-type',
         'Access-Control-Allow-Methods': 'POST,OPTIONS',
         Vary: 'Origin',

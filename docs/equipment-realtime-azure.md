@@ -8,7 +8,7 @@ Dataverse remains the source of truth. This integration broadcasts invalidation 
 2. Create a standalone Azure Function App using Node.js 24 on Flex Consumption. The existing Static Web Apps managed API cannot host SignalR bindings because managed APIs support HTTP bindings only.
 3. Deploy the `realtime-api` directory to that Function App.
 4. Configure `AzureSignalRConnectionString`, `DATAVERSE_URL`, and `APP_ORIGINS` in Function App settings. `APP_ORIGINS` is a comma-separated allowlist containing the production URL and approved local development origins. Keep all values server-side.
-5. Add the same explicit origins to the Function App CORS settings.
+5. Add the same explicit origins to the Function App CORS settings and enable credential support because the SignalR browser client negotiates with credentials enabled.
 6. Set `VITE_EQUIPMENT_REALTIME_API_URL` to the Function App `/api` URL when building the frontend.
 
 ## GitHub deployment settings
