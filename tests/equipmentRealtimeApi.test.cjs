@@ -51,3 +51,15 @@ test('the protected realtime webhook maps a minimal Dataverse Job event', () => 
     assert.equal(event.operation, 'create')
     assert.equal(jobEvent({ PrimaryEntityName: 'gr_equipment', PrimaryEntityId: event.jobId, MessageName: 'Update' }), undefined)
 })
+
+test('Node v4 entrypoints preserve protected receiver and authenticated negotiate routes', () => {
+    const packageDefinition = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'realtime-api', 'package.json'), 'utf8'))
+    assert.equal(packageDefinition.main, 'src/functions/*.js')
+    assert.equal(typeof packageDefinition.dependencies['@azure/functions'], 'string')
+    const receiver = fs.readFileSync(path.join(__dirname, '..', 'realtime-api', 'src', 'functions', 'equipmentchanged.js'), 'utf8')
+    const negotiate = fs.readFileSync(path.join(__dirname, '..', 'realtime-api', 'src', 'functions', 'negotiate.js'), 'utf8')
+    assert.match(receiver, /authLevel: 'function'/)
+    assert.match(receiver, /route: 'equipmentchanged'/)
+    assert.match(negotiate, /authLevel: 'anonymous'/)
+    assert.match(negotiate, /route: 'negotiate'/)
+})
