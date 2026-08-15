@@ -60,6 +60,14 @@ Branch: `codex/job-book-integration`
   Three enabled asynchronous PostOperation `gr_job` Create/Update/Delete steps were then registered
   and independently verified. The synthetic event contained no real Dataverse record and performed
   no Dataverse write. Signed-in multi-client Job update smoke testing remains outstanding.
+- The Job Book integration, route-loading improvements, and shared Equipment Map coordinate cache
+  were published from commit `e408a49` by successful Azure Static Web Apps run `31915757368` on
+  16 August 2026. Production-safe verification returned `200` for `/`, `/equipment-map`, `/job-book`,
+  and `/jobs`, found the exact commit marker in the deployed client asset, and confirmed the
+  geocoding API still rejects anonymous requests with `401`. The five optional Site geocode fields
+  were provisioned and verified before deployment; signed-in localhost smoke populated every one of
+  the 142 addressed Sites with assigned Equipment, while six empty Sites were intentionally skipped.
+  Signed-in production Job Book and cross-device map smoke testing remain outstanding.
 
 ## Unfinished work
 
