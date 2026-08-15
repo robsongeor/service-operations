@@ -18,6 +18,7 @@ jobs:
       VITE_MSAL_CLIENT_ID: ${{ vars.VITE_MSAL_CLIENT_ID }}
       VITE_MSAL_TENANT_ID: ${{ vars.VITE_MSAL_TENANT_ID }}
       VITE_DATAVERSE_URL: ${{ vars.VITE_DATAVERSE_URL }}
+      VITE_EQUIPMENT_REALTIME_API_URL: https://serviceops-equipment-realtime-bbd3f9.azurewebsites.net/api
     steps:
       - uses: actions/checkout@v3
         with:

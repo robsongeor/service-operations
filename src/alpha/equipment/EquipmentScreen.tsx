@@ -1,10 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import EquipmentDrawer from './components/EquipmentDrawer'
 import EquipmentTable from './components/EquipmentTable'
 import { useEquipmentManager } from './hooks/useEquipmentManager'
-import { useJobs } from '../jobs/hooks/useJobs'
-import JobCreateDrawer, { type JobCreateInitialValues } from '../jobs/components/JobCreateDrawer'
 import type { Equipment } from '../jobs/types/equipment.types'
 import type { EquipmentSortKey, SortDirection } from './types/equipmentManager.types'
 import './EquipmentScreen.css'
@@ -20,6 +18,8 @@ import {
     reviewEquipmentCsv,
     type EquipmentCsvReviewRow,
 } from './utils/equipmentCsv'
+import EquipmentJobCreateDrawer from './components/EquipmentJobCreateDrawer'
+import { paginateEquipmentRows } from './equipmentPagination'
 
 type StateFilter = 'all' | 'active' | 'inactive'
 
@@ -30,21 +30,7 @@ export default function EquipmentScreen() {
     const activeAccount = useActiveMsalAccount()
     const signedInUser = getSignedInUserInfo(activeAccount)
     const csvToolsAllowed = canUseEquipmentCsvTools(signedInUser)
-    const { equipment, customers, sites, jobs, servicePlans, isLoading, isSaving, loadError, saveError, reload, clearSaveError, createCustomer, createSite, createEquipment, updateEquipment, saveEquipmentMaintenanceHistory, applyEquipmentCsvUpdates, deleteEquipment } = useEquipmentManager()
-    const {
-        equipmentList: jobEquipmentList,
-        mechanics,
-        sites: jobSites,
-        customers: jobCustomers,
-        siteContacts,
-        servicePlans: jobServicePlans,
-        createJob,
-        createCustomer: createJobCustomer,
-        createSite: createJobSite,
-        createContactForSite,
-        createEquipment: createJobEquipment,
-        createScheduleOption,
-    } = useJobs()
+    const { equipment, customers, sites, jobs, servicePlans, equipmentCacheStatus, equipmentRealtimeStatus, isLoading, isSaving, loadError, saveError, reload, loadEquipmentJobs, clearSaveError, createCustomer, createSite, createEquipment, updateEquipment, saveEquipmentMaintenanceHistory, applyEquipmentCsvUpdates, deleteEquipment } = useEquipmentManager()
     const [editingEquipment, setEditingEquipment] = useState<Equipment | null>(null)
     const [creatingJobForEquipment, setCreatingJobForEquipment] = useState<Equipment | null>(null)
     const [isCreatingEquipment, setIsCreatingEquipment] = useState(false)
@@ -57,6 +43,23 @@ export default function EquipmentScreen() {
     const [settingsOpen, setSettingsOpen] = useState(false)
     const [csvError, setCsvError] = useState('')
     const [csvImport, setCsvImport] = useState<{ filename: string; rows: EquipmentCsvReviewRow[] } | null>(null)
+    const [page, setPage] = useState(1)
+    const [pendingEquipment, setPendingEquipment] = useState<Equipment | null>(null)
+    const [equipmentJobsError, setEquipmentJobsError] = useState('')
+
+    const openEquipment = useCallback(async (record: Equipment) => {
+        setPendingEquipment(record)
+        setEquipmentJobsError('')
+        try {
+            await loadEquipmentJobs(record.gr_equipmentid)
+            setEditingEquipment(record)
+            setPendingEquipment(null)
+            return true
+        } catch (error) {
+            setEquipmentJobsError(error instanceof Error ? error.message : 'Equipment Job history could not be loaded.')
+            return false
+        }
+    }, [loadEquipmentJobs])
 
     useEffect(() => {
         const equipmentId = searchParams.get('equipmentId')
@@ -65,23 +68,26 @@ export default function EquipmentScreen() {
             item.gr_equipmentid.toLowerCase() === equipmentId.toLowerCase())
         if (!record) return
         const timer = window.setTimeout(() => {
-            setEditingEquipment(record)
-            const next = new URLSearchParams(searchParams)
-            next.delete('equipmentId')
-            setSearchParams(next, { replace: true })
+            void openEquipment(record).then((opened) => {
+                if (!opened) return
+                const next = new URLSearchParams(searchParams)
+                next.delete('equipmentId')
+                setSearchParams(next, { replace: true })
+            })
         }, 0)
         return () => window.clearTimeout(timer)
-    }, [editingEquipment, equipment, isLoading, searchParams, setSearchParams])
+    }, [editingEquipment, equipment, isLoading, openEquipment, searchParams, setSearchParams])
 
     const siteOptions = sites.filter((site) => !customerId || site.gr_Customer?.gr_customerid === customerId)
-    const jobCounts = useMemo(() => {
-        const counts = new Map<string, number>()
-        jobs.forEach((job) => {
-            const equipmentId = job.gr_Equipment?.gr_equipmentid.toLowerCase()
-            if (equipmentId) counts.set(equipmentId, (counts.get(equipmentId) ?? 0) + 1)
+    const plansByEquipment = useMemo(() => {
+        const grouped = new Map<string, typeof servicePlans>()
+        servicePlans.forEach((plan) => {
+            const equipmentId = plan._gr_equipment_value?.toLowerCase()
+            if (!equipmentId) return
+            grouped.set(equipmentId, [...(grouped.get(equipmentId) ?? []), plan])
         })
-        return counts
-    }, [jobs])
+        return grouped
+    }, [servicePlans])
     const rows = useMemo(() => {
         const query = search.trim().toLocaleLowerCase()
         const sortValue = (item: Equipment) => {
@@ -101,37 +107,19 @@ export default function EquipmentScreen() {
             return !query || [item.gr_fleet, item.gr_serial, item.gr_make, item.gr_model, item.gr_Site?.gr_name, item.gr_Site?.gr_Customer?.gr_name].some((value) => text(value).includes(query))
         }).sort((a, b) => {
             if (sortKey === 'dataStatus') {
-                const plansFor = (item: Equipment) => servicePlans.filter((plan) =>
-                    plan._gr_equipment_value?.toLowerCase() === item.gr_equipmentid.toLowerCase(),
-                )
+                const plansFor = (item: Equipment) => plansByEquipment.get(item.gr_equipmentid.toLowerCase()) ?? []
                 return compareEquipmentDataQuality(a, plansFor(a), b, plansFor(b), sortDirection)
-            }
-            if (sortKey === 'jobs') {
-                const difference = (jobCounts.get(a.gr_equipmentid.toLowerCase()) ?? 0)
-                    - (jobCounts.get(b.gr_equipmentid.toLowerCase()) ?? 0)
-                const fleetFallback = text(a.gr_fleet).localeCompare(text(b.gr_fleet), undefined, { numeric: true })
-                return (difference || fleetFallback) * (sortDirection === 'asc' ? 1 : -1)
             }
             return text(sortValue(a)).localeCompare(text(sortValue(b)), undefined, { numeric: true }) * (sortDirection === 'asc' ? 1 : -1)
         })
-    }, [customerId, equipment, jobCounts, search, servicePlans, siteId, sortDirection, sortKey, stateFilter])
+    }, [customerId, equipment, plansByEquipment, search, siteId, sortDirection, sortKey, stateFilter])
+
+    const paged = useMemo(() => paginateEquipmentRows(rows, page), [page, rows])
 
     const changeSort = (key: EquipmentSortKey) => {
+        setPage(1)
         if (key === sortKey) setSortDirection((current) => current === 'asc' ? 'desc' : 'asc')
         else { setSortKey(key); setSortDirection('asc') }
-    }
-    const getInitialJobValues = (record: Equipment): JobCreateInitialValues => {
-        const siteId = record.gr_Site?.gr_siteid ?? ''
-        const contactsForSite = siteId
-            ? siteContacts.filter((siteContact) => siteContact.gr_Site?.gr_siteid === siteId)
-            : []
-
-        return {
-            equipmentId: record.gr_equipmentid,
-            siteId,
-            customerId: record.gr_Site?.gr_Customer?.gr_customerid ?? '',
-            contactId: contactsForSite.length === 1 ? contactsForSite[0].gr_Contact?.gr_contactid ?? '' : '',
-        }
     }
     const openJobCreateForEquipment = (record: Equipment) => {
         setCreatingJobForEquipment(record)
@@ -177,41 +165,28 @@ export default function EquipmentScreen() {
 
     return (
         <main className="equipment-page">
-            <header className="equipment-page-header"><div><p>Operations</p><h1>Equipment Manager</h1></div><div className="equipment-page-header-actions"><span>{equipment.length} records</span>{csvToolsAllowed && <PageSettingsButton onClick={() => { setCsvError(''); setSettingsOpen(true) }} />}<button type="button" className="equipment-create-button" onClick={() => { clearSaveError(); setEditingEquipment(null); setIsCreatingEquipment(true) }}>New Equipment</button></div></header>
+            <header className="equipment-page-header"><div><p>Operations</p><h1>Equipment Manager</h1></div><div className="equipment-page-header-actions"><span>{equipment.length} records</span>{equipmentRealtimeStatus !== 'disabled' && <span className={`equipment-realtime-status ${equipmentRealtimeStatus}`}>{equipmentRealtimeStatus === 'connected' ? 'Live updates on' : equipmentRealtimeStatus === 'connecting' ? 'Connecting live updates…' : 'Live updates offline'}</span>}{equipmentCacheStatus && <span className="equipment-cache-status">{equipmentCacheStatus.refreshing ? 'Saved copy · refreshing…' : equipmentCacheStatus.source === 'device' ? `Saved copy from ${new Date(equipmentCacheStatus.savedAt).toLocaleString('en-NZ')}` : `Updated ${new Date(equipmentCacheStatus.savedAt).toLocaleString('en-NZ')}`}</span>}{csvToolsAllowed && <PageSettingsButton onClick={() => { setCsvError(''); setSettingsOpen(true) }} />}<button type="button" className="equipment-create-button" onClick={() => { clearSaveError(); setEditingEquipment(null); setIsCreatingEquipment(true) }}>New Equipment</button></div></header>
             {isLoading ? <div className="equipment-data-state">Loading equipment…</div> : loadError ? (
                 <div className="equipment-data-state error"><div><strong>Equipment could not be loaded.</strong><p>{loadError}</p></div><button type="button" onClick={() => void reload()}>Try again</button></div>
             ) : <section className="equipment-list-card">
                 <div className="equipment-toolbar">
-                    <label className="equipment-search"><span className="equipment-visually-hidden">Search equipment</span><input type="search" placeholder="Search fleet, serial, make, model, Site or Customer" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
-                    <label>Customer<select value={customerId} onChange={(event) => { const next = event.target.value; setCustomerId(next); if (siteId && !sites.some((site) => site.gr_siteid === siteId && (!next || site.gr_Customer?.gr_customerid === next))) setSiteId('') }}><option value="">All Customers</option>{customers.map((customer) => <option key={customer.gr_customerid} value={customer.gr_customerid}>{customer.gr_name}</option>)}</select></label>
-                    <label>Site<select value={siteId} onChange={(event) => setSiteId(event.target.value)}><option value="">All Sites</option>{siteOptions.map((site) => <option key={site.gr_siteid} value={site.gr_siteid}>{site.gr_name || 'Unnamed Site'}</option>)}</select></label>
-                    <label>State<select value={stateFilter} onChange={(event) => setStateFilter(event.target.value as StateFilter)}><option value="all">All states</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
+                    <label className="equipment-search"><span className="equipment-visually-hidden">Search equipment</span><input type="search" placeholder="Search fleet, serial, make, model, Site or Customer" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1) }} /></label>
+                    <label>Customer<select value={customerId} onChange={(event) => { const next = event.target.value; setCustomerId(next); setPage(1); if (siteId && !sites.some((site) => site.gr_siteid === siteId && (!next || site.gr_Customer?.gr_customerid === next))) setSiteId('') }}><option value="">All Customers</option>{customers.map((customer) => <option key={customer.gr_customerid} value={customer.gr_customerid}>{customer.gr_name}</option>)}</select></label>
+                    <label>Site<select value={siteId} onChange={(event) => { setSiteId(event.target.value); setPage(1) }}><option value="">All Sites</option>{siteOptions.map((site) => <option key={site.gr_siteid} value={site.gr_siteid}>{site.gr_name || 'Unnamed Site'}</option>)}</select></label>
+                    <label>State<select value={stateFilter} onChange={(event) => { setStateFilter(event.target.value as StateFilter); setPage(1) }}><option value="all">All states</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
                 </div>
-                <div className="equipment-results-count">Showing {rows.length} of {equipment.length}</div>
-                <EquipmentTable equipment={rows} servicePlans={servicePlans} jobCounts={jobCounts} sortKey={sortKey} sortDirection={sortDirection} onSort={changeSort} onEdit={(item) => { clearSaveError(); setEditingEquipment(item) }} />
+                <div className="equipment-results-count">Showing {rows.length ? paged.start + 1 : 0}–{paged.end} of {rows.length}{rows.length !== equipment.length ? ` filtered (${equipment.length} total)` : ''}</div>
+                <EquipmentTable equipment={paged.rows} servicePlans={servicePlans} sortKey={sortKey} sortDirection={sortDirection} onSort={changeSort} onEdit={(item) => { clearSaveError(); void openEquipment(item) }} />
+                {paged.totalPages > 1 && <nav className="equipment-pagination" aria-label="Equipment pages"><button type="button" onClick={() => setPage(Math.max(1, paged.page - 1))} disabled={paged.page === 1}>Previous</button><span>Page <strong>{paged.page}</strong> of <strong>{paged.totalPages}</strong></span><button type="button" onClick={() => setPage(Math.min(paged.totalPages, paged.page + 1))} disabled={paged.page === paged.totalPages}>Next</button></nav>}
             </section>}
-            {isCreatingEquipment && <EquipmentDrawer mode="create" customers={customers} sites={sites} equipmentList={equipment} jobs={jobs} isSaving={isSaving} saveError={saveError} onClose={() => setIsCreatingEquipment(false)} onCreateCustomer={createCustomer} onCreateSite={createSite} onCreate={async (input, resolvedSite) => { await createEquipment(input, resolvedSite); setIsCreatingEquipment(false) }} />}
+            {isCreatingEquipment && <EquipmentDrawer mode="create" customers={customers} sites={sites} equipmentList={equipment} jobs={[]} isSaving={isSaving} saveError={saveError} onClose={() => setIsCreatingEquipment(false)} onCreateCustomer={createCustomer} onCreateSite={createSite} onCreate={async (input, resolvedSite) => { await createEquipment(input, resolvedSite); setIsCreatingEquipment(false) }} />}
             {editingEquipment && <EquipmentDrawer mode="edit" equipment={editingEquipment} equipmentList={equipment} servicePlans={servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === editingEquipment.gr_equipmentid.toLowerCase())} customers={customers} sites={sites} jobs={jobs} isSaving={isSaving} saveError={saveError} onClose={() => setEditingEquipment(null)} onCreateCustomer={createCustomer} onCreateSite={createSite} onSave={async (input, resolvedSite) => { const updated = await updateEquipment(editingEquipment, input, resolvedSite); setEditingEquipment(updated) }} onSaveMaintenanceHistory={async (plans, input) => { const updated = await saveEquipmentMaintenanceHistory(editingEquipment, plans, input); setEditingEquipment(updated.equipment) }} onCreateJob={openJobCreateForEquipment} onDelete={async () => { await deleteEquipment(editingEquipment.gr_equipmentid); setEditingEquipment(null) }} />}
-            {creatingJobForEquipment && <JobCreateDrawer
-                mechanics={mechanics}
-                equipmentList={jobEquipmentList}
-                sites={jobSites}
-                customers={jobCustomers}
-                siteContacts={siteContacts}
-                servicePlans={jobServicePlans}
-                initialValues={getInitialJobValues(creatingJobForEquipment)}
-                onCreateCustomer={createJobCustomer}
-                onCreateSite={createJobSite}
-                onCreateContact={createContactForSite}
-                onCreateEquipment={createJobEquipment}
-                onCreateJob={async (input) => {
-                    const jobId = await createJob(input)
-                    await reload()
-                    return jobId
-                }}
-                onCreateScheduleOption={createScheduleOption}
+            {creatingJobForEquipment && <EquipmentJobCreateDrawer
+                equipment={creatingJobForEquipment}
+                onCreated={async () => { await reload(); await loadEquipmentJobs(creatingJobForEquipment.gr_equipmentid) }}
                 onClose={closeEquipmentJobCreate}
             />}
+            {pendingEquipment && !editingEquipment && <div className="equipment-job-load-overlay" role={equipmentJobsError ? 'alert' : 'status'}><section><strong>{equipmentJobsError ? 'Equipment could not be opened' : 'Loading Equipment history…'}</strong><p>{equipmentJobsError || 'Loading only the Jobs linked to this Equipment.'}</p><div>{equipmentJobsError && <button type="button" onClick={() => void openEquipment(pendingEquipment)}>Try again</button>}<button type="button" onClick={() => { setPendingEquipment(null); setEquipmentJobsError('') }}>Cancel</button></div></section></div>}
             <PageSettingsDialog
                 open={settingsOpen && csvToolsAllowed}
                 title="Equipment Settings"

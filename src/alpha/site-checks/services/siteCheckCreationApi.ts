@@ -5,6 +5,7 @@ import {
     isEquipmentSiteCheckAvailability,
     type EquipmentSiteCheckAvailability,
 } from '../../equipment/types/equipmentSiteCheckAvailability.types.ts'
+import { invalidateSharedEquipmentDataCache } from '../../equipment/services/equipmentDataCache.ts'
 import { buildJobCreatePayload } from '../../jobs/services/jobsApi.ts'
 import { JOB_STATUSES } from '../../jobs/types/jobStatus.types.ts'
 import { JOB_TYPES } from '../../jobs/types/jobType.types.ts'
@@ -295,5 +296,6 @@ export async function executeSiteCheckCreation(
     if (successfulOperations !== batch.operationCount) {
         throw new Error('Dataverse did not confirm every Site Check creation operation.')
     }
+    if ((input.availabilityUpdates?.length ?? 0) > 0) invalidateSharedEquipmentDataCache(accessToken)
     return { operationCount: batch.operationCount, payloadBytes: batch.payloadBytes }
 }

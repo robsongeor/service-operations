@@ -11,6 +11,7 @@ import { isHistoricalHourMeterReading, validateCompletionHourMeter, validateHour
 import { calculateNextDueDate, isServiceTypeEnabled, resolveMaintenanceConfiguration } from '../../equipment/servicePlans/maintenanceConfiguration'
 import type { MaintenanceProfile, ServiceProgramme } from '../../equipment/servicePlans/maintenanceConfiguration'
 import { HOUR_METER_CLASSIFICATION_ENABLED, type HourMeterReadingType } from '../../equipment/hourMeter/hourMeterReading.types'
+import { invalidateSharedEquipmentDataCache } from '../../equipment/services/equipmentDataCache'
 
 const API_URL = `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2`
 
@@ -362,6 +363,7 @@ export async function completeServiceJobAtomically(
     const completedDate = input.completedDate
     try {
         await executeAtomicChanges(token, completionRequests(context, input, completedDate))
+        invalidateSharedEquipmentDataCache(token)
         return { completedDate, alreadyCompleted: false }
     } catch (error) {
         try {

@@ -4,6 +4,7 @@ import {
     type PlannedServiceType,
 } from './equipmentServicePlan.types'
 import type { Equipment } from '../../jobs/types/equipment.types'
+import { invalidateSharedEquipmentDataCache } from '../services/equipmentDataCache'
 import { calculateNextDueDate, resolveMaintenanceConfiguration } from './maintenanceConfiguration'
 import { shouldAdvanceCurrentHourMeter } from './equipmentUsageForecast'
 
@@ -164,6 +165,7 @@ export async function updateEquipmentCurrentHourMeter(
         })
         if (response.status === 412 && attempt === 0) continue
         await ensureSuccess(response, 'Failed to update equipment current hour meter')
+        invalidateSharedEquipmentDataCache(token)
         return
     }
 

@@ -1,4 +1,4 @@
-import { fetchEquipment } from '../../jobs/services/equipmentApi'
+import { fetchEquipment, invalidateEquipmentCache } from '../../jobs/services/equipmentApi'
 import type { Equipment } from '../../jobs/types/equipment.types'
 import { normalizeEquipmentInput, type EquipmentUpdateInput } from '../types/equipmentManager.types'
 import type { EquipmentMaintenanceSetupInput, MaintenanceProfile } from '../servicePlans/maintenanceConfiguration'
@@ -53,6 +53,7 @@ export async function createEquipment(
         throw new Error(`Failed to create equipment: ${detail || `${response.status} ${response.statusText}`}`)
     }
     const data = await response.json()
+    invalidateEquipmentCache(token)
     return data
 }
 
@@ -75,6 +76,7 @@ export async function updateEquipment(
         const detail = await response.text()
         throw new Error(`Failed to update equipment: ${detail || `${response.status} ${response.statusText}`}`)
     }
+    invalidateEquipmentCache(token)
 }
 
 export async function updateEquipmentMaintenanceProfile(
@@ -95,6 +97,7 @@ export async function updateEquipmentMaintenanceProfile(
         const detail = await response.text()
         throw new Error(`Failed to update Equipment maintenance profile: ${detail || `${response.status} ${response.statusText}`}`)
     }
+    invalidateEquipmentCache(token)
 }
 
 export async function updateEquipmentMaintenanceSetup(
@@ -125,6 +128,7 @@ export async function updateEquipmentMaintenanceSetup(
         const detail = await response.text()
         throw new Error(`Failed to save Equipment maintenance setup: ${detail || `${response.status} ${response.statusText}`}`)
     }
+    invalidateEquipmentCache(token)
 }
 
 export async function deleteEquipment(token: string, equipmentId: string): Promise<void> {
@@ -136,6 +140,7 @@ export async function deleteEquipment(token: string, equipmentId: string): Promi
         const detail = await response.text()
         throw new Error(`Failed to delete equipment: ${detail || `${response.status} ${response.statusText}`}`)
     }
+    invalidateEquipmentCache(token)
 }
 
 export function applyEquipmentUpdate(

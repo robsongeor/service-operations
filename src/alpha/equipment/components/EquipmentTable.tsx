@@ -8,7 +8,6 @@ import EquipmentDataQualityIndicator from './EquipmentDataQualityIndicator'
 type Props = {
     equipment: Equipment[]
     servicePlans: EquipmentServicePlan[]
-    jobCounts: ReadonlyMap<string, number>
     sortKey: EquipmentSortKey
     sortDirection: SortDirection
     onSort: (key: EquipmentSortKey) => void
@@ -22,21 +21,20 @@ const columns: { key: EquipmentSortKey; label: string }[] = [
     { key: 'make', label: 'Make' },
     { key: 'model', label: 'Model' },
     { key: 'serial', label: 'Serial number' },
-    { key: 'jobs', label: 'Jobs' },
 ]
 
 function valueOrDash(value?: string | null) {
     return value?.trim() || '—'
 }
 
-export default function EquipmentTable({ equipment, servicePlans, jobCounts, sortKey, sortDirection, onSort, onEdit }: Props) {
+export default function EquipmentTable({ equipment, servicePlans, sortKey, sortDirection, onSort, onEdit }: Props) {
     return (
         <div className="equipment-table-scroll">
             <table className="equipment-table">
                 <thead>
                     <tr>
                         {columns.map((column) => (
-                            <th key={column.key} className={column.key === 'jobs' ? 'equipment-jobs-heading' : undefined} aria-sort={sortKey === column.key ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                            <th key={column.key} aria-sort={sortKey === column.key ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}>
                                 <button type="button" onClick={() => onSort(column.key)}>
                                     {column.label}
                                     <span aria-hidden="true">{sortKey === column.key ? (sortDirection === 'asc' ? ' ↑' : ' ↓') : ''}</span>
@@ -56,7 +54,7 @@ export default function EquipmentTable({ equipment, servicePlans, jobCounts, sor
                 </thead>
                 <tbody>
                     {equipment.length === 0 ? (
-                        <tr><td className="equipment-empty" colSpan={11}>No equipment matches the current search and filters.</td></tr>
+                        <tr><td className="equipment-empty" colSpan={10}>No equipment matches the current search and filters.</td></tr>
                     ) : equipment.map((item) => {
                         const itemServicePlans = servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === item.gr_equipmentid.toLowerCase())
                         const primary = calculatePrimaryNextService(itemServicePlans, item)
@@ -80,7 +78,6 @@ export default function EquipmentTable({ equipment, servicePlans, jobCounts, sor
                             <td>{valueOrDash(item.gr_make)}</td>
                             <td>{valueOrDash(item.gr_model)}</td>
                             <td>{valueOrDash(item.gr_serial)}</td>
-                            <td className="equipment-jobs-cell"><span className="equipment-job-count" aria-label={`${jobCounts.get(item.gr_equipmentid.toLowerCase()) ?? 0} linked jobs`}>{jobCounts.get(item.gr_equipmentid.toLowerCase()) ?? 0}</span></td>
                             <td><span className={item.statecode === 0 ? 'equipment-state active' : 'equipment-state'}>{item.statecode === 0 ? 'Active' : 'Inactive'}</span></td>
                             <td>{primary ? <span className="equipment-maintenance-summary"><strong>{label} @ {primary.gr_nextduehours}</strong><small>{remaining != null ? `${Math.abs(remaining)} hrs ${remaining < 0 ? 'overdue' : 'remaining'}` : 'Due hours unavailable'}</small></span> : 'Not Configured'}</td>
                             <td className="equipment-data-quality-cell"><EquipmentDataQualityIndicator equipment={item} servicePlans={itemServicePlans} /></td>

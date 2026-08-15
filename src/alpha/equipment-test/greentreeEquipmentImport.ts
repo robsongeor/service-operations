@@ -3,6 +3,7 @@ import { isServiceOperationsAdministrator } from '../../auth/adminAuthorization.
 import type { SignedInUserInfo } from '../../auth/signedInUser.ts'
 import type { GreentreeEquipmentSnapshot, ReconciliationRow } from './greentreeReconciliation.ts'
 import { normalizeIdentity } from './greentreeReconciliation.ts'
+import { invalidateSharedEquipmentDataCache } from '../equipment/services/equipmentDataCache.ts'
 
 const DATAVERSE_URL = import.meta.env?.VITE_DATAVERSE_URL ?? ''
 export const GREENTREE_IMPORT_BATCH_LIMIT = 50
@@ -65,6 +66,7 @@ async function createEquipmentFromGreentree(accessToken: string, source: Greentr
         }),
     })
     if (!response.ok) throw new Error(await dataverseMessage(response))
+    invalidateSharedEquipmentDataCache(accessToken)
     const text = await response.text()
     if (text) {
         const data = JSON.parse(text) as { gr_equipmentid?: string }

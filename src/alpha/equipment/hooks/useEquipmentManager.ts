@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { useActiveMsalAccount } from '../../../auth/useActiveMsalAccount'
 import { createCustomer as createCustomerApi, fetchCustomers } from '../../jobs/services/customersApi'
-import { fetchJobs } from '../../jobs/services/jobsApi'
+import { fetchEquipmentJobs } from '../../jobs/services/jobsApi'
 import { updateEquipmentSite } from '../../jobs/services/equipmentApi'
 import { createSite as createSiteApi, fetchSites, updateSite as updateSiteApi } from '../../jobs/services/sitesApi'
 import type { Customer } from '../../jobs/types/customer.types'
@@ -34,6 +34,7 @@ import {
     type EquipmentCsvReviewRow,
 } from '../utils/equipmentCsv'
 import { acquireDataverseAccessToken } from '../../../auth/dataverseAuthentication'
+import { startEquipmentRealtime, type EquipmentRealtimeStatus } from '../services/equipmentRealtime'
 
 export function useEquipmentManager() {
     const { instance } = useMsal()
@@ -47,6 +48,12 @@ export function useEquipmentManager() {
     const [loadError, setLoadError] = useState('')
     const [isSaving, setIsSaving] = useState(false)
     const [saveError, setSaveError] = useState('')
+    const [equipmentCacheStatus, setEquipmentCacheStatus] = useState<{
+        source: 'device' | 'network'
+        savedAt: number
+        refreshing: boolean
+    } | null>(null)
+    const [equipmentRealtimeStatus, setEquipmentRealtimeStatus] = useState<EquipmentRealtimeStatus>('disabled')
 
     const getToken = useCallback(async () => {
         return acquireDataverseAccessToken(instance, account)
@@ -58,17 +65,21 @@ export function useEquipmentManager() {
         setLoadError('')
         try {
             const token = await getToken()
-            const [nextEquipment, nextCustomers, nextSites, nextJobs, nextServicePlans] = await Promise.all([
-                fetchEquipment(token),
+            const [nextEquipment, nextCustomers, nextSites, nextServicePlans] = await Promise.all([
+                fetchEquipment(token, {
+                    forceRefresh: true,
+                    onBackgroundRefresh: (rows, refreshedAt) => {
+                        setEquipment(rows)
+                        setEquipmentCacheStatus({ source: 'network', savedAt: refreshedAt, refreshing: false })
+                    },
+                }),
                 fetchCustomers(token),
                 fetchSites(token),
-                fetchJobs(token),
                 fetchEquipmentServicePlans(token),
             ])
             setEquipment(nextEquipment)
             setCustomers(nextCustomers)
             setSites(nextSites)
-            setJobs(nextJobs)
             setServicePlans(nextServicePlans)
         } catch (error) {
             setLoadError(error instanceof Error ? error.message : 'Equipment data could not be loaded.')
@@ -79,24 +90,47 @@ export function useEquipmentManager() {
 
     useEffect(() => {
         let cancelled = false
+        let deviceSnapshotRestored = false
         if (!account) return
         const loadInitialData = async () => {
             setIsLoading(true)
             setLoadError('')
             try {
                 const token = await getToken()
-                const [nextEquipment, nextCustomers, nextSites, nextJobs, nextServicePlans] = await Promise.all([
-                    fetchEquipment(token), fetchCustomers(token), fetchSites(token), fetchJobs(token), fetchEquipmentServicePlans(token),
+                const [nextEquipment, nextCustomers, nextSites, nextServicePlans] = await Promise.all([
+                    fetchEquipment(token, {
+                        useDeviceCache: true,
+                        onDeviceSnapshot: (rows, savedAt) => {
+                            deviceSnapshotRestored = true
+                            if (!cancelled) {
+                                setEquipment(rows)
+                                setIsLoading(false)
+                                setEquipmentCacheStatus({ source: 'device', savedAt, refreshing: true })
+                            }
+                        },
+                        onBackgroundRefresh: (rows, refreshedAt) => {
+                            if (!cancelled) {
+                                setEquipment(rows)
+                                setEquipmentCacheStatus({ source: 'network', savedAt: refreshedAt, refreshing: false })
+                            }
+                        },
+                        onBackgroundRefreshError: () => {
+                            if (!cancelled) setEquipmentCacheStatus((current) => current ? { ...current, refreshing: false } : current)
+                        },
+                    }), fetchCustomers(token), fetchSites(token), fetchEquipmentServicePlans(token),
                 ])
                 if (!cancelled) {
                     setEquipment(nextEquipment)
                     setCustomers(nextCustomers)
                     setSites(nextSites)
-                    setJobs(nextJobs)
                     setServicePlans(nextServicePlans)
                 }
             } catch (error) {
-                if (!cancelled) setLoadError(error instanceof Error ? error.message : 'Equipment data could not be loaded.')
+                if (!cancelled && !deviceSnapshotRestored) {
+                    setLoadError(error instanceof Error ? error.message : 'Equipment data could not be loaded.')
+                } else if (!cancelled) {
+                    setEquipmentCacheStatus((current) => current ? { ...current, refreshing: false } : current)
+                }
             } finally {
                 if (!cancelled) setIsLoading(false)
             }
@@ -104,6 +138,47 @@ export function useEquipmentManager() {
         void loadInitialData()
         return () => { cancelled = true }
     }, [account, getToken])
+
+    useEffect(() => {
+        const apiUrl = import.meta.env.VITE_EQUIPMENT_REALTIME_API_URL?.trim() ?? ''
+        if (!account || !apiUrl) return
+
+        let cancelled = false
+        let refreshTimer: number | undefined
+        const stop = startEquipmentRealtime({
+            apiUrl,
+            getAccessToken: getToken,
+            onStatus: (status) => { if (!cancelled) setEquipmentRealtimeStatus(status) },
+            onEvent: () => {
+                if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
+                refreshTimer = window.setTimeout(async () => {
+                    if (cancelled) return
+                    setEquipmentCacheStatus((current) => current ? { ...current, refreshing: true } : current)
+                    try {
+                        const rows = await fetchEquipment(await getToken(), { forceRefresh: true })
+                        if (!cancelled) {
+                            setEquipment(rows)
+                            setEquipmentCacheStatus({ source: 'network', savedAt: Date.now(), refreshing: false })
+                        }
+                    } catch {
+                        if (!cancelled) setEquipmentCacheStatus((current) => current ? { ...current, refreshing: false } : current)
+                    }
+                }, 2_000)
+            },
+        })
+
+        return () => {
+            cancelled = true
+            if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
+            stop()
+        }
+    }, [account, getToken])
+
+    const loadEquipmentJobs = useCallback(async (equipmentId: string) => {
+        const rows = await fetchEquipmentJobs(await getToken(), equipmentId)
+        setJobs(rows)
+        return rows
+    }, [getToken])
 
     const updateEquipment = async (record: Equipment, input: EquipmentUpdateInput, resolvedSite?: Site) => {
         setIsSaving(true)
@@ -410,8 +485,9 @@ export function useEquipmentManager() {
     }
 
     return {
-        equipment, customers, sites, jobs, servicePlans, isLoading, isSaving, loadError, saveError,
+        equipment, customers, sites, jobs, servicePlans, equipmentCacheStatus, equipmentRealtimeStatus, isLoading, isSaving, loadError, saveError,
         reload: load,
+        loadEquipmentJobs,
         clearSaveError: () => setSaveError(''),
         createCustomer,
         createSite,

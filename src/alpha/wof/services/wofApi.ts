@@ -3,6 +3,7 @@ import { createJob } from '../../jobs/services/jobsApi'
 import { JOB_STATUSES } from '../../jobs/types/jobStatus.types'
 import { JOB_TYPES } from '../../jobs/types/jobType.types'
 import type { Equipment } from '../../jobs/types/equipment.types'
+import { invalidateSharedEquipmentDataCache } from '../../equipment/services/equipmentDataCache'
 import { createJobScheduleOption } from '../../jobs/services/jobScheduleApi'
 import { SCHEDULE_TYPE } from '../../jobs/types/jobSchedule.types'
 import type { CreateWofInput, ServiceProvider, TechnicianQualification, UpdateWofInput, WofInspection } from '../types/wof.types'
@@ -211,6 +212,7 @@ export async function updateWof(token: string, input: UpdateWofInput) {
             gr_currentwofexpiry: input.newWofExpiry,
             gr_lastwofcompleted: input.inspectionDate || null,
         }, 'The Inspection was saved, but the Equipment WOF expiry could not be updated')
+        invalidateSharedEquipmentDataCache(token)
     }
 }
 
@@ -264,6 +266,7 @@ export async function updateWofExpiryForCompletion(
         gr_currentwofexpiry: input.newExpiry,
         gr_lastwofcompleted: completionDateOnly,
     }, 'The Equipment WOF expiry could not be updated')
+    invalidateSharedEquipmentDataCache(token)
 
     await verifyWofExpiryWithRetry(readSavedExpiries, input.newExpiry)
 }

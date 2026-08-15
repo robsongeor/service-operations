@@ -102,6 +102,33 @@ export async function fetchJobs(accessToken: string): Promise<Job[]> {
     }))
 }
 
+export async function fetchEquipmentJobs(accessToken: string, equipmentId: string): Promise<Job[]> {
+    const select = `gr_jobid,createdon,gr_jobnumber,gr_status,gr_description,gr_jobtype,gr_jobcardstatus,gr_hourmeter${HOUR_METER_READING_SELECT},gr_completeddate,gr_servicetype`
+    const expand = 'gr_Equipment($select=gr_equipmentid),gr_Mechanic($select=gr_mechanicid,gr_name),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name))'
+    const rows: Job[] = []
+    let nextUrl: string | undefined = `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=${select}&$expand=${expand}&$filter=_gr_equipment_value eq ${equipmentId}&$orderby=createdon desc`
+
+    while (nextUrl) {
+        const response = await fetch(nextUrl, {
+            cache: 'no-store',
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                Accept: 'application/json',
+                'Cache-Control': 'no-cache',
+            },
+        })
+        if (!response.ok) {
+            const detail = await response.text()
+            throw new Error(`Failed to fetch Equipment Job history: ${detail || `${response.status} ${response.statusText}`}`)
+        }
+        const data = await response.json() as { value?: Job[]; '@odata.nextLink'?: string }
+        rows.push(...(data.value ?? []))
+        nextUrl = data['@odata.nextLink']
+    }
+
+    return rows
+}
+
 export function buildJobCreatePayload(
     job: JobSaveInput,
     source: JobCreationSource = 'standard',

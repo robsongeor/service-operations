@@ -244,16 +244,25 @@ test('Equipment Job History labels created, completed, and hour-meter evidence',
     }
 })
 
-test('Equipment table displays and sorts case-insensitive linked Job counts', () => {
+test('Equipment table omits the temporary linked Job count column', () => {
     const screen = readFileSync(new URL('../src/alpha/equipment/EquipmentScreen.tsx', import.meta.url), 'utf8')
     const table = readFileSync(new URL('../src/alpha/equipment/components/EquipmentTable.tsx', import.meta.url), 'utf8')
     const types = readFileSync(new URL('../src/alpha/equipment/types/equipmentManager.types.ts', import.meta.url), 'utf8')
-    assert.match(screen, /job\.gr_Equipment\?\.gr_equipmentid\.toLowerCase\(\)/)
-    assert.match(screen, /if \(sortKey === 'jobs'\)/)
-    assert.match(screen, /jobCounts\.get\(a\.gr_equipmentid\.toLowerCase\(\)\)/)
-    assert.match(table, /\{ key: 'jobs', label: 'Jobs' \}/)
-    assert.match(table, /className="equipment-job-count"/)
-    assert.match(types, /'jobs' \| 'dataStatus'/)
+    assert.doesNotMatch(screen, /jobCounts/)
+    assert.doesNotMatch(table, /\{ key: 'jobs', label: 'Jobs' \}/)
+    assert.doesNotMatch(table, /className="equipment-job-count"/)
+    assert.doesNotMatch(types, /'jobs'/)
+})
+
+test('Equipment loads focused Job history only when a record is opened', () => {
+    const manager = readFileSync(new URL('../src/alpha/equipment/hooks/useEquipmentManager.ts', import.meta.url), 'utf8')
+    const jobsApi = readFileSync(new URL('../src/alpha/jobs/services/jobsApi.ts', import.meta.url), 'utf8')
+    const screen = readFileSync(new URL('../src/alpha/equipment/EquipmentScreen.tsx', import.meta.url), 'utf8')
+
+    assert.doesNotMatch(manager, /fetchJobs\(token\)/)
+    assert.match(manager, /fetchEquipmentJobs\(await getToken\(\), equipmentId\)/)
+    assert.match(jobsApi, /\$filter=_gr_equipment_value eq \$\{equipmentId\}/)
+    assert.match(screen, /await loadEquipmentJobs\(record\.gr_equipmentid\)/)
 })
 
 test('Equipment Maintenance separates usage insight from legacy service baseline setup', () => {

@@ -4,6 +4,10 @@
 .equipment-page-header p { color: #737a76; font-size: .68rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
 .equipment-page-header h1 { font-size: 1.45rem; }
 .equipment-page-header > span, .equipment-results-count { color: #68706b; font-size: .74rem; }
+.equipment-cache-status { color: #587069!important; font-size: .68rem!important; white-space: nowrap; }
+.equipment-realtime-status { padding: 4px 7px; border-radius: 999px; background: #edf0ee; color: #66736c!important; font-size: .64rem!important; font-weight: 750; white-space: nowrap; }
+.equipment-realtime-status.connected { background: #dceee6; color: #28644f!important; }
+.equipment-realtime-status.disconnected { background: #f8dddd; color: #923b3b!important; }
 .equipment-page-header-actions { display: flex; align-items: center; gap: 12px; }
 .equipment-page-header-actions > span { color: #68706b; font-size: .74rem; }
 .equipment-create-button { min-height: 38px; padding: 0 16px; border: 1px solid #176f66; border-radius: 9px; background: #176f66; color: #fff; font: inherit; font-size: .82rem; font-weight: 700; cursor: pointer; }
@@ -13,6 +17,16 @@
 .equipment-toolbar label { display: grid; gap: 5px; color: #656d68; font-size: .68rem; font-weight: 700; }
 .equipment-toolbar input, .equipment-toolbar select { box-sizing: border-box; width: 100%; height: 36px; padding: 0 10px; border: 1px solid #d8ddd9; border-radius: 8px; background: #fff; color: #202421; font: inherit; font-size: .75rem; }
 .equipment-results-count { padding: 0 20px 10px; }
+.equipment-pagination { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 13px 20px; border-top: 1px solid #dfe5e1; background: #fafbf9; }
+.equipment-pagination span { color: #65736c; font-size: .7rem; }
+.equipment-pagination button { min-height: 32px; padding: 0 11px; border: 1px solid #c8d2cc; border-radius: 7px; background: #fff; color: #34443c; font: inherit; font-size: .7rem; font-weight: 750; cursor: pointer; }
+.equipment-pagination button:disabled { cursor: default; opacity: .45; }
+.equipment-job-load-overlay { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; padding: 20px; background: rgb(20 31 26 / .42); }
+.equipment-job-load-overlay section { width: min(420px, 100%); box-sizing: border-box; padding: 22px; border-radius: 12px; background: #fff; box-shadow: 0 18px 55px rgb(20 31 26 / .24); }
+.equipment-job-load-overlay strong { color: #26332c; }
+.equipment-job-load-overlay p { margin: 7px 0 18px; color: #66736c; font-size: .76rem; line-height: 1.45; }
+.equipment-job-load-overlay div { display: flex; justify-content: flex-end; gap: 8px; }
+.equipment-job-load-overlay button { min-height: 36px; padding: 0 12px; border: 1px solid #b9c8c0; border-radius: 8px; background: #fff; color: #25483e; font: inherit; font-size: .72rem; font-weight: 750; cursor: pointer; }
 .equipment-table-scroll { overflow-x: auto; }
 .equipment-table { width: 100%; min-width: 1010px; border-collapse: collapse; table-layout: fixed; font-size: .75rem; }
 .equipment-table th { padding: 9px 10px; border-top: 1px solid #dfe4e1; border-bottom: 1px solid #dfe4e1; background: #f4f5f2; color: #6b726e; font-size: .66rem; text-align: left; text-transform: uppercase; }
@@ -25,8 +39,6 @@
 .equipment-table .equipment-data-quality-heading,
 .equipment-table .equipment-data-quality-cell { width: 42px; padding-right: 5px; padding-left: 5px; text-align: center; }
 .equipment-table .equipment-data-quality-cell { overflow: visible; }
-.equipment-table .equipment-jobs-heading, .equipment-table .equipment-jobs-cell { width: 58px; text-align: center; }
-.equipment-job-count { display: inline-grid; min-width: 24px; height: 24px; box-sizing: border-box; place-items: center; padding: 0 6px; border-radius: 999px; background: #e5eeea; color: #315f55; font-size: .68rem; font-weight: 800; }
 .equipment-state { display: inline-flex; padding: 4px 8px; border: 1px solid #c8ceca; border-radius: 999px; background: #f0f2f0; color: #606762; font-size: .68rem; font-weight: 700; }
 .equipment-state.active { border-color: #9bc5a7; background: #e3f1e7; color: #326d43; }
 .equipment-edit-action { padding: 5px 9px; border: 1px solid #cfd4d0; border-radius: 999px; background: transparent; color: #333936; font-size: .68rem; font-weight: 700; cursor: pointer; }
