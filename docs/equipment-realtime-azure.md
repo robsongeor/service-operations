@@ -46,6 +46,13 @@ invalidations; they are intentionally not created by an ordinary application dep
 
 The development Dataverse registration is `Service Operations Equipment Realtime` (`85b89b0f-bd59-44cb-9d98-86cc3660963e`). Its three steps are enabled, asynchronous, PostOperation, and configured to delete successful system jobs automatically.
 
+The development `gr_job` registration was added and verified on 16 August 2026. Its enabled
+asynchronous PostOperation steps are:
+
+- Create: `8e07bc05-ad98-f111-b8db-6045bde57026`
+- Update: `9107bc05-ad98-f111-b8db-6045bde57026`
+- Delete: `9407bc05-ad98-f111-b8db-6045bde57026`
+
 ## Security and operation
 
 - The negotiate endpoint validates the caller's Dataverse bearer token with `WhoAmI` before returning a short-lived SignalR connection token.
