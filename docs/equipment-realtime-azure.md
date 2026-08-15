@@ -7,8 +7,8 @@ Dataverse remains the source of truth. This integration broadcasts invalidation 
 1. Create an Azure SignalR Service resource in **Serverless** mode.
 2. Create a standalone Azure Function App using Node.js 24 on Flex Consumption. The existing Static Web Apps managed API cannot host SignalR bindings because managed APIs support HTTP bindings only.
 3. Deploy the `realtime-api` directory to that Function App.
-4. Configure `AzureSignalRConnectionString`, `DATAVERSE_URL`, and `APP_ORIGIN` in Function App settings. Keep all values server-side.
-5. Allow the production app origin in the Function App CORS settings.
+4. Configure `AzureSignalRConnectionString`, `DATAVERSE_URL`, and `APP_ORIGINS` in Function App settings. `APP_ORIGINS` is a comma-separated allowlist containing the production URL and approved local development origins. Keep all values server-side.
+5. Add the same explicit origins to the Function App CORS settings.
 6. Set `VITE_EQUIPMENT_REALTIME_API_URL` to the Function App `/api` URL when building the frontend.
 
 ## GitHub deployment settings
@@ -19,6 +19,7 @@ The development deployment uses:
 - SignalR `serviceops-equipment-signalr-bbd3f9` in Serverless mode on Free F1.
 - Storage `serviceopsequiprtbbd3f9` using Standard LRS.
 - Frontend realtime URL `https://serviceops-equipment-realtime-bbd3f9.azurewebsites.net/api`.
+- Allowed frontend origins `https://yellow-cliff-068680700.7.azurestaticapps.net` and `http://localhost:5173`.
 
 Add this repository setting before running **Deploy Equipment Realtime Function**:
 

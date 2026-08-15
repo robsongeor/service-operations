@@ -9,16 +9,23 @@ function bearerToken(request) {
     return authorization.match(/^Bearer\s+(.+)$/i)?.[1] || ''
 }
 
+function allowedOrigins() {
+    return [process.env.APP_ORIGIN, process.env.APP_ORIGINS]
+        .filter(Boolean)
+        .flatMap((value) => String(value).split(','))
+        .map((value) => value.trim().replace(/\/$/, ''))
+        .filter(Boolean)
+}
+
 function corsHeaders(request) {
-    const configuredOrigin = String(process.env.APP_ORIGIN || '').replace(/\/$/, '')
     const requestOrigin = String(requestHeader(request, 'origin') || '').replace(/\/$/, '')
-    if (!configuredOrigin || requestOrigin !== configuredOrigin) return {}
+    if (!requestOrigin || !allowedOrigins().includes(requestOrigin)) return {}
     return {
-        'Access-Control-Allow-Origin': configuredOrigin,
+        'Access-Control-Allow-Origin': requestOrigin,
         'Access-Control-Allow-Headers': 'authorization,content-type',
         'Access-Control-Allow-Methods': 'POST,OPTIONS',
         Vary: 'Origin',
     }
 }
 
-module.exports = { bearerToken, corsHeaders, requestHeader }
+module.exports = { allowedOrigins, bearerToken, corsHeaders, requestHeader }
