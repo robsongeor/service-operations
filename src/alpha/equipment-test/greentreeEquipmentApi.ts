@@ -1,6 +1,18 @@
-import type { AccountInfo, IPublicClientApplication } from '@azure/msal-browser'
+export const GREENTREE_TABLE_LOGICAL_NAME = 'gr_greentreeequipment'
+export const GREENTREE_TABLE_ENTITY_SET = 'gr_greentreeequipments'
+export const GREENTREE_TABLE_PRIMARY_ID = 'gr_greentreeequipmentid'
 
-export const GREENTREE_TABLE_DISPLAY_NAME = 'GreentreeEquipmentTable'
+const GREENTREE_COLUMNS = [
+    GREENTREE_TABLE_PRIMARY_ID,
+    'gr_greentreecode',
+    'gr_make',
+    'gr_model',
+    'gr_serial',
+    'gr_site',
+    'gr_siteaddress1',
+    'gr_siteaddress2',
+    'gr_sourcekey',
+].join(',')
 
 export type GreentreeRecord = Record<string, unknown>
 
@@ -9,19 +21,7 @@ export type GreentreeTableResult = {
     entitySetName: string
     logicalName: string
     primaryIdAttribute: string
-    primaryNameAttribute: string | null
-}
-
-type EntityDefinition = {
-    EntitySetName: string
-    LogicalName: string
-    PrimaryIdAttribute: string
-    PrimaryNameAttribute?: string | null
-    DisplayName?: { UserLocalizedLabel?: { Label?: string } | null } | null
-}
-
-function cleanEnvironmentUrl(value: string) {
-    return value.trim().replace(/\/+$/, '')
+    primaryNameAttribute: string
 }
 
 async function readJson(response: Response) {
@@ -37,7 +37,7 @@ async function get(accessToken: string, url: string) {
         headers: {
             Authorization: `Bearer ${accessToken}`,
             Accept: 'application/json',
-            Prefer: 'odata.maxpagesize=5000, odata.include-annotations="OData.Community.Display.V1.FormattedValue"',
+            Prefer: 'odata.maxpagesize=5000',
             'OData-MaxVersion': '4.0',
             'OData-Version': '4.0',
         },
@@ -63,59 +63,22 @@ async function getAllRecords(accessToken: string, initialUrl: string, environmen
     return records
 }
 
-async function acquireExternalToken(
-    instance: IPublicClientApplication,
-    account: AccountInfo,
-    environmentUrl: string,
-) {
-    const request = {
-        account,
-        scopes: [`${environmentUrl}/user_impersonation`],
-        redirectUri: import.meta.env.VITE_MSAL_SILENT_REDIRECT_URI || window.location.origin,
-    }
-    try {
-        return (await instance.acquireTokenSilent(request)).accessToken
-    } catch {
-        return (await instance.acquireTokenPopup(request)).accessToken
-    }
-}
-
-export async function fetchGreentreeEquipmentTable(
-    instance: IPublicClientApplication,
-    account: AccountInfo | null,
-    configuredEnvironmentUrl: string,
-): Promise<GreentreeTableResult> {
-    if (!account) throw new Error('No signed-in Microsoft account is available.')
-    const environmentUrl = cleanEnvironmentUrl(configuredEnvironmentUrl)
-    if (!environmentUrl) {
-        throw new Error('Set VITE_GREENTREE_DATAVERSE_URL to the Dataverse organization URL that contains GreentreeEquipmentTable.')
-    }
+export async function fetchGreentreeEquipmentTable(accessToken: string): Promise<GreentreeTableResult> {
+    const environmentUrl = (import.meta.env.VITE_DATAVERSE_URL ?? '').trim().replace(/\/+$/, '')
     if (!/^https:\/\/[^/]+\.dynamics\.com$/i.test(environmentUrl)) {
-        throw new Error('VITE_GREENTREE_DATAVERSE_URL must be a Dataverse organization URL, for example https://example.crm6.dynamics.com.')
-    }
-
-    const token = await acquireExternalToken(instance, account, environmentUrl)
-    const apiUrl = `${environmentUrl}/api/data/v9.2`
-    const definitions = await get(token, `${apiUrl}/EntityDefinitions?$select=LogicalName,EntitySetName,PrimaryIdAttribute,PrimaryNameAttribute,DisplayName`)
-    const entities = (definitions.value ?? []) as EntityDefinition[]
-    const target = entities.find((entity) =>
-        entity.DisplayName?.UserLocalizedLabel?.Label?.localeCompare(GREENTREE_TABLE_DISPLAY_NAME, undefined, { sensitivity: 'accent' }) === 0,
-    ) ?? entities.find((entity) => entity.LogicalName.toLowerCase().includes('greentreeequipment'))
-
-    if (!target?.EntitySetName) {
-        throw new Error(`The table ${GREENTREE_TABLE_DISPLAY_NAME} was not found in the configured environment.`)
+        throw new Error('VITE_DATAVERSE_URL must be a Dataverse organization URL.')
     }
 
     const records = await getAllRecords(
-        token,
-        `${apiUrl}/${encodeURIComponent(target.EntitySetName)}`,
+        accessToken,
+        `${environmentUrl}/api/data/v9.2/${GREENTREE_TABLE_ENTITY_SET}?$select=${GREENTREE_COLUMNS}`,
         environmentUrl,
     )
     return {
         records,
-        entitySetName: target.EntitySetName,
-        logicalName: target.LogicalName,
-        primaryIdAttribute: target.PrimaryIdAttribute,
-        primaryNameAttribute: target.PrimaryNameAttribute ?? null,
+        entitySetName: GREENTREE_TABLE_ENTITY_SET,
+        logicalName: GREENTREE_TABLE_LOGICAL_NAME,
+        primaryIdAttribute: GREENTREE_TABLE_PRIMARY_ID,
+        primaryNameAttribute: 'gr_name',
     }
 }

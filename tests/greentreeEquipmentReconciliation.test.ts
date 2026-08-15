@@ -11,14 +11,14 @@ import {
 } from '../src/alpha/equipment-test/greentreeReconciliation.ts'
 import { greentreeImportBatches, greentreeImportIssues, importGreentreeEquipmentBatch } from '../src/alpha/equipment-test/greentreeEquipmentImport.ts'
 
-test('cr16b_Code maps to fleet while cr16b_CodeActive is ignored', () => {
+test('owned Greentree table maps code and stable source key', () => {
     const mapped = mapGreentreeEquipmentRecords([{
-        cr16b_greentreeequipmenttableid: 'source-1',
-        cr16b_CodeActive: 'Yes',
-        cr16b_Code: 'FLT-100',
-    }], 'cr16b_greentreeequipmenttableid')
+        gr_greentreeequipmentid: 'row-1',
+        gr_sourcekey: 'source-1',
+        gr_greentreecode: 'FLT-100',
+    }], 'gr_greentreeequipmentid')
     assert.equal(mapped[0].fleet, 'FLT-100')
-    assert.equal(mapped[0].codeActive, 'Yes')
+    assert.equal(mapped[0].sourceId, 'source-1')
 })
 
 const appEquipment = (id: string, fleet: string, serial: string): Equipment => ({
@@ -36,9 +36,8 @@ const sourceEquipment = (fleet: string, serial: string): GreentreeEquipmentSnaps
     make: 'Toyota',
     model: '8FG',
     siteAddress1: '',
-    siteAddress3: '',
+    siteAddress2: '',
     siteName: '',
-    codeActive: '',
 })
 
 test('fleet and serial matching one app record is exact', () => {
@@ -88,9 +87,9 @@ test('unmatched source and app records remain visible', () => {
     assert.equal(result.appOnly[0].gr_equipmentid, '1')
 })
 
-test('source profile reports duplicates, missing fields, active distribution, and legacy fleet labels', () => {
-    const first = { ...sourceEquipment('F100', 'S100'), codeActive: 'Yes', siteAddress1: '1 Test Road' }
-    const second = { ...sourceEquipment('F100', ''), codeActive: 'No' }
+test('source profile reports duplicates, missing fields, and legacy fleet labels', () => {
+    const first = { ...sourceEquipment('F100', 'S100'), siteAddress1: '1 Test Road' }
+    const second = { ...sourceEquipment('F100', '') }
     const app = [appEquipment('1', 'Cardinal01 exFN1584', 'APP-1')]
     const reconciliation = reconcileGreentreeEquipment([first, second], app)
     const profile = profileGreentreeEquipment([first, second], reconciliation, app)
@@ -99,7 +98,6 @@ test('source profile reports duplicates, missing fields, active distribution, an
     assert.equal(profile.serial.missing, 1)
     assert.equal(profile.missingSiteName, 2)
     assert.equal(profile.distinctSiteAddresses, 1)
-    assert.deepEqual(profile.codeActiveValues, [{ value: 'No', count: 1 }, { value: 'Yes', count: 1 }])
     assert.equal(profile.legacyAppFleetLabels, 1)
 })
 

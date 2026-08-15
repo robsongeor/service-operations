@@ -4,14 +4,14 @@ import type { GreentreeRecord } from './greentreeEquipmentApi.ts'
 const FORMATTED_VALUE = '@OData.Community.Display.V1.FormattedValue'
 
 const fieldAliases = {
-    fleet: ['code', 'fleetnumbercode', 'fleetnumber', 'fleetno', 'fleet'],
+    fleet: ['greentreecode', 'code', 'fleetnumbercode', 'fleetnumber', 'fleetno', 'fleet'],
     make: ['make'],
     model: ['model'],
     serial: ['serial', 'serialnumber'],
     siteAddress1: ['siteaddress1', 'siteaddressline1', 'address1', 'addressline1'],
-    siteAddress3: ['siteaddress3', 'siteaddressline3', 'address3', 'addressline3'],
+    siteAddress2: ['siteaddress2', 'siteaddressline2', 'address2', 'addressline2'],
     siteName: ['sitename', 'site'],
-    codeActive: ['codeactive'],
+    sourceKey: ['sourcekey'],
 } as const
 
 export type GreentreeEquipmentSnapshot = {
@@ -21,9 +21,8 @@ export type GreentreeEquipmentSnapshot = {
     model: string
     serial: string
     siteAddress1: string
-    siteAddress3: string
+    siteAddress2: string
     siteName: string
-    codeActive: string
 }
 
 export type ReconciliationStatus = 'exact' | 'probable' | 'new' | 'conflict'
@@ -63,7 +62,6 @@ export type GreentreeSourceProfile = {
     missingSiteAddress: number
     distinctSiteNames: number
     distinctSiteAddresses: number
-    codeActiveValues: Array<{ value: string; count: number }>
     conflictReasons: Array<{ value: string; count: number }>
     legacyAppFleetLabels: number
 }
@@ -113,21 +111,20 @@ export function mapGreentreeEquipmentRecords(records: GreentreeRecord[], primary
         model: resolveKey(keys, fieldAliases.model),
         serial: resolveKey(keys, fieldAliases.serial),
         siteAddress1: resolveKey(keys, fieldAliases.siteAddress1),
-        siteAddress3: resolveKey(keys, fieldAliases.siteAddress3),
+        siteAddress2: resolveKey(keys, fieldAliases.siteAddress2),
         siteName: resolveKey(keys, fieldAliases.siteName),
-        codeActive: resolveKey(keys, fieldAliases.codeActive),
+        sourceKey: resolveKey(keys, fieldAliases.sourceKey),
     }
 
     return records.map((record, index): GreentreeEquipmentSnapshot => ({
-        sourceId: recordText(record, primaryIdAttribute) || `source-row-${index + 1}`,
+        sourceId: recordText(record, resolved.sourceKey) || recordText(record, primaryIdAttribute) || `source-row-${index + 1}`,
         fleet: recordText(record, resolved.fleet),
         make: recordText(record, resolved.make),
         model: recordText(record, resolved.model),
         serial: recordText(record, resolved.serial),
         siteAddress1: recordText(record, resolved.siteAddress1),
-        siteAddress3: recordText(record, resolved.siteAddress3),
+        siteAddress2: recordText(record, resolved.siteAddress2),
         siteName: recordText(record, resolved.siteName),
-        codeActive: recordText(record, resolved.codeActive),
     }))
 }
 
@@ -257,7 +254,7 @@ export function profileGreentreeEquipment(
     reconciliation: ReconciliationResult,
     appEquipment: Equipment[],
 ): GreentreeSourceProfile {
-    const siteAddresses = source.map((item) => [item.siteAddress1, item.siteAddress3].filter(Boolean).join(', '))
+    const siteAddresses = source.map((item) => [item.siteAddress1, item.siteAddress2].filter(Boolean).join(', '))
     return {
         totalRows: source.length,
         fleet: profileIdentity(source, (item) => item.fleet),
@@ -268,7 +265,6 @@ export function profileGreentreeEquipment(
         missingSiteAddress: siteAddresses.filter((value) => !normalizeIdentity(value)).length,
         distinctSiteNames: new Set(source.map((item) => normalizeIdentity(item.siteName)).filter(Boolean)).size,
         distinctSiteAddresses: new Set(siteAddresses.map(normalizeIdentity).filter(Boolean)).size,
-        codeActiveValues: valueDistribution(source.map((item) => item.codeActive), 'Blank'),
         conflictReasons: valueDistribution(reconciliation.rows.flatMap((row) => row.status === 'conflict' ? row.reasons : []), 'Unspecified'),
         legacyAppFleetLabels: appEquipment.filter((item) => /\bex\s*fn\s*\d+/i.test(item.gr_fleet ?? '')).length,
     }

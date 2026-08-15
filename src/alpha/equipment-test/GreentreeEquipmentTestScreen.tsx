@@ -27,7 +27,6 @@ import {
 import '../equipment/EquipmentScreen.css'
 import './GreentreeEquipmentTestScreen.css'
 
-const environmentUrl = import.meta.env.VITE_GREENTREE_DATAVERSE_URL ?? ''
 const REVIEW_PAGE_SIZE = 50
 type ReviewTab = 'all' | ReconciliationStatus | 'app-only'
 type ReviewRequirement = 'all' | 'none' | 'has'
@@ -71,7 +70,7 @@ function SourceProfile({ profile }: { profile: GreentreeSourceProfile }) {
             <article><h3>Missing source details</h3><dl><div><dt>Make</dt><dd>{profile.missingMake}</dd></div><div><dt>Model</dt><dd>{profile.missingModel}</dd></div><div><dt>Site Name</dt><dd>{profile.missingSiteName}</dd></div><div><dt>Site Address</dt><dd>{profile.missingSiteAddress}</dd></div></dl></article>
             <article><h3>Site coverage</h3><dl><div><dt>Distinct names</dt><dd>{profile.distinctSiteNames}</dd></div><div><dt>Distinct addresses</dt><dd>{profile.distinctSiteAddresses}</dd></div><div><dt>Legacy app fleet labels</dt><dd>{profile.legacyAppFleetLabels}</dd></div></dl></article>
         </div>
-        <div className="greentree-profile-breakdown"><div><h3>Code Active distribution</h3><div className="greentree-profile-chips">{profile.codeActiveValues.map((item) => <span key={item.value}>{item.value} <strong>{item.count}</strong></span>)}</div></div><div><h3>Conflict causes</h3>{profile.conflictReasons.length ? <ul>{profile.conflictReasons.map((item) => <li key={item.value}><span>{item.value}</span><strong>{item.count}</strong></li>)}</ul> : <p>No conflicts detected.</p>}</div></div>
+        <div className="greentree-profile-breakdown"><div><h3>Conflict causes</h3>{profile.conflictReasons.length ? <ul>{profile.conflictReasons.map((item) => <li key={item.value}><span>{item.value}</span><strong>{item.count}</strong></li>)}</ul> : <p>No conflicts detected.</p>}</div></div>
     </section>
 }
 
@@ -100,8 +99,8 @@ export default function GreentreeEquipmentTestScreen() {
         setLoading(true)
         setError('')
         try {
-            const [greentree, appToken] = await Promise.all([fetchGreentreeEquipmentTable(instance, account, environmentUrl), acquireDataverseAccessToken(instance, account)])
-            const appEquipment = await fetchEquipment(appToken)
+            const appToken = await acquireDataverseAccessToken(instance, account)
+            const [greentree, appEquipment] = await Promise.all([fetchGreentreeEquipmentTable(appToken), fetchEquipment(appToken)])
             const source = mapGreentreeEquipmentRecords(greentree.records, greentree.primaryIdAttribute)
             const reconciliation = reconcileGreentreeEquipment(source, appEquipment)
             setWorkspace({ reconciliation, sourceCount: source.length, appCount: appEquipment.length, logicalName: greentree.logicalName, profile: profileGreentreeEquipment(source, reconciliation, appEquipment) })
@@ -127,7 +126,7 @@ export default function GreentreeEquipmentTestScreen() {
         if (reviewCountFilter !== 'all') {
             if (reviewCountFilter === '4+' ? reviewCount < 4 : reviewCount !== Number(reviewCountFilter)) return false
         }
-        return !query || searchable([row.source.fleet, row.source.serial, row.source.make, row.source.model, row.source.siteName, row.source.siteAddress1, row.source.siteAddress3, row.appEquipment?.gr_fleet, row.appEquipment?.gr_serial], query)
+        return !query || searchable([row.source.fleet, row.source.serial, row.source.make, row.source.model, row.source.siteName, row.source.siteAddress1, row.source.siteAddress2, row.appEquipment?.gr_fleet, row.appEquipment?.gr_serial], query)
     }), [query, reviewCountFilter, reviewRequirement, tab, workspace])
     const visibleAppOnly = useMemo(() => (workspace?.reconciliation.appOnly ?? []).filter((item) => !query || searchable([item.gr_fleet, item.gr_serial, item.gr_make, item.gr_model, item.gr_Site?.gr_name, item.gr_Site?.gr_address], query)), [query, workspace])
     const resultCount = tab === 'app-only' ? visibleAppOnly.length : visibleRows.length
@@ -201,7 +200,7 @@ export default function GreentreeEquipmentTestScreen() {
             <div className="equipment-results-count">Showing {resultCount ? pageStart + 1 : 0}–{Math.min(pageStart + REVIEW_PAGE_SIZE, resultCount)} of {resultCount}{query && resultCount !== counts[tab] ? ` filtered (${counts[tab]} total)` : ''}</div>
             <div className="equipment-table-scroll">
                 {tab === 'app-only' ? <table className="equipment-table greentree-review-table app-only"><thead><tr><th>App fleet</th><th>Serial</th><th>Make / Model</th><th>Current Site</th><th>Assessment</th></tr></thead><tbody>{pageAppOnly.length ? pageAppOnly.map((item) => <tr key={item.gr_equipmentid}><td><strong>{valueOrDash(item.gr_fleet)}</strong></td><td>{valueOrDash(item.gr_serial)}</td><td>{[item.gr_make, item.gr_model].filter(Boolean).join(' ') || '—'}</td><td><strong>{valueOrDash(item.gr_Site?.gr_name)}</strong><small>{valueOrDash(item.gr_Site?.gr_address)}</small></td><td><span className="greentree-status app-only">App only / possible pending</span></td></tr>) : <tr><td className="equipment-empty" colSpan={5}>No app-only records match the current search.</td></tr>}</tbody></table> :
-                    <table className={`equipment-table greentree-review-table ${selectable ? 'selectable' : ''}`}><thead><tr>{selectable && <th className="greentree-select-column"><span className="equipment-visually-hidden">Select</span></th>}<th>Greentree identity</th><th>Make / Model</th><th>Greentree Site</th><th>App match</th><th>Assessment</th><th>Review</th></tr></thead><tbody>{pageRows.length ? pageRows.map((row) => { const issues = greentreeImportIssues(row); return <tr key={row.source.sourceId}>{selectable && <td className="greentree-select-column"><input type="checkbox" aria-label={`Select ${row.source.fleet || 'Equipment'} for import`} checked={selectedSourceIds.has(row.source.sourceId)} disabled={issues.length > 0 || importing} title={issues.join(' ')} onChange={() => toggleSelection(row.source.sourceId)} /></td>}<td><SourceIdentity row={row} /></td><td><strong>{valueOrDash(row.source.make)}</strong><small>{valueOrDash(row.source.model)}</small></td><td><strong>{valueOrDash(row.source.siteName)}</strong><small>{[row.source.siteAddress1, row.source.siteAddress3].filter(Boolean).join(', ') || '—'}</small></td><td><AppIdentity equipment={row.appEquipment} candidates={row.candidateEquipment} /></td><td><span className={`greentree-status ${row.status}`}>{statusLabels[row.status]}</span></td><td><ReviewDetails row={row} /></td></tr> }) : <tr><td className="equipment-empty" colSpan={selectable ? 7 : 6}>No reconciliation records match the current search.</td></tr>}</tbody></table>}
+                    <table className={`equipment-table greentree-review-table ${selectable ? 'selectable' : ''}`}><thead><tr>{selectable && <th className="greentree-select-column"><span className="equipment-visually-hidden">Select</span></th>}<th>Greentree identity</th><th>Make / Model</th><th>Greentree Site</th><th>App match</th><th>Assessment</th><th>Review</th></tr></thead><tbody>{pageRows.length ? pageRows.map((row) => { const issues = greentreeImportIssues(row); return <tr key={row.source.sourceId}>{selectable && <td className="greentree-select-column"><input type="checkbox" aria-label={`Select ${row.source.fleet || 'Equipment'} for import`} checked={selectedSourceIds.has(row.source.sourceId)} disabled={issues.length > 0 || importing} title={issues.join(' ')} onChange={() => toggleSelection(row.source.sourceId)} /></td>}<td><SourceIdentity row={row} /></td><td><strong>{valueOrDash(row.source.make)}</strong><small>{valueOrDash(row.source.model)}</small></td><td><strong>{valueOrDash(row.source.siteName)}</strong><small>{[row.source.siteAddress1, row.source.siteAddress2].filter(Boolean).join(', ') || '—'}</small></td><td><AppIdentity equipment={row.appEquipment} candidates={row.candidateEquipment} /></td><td><span className={`greentree-status ${row.status}`}>{statusLabels[row.status]}</span></td><td><ReviewDetails row={row} /></td></tr> }) : <tr><td className="equipment-empty" colSpan={selectable ? 7 : 6}>No reconciliation records match the current search.</td></tr>}</tbody></table>}
             </div>
             {resultCount > REVIEW_PAGE_SIZE && <nav className="greentree-pagination" aria-label="Review pages"><button type="button" onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={currentPage === 1}>Previous</button><span>Page <strong>{currentPage}</strong> of <strong>{totalPages}</strong></span><button type="button" onClick={() => setPage((value) => Math.min(totalPages, value + 1))} disabled={currentPage === totalPages}>Next</button></nav>}
         </section>}
