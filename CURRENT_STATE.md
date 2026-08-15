@@ -1,6 +1,6 @@
 # Current State
 
-Branch: `codex/next-development`
+Branch: `codex/job-book-integration`
 
 ## Deployment status
 
@@ -52,6 +52,15 @@ Branch: `codex/next-development`
   credential creation, or real communication was performed.
 
 ## Unfinished work
+
+- Jobs now follows the Equipment data-loading model locally. An account/environment-scoped
+  IndexedDB snapshot gives the Jobs table an immediate first render, an in-memory cache deduplicates
+  same-session requests, and a complete paged Dataverse refresh replaces the snapshot in the
+  background. The table projection no longer downloads every Job Card time entry and material;
+  those child rows and photos load only for the selected Job drawer. The existing protected realtime
+  receiver now routes bounded Equipment and Job events, but it must be deployed and `gr_job`
+  Create/Update/Delete webhook steps must be registered before live Job invalidations are
+  operational. No cloud or Dataverse registration was changed by this local implementation.
 
 - The published Service Job completion hour-meter dialog now uses bounded responsive columns so Equipment
   labels, maintenance summaries, and numeric inputs cannot overlap or escape the modal at narrow

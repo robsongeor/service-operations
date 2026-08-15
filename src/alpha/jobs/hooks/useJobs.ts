@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { useActiveMsalAccount } from '../../../auth/useActiveMsalAccount'
 import type { Job } from '../types/job.types'
 import type { Equipment } from '../types/equipment.types'
 import {
     fetchJobs as fetchJobsApi,
-    fetchJobPhotos as fetchJobPhotosApi,
+    fetchJobForDrawer as fetchJobForDrawerApi,
     createJob as createJobApi,
     updateJobStatus as updateJobStatusApi,
     updateJobCardStatus as updateJobCardStatusApi,
@@ -15,6 +15,7 @@ import {
     updateJob as updateJobApi,
     deleteJob as deleteJobApi,
 } from '../services/jobsApi'
+import { startJobsRealtime, type JobsRealtimeStatus } from '../services/jobsRealtime'
 import type { JobSaveInput } from '../types/jobSave.types'
 import { JOB_STATUSES, UNCONFIRMED_OPERATION_MESSAGE, jobIsOperational, type JobStatus } from '../types/jobStatus.types'
 import { jobIsSchedulerEligible, SITE_CHECK_SCHEDULER_MESSAGE } from '../types/jobSchedulerEligibility'
@@ -146,10 +147,16 @@ export function useJobs() {
     const [completionError, setCompletionError] = useState('')
     const [isEquipmentSaving, setIsEquipmentSaving] = useState(false)
     const [equipmentSaveError, setEquipmentSaveError] = useState('')
+    const [jobsCacheStatus, setJobsCacheStatus] = useState<{
+        source: 'device' | 'network'
+        savedAt: number
+        refreshing: boolean
+    } | null>(null)
+    const [jobsRealtimeStatus, setJobsRealtimeStatus] = useState<JobsRealtimeStatus>('disabled')
 
-    const getAccessToken = async () => {
+    const getAccessToken = useCallback(async () => {
         return acquireDataverseAccessToken(instance, account)
-    }
+    }, [account, instance])
 
     const createEquipment = async (equipment: {
         fleet: string
@@ -361,20 +368,18 @@ export function useJobs() {
 
     const fetchJobs = async () => {
         const token = await getAccessToken()
-        const jobs = await fetchJobsApi(token)
+        const jobs = await fetchJobsApi(token, { forceRefresh: true })
         setJobs(jobs)
+        setJobsCacheStatus({ source: 'network', savedAt: Date.now(), refreshing: false })
         return jobs
     }
 
     const fetchJobForDrawer = async (jobId: string) => {
         const token = await getAccessToken()
-        const [nextJobs, photos] = await Promise.all([
-            fetchJobsApi(token),
-            fetchJobPhotosApi(token, jobId),
-        ])
-        const merged = nextJobs.map((job) => job.gr_jobid === jobId ? { ...job, jobPhotos: photos } : job)
-        setJobs(merged)
-        return merged.find((job) => job.gr_jobid === jobId)
+        const refreshed = await fetchJobForDrawerApi(token, jobId)
+        if (!refreshed) return undefined
+        setJobs((current) => current.map((job) => job.gr_jobid === jobId ? refreshed : job))
+        return refreshed
     }
 
     const fetchScheduleOptions = async () => {
@@ -1027,6 +1032,7 @@ export function useJobs() {
         if (!account) return
 
         let cancelled = false
+        let deviceSnapshotRestored = false
 
         const loadInitialData = async () => {
             setIsLoading(true)
@@ -1049,7 +1055,26 @@ export function useJobs() {
                     initialOfficeUpdates,
                     mechanicsData,
                 ] = await Promise.all([
-                    fetchJobsApi(token),
+                    fetchJobsApi(token, {
+                        useDeviceCache: true,
+                        onDeviceSnapshot: (rows, savedAt) => {
+                            deviceSnapshotRestored = true
+                            if (!cancelled) {
+                                setJobs(rows)
+                                setIsLoading(false)
+                                setJobsCacheStatus({ source: 'device', savedAt, refreshing: true })
+                            }
+                        },
+                        onBackgroundRefresh: (rows, refreshedAt) => {
+                            if (!cancelled) {
+                                setJobs(rows)
+                                setJobsCacheStatus({ source: 'network', savedAt: refreshedAt, refreshing: false })
+                            }
+                        },
+                        onBackgroundRefreshError: () => {
+                            if (!cancelled) setJobsCacheStatus((current) => current ? { ...current, refreshing: false } : current)
+                        },
+                    }),
                     fetchEquipmentApi(token),
                     fetchSitesApi(token),
                     fetchCustomersApi(token),
@@ -1079,9 +1104,13 @@ export function useJobs() {
                 if (cancelled) return
 
                 console.error('Failed to load Dataverse data:', error)
-                setLoadError(error instanceof Error
-                    ? error.message
-                    : 'Dataverse data could not be loaded.')
+                if (!deviceSnapshotRestored) {
+                    setLoadError(error instanceof Error
+                        ? error.message
+                        : 'Dataverse data could not be loaded.')
+                } else {
+                    setJobsCacheStatus((current) => current ? { ...current, refreshing: false } : current)
+                }
             } finally {
                 if (!cancelled) setIsLoading(false)
             }
@@ -1094,6 +1123,41 @@ export function useJobs() {
         }
     }, [account, instance, reloadKey])
 
+    useEffect(() => {
+        const apiUrl = import.meta.env.VITE_EQUIPMENT_REALTIME_API_URL?.trim() ?? ''
+        if (!account || !apiUrl) return
+
+        let cancelled = false
+        let refreshTimer: number | undefined
+        const stop = startJobsRealtime({
+            apiUrl,
+            getAccessToken,
+            onStatus: (status) => { if (!cancelled) setJobsRealtimeStatus(status) },
+            onEvent: () => {
+                if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
+                refreshTimer = window.setTimeout(async () => {
+                    if (cancelled) return
+                    setJobsCacheStatus((current) => current ? { ...current, refreshing: true } : current)
+                    try {
+                        const rows = await fetchJobsApi(await getAccessToken(), { forceRefresh: true })
+                        if (!cancelled) {
+                            setJobs(rows)
+                            setJobsCacheStatus({ source: 'network', savedAt: Date.now(), refreshing: false })
+                        }
+                    } catch {
+                        if (!cancelled) setJobsCacheStatus((current) => current ? { ...current, refreshing: false } : current)
+                    }
+                }, 2_000)
+            },
+        })
+
+        return () => {
+            cancelled = true
+            if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
+            stop()
+        }
+    }, [account, getAccessToken])
+
     return {
         jobs,
         scheduleOptions,
@@ -1101,6 +1165,8 @@ export function useJobs() {
         jobAssignments,
         servicePlans,
         officeUpdates,
+        jobsCacheStatus,
+        jobsRealtimeStatus,
         equipmentList,
         sites,
         customers,

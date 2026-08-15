@@ -2,9 +2,50 @@ import type { Job } from '../types/job.types.ts'
 import type { JobSaveInput } from '../types/jobSave.types.ts'
 import { assertJobTypeAllowedForCreation, type JobCreationSource } from '../types/jobType.types.ts'
 import { HOUR_METER_CLASSIFICATION_ENABLED, type HourMeterReadingType } from '../../equipment/hourMeter/hourMeterReading.types.ts'
+import {
+    invalidateSharedJobsDataCache,
+    jobsCacheScope,
+    readPersistedJobsSnapshot,
+    sharedJobsDataCache,
+    writePersistedJobsSnapshot,
+    type JobsCacheReadOptions,
+} from './jobsDataCache.ts'
 
 const DATAVERSE_URL = import.meta.env?.VITE_DATAVERSE_URL ?? ''
 const HOUR_METER_READING_SELECT = HOUR_METER_CLASSIFICATION_ENABLED ? ',gr_hourmeterreadingtype,gr_hourmeterrecordeddate' : ''
+const JOB_SELECT = `gr_jobid,createdon,gr_jobnumber,gr_status,gr_ordernumber,gr_description,gr_jobtype,gr_jobcardstatus,gr_jobcardsenton,gr_jobcardsubmittedon,gr_jobcardclosedon,gr_hourmeter${HOUR_METER_READING_SELECT},gr_completeddate,gr_servicetype,gr_currentofficeaction,gr_officeactionowner,gr_officeattentionrequired,gr_techniciansubmissiontokenhash,gr_techniciansubmissiontokencreatedon,gr_techniciansubmissiontokenexpireson,gr_techniciansubmissiontokenused,gr_techniciansubmissionsubmittedon,gr_techniciansubmissionhourmeter,gr_techniciansubmissionstory,gr_techniciansubmissionfurtherworkrequired,gr_techniciansubmissionfurtherworkdetails,gr_techniciansubmissionsafetyissueidentified,gr_techniciansubmissionsafetyissuedetails,_gr_sitecheck_value`
+const JOB_EXPAND = 'gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_serial,gr_currenthourmeter,gr_currenthourmeterrecordeddate,gr_servicetrackingenabled),gr_Mechanic($select=gr_mechanicid,gr_name,gr_phone,gr_email),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name,gr_phone,gr_email)'
+
+type FetchJobsOptions = JobsCacheReadOptions & {
+    useDeviceCache?: boolean
+    onDeviceSnapshot?: (rows: Job[], savedAt: number) => void
+    onBackgroundRefresh?: (rows: Job[], refreshedAt: number) => void
+    onBackgroundRefreshError?: () => void
+}
+
+async function fetchAllJobPages(accessToken: string): Promise<Job[]> {
+    const rows: Job[] = []
+    let nextUrl: string | undefined = `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=${JOB_SELECT}&$expand=${JOB_EXPAND}`
+    while (nextUrl) {
+        const result = await fetch(nextUrl, {
+            cache: 'no-store',
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                Accept: 'application/json',
+                'Cache-Control': 'no-cache',
+                Prefer: 'odata.maxpagesize=5000',
+            },
+        })
+        if (!result.ok) {
+            const error = await result.text()
+            throw new Error(`Failed to fetch jobs: ${error || `${result.status} ${result.statusText}`}`)
+        }
+        const data = await result.json() as { value?: Job[]; '@odata.nextLink'?: string }
+        rows.push(...(data.value ?? []))
+        nextUrl = data['@odata.nextLink']
+    }
+    return rows
+}
 
 function blobDataUrl(blob: Blob) {
     return new Promise<string>((resolve, reject) => {
@@ -40,66 +81,62 @@ export async function fetchJobPhotos(accessToken: string, jobId: string): Promis
     }))
 }
 
-export async function fetchJobs(accessToken: string): Promise<Job[]> {
-    const result = await fetch(
-        `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=gr_jobid,createdon,gr_jobnumber,gr_status,gr_ordernumber,gr_description,gr_jobtype,gr_jobcardstatus,gr_jobcardsenton,gr_jobcardsubmittedon,gr_jobcardclosedon,gr_hourmeter${HOUR_METER_READING_SELECT},gr_completeddate,gr_servicetype,gr_currentofficeaction,gr_officeactionowner,gr_officeattentionrequired,gr_techniciansubmissiontokenhash,gr_techniciansubmissiontokencreatedon,gr_techniciansubmissiontokenexpireson,gr_techniciansubmissiontokenused,gr_techniciansubmissionsubmittedon,gr_techniciansubmissionhourmeter,gr_techniciansubmissionstory,_gr_sitecheck_value&$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_serial,gr_currenthourmeter,gr_currenthourmeterrecordeddate,gr_servicetrackingenabled),gr_Mechanic($select=gr_mechanicid,gr_name,gr_phone,gr_email),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name,gr_phone,gr_email)`,
-        {
-            cache: 'no-store',
-            headers: {
-                Authorization: `Bearer ${accessToken}`,
-                Accept: 'application/json',
-                'Cache-Control': 'no-cache',
-            },
-        },
-    )
-
-    if (!result.ok) {
-        const error = await result.text()
-        throw new Error(`Failed to fetch jobs: ${error}`)
+export async function fetchJobs(accessToken: string, options: FetchJobsOptions = {}): Promise<Job[]> {
+    const scope = jobsCacheScope(accessToken)
+    const loadNetwork = async () => {
+        const rows = await fetchAllJobPages(accessToken)
+        const refreshedAt = Date.now()
+        void writePersistedJobsSnapshot(scope, rows, refreshedAt)
+        options.onBackgroundRefresh?.(rows, refreshedAt)
+        return rows
     }
 
-    const data = await result.json()
-    const jobs = (data.value ?? []) as Job[]
-    const headers = {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: 'application/json',
-        'Cache-Control': 'no-cache',
-    }
-    const [metadataResult, timeResult, partsResult] = await Promise.allSettled([
-        fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=gr_jobid,gr_techniciansubmissionfurtherworkrequired,gr_techniciansubmissionfurtherworkdetails,gr_techniciansubmissionsafetyissueidentified,gr_techniciansubmissionsafetyissuedetails`, { cache: 'no-store', headers }),
-        fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobcardsubmissiontimeentries?$select=gr_jobcardsubmissiontimeentryid,gr_entrydate,gr_totalhours,gr_kilometres,_gr_job_value&$orderby=gr_entrydate asc`, { cache: 'no-store', headers }),
-        fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobmaterials?$select=gr_jobmaterialid,gr_material,_gr_job_value&$orderby=gr_displayorder asc`, { cache: 'no-store', headers }),
+    return sharedJobsDataCache.read(scope, async () => {
+        if (!options.forceRefresh && options.useDeviceCache) {
+            const snapshot = await readPersistedJobsSnapshot(scope)
+            if (snapshot) {
+                options.onDeviceSnapshot?.(snapshot.rows, snapshot.savedAt)
+                void loadNetwork()
+                    .then((rows) => sharedJobsDataCache.write(scope, rows))
+                    .catch(() => options.onBackgroundRefreshError?.())
+                return snapshot.rows
+            }
+        }
+        return loadNetwork()
+    }, options)
+}
+
+export async function fetchJobForDrawer(accessToken: string, jobId: string): Promise<Job | undefined> {
+    const headers = { Authorization: `Bearer ${accessToken}`, Accept: 'application/json', 'Cache-Control': 'no-cache' }
+    const [jobResult, timeResult, partsResult, photos] = await Promise.all([
+        fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=${JOB_SELECT}&$expand=${JOB_EXPAND}&$filter=gr_jobid eq ${jobId}&$top=1`, { cache: 'no-store', headers }),
+        fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobcardsubmissiontimeentries?$select=gr_jobcardsubmissiontimeentryid,gr_entrydate,gr_totalhours,gr_kilometres,_gr_job_value&$filter=_gr_job_value eq ${jobId}&$orderby=gr_entrydate asc`, { cache: 'no-store', headers }),
+        fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobmaterials?$select=gr_jobmaterialid,gr_material,_gr_job_value&$filter=_gr_job_value eq ${jobId}&$orderby=gr_displayorder asc`, { cache: 'no-store', headers }),
+        fetchJobPhotos(accessToken, jobId),
     ])
-    const readValues = async (settled: PromiseSettledResult<Response>) => {
-        if (settled.status !== 'fulfilled' || !settled.value.ok) return []
-        return (await settled.value.json()).value ?? []
-    }
-    const [metadata, timeEntries, parts] = await Promise.all([
-        readValues(metadataResult),
-        readValues(timeResult),
-        readValues(partsResult),
-    ])
-    const metadataByJob = new Map<string, Partial<Job>>(
-        metadata.map((item: Record<string, unknown>) => [String(item.gr_jobid), item as Partial<Job>]),
-    )
-    return jobs.map((job) => ({
+    if (!jobResult.ok) throw new Error('The Job could not be refreshed for review.')
+    const job = ((await jobResult.json()) as { value?: Job[] }).value?.[0]
+    if (!job) return undefined
+    const timeEntries = timeResult.ok ? ((await timeResult.json()).value ?? []) as Record<string, unknown>[] : []
+    const parts = partsResult.ok ? ((await partsResult.json()).value ?? []) as Record<string, unknown>[] : []
+    return {
         ...job,
-        ...metadataByJob.get(job.gr_jobid),
-        technicianSubmissionTimeEntries: timeEntries
-            .filter((item: Record<string, unknown>) => String(item._gr_job_value).toLowerCase() === job.gr_jobid.toLowerCase())
-            .map((item: Record<string, unknown>) => ({
-                id: String(item.gr_jobcardsubmissiontimeentryid),
-                date: String(item.gr_entrydate),
-                hours: Number(item.gr_totalhours),
-                kilometres: Number(item.gr_kilometres),
-            })),
-        technicianSubmissionParts: parts
-            .filter((item: Record<string, unknown>) => String(item._gr_job_value).toLowerCase() === job.gr_jobid.toLowerCase())
-            .map((item: Record<string, unknown>) => ({
-                id: String(item.gr_jobmaterialid),
-                part: String(item.gr_material),
-            })),
-    }))
+        technicianSubmissionTimeEntries: timeEntries.map((item) => ({
+            id: String(item.gr_jobcardsubmissiontimeentryid),
+            date: String(item.gr_entrydate),
+            hours: Number(item.gr_totalhours),
+            kilometres: Number(item.gr_kilometres),
+        })),
+        technicianSubmissionParts: parts.map((item) => ({
+            id: String(item.gr_jobmaterialid),
+            part: String(item.gr_material),
+        })),
+        jobPhotos: photos,
+    }
+}
+
+export function invalidateJobsCache(accessToken?: string) {
+    invalidateSharedJobsDataCache(accessToken)
 }
 
 export async function fetchEquipmentJobs(accessToken: string, equipmentId: string): Promise<Job[]> {
@@ -194,6 +231,7 @@ export async function createJob(
     }
 
     const createdJob = await result.json()
+    invalidateJobsCache(accessToken)
     return createdJob.gr_jobid
 }
 
@@ -251,6 +289,7 @@ export async function updateJobStatus(
     if (!response.ok) {
         throw new Error('Failed to update job status')
     }
+    invalidateJobsCache(token)
 }
 
 export async function updateJobCardStatus(
@@ -283,6 +322,7 @@ export async function updateJobCardStatus(
         const error = await response.text()
         throw new Error(`Failed to update job card status: ${error}`)
     }
+    invalidateJobsCache(token)
 }
 
 export async function updateJobFields(
@@ -311,6 +351,7 @@ export async function updateJobFields(
     if (!response.ok) {
         throw new Error('Failed to update job')
     }
+    invalidateJobsCache(token)
 }
 
 export async function allocateJobNumbers(
@@ -379,6 +420,7 @@ export async function allocateJobNumbers(
     if (statuses.filter((status) => status >= 200 && status < 300).length !== allocations.length) {
         throw new Error('Dataverse did not confirm every Job number update.')
     }
+    invalidateJobsCache(token)
 }
 
 export async function updateJobOfficeAttention(
@@ -400,6 +442,7 @@ export async function updateJobOfficeAttention(
         const error = await response.text()
         throw new Error(`Failed to update office attention: ${error}`)
     }
+    invalidateJobsCache(token)
 }
 
 export async function updateJob(
@@ -426,6 +469,7 @@ export async function updateJob(
         const error = await response.text()
         throw new Error(`Failed to update job: ${error}`)
     }
+    invalidateJobsCache(token)
 }
 
 export function buildJobUpdateFields(job: JobSaveInput): Record<string, string | number | boolean | null> {
@@ -475,4 +519,5 @@ export async function deleteJob(token: string, jobId: string) {
         const error = await response.text()
         throw new Error(`Failed to delete job: ${error}`)
     }
+    invalidateJobsCache(token)
 }

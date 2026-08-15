@@ -1,6 +1,6 @@
-# Equipment realtime updates on Azure
+# Equipment and Jobs realtime updates on Azure
 
-Dataverse remains the source of truth. This integration broadcasts invalidation events only; it does not create another Equipment database.
+Dataverse remains the source of truth. This integration broadcasts invalidation events only; it does not create another Equipment or Jobs database.
 
 ## Azure resources
 
@@ -10,6 +10,7 @@ Dataverse remains the source of truth. This integration broadcasts invalidation 
 4. Configure `AzureSignalRConnectionString`, `DATAVERSE_URL`, and `APP_ORIGINS` in Function App settings. `APP_ORIGINS` is a comma-separated allowlist containing the production URL and approved local development origins. Keep all values server-side.
 5. Add the same explicit origins to the Function App CORS settings and enable credential support because the SignalR browser client negotiates with credentials enabled.
 6. Set `VITE_EQUIPMENT_REALTIME_API_URL` to the Function App `/api` URL when building the frontend.
+   Equipment and Jobs share the authenticated SignalR connection.
 
 ## GitHub deployment settings
 
@@ -37,11 +38,17 @@ Use `WebhookKey` authentication with the `equipmentchanged` Azure Function key. 
 
 Register PostOperation, asynchronous steps for `Create`, `Update`, and `Delete` on the `gr_equipment` table. For Update, configure filtering attributes for the Equipment fields used by the app so unrelated writes do not broadcast.
 
+For Jobs, reuse this protected service endpoint and register PostOperation asynchronous `Create`,
+`Update`, and `Delete` steps on `gr_job`. The receiver identifies the Dataverse table and broadcasts
+the corresponding bounded SignalR event. Configure Update filtering attributes for the Job fields
+projected by the Jobs table. These steps are required before the client can receive Job
+invalidations; they are intentionally not created by an ordinary application deployment.
+
 The development Dataverse registration is `Service Operations Equipment Realtime` (`85b89b0f-bd59-44cb-9d98-86cc3660963e`). Its three steps are enabled, asynchronous, PostOperation, and configured to delete successful system jobs automatically.
 
 ## Security and operation
 
 - The negotiate endpoint validates the caller's Dataverse bearer token with `WhoAmI` before returning a short-lived SignalR connection token.
 - Azure Functions validates the Dataverse webhook key before invoking the handler.
-- SignalR messages contain only Equipment ID, operation, and event time.
+- SignalR messages contain only the changed Equipment or Job ID, operation, and event time.
 - Connected clients debounce event bursts before refreshing the authoritative Dataverse snapshot.

@@ -27,6 +27,11 @@
 }
 
 .jobs-page-header-actions { display: flex; align-items: center; gap: 9px; }
+.jobs-page-header-actions > span { color: #68706b; font-size: .74rem; }
+.jobs-cache-status { color: #587069!important; font-size: .68rem!important; white-space: nowrap; }
+.jobs-realtime-status { padding: 4px 7px; border-radius: 999px; background: #edf0ee; color: #66736c!important; font-size: .64rem!important; font-weight: 750; white-space: nowrap; }
+.jobs-realtime-status.connected { background: #dceee6; color: #28644f!important; }
+.jobs-realtime-status.disconnected { background: #f8dddd; color: #923b3b!important; }
 .jobs-scheduled-settings { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; }
 .jobs-scheduled-settings legend { margin-bottom: 8px; font-size: .82rem; font-weight: 750; }
 .jobs-scheduled-settings label { display: flex; min-height: 42px; align-items: center; gap: 10px; padding: 0 12px; border: 1px solid #dce3df; border-radius: 9px; color: #3d4a44; font-size: .82rem; cursor: pointer; }

@@ -2,7 +2,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const test = require('node:test')
-const { equipmentEvent } = require('../realtime-api/equipmentchanged/index')._test
+const { equipmentEvent, jobEvent } = require('../realtime-api/equipmentchanged/index')._test
 const { corsHeaders } = require('../realtime-api/services/realtimeSecurity')
 
 test('realtime CORS accepts explicit production and localhost origins only', () => {
@@ -43,4 +43,11 @@ test('Dataverse Equipment webhook context maps to a minimal SignalR event', () =
 test('Dataverse webhook rejects unrelated tables and operations', () => {
     assert.equal(equipmentEvent({ PrimaryEntityName: 'gr_job', PrimaryEntityId: '11111111-1111-4111-8111-111111111111', MessageName: 'Update' }), undefined)
     assert.equal(equipmentEvent({ PrimaryEntityName: 'gr_equipment', PrimaryEntityId: '11111111-1111-4111-8111-111111111111', MessageName: 'Retrieve' }), undefined)
+})
+
+test('the protected realtime webhook maps a minimal Dataverse Job event', () => {
+    const event = jobEvent({ PrimaryEntityName: 'gr_job', PrimaryEntityId: '{11111111-1111-4111-8111-111111111111}', MessageName: 'Create' })
+    assert.equal(event.jobId, '11111111-1111-4111-8111-111111111111')
+    assert.equal(event.operation, 'create')
+    assert.equal(jobEvent({ PrimaryEntityName: 'gr_equipment', PrimaryEntityId: event.jobId, MessageName: 'Update' }), undefined)
 })

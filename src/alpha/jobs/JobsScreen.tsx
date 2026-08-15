@@ -44,6 +44,7 @@ export default function JobsScreen() {
         createJobOfficeUpdate,
         updateJobOfficeAttention,
         completionRequest, isCompletingJob, completionError, completeStandardJob, completeServiceJob, completeWofJob, cancelJobCompletion,
+        jobsCacheStatus, jobsRealtimeStatus,
         isLoading, loadError, retryInitialLoad, fetchJobForDrawer,
     } = useJobs()
     const [editingJob, setEditingJob] = useState<Job | null>(null)
@@ -169,6 +170,23 @@ export default function JobsScreen() {
             <header className="jobs-page-header">
                 <h1>Jobs</h1>
                 <div className="jobs-page-header-actions">
+                    <span>{jobs.length} records</span>
+                    {jobsRealtimeStatus !== 'disabled' && (
+                        <span className={`jobs-realtime-status ${jobsRealtimeStatus}`}>
+                            {jobsRealtimeStatus === 'connected'
+                                ? 'Live updates on'
+                                : jobsRealtimeStatus === 'connecting' ? 'Connecting live updates…' : 'Live updates offline'}
+                        </span>
+                    )}
+                    {jobsCacheStatus && (
+                        <span className="jobs-cache-status">
+                            {jobsCacheStatus.refreshing
+                                ? 'Saved copy · refreshing…'
+                                : jobsCacheStatus.source === 'device'
+                                    ? `Saved copy from ${new Date(jobsCacheStatus.savedAt).toLocaleString('en-NZ')}`
+                                    : `Updated ${new Date(jobsCacheStatus.savedAt).toLocaleString('en-NZ')}`}
+                        </span>
+                    )}
                     <PageSettingsButton
                         active={viewState.scheduledJobsVisibility !== 'all'}
                         title={viewState.scheduledJobsVisibility === 'all' ? 'Settings' : `Settings: ${scheduledSettingLabels[viewState.scheduledJobsVisibility]}`}

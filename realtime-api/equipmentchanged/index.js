@@ -9,15 +9,28 @@ function equipmentEvent(body) {
     return { equipmentId, operation, changedAt: new Date().toISOString() }
 }
 
+function jobEvent(body) {
+    const table = String(body?.PrimaryEntityName || body?.primaryEntityName || '').toLowerCase()
+    const operation = String(body?.MessageName || body?.messageName || '').toLowerCase()
+    const jobId = String(body?.PrimaryEntityId || body?.primaryEntityId || '').replace(/[{}]/g, '')
+    if (table !== 'gr_job' || !OPERATIONS.has(operation) || !GUID_PATTERN.test(jobId)) return undefined
+    return { jobId, operation, changedAt: new Date().toISOString() }
+}
+
 module.exports = async function equipmentChanged(context, request) {
-    const event = equipmentEvent(request.body)
+    const equipment = equipmentEvent(request.body)
+    const job = jobEvent(request.body)
+    const event = equipment ?? job
     if (!event) {
         context.res = { status: 400, body: { error: 'Unsupported Dataverse event.' } }
         return
     }
 
-    context.bindings.signalRMessages = [{ target: 'equipmentChanged', arguments: [event] }]
+    context.bindings.signalRMessages = [{
+        target: equipment ? 'equipmentChanged' : 'jobChanged',
+        arguments: [event],
+    }]
     context.res = { status: 202, body: { accepted: true } }
 }
 
-module.exports._test = { equipmentEvent }
+module.exports._test = { equipmentEvent, jobEvent }

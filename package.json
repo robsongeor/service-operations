@@ -19,7 +19,7 @@
     "test:job-photo": "node --experimental-strip-types --test tests/jobPhoto.test.ts",
     "test:customer-dashboard": "node --experimental-strip-types --test tests/customerDashboardSiteSettings.test.ts tests/purchaseOrderRecipients.test.ts",
     "test:site-checks": "node --experimental-strip-types --test tests/siteChecks.test.ts tests/siteCheckChecklistAdmin.test.ts",
-    "test:jobs-site-checks": "node --experimental-strip-types --test tests/jobsSiteChecksIntegration.test.ts",
+    "test:jobs-site-checks": "node --experimental-strip-types --test tests/jobsDataCache.test.ts tests/jobsPagination.test.ts tests/jobsRealtime.test.ts tests/jobsSiteChecksIntegration.test.ts",
     "test:quotes": "node --experimental-strip-types --test tests/quotePoRequestInvoice.test.ts",
     "test:chargeable-invoices": "node --experimental-strip-types --test tests/chargeableInvoiceReview.test.ts tests/chargeableInvoiceReleaseReadiness.test.ts",
     "test:staff": "node --experimental-strip-types --test tests/staffDirectory.test.ts"

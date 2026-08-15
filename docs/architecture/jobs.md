@@ -29,6 +29,13 @@ Detailed tables, columns, and relationship names belong in the relevant schema d
 
 ## Shared Components and APIs
 
+The Jobs table restores an account- and Dataverse-environment-scoped IndexedDB snapshot for a fast
+first render, while Dataverse remains authoritative. It refreshes every paged Job row in the
+background and replaces the saved snapshot after success. SignalR carries bounded invalidation
+events only; clients debounce those events and refresh from Dataverse. Technician time, materials,
+and photos are drawer-only details and are fetched for the selected Job rather than for the entire
+table.
+
 Job create/edit drawers use shared drawer presentation and shared searchable selectors.
 Scheduling and Customer Dashboard entry points reuse the Jobs workflow. Completion is routed
 through the completion framework rather than screen-specific writes.
