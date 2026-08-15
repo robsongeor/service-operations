@@ -50,6 +50,16 @@ Branch: `codex/job-book-integration`
   its value remains outside source control and client configuration. Signed-in Equipment Map and
   business-flow smoke testing remain outstanding. No Dataverse provisioning, role assignment,
   credential creation, or real communication was performed.
+- The Jobs device-cache and realtime client testing release was published from commit `e7b24dc` by
+  successful Azure Static Web Apps run `31906700019` on 16 August 2026. Production-safe verification
+  returned `200` for `/` and `/jobs`, found the exact commit marker plus the Jobs realtime and
+  IndexedDB cache code in the deployed bundle, confirmed production negotiate CORS with `204`, and
+  confirmed anonymous negotiation and an unkeyed Dataverse receiver request are rejected with `401`.
+  The existing Flex Consumption receiver was migrated to Node v4 registration and deployed directly;
+  Azure indexed both functions and accepted a protected synthetic Job invalidation with `202`.
+  Three enabled asynchronous PostOperation `gr_job` Create/Update/Delete steps were then registered
+  and independently verified. The synthetic event contained no real Dataverse record and performed
+  no Dataverse write. Signed-in multi-client Job update smoke testing remains outstanding.
 
 ## Unfinished work
 
