@@ -33,7 +33,15 @@ export function buildJobSubmissionPublicUrl(
     return new URL(path, publicUrl.origin).toString()
 }
 
-export async function generateJobSubmissionLink(accessToken: string, jobId: string) {
+export type JobSubmissionRecipient = {
+    jobId: string
+    mechanicId?: string
+    assignmentId?: string
+    recipientName: string
+    recipientEmail: string
+}
+
+export async function generateJobSubmissionLink(accessToken: string, recipient: JobSubmissionRecipient) {
     const response = await fetch('/api/jobsubmission', {
         method: 'POST',
         cache: 'no-store',
@@ -42,7 +50,7 @@ export async function generateJobSubmissionLink(accessToken: string, jobId: stri
             Accept: 'application/json',
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ action: 'generate', jobId }),
+        body: JSON.stringify({ action: 'generate', ...recipient }),
     })
     if (!response.ok) {
         throw new Error('The secure Job Card link could not be created. Please try again.')

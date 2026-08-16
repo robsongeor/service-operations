@@ -1,6 +1,9 @@
 const { createHash, randomBytes } = require('node:crypto')
 
 const JOB_CARD_SUBMITTED = 122830002
+const JOB_CARD_SENT = 122830001
+const SUBMISSION_ROLE_PRIMARY = 122830000
+const SUBMISSION_ROLE_ADDITIONAL = 122830001
 const SERVICE_JOB = 122830001
 const DEFAULT_EXPIRY_HOURS = 168
 const MAX_PHOTOS = 20
@@ -116,6 +119,43 @@ async function findJob(token, bearer) {
     return { job, etag: job['@odata.etag'] }
 }
 
+async function fetchJobById(jobId, bearer) {
+    const select = 'gr_jobid,gr_jobnumber,gr_description,gr_jobtype,gr_status,gr_jobcardstatus'
+    const expand = [
+        'gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_currenthourmeter)',
+        'gr_Site($select=gr_name;$expand=gr_Customer($select=gr_name))',
+    ].join(',')
+    const response = await fetch(`${dataverseOrigin()}/api/data/v9.2/gr_jobs(${jobId})?$select=${select}&$expand=${expand}`, {
+        headers: { Authorization: bearer, Accept: 'application/json', Prefer: 'odata.include-annotations="*"' },
+    })
+    if (!response.ok) throw new Error('Job lookup failed.')
+    return response.json()
+}
+
+async function findNormalizedSubmission(token, bearer) {
+    if (typeof token !== 'string' || token.length < 40 || token.length > 100) return { error: tokenFailure('invalid') }
+    const hash = hashToken(token)
+    const select = 'gr_jobcardsubmissionid,gr_tokenexpireson,gr_tokenused,gr_status,gr_recipientname,gr_recipientemail,_gr_job_value,_gr_jobassignment_value'
+    const response = await fetch(`${dataverseOrigin()}/api/data/v9.2/gr_jobcardsubmissions?$select=${select}&$filter=gr_tokenhash eq '${escapeOData(hash)}'&$top=2`, {
+        headers: { Authorization: bearer, Accept: 'application/json' },
+    })
+    if (response.status === 404) return null
+    if (!response.ok) throw new Error('Job Card submission lookup failed.')
+    const rows = (await response.json()).value ?? []
+    if (rows.length !== 1) return rows.length ? { error: tokenFailure('invalid') } : null
+    const submission = rows[0]
+    if (submission.gr_tokenused) return { error: tokenFailure('used') }
+    const expires = Date.parse(submission.gr_tokenexpireson)
+    if (!Number.isFinite(expires) || expires <= Date.now()) return { error: tokenFailure('expired') }
+    const job = await fetchJobById(submission._gr_job_value, bearer)
+    return { submission, job, etag: submission['@odata.etag'] }
+}
+
+async function findSubmission(token, bearer) {
+    const normalized = await findNormalizedSubmission(token, bearer)
+    return normalized || findJob(token, bearer)
+}
+
 function publicDetails(job) {
     return {
         jobNumber: job.gr_jobnumber || 'Not recorded',
@@ -202,7 +242,7 @@ function validateSubmission(job, body) {
     return ''
 }
 
-async function persistPhotos(token, job, photos, bearer, now) {
+async function persistPhotos(token, job, photos, bearer, now, submissionId = '') {
     for (let index = 0; index < photos.length; index += 1) {
         const photo = photos[index]
         const uploadKey = hashToken(`${hashToken(token)}:${index}`)
@@ -230,6 +270,7 @@ async function persistPhotos(token, job, photos, bearer, now) {
                     gr_uploadedon: now,
                     gr_displayorder: index,
                     gr_uploadkey: uploadKey,
+                    ...(submissionId ? { 'gr_JobCardSubmission@odata.bind': `/gr_jobcardsubmissions(${submissionId})` } : {}),
                 }),
             })
             if (!create.ok) throw new Error('Job photo record creation failed.')
@@ -272,7 +313,22 @@ function submissionFields(body, now) {
     return fields
 }
 
-function batchRequest(job, etag, body, now) {
+function normalizedSubmissionFields(body, now) {
+    const fields = {
+        gr_story: body.story.trim(),
+        gr_submittedon: now,
+        gr_tokenused: true,
+        gr_status: JOB_CARD_SUBMITTED,
+        gr_furtherworkrequired: body.furtherWorkRequired === true,
+        gr_safetyissueidentified: body.safetyIssueIdentified === true,
+    }
+    if (body.furtherWorkRequired) fields.gr_furtherworkdetails = body.furtherWorkDetails.trim()
+    if (body.safetyIssueIdentified) fields.gr_safetyissuedetails = body.safetyIssueDetails.trim()
+    if (body.hourMeter != null) fields.gr_hourmeter = body.hourMeter
+    return fields
+}
+
+function batchRequest(job, etag, body, now, submission) {
     const boundary = `batch_${randomBytes(12).toString('hex')}`
     const changeset = `changeset_${randomBytes(12).toString('hex')}`
     const requests = []
@@ -290,6 +346,9 @@ function batchRequest(job, etag, body, now) {
             JSON.stringify(fields),
         ].join('\r\n'))
     }
+    const submissionBind = submission
+        ? { 'gr_JobCardSubmission@odata.bind': `/gr_jobcardsubmissions(${submission.gr_jobcardsubmissionid})` }
+        : {}
     body.timeEntries.forEach((entry, index) => addCreate('gr_jobcardsubmissiontimeentries', {
         gr_name: `${job.gr_jobnumber || 'Job'} - ${entry.date}`,
         'gr_Job@odata.bind': `/gr_jobs(${job.gr_jobid})`,
@@ -297,6 +356,7 @@ function batchRequest(job, etag, body, now) {
         gr_totalhours: entry.hours,
         gr_kilometres: entry.kilometres,
         gr_displayorder: index,
+        ...submissionBind,
     }))
     body.parts.forEach((part, index) => addCreate('gr_jobmaterials', {
         gr_name: part.description.trim(),
@@ -304,6 +364,7 @@ function batchRequest(job, etag, body, now) {
         gr_material: part.description.trim(),
         gr_quantity: part.quantity,
         gr_displayorder: index,
+        ...submissionBind,
     }))
     requests.push([
         `--${changeset}`,
@@ -311,11 +372,11 @@ function batchRequest(job, etag, body, now) {
         'Content-Transfer-Encoding: binary',
         `Content-ID: ${requests.length + 1}`,
         '',
-        `PATCH ${dataverseOrigin()}/api/data/v9.2/gr_jobs(${job.gr_jobid}) HTTP/1.1`,
+        `PATCH ${dataverseOrigin()}/api/data/v9.2/${submission ? `gr_jobcardsubmissions(${submission.gr_jobcardsubmissionid})` : `gr_jobs(${job.gr_jobid})`} HTTP/1.1`,
         'Content-Type: application/json',
         `If-Match: ${etag}`,
         '',
-        JSON.stringify(submissionFields(body, now)),
+        JSON.stringify(submission ? normalizedSubmissionFields(body, now) : submissionFields(body, now)),
     ].join('\r\n'))
     const payload = [`--${boundary}`, `Content-Type: multipart/mixed;boundary=${changeset}`, '', ...requests, `--${changeset}--`, `--${boundary}--`, ''].join('\r\n')
     return { boundary, payload }
@@ -341,41 +402,105 @@ async function generate(request) {
     const token = generateToken()
     const now = new Date()
     const expires = new Date(now.getTime() + hours * 60 * 60 * 1000)
-    const response = await fetch(`${dataverseOrigin()}/api/data/v9.2/gr_jobs(${jobId})`, {
+    const assignmentId = typeof request.body?.assignmentId === 'string' ? request.body.assignmentId.trim() : ''
+    const mechanicId = typeof request.body?.mechanicId === 'string' ? request.body.mechanicId.trim() : ''
+    const guid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i
+    if ((assignmentId && !guid.test(assignmentId)) || (mechanicId && !guid.test(mechanicId))) {
+        return jsonResponse(400, { error: 'The technician assignment is invalid.' })
+    }
+    const role = assignmentId ? SUBMISSION_ROLE_ADDITIONAL : SUBMISSION_ROLE_PRIMARY
+    const identityKey = `${jobId}:${assignmentId || 'primary'}`.toLowerCase()
+    const existingResponse = await fetch(`${dataverseOrigin()}/api/data/v9.2/gr_jobcardsubmissions?$select=gr_jobcardsubmissionid,gr_status&$filter=gr_identitykey eq '${escapeOData(identityKey)}'&$top=1`, {
+        headers: { Authorization: authorization, Accept: 'application/json' },
+    })
+    if (existingResponse.status === 404) {
+        const legacy = await fetch(`${dataverseOrigin()}/api/data/v9.2/gr_jobs(${jobId})`, {
+            method: 'PATCH',
+            headers: { Authorization: authorization, 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify({
+                gr_techniciansubmissiontokenhash: hashToken(token),
+                gr_techniciansubmissiontokencreatedon: now.toISOString(),
+                gr_techniciansubmissiontokenexpireson: expires.toISOString(),
+                gr_techniciansubmissiontokenused: false,
+            }),
+        })
+        if (!legacy.ok) return jsonResponse(legacy.status === 404 ? 404 : 502, { error: 'A submission link could not be created.' })
+        return jsonResponse(201, { token, path: `/portal/job/${token}`, expiresOn: expires.toISOString(), legacy: true })
+    }
+    if (!existingResponse.ok) return jsonResponse(502, { error: 'A submission link could not be created.' })
+    const existing = ((await existingResponse.json()).value ?? [])[0]
+    if (existing && [JOB_CARD_SUBMITTED, 122830003].includes(existing.gr_status)) {
+        return jsonResponse(409, { error: 'This technician has already submitted this Job Card.' })
+    }
+    const submissionAuthorization = `Bearer ${await applicationToken()}`
+    const recipientName = typeof request.body?.recipientName === 'string' ? request.body.recipientName.trim().slice(0, 200) : ''
+    const recipientEmail = typeof request.body?.recipientEmail === 'string' ? request.body.recipientEmail.trim().slice(0, 320) : ''
+    const fields = {
+        gr_name: `${recipientName || 'Technician'} - Job Card`,
+        gr_identitykey: identityKey,
+        gr_recipientname: recipientName || null,
+        gr_recipientemail: recipientEmail || null,
+        gr_role: role,
+        gr_status: JOB_CARD_SENT,
+        gr_required: true,
+        gr_emailsenton: now.toISOString(),
+        gr_tokenhash: hashToken(token),
+        gr_tokencreatedon: now.toISOString(),
+        gr_tokenexpireson: expires.toISOString(),
+        gr_tokenused: false,
+        'gr_Job@odata.bind': `/gr_jobs(${jobId})`,
+        ...(assignmentId ? { 'gr_JobAssignment@odata.bind': `/gr_jobassignments(${assignmentId})` } : {}),
+    }
+    const target = `gr_jobcardsubmissions(gr_identitykey='${escapeOData(identityKey)}')`
+    const response = await fetch(`${dataverseOrigin()}/api/data/v9.2/${target}`, {
         method: 'PATCH',
-        headers: { Authorization: authorization, 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({
-            gr_techniciansubmissiontokenhash: hashToken(token),
-            gr_techniciansubmissiontokencreatedon: now.toISOString(),
-            gr_techniciansubmissiontokenexpireson: expires.toISOString(),
-            gr_techniciansubmissiontokenused: false,
-        }),
+        headers: {
+            Authorization: submissionAuthorization,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            Prefer: 'return=representation',
+        },
+        body: JSON.stringify(fields),
     })
     if (!response.ok) return jsonResponse(response.status === 404 ? 404 : 502, { error: 'A submission link could not be created.' })
-    return jsonResponse(201, { token, path: `/portal/job/${token}`, expiresOn: expires.toISOString() })
+    return jsonResponse(201, {
+        token,
+        path: `/portal/job/${token}`,
+        expiresOn: expires.toISOString(),
+    })
 }
 
 async function handlePublicGet(request) {
     const bearer = `Bearer ${await applicationToken()}`
-    const found = await findJob(request.query?.token, bearer)
+    const found = await findSubmission(request.query?.token, bearer)
     return found.error || jsonResponse(200, publicDetails(found.job))
 }
 
 async function handlePublicPost(request) {
     const bearer = `Bearer ${await applicationToken()}`
-    const found = await findJob(request.body?.token, bearer)
+    const found = await findSubmission(request.body?.token, bearer)
     if (found.error) return found.error
     const body = normalizeSubmission(request.body || {})
     const validation = validateSubmission(found.job, body)
     if (validation) return jsonResponse(400, { code: 'invalid', error: validation })
     const now = new Date().toISOString()
-    if (body.photos.length > 0) await persistPhotos(request.body.token, found.job, body.photos, bearer, now)
+    if (body.photos.length > 0) await persistPhotos(
+        request.body.token,
+        found.job,
+        body.photos,
+        bearer,
+        now,
+        found.submission?.gr_jobcardsubmissionid,
+    )
     const hasChildren = body.timeEntries.length > 0 || body.parts.length > 0
-    const batch = hasChildren ? batchRequest(found.job, found.etag, body, now) : null
+    const batch = hasChildren ? batchRequest(found.job, found.etag, body, now, found.submission) : null
+    const target = found.submission
+        ? `gr_jobcardsubmissions(${found.submission.gr_jobcardsubmissionid})`
+        : `gr_jobs(${found.job.gr_jobid})`
     const response = await fetch(
         hasChildren
             ? `${dataverseOrigin()}/api/data/v9.2/$batch`
-            : `${dataverseOrigin()}/api/data/v9.2/gr_jobs(${found.job.gr_jobid})`,
+            : `${dataverseOrigin()}/api/data/v9.2/${target}`,
         hasChildren ? {
             method: 'POST',
             headers: {
@@ -394,7 +519,9 @@ async function handlePublicPost(request) {
                 Accept: 'application/json',
                 'If-Match': found.etag,
             },
-            body: JSON.stringify(submissionFields(body, now)),
+            body: JSON.stringify(found.submission
+                ? normalizedSubmissionFields(body, now)
+                : submissionFields(body, now)),
         },
     )
     const responseText = await response.text()
@@ -404,6 +531,13 @@ async function handlePublicPost(request) {
         const innerCode = responseText.match(/"code"\s*:\s*"([^"]+)"/)?.[1]
         const permissionDetail = safeDataversePermissionDetail(responseText)
         throw new Error(`Job submission update failed (${innerStatus || response.status}${innerCode ? `, ${innerCode}` : ''}).${permissionDetail ? ` ${permissionDetail}` : ''}`)
+    }
+    if (found.submission?._gr_jobassignment_value) {
+        await fetch(`${dataverseOrigin()}/api/data/v9.2/gr_jobassignments(${found.submission._gr_jobassignment_value})`, {
+            method: 'PATCH',
+            headers: { Authorization: bearer, 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify({ gr_jobcardstatus: JOB_CARD_SUBMITTED, gr_submittedon: now }),
+        })
     }
     return jsonResponse(200, { submitted: true })
 }

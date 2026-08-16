@@ -667,7 +667,12 @@ export function useJobs() {
             throw new Error('The primary technician needs an email address before the job can be sent.')
         }
         const token = await getAccessToken()
-        const submissionLink = await generateJobSubmissionLink(token, job.gr_jobid)
+        const submissionLink = await generateJobSubmissionLink(token, {
+            jobId: job.gr_jobid,
+            mechanicId: job.gr_Mechanic?.gr_mechanicid,
+            recipientName: job.gr_Mechanic?.gr_name ?? 'Technician',
+            recipientEmail: job.gr_Mechanic?.gr_email ?? '',
+        })
         const email = buildPrimaryJobEmail(job, submissionLink.url)
         const dispatchId = await createEmailDispatch(token, {
             jobId: job.gr_jobid,
@@ -690,7 +695,12 @@ export function useJobs() {
         }))
         try {
             const token = await getAccessToken()
-            const submissionLink = await generateJobSubmissionLink(token, job.gr_jobid)
+            const submissionLink = await generateJobSubmissionLink(token, {
+                jobId: job.gr_jobid,
+                mechanicId: job.gr_Mechanic?.gr_mechanicid,
+                recipientName: job.gr_Mechanic?.gr_name ?? 'Technician',
+                recipientEmail: draft.recipientEmail,
+            })
             const email = buildPrimaryJobEmail(job, submissionLink.url, draft)
             const dispatchId = await createEmailDispatch(token, { jobId: job.gr_jobid, ...email })
             void (async () => {
@@ -730,7 +740,13 @@ export function useJobs() {
             throw new Error('This technician needs an email address before the job can be sent.')
         }
         const token = await getAccessToken()
-        const submissionLink = await generateJobSubmissionLink(token, job.gr_jobid)
+        const submissionLink = await generateJobSubmissionLink(token, {
+            jobId: job.gr_jobid,
+            mechanicId: assignment.gr_Mechanic?.gr_mechanicid,
+            assignmentId: assignment.gr_jobassignmentid,
+            recipientName: assignment.gr_Mechanic?.gr_name ?? 'Technician',
+            recipientEmail: assignment.gr_Mechanic?.gr_email ?? '',
+        })
         const email = buildAssignmentJobEmail(job, assignment, submissionLink.url)
         const dispatchId = await createEmailDispatch(token, {
             jobId: job.gr_jobid,

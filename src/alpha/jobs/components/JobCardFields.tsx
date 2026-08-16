@@ -1,484 +1,201 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { Job } from '../types/job.types'
 import type { Mechanic } from '../types/mechanic.types'
 import type { JobAssignment } from '../types/jobAssignment.types'
+import type { JobCardSubmission } from '../types/jobCardSubmission.types'
+import { JOB_CARD_SUBMISSION_ROLES } from '../types/jobCardSubmission.types'
 import { canBeAssignedJobs } from '../../mechanics/staffDirectory.ts'
-import {
-    getJobCardStatus,
-    JOB_CARD_STATUSES,
-    JOB_CARD_STATUS_OPTIONS,
-    type JobCardStatus,
-} from '../types/jobCardStatus.types'
+import { getJobCardStatus, JOB_CARD_STATUSES, JOB_CARD_STATUS_OPTIONS, type JobCardStatus } from '../types/jobCardStatus.types'
 import { JOB_NUMBER_REQUIRED_EMAIL_MESSAGE, jobHasEmailableJobNumber } from '../services/jobEmailRules'
-import { jobHasActiveSubmissionLink } from '../services/jobSubmissionLinkApi'
 import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation'
-import {
-    formatTechnicianSubmissionHourMeter,
-    formatTechnicianSubmissionTimestamp,
-    hasTechnicianSubmission,
-} from '../types/technicianSubmission'
+import { formatTechnicianSubmissionHourMeter, hasTechnicianSubmission } from '../types/technicianSubmission'
 
 type Props = {
     job: Job
     mechanics: Mechanic[]
     assignments: JobAssignment[]
     onStatusChange: (jobId: string, status: JobCardStatus) => Promise<void>
-    onCreateAssignment: (assignment: {
-        jobId: string
-        mechanicId: string
-        mechanicName: string
-        instructions?: string
-    }) => Promise<void>
+    onCreateAssignment: (assignment: { jobId: string; mechanicId: string; mechanicName: string; instructions?: string }) => Promise<void>
     onSendPrimary: (job: Job) => Promise<void>
     onSendAssignment: (job: Job, assignment: JobAssignment) => Promise<void>
     onDeleteAssignment: (assignmentId: string) => Promise<void>
 }
 
-const timestamp = new Intl.DateTimeFormat('en-NZ', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-})
-
-function formatTimestamp(value?: string | null) {
-    return value ? timestamp.format(new Date(value)) : 'Not recorded'
-}
-
-function formatEntryDate(value: string) {
+const formatEntryDate = (value: string) => {
     const [year, month, day] = value.slice(0, 10).split('-')
     return year && month && day ? `${day}/${month}/${year}` : value
 }
 
-type TechnicianCardProps = {
+function Evidence({ submission, onPhoto }: { submission: JobCardSubmission; onPhoto: (id: string) => void }) {
+    return <div className="job-card-evidence">
+        <div className="job-card-evidence-metrics">
+            {submission.gr_hourmeter != null && <div><span>Hour meter</span><strong>{formatTechnicianSubmissionHourMeter(submission.gr_hourmeter)}</strong></div>}
+            {submission.timeEntries.length > 0 && <div><span>Total hours</span><strong>{submission.timeEntries.reduce((sum, entry) => sum + entry.hours, 0).toLocaleString('en-NZ')}</strong></div>}
+            {submission.timeEntries.some((entry) => entry.kilometres > 0) && <div><span>Kilometres</span><strong>{submission.timeEntries.reduce((sum, entry) => sum + entry.kilometres, 0).toLocaleString('en-NZ')}</strong></div>}
+            {submission.parts.length > 0 && <div><span>Parts</span><strong>{submission.parts.reduce((sum, part) => sum + part.quantity, 0)}</strong></div>}
+        </div>
+        {submission.gr_story?.trim() && <section className="job-card-evidence-block"><h4>Work completed</h4><p>{submission.gr_story.trim()}</p></section>}
+        {submission.timeEntries.length > 0 && <section className="job-card-evidence-block"><h4>Time &amp; travel</h4><div className="job-card-evidence-table">
+            {submission.timeEntries.map((entry) => <div key={entry.id}><span>{formatEntryDate(entry.date)}</span><strong>{entry.hours.toLocaleString('en-NZ')} h</strong><span>{entry.kilometres.toLocaleString('en-NZ')} km</span></div>)}
+        </div></section>}
+        {submission.parts.length > 0 && <section className="job-card-evidence-block"><h4>Parts used</h4><div className="job-card-parts-table">
+            {submission.parts.map((part) => <div key={part.id}><strong>{part.quantity} &times;</strong><span>{part.part}</span></div>)}
+        </div></section>}
+        {submission.gr_furtherworkrequired && <section className="job-card-evidence-alert further"><h4>Further work required</h4><p>{submission.gr_furtherworkdetails?.trim() || 'Details not supplied'}</p></section>}
+        {submission.gr_safetyissueidentified && <section className="job-card-evidence-alert safety"><h4>Safety issue</h4><p>{submission.gr_safetyissuedetails?.trim() || 'Details not supplied'}</p></section>}
+        {submission.photos.length > 0 && <section className="job-card-evidence-block"><h4>Photos</h4><div className="manager-job-photo-grid">
+            {submission.photos.map((photo) => <button type="button" key={photo.id} onClick={() => onPhoto(photo.id)}><img src={photo.previewUrl} alt={photo.fileName} /><span>{photo.fileName}</span></button>)}
+        </div></section>}
+    </div>
+}
+
+type CardProps = {
     name: string
-    detail: string
+    email?: string | null
+    label: string
     status: JobCardStatus
-    instructions?: string | null
+    submission?: JobCardSubmission
     isBusy: boolean
     canSend: boolean
-    disabledHint?: string
+    expanded: boolean
+    onToggle: () => void
     onSend: () => void
     onRemove?: () => void
+    onPhoto: (id: string) => void
 }
 
-function TechnicianCard({
-    name,
-    detail,
-    status,
-    instructions,
-    isBusy,
-    canSend,
-    disabledHint,
-    onSend,
-    onRemove,
-}: TechnicianCardProps) {
-    const statusLabel = JOB_CARD_STATUS_OPTIONS.find((option) => option.value === status)?.label
-
-    return (
-        <article className="job-assignment-card technician-job-card">
-            <div className="job-assignment-main">
-                <div className="job-assignment-title">
-                    <div>
-                        <strong>{name}</strong>
-                        <small>{detail}</small>
-                    </div>
-                    <span className={`job-card-current status-${status}`}>{statusLabel}</span>
-                </div>
-                {instructions && <p>{instructions}</p>}
-                <div className="job-assignment-controls">
-                    <button
-                        type="button"
-                        className="job-assignment-send"
-                        title={!canSend ? disabledHint : undefined}
-                        onClick={onSend}
-                        disabled={isBusy || !canSend || status !== JOB_CARD_STATUSES.NOT_SENT}
-                    >
-                        {isBusy
-                            ? 'Sending...'
-                            : status === JOB_CARD_STATUSES.NOT_SENT
-                                ? 'Send job'
-                                : statusLabel}
-                    </button>
-                    {onRemove && (
-                        <button
-                            type="button"
-                            className="job-assignment-remove"
-                            disabled={isBusy}
-                            onClick={onRemove}
-                        >
-                            Remove
-                        </button>
-                    )}
-                </div>
+function TechnicianCard({ name, email, label, status, submission, isBusy, canSend, expanded, onToggle, onSend, onRemove, onPhoto }: CardProps) {
+    const statusLabel = JOB_CARD_STATUS_OPTIONS.find((option) => option.value === status)?.label ?? 'Not sent'
+    const submitted = status === JOB_CARD_STATUSES.SUBMITTED || Boolean(submission?.gr_submittedon)
+    return <article className={`job-card-person ${expanded ? 'expanded' : ''}`}>
+        <div className="job-card-person-row">
+            <button type="button" className="job-card-person-main" onClick={onToggle} aria-expanded={expanded} disabled={!submission}>
+                <span className="job-card-person-avatar" aria-hidden="true">{name.slice(0, 1).toUpperCase() || '?'}</span>
+                <span><strong>{name}</strong><small>{label}{email ? ` · ${email}` : ''}</small></span>
+            </button>
+            <span className={`job-card-current status-${status}`}>{statusLabel}</span>
+            <div className="job-card-person-actions">
+                {submission && <button type="button" onClick={onToggle}>{expanded ? 'Hide' : 'View'}</button>}
+                {!submitted && <button type="button" className="primary" disabled={isBusy || !canSend} onClick={onSend}>{isBusy ? 'Sending…' : status === JOB_CARD_STATUSES.SENT ? 'Resend' : 'Send'}</button>}
+                {onRemove && !submitted && <button type="button" className="danger" disabled={isBusy} onClick={onRemove}>Remove</button>}
             </div>
-        </article>
-    )
+        </div>
+        {expanded && submission && <Evidence submission={submission} onPhoto={onPhoto} />}
+    </article>
 }
 
-export default function JobCardFields({
-    job,
-    mechanics,
-    assignments,
-    onStatusChange,
-    onCreateAssignment,
-    onSendPrimary,
-    onSendAssignment,
-    onDeleteAssignment,
-}: Props) {
-    const [status, setStatus] = useState(() => getJobCardStatus(job.gr_jobcardstatus))
-    const [sentOn, setSentOn] = useState(job.gr_jobcardsenton)
-    const [submittedOn, setSubmittedOn] = useState(job.gr_jobcardsubmittedon)
-    const [closedOn, setClosedOn] = useState(job.gr_jobcardclosedon)
+function legacySubmission(job: Job): JobCardSubmission | undefined {
+    if (!hasTechnicianSubmission(job)) return undefined
+    return {
+        gr_jobcardsubmissionid: 'legacy', gr_name: 'Original technician submission',
+        gr_recipientname: job.gr_Mechanic?.gr_name, gr_recipientemail: job.gr_Mechanic?.gr_email,
+        gr_role: JOB_CARD_SUBMISSION_ROLES.LEGACY, gr_status: JOB_CARD_STATUSES.SUBMITTED,
+        gr_submittedon: job.gr_techniciansubmissionsubmittedon, gr_hourmeter: job.gr_techniciansubmissionhourmeter,
+        gr_story: job.gr_techniciansubmissionstory, gr_furtherworkrequired: job.gr_techniciansubmissionfurtherworkrequired,
+        gr_furtherworkdetails: job.gr_techniciansubmissionfurtherworkdetails,
+        gr_safetyissueidentified: job.gr_techniciansubmissionsafetyissueidentified,
+        gr_safetyissuedetails: job.gr_techniciansubmissionsafetyissuedetails, gr_islegacy: true,
+        _gr_job_value: job.gr_jobid, timeEntries: job.technicianSubmissionTimeEntries ?? [],
+        parts: job.technicianSubmissionParts ?? [], photos: job.jobPhotos ?? [],
+    }
+}
+
+export default function JobCardFields({ job, mechanics, assignments, onStatusChange, onCreateAssignment, onSendPrimary, onSendAssignment, onDeleteAssignment }: Props) {
     const [isUpdating, setIsUpdating] = useState(false)
-    const [updatingAssignmentId, setUpdatingAssignmentId] = useState('')
+    const [busyId, setBusyId] = useState('')
     const [showAssignmentForm, setShowAssignmentForm] = useState(false)
     const [mechanicId, setMechanicId] = useState('')
     const [error, setError] = useState('')
     const [pendingEmail, setPendingEmail] = useState<'primary' | JobAssignment | null>(null)
-    const [previewPhotoId, setPreviewPhotoId] = useState('')
+    const [expandedId, setExpandedId] = useState('')
+    const [preview, setPreview] = useState<{ submission: JobCardSubmission; photoId: string } | null>(null)
     const hasJobNumber = jobHasEmailableJobNumber(job)
+    const submissions = useMemo(() => {
+        const normalized = job.jobCardSubmissions ?? []
+        const old = legacySubmission(job)
+        return old && !normalized.some((item) => item.gr_islegacy) ? [...normalized, old] : normalized
+    }, [job])
+    const primarySubmission = [...submissions].reverse().find((item) => item.gr_role === JOB_CARD_SUBMISSION_ROLES.PRIMARY)
+    const legacy = submissions.find((item) => item.gr_role === JOB_CARD_SUBMISSION_ROLES.LEGACY)
+    const requiredCount = 1 + assignments.length
+    const submittedCount = (primarySubmission || legacy ? 1 : 0) + assignments.filter((assignment) =>
+        submissions.some((item) => item._gr_jobassignment_value === assignment.gr_jobassignmentid && item.gr_status === JOB_CARD_STATUSES.SUBMITTED),
+    ).length
+    const progressLabel = getJobCardStatus(job.gr_jobcardstatus) === JOB_CARD_STATUSES.CLOSED
+        ? 'Closed'
+        : submittedCount === requiredCount ? 'Ready for office'
+            : submittedCount > 0 ? 'Partially submitted'
+                : submissions.some((item) => item.gr_status === JOB_CARD_STATUSES.SENT) ? 'Awaiting technicians' : 'Not sent'
 
-    const changeStatus = async (nextStatus: JobCardStatus) => {
-        setIsUpdating(true)
+    const performSend = async (target: 'primary' | JobAssignment) => {
+        const email = target === 'primary' ? job.gr_Mechanic?.gr_email : target.gr_Mechanic?.gr_email
+        if (!hasJobNumber) return setError(JOB_NUMBER_REQUIRED_EMAIL_MESSAGE)
+        if (!email) return setError('This technician needs an email address before the job can be sent.')
+        const id = target === 'primary' ? 'primary' : target.gr_jobassignmentid
+        if (target === 'primary') setIsUpdating(true)
+        else setBusyId(id)
         setError('')
         try {
-            await onStatusChange(job.gr_jobid, nextStatus)
-            const now = new Date().toISOString()
-            setStatus(nextStatus)
-            if (nextStatus === JOB_CARD_STATUSES.SENT) setSentOn(now)
-            if (nextStatus === JOB_CARD_STATUSES.SUBMITTED) setSubmittedOn(now)
-            if (nextStatus === JOB_CARD_STATUSES.CLOSED) setClosedOn(now)
-        } catch (updateError) {
-            setError(updateError instanceof Error
-                ? updateError.message
-                : 'The job card status could not be updated.')
-        } finally {
-            setIsUpdating(false)
+            if (target === 'primary') await onSendPrimary(job)
+            else await onSendAssignment(job, target)
         }
+        catch (caught) { setError(caught instanceof Error ? caught.message : 'The Job Card could not be sent.') }
+        finally { setIsUpdating(false); setBusyId(''); setPendingEmail(null) }
     }
-
+    const requestSend = (target: 'primary' | JobAssignment, status: JobCardStatus) => {
+        if (status === JOB_CARD_STATUSES.SENT) setPendingEmail(target)
+        else void performSend(target)
+    }
     const addAssignment = async () => {
         const mechanic = mechanics.find((item) => item.gr_mechanicid === mechanicId)
-        if (!mechanic) {
-            setError('Choose a technician first.')
-            return
-        }
-
-        setIsUpdating(true)
-        setError('')
-        try {
-            await onCreateAssignment({
-                jobId: job.gr_jobid,
-                mechanicId,
-                mechanicName: mechanic.gr_name,
-            })
-            setMechanicId('')
-            setShowAssignmentForm(false)
-        } catch (createError) {
-            setError(createError instanceof Error
-                ? createError.message
-                : 'The technician could not be assigned.')
-        } finally {
-            setIsUpdating(false)
-        }
+        if (!mechanic) return setError('Choose a technician first.')
+        setIsUpdating(true); setError('')
+        try { await onCreateAssignment({ jobId: job.gr_jobid, mechanicId, mechanicName: mechanic.gr_name }); setMechanicId(''); setShowAssignmentForm(false) }
+        catch (caught) { setError(caught instanceof Error ? caught.message : 'The technician could not be assigned.') }
+        finally { setIsUpdating(false) }
     }
-
-    const sendAssignment = async (assignment: JobAssignment, confirmedReplacement = false) => {
-        if (!hasJobNumber) {
-            setError(JOB_NUMBER_REQUIRED_EMAIL_MESSAGE)
-            return
-        }
-
-        if (!assignment.gr_Mechanic?.gr_email) {
-            setError('This technician needs an email address before the job can be sent.')
-            return
-        }
-        if (!confirmedReplacement && jobHasActiveSubmissionLink(job)) {
-            setPendingEmail(assignment)
-            return
-        }
-
-        setUpdatingAssignmentId(assignment.gr_jobassignmentid)
-        setError('')
-        setPendingEmail(null)
-        try {
-            await onSendAssignment(job, assignment)
-        } catch (sendError) {
-            setError(sendError instanceof Error
-                ? sendError.message
-                : 'The job could not be recorded as sent.')
-        } finally {
-            setUpdatingAssignmentId('')
-        }
-    }
-
-    const sendPrimaryTechnician = async (confirmedReplacement = false) => {
-        if (!hasJobNumber) {
-            setError(JOB_NUMBER_REQUIRED_EMAIL_MESSAGE)
-            return
-        }
-
-        if (!job.gr_Mechanic?.gr_email) {
-            setError('The primary technician needs an email address before the job can be sent.')
-            return
-        }
-        if (!confirmedReplacement && jobHasActiveSubmissionLink(job)) {
-            setPendingEmail('primary')
-            return
-        }
-
-        setIsUpdating(true)
-        setError('')
-        setPendingEmail(null)
-        try {
-            await onSendPrimary(job)
-            setStatus(JOB_CARD_STATUSES.SENT)
-            setSentOn(new Date().toISOString())
-        } catch (sendError) {
-            setError(sendError instanceof Error
-                ? sendError.message
-                : 'The job email flow did not complete.')
-        } finally {
-            setIsUpdating(false)
-        }
-    }
-
     const removeAssignment = async (assignment: JobAssignment) => {
-        if (!window.confirm(`Remove ${assignment.gr_Mechanic?.gr_name ?? 'this technician'} from the assignment history?`)) return
-        setUpdatingAssignmentId(assignment.gr_jobassignmentid)
-        setError('')
-        try {
-            await onDeleteAssignment(assignment.gr_jobassignmentid)
-        } catch (deleteError) {
-            setError(deleteError instanceof Error
-                ? deleteError.message
-                : 'The assignment could not be removed.')
-        } finally {
-            setUpdatingAssignmentId('')
-        }
+        if (!window.confirm(`Remove ${assignment.gr_Mechanic?.gr_name ?? 'this technician'} from this Job Card?`)) return
+        setBusyId(assignment.gr_jobassignmentid)
+        try { await onDeleteAssignment(assignment.gr_jobassignmentid) }
+        catch (caught) { setError(caught instanceof Error ? caught.message : 'The assignment could not be removed.') }
+        finally { setBusyId('') }
     }
+    const showPhoto = (submission: JobCardSubmission, photoId: string) => setPreview({ submission, photoId })
 
-    return (<>
+    return <>
         <div className="job-card-layout">
-            <section className="job-card-section overall-job-card-section">
-                <div className="job-card-heading">
-                    <div>
-                        <span>Primary technician</span>
-                        <h3>Job card</h3>
-                        <p>The normal workflow for the technician assigned on the Details tab.</p>
-                    </div>
-                </div>
+            <header className="job-card-overview">
+                <div><span>Job Card progress</span><strong>{submittedCount} of {requiredCount} submitted</strong><small>{progressLabel}</small></div>
+                <label><span>Office status</span><select value={getJobCardStatus(job.gr_jobcardstatus)} disabled={isUpdating} onChange={(event) => void onStatusChange(job.gr_jobid, Number(event.target.value) as JobCardStatus)}>{JOB_CARD_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+            </header>
 
+            <section className="job-card-people" aria-label="Technician Job Cards">
                 <TechnicianCard
-                    name={job.gr_Mechanic?.gr_name ?? 'No technician assigned'}
-                    detail={job.gr_Mechanic?.gr_email
-                        ? `Primary technician · ${job.gr_Mechanic.gr_email}`
-                        : 'Assign a technician with an email address on the Details tab.'}
-                    status={status}
-                    isBusy={isUpdating}
-                    canSend={hasJobNumber && Boolean(job.gr_Mechanic?.gr_email)}
-                    disabledHint={!hasJobNumber
-                        ? JOB_NUMBER_REQUIRED_EMAIL_MESSAGE
-                        : 'The primary technician needs an email address before the job can be sent.'}
-                    onSend={() => void sendPrimaryTechnician()}
+                    name={job.gr_Mechanic?.gr_name ?? 'No primary technician'} email={job.gr_Mechanic?.gr_email} label="Primary technician"
+                    status={primarySubmission?.gr_status ?? (legacy ? JOB_CARD_STATUSES.SUBMITTED : getJobCardStatus(job.gr_jobcardstatus))}
+                    submission={primarySubmission ?? legacy} isBusy={isUpdating} canSend={hasJobNumber && Boolean(job.gr_Mechanic?.gr_email)}
+                    expanded={expandedId === (primarySubmission ?? legacy)?.gr_jobcardsubmissionid}
+                    onToggle={() => setExpandedId((current) => current ? '' : (primarySubmission ?? legacy)?.gr_jobcardsubmissionid ?? '')}
+                    onSend={() => requestSend('primary', primarySubmission?.gr_status ?? getJobCardStatus(job.gr_jobcardstatus))}
+                    onPhoto={(id) => (primarySubmission ?? legacy) && showPhoto((primarySubmission ?? legacy)!, id)}
                 />
-
-                <div className="job-additional-technicians">
-                    {assignments.length > 0 && (
-                        <div className="job-assignment-list">
-                            {assignments.map((assignment) => {
-                                const assignmentStatus = getJobCardStatus(assignment.gr_jobcardstatus)
-                                const isBusy = updatingAssignmentId === assignment.gr_jobassignmentid
-                                return (
-                                    <TechnicianCard
-                                        key={assignment.gr_jobassignmentid}
-                                        name={assignment.gr_Mechanic?.gr_name ?? 'Unknown technician'}
-                                        detail={`Added technician · ${formatTimestamp(assignment.gr_assignedon)}`}
-                                        status={assignmentStatus}
-                                        instructions={assignment.gr_workinstructions}
-                                        isBusy={isBusy}
-                                        canSend={hasJobNumber && Boolean(assignment.gr_Mechanic?.gr_email)}
-                                        disabledHint={!hasJobNumber
-                                            ? JOB_NUMBER_REQUIRED_EMAIL_MESSAGE
-                                            : 'This technician needs an email address before the job can be sent.'}
-                                        onSend={() => void sendAssignment(assignment)}
-                                        onRemove={() => void removeAssignment(assignment)}
-                                    />
-                                )
-                            })}
-                        </div>
-                    )}
-
-                    {showAssignmentForm && (
-                        <div className="job-assignment-form">
-                            <label className="job-edit-field">
-                                <span>Technician</span>
-                                <select value={mechanicId} onChange={(event) => setMechanicId(event.target.value)}>
-                                    <option value="">Select technician</option>
-                                    {mechanics.filter((mechanic) =>
-                                        canBeAssignedJobs(mechanic)
-                                        && mechanic.gr_mechanicid !== job.gr_Mechanic?.gr_mechanicid
-                                        && !assignments.some((assignment) =>
-                                            assignment.gr_Mechanic?.gr_mechanicid === mechanic.gr_mechanicid,
-                                        )
-                                    ).map((mechanic) => (
-                                        <option key={mechanic.gr_mechanicid} value={mechanic.gr_mechanicid}>
-                                            {mechanic.gr_name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </label>
-                            <button type="button" className="job-assignment-save" onClick={() => void addAssignment()} disabled={isUpdating}>
-                                {isUpdating ? 'Adding...' : 'Add technician'}
-                            </button>
-                        </div>
-                    )}
-
-                    <button
-                        type="button"
-                        className="job-assignment-add"
-                        onClick={() => setShowAssignmentForm((current) => !current)}
-                        disabled={isUpdating}
-                    >
-                        {showAssignmentForm ? 'Cancel adding technician' : '+ Add another tech'}
-                    </button>
-                </div>
-
-                <label className="job-edit-field job-card-status-field">
-                    <span>Job card status</span>
-                    <select
-                        value={status}
-                        disabled={isUpdating}
-                        onChange={(event) => void changeStatus(Number(event.target.value) as JobCardStatus)}
-                    >
-                        {JOB_CARD_STATUS_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>{option.label}</option>
-                        ))}
-                    </select>
-                    <small>This remains office-controlled while technician submission automation is being built.</small>
-                </label>
-
-                <div className="job-card-timeline">
-                    <div className={sentOn ? 'complete' : ''}>
-                        <span aria-hidden="true" />
-                        <div><strong>Sent</strong><small>{formatTimestamp(sentOn)}</small></div>
-                    </div>
-                    <div className={submittedOn ? 'complete' : ''}>
-                        <span aria-hidden="true" />
-                        <div><strong>Submitted</strong><small>{formatTimestamp(submittedOn)}</small></div>
-                    </div>
-                    <div className={closedOn ? 'complete' : ''}>
-                        <span aria-hidden="true" />
-                        <div><strong>Closed</strong><small>{formatTimestamp(closedOn)}</small></div>
-                    </div>
-                </div>
-
-                <section className="technician-submission-section" aria-labelledby="technician-submission-heading">
-                    <div className="job-card-heading">
-                        <div>
-                            <span>Original technician record</span>
-                            <h3 id="technician-submission-heading">Technician submission</h3>
-                        </div>
-                    </div>
-                    {hasTechnicianSubmission(job) ? (
-                        <div className="technician-submission-content">
-                            <div className="technician-submission-summary">
-                                <span className={`job-card-current status-${JOB_CARD_STATUSES.SUBMITTED}`}>Submitted</span>
-                                <time dateTime={job.gr_techniciansubmissionsubmittedon ?? undefined}>
-                                    {formatTechnicianSubmissionTimestamp(job.gr_techniciansubmissionsubmittedon)}
-                                </time>
-                            </div>
-                            <dl className="technician-submission-details">
-                                <div>
-                                    <dt>Hour meter</dt>
-                                    <dd>{formatTechnicianSubmissionHourMeter(job.gr_techniciansubmissionhourmeter)}</dd>
-                                </div>
-                                <div>
-                                    <dt>Job story</dt>
-                                    <dd className="technician-submission-story">{job.gr_techniciansubmissionstory?.trim() || 'Not supplied'}</dd>
-                                </div>
-                                <div>
-                                    <dt>Time &amp; Travel</dt>
-                                    <dd>{job.technicianSubmissionTimeEntries?.length ? (
-                                        <ul className="technician-submission-list">
-                                            {job.technicianSubmissionTimeEntries.map((entry) => (
-                                                <li key={entry.id}>
-                                                    <strong>{formatEntryDate(entry.date)}</strong>
-                                                    <span>{entry.hours.toLocaleString('en-NZ')} h · {entry.kilometres.toLocaleString('en-NZ')} km</span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    ) : 'None recorded'}</dd>
-                                </div>
-                                <div>
-                                    <dt>Parts</dt>
-                                    <dd>{job.technicianSubmissionParts?.length ? (
-                                        <ul className="technician-submission-parts">
-                                            {job.technicianSubmissionParts.map((part) => <li key={part.id}>
-                                                <strong>{part.quantity.toLocaleString('en-NZ')} &times;</strong> {part.part}
-                                            </li>)}
-                                        </ul>
-                                    ) : 'None recorded'}</dd>
-                                </div>
-                                <div>
-                                    <dt>Further Work Required</dt>
-                                    <dd className="technician-submission-story">{job.gr_techniciansubmissionfurtherworkrequired
-                                        ? job.gr_techniciansubmissionfurtherworkdetails?.trim() || 'Details not supplied'
-                                        : 'No'}</dd>
-                                </div>
-                                <div>
-                                    <dt>Safety Issue</dt>
-                                    <dd className="technician-submission-story">{job.gr_techniciansubmissionsafetyissueidentified
-                                        ? job.gr_techniciansubmissionsafetyissuedetails?.trim() || 'Details not supplied'
-                                        : 'No'}</dd>
-                                </div>
-                                <div>
-                                    <dt>Photos</dt>
-                                    <dd>{job.jobPhotos?.length ? (
-                                        <div className="manager-job-photo-grid">
-                                            {job.jobPhotos.map((photo) => (
-                                                <button type="button" key={photo.id} onClick={() => setPreviewPhotoId(photo.id)}>
-                                                    <img src={photo.previewUrl} alt={photo.fileName} />
-                                                    <span>{photo.fileName}</span>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    ) : 'None recorded'}</dd>
-                                </div>
-                            </dl>
-                        </div>
-                    ) : (
-                        <div className="technician-submission-empty">
-                            <strong>Not yet submitted</strong>
-                            <p>The technician has not submitted an hour meter or job story for this Job.</p>
-                        </div>
-                    )}
-                </section>
+                {assignments.map((assignment) => {
+                    const submission = [...submissions].reverse().find((item) => item._gr_jobassignment_value === assignment.gr_jobassignmentid)
+                    const status = submission?.gr_status ?? getJobCardStatus(assignment.gr_jobcardstatus)
+                    return <TechnicianCard key={assignment.gr_jobassignmentid} name={assignment.gr_Mechanic?.gr_name ?? 'Unknown technician'} email={assignment.gr_Mechanic?.gr_email} label="Additional technician"
+                        status={status} submission={submission} isBusy={busyId === assignment.gr_jobassignmentid} canSend={hasJobNumber && Boolean(assignment.gr_Mechanic?.gr_email)}
+                        expanded={expandedId === submission?.gr_jobcardsubmissionid} onToggle={() => setExpandedId((current) => current ? '' : submission?.gr_jobcardsubmissionid ?? '')}
+                        onSend={() => requestSend(assignment, status)} onRemove={() => void removeAssignment(assignment)} onPhoto={(id) => submission && showPhoto(submission, id)} />
+                })}
             </section>
 
+            {showAssignmentForm && <div className="job-assignment-form"><label className="job-edit-field"><span>Technician</span><select value={mechanicId} onChange={(event) => setMechanicId(event.target.value)}><option value="">Select technician</option>{mechanics.filter((mechanic) => canBeAssignedJobs(mechanic) && mechanic.gr_mechanicid !== job.gr_Mechanic?.gr_mechanicid && !assignments.some((assignment) => assignment.gr_Mechanic?.gr_mechanicid === mechanic.gr_mechanicid)).map((mechanic) => <option key={mechanic.gr_mechanicid} value={mechanic.gr_mechanicid}>{mechanic.gr_name}</option>)}</select></label><button type="button" className="job-assignment-save" onClick={() => void addAssignment()} disabled={isUpdating}>{isUpdating ? 'Adding…' : 'Add technician'}</button></div>}
+            <button type="button" className="job-assignment-add" onClick={() => setShowAssignmentForm((current) => !current)} disabled={isUpdating}>{showAssignmentForm ? 'Cancel' : '+ Add another technician'}</button>
             {error && <p className="job-card-error" role="alert">{error}</p>}
         </div>
-        {pendingEmail && <EditDrawerConfirmation
-            eyebrow="Replace secure link"
-            title="Generate a new technician submission link?"
-            message="Generating a new link will invalidate the previous technician submission link for this Job."
-            isBusy={isUpdating || Boolean(updatingAssignmentId)}
-            confirmLabel={isUpdating || updatingAssignmentId ? 'Generating...' : 'Generate and email'}
-            onCancel={() => setPendingEmail(null)}
-            onConfirm={() => {
-                if (pendingEmail === 'primary') void sendPrimaryTechnician(true)
-                else void sendAssignment(pendingEmail, true)
-            }}
-        />}
-        {previewPhotoId && (() => {
-            const photo = job.jobPhotos?.find((item) => item.id === previewPhotoId)
-            return photo ? <div className="job-photo-preview" role="dialog" aria-modal="true" aria-label={photo.fileName} onClick={() => setPreviewPhotoId('')}>
-                <button type="button" aria-label="Close photo preview" onClick={() => setPreviewPhotoId('')}>×</button>
-                <img src={photo.previewUrl} alt={photo.fileName} onClick={(event) => event.stopPropagation()} />
-                <span>{photo.fileName}</span>
-            </div> : null
-        })()}
-    </>)
+
+        {pendingEmail && <EditDrawerConfirmation eyebrow="Replace this technician's link" title="Send a new Job Card link?" message="Only this technician's previous link will stop working. Other technicians and submissions are unaffected." isBusy={isUpdating || Boolean(busyId)} confirmLabel="Generate and email" onCancel={() => setPendingEmail(null)} onConfirm={() => void performSend(pendingEmail)} />}
+        {preview && (() => { const photo = preview.submission.photos.find((item) => item.id === preview.photoId); return photo ? <div className="job-photo-preview" role="dialog" aria-modal="true" aria-label={photo.fileName} onClick={() => setPreview(null)}><button type="button" aria-label="Close photo preview" onClick={() => setPreview(null)}>×</button><img src={photo.previewUrl} alt={photo.fileName} onClick={(event) => event.stopPropagation()} /><span>{photo.fileName}</span></div> : null })()}
+    </>
 }

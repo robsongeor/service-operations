@@ -63,6 +63,7 @@ function mockPublic(job, updateStatus = 204) {
     global.fetch = async (url, options = {}) => {
         const value = String(url)
         if (value.includes('login.microsoftonline.com')) return Response.json({ access_token: 'app-token' })
+        if (value.includes('/gr_jobcardsubmissions?')) return new Response(null, { status: 404 })
         if (value.includes('/gr_jobs?')) return Response.json({ value: job ? [job] : [] })
         if (value.includes('/gr_jobs(') && options.method === 'PATCH') return new Response('', { status: updateStatus })
         throw new Error(`Unexpected request: ${value}`)
@@ -224,6 +225,7 @@ test('successful submission changes only pending fields and Job Card status', { 
     global.fetch = async (url, options = {}) => {
         const value = String(url)
         if (value.includes('login.microsoftonline.com')) return Response.json({ access_token: 'app-token' })
+        if (value.includes('/gr_jobcardsubmissions?')) return new Response(null, { status: 404 })
         if (value.includes('/gr_jobs?')) return Response.json({ value: [job] })
         if (value.includes('/gr_jobs(')) {
             patch = { headers: options.headers, body: JSON.parse(options.body) }
@@ -252,6 +254,8 @@ test('failed Dataverse submission returns a bounded diagnostic without exposing 
     global.fetch = async (url) => {
         const value = String(url)
         if (value.includes('login.microsoftonline.com')) return Response.json({ access_token: 'app-token' })
+        if (value.includes('/gr_jobcardsubmissions?')) return new Response(null, { status: 404 })
+        if (value.includes('/gr_jobcardsubmissions?')) return new Response(null, { status: 404 })
         if (value.includes('/gr_jobs?')) return Response.json({ value: [job] })
         if (value.includes('/gr_jobs(')) return Response.json({
             error: { code: '0x80040265', message: 'Sensitive internal Dataverse detail' },
@@ -307,6 +311,7 @@ test('link generation replaces the stored hash without changing Job workflows', 
     global.fetch = async (url, options = {}) => {
         const value = String(url)
         if (value.endsWith('/WhoAmI')) return Response.json({ UserId: 'office-user' })
+        if (value.includes('/gr_jobcardsubmissions?')) return new Response(null, { status: 404 })
         if (value.includes('/gr_jobs(') && options.method === 'PATCH') {
             patch = JSON.parse(options.body)
             return new Response(null, { status: 204 })
@@ -334,6 +339,7 @@ test('link generation accepts opaque Dataverse GUIDs without RFC version bits', 
     global.fetch = async (url, options = {}) => {
         const value = String(url)
         if (value.endsWith('/WhoAmI')) return Response.json({ UserId: 'office-user' })
+        if (value.includes('/gr_jobcardsubmissions?')) return new Response(null, { status: 404 })
         if (value.includes('/gr_jobs(') && options.method === 'PATCH') {
             requestedUrl = value
             return new Response(null, { status: 204 })
@@ -347,4 +353,67 @@ test('link generation accepts opaque Dataverse GUIDs without RFC version bits', 
     })
     assert.equal(response.status, 201)
     assert.match(requestedUrl, /gr_jobs\(df9a3779-4e83-f111-ab0f-0022489917ff\)$/)
+})
+
+test('link generation creates an independent submission identity for an additional technician', { concurrency: false }, async () => {
+    configure()
+    let target = ''
+    let patch
+    global.fetch = async (url, options = {}) => {
+        const value = String(url)
+        if (value.endsWith('/WhoAmI')) return Response.json({ UserId: 'office-user' })
+        if (value.includes('login.microsoftonline.com')) return Response.json({ access_token: 'app-token' })
+        if (value.includes('/gr_jobcardsubmissions?')) return Response.json({ value: [] })
+        if (value.includes("/gr_jobcardsubmissions(gr_identitykey='")) {
+            target = value
+            patch = JSON.parse(options.body)
+            return new Response(null, { status: 204 })
+        }
+        throw new Error(`Unexpected request: ${value}`)
+    }
+    const response = await invoke({
+        method: 'POST', headers: { Authorization: 'Bearer office-token' }, body: {
+            action: 'generate', jobId: '00000000-0000-4000-8000-000000000001',
+            assignmentId: '00000000-0000-4000-8000-000000000004',
+            mechanicId: '00000000-0000-4000-8000-000000000005',
+            recipientName: 'Second Tech', recipientEmail: 'second@example.com',
+        },
+    })
+    assert.equal(response.status, 201)
+    assert.match(target, /00000000-0000-4000-8000-000000000001%3A00000000|00000000-0000-4000-8000-000000000001:00000000/)
+    assert.equal(patch.gr_role, 122830001)
+    assert.equal(patch.gr_recipientemail, 'second@example.com')
+    assert.equal(patch['gr_JobAssignment@odata.bind'], '/gr_jobassignments(00000000-0000-4000-8000-000000000004)')
+})
+
+test('normalized technician submission updates its own record instead of the Job', { concurrency: false }, async () => {
+    configure()
+    const submissionId = '00000000-0000-4000-8000-000000000006'
+    let updatedUrl = ''
+    let fields
+    global.fetch = async (url, options = {}) => {
+        const value = String(url)
+        if (value.includes('login.microsoftonline.com')) return Response.json({ access_token: 'app-token' })
+        if (value.includes('/gr_jobcardsubmissions?')) return Response.json({ value: [{
+            gr_jobcardsubmissionid: submissionId,
+            gr_tokenexpireson: new Date(Date.now() + 60_000).toISOString(),
+            gr_tokenused: false,
+            _gr_job_value: '00000000-0000-4000-8000-000000000001',
+            '@odata.etag': 'W/"22"',
+        }] })
+        if (value.includes('/gr_jobs(00000000-0000-4000-8000-000000000001)?')) return Response.json(baseJob())
+        if (value.includes(`/gr_jobcardsubmissions(${submissionId})`) && options.method === 'PATCH') {
+            updatedUrl = value
+            fields = JSON.parse(options.body)
+            return new Response(null, { status: 204 })
+        }
+        throw new Error(`Unexpected request: ${value}`)
+    }
+    const response = await invoke({ method: 'POST', headers: {}, body: { token: 'n'.repeat(43), story: 'Second technician work', hourMeter: 2520 } })
+    assert.equal(response.status, 200)
+    assert.match(updatedUrl, /gr_jobcardsubmissions/)
+    assert.equal(fields.gr_story, 'Second technician work')
+    assert.equal(fields.gr_hourmeter, 2520)
+    assert.equal(fields.gr_jobcardstatus, undefined)
+    assert.equal(fields.gr_techniciansubmissionstory, undefined)
 })

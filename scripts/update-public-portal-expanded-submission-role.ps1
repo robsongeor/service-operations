@@ -35,36 +35,45 @@ $privilegeQuery.Criteria.AddCondition('name', [Microsoft.Xrm.Sdk.Query.Condition
 $allPrivileges = $service.RetrieveMultiple($privilegeQuery).Entities
 $currentRequest = [Microsoft.Crm.Sdk.Messages.RetrieveRolePrivilegesRoleRequest]::new()
 $currentRequest.RoleId = $RoleId
+$currentPrivileges = ($service.Execute($currentRequest)).RolePrivileges
 $currentIds = [System.Collections.Generic.HashSet[Guid]]::new()
-($service.Execute($currentRequest)).RolePrivileges | ForEach-Object { $currentIds.Add($_.PrivilegeId) | Out-Null }
+$currentPrivileges | ForEach-Object { $currentIds.Add($_.PrivilegeId) | Out-Null }
 
-$requiredNames = @(
-    'prvAppendTogr_Job',
-    'prvCreategr_JobCardSubmissionTimeEntry',
-    'prvReadgr_JobCardSubmissionTimeEntry',
-    'prvWritegr_JobCardSubmissionTimeEntry',
-    'prvAppendgr_JobCardSubmissionTimeEntry',
-    'prvCreategr_JobMaterial',
-    'prvReadgr_JobMaterial',
-    'prvWritegr_JobMaterial',
-    'prvAppendgr_JobMaterial',
-    'prvCreategr_JobPhoto',
-    'prvReadgr_JobPhoto',
-    'prvWritegr_JobPhoto',
-    'prvAppendgr_JobPhoto'
+$requiredPrivileges = @(
+    @{ Name='prvAppendTogr_Job'; Depth=[Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Global },
+    @{ Name='prvAppendTogr_JobAssignment'; Depth=[Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Global },
+    @{ Name='prvCreategr_JobCardSubmission'; Depth=[Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Basic },
+    @{ Name='prvReadgr_JobCardSubmission'; Depth=[Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Basic },
+    @{ Name='prvWritegr_JobCardSubmission'; Depth=[Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Basic },
+    @{ Name='prvAppendgr_JobCardSubmission'; Depth=[Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Basic },
+    @{ Name='prvAppendTogr_JobCardSubmission'; Depth=[Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Basic },
+    @{ Name='prvCreategr_JobCardSubmissionTimeEntry'; Depth=[Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Global },
+    @{ Name='prvReadgr_JobCardSubmissionTimeEntry'; Depth=[Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Global },
+    @{ Name='prvWritegr_JobCardSubmissionTimeEntry'; Depth=[Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Global },
+    @{ Name='prvAppendgr_JobCardSubmissionTimeEntry'; Depth=[Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Global },
+    @{ Name='prvCreategr_JobMaterial'; Depth=[Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Global },
+    @{ Name='prvReadgr_JobMaterial'; Depth=[Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Global },
+    @{ Name='prvWritegr_JobMaterial'; Depth=[Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Global },
+    @{ Name='prvAppendgr_JobMaterial'; Depth=[Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Global },
+    @{ Name='prvCreategr_JobPhoto'; Depth=[Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Global },
+    @{ Name='prvReadgr_JobPhoto'; Depth=[Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Global },
+    @{ Name='prvWritegr_JobPhoto'; Depth=[Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Global },
+    @{ Name='prvAppendgr_JobPhoto'; Depth=[Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Global }
 )
 
 $toAdd = [System.Collections.Generic.List[Microsoft.Crm.Sdk.Messages.RolePrivilege]]::new()
-foreach ($name in $requiredNames) {
+foreach ($required in $requiredPrivileges) {
+    $name = $required.Name
     $metadata = $allPrivileges | Where-Object { [string]$_.Attributes['name'] -ieq $name } | Select-Object -First 1
     if (-not $metadata) { throw "Required Dataverse privilege was not found: $name" }
-    if ($currentIds.Contains($metadata.Id)) {
+    $currentPrivilege = $currentPrivileges | Where-Object { $_.PrivilegeId -eq $metadata.Id } | Select-Object -First 1
+    if ($currentPrivilege -and $currentPrivilege.Depth -ge $required.Depth) {
         Write-Output "Role already has $name"
         continue
     }
     $rolePrivilege = [Microsoft.Crm.Sdk.Messages.RolePrivilege]::new()
     $rolePrivilege.PrivilegeId = $metadata.Id
-    $rolePrivilege.Depth = [Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Global
+    $rolePrivilege.Depth = $required.Depth
     $toAdd.Add($rolePrivilege)
 }
 
@@ -79,11 +88,12 @@ if ($toAdd.Count -gt 0) {
 }
 
 $verify = ($service.Execute($currentRequest)).RolePrivileges
-foreach ($name in $requiredNames) {
+foreach ($required in $requiredPrivileges) {
+    $name = $required.Name
     $metadata = $allPrivileges | Where-Object { [string]$_.Attributes['name'] -ieq $name } | Select-Object -First 1
     $actual = $verify | Where-Object { $_.PrivilegeId -eq $metadata.Id } | Select-Object -First 1
-    if (-not $actual -or $actual.Depth -ne [Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Global) {
+    if (-not $actual -or $actual.Depth -lt $required.Depth) {
         throw "Role verification failed for $name."
     }
 }
-Write-Output 'Verified expanded-submission role privileges at Organization depth.'
+Write-Output 'Verified expanded-submission role privileges at their least required depths.'

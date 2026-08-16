@@ -4,6 +4,7 @@ import type { JobCardStatus } from './jobCardStatus.types'
 import type { ServiceType } from '../../equipment/servicePlans/equipmentServicePlan.types'
 import type { OfficeAction } from './officeAction.types'
 import type { HourMeterReadingType } from '../../equipment/hourMeter/hourMeterReading.types'
+import type { JobCardSubmission } from './jobCardSubmission.types'
 
 export type Job = {
     gr_jobid: string
@@ -47,6 +48,7 @@ export type Job = {
         displayOrder: number
         previewUrl: string
     }[]
+    jobCardSubmissions?: JobCardSubmission[]
     gr_hourmeter?: number | null
     gr_hourmeterreadingtype?: HourMeterReadingType | null
     gr_hourmeterrecordeddate?: string | null
