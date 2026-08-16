@@ -1,9 +1,15 @@
 const assert = require('node:assert/strict')
 const test = require('node:test')
+const { readFileSync } = require('node:fs')
 const submission = require('../api/jobsubmission/index')
 
 const originalFetch = global.fetch
 const originalEnvironment = { ...process.env }
+
+test('Job Card link client uses the Static Web Apps-safe delegated token header', () => {
+    const client = readFileSync('src/alpha/jobs/services/jobSubmissionLinkApi.ts', 'utf8')
+    assert.match(client, /'X-Dataverse-Authorization': `Bearer \$\{accessToken\}`/)
+})
 
 function restore() {
     global.fetch = originalFetch
@@ -270,7 +276,7 @@ test('link generation replaces the stored hash without changing Job workflows', 
     }
     const response = await invoke({
         method: 'POST',
-        headers: { Authorization: 'Bearer office-token' },
+        headers: { 'X-Dataverse-Authorization': 'Bearer office-token' },
         body: { action: 'generate', jobId: '00000000-0000-4000-8000-000000000001' },
     })
     assert.equal(response.status, 201)

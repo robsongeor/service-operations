@@ -20,7 +20,7 @@ export async function generateJobSubmissionLink(accessToken: string, jobId: stri
         method: 'POST',
         cache: 'no-store',
         headers: {
-            Authorization: `Bearer ${accessToken}`,
+            'X-Dataverse-Authorization': `Bearer ${accessToken}`,
             Accept: 'application/json',
             'Content-Type': 'application/json',
         },
