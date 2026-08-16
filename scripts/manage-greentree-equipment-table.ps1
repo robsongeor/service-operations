@@ -118,7 +118,8 @@ $columns = @(
     @{ Schema = 'gr_Serial'; Logical = 'gr_serial'; Display = 'Serial'; Length = 150; Required = $false },
     @{ Schema = 'gr_Site'; Logical = 'gr_site'; Display = 'Site'; Length = 200; Required = $false },
     @{ Schema = 'gr_SiteAddress1'; Logical = 'gr_siteaddress1'; Display = 'Site Address 1'; Length = 250; Required = $false },
-    @{ Schema = 'gr_SiteAddress2'; Logical = 'gr_siteaddress2'; Display = 'Site Address 2'; Length = 250; Required = $false }
+    @{ Schema = 'gr_SiteAddress2'; Logical = 'gr_siteaddress2'; Display = 'Site Address 2'; Length = 250; Required = $false },
+    @{ Schema = 'gr_AlternateFleet'; Logical = 'gr_alternatefleet'; Display = 'Alternate Fleet Number'; Length = 100; Required = $false }
 )
 
 function Ensure-Columns($Service, [bool]$Provision) {

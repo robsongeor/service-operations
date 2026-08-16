@@ -43,7 +43,7 @@ const valueOrDash = (value?: string | null) => value?.trim() || '—'
 const searchable = (values: Array<string | null | undefined>, query: string) => values.some((value) => value?.toLocaleLowerCase().includes(query))
 
 function SourceIdentity({ row }: { row: ReconciliationRow }) {
-    return <><strong>{valueOrDash(row.source.fleet)}</strong><small>S/N {valueOrDash(row.source.serial)}</small></>
+    return <><strong>{valueOrDash(row.source.fleet)}</strong>{row.source.alternateFleet && <small>Also {row.source.alternateFleet}</small>}<small>S/N {valueOrDash(row.source.serial)}</small></>
 }
 
 function AppIdentity({ equipment, candidates }: { equipment: Equipment | null; candidates: Equipment[] }) {
@@ -141,7 +141,7 @@ export default function GreentreeEquipmentTestScreen() {
         if (reviewCountFilter !== 'all') {
             if (reviewCountFilter === '4+' ? reviewCount < 4 : reviewCount !== Number(reviewCountFilter)) return false
         }
-        return !query || searchable([row.source.fleet, row.source.serial, row.source.make, row.source.model, row.source.siteName, row.source.siteAddress1, row.source.siteAddress2, row.appEquipment?.gr_fleet, row.appEquipment?.gr_serial], query)
+        return !query || searchable([row.source.fleet, row.source.alternateFleet, row.source.serial, row.source.make, row.source.model, row.source.siteName, row.source.siteAddress1, row.source.siteAddress2, row.appEquipment?.gr_fleet, row.appEquipment?.gr_alternatefleetnumbers, row.appEquipment?.gr_serial], query)
     }), [duplicateSerials, query, reviewCountFilter, reviewRequirement, serialFilter, tab, workspace])
     const visibleAppOnly = useMemo(() => (workspace?.reconciliation.appOnly ?? []).filter((item) => !query || searchable([item.gr_fleet, item.gr_serial, item.gr_make, item.gr_model, item.gr_Site?.gr_name, item.gr_Site?.gr_address], query)), [query, workspace])
     const resultCount = tab === 'app-only' ? visibleAppOnly.length : visibleRows.length

@@ -11,6 +11,7 @@ const GREENTREE_COLUMNS = [
     'gr_site',
     'gr_siteaddress1',
     'gr_siteaddress2',
+    'gr_alternatefleet',
     'gr_sourcekey',
 ].join(',')
 

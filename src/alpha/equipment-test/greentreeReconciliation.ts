@@ -1,10 +1,12 @@
 import type { Equipment } from '../jobs/types/equipment.types.ts'
 import type { GreentreeRecord } from './greentreeEquipmentApi.ts'
+import { parseAlternateFleetNumbers } from '../equipment/identifiers/alternateFleetNumbers.ts'
 
 const FORMATTED_VALUE = '@OData.Community.Display.V1.FormattedValue'
 
 const fieldAliases = {
     fleet: ['greentreecode', 'code', 'fleetnumbercode', 'fleetnumber', 'fleetno', 'fleet'],
+    alternateFleet: ['alternatefleet', 'alternatefleetnumber', 'alternatefleetnumbers'],
     name: ['name', 'equipmentname'],
     make: ['make'],
     model: ['model'],
@@ -18,6 +20,7 @@ const fieldAliases = {
 export type GreentreeEquipmentSnapshot = {
     sourceId: string
     fleet: string
+    alternateFleet: string
     name?: string
     make: string
     model: string
@@ -109,6 +112,7 @@ export function mapGreentreeEquipmentRecords(records: GreentreeRecord[], primary
     )))]
     const resolved = {
         fleet: resolveKey(keys, fieldAliases.fleet),
+        alternateFleet: resolveKey(keys, fieldAliases.alternateFleet),
         name: resolveKey(keys, fieldAliases.name),
         make: resolveKey(keys, fieldAliases.make),
         model: resolveKey(keys, fieldAliases.model),
@@ -122,6 +126,7 @@ export function mapGreentreeEquipmentRecords(records: GreentreeRecord[], primary
     return records.map((record, index): GreentreeEquipmentSnapshot => ({
         sourceId: recordText(record, resolved.sourceKey) || recordText(record, primaryIdAttribute) || `source-row-${index + 1}`,
         fleet: recordText(record, resolved.fleet),
+        alternateFleet: recordText(record, resolved.alternateFleet),
         name: recordText(record, resolved.name),
         make: recordText(record, resolved.make),
         model: recordText(record, resolved.model),
@@ -187,6 +192,7 @@ function sourceCounts(source: GreentreeEquipmentSnapshot[], value: (item: Greent
 function differences(source: GreentreeEquipmentSnapshot, equipment: Equipment) {
     const fields = [
         ['Fleet Number', equipment.gr_fleet ?? '', source.fleet],
+        ['Alternate Fleet Number', parseAlternateFleetNumbers(equipment.gr_alternatefleetnumbers).join(', '), source.alternateFleet],
         ['Make', equipment.gr_make ?? '', source.make],
         ['Model', equipment.gr_model ?? '', source.model],
         ['Serial', equipment.gr_serial ?? '', source.serial],
@@ -200,16 +206,29 @@ export function reconcileGreentreeEquipment(
     source: GreentreeEquipmentSnapshot[],
     equipment: Equipment[],
 ): ReconciliationResult {
-    const appByFleet = indexEquipment(equipment, (item) => item.gr_fleet)
+    const appByFleet = new Map<string, Equipment[]>()
+    equipment.forEach((item) => {
+        const identifiers = new Set([item.gr_fleet, ...parseAlternateFleetNumbers(item.gr_alternatefleetnumbers)]
+            .map(normalizeIdentity).filter(Boolean))
+        identifiers.forEach((key) => appByFleet.set(key, [...(appByFleet.get(key) ?? []), item]))
+    })
     const appBySerial = indexEquipment(equipment, (item) => item.gr_serial)
-    const sourceFleetCounts = sourceCounts(source, (item) => item.fleet)
+    const sourceFleetIdentityCounts = new Map<string, number>()
+    source.forEach((item) => {
+        new Set([item.fleet, item.alternateFleet].map(normalizeIdentity).filter(Boolean))
+            .forEach((key) => sourceFleetIdentityCounts.set(key, (sourceFleetIdentityCounts.get(key) ?? 0) + 1))
+    })
     const sourceSerialCounts = sourceCounts(source, (item) => item.serial)
     const referencedAppIds = new Set<string>()
 
     const rows = source.map((item): ReconciliationRow => {
         const fleetKey = normalizeIdentity(item.fleet)
+        const alternateFleetKey = normalizeIdentity(item.alternateFleet)
         const serialKey = normalizeIdentity(item.serial)
-        const fleetMatches = fleetKey ? appByFleet.get(fleetKey) ?? [] : []
+        const fleetMatches = [...new Map([
+            ...(fleetKey ? appByFleet.get(fleetKey) ?? [] : []),
+            ...(alternateFleetKey ? appByFleet.get(alternateFleetKey) ?? [] : []),
+        ].map((record) => [record.gr_equipmentid, record])).values()]
         const serialMatches = serialKey ? appBySerial.get(serialKey) ?? [] : []
         const candidates = [...new Map([...fleetMatches, ...serialMatches].map((record) => [record.gr_equipmentid, record])).values()]
         candidates.forEach((record) => referencedAppIds.add(record.gr_equipmentid))
@@ -221,7 +240,9 @@ export function reconcileGreentreeEquipment(
         if (!item.make) qualityIssues.push('Make missing')
         if (!item.model) qualityIssues.push('Model missing')
 
-        if (fleetKey && (sourceFleetCounts.get(fleetKey) ?? 0) > 1) reasons.push('Fleet Number Code is duplicated in Greentree')
+        if (fleetKey && (sourceFleetIdentityCounts.get(fleetKey) ?? 0) > 1) reasons.push('Fleet Number Code is duplicated in Greentree fleet identities')
+        if (alternateFleetKey && (sourceFleetIdentityCounts.get(alternateFleetKey) ?? 0) > 1) reasons.push('Alternate Fleet Number is duplicated in Greentree fleet identities')
+        if (fleetKey && alternateFleetKey && fleetKey === alternateFleetKey) qualityIssues.push('Alternate Fleet Number repeats the primary Fleet Number')
         if (serialKey && (sourceSerialCounts.get(serialKey) ?? 0) > 1) reasons.push('Serial is duplicated in Greentree')
         if (fleetMatches.length > 1) reasons.push('Fleet Number Code matches multiple app records')
         if (serialMatches.length > 1) reasons.push('Serial matches multiple app records')
@@ -243,7 +264,7 @@ export function reconcileGreentreeEquipment(
         } else if (candidates.length === 1) {
             status = 'probable'
             appEquipment = candidates[0]
-            reasons.push(fleetMatch ? 'Matched by Fleet Number Code only' : 'Matched by Serial only')
+            reasons.push(fleetMatch ? 'Matched by Fleet Number identity only' : 'Matched by Serial only')
         } else {
             status = 'new'
         }

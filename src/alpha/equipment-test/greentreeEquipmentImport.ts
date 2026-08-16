@@ -2,6 +2,7 @@ import { isServiceOperationsAdministrator } from '../../auth/adminAuthorization.
 import type { SignedInUserInfo } from '../../auth/signedInUser.ts'
 import type { GreentreeEquipmentSnapshot, ReconciliationRow } from './greentreeReconciliation.ts'
 import { invalidateSharedEquipmentDataCache } from '../equipment/services/equipmentDataCache.ts'
+import { normalizeAlternateFleetNumbers } from '../equipment/identifiers/alternateFleetNumbers.ts'
 
 const DATAVERSE_URL = import.meta.env?.VITE_DATAVERSE_URL ?? ''
 export const GREENTREE_IMPORT_BATCH_LIMIT = 50
@@ -24,6 +25,9 @@ export function greentreeImportIssues(row: ReconciliationRow) {
     if (!row.source.fleet.trim()) issues.push('Fleet Number Code is required.')
     if (row.reasons.includes('Serial is duplicated in Greentree')) {
         issues.push('Serial is duplicated in Greentree. Resolve the duplicate before importing.')
+    }
+    if (row.reasons.some((reason) => reason.includes('duplicated in Greentree fleet identities'))) {
+        issues.push('A primary or alternate Fleet Number is duplicated in Greentree. Resolve the duplicate before importing.')
     }
     if (!row.appEquipment && row.candidateEquipment.length > 1) {
         issues.push('Multiple app records are possible matches. Resolve the duplicate app records before importing.')
@@ -53,6 +57,7 @@ async function createEquipmentFromGreentree(accessToken: string, source: Greentr
         },
         body: JSON.stringify({
             gr_fleet: source.fleet.trim(),
+            gr_alternatefleetnumbers: normalizeAlternateFleetNumbers(source.alternateFleet, source.fleet) || null,
             gr_serial: source.serial.trim(),
             gr_make: source.make.trim(),
             gr_model: source.model.trim(),
@@ -71,7 +76,7 @@ async function createEquipmentFromGreentree(accessToken: string, source: Greentr
     return id
 }
 
-async function updateEquipmentFromGreentree(accessToken: string, equipmentId: string, source: GreentreeEquipmentSnapshot) {
+async function updateEquipmentFromGreentree(accessToken: string, equipmentId: string, source: GreentreeEquipmentSnapshot, existingAlternateFleetNumbers?: string | null) {
     const response = await fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_equipments(${equipmentId})`, {
         method: 'PATCH',
         headers: {
@@ -81,6 +86,7 @@ async function updateEquipmentFromGreentree(accessToken: string, equipmentId: st
         },
         body: JSON.stringify({
             gr_fleet: source.fleet.trim(),
+            gr_alternatefleetnumbers: normalizeAlternateFleetNumbers([existingAlternateFleetNumbers, source.alternateFleet].filter(Boolean).join('\n'), source.fleet) || null,
             gr_serial: source.serial.trim(),
             gr_make: source.make.trim(),
             gr_model: source.model.trim(),
@@ -114,7 +120,7 @@ export async function importGreentreeEquipmentBatch(
         try {
             const target = importTarget(row)
             const equipmentId = target
-                ? await updateEquipmentFromGreentree(accessToken, target.gr_equipmentid, row.source)
+                ? await updateEquipmentFromGreentree(accessToken, target.gr_equipmentid, row.source, target.gr_alternatefleetnumbers)
                 : await createEquipmentFromGreentree(accessToken, row.source)
             succeeded.push({ sourceId: row.source.sourceId, equipmentId, action: target ? 'updated' : 'created' })
         } catch (error) {

@@ -17,8 +17,10 @@ test('owned Greentree table maps code and stable source key', () => {
         gr_greentreeequipmentid: 'row-1',
         gr_sourcekey: 'source-1',
         gr_greentreecode: 'FLT-100',
+        gr_alternatefleet: 'VFL00100',
     }], 'gr_greentreeequipmentid')
     assert.equal(mapped[0].fleet, 'FLT-100')
+    assert.equal(mapped[0].alternateFleet, 'VFL00100')
     assert.equal(mapped[0].sourceId, 'source-1')
 })
 
@@ -33,6 +35,7 @@ const appEquipment = (id: string, fleet: string, serial: string): Equipment => (
 const sourceEquipment = (fleet: string, serial: string): GreentreeEquipmentSnapshot => ({
     sourceId: `${fleet}-${serial}`,
     fleet,
+    alternateFleet: '',
     serial,
     make: 'Toyota',
     model: '8FG',
@@ -48,10 +51,27 @@ test('fleet and serial matching one app record is exact', () => {
     assert.equal(result.appOnly.length, 0)
 })
 
+test('alternate Greentree fleet number can identify an existing app record', () => {
+    const source = { ...sourceEquipment('VisyboardVFL00962', 'S962'), alternateFleet: 'VFL00962' }
+    const app = { ...appEquipment('1', 'OLD-FLEET', 'S962-OLD'), gr_alternatefleetnumbers: 'VFL00962' }
+    const row = reconcileGreentreeEquipment([source], [app]).rows[0]
+    assert.equal(row.status, 'probable')
+    assert.equal(row.appEquipment?.gr_equipmentid, '1')
+})
+
+test('alternate fleet collisions are blocked from import', () => {
+    const rows = reconcileGreentreeEquipment([
+        { ...sourceEquipment('PRIMARY-1', 'S1'), alternateFleet: 'VFL00962' },
+        sourceEquipment('VFL00962', 'S2'),
+    ], []).rows
+    assert.match(greentreeImportIssues(rows[0]).join(' '), /Fleet Number is duplicated/)
+    assert.match(greentreeImportIssues(rows[1]).join(' '), /Fleet Number is duplicated/)
+})
+
 test('one unique identity match is probable', () => {
     const result = reconcileGreentreeEquipment([sourceEquipment('F100', 'NEW-SERIAL')], [appEquipment('1', 'F100', 'OLD-SERIAL')])
     assert.equal(result.rows[0].status, 'probable')
-    assert.deepEqual(result.rows[0].reasons, ['Matched by Fleet Number Code only'])
+    assert.deepEqual(result.rows[0].reasons, ['Matched by Fleet Number identity only'])
 })
 
 test('Site differences do not affect Equipment-only reconciliation review', () => {
@@ -167,7 +187,7 @@ test('a clear app match is updated from Greentree', async () => {
         const result = await importGreentreeEquipmentBatch(administrator, 'token', [row])
         assert.match(requestUrl, /gr_equipments\(existing\)$/)
         assert.equal(requestMethod, 'PATCH')
-        assert.deepEqual(payload, { gr_fleet: 'F200', gr_serial: 'S200', gr_make: 'Komatsu', gr_model: 'FG25' })
+        assert.deepEqual(payload, { gr_fleet: 'F200', gr_alternatefleetnumbers: null, gr_serial: 'S200', gr_make: 'Komatsu', gr_model: 'FG25' })
         assert.deepEqual(result.succeeded, [{ sourceId: 'F200-S200', equipmentId: 'existing', action: 'updated' }])
     } finally {
         globalThis.fetch = originalFetch
@@ -175,7 +195,7 @@ test('a clear app match is updated from Greentree', async () => {
 })
 
 test('unmatched import creates Equipment and excludes Customer and Site data', async () => {
-    const row = reconcileGreentreeEquipment([sourceEquipment('F201', 'S201')], []).rows[0]
+    const row = reconcileGreentreeEquipment([{ ...sourceEquipment('F201', 'S201'), alternateFleet: 'VFL00201' }], []).rows[0]
     const originalFetch = globalThis.fetch
     let payload: Record<string, unknown> = {}
     globalThis.fetch = async (_input, init) => {
@@ -186,7 +206,7 @@ test('unmatched import creates Equipment and excludes Customer and Site data', a
         const result = await importGreentreeEquipmentBatch(administrator, 'token', [row])
         assert.equal(result.succeeded.length, 1)
         assert.equal(result.succeeded[0].action, 'created')
-        assert.deepEqual(payload, { gr_fleet: 'F201', gr_serial: 'S201', gr_make: 'Toyota', gr_model: '8FG' })
+        assert.deepEqual(payload, { gr_fleet: 'F201', gr_alternatefleetnumbers: 'VFL00201', gr_serial: 'S201', gr_make: 'Toyota', gr_model: '8FG' })
         assert.equal(Object.keys(payload).some((key) => /site|customer/i.test(key)), false)
     } finally {
         globalThis.fetch = originalFetch
