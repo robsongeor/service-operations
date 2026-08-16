@@ -7,6 +7,7 @@ import type { Customer } from '../../jobs/types/customer.types'
 import type { Equipment } from '../../jobs/types/equipment.types'
 import type { Mechanic } from '../../jobs/types/mechanic.types'
 import { fetchMechanics } from '../../mechanics/services/mechanicsApi'
+import { subscribeToStaffChanges } from '../../mechanics/services/staffRealtime'
 import { fetchPricingItems } from '../services/pricingApi'
 import {
     createQuote as createQuoteApi,
@@ -98,6 +99,26 @@ export function useQuotes() {
         }
         void loadInitialData()
         return () => { cancelled = true }
+    }, [account, getAccessToken])
+
+    useEffect(() => {
+        if (!account) return
+        let cancelled = false
+        let refreshTimer: number | undefined
+        const unsubscribe = subscribeToStaffChanges(() => {
+            if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
+            refreshTimer = window.setTimeout(async () => {
+                try {
+                    const rows = await fetchMechanics(await getAccessToken())
+                    if (!cancelled) setStaff(rows)
+                } catch { /* Keep the current Staff choices until the next refresh. */ }
+            }, 750)
+        })
+        return () => {
+            cancelled = true
+            if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
+            unsubscribe()
+        }
     }, [account, getAccessToken])
 
     const loadLines = async (quoteId: string) => {

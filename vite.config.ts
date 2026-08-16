@@ -5,12 +5,6 @@ import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 
 const require = createRequire(import.meta.url)
-const jobSubmissionService = require('./api/services/jobSubmissionService') as {
-  generate: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
-  handlePublicGet: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
-  handlePublicPost: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
-  jsonResponse: (status: number, body: object, headers?: Record<string, string>) => LocalFunctionResponse
-}
 const siteCheckAssignmentService = require('./api/services/siteCheckAssignmentService') as {
   generate: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
   revoke: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
@@ -94,6 +88,20 @@ function jobSubmissionProxy(env: Record<string, string | undefined>): Plugin {
   process.env.DATAVERSE_CLIENT_ID ||= env.DATAVERSE_CLIENT_ID
   process.env.DATAVERSE_CLIENT_SECRET ||= env.DATAVERSE_CLIENT_SECRET
 
+  const servicePath = require.resolve('./api/services/jobSubmissionService')
+  const loadService = () => {
+    // The browser can hot-reload its API client while Vite otherwise retains the
+    // CommonJS server module. Reload per request so delegated-auth header changes
+    // cannot leave localhost running mismatched client and server versions.
+    delete require.cache[servicePath]
+    return require('./api/services/jobSubmissionService') as {
+      generate: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
+      handlePublicGet: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
+      handlePublicPost: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
+      jsonResponse: (status: number, body: object, headers?: Record<string, string>) => LocalFunctionResponse
+    }
+  }
+
   const installMiddleware = (middlewares: { use: (handler: (request: IncomingMessage, response: ServerResponse, next: () => void) => void) => void }) => {
     middlewares.use((request, response, next) => {
       if (!request.url) return next()
@@ -102,6 +110,7 @@ function jobSubmissionProxy(env: Record<string, string | undefined>): Plugin {
 
       void (async () => {
         try {
+          const jobSubmissionService = loadService()
           const body = request.method === 'POST' ? await readJsonBody(request) : {}
           if (body === null) {
             return sendFunctionResponse(response, jobSubmissionService.jsonResponse(400, { error: 'The request body is invalid.' }))
@@ -119,7 +128,7 @@ function jobSubmissionProxy(env: Record<string, string | undefined>): Plugin {
           else result = jobSubmissionService.jsonResponse(405, { error: 'Method not allowed.' }, { Allow: 'GET, POST' })
           sendFunctionResponse(response, result)
         } catch {
-          sendFunctionResponse(response, jobSubmissionService.jsonResponse(503, {
+          sendFunctionResponse(response, loadService().jsonResponse(503, {
             code: 'temporary',
             error: 'The job card service is temporarily unavailable.',
           }))

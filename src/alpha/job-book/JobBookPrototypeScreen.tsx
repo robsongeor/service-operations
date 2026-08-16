@@ -6,6 +6,7 @@ import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
 import { fetchCustomers } from '../jobs/services/customersApi'
 import { fetchSites } from '../jobs/services/sitesApi'
 import { fetchMechanics } from '../mechanics/services/mechanicsApi'
+import { subscribeToStaffChanges } from '../mechanics/services/staffRealtime'
 import type { Customer } from '../jobs/types/customer.types'
 import type { Mechanic } from '../jobs/types/mechanic.types'
 import type { Site } from '../jobs/types/site.types'
@@ -249,6 +250,29 @@ export default function JobBookPrototypeScreen() {
         }
         void load()
         return () => { cancelled = true }
+    }, [account, instance])
+
+    useEffect(() => {
+        if (!account) return
+        let cancelled = false
+        let refreshTimer: number | undefined
+        const unsubscribe = subscribeToStaffChanges(() => {
+            if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
+            refreshTimer = window.setTimeout(async () => {
+                try {
+                    const token = await acquireDataverseAccessToken(instance, account)
+                    const rows = await fetchMechanics(token)
+                    if (!cancelled) setMechanics(rows)
+                } catch {
+                    // Preserve the current picker contents if a background refresh fails.
+                }
+            }, 750)
+        })
+        return () => {
+            cancelled = true
+            if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
+            unsubscribe()
+        }
     }, [account, instance])
 
     const customerSites = useMemo(() => sites.filter((site) => !machineDraft.customer

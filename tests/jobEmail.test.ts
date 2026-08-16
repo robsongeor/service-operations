@@ -8,6 +8,8 @@ import {
     buildTechnicianEmailSubject,
 } from '../src/alpha/jobs/utils/technicianMailto.ts'
 import type { Job } from '../src/alpha/jobs/types/job.types.ts'
+import { buildTechnicianJobCardHtml } from '../src/alpha/jobs/services/jobEmail.ts'
+import { readFileSync } from 'node:fs'
 
 const job = {
     gr_jobid: '00000000-0000-4000-8000-000000000001',
@@ -58,6 +60,28 @@ test('technician email subject includes Job, fleet, customer and description', (
         buildTechnicianEmailSubject(job),
         'Job: 145222 - FN1758 - Waikato Auto Parts - Service',
     )
+})
+
+test('direct technician email renders an Outlook-safe HTML Job Card with a clickable secure link', () => {
+    const portalUrl = 'https://service.example.test/portal/job/secure-token?a=1&b=2'
+    const body = buildTechnicianJobCardHtml({ ...job, gr_description: 'Inspect <mast> & chains' }, 'Anthony Example', portalUrl)
+    assert.match(body, /<!doctype html>/i)
+    assert.match(body, /<table role="presentation"/)
+    assert.match(body, /href="https:\/\/service\.example\.test\/portal\/job\/secure-token\?a=1&amp;b=2"/)
+    assert.match(body, />Open Job Card<\/a>/)
+    assert.match(body, /Inspect &lt;mast&gt; &amp; chains/)
+    assert.doesNotMatch(body, /Inspect <mast>/)
+})
+
+test('Jobs table opens the in-app composer and no longer hands off to mailto', () => {
+    const table = readFileSync(new URL('../src/alpha/jobs/components/JobsTable.tsx', import.meta.url), 'utf8')
+    const composer = readFileSync(new URL('../src/alpha/jobs/components/JobEmailComposer.tsx', import.meta.url), 'utf8')
+    const hook = readFileSync(new URL('../src/alpha/jobs/hooks/useJobs.ts', import.meta.url), 'utf8')
+    assert.match(table, /<JobEmailComposer/)
+    assert.doesNotMatch(table, /window\.location\.href|mailto:/)
+    assert.match(composer, /Send Job Card/)
+    assert.match(hook, /void \(async \(\) =>/)
+    assert.match(hook, /waitForEmailDispatch/)
 })
 
 test('active link detection requires an unused, unexpired stored hash', () => {

@@ -30,6 +30,7 @@ import type {
     SiteCheckDetailJob,
     SiteCheckEquipmentExclusion,
 } from '../types/siteCheck.types'
+import { subscribeToStaffChanges } from '../../mechanics/services/staffRealtime'
 import {
     prepareSiteCheckAssignmentEmail,
     type SiteCheckAssignmentEmailInput,
@@ -67,6 +68,26 @@ export function useSiteCheckWorkspace() {
         }),
         [acquireAccessToken],
     )
+
+    useEffect(() => {
+        if (!account) return
+        let cancelled = false
+        let refreshTimer: number | undefined
+        const unsubscribe = subscribeToStaffChanges(() => {
+            if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
+            refreshTimer = window.setTimeout(async () => {
+                try {
+                    const rows = await fetchSiteCheckWorkspaceMechanics(await acquireAccessToken())
+                    if (!cancelled) setMechanics(rows)
+                } catch { /* Keep the current Staff choices until the next refresh. */ }
+            }, 750)
+        })
+        return () => {
+            cancelled = true
+            if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
+            unsubscribe()
+        }
+    }, [account, acquireAccessToken])
 
     const load = useCallback(async (suppliedToken?: string) => {
         const version = ++requestVersion.current

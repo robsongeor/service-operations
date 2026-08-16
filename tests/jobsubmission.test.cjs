@@ -11,6 +11,12 @@ test('Job Card link client uses the Static Web Apps-safe delegated token header'
     assert.match(client, /'X-Dataverse-Authorization': `Bearer \$\{accessToken\}`/)
 })
 
+test('local Job Card middleware reloads its server service to stay aligned with the hot client', () => {
+    const config = readFileSync('vite.config.ts', 'utf8')
+    assert.match(config, /require\.resolve\('\.\/api\/services\/jobSubmissionService'\)/)
+    assert.match(config, /delete require\.cache\[servicePath\]/)
+})
+
 function restore() {
     global.fetch = originalFetch
     for (const key of Object.keys(process.env)) if (!(key in originalEnvironment)) delete process.env[key]

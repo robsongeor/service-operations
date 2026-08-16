@@ -1,0 +1,167 @@
+.job-email-composer {
+    width: min(720px, calc(100vw - 32px));
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+}
+
+.job-email-composer-fields {
+    gap: 14px;
+}
+
+.job-email-composer-fields > label {
+    display: grid;
+    gap: 6px;
+}
+
+.job-email-composer-fields > label > span {
+    color: #52615a;
+    font-size: 0.68rem;
+    font-weight: 750;
+    letter-spacing: 0.035em;
+    text-transform: uppercase;
+}
+
+.job-email-composer-fields input {
+    min-width: 0;
+    padding: 10px 12px;
+    border: 1px solid #b9c9c2;
+    border-radius: 7px;
+    background: #fff;
+    color: #17251f;
+    font: inherit;
+}
+
+.job-email-composer-fields input:focus {
+    border-color: #167b70;
+    outline: 2px solid #c8e7e1;
+    outline-offset: 1px;
+}
+
+.job-email-composer-fields input[aria-invalid="true"] {
+    border-color: #c45f5f;
+}
+
+.job-email-composer-fields label small {
+    color: #9b4141;
+    font-size: 0.68rem;
+}
+
+.job-email-composer-intro {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 10px 12px;
+    border-radius: 7px;
+    background: #eef8f5;
+    color: #386158;
+    font-size: 0.72rem;
+}
+
+.job-email-composer-intro strong {
+    color: #0c665b;
+    white-space: nowrap;
+}
+
+.job-email-preview {
+    overflow: hidden;
+    border: 1px solid #d5e0db;
+    border-radius: 10px;
+    background: #f2f6f4;
+}
+
+.job-email-preview > header {
+    padding: 16px 20px;
+    background: #0f665d;
+    color: #fff;
+}
+
+.job-email-preview header small {
+    font-size: 0.62rem;
+    font-weight: 750;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+}
+
+.job-email-preview h4 {
+    margin: 4px 0 0;
+    font-size: 1.25rem;
+}
+
+.job-email-preview-body {
+    display: grid;
+    gap: 10px;
+    padding: 18px 20px;
+    background: #fff;
+}
+
+.job-email-preview-body p {
+    margin: 0;
+    color: #3c4b44;
+    font-size: 0.76rem;
+}
+
+.job-email-work {
+    display: grid;
+    gap: 5px;
+    margin: 4px 0;
+    padding: 12px 14px;
+    border-left: 4px solid #168478;
+    border-radius: 6px;
+    background: #f5f8f7;
+}
+
+.job-email-work span {
+    color: #66736d;
+    font-size: 0.62rem;
+    font-weight: 750;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.job-email-work strong {
+    white-space: pre-wrap;
+    font-size: 0.8rem;
+    line-height: 1.45;
+}
+
+.job-email-preview dl {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 7px 14px;
+    margin: 2px 0 4px;
+    font-size: 0.72rem;
+}
+
+.job-email-preview dt {
+    color: #66736d;
+    font-weight: 750;
+}
+
+.job-email-preview dd {
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.job-email-preview-button {
+    justify-self: start;
+    padding: 10px 15px;
+    border-radius: 6px;
+    background: #11766b;
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 750;
+}
+
+.job-email-preview-body > small {
+    color: #66736d;
+    font-size: 0.65rem;
+}
+
+@media (max-width: 600px) {
+    .job-email-composer-intro {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}

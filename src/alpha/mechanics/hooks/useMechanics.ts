@@ -14,6 +14,7 @@ import {
 import type { QualificationType, TechnicianQualification, TechnicianQualificationInput } from '../../wof/types/wof.types'
 import { createTechnicianQualification as createQualificationApi, deactivateTechnicianQualification as deactivateQualificationApi, fetchAllTechnicianQualifications, fetchQualificationTypes, updateTechnicianQualification as updateQualificationApi } from '../../wof/services/qualificationApi'
 import { acquireDataverseAccessToken } from '../../../auth/dataverseAuthentication'
+import { subscribeToStaffChanges } from '../services/staffRealtime'
 
 export function useMechanics() {
     const { instance } = useMsal()
@@ -84,6 +85,28 @@ export function useMechanics() {
         }
         void loadInitialData()
         return () => { cancelled = true }
+    }, [account, getToken])
+
+    useEffect(() => {
+        if (!account) return
+        let cancelled = false
+        let refreshTimer: number | undefined
+        const unsubscribe = subscribeToStaffChanges(() => {
+            if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
+            refreshTimer = window.setTimeout(async () => {
+                try {
+                    const nextMechanics = await fetchMechanicsApi(await getToken())
+                    if (!cancelled) setMechanics(nextMechanics)
+                } catch {
+                    // Keep the last usable directory; a later event or manual reload can retry.
+                }
+            }, 750)
+        })
+        return () => {
+            cancelled = true
+            if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
+            unsubscribe()
+        }
     }, [account, getToken])
 
     const mutate = async (action: (token: string) => Promise<void>) => {

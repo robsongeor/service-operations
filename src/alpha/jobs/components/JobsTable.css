@@ -719,3 +719,21 @@
     outline: none;
     box-shadow: 0 0 0 2px #f5dfb8;
 }
+
+.jobs-technician-email-action.sending {
+    border-color: #d4a53c;
+    background: #fff5d9;
+    color: #72510a;
+}
+
+.jobs-technician-email-action.sent {
+    border-color: #86bea9;
+    background: #eaf7f1;
+    color: #17634f;
+}
+
+.jobs-technician-email-action.failed {
+    border-color: #d9a0a0;
+    background: #fff0f0;
+    color: #923d3d;
+}

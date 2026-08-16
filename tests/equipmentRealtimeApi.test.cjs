@@ -2,7 +2,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const test = require('node:test')
-const { equipmentEvent, jobEvent } = require('../realtime-api/equipmentchanged/index')._test
+const { equipmentEvent, jobEvent, staffEvent } = require('../realtime-api/equipmentchanged/index')._test
 const { corsHeaders } = require('../realtime-api/services/realtimeSecurity')
 
 test('realtime CORS accepts explicit production and localhost origins only', () => {
@@ -50,6 +50,13 @@ test('the protected realtime webhook maps a minimal Dataverse Job event', () => 
     assert.equal(event.jobId, '11111111-1111-4111-8111-111111111111')
     assert.equal(event.operation, 'create')
     assert.equal(jobEvent({ PrimaryEntityName: 'gr_equipment', PrimaryEntityId: event.jobId, MessageName: 'Update' }), undefined)
+})
+
+test('the protected realtime webhook maps a minimal Dataverse Staff event', () => {
+    const event = staffEvent({ PrimaryEntityName: 'gr_mechanic', PrimaryEntityId: '{11111111-1111-4111-8111-111111111111}', MessageName: 'Update' })
+    assert.equal(event.staffId, '11111111-1111-4111-8111-111111111111')
+    assert.equal(event.operation, 'update')
+    assert.equal(staffEvent({ PrimaryEntityName: 'gr_job', PrimaryEntityId: event.staffId, MessageName: 'Update' }), undefined)
 })
 
 test('Node v4 entrypoints preserve protected receiver and authenticated negotiate routes', () => {

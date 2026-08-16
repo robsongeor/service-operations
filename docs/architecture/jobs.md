@@ -36,6 +36,15 @@ events only; clients debounce those events and refresh from Dataverse. Technicia
 and photos are drawer-only details and are fetched for the selected Job rather than for the entire
 table.
 
+The authenticated app shell also listens for bounded Staff invalidation events. An active Jobs
+screen re-reads only `gr_mechanics` after a short debounce, so technician names and assignment
+choices update across PCs without reloading the Job collection or the browser page.
+
+Job invalidations are not replayable while a laptop is asleep or disconnected. The Jobs client
+therefore performs one debounced authoritative refresh after SignalR reconnects and when a hidden
+Jobs tab becomes visible. This closes missed-event gaps without background polling or constant
+Dataverse queries.
+
 Jobs startup is deliberately split into two phases. The table phase loads Jobs and Staff plus the
 Schedule Options and Office Updates that directly drive visible table filtering and summaries. It
 does not request the full Equipment, Customer, Site, Site Contact, Quote, Assignment, or Equipment
@@ -47,6 +56,12 @@ retried without opening a partially populated drawer.
 Job create/edit drawers use shared drawer presentation and shared searchable selectors.
 Scheduling and Customer Dashboard entry points reuse the Jobs workflow. Completion is routed
 through the completion framework rather than screen-specific writes.
+The Jobs-table email action opens the feature-owned Job Card composer instead of handing off to a
+desktop email client. Recipient and subject remain editable, while a bounded preview shows the
+Outlook-safe HTML card and secure clickable Job Card action. Confirmed sends create an Email Dispatch
+request and return immediately; Power Automate performs delivery asynchronously and the table shows
+Sending, Sent, or Failed. A Job with an existing unused link requires explicit replacement
+confirmation before a new link is generated. Job Card status changes only after confirmed delivery.
 Every transition into Complete requires linked Equipment and a whole-number hour-meter reading.
 Every completion dialog also displays a required Job Completion Date, initially today and editable
 to a valid non-future date. The selected calendar date is stored in the existing Job Completed Date
@@ -182,10 +197,10 @@ lists are not part of the initial Job Book load; they load only when the add-mac
   preparing or dispatching the email. The primary technician's existing email address is
   required before token generation. Replacing an active unused link requires confirmation
   because only the newest token hash remains valid.
-- Email preparation uses the existing delivery path: the Jobs table opens a plain-text
-  `mailto:`, while the Job drawer retains its Email Dispatch/Power Automate workflow.
-  Generating a link does not change operational Job Status or Job Card Status. The automated
-  drawer workflow records Sent only after its existing dispatch confirmation succeeds.
+- Primary technician Job Card email uses the Email Dispatch/Power Automate delivery path from both
+  the Jobs table and Job drawer. The table uses a non-blocking in-app composer and formatted HTML;
+  assignment sends reuse the same formatted card. Generating a link does not change operational Job
+  Status or Job Card Status. Sent is recorded only after dispatch confirmation succeeds.
 - Technician Job Card submission stores pending story/hour-meter information and moves the
   Job Card Status to `Submitted`. It does not change operational Job Status, Completed Date,
   Equipment hour meter, maintenance state, or assignments.

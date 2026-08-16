@@ -19,11 +19,11 @@ import SearchableMechanicSelect from './SearchableMechanicSelect'
 import JobsTableSortIcon from './JobsTableSortIcon'
 import { isValidTechnicianEmail } from '../utils/technicianMailto'
 import { getJobsTableColumnWidths, JOBS_TABLE_ACTIONS_WIDTH, JOBS_TABLE_COLUMNS, JOBS_TABLE_WIDTH, jobsStickyColumnStyle, type JobsStickyThroughColumnId, type JobsTableColumnId } from '../types/jobsTableColumns'
-import { jobHasActiveSubmissionLink } from '../services/jobSubmissionLinkApi'
-import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation'
 import { hasTechnicianSubmission } from '../types/technicianSubmission'
 import { parseAlternateFleetNumbers } from '../../equipment/identifiers/alternateFleetNumbers'
 import { JOB_DESCRIPTION_MAX_LENGTH } from '../domain/jobDescription'
+import JobEmailComposer from './JobEmailComposer'
+import type { JobEmailDeliveryState, JobEmailDraft } from '../services/jobEmail'
 
 type Props = {
     jobs: Job[]
@@ -44,7 +44,8 @@ type Props = {
         }
     ) => Promise<void>
     onJobNumberAllocation: (allocations: readonly { job: Job; jobNumber: string }[]) => Promise<void>
-    onEmailTechnician: (job: Job) => Promise<string>
+    onEmailTechnician: (job: Job, draft: JobEmailDraft) => Promise<void>
+    emailDeliveryStates: Record<string, JobEmailDeliveryState>
     onEditJob: (job: Job) => void
     onOpenJobCard: (job: Job) => void
     onOpenEquipment: (equipmentId: string) => void
@@ -72,6 +73,7 @@ export default function JobsTable({
     onJobFieldsChange,
     onJobNumberAllocation,
     onEmailTechnician,
+    emailDeliveryStates,
     onEditJob,
     onOpenJobCard,
     onOpenEquipment,
@@ -87,7 +89,7 @@ export default function JobsTable({
     const [openMechanicJobId, setOpenMechanicJobId] = useState<string | null>(null)
     const [savingMechanicJobId, setSavingMechanicJobId] = useState<string | null>(null)
     const [emailingJobId, setEmailingJobId] = useState<string | null>(null)
-    const [pendingEmailJob, setPendingEmailJob] = useState<Job | null>(null)
+    const [emailComposerJob, setEmailComposerJob] = useState<Job | null>(null)
     const tableHeaderScrollRef = useRef<HTMLDivElement>(null)
     const tableBodyScrollRef = useRef<HTMLDivElement>(null)
     const [tableWidth, setTableWidth] = useState(JOBS_TABLE_WIDTH)
@@ -122,21 +124,16 @@ export default function JobsTable({
         return () => resizeObserver.disconnect()
     }, [])
 
-    const prepareEmail = async (job: Job) => {
+    const sendEmail = async (job: Job, draft: JobEmailDraft) => {
         if (emailingJobId) return
         setEmailingJobId(job.gr_jobid)
         setCopyFeedback(null)
         try {
-            const mailtoUrl = await onEmailTechnician(job)
-            window.location.href = mailtoUrl
-        } catch {
-            setCopyFeedback({
-                message: 'The secure Job Card link could not be created. Please try again.',
-                isError: true,
-            })
+            await onEmailTechnician(job, draft)
+            setCopyFeedback({ message: `Job Card email queued for ${draft.recipientEmail}.`, isError: false })
+            setEmailComposerJob(null)
         } finally {
             setEmailingJobId(null)
-            setPendingEmailJob(null)
         }
     }
 
@@ -570,11 +567,12 @@ export default function JobsTable({
                             const canCopyForSpreadsheet = Boolean(job.gr_jobnumber?.trim())
                             const mechanicEmail = job.gr_Mechanic?.gr_email?.trim() ?? ''
                             const canEmailTechnician = Boolean(job.gr_Mechanic) && isValidTechnicianEmail(mechanicEmail)
+                            const emailDelivery = emailDeliveryStates[job.gr_jobid]
                             const emailTooltip = !job.gr_Mechanic
                                 ? 'Assign a technician before emailing job details.'
                                 : !isValidTechnicianEmail(mechanicEmail)
                                     ? 'The allocated technician does not have an email address.'
-                                    : 'Email technician'
+                                    : emailDelivery?.message || 'Send Job Card email'
 
                             return (
                             <tr
@@ -772,19 +770,15 @@ export default function JobsTable({
                                             </svg>
                                         </button>
                                         <button
-                                            className="jobs-table-action jobs-technician-email-action"
+                                            className={`jobs-table-action jobs-technician-email-action${emailDelivery ? ` ${emailDelivery.status}` : ''}`}
                                             type="button"
                                             title={emailTooltip}
                                             aria-label="Email job details to technician"
                                             onClick={() => {
                                                 if (!job.gr_Mechanic || !canEmailTechnician) return
-                                                if (jobHasActiveSubmissionLink(job)) {
-                                                    setPendingEmailJob(job)
-                                                    return
-                                                }
-                                                void prepareEmail(job)
+                                                setEmailComposerJob(job)
                                             }}
-                                            disabled={!canEmailTechnician || Boolean(emailingJobId)}
+                                            disabled={!canEmailTechnician || emailDelivery?.status === 'sending' || Boolean(emailingJobId)}
                                         >
                                             <svg viewBox="0 0 24 24" aria-hidden="true">
                                                 <path d="M3 6.5h18v11H3z" />
@@ -810,14 +804,10 @@ export default function JobsTable({
             )}
 
         </section>
-        {pendingEmailJob && <EditDrawerConfirmation
-            eyebrow="Replace secure link"
-            title="Generate a new technician submission link?"
-            message="Generating a new link will invalidate the previous technician submission link for this Job."
-            isBusy={emailingJobId === pendingEmailJob.gr_jobid}
-            confirmLabel={emailingJobId === pendingEmailJob.gr_jobid ? 'Generating...' : 'Generate new link'}
-            onCancel={() => setPendingEmailJob(null)}
-            onConfirm={() => void prepareEmail(pendingEmailJob)}
+        {emailComposerJob && <JobEmailComposer
+            job={emailComposerJob}
+            onCancel={() => setEmailComposerJob(null)}
+            onSend={(draft) => sendEmail(emailComposerJob, draft)}
         />}
     </>)
 }

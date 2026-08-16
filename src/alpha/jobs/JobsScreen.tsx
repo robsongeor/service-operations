@@ -35,7 +35,7 @@ export default function JobsScreen() {
         officeUpdates,
         createJob, updateJob, deleteJob, updateJobStatus, updateJobFields, allocateJobNumbers,
         updateJobCardStatus,
-        sendPrimaryJobEmail, sendAssignmentJobEmail, prepareTechnicianJobEmail,
+        sendPrimaryJobEmail, queuePrimaryJobEmail, emailDeliveryStates, sendAssignmentJobEmail,
         createJobAssignment, deleteJobAssignment,
         createContactForSite, createEquipment, createSite, createCustomer,
         updateEquipment, setupEquipmentMaintenance, saveEquipmentMaintenanceHistory, deleteEquipment,
@@ -271,7 +271,8 @@ export default function JobsScreen() {
                     }}
                     onJobFieldsChange={updateJobFields}
                     onJobNumberAllocation={allocateJobNumbers}
-                    onEmailTechnician={prepareTechnicianJobEmail}
+                    onEmailTechnician={queuePrimaryJobEmail}
+                    emailDeliveryStates={emailDeliveryStates}
                     onEditJob={(job) => { void openJob(job).catch(() => undefined) }}
                     onOpenJobCard={(job) => { void openJob(job, 'jobcard').catch(() => undefined) }}
                     onOpenEquipment={(equipmentId) => { void openEquipment(equipmentId).catch(() => undefined) }}

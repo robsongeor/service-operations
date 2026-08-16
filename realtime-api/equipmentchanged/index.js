@@ -17,20 +17,29 @@ function jobEvent(body) {
     return { jobId, operation, changedAt: new Date().toISOString() }
 }
 
+function staffEvent(body) {
+    const table = String(body?.PrimaryEntityName || body?.primaryEntityName || '').toLowerCase()
+    const operation = String(body?.MessageName || body?.messageName || '').toLowerCase()
+    const staffId = String(body?.PrimaryEntityId || body?.primaryEntityId || '').replace(/[{}]/g, '')
+    if (table !== 'gr_mechanic' || !OPERATIONS.has(operation) || !GUID_PATTERN.test(staffId)) return undefined
+    return { staffId, operation, changedAt: new Date().toISOString() }
+}
+
 module.exports = async function equipmentChanged(context, request) {
     const equipment = equipmentEvent(request.body)
     const job = jobEvent(request.body)
-    const event = equipment ?? job
+    const staff = staffEvent(request.body)
+    const event = equipment ?? job ?? staff
     if (!event) {
         context.res = { status: 400, body: { error: 'Unsupported Dataverse event.' } }
         return
     }
 
     context.bindings.signalRMessages = [{
-        target: equipment ? 'equipmentChanged' : 'jobChanged',
+        target: equipment ? 'equipmentChanged' : job ? 'jobChanged' : 'staffChanged',
         arguments: [event],
     }]
     context.res = { status: 202, body: { accepted: true } }
 }
 
-module.exports._test = { equipmentEvent, jobEvent }
+module.exports._test = { equipmentEvent, jobEvent, staffEvent }

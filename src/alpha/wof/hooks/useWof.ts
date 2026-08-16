@@ -27,6 +27,7 @@ import { createWof as createWofApi, createWofJobFromJobDrawer, deleteWofInspecti
 import { getWofDeletionBlockReason } from '../utils/wofRules'
 import { acquireDataverseAccessToken } from '../../../auth/dataverseAuthentication'
 import { fetchMechanics as fetchStaffDirectory } from '../../mechanics/services/mechanicsApi'
+import { subscribeToStaffChanges } from '../../mechanics/services/staffRealtime'
 
 export function useWof() {
     const { instance } = useMsal()
@@ -77,6 +78,26 @@ export function useWof() {
         const timer = window.setTimeout(() => { void load() }, 0)
         return () => window.clearTimeout(timer)
     }, [load])
+
+    useEffect(() => {
+        if (!account) return
+        let cancelled = false
+        let refreshTimer: number | undefined
+        const unsubscribe = subscribeToStaffChanges(() => {
+            if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
+            refreshTimer = window.setTimeout(async () => {
+                try {
+                    const rows = await fetchStaffDirectory(await token())
+                    if (!cancelled) setMechanics(rows)
+                } catch { /* Keep the current Staff choices until the next refresh. */ }
+            }, 750)
+        })
+        return () => {
+            cancelled = true
+            if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
+            unsubscribe()
+        }
+    }, [account, token])
 
     const createWof = async (input: CreateWofInput) => {
         const accessToken = await token()

@@ -30,6 +30,7 @@ business workflow and should be embedded through thin feature adapters when need
 | --- | --- | --- |
 | `JobEditDrawer` | `src/alpha/jobs/components/JobEditDrawer.tsx` | Manager-facing Job details and editing. Do not build a feature-specific Job editor. |
 | `JobCreateDrawer` | `src/alpha/jobs/components/JobCreateDrawer.tsx` | Standard Job creation, including pre-populated Job and proposed Equipment values, constrained Job Type options, and the shared searchable relationship/create workflow. Proposed Equipment identifiers search existing records first and require confirmation before inline creation. |
+| `JobEmailComposer` | `src/alpha/jobs/components/JobEmailComposer.tsx` | Jobs-table technician email review and send workflow, including recipient/subject editing, formatted Job Card preview, and active-link replacement confirmation. |
 | `JobDrawerShell` | `src/alpha/jobs/components/JobDrawerShell.tsx` | Job-specific composition of the shared drawer shell. |
 | `EquipmentDrawer` | `src/alpha/equipment/components/EquipmentDrawer.tsx` | Primary Equipment create/edit workflow and related operational information, including the shared searchable Customer/Site selection and inline creation flow in both modes. |
 | `EquipmentDataQualityIndicator` | `src/alpha/equipment/components/EquipmentDataQualityIndicator.tsx` | Keyboard-accessible Critical/Warning Equipment data-quality disclosure used by Equipment lists. |
@@ -58,6 +59,7 @@ Business rules must have one owner even when several screens display the result.
 | Job completion | `src/alpha/jobs/completion/` and `src/alpha/site-checks/services/siteCheckCompletionApi.ts` | Job-type-owned completion orchestration and atomic completion-side effects, reached through `useJobs`. |
 | Editable email drafts | `src/alpha/jobs/utils/technicianMailto.ts` | Shared recipient-email validation and encoded `mailto:` construction. Feature services own subject/body rules and preparation audit. |
 | Staff eligibility | `src/alpha/mechanics/staffDirectory.ts` | Department labels, backward-compatible Job-assignment eligibility, and active internal-email-recipient eligibility across Staff, Jobs, Site Checks, and Chargeable Invoice Review. |
+| Staff realtime invalidation | `src/alpha/mechanics/StaffRealtimeBridge.tsx` and `src/alpha/mechanics/services/staffRealtime.ts` | One authenticated app-wide Staff change listener and a browser-local subscription boundary; active features own their bounded Staff-only refresh. |
 | Equipment CSV tools | `src/alpha/equipment/utils/equipmentCsv.ts` | Admin authorization, UTF-8 CSV serialization/parsing, stable-ID matching, blank-safe comparison, and staged Equipment change review. |
 
 Use feature hooks and services for loading and mutations. Components render values and raise

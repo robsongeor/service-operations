@@ -24,6 +24,7 @@ export function startJobsRealtime(options: {
     getAccessToken: () => Promise<string>
     onEvent: (event: JobsRealtimeEvent) => void
     onStatus: (status: JobsRealtimeStatus) => void
+    onReconnected?: () => void
 }) {
     const apiUrl = options.apiUrl.replace(/\/$/, '')
     if (!apiUrl) {
@@ -43,7 +44,10 @@ export function startJobsRealtime(options: {
         if (isJobsRealtimeEvent(value)) options.onEvent(value)
     })
     connection.onreconnecting(() => options.onStatus('connecting'))
-    connection.onreconnected(() => options.onStatus('connected'))
+    connection.onreconnected(() => {
+        options.onStatus('connected')
+        options.onReconnected?.()
+    })
     connection.onclose(() => { if (!stopped) options.onStatus('disconnected') })
 
     const connect = async () => {

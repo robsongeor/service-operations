@@ -29,16 +29,12 @@ import {
 } from '../services/jobAssignmentsApi'
 import type { JobAssignment } from '../types/jobAssignment.types'
 import { fetchMechanics as fetchStaffDirectory } from '../../mechanics/services/mechanicsApi'
+import { subscribeToStaffChanges } from '../../mechanics/services/staffRealtime'
 import { createEmailDispatch, waitForEmailDispatch } from '../services/emailDispatchApi'
-import { buildAssignmentJobEmail, buildPrimaryJobEmail } from '../services/jobEmail'
+import { buildAssignmentJobEmail, buildPrimaryJobEmail, type JobEmailDeliveryState, type JobEmailDraft } from '../services/jobEmail'
 import { assertJobHasEmailableJobNumber } from '../services/jobEmailRules'
 import { generateJobSubmissionLink } from '../services/jobSubmissionLinkApi'
-import {
-    buildMailtoUrl,
-    buildTechnicianEmailBody,
-    buildTechnicianEmailSubject,
-    isValidTechnicianEmail,
-} from '../utils/technicianMailto'
+import { isValidTechnicianEmail } from '../utils/technicianMailto'
 import type {
     JobScheduleOption,
     JobScheduleOptionInput,
@@ -164,6 +160,7 @@ export function useJobs() {
     const [jobsRealtimeStatus, setJobsRealtimeStatus] = useState<JobsRealtimeStatus>('disabled')
     const [referenceDataStatus, setReferenceDataStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
     const [referenceDataError, setReferenceDataError] = useState('')
+    const [emailDeliveryStates, setEmailDeliveryStates] = useState<Record<string, JobEmailDeliveryState>>({})
     const referenceDataRequestRef = useRef<Promise<JobReferenceData> | null>(null)
     const referenceDataValueRef = useRef<JobReferenceData | null>(null)
     const referenceDataReadyRef = useRef(false)
@@ -681,6 +678,52 @@ export function useJobs() {
         await fetchJobs()
     }
 
+    const queuePrimaryJobEmail = async (job: Job, draft: JobEmailDraft) => {
+        assertJobHasEmailableJobNumber(job)
+        if (!isValidTechnicianEmail(draft.recipientEmail)) {
+            throw new Error('Enter a valid technician email address before sending.')
+        }
+        if (!draft.subject.trim()) throw new Error('Enter an email subject before sending.')
+        setEmailDeliveryStates((current) => ({
+            ...current,
+            [job.gr_jobid]: { status: 'sending', message: 'Job Card email is being sent.' },
+        }))
+        try {
+            const token = await getAccessToken()
+            const submissionLink = await generateJobSubmissionLink(token, job.gr_jobid)
+            const email = buildPrimaryJobEmail(job, submissionLink.url, draft)
+            const dispatchId = await createEmailDispatch(token, { jobId: job.gr_jobid, ...email })
+            void (async () => {
+                try {
+                    await waitForEmailDispatch(token, dispatchId)
+                    await updateJobCardStatusApi(token, job.gr_jobid, JOB_CARD_STATUSES.SENT)
+                    setEmailDeliveryStates((current) => ({
+                        ...current,
+                        [job.gr_jobid]: { status: 'sent', message: 'Job Card email sent.' },
+                    }))
+                    await fetchJobs()
+                } catch (deliveryError) {
+                    setEmailDeliveryStates((current) => ({
+                        ...current,
+                        [job.gr_jobid]: {
+                            status: 'failed',
+                            message: deliveryError instanceof Error ? deliveryError.message : 'Job Card email delivery failed.',
+                        },
+                    }))
+                }
+            })()
+        } catch (queueError) {
+            setEmailDeliveryStates((current) => ({
+                ...current,
+                [job.gr_jobid]: {
+                    status: 'failed',
+                    message: queueError instanceof Error ? queueError.message : 'Job Card email could not be queued.',
+                },
+            }))
+            throw queueError
+        }
+    }
+
     const sendAssignmentJobEmail = async (job: Job, assignment: JobAssignment) => {
         assertJobHasEmailableJobNumber(job)
         if (!isValidTechnicianEmail(assignment.gr_Mechanic?.gr_email)) {
@@ -701,21 +744,6 @@ export function useJobs() {
             JOB_CARD_STATUSES.SENT,
         )
         await fetchJobAssignments()
-    }
-
-    const prepareTechnicianJobEmail = async (job: Job) => {
-        assertJobHasEmailableJobNumber(job)
-        const mechanic = job.gr_Mechanic
-        if (!mechanic || !isValidTechnicianEmail(mechanic.gr_email)) {
-            throw new Error('The allocated technician does not have an email address.')
-        }
-        const token = await getAccessToken()
-        const submissionLink = await generateJobSubmissionLink(token, job.gr_jobid)
-        return buildMailtoUrl({
-            recipient: mechanic.gr_email,
-            subject: buildTechnicianEmailSubject(job),
-            body: buildTechnicianEmailBody(job, mechanic.gr_name, submissionLink.url),
-        })
     }
 
     const deleteJobAssignment = async (assignmentId: string) => {
@@ -1201,32 +1229,61 @@ export function useJobs() {
 
         let cancelled = false
         let refreshTimer: number | undefined
+        const refreshJobs = () => {
+            if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
+            refreshTimer = window.setTimeout(async () => {
+                if (cancelled) return
+                setJobsCacheStatus((current) => current ? { ...current, refreshing: true } : current)
+                try {
+                    const rows = await fetchJobsApi(await getAccessToken(), { forceRefresh: true })
+                    if (!cancelled) {
+                        setJobs(rows)
+                        setJobsCacheStatus({ source: 'network', savedAt: Date.now(), refreshing: false })
+                    }
+                } catch {
+                    if (!cancelled) setJobsCacheStatus((current) => current ? { ...current, refreshing: false } : current)
+                }
+            }, 2_000)
+        }
         const stop = startJobsRealtime({
             apiUrl,
             getAccessToken,
             onStatus: (status) => { if (!cancelled) setJobsRealtimeStatus(status) },
-            onEvent: () => {
-                if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
-                refreshTimer = window.setTimeout(async () => {
-                    if (cancelled) return
-                    setJobsCacheStatus((current) => current ? { ...current, refreshing: true } : current)
-                    try {
-                        const rows = await fetchJobsApi(await getAccessToken(), { forceRefresh: true })
-                        if (!cancelled) {
-                            setJobs(rows)
-                            setJobsCacheStatus({ source: 'network', savedAt: Date.now(), refreshing: false })
-                        }
-                    } catch {
-                        if (!cancelled) setJobsCacheStatus((current) => current ? { ...current, refreshing: false } : current)
-                    }
-                }, 2_000)
-            },
+            onEvent: refreshJobs,
+            onReconnected: refreshJobs,
         })
+        const refreshWhenVisible = () => {
+            if (document.visibilityState === 'visible') refreshJobs()
+        }
+        document.addEventListener('visibilitychange', refreshWhenVisible)
 
         return () => {
             cancelled = true
             if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
+            document.removeEventListener('visibilitychange', refreshWhenVisible)
             stop()
+        }
+    }, [account, getAccessToken])
+
+    useEffect(() => {
+        if (!account) return
+        let cancelled = false
+        let refreshTimer: number | undefined
+        const unsubscribe = subscribeToStaffChanges(() => {
+            if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
+            refreshTimer = window.setTimeout(async () => {
+                try {
+                    const rows = await fetchStaffDirectory(await getAccessToken())
+                    if (!cancelled) setMechanics(rows)
+                } catch {
+                    // Keep the last usable directory; the next notification can retry.
+                }
+            }, 750)
+        })
+        return () => {
+            cancelled = true
+            if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
+            unsubscribe()
         }
     }, [account, getAccessToken])
 
@@ -1269,8 +1326,9 @@ export function useJobs() {
         updateJobStatus,
         updateJobCardStatus,
         sendPrimaryJobEmail,
+        queuePrimaryJobEmail,
+        emailDeliveryStates,
         sendAssignmentJobEmail,
-        prepareTechnicianJobEmail,
         createJobAssignment,
         updateJobAssignmentStatus,
         deleteJobAssignment,

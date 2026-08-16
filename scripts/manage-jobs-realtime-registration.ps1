@@ -3,6 +3,8 @@ param(
     [string]$Mode = 'Inspect',
     [string]$EnvironmentUrl = 'https://org0d4246d7.crm6.dynamics.com',
     [Guid]$ServiceEndpointId = '85b89b0f-bd59-44cb-9d98-86cc3660963e',
+    [ValidateSet('gr_job', 'gr_mechanic')]
+    [string]$EntityName = 'gr_job',
     [ValidateSet('Never', 'Auto')]
     [string]$LoginPrompt = 'Never'
 )
@@ -11,8 +13,8 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $messages = @('Create', 'Update', 'Delete')
-$stepPrefix = 'Service Operations Jobs Realtime'
-$filteringAttributes = @(
+$stepPrefix = if ($EntityName -eq 'gr_mechanic') { 'Service Operations Staff Realtime' } else { 'Service Operations Jobs Realtime' }
+$jobFilteringAttributes = @(
     'gr_jobnumber', 'gr_status', 'gr_ordernumber', 'gr_description', 'gr_jobtype',
     'gr_jobcardstatus', 'gr_jobcardsenton', 'gr_jobcardsubmittedon', 'gr_jobcardclosedon',
     'gr_hourmeter', 'gr_hourmeterreadingtype', 'gr_hourmeterrecordeddate', 'gr_completeddate',
@@ -24,6 +26,12 @@ $filteringAttributes = @(
     'gr_techniciansubmissionsafetyissueidentified', 'gr_techniciansubmissionsafetyissuedetails',
     'gr_equipment', 'gr_mechanic', 'gr_site', 'gr_contact'
 ) -join ','
+$staffFilteringAttributes = @(
+    'gr_name', 'gr_phone', 'gr_email', 'gr_camnumber', 'gr_rego', 'gr_region',
+    'gr_department', 'gr_jobassignmentenabled', 'gr_customeremailccenabled',
+    'statecode', 'statuscode'
+) -join ','
+$filteringAttributes = if ($EntityName -eq 'gr_mechanic') { $staffFilteringAttributes } else { $jobFilteringAttributes }
 
 function Get-ToolsPath {
     $root = Join-Path $env:LOCALAPPDATA 'Microsoft\PowerAppsCLI'
@@ -55,7 +63,7 @@ function Connect-Dataverse {
 function Get-JobMessageFilters($Service) {
     $query = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new('sdkmessagefilter')
     $query.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new('sdkmessagefilterid', 'sdkmessageid', 'primaryobjecttypecode')
-    $query.Criteria.AddCondition('primaryobjecttypecode', [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal, 'gr_job') | Out-Null
+    $query.Criteria.AddCondition('primaryobjecttypecode', [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal, $EntityName) | Out-Null
     $filters = $Service.RetrieveMultiple($query).Entities
     $result = @{}
     foreach ($filter in $filters) {
@@ -86,20 +94,23 @@ try {
     Write-Output "URL: $($endpoint['url'])"
     $filters = Get-JobMessageFilters $service
     foreach ($message in $messages) {
-        if (-not $filters.ContainsKey($message)) { throw "No $message message filter exists for gr_job." }
+        if (-not $filters.ContainsKey($message)) { throw "No $message message filter exists for $EntityName." }
     }
 
     $steps = Get-RealtimeSteps $service
-    $jobSteps = @($steps | Where-Object { [string]$_['name'] -like "$stepPrefix*" })
-    Write-Output "Existing Job realtime steps: $($jobSteps.Count)"
-    foreach ($step in $jobSteps) {
+    $entitySteps = @($steps | Where-Object { [string]$_['name'] -like "$stepPrefix*" })
+    Write-Output "Existing $EntityName realtime steps: $($entitySteps.Count)"
+    foreach ($step in $entitySteps) {
         Write-Output "- $($step['name']) | state=$($step.FormattedValues['statecode']) | mode=$($step['mode'].Value) | stage=$($step['stage'].Value)"
+        if ($step.Attributes.ContainsKey('filteringattributes') -and [string]$step['filteringattributes']) {
+            Write-Output "  filteringattributes=$($step['filteringattributes'])"
+        }
     }
 
     if ($Mode -eq 'Register') {
         foreach ($message in $messages) {
             $name = "$stepPrefix - $message"
-            $existing = $jobSteps | Where-Object { [string]$_['name'] -eq $name } | Select-Object -First 1
+            $existing = $entitySteps | Where-Object { [string]$_['name'] -eq $name } | Select-Object -First 1
             if ($existing) {
                 Write-Output "Exists: $name"
                 continue
@@ -107,7 +118,7 @@ try {
             $filter = $filters[$message]
             $step = [Microsoft.Xrm.Sdk.Entity]::new('sdkmessageprocessingstep')
             $step['name'] = $name
-            $step['description'] = 'Broadcast a bounded Job cache-invalidation event to authenticated Service Operations clients.'
+            $step['description'] = "Broadcast a bounded $EntityName cache-invalidation event to authenticated Service Operations clients."
             $step['eventhandler'] = [Microsoft.Xrm.Sdk.EntityReference]::new('serviceendpoint', $ServiceEndpointId)
             $step['sdkmessageid'] = [Microsoft.Xrm.Sdk.EntityReference]$filter.Attributes['sdkmessageid']
             $step['sdkmessagefilterid'] = [Microsoft.Xrm.Sdk.EntityReference]::new('sdkmessagefilter', $filter.Id)
@@ -129,8 +140,17 @@ try {
             $expected = "$stepPrefix - $message"
             if ($names -notcontains $expected) { throw "Missing registered step: $expected" }
         }
-        if ($verified.Count -ne 3) { throw "Expected exactly three Job realtime steps; found $($verified.Count)." }
-        Write-Output 'Verified three asynchronous PostOperation Job realtime steps.'
+        if ($verified.Count -ne 3) { throw "Expected exactly three $EntityName realtime steps; found $($verified.Count)." }
+        $updateStep = $verified | Where-Object { [string]$_['name'] -eq "$stepPrefix - Update" } | Select-Object -First 1
+        $configuredAttributes = if ($updateStep.Attributes.ContainsKey('filteringattributes')) {
+            @([string]$updateStep['filteringattributes'] -split ',' | ForEach-Object { $_.Trim().ToLowerInvariant() } | Where-Object { $_ })
+        } else { @() }
+        foreach ($attribute in @($filteringAttributes -split ',')) {
+            if ($configuredAttributes -notcontains $attribute.ToLowerInvariant()) {
+                throw "The Update step is missing filtering attribute: $attribute"
+            }
+        }
+        Write-Output "Verified three asynchronous PostOperation $EntityName realtime steps."
     }
 } finally {
     $service.Dispose()

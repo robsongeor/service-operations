@@ -81,6 +81,13 @@ Branch: `codex/job-book-integration`
 
 ## Unfinished work
 
+- The active Dataverse **Job Email Dispatch** Power Automate flow was upgraded in place on
+  16 August 2026 to use the existing WSSOperations Office 365 Outlook connection. It now sends the
+  stored HTML body before marking Email Sent, and records a safe failure result on Outlook failure
+  or timeout. The corresponding Jobs-table in-app composer, formatted Job Card, clickable secure
+  link, non-blocking queue behaviour, and background Sending/Sent/Failed state are implemented
+  locally and await commit/deployment and one deliberate recipient-controlled delivery smoke test.
+
 - Job Book Intake now has a provisioned, published, and verified organization-owned
   `gr_jobbookentry` Dataverse ledger in `ServiceOperationsNew`. Its primary Job Number is an
   AutoNumber with Active alternate key, seeded at `145969`; the Service Operations role has only
@@ -112,6 +119,21 @@ Branch: `codex/job-book-integration`
   HTTP 202. Three enabled asynchronous PostOperation `gr_job` Create/Update/Delete steps were created
   against the existing service endpoint and independently verified. Dataverse remains authoritative;
   SignalR messages contain only the changed record ID, operation, and event time.
+
+- Staff realtime invalidation is implemented locally and awaiting backend deployment plus Dataverse
+  registration. The authenticated app shell opens one Staff notification listener, and active Staff,
+  Jobs, and Job Book screens debounce a `gr_mechanic` change before re-reading only the Staff
+  directory. The notification contains only Staff ID, operation, and event time. Use
+  `scripts/manage-staff-realtime-registration.ps1` to inspect/register/verify the three asynchronous
+  PostOperation steps after deploying the updated realtime receiver.
+
+- Local Job Card link generation now reloads its CommonJS API service per Vite request. This prevents
+  the hot-reloaded browser client and long-running localhost middleware from disagreeing about the
+  delegated Dataverse authentication header and returning a false `401` until Vite is restarted.
+
+- Jobs realtime recovery now performs one debounced Dataverse reconciliation after SignalR
+  reconnects and when a hidden Jobs tab becomes visible. This handles laptop sleep/background-tab
+  gaps without polling; ordinary connected changes continue to use bounded `jobChanged` events.
 
 - The published Service Job completion hour-meter dialog now uses bounded responsive columns so Equipment
   labels, maintenance summaries, and numeric inputs cannot overlap or escape the modal at narrow

@@ -7,6 +7,7 @@ import { getSignedInUserInfo } from './auth/signedInUser'
 import { useActiveMsalAccount } from './auth/useActiveMsalAccount'
 import { isServiceOperationsAdministrator } from './auth/adminAuthorization'
 import DataverseSessionRecovery from './auth/DataverseSessionRecovery'
+import StaffRealtimeBridge from './alpha/mechanics/StaffRealtimeBridge'
 
 const JobsScreen = lazy(() => import('./alpha/jobs/JobsScreen'))
 const SchedulingScreen = lazy(() => import('./alpha/scheduling/SchedulingScreen'))
@@ -60,6 +61,7 @@ function App() {
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       <DataverseSessionRecovery />
+      <StaffRealtimeBridge />
       {/* Sidebar */}
       <Sidebar />
 

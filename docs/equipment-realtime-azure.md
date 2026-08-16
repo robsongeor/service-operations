@@ -1,6 +1,6 @@
-# Equipment and Jobs realtime updates on Azure
+# Equipment, Jobs, and Staff realtime updates on Azure
 
-Dataverse remains the source of truth. This integration broadcasts invalidation events only; it does not create another Equipment or Jobs database.
+Dataverse remains the source of truth. This integration broadcasts invalidation events only; it does not create another Equipment, Jobs, or Staff database.
 
 ## Azure resources
 
@@ -10,7 +10,7 @@ Dataverse remains the source of truth. This integration broadcasts invalidation 
 4. Configure `AzureSignalRConnectionString`, `DATAVERSE_URL`, and `APP_ORIGINS` in Function App settings. `APP_ORIGINS` is a comma-separated allowlist containing the production URL and approved local development origins. Keep all values server-side.
 5. Add the same explicit origins to the Function App CORS settings and enable credential support because the SignalR browser client negotiates with credentials enabled.
 6. Set `VITE_EQUIPMENT_REALTIME_API_URL` to the Function App `/api` URL when building the frontend.
-   Equipment and Jobs share the authenticated SignalR connection.
+   Equipment, Jobs, and Staff use the authenticated SignalR hub.
 
 ## GitHub deployment settings
 
@@ -44,6 +44,12 @@ the corresponding bounded SignalR event. Configure Update filtering attributes f
 projected by the Jobs table. These steps are required before the client can receive Job
 invalidations; they are intentionally not created by an ordinary application deployment.
 
+For Staff, reuse the endpoint and register the same three steps on `gr_mechanic`. Run
+`scripts/manage-staff-realtime-registration.ps1 -Mode Inspect`, then use `-Mode Register` only after
+the intended environment and endpoint have been confirmed, followed by `-Mode Verify`. Staff
+updates use their own `staffChanged` target and cause active screens to reload only the Staff
+directory.
+
 The development Dataverse registration is `Service Operations Equipment Realtime` (`85b89b0f-bd59-44cb-9d98-86cc3660963e`). Its three steps are enabled, asynchronous, PostOperation, and configured to delete successful system jobs automatically.
 
 The development `gr_job` registration was added and verified on 16 August 2026. Its enabled
@@ -57,5 +63,5 @@ asynchronous PostOperation steps are:
 
 - The negotiate endpoint validates the caller's Dataverse bearer token with `WhoAmI` before returning a short-lived SignalR connection token.
 - Azure Functions validates the Dataverse webhook key before invoking the handler.
-- SignalR messages contain only the changed Equipment or Job ID, operation, and event time.
+- SignalR messages contain only the changed Equipment, Job, or Staff ID, operation, and event time.
 - Connected clients debounce event bursts before refreshing the authoritative Dataverse snapshot.
