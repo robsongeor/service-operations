@@ -6,6 +6,7 @@ import type { useJobEditor } from '../hooks/useJobEditor'
 import { deriveSiteNameFromAddress } from '../../shared/siteName'
 import VerifiedAddressField from './VerifiedAddressField'
 import type { VerifiedAddressSuggestion } from '../services/addressSearchApi'
+import { equipmentIdentifierSearchValues, parseAlternateFleetNumbers } from '../../equipment/identifiers/alternateFleetNumbers'
 
 type Props = {
     editor: ReturnType<typeof useJobEditor>
@@ -22,7 +23,9 @@ type Panel = '' | 'equipment' | 'customer' | 'site' | 'contact'
 const normalizeSearch = (value?: string | null) => value?.trim().replace(/\s+/g, ' ').toLocaleLowerCase() ?? ''
 const equipmentLabel = (item: Equipment) => ({
     identifier: item.gr_fleet || (item.gr_serial ? `Serial ${item.gr_serial}` : 'Equipment'),
-    model: [item.gr_make, item.gr_model].filter(Boolean).join(' '),
+    model: [item.gr_make, item.gr_model, parseAlternateFleetNumbers(item.gr_alternatefleetnumbers).length
+        ? `Also ${parseAlternateFleetNumbers(item.gr_alternatefleetnumbers).join(' · ')}`
+        : ''].filter(Boolean).join(' · '),
     location: [item.gr_Site?.gr_Customer?.gr_name, item.gr_Site?.gr_name].filter(Boolean).join(' · '),
 })
 
@@ -85,7 +88,7 @@ export default function JobRelationshipFields({
     const equipmentResults = useMemo(() => {
         const query = normalizeSearch(equipmentSearch)
         return equipmentList.map((item) => {
-            const identifiers = [item.gr_fleet, item.gr_serial].map(normalizeSearch)
+            const identifiers = equipmentIdentifierSearchValues(item).map(normalizeSearch)
             const details = [item.gr_make, item.gr_model, item.gr_Site?.gr_Customer?.gr_name, item.gr_Site?.gr_name, item.gr_Site?.gr_address].map(normalizeSearch)
             if (!query) {
                 const score = item.gr_Site?.gr_siteid === draft.siteId ? 0 : item.gr_Site?.gr_Customer?.gr_customerid === draft.customerId ? 1 : 2
@@ -242,7 +245,7 @@ export default function JobRelationshipFields({
 
         <label className="job-edit-field job-edit-field-wide job-edit-combobox">
             <span>Equipment</span>
-            {selectedEquipment ? <div className="job-equipment-selected"><div><strong>{equipmentLabel(selectedEquipment).identifier}</strong>{equipmentLabel(selectedEquipment).model && <small>{equipmentLabel(selectedEquipment).model}</small>}{equipmentLabel(selectedEquipment).location && <small>{equipmentLabel(selectedEquipment).location}</small>}</div><button type="button" aria-label="Change selected equipment" onClick={clearEquipment}>Change</button></div> : <><input role="combobox" aria-expanded={equipmentSearchOpen} aria-controls="job-editor-equipment-results" autoComplete="off" placeholder="Search fleet, serial, make or model..." value={equipmentSearch} onFocus={() => setEquipmentSearchOpen(true)} onChange={(event) => { setEquipmentSearch(event.target.value); setEquipmentSearchOpen(true); setEquipmentActiveIndex(0) }} onKeyDown={(event) => { if (event.key === 'ArrowDown') { event.preventDefault(); setEquipmentActiveIndex((current) => Math.min(current + 1, equipmentResults.length - 1)) } if (event.key === 'ArrowUp') { event.preventDefault(); setEquipmentActiveIndex((current) => Math.max(current - 1, 0)) } if (event.key === 'Enter' && equipmentResults[equipmentActiveIndex]) { event.preventDefault(); selectEquipment(equipmentResults[equipmentActiveIndex]) } if (event.key === 'Escape') setEquipmentSearchOpen(false) }} />{equipmentSearchOpen && <div className="job-edit-results job-equipment-results" id="job-editor-equipment-results" role="listbox"><button type="button" className="job-edit-add-result" onClick={clearEquipment}>No Equipment</button><button type="button" className="job-edit-add-result" onClick={openNewEquipmentPanel}>+ Add new equipment</button>{equipmentResults.map((item, index) => { const label = equipmentLabel(item); return <button key={item.gr_equipmentid} type="button" role="option" aria-selected={index === equipmentActiveIndex} className={index === equipmentActiveIndex ? 'active' : ''} onMouseEnter={() => setEquipmentActiveIndex(index)} onClick={() => selectEquipment(item)}><strong>{label.identifier}</strong>{label.model && <small>{label.model}</small>}{label.location && <small>{label.location}</small>}</button> })}{equipmentSearch.trim() && equipmentResults.length === 0 && <span>No Equipment found for &quot;{equipmentSearch.trim()}&quot;</span>}</div>}</>}
+            {selectedEquipment ? <div className="job-equipment-selected"><div><strong>{equipmentLabel(selectedEquipment).identifier}</strong>{equipmentLabel(selectedEquipment).model && <small>{equipmentLabel(selectedEquipment).model}</small>}{equipmentLabel(selectedEquipment).location && <small>{equipmentLabel(selectedEquipment).location}</small>}</div><button type="button" aria-label="Change selected equipment" onClick={clearEquipment}>Change</button></div> : <><input role="combobox" aria-expanded={equipmentSearchOpen} aria-controls="job-editor-equipment-results" autoComplete="off" placeholder="Search primary or alternate fleet, serial, make or model..." value={equipmentSearch} onFocus={() => setEquipmentSearchOpen(true)} onChange={(event) => { setEquipmentSearch(event.target.value); setEquipmentSearchOpen(true); setEquipmentActiveIndex(0) }} onKeyDown={(event) => { if (event.key === 'ArrowDown') { event.preventDefault(); setEquipmentActiveIndex((current) => Math.min(current + 1, equipmentResults.length - 1)) } if (event.key === 'ArrowUp') { event.preventDefault(); setEquipmentActiveIndex((current) => Math.max(current - 1, 0)) } if (event.key === 'Enter' && equipmentResults[equipmentActiveIndex]) { event.preventDefault(); selectEquipment(equipmentResults[equipmentActiveIndex]) } if (event.key === 'Escape') setEquipmentSearchOpen(false) }} />{equipmentSearchOpen && <div className="job-edit-results job-equipment-results" id="job-editor-equipment-results" role="listbox"><button type="button" className="job-edit-add-result" onClick={clearEquipment}>No Equipment</button><button type="button" className="job-edit-add-result" onClick={openNewEquipmentPanel}>+ Add new equipment</button>{equipmentResults.map((item, index) => { const label = equipmentLabel(item); return <button key={item.gr_equipmentid} type="button" role="option" aria-selected={index === equipmentActiveIndex} className={index === equipmentActiveIndex ? 'active' : ''} onMouseEnter={() => setEquipmentActiveIndex(index)} onClick={() => selectEquipment(item)}><strong>{label.identifier}</strong>{label.model && <small>{label.model}</small>}{label.location && <small>{label.location}</small>}</button> })}{equipmentSearch.trim() && equipmentResults.length === 0 && <span>No Equipment found for &quot;{equipmentSearch.trim()}&quot;</span>}</div>}</>}
             {showLegacyEquipmentSelect && <select value={draft.equipmentId} onChange={(event) => {
                 if (event.target.value === '__new__') return openPanel('equipment')
 

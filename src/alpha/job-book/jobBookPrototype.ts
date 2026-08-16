@@ -3,6 +3,7 @@ import type { Equipment } from '../jobs/types/equipment.types'
 export type PrototypeEquipment = {
     id: string
     fleet: string
+    alternateFleetNumbers?: string
     serial: string
     make: string
     model: string
@@ -66,6 +67,7 @@ export function equipmentToPrototype(record: Equipment): PrototypeEquipment {
     return {
         id: record.gr_equipmentid,
         fleet: record.gr_fleet?.trim() ?? '',
+        alternateFleetNumbers: record.gr_alternatefleetnumbers?.trim() ?? '',
         serial: record.gr_serial?.trim() ?? '',
         make: record.gr_make?.trim() ?? '',
         model: record.gr_model?.trim() ?? '',

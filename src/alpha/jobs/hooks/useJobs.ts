@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { useActiveMsalAccount } from '../../../auth/useActiveMsalAccount'
 import type { Job } from '../types/job.types'
@@ -122,6 +122,15 @@ import { updateWofExpiryForCompletion } from '../../wof/services/wofApi'
 import { acquireDataverseAccessToken } from '../../../auth/dataverseAuthentication'
 import type { HourMeterReadingType } from '../../equipment/hourMeter/hourMeterReading.types'
 
+type JobReferenceData = {
+    equipment: Equipment[]
+    sites: Site[]
+    customers: Customer[]
+    siteContacts: SiteContact[]
+    quotes: Quote[]
+    assignments: JobAssignment[]
+    servicePlans: EquipmentServicePlan[]
+}
 
 
 export function useJobs() {
@@ -153,10 +162,79 @@ export function useJobs() {
         refreshing: boolean
     } | null>(null)
     const [jobsRealtimeStatus, setJobsRealtimeStatus] = useState<JobsRealtimeStatus>('disabled')
+    const [referenceDataStatus, setReferenceDataStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
+    const [referenceDataError, setReferenceDataError] = useState('')
+    const referenceDataRequestRef = useRef<Promise<JobReferenceData> | null>(null)
+    const referenceDataValueRef = useRef<JobReferenceData | null>(null)
+    const referenceDataReadyRef = useRef(false)
 
     const getAccessToken = useCallback(async () => {
         return acquireDataverseAccessToken(instance, account)
     }, [account, instance])
+
+    const prepareJobReferenceData = useCallback(async () => {
+        if (referenceDataReadyRef.current && referenceDataValueRef.current) return referenceDataValueRef.current
+        if (referenceDataRequestRef.current) return referenceDataRequestRef.current
+
+        setReferenceDataStatus('loading')
+        setReferenceDataError('')
+
+        const request = (async () => {
+            try {
+                const token = await getAccessToken()
+                const [equipment, siteRows, customerRows, contacts, quotes, assignments, plans] = await Promise.all([
+                    fetchEquipmentApi(token),
+                    fetchSitesApi(token),
+                    fetchCustomersApi(token),
+                    fetchSiteContactsApi(token),
+                    fetchQuotesApi(token),
+                    fetchJobAssignmentsApi(token),
+                    fetchEquipmentServicePlans(token),
+                ])
+
+                const data: JobReferenceData = {
+                    equipment,
+                    sites: siteRows,
+                    customers: customerRows,
+                    siteContacts: contacts,
+                    quotes,
+                    assignments,
+                    servicePlans: plans,
+                }
+                setEquipmentList(data.equipment)
+                setSites(data.sites)
+                setCustomers(data.customers)
+                setSiteContacts(data.siteContacts)
+                setJobQuotes(data.quotes)
+                setJobAssignments(data.assignments)
+                setServicePlans(data.servicePlans)
+                referenceDataValueRef.current = data
+                referenceDataReadyRef.current = true
+                setReferenceDataStatus('ready')
+                return data
+            } catch (error) {
+                const message = error instanceof Error
+                    ? error.message
+                    : 'Job details could not be prepared.'
+                setReferenceDataError(message)
+                setReferenceDataStatus('error')
+                throw error
+            } finally {
+                referenceDataRequestRef.current = null
+            }
+        })()
+
+        referenceDataRequestRef.current = request
+        return request
+    }, [getAccessToken])
+
+    useEffect(() => {
+        if (!referenceDataValueRef.current) return
+        referenceDataValueRef.current = {
+            ...referenceDataValueRef.current,
+            equipment: equipmentList,
+        }
+    }, [equipmentList])
 
     const createEquipment = async (equipment: {
         fleet: string
@@ -374,13 +452,16 @@ export function useJobs() {
         return jobs
     }
 
-    const fetchJobForDrawer = async (jobId: string) => {
-        const token = await getAccessToken()
+    const fetchJobForDrawer = useCallback(async (jobId: string) => {
+        const [, token] = await Promise.all([
+            prepareJobReferenceData(),
+            getAccessToken(),
+        ])
         const refreshed = await fetchJobForDrawerApi(token, jobId)
         if (!refreshed) return undefined
         setJobs((current) => current.map((job) => job.gr_jobid === jobId ? refreshed : job))
         return refreshed
-    }
+    }, [getAccessToken, prepareJobReferenceData])
 
     const fetchScheduleOptions = async () => {
         const token = await getAccessToken()
@@ -1035,6 +1116,18 @@ export function useJobs() {
         let deviceSnapshotRestored = false
 
         const loadInitialData = async () => {
+            referenceDataRequestRef.current = null
+            referenceDataValueRef.current = null
+            referenceDataReadyRef.current = false
+            setReferenceDataStatus('idle')
+            setReferenceDataError('')
+            setEquipmentList([])
+            setSites([])
+            setCustomers([])
+            setSiteContacts([])
+            setJobQuotes([])
+            setJobAssignments([])
+            setServicePlans([])
             setIsLoading(true)
             setLoadError('')
 
@@ -1044,14 +1137,7 @@ export function useJobs() {
 
                 const [
                     initialJobs,
-                    initialEquipment,
-                    initialSites,
-                    initialCustomers,
-                    initialSiteContacts,
                     initialScheduleOptions,
-                    initialQuotes,
-                    initialAssignments,
-                    initialServicePlans,
                     initialOfficeUpdates,
                     mechanicsData,
                 ] = await Promise.all([
@@ -1075,14 +1161,7 @@ export function useJobs() {
                             if (!cancelled) setJobsCacheStatus((current) => current ? { ...current, refreshing: false } : current)
                         },
                     }),
-                    fetchEquipmentApi(token),
-                    fetchSitesApi(token),
-                    fetchCustomersApi(token),
-                    fetchSiteContactsApi(token),
                     fetchJobScheduleOptionsApi(token),
-                    fetchQuotesApi(token),
-                    fetchJobAssignmentsApi(token),
-                    fetchEquipmentServicePlans(token),
                     fetchJobOfficeUpdatesApi(token),
                     mechanicsRequest,
                 ])
@@ -1090,14 +1169,7 @@ export function useJobs() {
                 if (cancelled) return
 
                 setJobs(initialJobs)
-                setEquipmentList(initialEquipment)
-                setSites(initialSites)
-                setCustomers(initialCustomers)
-                setSiteContacts(initialSiteContacts)
                 setScheduleOptions(initialScheduleOptions)
-                setJobQuotes(initialQuotes)
-                setJobAssignments(initialAssignments)
-                setServicePlans(initialServicePlans)
                 setOfficeUpdates(initialOfficeUpdates)
                 setMechanics(mechanicsData)
             } catch (error) {
@@ -1167,6 +1239,9 @@ export function useJobs() {
         officeUpdates,
         jobsCacheStatus,
         jobsRealtimeStatus,
+        referenceDataStatus,
+        referenceDataError,
+        prepareJobReferenceData,
         equipmentList,
         sites,
         customers,

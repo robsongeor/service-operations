@@ -36,6 +36,14 @@ events only; clients debounce those events and refresh from Dataverse. Technicia
 and photos are drawer-only details and are fetched for the selected Job rather than for the entire
 table.
 
+Jobs startup is deliberately split into two phases. The table phase loads Jobs and Staff plus the
+Schedule Options and Office Updates that directly drive visible table filtering and summaries. It
+does not request the full Equipment, Customer, Site, Site Contact, Quote, Assignment, or Equipment
+Service Plan collections. Those reference collections load only when a user first opens Job create,
+Job edit, Equipment details, or a workflow that needs them. Concurrent opens share one in-flight
+request, a successful result remains in memory for the page session, and a failed request can be
+retried without opening a partially populated drawer.
+
 Job create/edit drawers use shared drawer presentation and shared searchable selectors.
 Scheduling and Customer Dashboard entry points reuse the Jobs workflow. Completion is routed
 through the completion framework rather than screen-specific writes.
@@ -118,6 +126,8 @@ lists are not part of the initial Job Book load; they load only when the add-mac
 
 ## Important Business Rules
 
+- Job descriptions support up to 4,000 characters across managed Jobs and Job Book Intake. The
+  shared UI and service boundary enforce the same limit as the Dataverse columns.
 - A non-empty Job Number must be unique across Jobs. The canonical create service performs an exact,
   authenticated Dataverse preflight for every creation entry point before POST; the main Jobs drawer
   also rejects a normalized duplicate from its loaded projection immediately. Blank Job Numbers

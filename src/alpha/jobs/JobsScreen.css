@@ -89,6 +89,39 @@
 
 .jobs-intake-button:hover { border-color: #6ca99b; background: #e2f3ee; }
 
+.jobs-reference-data-state {
+    display: flex;
+    min-height: 36px;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin: -8px 0 12px;
+    padding: 6px 12px;
+    border: 1px solid #d8e5e0;
+    border-radius: 9px;
+    background: #f4f9f7;
+    color: #49625a;
+    font-size: .76rem;
+}
+
+.jobs-reference-data-error {
+    justify-content: space-between;
+    border-color: #efcaca;
+    background: #fff8f8;
+    color: #863b3b;
+}
+
+.jobs-reference-data-state button {
+    padding: 5px 9px;
+    border: 1px solid #a8c9c0;
+    border-radius: 7px;
+    background: #fff;
+    color: #176f66;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
 .jobs-data-state {
     display: flex;
     min-height: 180px;

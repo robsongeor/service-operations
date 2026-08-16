@@ -45,6 +45,7 @@ export default function JobsScreen() {
         updateJobOfficeAttention,
         completionRequest, isCompletingJob, completionError, completeStandardJob, completeServiceJob, completeWofJob, cancelJobCompletion,
         jobsCacheStatus, jobsRealtimeStatus,
+        referenceDataStatus, referenceDataError, prepareJobReferenceData,
         isLoading, loadError, retryInitialLoad, fetchJobForDrawer,
     } = useJobs()
     const [editingJob, setEditingJob] = useState<Job | null>(null)
@@ -90,19 +91,21 @@ export default function JobsScreen() {
         }))
     }
 
-    const openJob = (job: Job, tab: 'details' | 'jobcard' = 'details') => {
+    const openJob = async (job: Job, tab: 'details' | 'jobcard' = 'details') => {
         setEditingInitialTab(tab)
-        setEditingJob(job)
-        void fetchJobForDrawer(job.gr_jobid).then((refreshedJob) => {
-            if (!refreshedJob) return
-            setEditingJob((current) => current?.gr_jobid === job.gr_jobid ? refreshedJob : current)
-        }).catch(() => {
-            // The already-loaded Job remains available if the background refresh fails.
-        })
+        await prepareJobReferenceData()
+        try {
+            const refreshedJob = await fetchJobForDrawer(job.gr_jobid)
+            setEditingJob(refreshedJob ?? job)
+        } catch {
+            // Reference data is ready, so retain the existing Job if only its focused refresh failed.
+            setEditingJob(job)
+        }
     }
 
-    const openEquipment = (equipmentId: string) => {
-        const equipment = equipmentList.find((item) =>
+    const openEquipment = async (equipmentId: string) => {
+        const referenceData = await prepareJobReferenceData()
+        const equipment = referenceData.equipment.find((item) =>
             item.gr_equipmentid.toLowerCase() === equipmentId.toLowerCase())
         if (!equipment) return
         clearEquipmentSaveError()
@@ -116,14 +119,12 @@ export default function JobsScreen() {
         if (!job) return
         const timer = window.setTimeout(() => {
             setEditingInitialTab('details')
-            setEditingJob(job)
-            void fetchJobForDrawer(job.gr_jobid).then((refreshedJob) => {
-                if (!refreshedJob) return
-                setEditingJob((current) => current?.gr_jobid === job.gr_jobid ? refreshedJob : current)
-            }).catch(() => undefined)
             const next = new URLSearchParams(searchParams)
             next.delete('jobId')
             setSearchParams(next, { replace: true })
+            void fetchJobForDrawer(job.gr_jobid).then((refreshedJob) => {
+                setEditingJob(refreshedJob ?? job)
+            }).catch(() => undefined)
         }, 0)
         return () => window.clearTimeout(timer)
     }, [editingJob, fetchJobForDrawer, isLoading, jobs, searchParams, setSearchParams])
@@ -206,13 +207,25 @@ export default function JobsScreen() {
                     <button
                         className="jobs-create-button"
                         type="button"
-                        onClick={() => setIsCreatingJob(true)}
-                        disabled={isLoading || Boolean(loadError)}
+                        onClick={() => {
+                            void prepareJobReferenceData().then(() => setIsCreatingJob(true)).catch(() => undefined)
+                        }}
+                        disabled={isLoading || Boolean(loadError) || referenceDataStatus === 'loading'}
                     >
-                        + Create job
+                        {referenceDataStatus === 'loading' ? 'Preparing details…' : '+ Create job'}
                     </button>
                 </div>
             </header>
+
+            {referenceDataStatus === 'loading' && (
+                <div className="jobs-reference-data-state" role="status">Preparing Job details…</div>
+            )}
+            {referenceDataStatus === 'error' && (
+                <div className="jobs-reference-data-state jobs-reference-data-error" role="alert">
+                    <span>Job details could not be prepared. {referenceDataError}</span>
+                    <button type="button" onClick={() => { void prepareJobReferenceData().catch(() => undefined) }}>Try again</button>
+                </div>
+            )}
 
             {isLoading ? (
                 <section className="jobs-data-state" aria-live="polite">
@@ -250,13 +263,18 @@ export default function JobsScreen() {
                     onToggleStatus={toggleStatus}
                     onResetToDefault={resetToDefault}
                     resetToDefaultDisabled={currentMatchesDefault}
-                    onStatusChange={updateJobStatus}
+                    onStatusChange={async (jobId, status) => {
+                        if (status === JOB_STATUSES.COMPLETE || status === JOB_STATUSES.UNCONFIRMED) {
+                            await prepareJobReferenceData()
+                        }
+                        return updateJobStatus(jobId, status)
+                    }}
                     onJobFieldsChange={updateJobFields}
                     onJobNumberAllocation={allocateJobNumbers}
                     onEmailTechnician={prepareTechnicianJobEmail}
-                    onEditJob={(job) => openJob(job)}
-                    onOpenJobCard={(job) => openJob(job, 'jobcard')}
-                    onOpenEquipment={openEquipment}
+                    onEditJob={(job) => { void openJob(job).catch(() => undefined) }}
+                    onOpenJobCard={(job) => { void openJob(job, 'jobcard').catch(() => undefined) }}
+                    onOpenEquipment={(equipmentId) => { void openEquipment(equipmentId).catch(() => undefined) }}
                     mechanics={mechanics}
                     officeUpdates={officeUpdates}
                     scheduleOptions={scheduleOptions}

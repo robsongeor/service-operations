@@ -8,11 +8,12 @@ import {
 } from './jobBookEquipmentIndexCache'
 
 const DATAVERSE_URL = import.meta.env.VITE_DATAVERSE_URL
-const EQUIPMENT_INDEX_QUERY = 'gr_equipments?$select=gr_equipmentid,gr_fleet,gr_serial,gr_make,gr_model&$expand=gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name))'
+const EQUIPMENT_INDEX_QUERY = 'gr_equipments?$select=gr_equipmentid,gr_fleet,gr_alternatefleetnumbers,gr_serial,gr_make,gr_model&$expand=gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name))'
 
 type EquipmentIndexApiRow = {
     gr_equipmentid: string
     gr_fleet: string | null
+    gr_alternatefleetnumbers?: string | null
     gr_serial: string | null
     gr_make: string | null
     gr_model: string | null
@@ -42,6 +43,7 @@ export function mapJobBookEquipmentIndexRow(row: EquipmentIndexApiRow): Prototyp
     return {
         id: row.gr_equipmentid,
         fleet: row.gr_fleet?.trim() ?? '',
+        alternateFleetNumbers: row.gr_alternatefleetnumbers?.trim() ?? '',
         serial: row.gr_serial?.trim() ?? '',
         make: row.gr_make?.trim() ?? '',
         model: row.gr_model?.trim() ?? '',

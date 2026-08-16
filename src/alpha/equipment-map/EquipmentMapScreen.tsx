@@ -10,6 +10,7 @@ import { equipmentIdentity, groupEquipmentBySite } from './equipmentMap'
 import { geocodeEquipmentSites } from './equipmentGeocodingApi'
 import { equipmentMapCacheKey, restoreEquipmentMapCache, saveEquipmentMapCache, type CachedCoordinate } from './equipmentMapCache'
 import './EquipmentMapScreen.css'
+import { equipmentIdentifierSearchValues } from '../equipment/identifiers/alternateFleetNumbers'
 
 const EquipmentLocationMap = lazy(() => import('./EquipmentLocationMap'))
 
@@ -122,7 +123,7 @@ export default function EquipmentMapScreen() {
             const matchingEquipment = site.equipment.filter((item) => {
                 if (stateFilter === 'active' && item.statecode !== 0) return false
                 if (stateFilter === 'inactive' && item.statecode === 0) return false
-                return !query || [equipmentIdentity(item), item.gr_serial, item.gr_make, item.gr_model, site.siteName, site.customerName, site.address]
+                return !query || [...equipmentIdentifierSearchValues(item), item.gr_make, item.gr_model, site.siteName, site.customerName, site.address]
                     .some((value) => normalized(value).includes(query))
             })
             if (!matchingEquipment.length) return []
@@ -150,7 +151,7 @@ export default function EquipmentMapScreen() {
         />
 
         <section className="equipment-map-toolbar" aria-label="Equipment map filters">
-            <label className="equipment-map-search"><span>Search</span><input autoFocus type="search" value={search} placeholder="Fleet, serial, make, Site or Customer" onChange={(event) => setSearch(event.currentTarget.value)} /></label>
+            <label className="equipment-map-search"><span>Search</span><input autoFocus type="search" value={search} placeholder="Primary or alternate fleet, serial, make, Site or Customer" onChange={(event) => setSearch(event.currentTarget.value)} /></label>
             <label><span>Customer</span><select value={customerId} onChange={(event) => { const next = event.currentTarget.value; setCustomerId(next); if (siteId && !sites.some((site) => site.gr_siteid === siteId && (!next || site.gr_Customer?.gr_customerid === next))) setSiteId('') }}><option value="">All Customers</option>{customers.map((customer) => <option key={customer.gr_customerid} value={customer.gr_customerid}>{customer.gr_name}</option>)}</select></label>
             <label><span>Site</span><select value={siteId} onChange={(event) => setSiteId(event.currentTarget.value)}><option value="">All Sites</option>{siteOptions.map((site) => <option key={site.gr_siteid} value={site.gr_siteid}>{site.gr_name || 'Unnamed Site'}</option>)}</select></label>
             <label><span>State</span><select value={stateFilter} onChange={(event) => setStateFilter(event.currentTarget.value as StateFilter)}><option value="active">Active Equipment</option><option value="all">All Equipment</option><option value="inactive">Inactive Equipment</option></select></label>

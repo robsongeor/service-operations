@@ -12,6 +12,7 @@ import type { ChargeableInvoiceIntakeItem } from './hooks/useChargeableInvoiceIn
 import { greenTreeJobDescription, greenTreeJobOrderNumber } from './domain/greenTreeInvoiceExtraction.ts'
 import { JOB_STATUSES } from '../jobs/types/jobStatus.types.ts'
 import './ChargeableInvoiceReviewScreen.css'
+import { parseAlternateFleetNumbers } from '../equipment/identifiers/alternateFleetNumbers.ts'
 
 const money = new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' })
 
@@ -25,7 +26,7 @@ function matchLabel(status: number | undefined) {
 
 const normalizeEquipmentIdentifier = (value?: string | null) => value?.trim().replace(/\s+/g, ' ').toLocaleLowerCase() ?? ''
 
-function uniqueExactEquipmentMatch<T extends { gr_fleet?: string | null; gr_serial?: string | null }>(
+function uniqueExactEquipmentMatch<T extends { gr_fleet?: string | null; gr_alternatefleetnumbers?: string | null; gr_serial?: string | null }>(
     equipment: T[],
     proposed: { fleet?: string | null; serial?: string | null },
 ) {
@@ -33,10 +34,12 @@ function uniqueExactEquipmentMatch<T extends { gr_fleet?: string | null; gr_seri
     const serial = normalizeEquipmentIdentifier(proposed.serial)
     if (!fleet && !serial) return null
     const matches = equipment.filter((item) => {
-        const itemFleet = normalizeEquipmentIdentifier(item.gr_fleet)
+        const itemFleetIdentifiers = [item.gr_fleet, ...parseAlternateFleetNumbers(item.gr_alternatefleetnumbers)]
+            .map(normalizeEquipmentIdentifier)
+            .filter(Boolean)
         const itemSerial = normalizeEquipmentIdentifier(item.gr_serial)
-        const exactIdentifier = Boolean((fleet && itemFleet === fleet) || (serial && itemSerial === serial))
-        const fleetCompatible = !fleet || !itemFleet || itemFleet === fleet
+        const exactIdentifier = Boolean((fleet && itemFleetIdentifiers.includes(fleet)) || (serial && itemSerial === serial))
+        const fleetCompatible = !fleet || itemFleetIdentifiers.length === 0 || itemFleetIdentifiers.includes(fleet)
         const serialCompatible = !serial || !itemSerial || itemSerial === serial
         return exactIdentifier && fleetCompatible && serialCompatible
     })

@@ -14,9 +14,11 @@ import {
     isEquipmentSiteCheckAvailability,
     type EquipmentSiteCheckAvailability,
 } from './equipmentSiteCheckAvailability.types.ts'
+import { normalizeAlternateFleetNumbers } from '../identifiers/alternateFleetNumbers.ts'
 
 export type EquipmentUpdateInput = {
     fleet: string
+    alternateFleetNumbers?: string
     make: string
     model: string
     serial: string
@@ -98,6 +100,7 @@ export function normalizeEquipmentInput(input: EquipmentUpdateInput): EquipmentU
     return {
         ...input,
         fleet: input.fleet.trim(),
+        alternateFleetNumbers: normalizeAlternateFleetNumbers(input.alternateFleetNumbers, input.fleet),
         make: input.make.trim(),
         model: input.model.trim(),
         serial: input.serial.trim(),

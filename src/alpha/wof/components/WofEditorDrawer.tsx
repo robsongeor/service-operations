@@ -15,6 +15,7 @@ import type { Site } from '../../jobs/types/site.types'
 import type { CreateWofInput, ServiceProvider, TechnicianQualification, UpdateWofInput, WofAssignmentMode, WofInspection, WofResult } from '../types/wof.types'
 import { WOF_RESULTS } from '../types/wof.types'
 import { getWofDeletionBlockReason, isQualificationValid, WOF_PROVIDER_TYPE_CODE } from '../utils/wofRules'
+import { parseAlternateFleetNumbers } from '../../equipment/identifiers/alternateFleetNumbers'
 
 type Props = {
     inspection?: WofInspection; schedule?: JobScheduleOption
@@ -115,7 +116,7 @@ export default function WofEditorDrawer(props: Props) {
             ]} />
             <div className="wof-form">
                 {activeTab === 'details' && <div id="drawer-tab-panel-details" className="wof-form-tab" role="tabpanel" aria-labelledby="drawer-tab-details">
-                <SearchableSelect id="wof-equipment" label="Equipment" required value={equipmentId} onChange={setEquipmentId} disabled={completed} placeholder="Select equipment" options={selectableEquipment.map((item) => ({ value: item.gr_equipmentid, label: item.gr_fleet || item.gr_serial || 'Unnamed equipment', secondary: [item.gr_registrationnumber, item.gr_make, item.gr_model].filter(Boolean).join(' · ') }))} />
+                <SearchableSelect id="wof-equipment" label="Equipment" required value={equipmentId} onChange={setEquipmentId} disabled={completed} placeholder="Select equipment" options={selectableEquipment.map((item) => ({ value: item.gr_equipmentid, label: item.gr_fleet || item.gr_serial || 'Unnamed equipment', secondary: [item.gr_registrationnumber, item.gr_make, item.gr_model].filter(Boolean).join(' · '), searchText: parseAlternateFleetNumbers(item.gr_alternatefleetnumbers).join(' ') }))} />
                 {!editing && <button type="button" className="wof-add-equipment" onClick={() => setCreatingEquipment(true)}>+ Add new equipment</button>}
                 {completed && <p className="wof-protected-note">Equipment cannot be changed after the linked Job is completed.</p>}
                 {selectedEquipment && <div className="wof-equipment-summary"><span>REGO <strong>{selectedEquipment.gr_registrationnumber || 'Not recorded'}</strong></span><span>Current expiry <strong>{selectedEquipment.gr_currentwofexpiry || 'Unknown'}</strong></span><span>Customer <strong>{selectedEquipment.gr_Site?.gr_Customer?.gr_name || 'Not recorded'}</strong></span><span>Site <strong>{selectedEquipment.gr_Site?.gr_name || 'Not recorded'}</strong></span></div>}

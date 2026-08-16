@@ -17,6 +17,7 @@ import {
 } from '../types/quote.types'
 import { buildQuoteTableClipboard, copyQuoteTable, isCopyableQuoteLine } from '../utils/quoteTableClipboard'
 import SearchableSelect, { type SearchableSelectOption } from '../../shared/searchable-select/SearchableSelect'
+import { parseAlternateFleetNumbers } from '../../equipment/identifiers/alternateFleetNumbers'
 import type { Customer } from '../../jobs/types/customer.types'
 import type { Equipment } from '../../jobs/types/equipment.types'
 import type { Mechanic } from '../../jobs/types/mechanic.types'
@@ -118,7 +119,8 @@ function existingLine(line: QuoteLine): EditableLine {
 function jobLabel(job: QuoteJob) {
     const customer = job.gr_Site?.gr_Customer?.gr_name
     const fleet = job.gr_Equipment?.gr_fleet
-    const detail = [customer, fleet].filter(Boolean).join(' · ')
+    const alternateFleetNumbers = parseAlternateFleetNumbers(job.gr_Equipment?.gr_alternatefleetnumbers)
+    const detail = [customer, fleet, ...alternateFleetNumbers].filter(Boolean).join(' · ')
     return `${job.gr_jobnumber || 'Job without number'}${detail ? ` — ${detail}` : ''}`
 }
 
@@ -195,6 +197,7 @@ export default function QuoteEditorDialog({
         value: item.gr_equipmentid,
         label: item.gr_fleet || item.gr_serial || 'Equipment without fleet number',
         secondary: [item.gr_make, item.gr_model, item.gr_serial, item.gr_Site?.gr_Customer?.gr_name].filter(Boolean).join(' · '),
+        searchText: parseAlternateFleetNumbers(item.gr_alternatefleetnumbers).join(' '),
     })), [equipment])
 
     const totals = useMemo(() => {

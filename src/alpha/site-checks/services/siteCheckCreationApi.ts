@@ -35,6 +35,7 @@ export const SITE_CHECK_CREATION_MAX_PAYLOAD_BYTES = 4 * 1024 * 1024
 export type SiteCheckCreationEquipment = {
     gr_equipmentid: string
     gr_fleet?: string | null
+    gr_alternatefleetnumbers?: string | null
     gr_serial?: string | null
     gr_make?: string | null
     gr_model?: string | null

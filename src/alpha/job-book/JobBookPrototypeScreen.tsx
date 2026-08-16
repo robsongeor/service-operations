@@ -11,6 +11,7 @@ import type { Mechanic } from '../jobs/types/mechanic.types'
 import type { Site } from '../jobs/types/site.types'
 import VerifiedAddressField from '../jobs/components/VerifiedAddressField'
 import { STANDARD_JOB_TYPE_OPTIONS, type JobType } from '../jobs/types/jobType.types'
+import { JOB_DESCRIPTION_MAX_LENGTH } from '../jobs/domain/jobDescription'
 import { createJobBookIntakeRow, fetchJobBookIntakeRows, fetchRecentJobBookRows, updateJobBookIntakeRow, updateManagedJobBookMarker } from './jobBookApi'
 import { fetchJobBookEquipmentIndex } from './jobBookEquipmentIndexApi'
 import {
@@ -78,8 +79,8 @@ function EquipmentPicker({
         return () => document.removeEventListener('mousedown', close)
     }, [])
     const normalized = query.trim().toLocaleLowerCase('en-NZ')
-    const results = equipment.filter((item) => [item.fleet, item.serial, item.make, item.model, item.customer, item.site]
-        .some((field) => field.toLocaleLowerCase('en-NZ').includes(normalized))).slice(0, 25)
+    const results = equipment.filter((item) => [item.fleet, item.alternateFleetNumbers, item.serial, item.make, item.model, item.customer, item.site]
+        .some((field) => (field ?? '').toLocaleLowerCase('en-NZ').includes(normalized))).slice(0, 25)
 
     return <div className="job-book-equipment-picker" ref={rootRef}>
         {selected && !open
@@ -90,7 +91,7 @@ function EquipmentPicker({
             : <input
                 value={query}
                 aria-label="Equipment search"
-                placeholder="Search fleet or serial"
+                placeholder="Search fleet, alternate or serial"
                 onFocus={() => setOpen(true)}
                 onChange={(event) => { setQuery(event.target.value); setOpen(true) }}
             />}
@@ -487,7 +488,7 @@ export default function JobBookPrototypeScreen() {
                             : <EquipmentPicker key={`${draft.id}-${draft.equipmentId}`} value={draft.fleet || draft.serial} selected={draft.equipmentConfigured ? draftEquipmentDisplay : undefined} equipment={equipment}
                                 onSelect={(item) => setDraft((current) => applyEquipmentToRow(current, item))} onAdd={() => openMachineDialog()} />}</td>
                         <td><div className="job-book-customer-editor"><input aria-label="Customer" placeholder="Enter customer" value={draft.customer} onChange={(event) => setDraft((current) => ({ ...current, customer: event.target.value, customerId: '', site: '', siteId: '' }))} />{draft.site && <small>{draft.site}</small>}</div></td>
-                        <td className={!draft.description.trim() ? 'job-book-required-missing' : undefined}><textarea required aria-label="Job description (required)" placeholder="Required" rows={2} value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} /></td>
+                        <td className={!draft.description.trim() ? 'job-book-required-missing' : undefined}><textarea required maxLength={JOB_DESCRIPTION_MAX_LENGTH} aria-label="Job description (required)" placeholder="Required" rows={2} value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} /></td>
                         <td className="job-book-address-cell"><div className="job-book-address-editor"><VerifiedAddressField compact verified={draft.addressVerified} value={draft.address}
                             onChange={(address, selection) => setDraft((current) => ({ ...current, address, addressVerified: Boolean(selection), addressNotFoundConfirmed: false }))} />
                             {draft.address.trim() && !draft.addressVerified && <label className="job-book-address-confirm"><input type="checkbox" checked={draft.addressNotFoundConfirmed} onChange={(event) => setDraft((current) => ({ ...current, addressNotFoundConfirmed: event.target.checked }))} /><span>Address<br />not found</span></label>}</div></td>
@@ -549,7 +550,7 @@ export default function JobBookPrototypeScreen() {
                             ? <div className="job-book-customer-editor"><input aria-label={`Customer for Job ${shown.jobNumber}`} value={shown.customer} onChange={(event) => setEditingRow((current) => current ? { ...current, customer: event.target.value, customerId: '', site: '', siteId: '' } : current)} />{shown.site && <small>{shown.site}</small>}</div>
                             : <span className="job-book-table-value job-book-customer-value"><strong>{shown.customer || '—'}</strong>{shown.site && <small>{shown.site}</small>}</span>}</td>
                         <td className={isEditing && !shown.description.trim() ? 'job-book-required-missing' : undefined}>{isEditing
-                            ? <textarea required aria-label={`Description for Job ${shown.jobNumber} (required)`} placeholder="Required" rows={2} value={shown.description} onChange={(event) => setEditingRow((current) => current ? { ...current, description: event.target.value } : current)} />
+                            ? <textarea required maxLength={JOB_DESCRIPTION_MAX_LENGTH} aria-label={`Description for Job ${shown.jobNumber} (required)`} placeholder="Required" rows={2} value={shown.description} onChange={(event) => setEditingRow((current) => current ? { ...current, description: event.target.value } : current)} />
                             : <span className="job-book-table-value description">{shown.description || '—'}</span>}</td>
                         <td className={isEditing ? 'job-book-address-cell' : undefined}>{isEditing
                             ? <div className="job-book-address-editor"><VerifiedAddressField compact verified={shown.addressVerified} value={shown.address}

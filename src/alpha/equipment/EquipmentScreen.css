@@ -68,7 +68,8 @@
 .equipment-state-note, .equipment-history-section > p { margin: 8px 0 14px; color: #717873; font-size: .72rem; }
 .equipment-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
 .equipment-form-grid label { display: grid; gap: 5px; color: #555d58; font-size: .72rem; font-weight: 700; }
-.equipment-form-grid input, .equipment-form-grid select { box-sizing: border-box; width: 100%; height: 38px; padding: 0 10px; border: 1px solid #d5dbd7; border-radius: 8px; background: #fff; color: #202421; font: inherit; }
+.equipment-form-grid input, .equipment-form-grid select, .equipment-form-grid textarea { box-sizing: border-box; width: 100%; padding: 0 10px; border: 1px solid #d5dbd7; border-radius: 8px; background: #fff; color: #202421; font: inherit; }
+.equipment-form-grid input, .equipment-form-grid select { height: 38px; }
 .equipment-history-list { display: grid; gap: 10px; }
 .equipment-history-list article { padding: 12px; border: 1px solid #e0e5e2; border-radius: 9px; background: #fafbf9; }
 .equipment-history-title { display: flex; justify-content: space-between; gap: 12px; }
@@ -98,8 +99,13 @@
 /* Equipment-specific content within the shared edit drawer presentation. */
 .equipment-form-grid { margin-top: 16px; }
 .equipment-form-grid label { color: #3c4540; font-size: .75rem; }
-.equipment-form-grid input, .equipment-form-grid select { min-height: 40px; padding: 0 11px; border-color: #d0d7d2; font-size: .85rem; font-weight: 450; outline: none; }
-.equipment-form-grid input:focus, .equipment-form-grid select:focus { border-color: #68736d; box-shadow: 0 0 0 3px rgba(80,90,84,.1); }
+.equipment-form-grid input, .equipment-form-grid select, .equipment-form-grid textarea { min-height: 40px; padding: 0 11px; border-color: #d0d7d2; font-size: .85rem; font-weight: 450; outline: none; }
+.equipment-form-grid textarea { padding-block: 9px; line-height: 1.4; resize: vertical; }
+.equipment-form-grid input:focus, .equipment-form-grid select:focus, .equipment-form-grid textarea:focus { border-color: #68736d; box-shadow: 0 0 0 3px rgba(80,90,84,.1); }
+.equipment-form-grid .equipment-alternate-fleet-field { grid-column: 1 / -1; }
+.equipment-alternate-fleet-field small { color: #6b7771; font-size: .69rem; font-weight: 500; line-height: 1.4; }
+.equipment-fleet-identity { display: grid; gap: 2px; }
+.equipment-fleet-identity small { color: #6b7771; font-size: .66rem; font-weight: 500; }
 .equipment-state-note, .equipment-history-note { margin: 8px 0 0; color: #7b827d; font-size: .72rem; }
 .equipment-history-section { margin-top: 0; }
 .equipment-history-count { color: #7b827d; font-size: .72rem; }

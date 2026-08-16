@@ -22,6 +22,8 @@ import { getJobsTableColumnWidths, JOBS_TABLE_ACTIONS_WIDTH, JOBS_TABLE_COLUMNS,
 import { jobHasActiveSubmissionLink } from '../services/jobSubmissionLinkApi'
 import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation'
 import { hasTechnicianSubmission } from '../types/technicianSubmission'
+import { parseAlternateFleetNumbers } from '../../equipment/identifiers/alternateFleetNumbers'
+import { JOB_DESCRIPTION_MAX_LENGTH } from '../domain/jobDescription'
 
 type Props = {
     jobs: Job[]
@@ -167,6 +169,7 @@ export default function JobsTable({
                 statusLabel,
                 createdDateFormatter.format(new Date(job.createdon)),
                 job.gr_Equipment?.gr_fleet,
+                ...parseAlternateFleetNumbers(job.gr_Equipment?.gr_alternatefleetnumbers),
                 job.gr_Equipment?.gr_serial,
                 job.gr_Equipment?.gr_make,
                 job.gr_Equipment?.gr_model,
@@ -648,6 +651,7 @@ export default function JobsTable({
                                         aria-label="Job description"
                                         defaultValue={job.gr_description ?? ''}
                                         rows={2}
+                                        maxLength={JOB_DESCRIPTION_MAX_LENGTH}
                                         onBlur={(event) => {
                                             const newValue = event.target.value.trim()
                                             if (newValue !== (job.gr_description ?? '')) {

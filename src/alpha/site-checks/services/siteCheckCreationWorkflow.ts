@@ -79,7 +79,7 @@ export async function fetchSiteCheckEquipmentForSite(
 ): Promise<SiteCheckCreationEquipment[]> {
     if (!GUID_PATTERN.test(siteId)) throw new Error('A valid Site ID is required.')
     const query = [
-        '$select=gr_equipmentid,gr_fleet,gr_serial,gr_make,gr_model,statecode,gr_ownershiptype,gr_powertype,gr_sitecheckavailability',
+        '$select=gr_equipmentid,gr_fleet,gr_alternatefleetnumbers,gr_serial,gr_make,gr_model,statecode,gr_ownershiptype,gr_powertype,gr_sitecheckavailability',
         `$filter=_gr_site_value eq ${siteId}`,
         '$orderby=gr_fleet asc',
     ].join('&')

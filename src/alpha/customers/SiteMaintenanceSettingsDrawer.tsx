@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { Equipment } from '../jobs/types/equipment.types'
+import { equipmentIdentifierSearchValues } from '../equipment/identifiers/alternateFleetNumbers'
 import type { Site } from '../jobs/types/site.types'
 import {
     MAINTENANCE_PROFILES,
@@ -121,7 +122,7 @@ export default function SiteMaintenanceSettingsDrawer({
                         value: item.gr_equipmentid,
                         label: [equipmentLabel(item), item.gr_make, item.gr_model].filter(Boolean).join(' · '),
                         secondary: `Current profile: ${profileLabel(item.gr_maintenanceprofile)}`,
-                        searchText: [item.gr_fleet, item.gr_serial, item.gr_make, item.gr_model].filter(Boolean).join(' '),
+                        searchText: [...equipmentIdentifierSearchValues(item), item.gr_make, item.gr_model].filter(Boolean).join(' '),
                     }))}
                     placeholder="Select Equipment"
                     searchPlaceholder="Search fleet, serial, make or model"

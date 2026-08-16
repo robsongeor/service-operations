@@ -31,6 +31,12 @@ may create a Customer and its first Site inline; duplicate Customer names are re
 existing record, and Equipment continues to store only the selected Site relationship.
 Equipment lists reuse the feature-owned data-quality evaluator and accessible indicator so
 identity, On-road compliance, and missing maintenance history are calculated consistently.
+The primary Fleet Number remains the current/Greentree-facing identifier. Equipment may also store
+multiple normalized Alternate Fleet Numbers for former Liftrucks numbers and Customer- or
+Site-specific codes. These aliases are searchable across Equipment selection workflows and appear
+under the primary number in Equipment Manager. Changing the primary number through the canonical
+drawer preserves its previous value as an alternate; operational snapshots continue using the
+primary value.
 The Equipment drawer Job History keeps the original linked Job context and distinguishes the Job's
 created date from its completed date. Each card also shows the recorded completion hours, including
 an Estimated marker where applicable; missing completion evidence is labelled rather than inferred.
@@ -53,6 +59,8 @@ occupying the drawer footer with persistent warning text.
 - When a saved Job establishes a Site, linked Equipment moves to that Site and local state
   reflects the change.
 - Current configuration changes must not delete Jobs, inspections, or service history.
+- Alternate Fleet Numbers identify the same Equipment record; they never create duplicate assets,
+  change Site ownership, or replace the Equipment Dataverse ID as the relationship key.
 - Customer is not stored directly on Equipment.
 - Completed Job evidence is authoritative for the Last Known Hour Meter: the latest dated completed
   Job reading supplies the displayed value and service calculations. The stored Equipment current

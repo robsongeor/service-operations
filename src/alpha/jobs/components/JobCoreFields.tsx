@@ -8,6 +8,7 @@ import { SERVICE_TYPES, SERVICE_TYPE_OPTIONS, type ServiceType } from '../../equ
 import SearchableMechanicSelect from './SearchableMechanicSelect'
 import type { Equipment } from '../types/equipment.types'
 import { isServiceTypeEnabled, resolveMaintenanceConfiguration } from '../../equipment/servicePlans/maintenanceConfiguration'
+import { JOB_DESCRIPTION_MAX_LENGTH } from '../domain/jobDescription'
 
 type Props = {
     draft: JobEditorDraft
@@ -86,6 +87,7 @@ export default function JobCoreFields({ draft, setDraft, mechanics, equipment, a
                 <span>Description</span>
                 <textarea
                     rows={5}
+                    maxLength={JOB_DESCRIPTION_MAX_LENGTH}
                     value={draft.description}
                     onChange={(event) => setDraft((current) => ({
                         ...current,

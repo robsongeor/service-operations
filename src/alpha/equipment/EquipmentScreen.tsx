@@ -20,6 +20,7 @@ import {
 } from './utils/equipmentCsv'
 import EquipmentJobCreateDrawer from './components/EquipmentJobCreateDrawer'
 import { paginateEquipmentRows } from './equipmentPagination'
+import { equipmentIdentifierSearchValues } from './identifiers/alternateFleetNumbers'
 
 type StateFilter = 'all' | 'active' | 'inactive'
 
@@ -104,7 +105,13 @@ export default function EquipmentScreen() {
             if (siteId && item.gr_Site?.gr_siteid !== siteId) return false
             if (stateFilter === 'active' && item.statecode !== 0) return false
             if (stateFilter === 'inactive' && item.statecode === 0) return false
-            return !query || [item.gr_fleet, item.gr_serial, item.gr_make, item.gr_model, item.gr_Site?.gr_name, item.gr_Site?.gr_Customer?.gr_name].some((value) => text(value).includes(query))
+            return !query || [
+                ...equipmentIdentifierSearchValues(item),
+                item.gr_make,
+                item.gr_model,
+                item.gr_Site?.gr_name,
+                item.gr_Site?.gr_Customer?.gr_name,
+            ].some((value) => text(value).includes(query))
         }).sort((a, b) => {
             if (sortKey === 'dataStatus') {
                 const plansFor = (item: Equipment) => plansByEquipment.get(item.gr_equipmentid.toLowerCase()) ?? []
@@ -170,7 +177,7 @@ export default function EquipmentScreen() {
                 <div className="equipment-data-state error"><div><strong>Equipment could not be loaded.</strong><p>{loadError}</p></div><button type="button" onClick={() => void reload()}>Try again</button></div>
             ) : <section className="equipment-list-card">
                 <div className="equipment-toolbar">
-                    <label className="equipment-search"><span className="equipment-visually-hidden">Search equipment</span><input type="search" placeholder="Search fleet, serial, make, model, Site or Customer" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1) }} /></label>
+                    <label className="equipment-search"><span className="equipment-visually-hidden">Search equipment</span><input type="search" placeholder="Search primary or alternate fleet, serial, make, model, Site or Customer" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1) }} /></label>
                     <label>Customer<select value={customerId} onChange={(event) => { const next = event.target.value; setCustomerId(next); setPage(1); if (siteId && !sites.some((site) => site.gr_siteid === siteId && (!next || site.gr_Customer?.gr_customerid === next))) setSiteId('') }}><option value="">All Customers</option>{customers.map((customer) => <option key={customer.gr_customerid} value={customer.gr_customerid}>{customer.gr_name}</option>)}</select></label>
                     <label>Site<select value={siteId} onChange={(event) => { setSiteId(event.target.value); setPage(1) }}><option value="">All Sites</option>{siteOptions.map((site) => <option key={site.gr_siteid} value={site.gr_siteid}>{site.gr_name || 'Unnamed Site'}</option>)}</select></label>
                     <label>State<select value={stateFilter} onChange={(event) => { setStateFilter(event.target.value as StateFilter); setPage(1) }}><option value="all">All states</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>

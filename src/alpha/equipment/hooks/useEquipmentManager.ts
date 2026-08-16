@@ -215,6 +215,7 @@ export function useEquipmentManager() {
             const created: Equipment = {
                 ...createdResponse,
                 gr_fleet: normalized.fleet || null,
+                gr_alternatefleetnumbers: normalized.alternateFleetNumbers || null,
                 gr_make: normalized.make || null,
                 gr_model: normalized.model || null,
                 gr_serial: normalized.serial || null,

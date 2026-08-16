@@ -35,6 +35,11 @@ import {
     type EquipmentSiteCheckAvailability,
 } from '../types/equipmentSiteCheckAvailability.types'
 import { HOUR_METER_READING_TYPES } from '../hourMeter/hourMeterReading.types'
+import {
+    equipmentIdentifierSearchValues,
+    parseAlternateFleetNumbers,
+    preservePreviousFleetNumber,
+} from '../identifiers/alternateFleetNumbers'
 
 type SharedProps = {
     customers: Customer[]
@@ -99,6 +104,7 @@ export default function EquipmentDrawer(props: Props) {
             : undefined)
     const [form, setForm] = useState<EquipmentUpdateInput>({
         fleet: equipment?.gr_fleet ?? initialValues?.fleet ?? '',
+        alternateFleetNumbers: equipment?.gr_alternatefleetnumbers ?? initialValues?.alternateFleetNumbers ?? '',
         make: equipment?.gr_make ?? initialValues?.make ?? '',
         model: equipment?.gr_model ?? initialValues?.model ?? '',
         serial: equipment?.gr_serial ?? initialValues?.serial ?? '',
@@ -210,8 +216,12 @@ export default function EquipmentDrawer(props: Props) {
     const matchingSiteAddress = newSite.address.trim()
         ? visibleSites.find((site) => site.gr_address && normalizeCustomerName(site.gr_address) === normalizeCustomerName(newSite.address))
         : undefined
-    const matchingEquipment = form.fleet.trim() || form.serial.trim()
-        ? props.equipmentList.find((item) => [item.gr_fleet, item.gr_serial].some((value) => value && normalizeCustomerName(value) === normalizeCustomerName(form.fleet.trim() || form.serial.trim())))
+    const proposedIdentifiers = [form.fleet, form.serial]
+        .map(normalizeCustomerName)
+        .filter(Boolean)
+    const matchingEquipment = proposedIdentifiers.length
+        ? props.equipmentList.find((item) => equipmentIdentifierSearchValues(item)
+            .some((value) => proposedIdentifiers.includes(normalizeCustomerName(value))))
         : undefined
     const busy = isSaving || isDeleting || isComplianceSaving
     const equipmentName = equipment ? [equipment.gr_fleet, equipment.gr_make, equipment.gr_model].filter(Boolean).join(' - ') || 'this equipment' : ''
@@ -397,7 +407,9 @@ export default function EquipmentDrawer(props: Props) {
             setNewSite({ name: deriveSiteNameFromAddress(row.address), address: row.address })
             setSiteMode('new')
         }
-        const duplicate = [nextForm.fleet, nextForm.serial].filter(Boolean).map(normalizeCustomerName).some((identifier) => props.equipmentList.some((item) => [item.gr_fleet, item.gr_serial].some((value) => value && normalizeCustomerName(value) === identifier)))
+        const duplicate = [nextForm.fleet, nextForm.serial].filter(Boolean).map(normalizeCustomerName)
+            .some((identifier) => props.equipmentList.some((item) => equipmentIdentifierSearchValues(item)
+                .some((value) => normalizeCustomerName(value) === identifier)))
         requiresReview ||= duplicate
         if (classification.kind === 'unresolved') skipped.push('Identifier (requires manual selection)')
         setSpreadsheetApplyNote(duplicate ? 'Equipment with this Fleet Number or Serial Number already exists. Resolve the duplicate before creating Equipment.' : skipped.length ? `Spreadsheet row applied. Kept existing values for: ${skipped.join(', ')}.` : 'Spreadsheet row applied. Review the details before creating Equipment.')
@@ -431,6 +443,16 @@ export default function EquipmentDrawer(props: Props) {
         let trimmed: EquipmentUpdateInput
         try {
             trimmed = normalizeEquipmentInput(form)
+            if (equipment) {
+                trimmed = {
+                    ...trimmed,
+                    alternateFleetNumbers: preservePreviousFleetNumber(
+                        trimmed.alternateFleetNumbers ?? '',
+                        equipment.gr_fleet,
+                        trimmed.fleet,
+                    ),
+                }
+            }
             setForm(trimmed)
         } catch (error) {
             setFormError(error instanceof Error ? error.message : 'Check the Equipment details and try again.')
@@ -668,8 +690,21 @@ export default function EquipmentDrawer(props: Props) {
                     {(isCreate || activeTab === 'details') && <EditDrawerSection title={isCreate ? 'Equipment details' : 'Current master record'} meta={!isCreate && <span className={equipment?.statecode === 0 ? 'equipment-state active' : 'equipment-state'}>{equipment?.statecode === 0 ? 'Active' : 'Inactive'}</span>}>
                         {!isCreate && <p className="equipment-state-note">State is read-only until Equipment status reason values are confirmed.</p>}
                         <div className="equipment-form-grid">
-                            <label>Fleet number<input value={form.fleet} onChange={(event) => updateField('fleet', event.target.value)} /></label>
+                            <label>Primary Fleet Number<input value={form.fleet} onChange={(event) => updateField('fleet', event.target.value)} /></label>
                             <label>Serial number<input value={form.serial} onChange={(event) => updateField('serial', event.target.value)} /></label>
+                            <label className="equipment-alternate-fleet-field">
+                                Alternate Fleet Numbers
+                                <textarea
+                                    value={form.alternateFleetNumbers ?? ''}
+                                    rows={2}
+                                    placeholder="One per line, for example FN2123 or SITE-01"
+                                    onChange={(event) => updateField('alternateFleetNumbers', event.target.value)}
+                                />
+                                <small>
+                                    Searchable former, customer, or Site-specific codes. Changing the primary Fleet Number automatically keeps its previous value here.
+                                    {parseAlternateFleetNumbers(form.alternateFleetNumbers).length > 0 && ` ${parseAlternateFleetNumbers(form.alternateFleetNumbers).length} recorded.`}
+                                </small>
+                            </label>
                             <label>Make<input value={form.make} onChange={(event) => updateField('make', event.target.value)} /></label>
                             <label>Model<input value={form.model} onChange={(event) => updateField('model', event.target.value)} /></label>
                             <label>

@@ -243,7 +243,7 @@ export function useWof() {
     const createEquipment = async (input: EquipmentUpdateInput, resolvedSite?: Site) => {
         const normalized = normalizeEquipmentInput(input)
         const response = await createEquipmentApi(await token(), normalized)
-        const created = { ...response, gr_fleet: normalized.fleet || null, gr_make: normalized.make || null, gr_model: normalized.model || null, gr_serial: normalized.serial || null, gr_registrationnumber: normalized.registrationNumber || null, gr_wofrequired: normalized.wofRequired, gr_currentwofexpiry: normalized.currentWofExpiry || null, gr_regoexpiry: normalized.regoExpiry || null, gr_Site: resolvedSite ?? sites.find((site) => site.gr_siteid === normalized.siteId) }
+        const created = { ...response, gr_fleet: normalized.fleet || null, gr_alternatefleetnumbers: normalized.alternateFleetNumbers || null, gr_make: normalized.make || null, gr_model: normalized.model || null, gr_serial: normalized.serial || null, gr_registrationnumber: normalized.registrationNumber || null, gr_wofrequired: normalized.wofRequired, gr_currentwofexpiry: normalized.currentWofExpiry || null, gr_regoexpiry: normalized.regoExpiry || null, gr_Site: resolvedSite ?? sites.find((site) => site.gr_siteid === normalized.siteId) }
         setEquipment((current) => current.some((item) => item.gr_equipmentid === created.gr_equipmentid)
             ? current.map((item) => item.gr_equipmentid === created.gr_equipmentid ? created : item)
             : [...current, created])

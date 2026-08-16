@@ -11,6 +11,7 @@ function equipmentPayload(input: EquipmentUpdateInput) {
     const normalized = normalizeEquipmentInput(input)
     return {
         gr_fleet: normalized.fleet || null,
+        gr_alternatefleetnumbers: normalized.alternateFleetNumbers || null,
         gr_make: normalized.make || null,
         gr_model: normalized.model || null,
         gr_serial: normalized.serial || null,
@@ -152,6 +153,7 @@ export function applyEquipmentUpdate(
     return {
         ...equipment,
         gr_fleet: normalized.fleet || null,
+        gr_alternatefleetnumbers: normalized.alternateFleetNumbers || null,
         gr_make: normalized.make || null,
         gr_model: normalized.model || null,
         gr_serial: normalized.serial || null,

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { Equipment } from '../jobs/types/equipment.types'
+import { equipmentIdentifierSearchValues } from '../equipment/identifiers/alternateFleetNumbers'
 import type { Customer } from '../jobs/types/customer.types'
 import type { Site } from '../jobs/types/site.types'
 import EditDrawerConfirmation from '../shared/drawer/EditDrawerConfirmation'
@@ -111,7 +112,7 @@ export default function EquipmentTransferDrawer({ customer, site, equipment, bus
                     value: item.gr_equipmentid,
                     label: [equipmentLabel(item), item.gr_make, item.gr_model].filter(Boolean).join(' · '),
                     secondary: `${item.gr_Site?.gr_Customer?.gr_name || 'No current customer'} · ${item.gr_Site?.gr_name || 'No current Site'}`,
-                    searchText: normalize([item.gr_fleet, item.gr_serial, item.gr_make, item.gr_model].filter(Boolean).join(' ')),
+                    searchText: normalize([...equipmentIdentifierSearchValues(item), item.gr_make, item.gr_model].filter(Boolean).join(' ')),
                 }))}
             />
             <section className="equipment-transfer-selected" aria-labelledby="equipment-transfer-selected-heading">

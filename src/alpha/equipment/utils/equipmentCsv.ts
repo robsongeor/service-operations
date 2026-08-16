@@ -15,6 +15,7 @@ import {
     type ServiceProgramme,
 } from '../servicePlans/maintenanceConfiguration.ts'
 import { normalizeEquipmentInput, toEquipmentDateOnlyValue, type EquipmentUpdateInput } from '../types/equipmentManager.types.ts'
+import { preservePreviousFleetNumber } from '../identifiers/alternateFleetNumbers.ts'
 
 export const EQUIPMENT_CSV_ADMIN_EMAIL = SERVICE_OPERATIONS_ADMIN_EMAIL
 
@@ -23,7 +24,7 @@ export function canUseEquipmentCsvTools(user: SignedInUserInfo | null) {
 }
 
 export const EQUIPMENT_CSV_COLUMNS = [
-    'Equipment ID', 'Fleet Number', 'Serial Number', 'Make', 'Model', 'Operational Status',
+    'Equipment ID', 'Fleet Number', 'Alternate Fleet Numbers', 'Serial Number', 'Make', 'Model', 'Operational Status',
     'Power Type', 'Power Type ID', 'Customer', 'Customer ID', 'Site', 'Site ID', 'Road Use',
     'Road Use ID', 'Registration Number', 'Rego Expiry', 'WOF Expiry', 'Maintenance Profile',
     'Maintenance Profile ID', 'Service Programme', 'Service Programme ID',
@@ -65,6 +66,7 @@ export function equipmentCsvText(equipment: Equipment[]) {
         const values = [
             item.gr_equipmentid,
             item.gr_fleet,
+            item.gr_alternatefleetnumbers,
             item.gr_serial,
             item.gr_make,
             item.gr_model,
@@ -132,6 +134,7 @@ export type EquipmentCsvChange = {
 
 export type EquipmentCsvPatch = {
     fleet?: string
+    alternateFleetNumbers?: string
     serial?: string
     make?: string
     model?: string
@@ -158,7 +161,7 @@ export type EquipmentCsvReviewRow = {
 }
 
 const editableColumns = new Set<string>([
-    'Fleet Number', 'Serial Number', 'Make', 'Model', 'Power Type ID', 'Site ID', 'Road Use ID',
+    'Fleet Number', 'Alternate Fleet Numbers', 'Serial Number', 'Make', 'Model', 'Power Type ID', 'Site ID', 'Road Use ID',
     'Registration Number', 'Rego Expiry', 'WOF Expiry', 'Maintenance Profile ID',
     'Service Programme ID', 'Last Known Hour Meter', 'Reading Recorded Date',
 ])
@@ -210,6 +213,7 @@ export function reviewEquipmentCsv(source: string, equipment: Equipment[], sites
         }
         const textFields = [
             ['Fleet Number', 'fleet', record.gr_fleet],
+            ['Alternate Fleet Numbers', 'alternateFleetNumbers', record.gr_alternatefleetnumbers],
             ['Serial Number', 'serial', record.gr_serial],
             ['Make', 'make', record.gr_make],
             ['Model', 'model', record.gr_model],
@@ -300,8 +304,15 @@ export function reviewEquipmentCsv(source: string, equipment: Equipment[], sites
 }
 
 export function equipmentInputFromCsvPatch(record: Equipment, patch: EquipmentCsvPatch): EquipmentUpdateInput {
+    const fleet = patch.fleet ?? record.gr_fleet ?? ''
+    const alternateFleetNumbers = preservePreviousFleetNumber(
+        patch.alternateFleetNumbers ?? record.gr_alternatefleetnumbers ?? '',
+        record.gr_fleet,
+        fleet,
+    )
     return normalizeEquipmentInput({
-        fleet: patch.fleet ?? record.gr_fleet ?? '',
+        fleet,
+        alternateFleetNumbers,
         serial: patch.serial ?? record.gr_serial ?? '',
         make: patch.make ?? record.gr_make ?? '',
         model: patch.model ?? record.gr_model ?? '',

@@ -10,11 +10,12 @@ import {
     writePersistedJobsSnapshot,
     type JobsCacheReadOptions,
 } from './jobsDataCache.ts'
+import { assertJobDescriptionLength } from '../domain/jobDescription.ts'
 
 const DATAVERSE_URL = import.meta.env?.VITE_DATAVERSE_URL ?? ''
 const HOUR_METER_READING_SELECT = HOUR_METER_CLASSIFICATION_ENABLED ? ',gr_hourmeterreadingtype,gr_hourmeterrecordeddate' : ''
 const JOB_SELECT = `gr_jobid,createdon,gr_jobnumber,gr_status,gr_ordernumber,gr_description,gr_jobtype,gr_jobcardstatus,gr_jobcardsenton,gr_jobcardsubmittedon,gr_jobcardclosedon,gr_hourmeter${HOUR_METER_READING_SELECT},gr_completeddate,gr_servicetype,gr_currentofficeaction,gr_officeactionowner,gr_officeattentionrequired,gr_techniciansubmissiontokenhash,gr_techniciansubmissiontokencreatedon,gr_techniciansubmissiontokenexpireson,gr_techniciansubmissiontokenused,gr_techniciansubmissionsubmittedon,gr_techniciansubmissionhourmeter,gr_techniciansubmissionstory,gr_techniciansubmissionfurtherworkrequired,gr_techniciansubmissionfurtherworkdetails,gr_techniciansubmissionsafetyissueidentified,gr_techniciansubmissionsafetyissuedetails,_gr_sitecheck_value`
-const JOB_EXPAND = 'gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_serial,gr_currenthourmeter,gr_currenthourmeterrecordeddate,gr_servicetrackingenabled),gr_Mechanic($select=gr_mechanicid,gr_name,gr_phone,gr_email),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name,gr_phone,gr_email)'
+const JOB_EXPAND = 'gr_Equipment($select=gr_equipmentid,gr_fleet,gr_alternatefleetnumbers,gr_make,gr_model,gr_serial,gr_currenthourmeter,gr_currenthourmeterrecordeddate,gr_servicetrackingenabled),gr_Mechanic($select=gr_mechanicid,gr_name,gr_phone,gr_email),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name,gr_phone,gr_email)'
 
 type FetchJobsOptions = JobsCacheReadOptions & {
     useDeviceCache?: boolean
@@ -171,6 +172,7 @@ export function buildJobCreatePayload(
     source: JobCreationSource = 'standard',
 ) {
     assertJobTypeAllowedForCreation(job.jobType, source)
+    assertJobDescriptionLength(job.description)
     const newJob: Record<string, string | number> = {
         gr_jobnumber: job.jobNumber,
         gr_ordernumber: job.orderNumber,
@@ -335,6 +337,7 @@ export async function updateJobFields(
         'gr_Mechanic@odata.bind'?: string | null
     }
 ) {
+    if (fields.gr_description != null) assertJobDescriptionLength(fields.gr_description)
     const response = await fetch(
         `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2/gr_jobs(${jobId})`,
         {
@@ -473,6 +476,7 @@ export async function updateJob(
 }
 
 export function buildJobUpdateFields(job: JobSaveInput): Record<string, string | number | boolean | null> {
+    assertJobDescriptionLength(job.description)
     const fields: Record<string, string | number | boolean | null> = {
         gr_jobnumber: job.jobNumber,
         gr_ordernumber: job.orderNumber,

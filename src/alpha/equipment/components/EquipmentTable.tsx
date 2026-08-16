@@ -4,6 +4,7 @@ import type { EquipmentServicePlan } from '../servicePlans/equipmentServicePlan.
 import { SERVICE_TYPE_OPTIONS } from '../servicePlans/equipmentServicePlan.types'
 import { calculateHoursRemaining, calculatePrimaryNextService } from '../servicePlans/servicePlanStatus'
 import EquipmentDataQualityIndicator from './EquipmentDataQualityIndicator'
+import { parseAlternateFleetNumbers } from '../identifiers/alternateFleetNumbers'
 
 type Props = {
     equipment: Equipment[]
@@ -72,7 +73,7 @@ export default function EquipmentTable({ equipment, servicePlans, sortKey, sortD
                                 }
                             }}
                         >
-                            <td><strong>{valueOrDash(item.gr_fleet)}</strong></td>
+                            <td><span className="equipment-fleet-identity"><strong>{valueOrDash(item.gr_fleet)}</strong>{parseAlternateFleetNumbers(item.gr_alternatefleetnumbers).length > 0 && <small>Also {parseAlternateFleetNumbers(item.gr_alternatefleetnumbers).join(' · ')}</small>}</span></td>
                             <td>{valueOrDash(item.gr_Site?.gr_Customer?.gr_name)}</td>
                             <td>{valueOrDash(item.gr_Site?.gr_name)}</td>
                             <td>{valueOrDash(item.gr_make)}</td>

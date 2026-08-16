@@ -12,7 +12,7 @@
     "test:api": "node --test tests/joblookup.test.cjs tests/jobsubmission.test.cjs tests/chargeableInvoicePreview.test.cjs tests/chargeableInvoiceApproval.test.cjs",
     "test:maintenance": "node --experimental-strip-types --test tests/maintenanceServicePlans.test.ts",
     "test:wof": "node --experimental-strip-types --test tests/wofWorkflow.test.ts",
-    "test:equipment": "node --experimental-strip-types --test tests/equipmentDataCache.test.ts tests/equipmentDataQuality.test.ts tests/equipmentMap.test.ts tests/equipmentPagination.test.ts tests/equipmentRealtime.test.ts tests/equipmentRealtimeApi.test.cjs tests/greentreeEquipmentReconciliation.test.ts",
+    "test:equipment": "node --experimental-strip-types --test tests/equipmentAlternateFleetNumbers.test.ts tests/equipmentDataCache.test.ts tests/equipmentDataQuality.test.ts tests/equipmentMap.test.ts tests/equipmentPagination.test.ts tests/equipmentRealtime.test.ts tests/equipmentRealtimeApi.test.cjs tests/greentreeEquipmentReconciliation.test.ts",
     "test:job-book": "node --experimental-strip-types --test tests/jobBookIntake.test.ts",
     "test:job-email": "node --experimental-strip-types --test tests/jobEmail.test.ts",
     "test:technician-submission": "node --experimental-strip-types --test tests/technicianSubmission.test.ts",
@@ -20,7 +20,7 @@
     "test:job-photo": "node --experimental-strip-types --test tests/jobPhoto.test.ts",
     "test:customer-dashboard": "node --experimental-strip-types --test tests/customerDashboardSiteSettings.test.ts tests/purchaseOrderRecipients.test.ts",
     "test:site-checks": "node --experimental-strip-types --test tests/siteChecks.test.ts tests/siteCheckChecklistAdmin.test.ts",
-    "test:jobs-site-checks": "node --experimental-strip-types --test tests/jobsDataCache.test.ts tests/jobsPagination.test.ts tests/jobsRealtime.test.ts tests/jobsSiteChecksIntegration.test.ts",
+    "test:jobs-site-checks": "node --experimental-strip-types --test tests/jobDescription.test.ts tests/jobsDataCache.test.ts tests/jobsPagination.test.ts tests/jobsRealtime.test.ts tests/jobsSiteChecksIntegration.test.ts",
     "test:quotes": "node --experimental-strip-types --test tests/quotePoRequestInvoice.test.ts",
     "test:chargeable-invoices": "node --experimental-strip-types --test tests/chargeableInvoiceReview.test.ts tests/chargeableInvoiceReleaseReadiness.test.ts",
     "test:staff": "node --experimental-strip-types --test tests/staffDirectory.test.ts"

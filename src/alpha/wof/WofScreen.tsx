@@ -17,6 +17,7 @@ import type { WofInspection } from './types/wof.types'
 import { DEFAULT_WOF_PREFERENCES, loadWofPreferences, saveWofPreferences, type WofSortKey } from './types/wofViewState.types'
 import { formatWofDateOnly, getLatestWofInspection, getWofDueStatus, getWofWorkflowStatus, wofCanCreateJob, wofNeedsAdministration, WOF_WORKFLOW_LABELS } from './utils/wofRules'
 import './WofScreen.css'
+import { equipmentIdentifierSearchValues } from '../equipment/identifiers/alternateFleetNumbers'
 
 const tabs: { value: WofTab; label: string }[] = [
     { value: 'all', label: 'All' }, { value: 'due-soon', label: 'Due Soon' }, { value: 'expired', label: 'Expired' },
@@ -66,7 +67,7 @@ export default function WofScreen({ accountId }: { accountId: string }) {
         if (tab === 'in-progress') return ['job-created', 'scheduled'].includes(row.workflow)
         if (tab === 'ready') return ['inspection-complete', 'ready-to-issue'].includes(row.workflow)
         return true
-    }).filter((row) => !search.trim() || [row.equipment.gr_fleet, row.equipment.gr_serial, row.equipment.gr_registrationnumber, row.equipment.gr_regoexpiry, row.equipment.gr_Site?.gr_name, row.customer, row.inspection?.gr_Job?.gr_jobnumber].some((value) => value?.toLowerCase().includes(search.trim().toLowerCase()))).sort((a, b) => {
+    }).filter((row) => !search.trim() || [...equipmentIdentifierSearchValues(row.equipment), row.equipment.gr_registrationnumber, row.equipment.gr_regoexpiry, row.equipment.gr_Site?.gr_name, row.customer, row.inspection?.gr_Job?.gr_jobnumber].some((value) => value?.toLowerCase().includes(search.trim().toLowerCase()))).sort((a, b) => {
         const sortValue = (row: typeof a) => {
             if (preferences.sort.key === 'customer') return row.customer
             if (preferences.sort.key === 'rego-expiry') return row.equipment.gr_regoexpiry || ''

@@ -58,6 +58,7 @@ export type Job = {
     gr_Equipment?: {
         gr_equipmentid: string
         gr_fleet: string | null
+        gr_alternatefleetnumbers?: string | null
         gr_serial: string | null
         gr_make: string | null
         gr_model: string | null
