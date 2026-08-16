@@ -130,10 +130,15 @@ function publicDetails(job) {
 }
 
 function normalizeSubmission(body) {
+    const parts = Array.isArray(body.parts)
+        ? body.parts.map((part) => typeof part === 'string'
+            ? { description: part, quantity: 1 }
+            : part)
+        : []
     return {
         ...body,
         timeEntries: body.timeEntries ?? [],
-        parts: body.parts ?? [],
+        parts,
         furtherWorkRequired: body.furtherWorkRequired ?? false,
         safetyIssueIdentified: body.safetyIssueIdentified ?? false,
         photos: body.photos ?? [],
@@ -164,7 +169,9 @@ function validateSubmission(job, body) {
         }
     }
     if (!Array.isArray(body.parts) || body.parts.length > 100
-        || body.parts.some((part) => typeof part !== 'string' || !part.trim() || part.trim().length > 500)) {
+        || body.parts.some((part) => !part || typeof part.description !== 'string'
+            || !part.description.trim() || part.description.trim().length > 500
+            || !Number.isSafeInteger(part.quantity) || part.quantity < 1)) {
         return 'Parts are invalid.'
     }
     if (typeof body.furtherWorkRequired !== 'boolean') return 'Further work selection is invalid.'
@@ -277,8 +284,8 @@ function batchRequest(job, etag, body, now) {
             'Content-Transfer-Encoding: binary',
             `Content-ID: ${contentId}`,
             '',
-            `POST ${entitySet} HTTP/1.1`,
-            'Content-Type: application/json;type=entry',
+            `POST ${dataverseOrigin()}/api/data/v9.2/${entitySet} HTTP/1.1`,
+            'Content-Type: application/json',
             '',
             JSON.stringify(fields),
         ].join('\r\n'))
@@ -292,9 +299,10 @@ function batchRequest(job, etag, body, now) {
         gr_displayorder: index,
     }))
     body.parts.forEach((part, index) => addCreate('gr_jobmaterials', {
-        gr_name: part.trim(),
+        gr_name: part.description.trim(),
         'gr_Job@odata.bind': `/gr_jobs(${job.gr_jobid})`,
-        gr_material: part.trim(),
+        gr_material: part.description.trim(),
+        gr_quantity: part.quantity,
         gr_displayorder: index,
     }))
     requests.push([
@@ -303,8 +311,8 @@ function batchRequest(job, etag, body, now) {
         'Content-Transfer-Encoding: binary',
         `Content-ID: ${requests.length + 1}`,
         '',
-        `PATCH gr_jobs(${job.gr_jobid}) HTTP/1.1`,
-        'Content-Type: application/json;type=entry',
+        `PATCH ${dataverseOrigin()}/api/data/v9.2/gr_jobs(${job.gr_jobid}) HTTP/1.1`,
+        'Content-Type: application/json',
         `If-Match: ${etag}`,
         '',
         JSON.stringify(submissionFields(body, now)),
@@ -367,6 +375,8 @@ async function handlePublicPost(request) {
                 Authorization: bearer,
                 'Content-Type': `multipart/mixed;boundary=${batch.boundary}`,
                 Accept: 'application/json',
+                'OData-MaxVersion': '4.0',
+                'OData-Version': '4.0',
             },
             body: batch.payload,
         } : {
@@ -382,7 +392,11 @@ async function handlePublicPost(request) {
     )
     const responseText = await response.text()
     if (response.status === 412 || /HTTP\/1\.1 412/.test(responseText)) return tokenFailure('used')
-    if (!response.ok || /HTTP\/1\.1 [45]\d\d/.test(responseText)) throw new Error('Job submission update failed.')
+    if (!response.ok || /HTTP\/1\.1 [45]\d\d/.test(responseText)) {
+        const innerStatus = responseText.match(/HTTP\/1\.1 ([45]\d\d)/)?.[1]
+        const innerCode = responseText.match(/"code"\s*:\s*"([^"]+)"/)?.[1]
+        throw new Error(`Job submission update failed (${innerStatus || response.status}${innerCode ? `, ${innerCode}` : ''}).`)
+    }
     return jsonResponse(200, { submitted: true })
 }
 

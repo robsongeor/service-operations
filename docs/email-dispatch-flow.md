@@ -35,3 +35,9 @@ An optional `gr_emaildispatch.gr_sitecheck` relationship was provisioned during 
 investigation, but it is unused. The existing required Job lookup was not changed. Do not provision
 a separate Site Check Email Dispatch table or extend this flow unless the product decision changes
 explicitly.
+# Public Job Card links
+
+`VITE_PUBLIC_APP_URL` optionally overrides the browser origin used for generated technician Job
+Card links. Local development sets it to the deployed Azure Static Web Apps origin so a phone can
+open the link; production can omit it and use its own origin. Only credential-free HTTPS origins
+are accepted, and the secure token remains stored and validated in Dataverse.

@@ -66,6 +66,7 @@ Time and parts are append-only child records rather than repeated Job columns:
 ### Job Material (`gr_jobmaterial`)
 
 - Entity set: `gr_jobmaterials`
+- `gr_quantity` — Whole Number; quantity used, defaults to 1 when older clients submit a part without a quantity.
 - Job lookup: `gr_Job`
 - Material: `gr_material` — Single line text, 500
 - Display Order: `gr_displayorder` — Whole number

@@ -38,6 +38,7 @@ export type Job = {
     technicianSubmissionParts?: {
         id: string
         part: string
+        quantity: number
     }[]
     jobPhotos?: {
         id: string

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { jobHasActiveSubmissionLink } from '../src/alpha/jobs/services/jobSubmissionLinkApi.ts'
+import { buildJobSubmissionPublicUrl, jobHasActiveSubmissionLink } from '../src/alpha/jobs/services/jobSubmissionLinkApi.ts'
 import {
     buildMailtoUrl,
     buildTechnicianEmailBody,
@@ -35,6 +35,26 @@ const job = {
         gr_email: 'anthony@example.test',
     },
 } as Job
+
+test('localhost Job Card links can target the deployed public app', () => {
+    const path = '/portal/job/secure-token'
+    assert.equal(
+        buildJobSubmissionPublicUrl(
+            path,
+            'http://localhost:5173',
+            'https://yellow-cliff-068680700.7.azurestaticapps.net',
+        ),
+        'https://yellow-cliff-068680700.7.azurestaticapps.net/portal/job/secure-token',
+    )
+    assert.equal(
+        buildJobSubmissionPublicUrl(path, 'https://service.example.test'),
+        'https://service.example.test/portal/job/secure-token',
+    )
+    assert.throws(
+        () => buildJobSubmissionPublicUrl(path, 'http://localhost:5173', 'http://example.test'),
+        /HTTPS origin/,
+    )
+})
 
 test('technician email retains Job details and includes the generated portal URL', () => {
     const portalUrl = 'https://service.example.test/portal/job/secure-token'

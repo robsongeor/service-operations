@@ -21,6 +21,7 @@ test('accepts supported Job photo formats within the size limit', () => {
     assert.equal(validateJobPhoto({ name: 'one.jpg', type: 'image/jpeg', size: MAX_JOB_PHOTO_BYTES }), '')
     assert.equal(validateJobPhoto({ name: 'two.png', type: 'image/png', size: 100 }), '')
     assert.equal(validateJobPhoto({ name: 'three.heic', type: 'image/heic', size: 100 }), '')
+    assert.equal(validateJobPhoto({ name: 'iphone.HEIC', type: '', size: 100 }), '')
     assert.equal(MAX_JOB_PHOTOS, 20)
 })
 

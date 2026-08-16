@@ -26,7 +26,10 @@ export type JobCardSubmissionInput = {
     story: string
     hourMeter?: number
     timeEntries: JobCardTimeEntryInput[]
-    parts: string[]
+    parts: {
+        description: string
+        quantity: number
+    }[]
     furtherWorkRequired: boolean
     furtherWorkDetails?: string
     safetyIssueIdentified: boolean

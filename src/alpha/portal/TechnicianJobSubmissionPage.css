@@ -18,7 +18,7 @@
 .technician-repeatable legend { padding: 0 5px; font-size: .85rem; font-weight: 800; }
 .technician-repeatable-row { display: grid; gap: 9px; padding-bottom: 12px; border-bottom: 1px solid #e6ece9; }
 .technician-repeatable-row.time-entry { grid-template-columns: 1.25fr .8fr .8fr auto; align-items: end; }
-.technician-repeatable-row.part-entry { grid-template-columns: 1fr auto; align-items: end; }
+.technician-repeatable-row.part-entry { grid-template-columns: minmax(0, 1fr) 90px auto; align-items: end; }
 .technician-portal-card .technician-add-row, .technician-portal-card .technician-remove-row { min-height: 38px; padding: 7px 11px; background: #eef4f1; color: #245c4c; }
 .technician-portal-card .technician-remove-row { color: #8a3636; }
 .technician-conditional { display: grid; gap: 10px; padding: 13px 0; border-top: 1px solid #e2e9e5; }
@@ -30,6 +30,7 @@
 .technician-photo-grid img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; background: #edf3f0; }
 .technician-photo-grid figcaption { overflow: hidden; color: #65756e; font-size: .65rem; text-overflow: ellipsis; white-space: nowrap; }
 .technician-photo-picker { display: grid; place-items: center; min-height: 44px; border: 1px dashed #87a99d; border-radius: 9px; background: #f2f7f5; color: #176b51; cursor: pointer; }
+.technician-photo-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
 .technician-photo-picker input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .technician-portal-error { margin: 0; color: #a12e2e; font-size: .78rem; }
 .technician-portal-message { margin-top: 10vh; text-align: center; }
@@ -80,6 +81,8 @@
   .technician-repeatable-row.time-entry { grid-template-columns: 1fr 1fr; }
   .technician-repeatable-row.time-entry label:first-child, .technician-repeatable-row.time-entry .technician-remove-row { grid-column: 1 / -1; }
   .technician-photo-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .technician-repeatable-row.part-entry { grid-template-columns: minmax(0, 1fr) 84px; }
+  .technician-repeatable-row.part-entry .technician-remove-row { grid-column: 1 / -1; }
   .site-check-workspace { padding: 14px 12px 88px; }
   .site-check-header h1 { font-size: 1.25rem; }
   .site-check-assignment-summary { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 9px !important; }
