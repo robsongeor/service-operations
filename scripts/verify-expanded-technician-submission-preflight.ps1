@@ -75,10 +75,7 @@ $roleRequest.RoleId=[Guid]'3b0845b7-ceb7-48c6-8cf2-a8dd90a20850'
 $assigned=($service.Execute($roleRequest)).RolePrivileges
 $requiredPrivileges=@(
     'prvReadgr_Job','prvWritegr_Job','prvAppendTogr_Job',
-    'prvReadgr_Equipment',
-    'prvCreategr_JobCardSubmissionTimeEntry','prvReadgr_JobCardSubmissionTimeEntry','prvWritegr_JobCardSubmissionTimeEntry','prvAppendgr_JobCardSubmissionTimeEntry',
-    'prvCreategr_JobMaterial','prvReadgr_JobMaterial','prvWritegr_JobMaterial','prvAppendgr_JobMaterial',
-    'prvCreategr_JobPhoto','prvReadgr_JobPhoto','prvWritegr_JobPhoto','prvAppendgr_JobPhoto'
+    'prvReadgr_Equipment','prvReadServiceEndpoint'
 )
 foreach($name in $requiredPrivileges){
     $metadata=$allPrivileges | Where-Object { [string]$_.Attributes['name'] -ieq $name } | Select-Object -First 1

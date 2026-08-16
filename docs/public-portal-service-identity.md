@@ -95,6 +95,11 @@ created. These cover SDK/plugin metadata and SharePoint integration internals:
 - Create, Read, and Write SharePoint Data
 - Read SharePoint Document
 
+The asynchronous Jobs and Staff realtime webhooks additionally require Organization Read
+on Service Endpoint. This platform privilege lets Dataverse dispatch the registered webhook
+when the portal service updates a Job; it grants no additional Service Operations business
+table access.
+
 They are platform-managed baseline privileges copied into a new custom role, not access to
 the Service Operations business tables. Direct role verification confirmed there are no
 other privileges.
