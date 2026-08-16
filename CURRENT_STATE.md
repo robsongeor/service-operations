@@ -68,6 +68,16 @@ Branch: `codex/job-book-integration`
   were provisioned and verified before deployment; signed-in localhost smoke populated every one of
   the 142 addressed Sites with assigned Equipment, while six empty Sites were intentionally skipped.
   Signed-in production Job Book and cross-device map smoke testing remain outstanding.
+- Jobs on-demand reference loading, Equipment alternate Fleet Numbers, and the 4,000-character Job
+  description limit were published from commit `f6441c4` by successful Azure run `31918720953` on
+  16 August 2026. The follow-up production Job Card authentication fix was published from commit
+  `9780b5a` by successful run `31918842475`. Job Card link generation now sends delegated Dataverse
+  authentication through the Static Web Apps-safe dedicated header, which also restores the Jobs
+  table email action because it generates the secure link before opening the draft. Production-safe
+  verification returned `200` for `/jobs`, found the exact `9780b5a` marker and dedicated header in
+  the deployed lazy Jobs bundle, and confirmed anonymous generation remains rejected with `401`.
+  One signed-in Job Card generation/email smoke test remains outstanding; no email was sent during
+  deployment verification.
 
 ## Unfinished work
 
