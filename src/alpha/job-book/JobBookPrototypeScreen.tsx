@@ -11,6 +11,7 @@ import type { Customer } from '../jobs/types/customer.types'
 import type { Mechanic } from '../jobs/types/mechanic.types'
 import type { Site } from '../jobs/types/site.types'
 import VerifiedAddressField from '../jobs/components/VerifiedAddressField'
+import SearchableSelect, { type SearchableSelectOption } from '../shared/searchable-select/SearchableSelect'
 import { STANDARD_JOB_TYPE_OPTIONS, type JobType } from '../jobs/types/jobType.types'
 import { JOB_DESCRIPTION_MAX_LENGTH } from '../jobs/domain/jobDescription'
 import { createJobBookIntakeRow, fetchJobBookIntakeRows, fetchRecentJobBookRows, updateJobBookIntakeRow, updateManagedJobBookMarker } from './jobBookApi'
@@ -56,61 +57,117 @@ function equipmentIsAccepted(record: Pick<JobBookRow, 'equipmentConfigured' | 'e
     return record.equipmentConfigured || record.equipmentReviewRequired
 }
 
+const ADD_EQUIPMENT_VALUE = '__add-equipment-details__'
+
+function clearEquipmentContext(row: JobBookRow, customerId = '', customer = ''): JobBookRow {
+    return {
+        ...row,
+        equipmentId: '', fleet: '', serial: '', make: '', model: '',
+        equipmentConfigured: false, equipmentReviewRequired: false,
+        customerId, customer, siteId: '', site: '', address: '',
+        addressVerified: false, addressNotFoundConfirmed: false,
+    }
+}
+
+function applyCustomerSelection(row: JobBookRow, customerId: string, customer: string): JobBookRow {
+    if (customerId === row.customerId) return row
+    return clearEquipmentContext(row, customerId, customer)
+}
+
 function EquipmentPicker({
+    id,
     value,
-    selected,
+    customerId,
     equipment,
     onSelect,
+    onClear,
     onAdd,
 }: {
+    id: string
     value: string
-    selected?: Pick<PrototypeEquipment, 'fleet' | 'serial' | 'make' | 'model'>
+    customerId: string
     equipment: PrototypeEquipment[]
     onSelect: (equipment: PrototypeEquipment) => void
+    onClear: () => void
     onAdd: () => void
 }) {
-    const [query, setQuery] = useState(value)
-    const [open, setOpen] = useState(false)
-    const rootRef = useRef<HTMLDivElement>(null)
-    useEffect(() => {
-        const close = (event: MouseEvent) => {
-            if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
-        }
-        document.addEventListener('mousedown', close)
-        return () => document.removeEventListener('mousedown', close)
-    }, [])
-    const normalized = query.trim().toLocaleLowerCase('en-NZ')
-    const results = equipment.filter((item) => [item.fleet, item.alternateFleetNumbers, item.serial, item.make, item.model, item.customer, item.site]
-        .some((field) => (field ?? '').toLocaleLowerCase('en-NZ').includes(normalized))).slice(0, 25)
+    const options = useMemo<SearchableSelectOption[]>(() => [
+        { value: ADD_EQUIPMENT_VALUE, label: '+ Add machine details', secondary: 'Record Equipment that is not in the picker', emphasized: true },
+        ...equipment
+            .filter((item) => !customerId || item.customerId === customerId)
+            .map((item) => ({
+                value: item.id,
+                label: item.fleet || item.serial || 'Equipment without an identifier',
+                secondary: [item.make, item.model, item.serial && `S/N ${item.serial}`].filter(Boolean).join(' · '),
+                searchText: [item.alternateFleetNumbers, item.customer, item.site].filter(Boolean).join(' '),
+            })),
+    ], [customerId, equipment])
 
-    return <div className="job-book-equipment-picker" ref={rootRef}>
-        {selected && !open
-            ? <button type="button" className="job-book-equipment-selected-trigger" onClick={() => { setQuery(selected.fleet || selected.serial); setOpen(true) }}>
-                <strong>{selected.fleet || selected.serial}</strong>
-                {(selected.make || selected.model) && <small>{[selected.make, selected.model].filter(Boolean).join(' ')}</small>}
-            </button>
-            : <input
-                value={query}
-                aria-label="Equipment search"
-                placeholder="Search fleet, alternate or serial"
-                onFocus={() => setOpen(true)}
-                onChange={(event) => { setQuery(event.target.value); setOpen(true) }}
-            />}
-        {open && <div className="job-book-equipment-menu">
-            <button type="button" className="job-book-equipment-add" onClick={() => { setOpen(false); onAdd() }}>
-                + Add machine details
-            </button>
-            {results.map((item) => <button
-                type="button"
-                key={item.id}
-                onClick={() => { setQuery(item.fleet || item.serial); onSelect(item); setOpen(false) }}
-            >
-                <strong>{item.fleet || 'No fleet'}</strong>
-                <span>{[item.make, item.model, item.serial && `S/N ${item.serial}`].filter(Boolean).join(' · ')}</span>
-                <small>{[item.customer, item.site].filter(Boolean).join(' — ')}</small>
-            </button>)}
-            {!results.length && <p>No matching equipment</p>}
-        </div>}
+    return <SearchableSelect
+        id={id}
+        label="Equipment"
+        value={value}
+        options={options}
+        placeholder="Select Equipment"
+        searchPlaceholder="Search fleet, alternate or serial"
+        emptyLabel="No matching Equipment"
+        resultLimit={50}
+        onChange={(nextValue) => {
+            if (nextValue === ADD_EQUIPMENT_VALUE) { onAdd(); return }
+            if (!nextValue) { onClear(); return }
+            const selected = equipment.find((item) => item.id === nextValue)
+            if (selected) onSelect(selected)
+        }}
+    />
+}
+
+function CustomerPicker({ id, value, customerName, customers, equipment, site, loading, onOpen, onChange }: {
+    id: string
+    value: string
+    customerName: string
+    customers: Customer[]
+    equipment: PrototypeEquipment[]
+    site: string
+    loading: boolean
+    onOpen: () => void
+    onChange: (customerId: string, customerName: string) => void
+}) {
+    const options = useMemo<SearchableSelectOption[]>(() => {
+        const byId = new Map<string, SearchableSelectOption>()
+        customers.forEach((customer) => byId.set(customer.gr_customerid, {
+            value: customer.gr_customerid,
+            label: customer.gr_name,
+        }))
+        equipment.forEach((item) => {
+            if (item.customerId && item.customer && !byId.has(item.customerId)) byId.set(item.customerId, {
+                value: item.customerId,
+                label: item.customer,
+            })
+        })
+        if (!value && customerName) byId.set('__saved-customer-text__', {
+            value: '__saved-customer-text__',
+            label: customerName,
+            secondary: 'Saved customer text; choose a Customer to link it',
+        })
+        return [...byId.values()].sort((a, b) => a.label.localeCompare(b.label))
+    }, [customerName, customers, equipment, value])
+
+    return <div className="job-book-customer-editor" onFocusCapture={onOpen} onPointerDownCapture={onOpen}>
+        <SearchableSelect
+            id={id}
+            label="Customer"
+            value={value || (customerName ? '__saved-customer-text__' : '')}
+            options={options}
+            placeholder="Select Customer"
+            searchPlaceholder="Search Customers"
+            emptyLabel={loading ? 'Loading Customers…' : 'No matching Customers'}
+            resultLimit={50}
+            onChange={(nextValue) => onChange(
+                nextValue === '__saved-customer-text__' ? '' : nextValue,
+                options.find((option) => option.value === nextValue)?.label ?? '',
+            )}
+        />
+        {site && <small>{site}</small>}
     </div>
 }
 
@@ -461,13 +518,6 @@ export default function JobBookPrototypeScreen() {
             addressNotFoundConfirmed: false,
         }))
     }
-    const draftSourceEquipment = equipment.find((item) => item.id.toLowerCase() === draft.equipmentId.toLowerCase())
-    const draftEquipmentDisplay = {
-        fleet: draft.fleet,
-        serial: draft.serial,
-        make: draft.make || draftSourceEquipment?.make || '',
-        model: draft.model || draftSourceEquipment?.model || '',
-    }
     const promotionReadiness = promotionRow ? getPromotionReadiness(promotionRow) : null
 
     return <main className="job-book-screen">
@@ -509,9 +559,10 @@ export default function JobBookPrototypeScreen() {
                             onChange={(mechanicId, mechanicName) => setDraft((current) => ({ ...current, mechanicId, mechanicName }))} /></td>
                         <td className={`fleet-cell${!equipmentIsAccepted(draft) ? ' job-book-required-missing' : ''}`}>{draft.equipmentReviewRequired
                             ? <button type="button" className="job-book-unconfigured-link" onClick={() => openMachineDialog()}><strong>Equipment not configured</strong><small>Click to add Fleet or Serial</small></button>
-                            : <EquipmentPicker key={`${draft.id}-${draft.equipmentId}`} value={draft.fleet || draft.serial} selected={draft.equipmentConfigured ? draftEquipmentDisplay : undefined} equipment={equipment}
-                                onSelect={(item) => setDraft((current) => applyEquipmentToRow(current, item))} onAdd={() => openMachineDialog()} />}</td>
-                        <td><div className="job-book-customer-editor"><input aria-label="Customer" placeholder="Enter customer" value={draft.customer} onChange={(event) => setDraft((current) => ({ ...current, customer: event.target.value, customerId: '', site: '', siteId: '' }))} />{draft.site && <small>{draft.site}</small>}</div></td>
+                            : <EquipmentPicker id="job-book-draft-equipment" key={`${draft.id}-${draft.equipmentId}`} value={draft.equipmentId} customerId={draft.customerId} equipment={equipment}
+                                onSelect={(item) => setDraft((current) => applyEquipmentToRow(current, item))} onClear={() => setDraft((current) => clearEquipmentContext(current, current.customerId, current.customer))} onAdd={() => openMachineDialog()} />}</td>
+                        <td><CustomerPicker id="job-book-draft-customer" value={draft.customerId} customerName={draft.customer} customers={customers} equipment={equipment} site={draft.site} loading={machineReferencesLoading}
+                            onOpen={ensureMachineReferenceData} onChange={(customerId, customerName) => setDraft((current) => applyCustomerSelection(current, customerId, customerName))} /></td>
                         <td className={!draft.description.trim() ? 'job-book-required-missing' : undefined}><textarea required maxLength={JOB_DESCRIPTION_MAX_LENGTH} aria-label="Job description (required)" placeholder="Required" rows={2} value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} /></td>
                         <td className="job-book-address-cell"><div className="job-book-address-editor"><VerifiedAddressField compact verified={draft.addressVerified} value={draft.address}
                             onChange={(address, selection) => setDraft((current) => ({ ...current, address, addressVerified: Boolean(selection), addressNotFoundConfirmed: false }))} />
@@ -565,13 +616,14 @@ export default function JobBookPrototypeScreen() {
                         <td className={isEditing ? `fleet-cell${!equipmentIsAccepted(shown) ? ' job-book-required-missing' : ''}` : undefined}>{isEditing
                             ? shown.equipmentReviewRequired
                                 ? <button type="button" className="job-book-unconfigured-link" onClick={() => openMachineDialog('edit')}><strong>Equipment not configured</strong><small>Click to add Fleet or Serial</small></button>
-                                : <EquipmentPicker key={`${shown.id}-${shown.equipmentId}`} value={shown.fleet || shown.serial} selected={shown.equipmentConfigured ? shown : undefined} equipment={equipment}
-                                    onSelect={(item) => setEditingRow((current) => current ? applyEquipmentToRow(current, item) : current)} onAdd={() => openMachineDialog('edit')} />
+                                : <EquipmentPicker id={`job-book-edit-equipment-${shown.id}`} key={`${shown.id}-${shown.equipmentId}`} value={shown.equipmentId} customerId={shown.customerId} equipment={equipment}
+                                    onSelect={(item) => setEditingRow((current) => current ? applyEquipmentToRow(current, item) : current)} onClear={() => setEditingRow((current) => current ? clearEquipmentContext(current, current.customerId, current.customer) : current)} onAdd={() => openMachineDialog('edit')} />
                             : shown.equipmentReviewRequired
                                 ? <button type="button" className="job-book-unconfigured-link" onClick={() => { setEditingRow(row); openMachineDialog('edit', row) }}><strong>Equipment not configured</strong><small>Click to add Fleet or Serial</small></button>
                                 : <span className="job-book-table-value job-book-equipment-value"><strong>{shown.fleet || shown.serial || '—'}</strong>{(shown.make || shown.model) && <small>{[shown.make, shown.model].filter(Boolean).join(' ')}</small>}</span>}</td>
                         <td>{isEditing
-                            ? <div className="job-book-customer-editor"><input aria-label={`Customer for Job ${shown.jobNumber}`} value={shown.customer} onChange={(event) => setEditingRow((current) => current ? { ...current, customer: event.target.value, customerId: '', site: '', siteId: '' } : current)} />{shown.site && <small>{shown.site}</small>}</div>
+                            ? <CustomerPicker id={`job-book-edit-customer-${shown.id}`} value={shown.customerId} customerName={shown.customer} customers={customers} equipment={equipment} site={shown.site} loading={machineReferencesLoading}
+                                onOpen={ensureMachineReferenceData} onChange={(customerId, customerName) => setEditingRow((current) => current ? applyCustomerSelection(current, customerId, customerName) : current)} />
                             : <span className="job-book-table-value job-book-customer-value"><strong>{shown.customer || '—'}</strong>{shown.site && <small>{shown.site}</small>}</span>}</td>
                         <td className={isEditing && !shown.description.trim() ? 'job-book-required-missing' : undefined}>{isEditing
                             ? <textarea required maxLength={JOB_DESCRIPTION_MAX_LENGTH} aria-label={`Description for Job ${shown.jobNumber} (required)`} placeholder="Required" rows={2} value={shown.description} onChange={(event) => setEditingRow((current) => current ? { ...current, description: event.target.value } : current)} />

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import {
     createBlankJobBookRow,
@@ -92,4 +93,18 @@ test('Site addresses display the street above the remaining locality', () => {
         street: '77 Westney Road',
         locality: 'Mangere, Auckland',
     })
+})
+
+test('Job Book intake uses the shared bounded selectors for Equipment and Customer', () => {
+    const screen = readFileSync(new URL('../src/alpha/job-book/JobBookPrototypeScreen.tsx', import.meta.url), 'utf8')
+    const sharedSelect = readFileSync(new URL('../src/alpha/shared/searchable-select/SearchableSelect.tsx', import.meta.url), 'utf8')
+
+    assert.match(screen, /import SearchableSelect/)
+    assert.match(screen, /id="job-book-draft-equipment"/)
+    assert.match(screen, /id="job-book-draft-customer"/)
+    assert.match(screen, /customerId=\{draft\.customerId\}/)
+    assert.match(screen, /applyCustomerSelection/)
+    assert.doesNotMatch(screen, /<input aria-label="Customer"/)
+    assert.match(sharedSelect, /resultLimit\?: number/)
+    assert.match(sharedSelect, /matching\.slice\(0, resultLimit\)/)
 })

@@ -7,7 +7,6 @@ import EquipmentDrawer from '../equipment/components/EquipmentDrawer'
 import EquipmentDataQualityIndicator from '../equipment/components/EquipmentDataQualityIndicator'
 import { compareEquipmentDataQuality } from '../equipment/dataQuality/equipmentDataQuality'
 import BulkEquipmentImportDrawer from '../equipment/components/BulkEquipmentImportDrawer'
-import EquipmentTransferDrawer from './EquipmentTransferDrawer'
 import SiteSettingsDrawer from './SiteSettingsDrawer'
 import { canUseBulkEquipmentImport } from '../equipment/utils/bulkEquipmentImport'
 import { isRoadRegistered } from '../equipment/compliance/equipmentCompliance'
@@ -81,7 +80,6 @@ export default function CustomerDashboardScreen() {
         clearSaveError,
         updateSites,
         updateSiteMaintenanceSettings,
-        transferEquipment,
         updateEquipment,
         createEquipment: createDashboardEquipment,
         createCustomer: createDashboardCustomer,
@@ -129,6 +127,7 @@ export default function CustomerDashboardScreen() {
         isLoading: isJobsLoading,
         loadError: jobsLoadError,
         fetchJobs,
+        fetchJobForDrawer,
     } = useJobs()
 
     const [selectedCustomerId, setSelectedCustomerId] = useState(() => viewStorageKey
@@ -138,9 +137,7 @@ export default function CustomerDashboardScreen() {
     const [creatingEquipmentInitialValues, setCreatingEquipmentInitialValues] = useState<EquipmentCreateInitialValues | null>(null)
     const [bulkImportSite, setBulkImportSite] = useState<Site | null>(null)
     const [bulkImportSuccess, setBulkImportSuccess] = useState('')
-    const [transferSite, setTransferSite] = useState<Site | null>(null)
     const [siteSettingsSite, setSiteSettingsSite] = useState<Site | null>(null)
-    const [transferSuccess, setTransferSuccess] = useState('')
     const [expandedSitesByCustomer, setExpandedSitesByCustomer] = useState<Record<string, Record<string, boolean>>>({})
     const [equipmentSortBySite, setEquipmentSortBySite] = useState<Record<string, SiteEquipmentSort>>({})
     const [creatingJobInitialValues, setCreatingJobInitialValues] = useState<JobCreateInitialValues | null>(null)
@@ -157,7 +154,7 @@ export default function CustomerDashboardScreen() {
     const [siteCheckDetails, setSiteCheckDetails] = useState<{
         site: Site
         check?: SiteCheck | null
-        tab: 'summary' | 'jobs' | 'history'
+        tab: 'summary' | 'history'
     } | null>(null)
     const siteCheckNestedTriggerRef = useRef<HTMLButtonElement | null>(null)
     const siteCheckDetailsTriggerRef = useRef<HTMLButtonElement | null>(null)
@@ -541,7 +538,7 @@ export default function CustomerDashboardScreen() {
                 <p>Choose a customer above to view sites, equipment, jobs, and the dashboard foundation for future service history and reporting.</p>
             </section>
         ) : <>
-            {(bulkImportSuccess || transferSuccess || siteSuccess) && <div className="customer-dashboard-success" role="status">{siteSuccess || transferSuccess || bulkImportSuccess}</div>}
+            {(bulkImportSuccess || siteSuccess) && <div className="customer-dashboard-success" role="status">{siteSuccess || bulkImportSuccess}</div>}
             <section className="customer-dashboard-header">
                 <div>
                     <span>Customer account</span>
@@ -646,33 +643,19 @@ export default function CustomerDashboardScreen() {
                                 </span>
                             </button>
                             <div className="customer-site-meta" onClick={(event) => event.stopPropagation()}>
-                                {(siteCheck?.state === 'due' || siteCheck?.state === 'overdue') && <button
-                                    type="button"
-                                    onClick={() => {
-                                        siteChecks.clearStartError()
-                                        setRunSiteCheckSite(site)
-                                    }}
-                                >
-                                    Run Site Check
-                                </button>}
-                                {siteCheck?.schedule.gr_enabled && <button
+                                <button
                                     type="button"
                                     onClick={(event) => {
                                         siteCheckDetailsTriggerRef.current = event.currentTarget
                                         setSiteCheckDetails({
                                             site,
-                                            check: siteCheck.activeSiteCheck,
-                                            tab: siteCheck.state === 'in-progress'
-                                                && siteCheck.activeSiteCheck
-                                                ? 'summary'
-                                                : 'history',
+                                            check: siteCheck?.activeSiteCheck,
+                                            tab: 'summary',
                                         })
                                     }}
                                 >
-                                    {siteCheck.state === 'in-progress' && siteCheck.activeSiteCheck
-                                        ? 'View Current Site Check'
-                                        : 'Site Check History'}
-                                </button>}
+                                    Site Check
+                                </button>
                                 <button
                                     type="button"
                                     disabled={site.gr_siteid.startsWith('prototype-site-') || selectedCustomer.gr_customerid.startsWith('prototype-customer-')}
@@ -705,19 +688,6 @@ export default function CustomerDashboardScreen() {
                                             setSiteSettingsSite(site)
                                         }}
                                     />}
-                                {!site.gr_siteid.startsWith('prototype-site-')
-                                    && !selectedCustomer.gr_customerid.startsWith('prototype-customer-')
-                                    && <button
-                                        type="button"
-                                        title={`Transfer existing Equipment to ${site.gr_name}`}
-                                        onClick={() => {
-                                            clearSaveError()
-                                            setTransferSuccess('')
-                                            setTransferSite(site)
-                                        }}
-                                    >
-                                        Transfer Equipment
-                                    </button>}
                             </div>
                         </header>
                         <div className="customer-equipment-table-wrap" id={equipmentRegionId} hidden={!expanded}>
@@ -857,6 +827,29 @@ export default function CustomerDashboardScreen() {
             allocateJobNumbers={siteChecks.allocateJobNumbers}
             clearJobNumber={siteChecks.clearJobNumber}
             prepareAssignmentEmail={siteChecks.prepareAssignmentEmail}
+            scheduleSettings={{
+                equipment: equipmentForSite(siteCheckDetails.site),
+                schedule: siteChecks.schedules.find((schedule) =>
+                    schedule._gr_site_value.toLowerCase() === siteCheckDetails.site.gr_siteid.toLowerCase()),
+                selectedEquipmentIds: siteChecks.scheduleEquipment
+                    .filter((selection) => selection._gr_sitecheckschedule_value.toLowerCase()
+                        === siteChecks.schedules.find((schedule) =>
+                            schedule._gr_site_value.toLowerCase() === siteCheckDetails.site.gr_siteid.toLowerCase()
+                        )?.gr_sitecheckscheduleid.toLowerCase())
+                    .map((selection) => selection._gr_equipment_value),
+                loading: siteChecks.isLoading,
+                saving: siteChecks.isSaving,
+                error: siteChecks.loadError || siteChecks.saveError,
+                onSave: async (input) => { await siteChecks.saveSchedule(input) },
+            }}
+            canStart={['due', 'overdue'].includes(
+                siteCheckBySite.get(siteCheckDetails.site.gr_siteid.toLowerCase())?.state ?? '',
+            )}
+            onStart={() => {
+                siteChecks.clearStartError()
+                setSiteCheckDetails(null)
+                setRunSiteCheckSite(siteCheckDetails.site)
+            }}
             onDelete={async (check) => {
                 await siteChecks.deleteOccurrence(check)
                 await fetchJobs()
@@ -867,10 +860,10 @@ export default function CustomerDashboardScreen() {
                 window.setTimeout(() => trigger?.focus(), 0)
             }}
             onOpenJob={(jobId, trigger) => {
-                const job = operationalJobs.find((item) => item.gr_jobid.toLowerCase() === jobId.toLowerCase())
-                if (!job) return
                 siteCheckNestedTriggerRef.current = trigger
-                setEditingJob(job)
+                void fetchJobForDrawer(jobId).then((job) => {
+                    if (job) setEditingJob(job)
+                }).catch(() => undefined)
             }}
             onOpenEquipment={(equipmentId, trigger) => {
                 const record = equipment.find((item) => item.gr_equipmentid.toLowerCase() === equipmentId.toLowerCase())
@@ -944,21 +937,6 @@ export default function CustomerDashboardScreen() {
                 setBulkImportSite(null)
             }}
             onClose={() => setBulkImportSite(null)}
-        />}
-
-        {transferSite && selectedCustomer && <EquipmentTransferDrawer
-            key={transferSite.gr_siteid}
-            customer={selectedCustomer}
-            site={transferSite}
-            equipment={equipment}
-            busy={isSaving}
-            onTransfer={transferEquipment}
-            onComplete={(transferredCount) => {
-                setSiteExpanded(transferSite.gr_siteid, true)
-                setTransferSuccess(`${transferredCount} Equipment record${transferredCount === 1 ? '' : 's'} transferred to ${transferSite.gr_name}.`)
-                setTransferSite(null)
-            }}
-            onClose={() => setTransferSite(null)}
         />}
 
         {siteSettingsSite && selectedCustomer && <SiteSettingsDrawer
@@ -1040,7 +1018,7 @@ export default function CustomerDashboardScreen() {
             onStart={siteChecks.startSiteCheck}
             onComplete={(created) => {
                 setSiteSuccess(`${created.gr_name} started successfully.`)
-                setSiteCheckDetails({ site: runSiteCheckSite, check: created, tab: 'jobs' })
+                setSiteCheckDetails({ site: runSiteCheckSite, check: created, tab: 'summary' })
                 setRunSiteCheckSite(null)
             }}
             onClose={() => {

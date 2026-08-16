@@ -244,6 +244,11 @@ test('Equipment Job History labels created, completed, and hour-meter evidence',
     }
 })
 
+test('Equipment drawer owns its styles when opened outside the Equipment route', () => {
+    const drawer = readFileSync(new URL('../src/alpha/equipment/components/EquipmentDrawer.tsx', import.meta.url), 'utf8')
+    assert.match(drawer, /import '\.\.\/EquipmentScreen\.css'/)
+})
+
 test('Equipment table omits the temporary linked Job count column', () => {
     const screen = readFileSync(new URL('../src/alpha/equipment/EquipmentScreen.tsx', import.meta.url), 'utf8')
     const table = readFileSync(new URL('../src/alpha/equipment/components/EquipmentTable.tsx', import.meta.url), 'utf8')

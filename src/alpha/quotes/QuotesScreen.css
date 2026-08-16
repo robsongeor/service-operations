@@ -56,14 +56,13 @@
 .quotes-tabs + .quotes-table-shell, .quotes-tabs + .quotes-data-state { border-radius: 0 0 13px 13px; }
 
 .quotes-table-shell { overflow-x: auto; border: 1px solid #dfe5e1; border-radius: 13px; background: #fff; box-shadow: 0 8px 28px rgba(25,36,30,.06); }
-.quotes-table { width: 100%; min-width: 1400px; border-collapse: collapse; table-layout: fixed; font-size: .76rem; }
-.quotes-table .quotes-equipment-col { width: 150px; }
-.quotes-table .quotes-job-col { width: 260px; }
-.quotes-table .quotes-customer-col { width: 180px; }
+.quotes-table { width: 100%; min-width: 1200px; border-collapse: collapse; table-layout: fixed; font-size: .76rem; }
+.quotes-table .quotes-equipment-col { width: 175px; }
+.quotes-table .quotes-job-col { width: 110px; }
+.quotes-table .quotes-customer-col { width: 210px; }
 .quotes-table .quotes-author-col { width: 170px; }
 .quotes-table .quotes-date-col { width: 125px; }
 .quotes-table .quotes-status-col { width: 100px; }
-.quotes-table .quotes-revision-col { width: 85px; }
 .quotes-table .quotes-total-col { width: 120px; }
 .quotes-table th, .quotes-table td { padding: 13px 14px; border-bottom: 1px solid #e8ece9; text-align: left; }
 .quotes-table th { background: #f6f8f7; color: #68736d; font-size: .65rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
@@ -185,7 +184,7 @@
     .quotes-summary-totals { width: 100%; justify-content: space-between; }
     .quotes-toolbar { align-items: stretch; flex-direction: column; }
     .quotes-status-filter { justify-content: flex-start; }
-    .quotes-table { min-width: 1400px; }
+    .quotes-table { min-width: 1200px; }
     .quote-form-grid { grid-template-columns: 1fr; }
     .quote-field-wide { grid-column: span 1; }
     .quote-dialog-backdrop { padding: 0; }

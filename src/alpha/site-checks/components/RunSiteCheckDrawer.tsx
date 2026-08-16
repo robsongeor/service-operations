@@ -96,6 +96,7 @@ export default function RunSiteCheckDrawer({
     const scope = SITE_CHECK_EQUIPMENT_SCOPE_OPTIONS.find(
         (option) => option.value === resolveSiteCheckEquipmentScope(schedule?.gr_equipmentscope),
     )?.label ?? 'All equipment'
+    const isNextBatch = Boolean(schedule?._gr_activesitecheck_value)
 
     const start = async () => {
         const validation = validateSiteCheckStart({
@@ -143,6 +144,11 @@ export default function RunSiteCheckDrawer({
         </>}
     >
         {(localError || error) && <p className="run-site-check-error" role="alert">{localError || error}</p>}
+
+        {isNextBatch && <p className="run-site-check-notice">
+            The previous batch remains open. This creates the next interval as a separate set of Jobs;
+            finishing the previous Jobs later will not change this batch or the schedule.
+        </p>}
 
         <EditDrawerSection title="Site Check">
             <dl className="run-site-check-summary">

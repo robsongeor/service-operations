@@ -258,7 +258,7 @@ Site Checks are scheduled checks for the equipment at a site. Open **Site Checks
 
 ### Review the Site Check list
 
-Start in **Needs attention** to see overdue, due and in-progress checks. Use the totals and filters to narrow the list by status, technician, frequency, due date, customer or site.
+Site Checks starts with **All enabled Sites**. Choose **Needs attention** to focus on overdue, due and in-progress checks, or use the totals and filters to narrow the list by status, technician, frequency, due date, customer or site.
 
 - **Start** begins a due Site Check.
 - **Open** shows the active check.
@@ -598,7 +598,7 @@ The board may hide historical Site Check schedule options. Site Checks are contr
 | Control | Use |
 | --- | --- |
 | Status totals | Quickly filter by due, overdue, in-progress and up-to-date state. |
-| Needs attention view | The practical daily starting view: overdue, due and in-progress sites. |
+| Needs attention view | Focuses the register on overdue, due and in-progress sites. |
 | Customer/site search and filters | Narrow the cross-customer list. |
 | Technician filter | Find checks owned by a particular technician. |
 | Frequency and due-date filters | Plan periodic work. |

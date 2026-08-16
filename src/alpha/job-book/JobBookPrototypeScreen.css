@@ -251,6 +251,11 @@
     border-color: #d99797;
 }
 
+.job-book-grid td.job-book-required-missing .searchable-select-trigger,
+.job-book-grid td.job-book-required-missing .searchable-select-input {
+    border-color: #d99797;
+}
+
 .job-book-allocation-note {
     display: grid;
     gap: 2px;
@@ -851,6 +856,35 @@
 
 .job-book-customer-editor small {
     padding: 0 7px;
+}
+
+.job-book-entry-table .searchable-select > label,
+.job-book-grid-wrap .searchable-select > label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.job-book-entry-table .searchable-select-menu,
+.job-book-grid-wrap .searchable-select-menu {
+    right: auto;
+    width: min(360px, 75vw);
+}
+
+.job-book-entry-table .searchable-select-trigger,
+.job-book-grid-wrap .searchable-select-trigger {
+    min-height: 42px;
+    border-color: #b8c4be;
+    border-radius: 7px;
+}
+
+.job-book-entry-table .searchable-select-input,
+.job-book-grid-wrap .searchable-select-input {
+    min-height: 42px;
 }
 
 .job-book-status-pill {

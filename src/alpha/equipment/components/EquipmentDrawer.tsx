@@ -40,6 +40,7 @@ import {
     parseAlternateFleetNumbers,
     preservePreviousFleetNumber,
 } from '../identifiers/alternateFleetNumbers'
+import '../EquipmentScreen.css'
 
 type SharedProps = {
     customers: Customer[]

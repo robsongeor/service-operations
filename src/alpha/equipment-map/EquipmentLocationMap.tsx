@@ -7,6 +7,7 @@ import type { EquipmentMapSite } from './equipmentMap.types'
 
 type Props = {
     sites: EquipmentMapSite[]
+    viewportKey: string
     selectedSiteId: string
     onSelectSite: (siteId: string) => void
 }
@@ -25,11 +26,12 @@ function markerIcon(equipmentCount: number, selected: boolean) {
     })
 }
 
-export default function EquipmentLocationMap({ sites, selectedSiteId, onSelectSite }: Props) {
+export default function EquipmentLocationMap({ sites, viewportKey, selectedSiteId, onSelectSite }: Props) {
     const containerRef = useRef<HTMLDivElement>(null)
     const mapRef = useRef<LeafletMap | null>(null)
     const clusterGroupRef = useRef<L.MarkerClusterGroup | null>(null)
     const markersRef = useRef<SiteMarker[]>([])
+    const fittedViewportKeyRef = useRef<string | null>(null)
     const onSelectSiteRef = useRef(onSelectSite)
     const [mapReady, setMapReady] = useState(false)
     const [mapError, setMapError] = useState('')
@@ -86,6 +88,7 @@ export default function EquipmentLocationMap({ sites, selectedSiteId, onSelectSi
         markersRef.current = []
         const mappedSites = sites.filter((site) => site.coordinate)
         if (!mappedSites.length) return
+        const shouldFitBounds = fittedViewportKeyRef.current !== viewportKey
         try {
             const bounds = L.latLngBounds([])
             const clusterGroup = L.markerClusterGroup({
@@ -119,13 +122,16 @@ export default function EquipmentLocationMap({ sites, selectedSiteId, onSelectSi
             })
             clusterGroup.addTo(map)
             clusterGroupRef.current = clusterGroup
-            if (mappedSites.length === 1) map.setView(bounds.getCenter(), 13)
-            else map.fitBounds(bounds, { padding: [64, 64], maxZoom: 13, animate: false })
+            if (shouldFitBounds) {
+                if (mappedSites.length === 1) map.setView(bounds.getCenter(), 13)
+                else map.fitBounds(bounds, { padding: [64, 64], maxZoom: 13, animate: false })
+                fittedViewportKeyRef.current = viewportKey
+            }
             map.invalidateSize({ pan: false })
         } catch {
             window.setTimeout(() => setMapError('The mapped Site markers could not be displayed.'), 0)
         }
-    }, [mapReady, sites])
+    }, [mapReady, sites, viewportKey])
 
     useEffect(() => {
         markersRef.current.forEach(({ siteId, marker }) => {

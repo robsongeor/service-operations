@@ -25,6 +25,7 @@ type Props = {
     multiple?: boolean
     values?: string[]
     onValuesChange?: (values: string[]) => void
+    resultLimit?: number
 }
 
 const normalize = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase()
@@ -45,6 +46,7 @@ export default function SearchableSelect({
     multiple = false,
     values = [],
     onValuesChange,
+    resultLimit,
 }: Props) {
     const rootRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLInputElement>(null)
@@ -55,10 +57,11 @@ export default function SearchableSelect({
     const selectedValueSet = useMemo(() => new Set(values), [values])
     const results = useMemo(() => {
         const search = normalize(query)
-        return options
+        const matching = options
             .filter((option) => !multiple || !selectedValueSet.has(option.value))
             .filter((option) => !search || normalize(`${option.label} ${option.secondary ?? ''} ${option.searchText ?? ''}`).includes(search))
-    }, [multiple, options, query, selectedValueSet])
+        return typeof resultLimit === 'number' ? matching.slice(0, resultLimit) : matching
+    }, [multiple, options, query, resultLimit, selectedValueSet])
     const optionOffset = multiple ? 0 : 1
     const optionCount = results.length + optionOffset
     const listboxId = `${id}-results`

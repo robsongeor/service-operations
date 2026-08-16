@@ -1,5 +1,6 @@
 import type { JobStatus } from '../../jobs/types/jobStatus.types.ts'
 import type { EquipmentSiteCheckAvailability } from '../../equipment/types/equipmentSiteCheckAvailability.types.ts'
+import type { HourMeterReadingType } from '../../equipment/hourMeter/hourMeterReading.types.ts'
 
 export const SITE_CHECK_FREQUENCIES = {
     WEEKLY: 122830000,
@@ -138,9 +139,12 @@ export type SiteCheckStartValidation = {
 export type SiteCheckCreationConflict = 'replay' | 'active-check-conflict'
 
 export type SiteCheckDetailJob = Required<SiteCheckJobProgressInput> & {
+    createdon?: string | null
     gr_jobnumber?: string | null
     gr_description?: string | null
     gr_completeddate?: string | null
+    gr_hourmeter?: number | null
+    gr_hourmeterreadingtype?: HourMeterReadingType | null
     gr_Equipment?: {
         gr_equipmentid: string
         gr_fleet?: string | null
@@ -150,6 +154,10 @@ export type SiteCheckDetailJob = Required<SiteCheckJobProgressInput> & {
     } | null
     gr_Mechanic?: {
         gr_mechanicid: string
+        gr_name: string
+    } | null
+    gr_Site?: {
+        gr_siteid: string
         gr_name: string
     } | null
     '@odata.etag'?: string

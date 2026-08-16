@@ -4,7 +4,7 @@ import { JOB_STATUSES, type JobStatus } from '../../jobs/types/jobStatus.types.t
 import { JOB_TYPES } from '../../jobs/types/jobType.types.ts'
 import { newZealandDateOnly } from '../../shared/dates/dateOnly.ts'
 import {
-    calculateNextSiteCheckDueDate,
+    calculateFollowingSiteCheckDueDate,
     calculateSiteCheckProgress,
     isSiteCheckExpired,
 } from '../domain/siteCheckCalculations.ts'
@@ -75,8 +75,16 @@ function sameId(first?: string | null, second?: string | null) {
 }
 
 function isRetiredExpiredOccurrence(context: CompletionContext) {
-    return !sameId(context.schedule._gr_activesitecheck_value, context.siteCheck.gr_sitecheckid)
-        && isSiteCheckExpired(context.siteCheck.gr_duedatesnapshot, newZealandDateOnly(new Date().toISOString()))
+    if (sameId(context.schedule._gr_activesitecheck_value, context.siteCheck.gr_sitecheckid)) {
+        return false
+    }
+    return Boolean(context.schedule._gr_activesitecheck_value)
+        || Boolean(context.schedule.gr_nextduedate
+            && context.schedule.gr_nextduedate > context.siteCheck.gr_duedatesnapshot)
+        || isSiteCheckExpired(
+            context.siteCheck.gr_duedatesnapshot,
+            newZealandDateOnly(new Date().toISOString()),
+        )
 }
 
 function requireEtag(record: { '@odata.etag'?: string }, label: string) {
@@ -158,10 +166,6 @@ function validateContext(context: CompletionContext, input: SiteCheckJobStatusIn
         throw new Error(
             `Site Check completion is blocked because ${progress.total} Jobs exist but ${progress.expected} were expected.`,
         )
-    }
-    if (context.siteCheck.gr_status === SITE_CHECK_STATUSES.COMPLETE
-        && input.status !== JOB_STATUSES.COMPLETE) {
-        throw new Error('A generated Job cannot be reopened after its Site Check is complete.')
     }
     if (input.pendingSave) {
         if (input.pendingSave.jobType !== JOB_TYPES.SITE_CHECK) {
@@ -255,15 +259,19 @@ async function executeAtomicChanges(
 
 function jobFields(input: SiteCheckJobStatusInput, completedDate?: string) {
     if (input.pendingSave) {
-        return buildJobUpdateFields({
+        return {
+            ...buildJobUpdateFields({
             ...input.pendingSave,
             status: input.status,
             completedDate: completedDate ?? input.pendingSave.completedDate,
-        })
+            }),
+            ...(input.status !== JOB_STATUSES.COMPLETE ? { gr_completeddate: null } : {}),
+        }
     }
     return {
         gr_status: input.status,
         ...(completedDate ? { gr_completeddate: completedDate } : {}),
+        ...(input.status !== JOB_STATUSES.COMPLETE ? { gr_completeddate: null } : {}),
         ...(input.hourMeter != null ? { gr_hourmeter: input.hourMeter } : {}),
         ...(HOUR_METER_CLASSIFICATION_ENABLED && input.hourMeterReadingType != null
             ? { gr_hourmeterreadingtype: input.hourMeterReadingType }
@@ -272,6 +280,27 @@ function jobFields(input: SiteCheckJobStatusInput, completedDate?: string) {
             ? { gr_hourmeterrecordeddate: input.hourMeterRecordedDate }
             : {}),
     }
+}
+
+function reopeningRequests(
+    context: CompletionContext,
+    input: SiteCheckJobStatusInput,
+): ChangeRequest[] {
+    return [
+        {
+            entityPath: `gr_jobs(${context.job.gr_jobid})`,
+            etag: requireEtag(context.job, 'The Job'),
+            fields: jobFields(input),
+        },
+        {
+            entityPath: `gr_sitechecks(${context.siteCheck.gr_sitecheckid})`,
+            etag: requireEtag(context.siteCheck, 'The Site Check'),
+            fields: {
+                gr_status: SITE_CHECK_STATUSES.IN_PROGRESS,
+                gr_completedon: null,
+            },
+        },
+    ]
 }
 
 function willCompleteSiteCheck(context: CompletionContext, status: JobStatus) {
@@ -308,9 +337,10 @@ function completionRequests(
             etag: requireEtag(context.schedule, 'The Site Check Schedule'),
             fields: {
                 gr_lastcompleteddate: completedDate,
-                gr_nextduedate: calculateNextSiteCheckDueDate(
-                    completedDate,
+                gr_nextduedate: calculateFollowingSiteCheckDueDate(
+                    context.siteCheck.gr_duedatesnapshot,
                     context.siteCheck.gr_frequencysnapshot,
+                    completedDate,
                 ),
                 'gr_ActiveSiteCheck@odata.bind': null,
             },
@@ -379,9 +409,10 @@ async function reconcileCompletedOccurrence(
             etag: requireEtag(context.schedule, 'The Site Check Schedule'),
             fields: {
                 gr_lastcompleteddate: completedDate,
-                gr_nextduedate: calculateNextSiteCheckDueDate(
-                    completedDate,
+                gr_nextduedate: calculateFollowingSiteCheckDueDate(
+                    context.siteCheck.gr_duedatesnapshot,
                     context.siteCheck.gr_frequencysnapshot,
+                    completedDate,
                 ),
                 'gr_ActiveSiteCheck@odata.bind': null,
             },
@@ -419,7 +450,13 @@ export async function updateSiteCheckJobStatus(
     if (!context) return null
     validateContext(context, input)
 
-    if (context.job.gr_status === input.status) {
+    const hasFieldUpdates = Boolean(
+        input.pendingSave
+        || input.hourMeter != null
+        || input.hourMeterReadingType != null
+        || input.hourMeterRecordedDate,
+    )
+    if (context.job.gr_status === input.status && !hasFieldUpdates) {
         const siteCheckCompleted = input.status === JOB_STATUSES.COMPLETE
             ? await reconcileWithReload(token, context, options)
             : completionCommitted(context)
@@ -430,10 +467,31 @@ export async function updateSiteCheckJobStatus(
         }
     }
 
+    if (context.job.gr_status === input.status) {
+        const completedOn = input.status === JOB_STATUSES.COMPLETE
+            ? input.completedOn ?? input.pendingSave?.completedDate ?? context.job.gr_completeddate ?? undefined
+            : undefined
+        await patchJob(token, context, input, completedOn, options)
+        const refreshed = await loadContext(token, input.jobId, options)
+        const siteCheckCompleted = refreshed && input.status === JOB_STATUSES.COMPLETE
+            ? await reconcileWithReload(token, refreshed, options)
+            : completionCommitted(refreshed ?? context)
+        return {
+            completedDate: completedOn,
+            siteCheckCompleted,
+            alreadyApplied: false,
+        }
+    }
+
     const completedOn = input.status === JOB_STATUSES.COMPLETE
         ? input.completedOn ?? input.pendingSave?.completedDate ?? new Date().toISOString()
         : undefined
     try {
+        if (context.siteCheck.gr_status === SITE_CHECK_STATUSES.COMPLETE
+            && input.status !== JOB_STATUSES.COMPLETE) {
+            await executeAtomicChanges(token, reopeningRequests(context, input), options)
+            return { completedDate: undefined, siteCheckCompleted: false, alreadyApplied: false }
+        }
         if (willCompleteSiteCheck(context, input.status)) {
             await executeAtomicChanges(token, completionRequests(context, input, completedOn!), options)
             return { completedDate: completedOn, siteCheckCompleted: true, alreadyApplied: false }

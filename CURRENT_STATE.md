@@ -81,6 +81,13 @@ Branch: `codex/job-book-integration`
 
 ## Unfinished work
 
+- Site Checks now supports cadence rollover without waiting for every Job in the previous
+  batch: an overdue row keeps **Open previous** and exposes **Start next batch**, late
+  completion closes only the replaced occurrence, and future due dates remain anchored to
+  the configured cadence. This is implemented and locally verified but not deployed. A true
+  one-off Site Check is still outstanding; it needs an explicit ad-hoc occurrence contract
+  rather than storing a false Weekly/Fortnightly/Monthly frequency.
+
 - The active Dataverse **Job Email Dispatch** Power Automate flow was upgraded in place on
   16 August 2026 to use the existing WSSOperations Office 365 Outlook connection. It now sends the
   stored HTML body before marking Email Sent, and records a safe failure result on Outlook failure
@@ -326,7 +333,7 @@ and separate non-admin direct-write denial smoke tests remain.
 
 The product direction for the next Site Checks expansion is approved and recorded as
 Phases 14–18 in the authoritative tracker. Phase 14 is complete: the authenticated
-`/site-checks` workspace shows enabled Sites across Customers, defaults to Needs attention,
+`/site-checks` workspace shows enabled Sites across Customers, defaults to All enabled Sites,
 supports state metrics plus combined operational filters, and reuses the existing
 Run/details drawers. It uses one silent token, paged Site/technician references, bounded
 100-Site Schedule scopes, batched occurrence/progress reads, and lazy per-Site Equipment;
@@ -639,8 +646,10 @@ interactive sign-in path.
 Site Checks Phase 6 is complete locally. Both Jobs table and drawer operational-status
 mutations now route generated Jobs through one Site Check completion service. It performs
 authoritative parent/sibling reads, expected-count integrity validation, ETag concurrency,
-atomic final Job/occurrence/Schedule rollover, NZ Date Only cadence calculation, 412/retry
-reconciliation, and completed-parent reopen blocking. Job Card Status remains independent.
+atomic final Job/occurrence/Schedule rollover, NZ Date Only cadence calculation, and 412/retry
+reconciliation. Reopening a completed generated Job now atomically clears its completion
+date and reopens its parent occurrence without rolling back or changing the recurring
+Schedule. Job Card Status remains independent.
 Jobs and mounted dashboard projections refresh after mutations. Focused and full regression
 tests, lint, and production build pass without live Dataverse access or sign-in prompts.
 

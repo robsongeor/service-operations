@@ -10,6 +10,8 @@ import {
 const dashboardSource = readFileSync(new URL('../src/alpha/customers/CustomerDashboardScreen.tsx', import.meta.url), 'utf8')
 const drawerSource = readFileSync(new URL('../src/alpha/customers/SiteSettingsDrawer.tsx', import.meta.url), 'utf8')
 const runDrawerSource = readFileSync(new URL('../src/alpha/site-checks/components/RunSiteCheckDrawer.tsx', import.meta.url), 'utf8')
+const siteCheckDetailsSource = readFileSync(new URL('../src/alpha/site-checks/components/SiteCheckDetailsDrawer.tsx', import.meta.url), 'utf8')
+const scheduleSettingsSource = readFileSync(new URL('../src/alpha/site-checks/components/SiteCheckScheduleSettings.tsx', import.meta.url), 'utf8')
 const searchableSelectSource = readFileSync(new URL('../src/alpha/shared/searchable-select/SearchableSelect.tsx', import.meta.url), 'utf8')
 
 function createStorage() {
@@ -55,6 +57,7 @@ test('Sites tab uses one accessible settings-icon entry point', () => {
     assert.match(dashboardSource, /ariaLabel=\{`Site settings for \$\{site\.gr_name\}`\}/)
     assert.doesNotMatch(dashboardSource, />\s*Bulk Add Equipment\s*<\/button>/)
     assert.doesNotMatch(dashboardSource, />\s*Edit Site\s*<\/button>/)
+    assert.doesNotMatch(dashboardSource, /Transfer Equipment|EquipmentTransferDrawer|transferSite/)
 })
 
 test('Site Settings restores focus to the invoking Site action when it closes', () => {
@@ -66,11 +69,10 @@ test('combined Site Settings drawer exposes the required state-preserving tabs',
     assert.match(drawerSource, /title="Site Settings"/)
     assert.match(drawerSource, /label: 'Details'/)
     assert.match(drawerSource, /label: 'Settings'/)
-    assert.match(drawerSource, /label: 'Site Checks'/)
     assert.match(drawerSource, /label: 'Bulk Add Equipment'/)
     assert.match(drawerSource, /hidden=\{activeTab !== 'details'\}/)
     assert.match(drawerSource, /hidden=\{activeTab !== 'settings'\}/)
-    assert.match(drawerSource, /hidden=\{activeTab !== 'site-checks'\}/)
+    assert.doesNotMatch(drawerSource, /\{ id: 'site-checks' as const, label: 'Site Checks'/)
 })
 
 test('Site Checks settings use the focused hook and preserve the existing drawer workflows', () => {
@@ -79,17 +81,22 @@ test('Site Checks settings use the focused hook and preserve the existing drawer
     assert.match(dashboardSource, /aria-live="polite"/)
     assert.match(dashboardSource, /sitesHeadingRef\.current\?\.focus/)
     assert.match(dashboardSource, /Object\.fromEntries\(matchingSiteIds/)
-    assert.match(drawerSource, /<FormSwitch/)
-    assert.match(drawerSource, /SITE_CHECK_FREQUENCY_OPTIONS/)
-    assert.match(drawerSource, /type="date"/)
-    assert.match(drawerSource, /onClick=\{requestSiteChecksSave\}/)
-    assert.match(drawerSource, /Existing Site Check history and generated Jobs are retained/)
-    assert.match(drawerSource, /Disable Site Checks/)
-    assert.match(drawerSource, /SITE_CHECK_EQUIPMENT_SCOPES\.MANUAL_SELECTION/)
-    assert.match(drawerSource, /multiple/)
-    assert.match(drawerSource, /Search fleet, serial, make or model/)
-    assert.match(drawerSource, /Selected Equipment/)
-    assert.match(drawerSource, /Select at least one Equipment record for Manual Selection/)
+    assert.match(siteCheckDetailsSource, /<SiteCheckScheduleSettings/)
+    assert.match(scheduleSettingsSource, /<FormSwitch/)
+    assert.match(scheduleSettingsSource, /SITE_CHECK_FREQUENCY_OPTIONS/)
+    assert.match(scheduleSettingsSource, /type="date"/)
+    assert.match(scheduleSettingsSource, /Initial check date/)
+    assert.match(scheduleSettingsSource, /Next check date/)
+    assert.match(scheduleSettingsSource, /not a completion deadline/)
+    assert.match(scheduleSettingsSource, /frequency automatically schedules every later check/)
+    assert.doesNotMatch(scheduleSettingsSource, /Following check date/)
+    assert.doesNotMatch(scheduleSettingsSource, />Initial date</)
+    assert.match(scheduleSettingsSource, /Existing Site Check history and generated Jobs are retained/)
+    assert.match(scheduleSettingsSource, /Disable Site Checks/)
+    assert.match(scheduleSettingsSource, /SITE_CHECK_EQUIPMENT_SCOPES\.MANUAL_SELECTION/)
+    assert.match(scheduleSettingsSource, /multiple/)
+    assert.match(scheduleSettingsSource, /Search fleet, serial, make or model/)
+    assert.match(scheduleSettingsSource, /Select at least one Equipment record for Manual Selection/)
     assert.match(runDrawerSource, /selectedEquipmentIds/)
 })
 
@@ -108,7 +115,7 @@ test('details and settings retain the existing service workflows', () => {
 })
 
 test('due Sites open the shared-pattern Run Site Check drawer with stable retry identity', () => {
-    assert.match(dashboardSource, />\s*Run Site Check\s*<\/button>/)
+    assert.match(siteCheckDetailsSource, />Start Site Check<\/button>/)
     assert.match(dashboardSource, /<RunSiteCheckDrawer/)
     assert.match(dashboardSource, /onStart=\{siteChecks\.startSiteCheck\}/)
     assert.match(runDrawerSource, /<EditDrawerShell/)
@@ -120,26 +127,20 @@ test('due Sites open the shared-pattern Run Site Check drawer with stable retry 
     assert.match(runDrawerSource, /availabilityOverrides/)
     assert.match(runDrawerSource, /Site Check availability for/)
     assert.match(runDrawerSource, /Create \$\{includedEquipment\.length\} Site Check Job/)
-    assert.match(dashboardSource, /setSiteCheckDetails\(\{ site: runSiteCheckSite, check: created, tab: 'jobs' \}\)/)
+    assert.match(dashboardSource, /setSiteCheckDetails\(\{ site: runSiteCheckSite, check: created, tab: 'summary' \}\)/)
 })
 
-test('disabled Site Check schedules render no Site Check controls in the Site header', () => {
+test('every Site uses one consistent Site Check entry point', () => {
     assert.match(dashboardSource, /siteCheck\?\.schedule\.gr_enabled && <span className="customer-site-check-summary"/)
-    assert.match(dashboardSource, /siteCheck\?\.schedule\.gr_enabled && <button[\s\S]*?Site Check History/)
-    assert.doesNotMatch(dashboardSource, /\{siteCheck\?\.schedule && <button/)
+    assert.match(dashboardSource, />\s*Site Check\s*<\/button>/)
+    assert.match(dashboardSource, /check: siteCheck\?\.activeSiteCheck,[\s\S]*?tab: 'summary'/)
+    assert.doesNotMatch(dashboardSource, /View Current Site Check|Site Check History|>\s*Run Site Check\s*<\/button>/)
 })
 
-test('enabled Sites use one context-aware Site Check details action', () => {
-    const enabledActionBlocks = dashboardSource.match(
-        /siteCheck\?\.schedule\.gr_enabled && <button/g,
-    ) ?? []
-    assert.equal(enabledActionBlocks.length, 1)
+test('Site Check history reloads the complete Job before opening its drawer', () => {
+    assert.match(dashboardSource, /fetchJobForDrawer,/)
     assert.match(
         dashboardSource,
-        /tab: siteCheck\.state === 'in-progress'[\s\S]*?\? 'summary'[\s\S]*?: 'history'/,
-    )
-    assert.match(
-        dashboardSource,
-        /\? 'View Current Site Check'[\s\S]*?: 'Site Check History'/,
+        /onOpenJob=\{\(jobId, trigger\) => \{[\s\S]*?fetchJobForDrawer\(jobId\)\.then\(\(job\) => \{[\s\S]*?setEditingJob\(job\)/,
     )
 })

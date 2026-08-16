@@ -9,6 +9,14 @@ import { buildProtectedQuoteTitle, buildQuoteTitle, extractQuoteTitleAddition, g
 import { buildQuotePoRequestEmail } from '../src/alpha/quotes/utils/quotePoRequestEmail.ts'
 import { PURCHASE_ORDER_RECIPIENT_ROLES, type PurchaseOrderRecipient } from '../src/alpha/customers/purchaseOrderRecipient.types.ts'
 
+test('Quotes register prioritizes operational context and omits the revision column', async () => {
+    const screen = await readFile(new URL('../src/alpha/quotes/QuotesScreen.tsx', import.meta.url), 'utf8')
+    assert.match(screen, /<th>Customer<\/th><th>Job<\/th><th>Equipment<\/th><th>Quote description<\/th>/)
+    assert.match(screen, /linkedEquipment\?\.gr_make, linkedEquipment\?\.gr_model/)
+    assert.doesNotMatch(screen, /<th>Revision<\/th>/)
+    assert.doesNotMatch(screen, /Rev \{quote\.gr_revision\}/)
+})
+
 const quote: Quote = {
     gr_quoteid: 'quote-id', gr_name: 'Repair hydraulic leak', gr_quotenumber: 'Q-00123',
     gr_quotestatus: QUOTE_STATUSES.DRAFT, gr_revision: 1, gr_quotedate: '2026-08-13',

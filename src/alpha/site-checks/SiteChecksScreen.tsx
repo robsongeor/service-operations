@@ -58,7 +58,7 @@ function rowMatchesView(item: SiteCheckDashboardItem, view: ViewFilter) {
 export default function SiteChecksScreen() {
     const navigate = useNavigate()
     const workspace = useSiteCheckWorkspace()
-    const [view, setView] = useState<ViewFilter>('needs-attention')
+    const [view, setView] = useState<ViewFilter>('all')
     const [search, setSearch] = useState('')
     const [technicianId, setTechnicianId] = useState('')
     const [frequency, setFrequency] = useState('')
@@ -72,7 +72,7 @@ export default function SiteChecksScreen() {
     const [details, setDetails] = useState<{
         site: Site
         check?: SiteCheck | null
-        tab: 'summary' | 'jobs' | 'history'
+        tab: 'summary' | 'history'
     } | null>(null)
     const drawerTrigger = useRef<HTMLButtonElement | null>(null)
 
@@ -128,7 +128,7 @@ export default function SiteChecksScreen() {
         })
 
     const setStateView = (state: ReportableSiteCheckState) => {
-        setView((current) => current === state ? 'needs-attention' : state)
+        setView((current) => current === state ? 'all' : state)
     }
     const changeSort = (key: SortKey) => setSort((current) => ({
         key,
@@ -137,7 +137,7 @@ export default function SiteChecksScreen() {
             : 'ascending',
     }))
     const resetFilters = () => {
-        setView('needs-attention')
+        setView('all')
         setSearch('')
         setTechnicianId('')
         setFrequency('')
@@ -205,8 +205,8 @@ export default function SiteChecksScreen() {
                 <option value="">All frequencies</option>
                 {SITE_CHECK_FREQUENCY_OPTIONS.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}
             </select></label>
-            <label><span>Due from</span><input type="date" value={dueFrom} onChange={(event) => setDueFrom(event.target.value)} /></label>
-            <label><span>Due to</span><input type="date" value={dueTo} onChange={(event) => setDueTo(event.target.value)} /></label>
+            <label className="site-checks-date"><span>Due from</span><input type="date" value={dueFrom} onChange={(event) => setDueFrom(event.target.value)} /></label>
+            <label className="site-checks-date"><span>Due to</span><input type="date" value={dueTo} onChange={(event) => setDueTo(event.target.value)} /></label>
             <button type="button" className="site-checks-reset" onClick={resetFilters}>Reset filters</button>
         </section>
 
@@ -240,6 +240,15 @@ export default function SiteChecksScreen() {
                             ? mechanicsById.get(item.activeSiteCheck._gr_assignedtechnician_value.toLowerCase())
                             : undefined
                         const canStart = item.state === 'due' || item.state === 'overdue'
+                        const hasUnfinishedPreviousBatch = canStart && Boolean(item.activeSiteCheck)
+                        const openDetails = (button: HTMLButtonElement) => {
+                            drawerTrigger.current = button
+                            setDetails({
+                                site,
+                                check: item.activeSiteCheck,
+                                tab: item.activeSiteCheck ? 'summary' : 'history',
+                            })
+                        }
                         return <tr key={item.schedule.gr_sitecheckscheduleid}>
                             <td><button type="button" className="site-checks-link" onClick={() => navigate(customerDashboardUrl(site))}>{site.gr_Customer?.gr_name ?? 'Customer unavailable'}</button></td>
                             <td><button type="button" className="site-checks-link site" onClick={() => navigate(customerDashboardUrl(site))}>{site.gr_name}</button></td>
@@ -250,15 +259,15 @@ export default function SiteChecksScreen() {
                                 ? <span className="site-checks-progress"><strong>{item.progress.completed}/{item.progress.expected}</strong><small>{item.progress.remaining} remaining</small></span>
                                 : '—'}</td>
                             <td>{technician?.gr_name ?? '—'}</td>
-                            <td>{canStart
-                                ? <button type="button" className="site-checks-action primary" onClick={(event) => void openRun(site, event.currentTarget)}>Start</button>
+                            <td>{hasUnfinishedPreviousBatch
+                                ? <span className="site-checks-actions">
+                                    <button type="button" className="site-checks-action" onClick={(event) => openDetails(event.currentTarget)}>Open previous</button>
+                                    <button type="button" className="site-checks-action primary" onClick={(event) => void openRun(site, event.currentTarget)}>Start next batch</button>
+                                </span>
+                                : canStart
+                                    ? <button type="button" className="site-checks-action primary" onClick={(event) => void openRun(site, event.currentTarget)}>Start</button>
                                 : <button type="button" className="site-checks-action" onClick={(event) => {
-                                    drawerTrigger.current = event.currentTarget
-                                    setDetails({
-                                        site,
-                                        check: item.activeSiteCheck,
-                                        tab: item.state === 'in-progress' ? 'summary' : 'history',
-                                    })
+                                    openDetails(event.currentTarget)
                                 }}>{item.state === 'in-progress' ? 'Open' : 'History'}</button>}</td>
                         </tr>
                     })}
@@ -282,7 +291,7 @@ export default function SiteChecksScreen() {
             error={workspace.startError}
             onStart={workspace.startSiteCheck}
             onComplete={(created) => {
-                setDetails({ site: runSite, check: created, tab: 'jobs' })
+                setDetails({ site: runSite, check: created, tab: 'summary' })
                 setRunSite(null)
             }}
             onClose={() => {

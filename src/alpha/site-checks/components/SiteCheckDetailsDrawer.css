@@ -56,6 +56,19 @@
     list-style: none;
 }
 
+.site-check-history > li {
+    overflow: hidden;
+    border: 1px solid #d0d5dd;
+    border-radius: .7rem;
+    background: #fff;
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.site-check-history > li:has(> button[aria-expanded="true"]) {
+    border-color: #176b55;
+    box-shadow: 0 0 0 2px rgb(23 107 85 / 12%);
+}
+
 .site-check-job-book {
     display: grid;
     gap: .65rem;
@@ -117,20 +130,168 @@
     color: #8d3030;
 }
 
-.site-check-history button {
+.site-check-history > li > button {
+    position: relative;
     display: grid;
     width: 100%;
     gap: .25rem;
-    padding: .8rem;
-    border: 1px solid #d0d5dd;
-    border-radius: .6rem;
+    padding: .8rem 2.5rem .8rem .8rem;
+    border: 0;
+    border-radius: 0;
     text-align: left;
     background: #fff;
+    cursor: pointer;
 }
 
-.site-check-history button[aria-current="true"] {
-    border-color: #176b55;
-    box-shadow: 0 0 0 2px rgb(23 107 85 / 15%);
+.site-check-history > li > button[aria-current="true"] {
+    border-bottom: 1px solid #c9ddd2;
+    background: #f3faf7;
+    box-shadow: none;
+}
+
+.site-check-history > li > button::after {
+    position: absolute;
+    top: 50%;
+    right: .9rem;
+    color: #426456;
+    font-size: 1rem;
+    font-weight: 800;
+    content: '+';
+    transform: translateY(-50%);
+}
+
+.site-check-history > li > button[aria-expanded="true"]::after {
+    content: '−';
+}
+
+.site-check-job-history-list article {
+    display: block;
+    padding: 12px;
+    border-color: #e0e5e2;
+    border-radius: 9px;
+    background: #fafbf9;
+}
+
+.site-check-job-history-card {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.site-check-job-history-card:focus-visible {
+    outline: 2px solid #176b55;
+    outline-offset: 4px;
+}
+
+.site-check-job-history-list article:has(.site-check-job-history-card):hover {
+    border-color: #9fc6b8;
+    background: #f3faf7;
+}
+
+.site-check-job-history-title {
+    display: flex !important;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.site-check-job-history-title > div {
+    display: flex;
+    min-width: 0;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.site-check-job-history-title strong { flex: 0 0 auto; }
+.site-check-job-history-title span { min-width: 0; overflow: hidden; color: #66716b; font-size: .72rem; text-overflow: ellipsis; white-space: nowrap; }
+.site-check-job-history-title time { flex: 0 0 auto; color: #6e756f; font-size: .7rem; }
+.site-check-job-history-meta { display: flex !important; grid-auto-flow: initial !important; gap: 6px; flex-wrap: wrap; margin: 7px 0; }
+.site-check-job-history-meta span { padding: 3px 7px; border-radius: 999px; background: #e9ece9; color: #555d58; font-size: .66rem; font-weight: 700; }
+.site-check-job-history-meta .site-check-job-history-status[data-status="122830000"] { background: #e5f2eb; color: #2f6840; }
+.site-check-job-history-meta .site-check-job-history-status[data-status="122830001"] { background: #fff0c2; color: #705500; }
+.site-check-job-history-meta .site-check-job-history-status[data-status="122830002"] { background: #e5f0f8; color: #456d87; }
+.site-check-job-history-meta .site-check-job-history-status[data-status="122830003"] { background: #edf0ee; color: #515854; }
+.site-check-job-history-meta .site-check-job-history-status[data-status="122830004"] { background: #f0edfb; color: #604f88; }
+.site-check-job-history-meta .site-check-job-history-status[data-status="122830005"] { background: #fff0c2; color: #704b08; }
+.site-check-job-history-list dl { display: grid; gap: 4px; margin: 0; }
+.site-check-job-history-list dl div { display: grid; grid-template-columns: 100px 1fr; gap: 8px; }
+.site-check-job-history-list dt { color: #737a76; font-size: .68rem; font-weight: 700; }
+.site-check-job-history-list dd { margin: 0; font-size: .72rem; white-space: pre-wrap; }
+.site-check-job-history-actions { display: flex !important; justify-content: flex-end; gap: 6px; margin-top: 10px; }
+
+.site-check-history-jobs {
+    margin: 0;
+    padding: .8rem;
+    background: #f8fbf9;
+}
+
+.site-check-history-jobs h4 {
+    margin: 0 0 .65rem;
+    color: #315b47;
+    font-size: .75rem;
+}
+
+.site-check-history-jobs .site-check-job-list {
+    margin-bottom: .65rem;
+}
+
+.site-check-date-field small {
+    color: #6f7873;
+    font-size: .7rem;
+    font-weight: 400;
+    line-height: 1.35;
+}
+
+.site-settings-fields select {
+    width: 100%;
+    min-height: 42px;
+    box-sizing: border-box;
+    padding: 0 11px;
+    border: 1px solid #ccd5d0;
+    border-radius: 8px;
+    background: #fff;
+    color: #26332d;
+    font: inherit;
+    outline: none;
+}
+
+.site-settings-fields select:focus,
+.site-settings-fields input:focus {
+    border-color: #43877a;
+    box-shadow: 0 0 0 3px rgba(67, 135, 122, .12);
+}
+
+.site-settings-fields select:disabled,
+.site-settings-fields input:disabled {
+    background: #f3f5f3;
+    color: #7a837e;
+    cursor: not-allowed;
+}
+
+.site-check-settings-save {
+    min-height: 38px;
+    margin-top: 14px;
+    padding: 0 14px;
+    border: 1px solid #176f66;
+    border-radius: 8px;
+    background: #176f66;
+    color: #fff;
+    font: inherit;
+    font-size: .78rem;
+    font-weight: 750;
+    cursor: pointer;
+}
+
+.site-check-settings-save:disabled {
+    border-color: #d5ddd9;
+    background: #edf1ef;
+    color: #8a938e;
+    cursor: not-allowed;
 }
 
 @media (max-width: 620px) {

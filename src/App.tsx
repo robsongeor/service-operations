@@ -25,6 +25,7 @@ const ChargeableInvoiceReviewScreen = lazy(() => import('./alpha/chargeable-invo
 const EquipmentMapScreen = lazy(() => import('./alpha/equipment-map/EquipmentMapScreen'))
 const GreentreeEquipmentTestScreen = lazy(() => import('./alpha/equipment-test/GreentreeEquipmentTestScreen'))
 const JobBookPrototypeScreen = lazy(() => import('./alpha/job-book/JobBookPrototypeScreen'))
+const OverviewScreen = lazy(() => import('./alpha/overview/OverviewScreen'))
 
 function RouteLoadingFallback() {
   return <div role="status" aria-live="polite" style={{ padding: '24px', color: '#66736c', fontSize: '.8rem' }}>Loading page…</div>
@@ -69,7 +70,7 @@ function App() {
       <div style={{ flex: 1, minWidth: 0, padding: '24px' }}>
         <Suspense fallback={<RouteLoadingFallback />}>
           <Routes>
-            <Route path="/" element={<div>Overview</div>} />
+            <Route path="/" element={<OverviewScreen />} />
             <Route path="/customers" element={<CustomerDashboardScreen />} />
             <Route path="/staff" element={<MechanicsScreen />} />
             <Route path="/mechanics" element={<Navigate to="/staff" replace />} />

@@ -5,7 +5,9 @@ import EditDrawerSection from '../../shared/drawer/EditDrawerSection'
 import EditDrawerShell from '../../shared/drawer/EditDrawerShell'
 import DrawerTabs from '../../shared/drawer/DrawerTabs'
 import { JOB_STATUS_OPTIONS } from '../../jobs/types/jobStatus.types'
+import { HOUR_METER_READING_TYPES } from '../../equipment/hourMeter/hourMeterReading.types'
 import { EQUIPMENT_SITE_CHECK_AVAILABILITY_OPTIONS } from '../../equipment/types/equipmentSiteCheckAvailability.types'
+import type { Equipment } from '../../jobs/types/equipment.types'
 import { calculateSiteCheckProgress, wasSiteCheckCompletedLate } from '../domain/siteCheckCalculations'
 import { buildSiteCheckJobBookRows, parseSiteCheckJobNumbers } from '../domain/siteCheckJobBook'
 import {
@@ -15,11 +17,14 @@ import {
     type SiteCheckDetailJob,
     type SiteCheckEquipmentExclusion,
     type SiteCheckPage,
+    type SiteCheckSchedule,
+    type SiteCheckScheduleSaveInput,
 } from '../types/siteCheck.types'
 import './SiteCheckDetailsDrawer.css'
 import type { SiteCheckAssignmentEmailInput } from '../services/siteCheckAssignmentApi'
+import SiteCheckScheduleSettings from './SiteCheckScheduleSettings'
 
-type Tab = 'summary' | 'jobs' | 'history'
+type Tab = 'summary' | 'settings' | 'history'
 
 type Props = {
     customerName: string
@@ -42,6 +47,17 @@ type Props = {
     onDelete: (siteCheck: SiteCheck) => Promise<void>
     onOpenJob: (jobId: string, trigger: HTMLButtonElement) => void
     onOpenEquipment: (equipmentId: string, trigger: HTMLButtonElement) => void
+    scheduleSettings?: {
+        equipment: Equipment[]
+        schedule?: SiteCheckSchedule
+        selectedEquipmentIds: string[]
+        loading: boolean
+        saving: boolean
+        error: string
+        onSave: (input: SiteCheckScheduleSaveInput) => Promise<void>
+    }
+    canStart?: boolean
+    onStart?: () => void
     onClose: () => void
 }
 
@@ -49,11 +65,18 @@ const dateTimeFormatter = new Intl.DateTimeFormat('en-NZ', {
     dateStyle: 'medium',
     timeStyle: 'short',
 })
+const dateFormatter = new Intl.DateTimeFormat('en-NZ', { dateStyle: 'medium' })
 
 function formatDateTime(value?: string | null) {
     if (!value) return '—'
     const date = new Date(value)
     return Number.isNaN(date.getTime()) ? '—' : dateTimeFormatter.format(date)
+}
+
+function formatDate(value?: string | null) {
+    if (!value) return 'Not recorded'
+    const date = new Date(value)
+    return Number.isNaN(date.getTime()) ? 'Not recorded' : dateFormatter.format(date)
 }
 
 function frequencyLabel(check?: SiteCheck | null) {
@@ -102,10 +125,14 @@ export default function SiteCheckDetailsDrawer({
     onDelete,
     onOpenJob,
     onOpenEquipment,
+    scheduleSettings,
+    canStart = false,
+    onStart,
     onClose,
 }: Props) {
     const [activeTab, setActiveTab] = useState<Tab>(initialTab)
     const [selected, setSelected] = useState<SiteCheck | null>(initialSiteCheck ?? null)
+    const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null)
     const [history, setHistory] = useState<SiteCheck[]>([])
     const [historyNext, setHistoryNext] = useState<string>()
     const [jobs, setJobs] = useState<SiteCheckDetailJob[]>([])
@@ -140,7 +167,11 @@ export default function SiteCheckDetailsDrawer({
                     !current.some((item) => item.gr_sitecheckid === record.gr_sitecheckid))]
                 : page.records)
             setHistoryNext(page.nextLink)
-            if (!selected && page.records[0]) setSelected(page.records[0])
+            if (!nextLink) {
+                setSelected((current) => current
+                    ? page.records.find((record) => record.gr_sitecheckid === current.gr_sitecheckid) ?? current
+                    : page.records[0] ?? null)
+            }
         } catch (cause) {
             setError(cause instanceof Error ? cause.message : 'Site Check History could not be loaded.')
         } finally {
@@ -197,11 +228,92 @@ export default function SiteCheckDetailsDrawer({
         return () => window.clearTimeout(timer)
     }, [loadAllEquipmentExclusions, selectedId])
 
+    useEffect(() => {
+        const refreshAfterJobChange = () => {
+            void appendHistory()
+            if (!selectedId) return
+            loadedJobsFor.current = ''
+            setJobs([])
+            setJobsNext(undefined)
+            void appendJobs(selectedId)
+        }
+        window.addEventListener('site-checks-changed', refreshAfterJobChange)
+        return () => window.removeEventListener('site-checks-changed', refreshAfterJobChange)
+    }, [selectedId]) // eslint-disable-line react-hooks/exhaustive-deps
+
     const progress = useMemo(
         () => calculateSiteCheckProgress(jobs, selected?.gr_expectedjobcount ?? 0),
         [jobs, selected?.gr_expectedjobcount],
     )
+    const hasCurrentCheck = selected?.gr_status === SITE_CHECK_STATUSES.IN_PROGRESS
     const status = selected?.gr_status === SITE_CHECK_STATUSES.COMPLETE ? 'Complete' : 'In progress'
+
+    const generatedJobs = (showActions = true) => <>
+        {jobsLoading && jobs.length === 0 ? <p>Loading generated Jobs…</p>
+            : jobs.length === 0 ? <p>No generated Jobs were found.</p>
+                : <div className="site-check-job-list site-check-job-history-list">
+                    {jobs.map((job) => {
+                        const jobStatus = JOB_STATUS_OPTIONS.find((option) => option.value === job.gr_status)?.label ?? 'Unknown'
+                        const details = <>
+                            <div className="site-check-job-history-title">
+                                <div>
+                                    <strong>{job.gr_jobnumber?.trim() || 'Job number not set'}</strong>
+                                    <span title={job.gr_description || 'No description'}>{job.gr_description || 'No description'}</span>
+                                </div>
+                                <time dateTime={job.createdon ?? undefined}>Created {formatDate(job.createdon)}</time>
+                            </div>
+                            <div className="site-check-job-history-meta">
+                                <span>Site Check</span>
+                                <span className="site-check-job-history-status" data-status={job.gr_status}>{jobStatus}</span>
+                                <span>{equipmentLabel(job)}</span>
+                            </div>
+                            <dl>
+                                <div><dt>Completed Date</dt><dd>{job.gr_completeddate ? formatDate(job.gr_completeddate) : 'Not completed'}</dd></div>
+                                <div><dt>Hours Recorded</dt><dd>{job.gr_hourmeter == null
+                                    ? 'Not recorded'
+                                    : `${job.gr_hourmeter.toLocaleString('en-NZ')} hours${job.gr_hourmeterreadingtype === HOUR_METER_READING_TYPES.ESTIMATED ? ' · Estimated' : ''}`}</dd></div>
+                                <div><dt>Job Site</dt><dd>{job.gr_Site?.gr_name || siteName}</dd></div>
+                                <div><dt>Mechanic</dt><dd>{job.gr_Mechanic?.gr_name ?? 'Unassigned'}</dd></div>
+                            </dl>
+                        </>
+                        return <article key={job.gr_jobid}>
+                            {showActions ? <>
+                                {details}
+                                <div className="site-check-job-history-actions">
+                                <button type="button" onClick={(event) => onOpenJob(job.gr_jobid, event.currentTarget)}>Open Job</button>
+                                <button
+                                    type="button"
+                                    disabled={!job.gr_Equipment}
+                                    onClick={(event) => job.gr_Equipment && onOpenEquipment(job.gr_Equipment.gr_equipmentid, event.currentTarget)}
+                                >
+                                    Open Equipment
+                                </button>
+                                {job.gr_jobnumber?.trim() && <button
+                                    type="button"
+                                    className="site-check-clear-number"
+                                    onClick={() => {
+                                        setClearNumberError('')
+                                        setJobNumberToClear(job)
+                                    }}
+                                >
+                                    Clear Job number
+                                </button>}
+                                </div>
+                            </> : <button
+                                type="button"
+                                className="site-check-job-history-card"
+                                aria-label={`Open Job ${job.gr_jobnumber?.trim() || equipmentLabel(job)}`}
+                                onClick={(event) => onOpenJob(job.gr_jobid, event.currentTarget)}
+                            >
+                                {details}
+                            </button>}
+                        </article>
+                    })}
+                </div>}
+        {jobsNext && <button type="button" disabled={jobsLoading} onClick={() => selectedId && void appendJobs(selectedId, jobsNext)}>
+            {jobsLoading ? 'Loading…' : 'Load more Jobs'}
+        </button>}
+    </>
 
     const loadCompleteOrderedJobs = async () => {
         if (!selectedId) throw new Error('Select a Site Check first.')
@@ -324,10 +436,11 @@ export default function SiteCheckDetailsDrawer({
 
     return <EditDrawerShell
         eyebrow="Site Checks"
-        title={selected?.gr_name ?? `${siteName} history`}
+        title={selected?.gr_name ?? `Site Check — ${siteName}`}
         busy={deleteBusy || emailBusy}
         onClose={onClose}
         footer={<>
+            {canStart && onStart && <button type="button" className="primary" onClick={onStart}>Start Site Check</button>}
             {selected?.gr_status === SITE_CHECK_STATUSES.IN_PROGRESS && <button
                 type="button"
                 className="primary"
@@ -353,7 +466,7 @@ export default function SiteCheckDetailsDrawer({
         <DrawerTabs
             tabs={[
                 { id: 'summary', label: 'Summary' },
-                { id: 'jobs', label: 'Jobs & Equipment' },
+                { id: 'settings', label: 'Settings' },
                 { id: 'history', label: 'History' },
             ]}
             activeTab={activeTab}
@@ -365,7 +478,7 @@ export default function SiteCheckDetailsDrawer({
 
         <div role="tabpanel" id="drawer-tab-panel-summary" aria-labelledby="drawer-tab-summary" hidden={activeTab !== 'summary'}>
             <EditDrawerSection title="Occurrence">
-                {!selected ? <p>No Site Check occurrence is available.</p> : <>
+                {!selected ? <p>No current Site Check is running. Use the Settings tab to enable Site Checks and choose the initial check date.</p> : <>
                     <dl className="site-check-detail-grid">
                         <div><dt>Customer</dt><dd>{customerName}</dd></div>
                         <div><dt>Site</dt><dd>{siteName}</dd></div>
@@ -383,10 +496,7 @@ export default function SiteCheckDetailsDrawer({
                     </div>
                 </>}
             </EditDrawerSection>
-        </div>
-
-        <div role="tabpanel" id="drawer-tab-panel-jobs" aria-labelledby="drawer-tab-jobs" hidden={activeTab !== 'jobs'}>
-            <EditDrawerSection title="Generated Jobs and Equipment">
+            {hasCurrentCheck && <><EditDrawerSection title="Current Jobs and Equipment">
                 {selected && <div className="site-check-job-book">
                     <div>
                         <strong>Job Book allocation</strong>
@@ -402,43 +512,7 @@ export default function SiteCheckDetailsDrawer({
                     </div>
                     {jobBookFeedback && <p role="status">{jobBookFeedback}</p>}
                 </div>}
-                {jobsLoading && jobs.length === 0 ? <p>Loading generated Jobs…</p>
-                    : jobs.length === 0 ? <p>No generated Jobs were found.</p>
-                        : <div className="site-check-job-list">
-                            {jobs.map((job) => {
-                                const jobStatus = JOB_STATUS_OPTIONS.find((option) => option.value === job.gr_status)?.label ?? 'Unknown'
-                                return <article key={job.gr_jobid}>
-                                    <div>
-                                        <strong>{equipmentLabel(job)}</strong>
-                                        <span>{job.gr_jobnumber?.trim() || 'Unnumbered Job'} · {jobStatus}</span>
-                                        <small>{job.gr_Mechanic?.gr_name ?? 'Technician unassigned'}</small>
-                                    </div>
-                                    <div>
-                                        <button type="button" onClick={(event) => onOpenJob(job.gr_jobid, event.currentTarget)}>Open Job</button>
-                                        <button
-                                            type="button"
-                                            disabled={!job.gr_Equipment}
-                                            onClick={(event) => job.gr_Equipment && onOpenEquipment(job.gr_Equipment.gr_equipmentid, event.currentTarget)}
-                                        >
-                                            Open Equipment
-                                        </button>
-                                        {job.gr_jobnumber?.trim() && <button
-                                            type="button"
-                                            className="site-check-clear-number"
-                                            onClick={() => {
-                                                setClearNumberError('')
-                                                setJobNumberToClear(job)
-                                            }}
-                                        >
-                                            Clear Job number
-                                        </button>}
-                                    </div>
-                                </article>
-                            })}
-                        </div>}
-                {jobsNext && <button type="button" disabled={jobsLoading} onClick={() => selectedId && void appendJobs(selectedId, jobsNext)}>
-                    {jobsLoading ? 'Loading…' : 'Load more Jobs'}
-                </button>}
+                {generatedJobs(false)}
             </EditDrawerSection>
             {exclusions.length > 0 && <EditDrawerSection title="Excluded from this occurrence">
                 <p>These machines were unavailable when this Site Check started. They will be reconsidered at the next occurrence.</p>
@@ -464,6 +538,22 @@ export default function SiteCheckDetailsDrawer({
                             </div>
                         </article>)}
                 </div>
+            </EditDrawerSection>}</>}
+        </div>
+
+        <div role="tabpanel" id="drawer-tab-panel-settings" aria-labelledby="drawer-tab-settings" hidden={activeTab !== 'settings'}>
+            {scheduleSettings ? <SiteCheckScheduleSettings
+                siteId={siteId}
+                siteName={siteName}
+                equipment={scheduleSettings.equipment}
+                schedule={scheduleSettings.schedule}
+                selectedEquipmentIds={scheduleSettings.selectedEquipmentIds}
+                loading={scheduleSettings.loading}
+                saving={scheduleSettings.saving}
+                error={scheduleSettings.error}
+                onSave={scheduleSettings.onSave}
+            /> : <EditDrawerSection title="Site Check Settings">
+                <p>Site Check settings are managed from the Customer Site workspace.</p>
             </EditDrawerSection>}
         </div>
 
@@ -475,6 +565,7 @@ export default function SiteCheckDetailsDrawer({
                             {history.map((check) => {
                                 const complete = check.gr_status === SITE_CHECK_STATUSES.COMPLETE
                                 const late = complete && wasSiteCheckCompletedLate(check.gr_completedon, check.gr_duedatesnapshot)
+                                const expanded = expandedHistoryId === check.gr_sitecheckid
                                 const selectedProgress = selectedId === check.gr_sitecheckid
                                     ? progress
                                     : null
@@ -482,16 +573,29 @@ export default function SiteCheckDetailsDrawer({
                                     ? check.gr_expectedjobcount
                                     : selectedProgress?.completed ?? 0
                                 return <li key={check.gr_sitecheckid}>
-                                    <button type="button" aria-current={selectedId === check.gr_sitecheckid ? 'true' : undefined} onClick={() => {
-                                        loadedJobsFor.current = ''
-                                        loadedExclusionsFor.current = ''
-                                        setSelected(check)
-                                        setActiveTab('summary')
-                                    }}>
+                                    <button
+                                        type="button"
+                                        aria-expanded={expanded}
+                                        aria-current={expanded ? 'true' : undefined}
+                                        onClick={() => {
+                                            if (expanded) {
+                                                setExpandedHistoryId(null)
+                                                return
+                                            }
+                                            loadedJobsFor.current = ''
+                                            loadedExclusionsFor.current = ''
+                                            setSelected(check)
+                                            setExpandedHistoryId(check.gr_sitecheckid)
+                                        }}>
                                         <strong>{formatDateTime(check.gr_startedon)}</strong>
                                         <span>{complete ? 'Complete' : 'In progress'} · {completedCount}/{check.gr_expectedjobcount}</span>
                                         <small>{technicianName(check._gr_assignedtechnician_value)} · Due {check.gr_duedatesnapshot}{late ? ' · Completed late' : ''}</small>
+                                        <small>{expanded ? 'Hide generated Jobs' : 'Show generated Jobs'}</small>
                                     </button>
+                                    {expanded && selectedId === check.gr_sitecheckid && <div className="site-check-history-jobs">
+                                        <h4>{complete ? 'Completed Jobs' : 'Generated Jobs'}</h4>
+                                        {generatedJobs(false)}
+                                    </div>}
                                 </li>
                             })}
                         </ol>}

@@ -174,6 +174,21 @@ export function calculateNextUpcomingSiteCheckDueDate(
     return nextDueDate
 }
 
+export function calculateFollowingSiteCheckDueDate(
+    occurrenceDueDate: string,
+    frequency: SiteCheckFrequency,
+    referenceDate: string,
+) {
+    if (!isValidDateOnly(occurrenceDueDate) || !isValidDateOnly(referenceDate)) {
+        throw new Error('A valid Site Check due date is required.')
+    }
+    let nextDueDate = calculateNextSiteCheckDueDate(occurrenceDueDate, frequency)
+    while (nextDueDate <= referenceDate) {
+        nextDueDate = calculateNextSiteCheckDueDate(nextDueDate, frequency)
+    }
+    return nextDueDate
+}
+
 export function isSiteCheckExpired(dueDate?: string | null, today?: string | null) {
     return isValidDateOnly(dueDate) && isValidDateOnly(today) && dueDate < today
 }

@@ -164,6 +164,7 @@ export default function EquipmentMapScreen() {
                 <Suspense fallback={<div className="equipment-map-canvas-shell"><div className="equipment-map-overlay">Loading map…</div></div>}>
                     <EquipmentLocationMap
                         sites={mappedSites}
+                        viewportKey={`${normalized(search)}|${customerId}|${siteId}|${stateFilter}`}
                         selectedSiteId={selectedSite?.siteId ?? ''}
                         onSelectSite={(nextSiteId) => { setSelectedSiteId(nextSiteId); setDetailsOpen(true) }}
                     />

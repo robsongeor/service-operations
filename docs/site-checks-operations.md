@@ -10,11 +10,28 @@ contracts remain owned by the [schema document](site-checks-dataverse-schema.md)
 ## Cross-customer workspace
 
 Open **Site Checks** from the main navigation to see enabled Site Check Sites across all
-Customers. The initial **Needs attention** view includes Overdue, Due, and In progress
+Customers. The initial **All enabled Sites** view shows every participating Site. **Needs attention** includes Overdue, Due, and In progress
 Sites. Use the status totals or filters to focus by state, technician, frequency, due-date
-range, Customer, or Site. **Start** opens the existing creation review, **Open** shows the
-active occurrence, and **History** shows completed occurrences. Configuration remains in
+range, Customer, or Site. **Start** opens the creation review, **Open** shows the active
+occurrence, and **History** shows completed occurrences. When an active batch passes its
+scheduled interval, **Open previous** remains available and **Start next batch** creates the
+next occurrence without waiting for every Job in the previous batch to be completed.
+Configuration remains in
 the relevant Customer Dashboard Site Settings.
+
+Selecting an occurrence in **History** expands its generated Jobs directly beneath that
+batch. Completed Jobs remain visible there as read-only history cards; Job and Equipment
+actions remain in the dedicated **Jobs & Equipment** tab. Selecting a history Job card opens
+that Job drawer. Selecting the same Site Check header again collapses it; expanding another
+Site Check automatically collapses the previously open batch.
+
+Recurring due dates remain anchored to the configured cadence, rather than drifting based
+on when the last Job happened to be completed. Completing Jobs from a replaced previous
+batch closes that occurrence only; it never clears or rolls the newer active batch.
+
+One-off Site Checks are an ad-hoc workflow, not a Weekly/Fortnightly/Monthly Schedule. Do
+not represent a one-off by assigning a false cadence. That path requires its own explicit
+creation mode and Dataverse contract before release.
 
 ## Authentication rule
 
@@ -94,10 +111,15 @@ credentials, or role assignments for the test.
    not Operational or Scheduler views.
 6. Submit or change Job Card Status and confirm operational Job Status and Site Check
    progress do not change.
-7. Complete generated Jobs through operational Job Status. Confirm the final Job completes
-   the occurrence, clears the active pointer, and rolls the next due date.
-8. Confirm completed history remains available and generated Jobs cannot be reopened.
-9. Confirm Job and Equipment row navigation returns focus to the invoking details row.
+7. Leave at least one generated Job incomplete until the next interval has passed. Confirm
+   **Open previous** still opens it and **Start next batch** creates the new occurrence.
+8. Complete the remaining Job from the previous batch. Confirm it closes only the previous
+   occurrence and does not clear or roll the newer active batch.
+9. Complete all Jobs in the newest batch. Confirm the occurrence completes, the active
+   pointer clears, and the cadence-anchored next due date is retained.
+10. Reopen one completed generated Job. Confirm its completion date clears, its occurrence
+    returns to In progress, and the recurring Schedule or any newer active batch is unchanged.
+11. Confirm Job and Equipment row navigation returns focus to the invoking details row.
 
 Record only pass/fail and non-sensitive record identifiers. Do not paste tokens, customer
 details, or raw Dataverse error bodies into documentation.

@@ -136,7 +136,7 @@ export default function SiteSettingsDrawer({
         ...initialSiteChecks,
         selectedEquipmentIds: currentSiteCheckEquipmentIds,
     })
-    const [siteChecksSuccess, setSiteChecksSuccess] = useState('')
+    const [, setSiteChecksSuccess] = useState('')
     const [confirmingDisable, setConfirmingDisable] = useState(false)
 
     const sortedEquipment = useMemo(() => [...equipment].sort((left, right) =>
@@ -243,18 +243,6 @@ export default function SiteSettingsDrawer({
         }
     }
 
-    const requestSiteChecksSave = () => {
-        if (
-            siteCheckSchedule?._gr_activesitecheck_value
-            && siteCheckSchedule.gr_enabled
-            && !siteChecksEnabled
-        ) {
-            setConfirmingDisable(true)
-            return
-        }
-        void saveSiteChecks()
-    }
-
     const requestClose = () => {
         if (busy) return
         if ((detailsDirty || siteChecksDirty) && !window.confirm('Discard unsaved Site changes?')) return
@@ -265,7 +253,6 @@ export default function SiteSettingsDrawer({
         { id: 'details' as const, label: 'Details', hasError: activeTab === 'details' && Boolean(localError) },
         { id: 'settings' as const, label: 'Settings', hasError: activeTab === 'settings' && Boolean(localError || error) },
         { id: 'po-contacts' as const, label: 'PO Contacts', hasError: activeTab === 'po-contacts' && Boolean(poRecipientsError) },
-        { id: 'site-checks' as const, label: 'Site Checks', hasError: activeTab === 'site-checks' && Boolean(localError || siteChecksError) },
         ...(bulkImportAllowed ? [{ id: 'bulk-equipment' as const, label: 'Bulk Add Equipment' }] : []),
     ]
 
@@ -278,8 +265,6 @@ export default function SiteSettingsDrawer({
             footer={<>
                 <span>{activeTab === 'settings'
                     ? `${selectedIds.length} machine${selectedIds.length === 1 ? '' : 's'} selected for update`
-                    : activeTab === 'site-checks'
-                        ? siteChecksSuccess || 'Site Checks are optional for this Site.'
                     : activeTab === 'bulk-equipment'
                         ? 'Customer and Site will be selected automatically.'
                         : detailsSuccess || 'Site name and address changes save to Dataverse.'}</span>
@@ -287,7 +272,6 @@ export default function SiteSettingsDrawer({
                     <button type="button" onClick={requestClose} disabled={busy}>Cancel</button>
                     {activeTab === 'details' && <button type="submit" form="site-settings-details-form" className="primary" disabled={busy || !detailsDirty}>Save changes</button>}
                     {activeTab === 'settings' && <button type="button" className="primary" onClick={requestSettingsSave} disabled={busy}>Save settings</button>}
-                    {activeTab === 'site-checks' && <button type="button" className="primary" onClick={requestSiteChecksSave} disabled={busy || siteChecksLoading || siteChecksSaving || !siteChecksDirty}>Save Site Checks</button>}
                     {activeTab === 'bulk-equipment' && <button type="button" className="primary" onClick={onOpenBulkImport}>Open bulk add</button>}
                 </div>
             </>}

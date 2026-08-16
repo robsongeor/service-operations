@@ -143,11 +143,17 @@ function mapDetailJob(value: unknown): SiteCheckDetailJob {
     const row = value as Record<string, unknown>
     const equipment = row.gr_Equipment as Record<string, unknown> | null | undefined
     const mechanic = row.gr_Mechanic as Record<string, unknown> | null | undefined
+    const site = row.gr_Site as Record<string, unknown> | null | undefined
     return {
         ...mapProgressJob(row),
+        createdon: typeof row.createdon === 'string' ? row.createdon : null,
         gr_jobnumber: typeof row.gr_jobnumber === 'string' ? row.gr_jobnumber : null,
         gr_description: typeof row.gr_description === 'string' ? row.gr_description : null,
         gr_completeddate: typeof row.gr_completeddate === 'string' ? row.gr_completeddate : null,
+        gr_hourmeter: typeof row.gr_hourmeter === 'number' ? row.gr_hourmeter : null,
+        gr_hourmeterreadingtype: typeof row.gr_hourmeterreadingtype === 'number'
+            ? row.gr_hourmeterreadingtype as SiteCheckDetailJob['gr_hourmeterreadingtype']
+            : null,
         gr_Equipment: equipment ? {
             gr_equipmentid: requireGuid(equipment.gr_equipmentid, 'Job Equipment ID'),
             gr_fleet: typeof equipment.gr_fleet === 'string' ? equipment.gr_fleet : null,
@@ -158,6 +164,10 @@ function mapDetailJob(value: unknown): SiteCheckDetailJob {
         gr_Mechanic: mechanic ? {
             gr_mechanicid: requireGuid(mechanic.gr_mechanicid, 'Job technician ID'),
             gr_name: requireString(mechanic.gr_name, 'Job technician name'),
+        } : null,
+        gr_Site: site ? {
+            gr_siteid: requireGuid(site.gr_siteid, 'Job Site ID'),
+            gr_name: requireString(site.gr_name, 'Job Site name'),
         } : null,
         '@odata.etag': typeof row['@odata.etag'] === 'string' ? row['@odata.etag'] : undefined,
     }
@@ -383,8 +393,8 @@ export async function fetchSiteCheckDetailJobsPage(
     const apiUrl = options.apiUrl ?? DEFAULT_API_URL
     const id = requireGuid(siteCheckId, 'Site Check ID')
     const query = [
-        '$select=gr_jobid,gr_jobnumber,gr_description,gr_status,gr_completeddate,_gr_sitecheck_value',
-        '$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_serial,gr_make,gr_model),gr_Mechanic($select=gr_mechanicid,gr_name)',
+        '$select=gr_jobid,createdon,gr_jobnumber,gr_description,gr_status,gr_completeddate,gr_hourmeter,gr_hourmeterreadingtype,_gr_sitecheck_value',
+        '$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_serial,gr_make,gr_model),gr_Mechanic($select=gr_mechanicid,gr_name),gr_Site($select=gr_siteid,gr_name)',
         `$filter=_gr_sitecheck_value eq ${id}`,
         '$orderby=createdon asc,gr_jobid asc',
         '$top=25',

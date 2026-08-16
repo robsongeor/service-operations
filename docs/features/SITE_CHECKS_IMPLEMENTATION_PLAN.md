@@ -77,7 +77,10 @@ the few product/data decisions that must be approved before dependent implementa
   and a valid next due Date Only value.
 - Disabling preserves schedules, Site Checks, and Jobs but removes active dashboard status,
   reporting participation, and the ability to start another occurrence.
-- A Site has at most one active Site Check. A first-class **Site Check** occurrence must be
+- A Schedule points to at most one current Site Check batch. Once that batch's interval has
+  passed, the next batch may replace the pointer even when Jobs from the previous batch are
+  unfinished. Those Jobs and their occurrence remain independently completable and visible
+  in history. A first-class **Site Check** occurrence must be
   shown by that name; “run” is acceptable only as the action phrase “Run Site Check.”
 - Version 1 starts checks manually and includes all Equipment returned by the agreed Site
   Equipment query. It has no exclusion UI.
@@ -88,7 +91,10 @@ the few product/data decisions that must be approved before dependent implementa
   mandatory for Site Check-generated Jobs.
 - Operational Job Status and Job Card Status remain separate. Only operational Job Status
   `Complete` contributes to Site Check progress.
-- The final completed generated Job completes the Site Check and rolls the schedule forward.
+- The final completed generated Job completes its Site Check. It rolls the schedule forward
+  only when that occurrence is still the current batch; completing a replaced batch must not
+  alter the newer pointer or due date. Cadence stays anchored to occurrence due dates rather
+  than drifting with late completion dates.
 - Site Check Jobs are absent from Scheduler and the normal default Jobs workflow, but remain
   discoverable through a dedicated Jobs filter and retained as historical Jobs.
 - Customer Dashboard is the primary management home. It provides compact Site summaries,
@@ -203,15 +209,16 @@ only after a second stable consumer appears.
 
 - `SiteCheckSchedule`: one recurring configuration for one Site. It owns enablement,
   frequency, next due date, last completed date, and a concurrency-protected pointer to the
-  active occurrence.
+  current scheduled occurrence.
 - `SiteCheck`: immutable occurrence context plus lifecycle state. It snapshots frequency and
   due date so later schedule edits do not rewrite history.
 - `Job`: existing operational record. An optional new parent Site Check lookup is populated
   and required by the protected Site Check creation workflow.
 - Schedule state is derived, not independently persisted:
   - `Disabled`: schedule absent or disabled; excluded everywhere.
-  - `In progress`: enabled and active occurrence pointer exists; supersedes date state.
-  - `Overdue`: enabled, no active occurrence, next due date before today.
+  - `In progress`: enabled, current occurrence pointer exists, and its interval has not passed.
+  - `Overdue`: enabled and next due date is before today. If a current occurrence pointer
+    still exists, the UI offers both **Open previous** and **Start next batch**.
   - `Due`: enabled, no active occurrence, next due date equals today.
   - `Up to date` (also the product’s “current” umbrella): enabled, no active occurrence,
     next due date after today.
@@ -431,15 +438,15 @@ revalidated from authoritative Site Equipment and included in the same ETag-prot
 change set as the occurrence, Schedule lock, Jobs, and exclusion snapshots. Successful
 creation opens Jobs & Equipment directly for immediate Job Book copy/paste.
 
-Creation is disabled when schedule is disabled/missing/invalid, technician is absent,
-another active check exists, Equipment count is zero, data is stale/loading, or a request is
-in progress. Disable immediately on first submit and retain one client-generated UUID
-request key for every retry until success/cancel.
+Creation is disabled when schedule is disabled/missing/invalid, technician is absent, a
+current check exists whose interval has not passed, Equipment count is zero, data is
+stale/loading, or a request is in progress. Disable immediately on first submit and retain
+one client-generated UUID request key for every retry until success/cancel.
 
 ```mermaid
 flowchart TD
     A["Open Run Site Check"] --> B["Reload schedule with ETag, Site, mechanic, Site Equipment"]
-    B --> C{"Valid enabled schedule; no active check; active mechanic; Equipment > 0?"}
+    B --> C{"Valid enabled schedule; no unexpired current check; active mechanic; Equipment > 0?"}
     C -->|No| X["Block with actionable error"]
     C -->|Yes| D["Show review and generated Job count"]
     D --> E["Submit stable request key"]
@@ -457,8 +464,8 @@ flowchart TD
 UI protection (disabled button and in-flight state) is only convenience. Authoritative
 creation must:
 
-1. Reload schedule by ID/Site with ETag; validate enabled, frequency, due date, and null
-   active pointer.
+1. Reload schedule by ID/Site with ETag; validate enabled, frequency, and due date. A current
+   pointer blocks creation only while its interval has not passed.
 2. Reload mechanic and reject inactive/missing records.
 3. Query Equipment by Site immediately before building the transaction.
 4. Use a stable request UUID stored in the Site Check unique alternate key.
@@ -499,9 +506,9 @@ For a transition to operational Complete:
 1. Reload Job, parent Site Check, schedule, and sibling Job IDs/statuses with ETags.
 2. Validate the Job still belongs to that parent.
 3. Persist Job completion through the canonical standard completion mapping.
-4. If all other siblings are already Complete, include parent completion, completion
-   timestamp, schedule last-completed date, calculated next due date, and clearing the
-   active pointer in the same atomic change set.
+4. If all other siblings are already Complete, include parent completion and its timestamp.
+   Include schedule last-completed date, cadence-anchored next due date, and clearing the
+   current pointer only when this occurrence is still the Schedule's current batch.
 5. After any generated Job completes, reload/reconcile siblings. This closes the concurrent
    “two last Jobs” race: if two transactions each observed the other incomplete, the
    post-write reconciliation sees all Complete and one ETag-guarded rollover wins.
@@ -524,9 +531,10 @@ flowchart TD
 Persist no component-maintained completed count. `Expected Job Count` detects missing/extra
 children; actual progress comes from linked operational Job statuses.
 
-The existing UI permits status changes away from Complete. Behavior after a Site Check has
-rolled over is unresolved: the recommended rule is to block reopening generated Jobs once
-the parent is Complete, because schedule rollback semantics are undefined. Approve in Phase 0.
+The existing UI permits status changes away from Complete. Reopening a generated Job
+atomically clears that Job's completion date and returns its parent occurrence to In Progress.
+The recurring Schedule is not rolled backward: a newer active occurrence, cadence date, and
+last-completed snapshot remain untouched.
 
 ## 18. Next-due-date calculation rules
 
@@ -1080,12 +1088,14 @@ Implementation notes/deviations: `useJobs` remains the single client owner for o
 status mutation. Both inline table status changes and full drawer saves route generated
 Jobs to `siteCheckCompletionApi`; the separate Job Card Status method remains untouched.
 The completion service reloads the Job, parent occurrence, Schedule, and all siblings,
-checks the immutable expected count, and uses ETags. The final Job, occurrence completion,
-and Schedule rollover are one Dataverse change set. A post-write reconciliation handles
+checks the immutable expected count, and uses ETags. For the current batch, the final Job,
+occurrence completion, and Schedule rollover are one Dataverse change set. A replaced
+previous batch completes without updating the Schedule. A post-write reconciliation handles
 two managers completing different final Jobs concurrently and safely recognizes a 412
-whose competing transaction already committed. The Schedule rolls from the New Zealand
-Date Only of completion using the occurrence frequency snapshot. Completed occurrences
-block generated Job reopening. Drawer saves may reassign the technician through the
+whose competing transaction already committed. The Schedule rolls from the immutable
+occurrence due-date and frequency snapshots, advancing until the next future cadence date.
+Reopening a Job from a completed occurrence atomically reopens that occurrence and clears
+the Job completion date without changing the Schedule. Drawer saves may reassign the technician through the
 canonical Job fields, but must retain the protected Site Check Job Type and the original
 Site and Equipment relationships. Jobs refresh authoritatively after every mutation and a
 silent-only invalidation refreshes any mounted Customer Dashboard Site Checks projection;

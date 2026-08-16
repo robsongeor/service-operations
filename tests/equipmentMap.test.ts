@@ -138,6 +138,8 @@ test('Equipment Map keeps Geoapify credentials out of client code and uses canon
     assert.doesNotMatch(locationMap, /marker\.setIcon/)
     assert.match(locationMap, /markerClusterGroup/)
     assert.match(locationMap, /leaflet\.markercluster/)
+    assert.match(locationMap, /fittedViewportKeyRef\.current !== viewportKey/)
+    assert.match(screen, /viewportKey=\{`\$\{normalized\(search\)\}\|\$\{customerId\}\|\$\{siteId\}\|\$\{stateFilter\}`\}/)
     assert.match(screen, /result\.status === 'provider_failed'\) return/)
     assert.match(mapCache, /coordinate\.status === 'not_found'/)
     assert.match(mapCache, /indexedDB/)

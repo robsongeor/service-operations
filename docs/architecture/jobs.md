@@ -175,8 +175,9 @@ lists are not part of the initial Job Book load; they load only when the add-mac
   through `siteCheckCompletionApi`. It reloads the parent and every sibling, blocks progress
   on expected-count mismatch, and atomically completes the final Job, occurrence, and
   Schedule rollover with ETags. Post-write reconciliation handles concurrent final Jobs and
-  idempotent retry. A generated Job cannot be reopened after its parent Site Check completes.
-  Its technician may be reassigned, but its protected Job Type and original Site/Equipment
+  idempotent retry. Reopening a completed generated Job atomically reopens its parent
+  occurrence but does not roll the recurring Schedule backward. Its technician may be
+  reassigned, but its protected Job Type and original Site/Equipment
   relationships cannot be changed. Job Card Status remains outside this workflow.
 - Generated Site Check Jobs may receive externally allocated numeric Job numbers through
   the Site Check details drawer. Exact-count/format validation and stable creation order are

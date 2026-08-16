@@ -8,6 +8,7 @@ import {
     addCalendarMonthsDateOnly,
     calculateNextSiteCheckDueDate,
     calculateNextUpcomingSiteCheckDueDate,
+    calculateFollowingSiteCheckDueDate,
     calculateInitialSiteCheckDate,
     calculateSiteCheckProgress,
     classifySiteCheckCreationConflict,
@@ -61,6 +62,7 @@ import {
     validateSiteCheckChecklistTemplate,
 } from '../src/alpha/site-checks/domain/siteCheckChecklist.ts'
 import { POWER_TYPES } from '../src/alpha/equipment/servicePlans/maintenanceConfiguration.ts'
+import { SERVICE_TYPES } from '../src/alpha/equipment/servicePlans/equipmentServicePlan.types.ts'
 import {
     fetchSiteCheckChecklistResponses,
     fetchSiteCheckChecklistSnapshotItems,
@@ -284,7 +286,14 @@ test('Site Checks workspace reuses the canonical drawers and does not load the g
     const hook = readFileSync(new URL('../src/alpha/site-checks/hooks/useSiteCheckWorkspace.ts', import.meta.url), 'utf8')
     const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
     const sidebar = readFileSync(new URL('../src/Sidebar.tsx', import.meta.url), 'utf8')
+    const styles = readFileSync(new URL('../src/alpha/site-checks/SiteChecksScreen.css', import.meta.url), 'utf8')
     assert.match(screen, /Needs attention/)
+    assert.match(screen, /useState<ViewFilter>\('all'\)/)
+    assert.match(screen, /setView\('all'\)/)
+    assert.match(screen, /className="site-checks-date"/)
+    assert.match(screen, /Open previous/)
+    assert.match(screen, /Start next batch/)
+    assert.match(styles, /input\[type="date"\]/)
     assert.match(screen, /<MetricStrip/)
     assert.match(screen, /<RunSiteCheckDrawer/)
     assert.match(screen, /<SiteCheckDetailsDrawer/)
@@ -1046,7 +1055,7 @@ test('Site Check initial dates derive the first due date and round-trip existing
     )
 })
 
-test('monthly cadence clamps month end and uses the completion date as its anchor', () => {
+test('monthly cadence clamps month end and keeps later batches anchored to the occurrence due date', () => {
     assert.equal(addCalendarMonthsDateOnly('2025-01-31', 1), '2025-02-28')
     assert.equal(addCalendarMonthsDateOnly('2024-01-31', 1), '2024-02-29')
     assert.equal(addCalendarMonthsDateOnly('2024-02-29', 1), '2024-03-29')
@@ -1054,6 +1063,22 @@ test('monthly cadence clamps month end and uses the completion date as its ancho
     assert.equal(
         calculateNextSiteCheckDueDate('2026-07-31', SITE_CHECK_FREQUENCIES.MONTHLY),
         '2026-08-31',
+    )
+    assert.equal(
+        calculateFollowingSiteCheckDueDate(
+            '2026-07-26',
+            SITE_CHECK_FREQUENCIES.MONTHLY,
+            '2026-08-01',
+        ),
+        '2026-08-26',
+    )
+    assert.equal(
+        calculateFollowingSiteCheckDueDate(
+            '2026-07-26',
+            SITE_CHECK_FREQUENCIES.MONTHLY,
+            '2026-09-01',
+        ),
+        '2026-09-26',
     )
 })
 
@@ -1630,6 +1655,47 @@ function completionContextResponses(input: {
     ]
 }
 
+test('same-status Site Check Job edits still patch fields such as Job number', async () => {
+    const responses: (object | Response)[] = [
+        ...completionContextResponses({
+            currentStatus: JOB_STATUSES.ALLOCATED,
+            siblingStatus: JOB_STATUSES.ALLOCATED,
+        }),
+        new Response(null, { status: 204 }),
+        ...completionContextResponses({
+            currentStatus: JOB_STATUSES.ALLOCATED,
+            siblingStatus: JOB_STATUSES.ALLOCATED,
+        }),
+    ]
+    let patchBody = ''
+    const fetcher = async (_input: string | URL | Request, init?: RequestInit) => {
+        const next = responses.shift()
+        if (init?.method === 'PATCH') patchBody = String(init.body)
+        return next instanceof Response
+            ? next
+            : new Response(JSON.stringify(next), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    }
+
+    const result = await updateSiteCheckJobStatus('token', {
+        jobId: IDS.job,
+        status: JOB_STATUSES.ALLOCATED,
+        pendingSave: {
+            jobNumber: '145494',
+            orderNumber: '',
+            description: 'Fortnightly checks',
+            jobType: JOB_TYPES.SITE_CHECK,
+            status: JOB_STATUSES.ALLOCATED,
+            equipmentId: '77777777-7777-7777-7777-777777777777',
+            mechanicId: IDS.technician,
+            siteId: IDS.site,
+            serviceType: SERVICE_TYPES.NONE,
+        },
+    }, { apiUrl: 'https://example.test', fetcher: fetcher as typeof fetch })
+
+    assert.match(patchBody, /"gr_jobnumber":"145494"/)
+    assert.equal(result?.alreadyApplied, false)
+})
+
 test('final operational Job completion atomically completes the Site Check and rolls its schedule', async () => {
     const responses: (object | Response)[] = [
         ...completionContextResponses({
@@ -1663,8 +1729,45 @@ test('final operational Job completion atomically completes the Site Check and r
     assert.match(batchBody, /PATCH \/api\/data\/v9\.2\/gr_sitechecks/)
     assert.match(batchBody, /PATCH \/api\/data\/v9\.2\/gr_sitecheckschedules/)
     assert.match(batchBody, /"gr_lastcompleteddate":"2026-08-01"/)
-    assert.match(batchBody, /"gr_nextduedate":"2026-09-01"/)
+    assert.match(batchBody, /"gr_nextduedate":"2026-08-26"/)
     assert.match(batchBody, /"gr_ActiveSiteCheck@odata.bind":null/)
+})
+
+test('finishing a replaced previous batch completes only that occurrence', async () => {
+    const responses: (object | Response)[] = [
+        ...completionContextResponses({
+            currentStatus: JOB_STATUSES.ALLOCATED,
+            siblingStatus: JOB_STATUSES.COMPLETE,
+            active: '99999999-9999-4999-8999-999999999999',
+        }),
+        new Response(
+            'HTTP/1.1 204 No Content\r\nHTTP/1.1 204 No Content\r\n',
+            { status: 200 },
+        ),
+    ]
+    let batchBody = ''
+    const fetcher = async (_input: string | URL | Request, init?: RequestInit) => {
+        const next = responses.shift()
+        if (init?.method === 'POST') batchBody = String(init.body)
+        return next instanceof Response
+            ? next
+            : new Response(JSON.stringify(next), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' },
+            })
+    }
+
+    const result = await updateSiteCheckJobStatus('token', {
+        jobId: IDS.job,
+        status: JOB_STATUSES.COMPLETE,
+        completedOn: '2026-08-15T01:00:00Z',
+    }, { apiUrl: 'https://example.test', fetcher: fetcher as typeof fetch })
+
+    assert.equal(result?.siteCheckCompleted, true)
+    assert.match(batchBody, /PATCH \/api\/data\/v9\.2\/gr_jobs/)
+    assert.match(batchBody, /PATCH \/api\/data\/v9\.2\/gr_sitechecks/)
+    assert.doesNotMatch(batchBody, /PATCH \/api\/data\/v9\.2\/gr_sitecheckschedules/)
+    assert.doesNotMatch(batchBody, /gr_ActiveSiteCheck/)
 })
 
 test('post-write reconciliation handles concurrent completion of different final Jobs', async () => {
@@ -1736,21 +1839,39 @@ test('a 412 final-completion retry reconciles an already committed rollover', as
     assert.equal(result?.siteCheckCompleted, true)
 })
 
-test('completed Site Checks block Job reopening and Job Card remains outside completion routing', async () => {
-    const responses = completionContextResponses({
-        currentStatus: JOB_STATUSES.COMPLETE,
-        siblingStatus: JOB_STATUSES.COMPLETE,
-        siteCheckStatus: 122830001,
-        active: null,
-    })
-    const fetcher = async () => new Response(JSON.stringify(responses.shift()), { status: 200 })
-    await assert.rejects(
-        updateSiteCheckJobStatus('token', {
-            jobId: IDS.job,
-            status: JOB_STATUSES.ALLOCATED,
-        }, { apiUrl: 'https://example.test', fetcher: fetcher as typeof fetch }),
-        /cannot be reopened/,
-    )
+test('reopening a completed Site Check Job atomically reopens its occurrence without changing the schedule', async () => {
+    const responses: (object | Response)[] = [
+        ...completionContextResponses({
+            currentStatus: JOB_STATUSES.COMPLETE,
+            siblingStatus: JOB_STATUSES.COMPLETE,
+            siteCheckStatus: 122830001,
+            active: null,
+        }),
+        new Response(
+            'HTTP/1.1 204 No Content\r\nHTTP/1.1 204 No Content\r\n',
+            { status: 200 },
+        ),
+    ]
+    let batchBody = ''
+    const fetcher = async (_input: string | URL | Request, init?: RequestInit) => {
+        const next = responses.shift()
+        if (init?.method === 'POST') batchBody = String(init.body)
+        return next instanceof Response
+            ? next
+            : new Response(JSON.stringify(next), { status: 200 })
+    }
+    const result = await updateSiteCheckJobStatus('token', {
+        jobId: IDS.job,
+        status: JOB_STATUSES.ALLOCATED,
+    }, { apiUrl: 'https://example.test', fetcher: fetcher as typeof fetch })
+
+    assert.equal(result?.siteCheckCompleted, false)
+    assert.match(batchBody, /PATCH \/api\/data\/v9\.2\/gr_jobs/)
+    assert.match(batchBody, /"gr_status":122830000/)
+    assert.match(batchBody, /"gr_completeddate":null/)
+    assert.match(batchBody, /PATCH \/api\/data\/v9\.2\/gr_sitechecks/)
+    assert.match(batchBody, /"gr_completedon":null/)
+    assert.doesNotMatch(batchBody, /gr_sitecheckschedules/)
 
     const hook = readFileSync(
         new URL('../src/alpha/jobs/hooks/useJobs.ts', import.meta.url),
@@ -1847,14 +1968,36 @@ test('Site Check details drawer uses accessible shared tabs, progress, paginatio
     )
     assert.match(drawer, /EditDrawerShell/)
     assert.match(drawer, /DrawerTabs/)
+    assert.match(drawer, /label: 'Settings'/)
+    assert.match(drawer, /drawer-tab-panel-settings/)
+    assert.match(drawer, /Use the Settings tab to enable Site Checks/)
     assert.match(drawer, /<progress/)
     assert.match(drawer, /Load more Jobs/)
     assert.match(drawer, /Load more history/)
+    assert.match(drawer, /site-check-history-jobs/)
+    assert.match(drawer, /site-check-job-history-title/)
+    assert.match(drawer, /Hours Recorded/)
+    assert.match(drawer, /Job Site/)
+    assert.match(drawer, /Completed Jobs/)
+    assert.match(drawer, /setExpandedHistoryId\(null\)/)
+    assert.match(drawer, /setExpandedHistoryId\(check\.gr_sitecheckid\)/)
+    assert.match(drawer, /Hide generated Jobs/)
+    assert.match(drawer, /generatedJobs\(false\)/)
+    assert.match(drawer, /site-check-job-history-card/)
+    assert.match(drawer, /aria-label={`Open Job/)
     assert.match(drawer, /onOpenJob/)
     assert.match(drawer, /onOpenEquipment/)
+    assert.match(drawer, /addEventListener\('site-checks-changed', refreshAfterJobChange\)/)
+    assert.match(drawer, /void appendHistory\(\)/)
+    assert.match(drawer, /void appendJobs\(selectedId\)/)
+    assert.match(drawer, /hasCurrentCheck && <>\s*<EditDrawerSection title="Current Jobs and Equipment">/)
+    assert.match(drawer, /<EditDrawerSection title="Current Jobs and Equipment">[\s\S]*?generatedJobs\(false\)/)
+    assert.doesNotMatch(drawer, /drawer-tab-panel-jobs/)
+    assert.doesNotMatch(drawer, /label: 'Current Check'/)
+    assert.doesNotMatch(drawer, /label: 'Jobs & Equipment'/)
     assert.doesNotMatch(drawer, /loginRedirect|loginPopup|acquireTokenPopup/)
-    assert.match(dashboard, /View Current Site Check/)
-    assert.match(dashboard, /Site Check History/)
+    assert.match(dashboard, />\s*Site Check\s*<\/button>/)
+    assert.doesNotMatch(dashboard, /View Current Site Check|Site Check History/)
     assert.match(dashboard, /setSiteCheckDetails\(\{ site: runSiteCheckSite, check: created/)
 })
 
