@@ -91,7 +91,7 @@ export default function TechnicianJobSubmissionPage() {
             })
             setSubmitted(true)
         } catch (error) {
-            setValidation(error instanceof JobSubmissionError ? errorMessages[error.code] : errorMessages.temporary)
+            setValidation(error instanceof JobSubmissionError ? error.message : errorMessages.temporary)
         } finally {
             setBusy(false)
         }

@@ -34,12 +34,15 @@ $existing = @(
     @{ Name='gr_techniciansubmissiontokenused'; Type='Boolean' },
     @{ Name='gr_techniciansubmissionsubmittedon'; Type='DateTime' },
     @{ Name='gr_techniciansubmissionhourmeter'; Type='Integer' },
-    @{ Name='gr_techniciansubmissionstory'; Type='Memo' }
+    @{ Name='gr_techniciansubmissionstory'; Type='Memo' },
+    @{ Name='gr_jobcardstatus'; Type='Picklist' },
+    @{ Name='gr_jobcardsubmittedon'; Type='DateTime' }
 )
 foreach($expected in $existing) {
     $actual=Get-Attribute 'gr_job' $expected.Name
     if(-not $actual){throw "Required existing column is missing: gr_job.$($expected.Name)"}
     if([string]$actual.AttributeType -ne $expected.Type){throw "Conflict: gr_job.$($expected.Name) is $($actual.AttributeType), expected $($expected.Type)."}
+    if(-not $actual.IsValidForUpdate){throw "Conflict: gr_job.$($expected.Name) cannot be updated."}
     Write-Output "Verified existing gr_job.$($expected.Name) ($($expected.Type))"
 }
 
@@ -62,5 +65,28 @@ $link=$query.AddLink('systemuserroles','roleid','roleid')
 $link.LinkCriteria.AddCondition('systemuserid',[Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,[Guid]'4322873e-ce87-f111-ab10-0022489917ff')
 $roles=$service.RetrieveMultiple($query).Entities
 if($roles.Count -ne 1 -or $roles[0].Id -ne [Guid]'3b0845b7-ceb7-48c6-8cf2-a8dd90a20850'){throw 'Application User role assignment is incompatible.'}
+
+$privilegeQuery=[Microsoft.Xrm.Sdk.Query.QueryExpression]::new('privilege')
+$privilegeQuery.ColumnSet=[Microsoft.Xrm.Sdk.Query.ColumnSet]::new('name')
+$allPrivileges=$service.RetrieveMultiple($privilegeQuery).Entities
+$roleRequest=[Microsoft.Crm.Sdk.Messages.RetrieveRolePrivilegesRoleRequest]::new()
+$roleRequest.RoleId=[Guid]'3b0845b7-ceb7-48c6-8cf2-a8dd90a20850'
+$assigned=($service.Execute($roleRequest)).RolePrivileges
+$requiredPrivileges=@(
+    'prvReadgr_Job','prvWritegr_Job','prvAppendTogr_Job',
+    'prvReadgr_Equipment',
+    'prvCreategr_JobCardSubmissionTimeEntry','prvReadgr_JobCardSubmissionTimeEntry','prvWritegr_JobCardSubmissionTimeEntry','prvAppendgr_JobCardSubmissionTimeEntry',
+    'prvCreategr_JobMaterial','prvReadgr_JobMaterial','prvWritegr_JobMaterial','prvAppendgr_JobMaterial',
+    'prvCreategr_JobPhoto','prvReadgr_JobPhoto','prvWritegr_JobPhoto','prvAppendgr_JobPhoto'
+)
+foreach($name in $requiredPrivileges){
+    $metadata=$allPrivileges | Where-Object { [string]$_.Attributes['name'] -ieq $name } | Select-Object -First 1
+    if(-not $metadata){throw "Required Dataverse privilege was not found: $name"}
+    $actual=$assigned | Where-Object { $_.PrivilegeId -eq $metadata.Id } | Select-Object -First 1
+    if(-not $actual -or $actual.Depth -ne [Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Global){
+        throw "Application User privilege is missing or not Organization depth: $name"
+    }
+    Write-Output "Verified Organization privilege $name"
+}
 Write-Output 'Verified Public Portal Service role and Application User assignment.'
 Write-Output 'Expanded Technician Job Submission preflight passed with no writes.'

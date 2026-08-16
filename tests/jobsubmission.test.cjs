@@ -246,6 +246,27 @@ test('successful submission changes only pending fields and Job Card status', { 
     assert.equal(patch.body.gr_hourmeter, undefined)
 })
 
+test('failed Dataverse submission returns a bounded diagnostic without exposing its response body', { concurrency: false }, async () => {
+    configure()
+    const job = baseJob()
+    global.fetch = async (url) => {
+        const value = String(url)
+        if (value.includes('login.microsoftonline.com')) return Response.json({ access_token: 'app-token' })
+        if (value.includes('/gr_jobs?')) return Response.json({ value: [job] })
+        if (value.includes('/gr_jobs(')) return Response.json({
+            error: { code: '0x80040265', message: 'Sensitive internal Dataverse detail' },
+        }, { status: 400 })
+        throw new Error(`Unexpected request: ${value}`)
+    }
+    const response = await invoke({
+        method: 'POST', headers: {},
+        body: { token: 'z'.repeat(43), story: 'Completed service', hourMeter: 2510 },
+    })
+    assert.equal(response.status, 503)
+    assert.match(response.body, /Job submission update failed \(400, 0x80040265\)/)
+    assert.doesNotMatch(response.body, /Sensitive internal Dataverse detail/)
+})
+
 test('concurrent repeat submission is rejected by ETag', { concurrency: false }, async () => {
     configure()
     mockPublic(baseJob(), 412)
