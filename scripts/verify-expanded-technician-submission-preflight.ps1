@@ -43,6 +43,7 @@ foreach($expected in $existing) {
     if(-not $actual){throw "Required existing column is missing: gr_job.$($expected.Name)"}
     if([string]$actual.AttributeType -ne $expected.Type){throw "Conflict: gr_job.$($expected.Name) is $($actual.AttributeType), expected $($expected.Type)."}
     if(-not $actual.IsValidForUpdate){throw "Conflict: gr_job.$($expected.Name) cannot be updated."}
+    if($actual.IsSecured){throw "Conflict: gr_job.$($expected.Name) uses field security but no portal field profile is configured."}
     Write-Output "Verified existing gr_job.$($expected.Name) ($($expected.Type))"
 }
 

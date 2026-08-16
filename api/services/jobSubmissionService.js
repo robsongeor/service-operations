@@ -321,6 +321,13 @@ function batchRequest(job, etag, body, now) {
     return { boundary, payload }
 }
 
+function safeDataversePermissionDetail(responseText) {
+    let message = ''
+    try { message = JSON.parse(responseText)?.error?.message || '' } catch {}
+    const missing = message.match(/is missing\s+([A-Za-z0-9_]+)\s+privilege on\s+([A-Za-z0-9_]+)\s+entity/i)
+    return missing ? `The portal service is missing ${missing[1]} on the ${missing[2]} table.` : ''
+}
+
 async function generate(request) {
     const authorization = await validateAuthenticatedUser(request)
     if (!authorization) return jsonResponse(401, { error: 'Authentication is required.' }, { 'WWW-Authenticate': 'Bearer' })
@@ -395,7 +402,8 @@ async function handlePublicPost(request) {
     if (!response.ok || /HTTP\/1\.1 [45]\d\d/.test(responseText)) {
         const innerStatus = responseText.match(/HTTP\/1\.1 ([45]\d\d)/)?.[1]
         const innerCode = responseText.match(/"code"\s*:\s*"([^"]+)"/)?.[1]
-        throw new Error(`Job submission update failed (${innerStatus || response.status}${innerCode ? `, ${innerCode}` : ''}).`)
+        const permissionDetail = safeDataversePermissionDetail(responseText)
+        throw new Error(`Job submission update failed (${innerStatus || response.status}${innerCode ? `, ${innerCode}` : ''}).${permissionDetail ? ` ${permissionDetail}` : ''}`)
     }
     return jsonResponse(200, { submitted: true })
 }
@@ -413,6 +421,7 @@ module.exports = {
     validateSubmission,
     submissionFields,
     batchRequest,
+    safeDataversePermissionDetail,
     persistPhotos,
     },
 }

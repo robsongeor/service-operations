@@ -18,7 +18,7 @@ module.exports = async function jobSubmission(context, request) {
     } catch (error) {
         context.log?.error('Job submission request failed.', error)
         const diagnostic = error instanceof Error
-            && /^Job submission update failed \([45]\d\d(?:, [A-Za-z0-9_.-]+)?\)\.$/.test(error.message)
+            && /^Job submission update failed \([45]\d\d(?:, [A-Za-z0-9_.-]+)?\)\.(?: The portal service is missing [A-Za-z0-9_]+ on the [A-Za-z0-9_]+ table\.)?$/.test(error.message)
             ? ` ${error.message}`
             : ''
         context.res = jobSubmissionService.jsonResponse(503, {

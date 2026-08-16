@@ -267,6 +267,16 @@ test('failed Dataverse submission returns a bounded diagnostic without exposing 
     assert.doesNotMatch(response.body, /Sensitive internal Dataverse detail/)
 })
 
+test('permission diagnostics expose only the missing privilege and table', () => {
+    const detail = submission._test.safeDataversePermissionDetail(JSON.stringify({ error: {
+        message: 'systemuser (Id = secret-guid) is missing prvReadgr_Example privilege on gr_Example entity (OTC=123).',
+    } }))
+    assert.equal(detail, 'The portal service is missing prvReadgr_Example on the gr_Example table.')
+    assert.equal(submission._test.safeDataversePermissionDetail(JSON.stringify({ error: {
+        message: 'A sensitive non-permission failure',
+    } })), '')
+})
+
 test('concurrent repeat submission is rejected by ETag', { concurrency: false }, async () => {
     configure()
     mockPublic(baseJob(), 412)
