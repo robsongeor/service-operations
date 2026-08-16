@@ -16,8 +16,19 @@ export type PendingJobPhoto = {
     previewUrl: string
 }
 
+function inferredPhotoType(file: Pick<File, 'name' | 'type'>) {
+    const supplied = file.type.toLowerCase()
+    if (supplied) return supplied
+    const extension = file.name.split('.').pop()?.toLowerCase()
+    return extension === 'jpg' || extension === 'jpeg' ? 'image/jpeg'
+        : extension === 'png' ? 'image/png'
+            : extension === 'heic' ? 'image/heic'
+                : extension === 'heif' ? 'image/heif'
+                    : ''
+}
+
 export function validateJobPhoto(file: Pick<File, 'name' | 'type' | 'size'>) {
-    if (!ACCEPTED_JOB_PHOTO_TYPES.has(file.type.toLowerCase())) {
+    if (!ACCEPTED_JOB_PHOTO_TYPES.has(inferredPhotoType(file))) {
         return `${file.name} is not a supported JPG, PNG, or HEIC image.`
     }
     if (file.size > MAX_JOB_PHOTO_BYTES) return `${file.name} is larger than 10 MB.`
@@ -57,7 +68,8 @@ async function compressBrowserImage(file: File) {
 export async function prepareJobPhoto(file: File): Promise<PendingJobPhoto> {
     const validation = validateJobPhoto(file)
     if (validation) throw new Error(validation)
-    const prepared = await compressBrowserImage(file)
+    const normalized = file.type ? file : new File([file], file.name, { type: inferredPhotoType(file) })
+    const prepared = await compressBrowserImage(normalized)
     const dataUrl = await readDataUrl(prepared)
     return {
         id: crypto.randomUUID(),

@@ -416,7 +416,9 @@ export default function JobCardFields({
                                     <dt>Parts</dt>
                                     <dd>{job.technicianSubmissionParts?.length ? (
                                         <ul className="technician-submission-parts">
-                                            {job.technicianSubmissionParts.map((part) => <li key={part.id}>{part.part}</li>)}
+                                            {job.technicianSubmissionParts.map((part) => <li key={part.id}>
+                                                <strong>{part.quantity.toLocaleString('en-NZ')} &times;</strong> {part.part}
+                                            </li>)}
                                         </ul>
                                     ) : 'None recorded'}</dd>
                                 </div>

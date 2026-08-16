@@ -112,7 +112,7 @@ export async function fetchJobForDrawer(accessToken: string, jobId: string): Pro
     const [jobResult, timeResult, partsResult, photos] = await Promise.all([
         fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=${JOB_SELECT}&$expand=${JOB_EXPAND}&$filter=gr_jobid eq ${jobId}&$top=1`, { cache: 'no-store', headers }),
         fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobcardsubmissiontimeentries?$select=gr_jobcardsubmissiontimeentryid,gr_entrydate,gr_totalhours,gr_kilometres,_gr_job_value&$filter=_gr_job_value eq ${jobId}&$orderby=gr_entrydate asc`, { cache: 'no-store', headers }),
-        fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobmaterials?$select=gr_jobmaterialid,gr_material,_gr_job_value&$filter=_gr_job_value eq ${jobId}&$orderby=gr_displayorder asc`, { cache: 'no-store', headers }),
+        fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobmaterials?$select=gr_jobmaterialid,gr_material,gr_quantity,_gr_job_value&$filter=_gr_job_value eq ${jobId}&$orderby=gr_displayorder asc`, { cache: 'no-store', headers }),
         fetchJobPhotos(accessToken, jobId),
     ])
     if (!jobResult.ok) throw new Error('The Job could not be refreshed for review.')
@@ -131,6 +131,7 @@ export async function fetchJobForDrawer(accessToken: string, jobId: string): Pro
         technicianSubmissionParts: parts.map((item) => ({
             id: String(item.gr_jobmaterialid),
             part: String(item.gr_material),
+            quantity: Number(item.gr_quantity) || 1,
         })),
         jobPhotos: photos,
     }

@@ -104,7 +104,7 @@ test('submission validation accepts multiple time entries, decimal hours, and pa
             { date: '2026-07-25', hours: 1.25, kilometres: 12 },
             { date: '2026-07-26', hours: 2.5, kilometres: 0 },
         ],
-        parts: ['Oil Filter', 'Grease'],
+        parts: [{ description: 'Oil Filter', quantity: 1 }, { description: 'Grease', quantity: 2 }],
         furtherWorkRequired: false,
         safetyIssueIdentified: false,
     })
@@ -129,23 +129,25 @@ test('further work and safety details are required only when selected', () => {
 })
 
 test('expanded submission uses one change set and does not change operational Job fields', () => {
+    configure()
     const request = submission._test.batchRequest(baseJob(), 'W/"10"', {
         story: 'Completed',
         hourMeter: 2510,
         timeEntries: [{ date: '2026-07-25', hours: 1.5, kilometres: 16 }],
-        parts: ['Hydraulic Hose'],
+        parts: [{ description: 'Hydraulic Hose', quantity: 2 }],
         furtherWorkRequired: true,
         furtherWorkDetails: 'Inspect mast rollers',
         safetyIssueIdentified: false,
     }, '2026-07-25T04:00:00.000Z')
-    assert.match(request.payload, /POST gr_jobcardsubmissiontimeentries/)
+    assert.match(request.payload, /POST https:\/\/example\.crm\.dynamics\.com\/api\/data\/v9\.2\/gr_jobcardsubmissiontimeentries/)
     assert.match(request.payload, /Content-ID: 1/)
     assert.match(request.payload, /Content-ID: 2/)
     assert.match(request.payload, /Content-ID: 3/)
     assert.match(request.payload, /"gr_totalhours":1\.5/)
-    assert.match(request.payload, /POST gr_jobmaterials/)
+    assert.match(request.payload, /POST https:\/\/example\.crm\.dynamics\.com\/api\/data\/v9\.2\/gr_jobmaterials/)
     assert.match(request.payload, /"gr_material":"Hydraulic Hose"/)
-    assert.match(request.payload, /PATCH gr_jobs\(/)
+    assert.match(request.payload, /"gr_quantity":2/)
+    assert.match(request.payload, /PATCH https:\/\/example\.crm\.dynamics\.com\/api\/data\/v9\.2\/gr_jobs\(/)
     assert.match(request.payload, /If-Match: W\/"10"/)
     assert.doesNotMatch(request.payload, /"gr_status"/)
     assert.doesNotMatch(request.payload, /"gr_completeddate"/)

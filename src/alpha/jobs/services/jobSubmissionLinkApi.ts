@@ -15,6 +15,24 @@ export function jobHasActiveSubmissionLink(job: Job, now = Date.now()) {
     )
 }
 
+export function buildJobSubmissionPublicUrl(
+    path: string,
+    currentOrigin: string,
+    configuredPublicOrigin = '',
+) {
+    if (!path.startsWith('/portal/job/')) {
+        throw new Error('The secure Job Card link path is invalid.')
+    }
+    const configured = configuredPublicOrigin.trim()
+    if (!configured) return new URL(path, currentOrigin).toString()
+
+    const publicUrl = new URL(configured)
+    if (publicUrl.protocol !== 'https:' || publicUrl.username || publicUrl.password) {
+        throw new Error('The public app URL must be a secure HTTPS origin.')
+    }
+    return new URL(path, publicUrl.origin).toString()
+}
+
 export async function generateJobSubmissionLink(accessToken: string, jobId: string) {
     const response = await fetch('/api/jobsubmission', {
         method: 'POST',
@@ -34,7 +52,11 @@ export async function generateJobSubmissionLink(accessToken: string, jobId: stri
         throw new Error('The secure Job Card link could not be created. Please try again.')
     }
     return {
-        url: new URL(body.path, window.location.origin).toString(),
+        url: buildJobSubmissionPublicUrl(
+            body.path,
+            window.location.origin,
+            import.meta.env.VITE_PUBLIC_APP_URL,
+        ),
         expiresOn: body.expiresOn,
     }
 }

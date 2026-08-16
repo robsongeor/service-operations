@@ -186,6 +186,13 @@ if (-not (Get-Attribute 'gr_jobmaterial' 'gr_material')) {
     $attribute.MaxLength = 500
     Add-Attribute 'gr_jobmaterial' $attribute
 }
+if (-not (Get-Attribute 'gr_jobmaterial' 'gr_quantity')) {
+    $attribute = [Microsoft.Xrm.Sdk.Metadata.IntegerAttributeMetadata]::new()
+    Set-Common $attribute 'gr_Quantity' 'Quantity'
+    $attribute.MinValue = 1
+    $attribute.MaxValue = 2147483647
+    Add-Attribute 'gr_jobmaterial' $attribute
+}
 if (-not (Get-Attribute 'gr_jobmaterial' 'gr_displayorder')) {
     $attribute = [Microsoft.Xrm.Sdk.Metadata.IntegerAttributeMetadata]::new()
     Set-Common $attribute 'gr_DisplayOrder' 'Display Order'
