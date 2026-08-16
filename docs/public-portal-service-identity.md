@@ -98,7 +98,9 @@ created. These cover SDK/plugin metadata and SharePoint integration internals:
 The asynchronous Jobs and Staff realtime webhooks additionally require Organization Read
 on Service Endpoint. This platform privilege lets Dataverse dispatch the registered webhook
 when the portal service updates a Job; it grants no additional Service Operations business
-table access.
+table access. Dataverse also requires User-level Read on System Job so the non-interactive
+identity can own the asynchronous dispatch record. User depth limits it to System Jobs owned
+by the portal identity.
 
 They are platform-managed baseline privileges copied into a new custom role, not access to
 the Service Operations business tables. Direct role verification confirmed there are no

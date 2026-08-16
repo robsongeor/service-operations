@@ -86,5 +86,9 @@ foreach($name in $requiredPrivileges){
     }
     Write-Output "Verified Organization privilege $name"
 }
+$asyncMetadata=$allPrivileges | Where-Object { [string]$_.Attributes['name'] -ieq 'prvReadAsyncOperation' } | Select-Object -First 1
+$asyncActual=$assigned | Where-Object { $_.PrivilegeId -eq $asyncMetadata.Id } | Select-Object -First 1
+if(-not $asyncActual){throw 'Application User is missing User Read on System Job for asynchronous realtime dispatch.'}
+Write-Output "Verified System Job Read at $($asyncActual.Depth) depth"
 Write-Output 'Verified Public Portal Service role and Application User assignment.'
 Write-Output 'Expanded Technician Job Submission preflight passed with no writes.'

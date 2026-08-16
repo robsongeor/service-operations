@@ -50,3 +50,23 @@ if (-not $verified -or $verified.Depth -ne [Microsoft.Crm.Sdk.Messages.Privilege
     throw 'Service Endpoint Read privilege verification failed.'
 }
 Write-Output 'Verified Public Portal Service realtime platform privilege.'
+
+$asyncQuery = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new('privilege')
+$asyncQuery.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new('name')
+$asyncQuery.Criteria.AddCondition('name',[Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,'prvReadAsyncOperation')
+$asyncPrivilege = $service.RetrieveMultiple($asyncQuery).Entities | Select-Object -First 1
+if (-not $asyncPrivilege) { throw 'Dataverse privilege prvReadAsyncOperation was not found.' }
+$asyncCurrent = ($service.Execute($retrieve)).RolePrivileges | Where-Object { $_.PrivilegeId -eq $asyncPrivilege.Id } | Select-Object -First 1
+if (-not $asyncCurrent) {
+    $entry = [Microsoft.Crm.Sdk.Messages.RolePrivilege]::new()
+    $entry.PrivilegeId = $asyncPrivilege.Id
+    $entry.Depth = [Microsoft.Crm.Sdk.Messages.PrivilegeDepth]::Basic
+    $add = [Microsoft.Crm.Sdk.Messages.AddPrivilegesRoleRequest]::new()
+    $add.RoleId = $RoleId
+    $add.Privileges = @($entry)
+    $service.Execute($add) | Out-Null
+    Write-Output 'Granted User Read on System Job to Public Portal Service.'
+}
+$asyncVerified = ($service.Execute($retrieve)).RolePrivileges | Where-Object { $_.PrivilegeId -eq $asyncPrivilege.Id } | Select-Object -First 1
+if (-not $asyncVerified) { throw 'System Job Read privilege verification failed.' }
+Write-Output "Verified Public Portal Service System Job Read at $($asyncVerified.Depth) depth."
