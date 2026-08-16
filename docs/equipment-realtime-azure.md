@@ -50,6 +50,18 @@ the intended environment and endpoint have been confirmed, followed by `-Mode Ve
 updates use their own `staffChanged` target and cause active screens to reload only the Staff
 directory.
 
+The development `gr_mechanic` registration was added and verified on 16 August 2026. Its enabled
+asynchronous PostOperation steps are:
+
+- Create: `d5d1b607-1799-f111-b8db-6045bde57026`
+- Update: `d7d1b607-1799-f111-b8db-6045bde57026`
+- Delete: `d9d1b607-1799-f111-b8db-6045bde57026`
+
+The current Function App uses Flex Consumption. When deploying from a signed-in development PC,
+publish the `realtime-api` directory with Azure Functions Core Tools; a plain zip push can be
+accepted while still leaving zero indexed Functions. After deployment, require both Functions in
+the Azure function list and an authenticated HTTP 200 response from `/api/negotiate`.
+
 The development Dataverse registration is `Service Operations Equipment Realtime` (`85b89b0f-bd59-44cb-9d98-86cc3660963e`). Its three steps are enabled, asynchronous, PostOperation, and configured to delete successful system jobs automatically.
 
 The development `gr_job` registration was added and verified on 16 August 2026. Its enabled

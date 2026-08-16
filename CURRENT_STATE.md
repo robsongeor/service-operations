@@ -120,12 +120,16 @@ Branch: `codex/job-book-integration`
   against the existing service endpoint and independently verified. Dataverse remains authoritative;
   SignalR messages contain only the changed record ID, operation, and event time.
 
-- Staff realtime invalidation is implemented locally and awaiting backend deployment plus Dataverse
-  registration. The authenticated app shell opens one Staff notification listener, and active Staff,
+- Staff realtime invalidation was published from commit `0adbe3d` on 16 August 2026. The
+  authenticated app shell opens one Staff notification listener, and active Staff,
   Jobs, and Job Book screens debounce a `gr_mechanic` change before re-reading only the Staff
-  directory. The notification contains only Staff ID, operation, and event time. Use
-  `scripts/manage-staff-realtime-registration.ps1` to inspect/register/verify the three asynchronous
-  PostOperation steps after deploying the updated realtime receiver.
+  directory. The notification contains only Staff ID, operation, and event time. Azure indexes the
+  `equipmentchanged` and `negotiate` Functions; authenticated negotiation returned HTTP 200 and a
+  protected synthetic Staff event returned HTTP 202. Three enabled asynchronous PostOperation
+  `gr_mechanic` steps were registered and independently verified: Create
+  `d5d1b607-1799-f111-b8db-6045bde57026`, Update
+  `d7d1b607-1799-f111-b8db-6045bde57026`, and Delete
+  `d9d1b607-1799-f111-b8db-6045bde57026`.
 
 - Local Job Card link generation now reloads its CommonJS API service per Vite request. This prevents
   the hot-reloaded browser client and long-running localhost middleware from disagreeing about the
