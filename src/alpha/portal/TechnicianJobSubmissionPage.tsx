@@ -31,7 +31,7 @@ export default function TechnicianJobSubmissionPage() {
     const [loadError, setLoadError] = useState<PublicSubmissionErrorCode | null>(null)
     const [story, setStory] = useState('')
     const [hourMeter, setHourMeter] = useState('')
-    const [timeEntries, setTimeEntries] = useState<TimeEntryDraft[]>([])
+    const [timeEntries, setTimeEntries] = useState<TimeEntryDraft[]>([newTimeEntry()])
     const [parts, setParts] = useState<PartDraft[]>([])
     const [furtherWorkRequired, setFurtherWorkRequired] = useState(false)
     const [furtherWorkDetails, setFurtherWorkDetails] = useState('')
@@ -44,6 +44,7 @@ export default function TechnicianJobSubmissionPage() {
     const [submittedPdfDraft, setSubmittedPdfDraft] = useState<JobSheetDraft | null>(null)
     const [pdfBusy, setPdfBusy] = useState(false)
     const [pdfFeedback, setPdfFeedback] = useState('')
+    const [confirmLowerHourMeter, setConfirmLowerHourMeter] = useState(false)
 
     useEffect(() => {
         let current = true
@@ -55,23 +56,32 @@ export default function TechnicianJobSubmissionPage() {
         return () => { current = false }
     }, [token])
 
-    const submit = async (event: FormEvent) => {
-        event.preventDefault()
+    const submitJobCard = async (lowerHourMeterConfirmed = false) => {
         const trimmedStory = story.trim()
         if (!trimmedStory) return setValidation('Enter the work completed or job story.')
         if (job?.requiresHourMeter && !hourMeter.trim()) return setValidation('Enter the current hour meter.')
-        if (hourMeter && (!/^\d+$/.test(hourMeter) || Number(hourMeter) < (job?.currentHourMeter ?? 0))) {
-            return setValidation(`Hour meter must be a whole number${job?.currentHourMeter != null ? ` of at least ${job.currentHourMeter}` : ''}.`)
+        if (hourMeter && !/^\d+$/.test(hourMeter)) {
+            return setValidation('Hour meter must be a non-negative whole number.')
         }
+        const parsedHourMeter = hourMeter ? Number(hourMeter) : undefined
+        const isLowerHourMeter = parsedHourMeter != null && job?.currentHourMeter != null
+            && parsedHourMeter < job.currentHourMeter
+        if (isLowerHourMeter && !lowerHourMeterConfirmed) {
+            setValidation('')
+            setConfirmLowerHourMeter(true)
+            return
+        }
+        setConfirmLowerHourMeter(false)
         const parsedTimeEntries: JobCardTimeEntryInput[] = timeEntries.map((entry) => ({
             date: entry.date,
             hours: Number(entry.hours),
             kilometres: Number(entry.kilometres),
         }))
+        if (timeEntries.length < 1) return setValidation('Add at least one time entry with a date and total hours.')
         if (timeEntries.some((entry) => !entry.hours.trim() || !entry.kilometres.trim())
-            || parsedTimeEntries.some((entry) => !entry.date || !Number.isFinite(entry.hours) || entry.hours < 0 || entry.hours > 24
+            || parsedTimeEntries.some((entry) => !entry.date || !Number.isFinite(entry.hours) || entry.hours <= 0 || entry.hours > 24
                 || !Number.isSafeInteger(entry.kilometres) || entry.kilometres < 0)) {
-            return setValidation('Check each time entry. Hours must be between 0 and 24 and kilometres must be a whole number.')
+            return setValidation('Check each time entry. Hours must be greater than 0 and no more than 24, and kilometres must be a whole number.')
         }
         if (parts.some((part) => !part.description.trim() || !/^\d+$/.test(part.quantity)
             || Number(part.quantity) < 1 || !Number.isSafeInteger(Number(part.quantity)))) {
@@ -83,7 +93,8 @@ export default function TechnicianJobSubmissionPage() {
         setValidation('')
         const submission = {
             story: trimmedStory,
-            hourMeter: hourMeter ? Number(hourMeter) : undefined,
+            hourMeter: parsedHourMeter,
+            lowerHourMeterConfirmed: isLowerHourMeter && lowerHourMeterConfirmed,
             timeEntries: parsedTimeEntries,
             parts: parts.map((part) => ({ description: part.description.trim(), quantity: Number(part.quantity) })),
             furtherWorkRequired,
@@ -108,6 +119,11 @@ export default function TechnicianJobSubmissionPage() {
         } finally {
             setBusy(false)
         }
+    }
+
+    const submit = (event: FormEvent) => {
+        event.preventDefault()
+        void submitJobCard(false)
     }
 
     if (submitted && job && submittedPdfDraft) return <main className="technician-portal"><section className="technician-portal-card technician-portal-message">
@@ -149,18 +165,30 @@ export default function TechnicianJobSubmissionPage() {
             </dl>
             <form onSubmit={submit}>
                 <label>Current Hour Meter{job.requiresHourMeter && ' *'}
-                    <input type="number" min={job.currentHourMeter ?? 0} step="1" inputMode="numeric" value={hourMeter} onChange={(event) => setHourMeter(event.target.value)} required={job.requiresHourMeter} />
+                    <input type="number" min="0" step="1" inputMode="numeric" value={hourMeter} onChange={(event) => {
+                        setHourMeter(event.target.value)
+                        setConfirmLowerHourMeter(false)
+                    }} required={job.requiresHourMeter} />
                 </label>
+                {confirmLowerHourMeter && job.currentHourMeter != null && <section className="technician-lower-meter-confirmation" role="alert" aria-live="assertive">
+                    <strong>Confirm lower hour meter</strong>
+                    <p>You entered {Number(hourMeter).toLocaleString('en-NZ')} hours, which is lower than the previous reading of {job.currentHourMeter.toLocaleString('en-NZ')} hours. Confirm only if the reading shown on the machine is correct.</p>
+                    <div>
+                        <button type="button" className="secondary" onClick={() => setConfirmLowerHourMeter(false)}>Go back</button>
+                        <button type="button" disabled={busy} onClick={() => void submitJobCard(true)}>{busy ? 'Submitting...' : 'Confirm &amp; submit'}</button>
+                    </div>
+                </section>}
                 <label>Job Story / Work Completed *
                     <textarea rows={7} value={story} onChange={(event) => setStory(event.target.value)} required />
                 </label>
                 <fieldset className="technician-repeatable">
-                    <legend>Time &amp; Travel</legend>
+                    <legend>Time &amp; Travel *</legend>
+                    <small>At least one date and total-hours entry is required.</small>
                     {timeEntries.map((entry, index) => <div className="technician-repeatable-row time-entry" key={index}>
-                        <label>Date<input type="date" value={entry.date} onChange={(event) => setTimeEntries((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, date: event.target.value } : item))} required /></label>
-                        <label>Total Hours<input type="number" min="0" max="24" step="0.25" inputMode="decimal" value={entry.hours} placeholder="Enter hours" onChange={(event) => setTimeEntries((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, hours: event.target.value } : item))} required /></label>
-                        <label>Kilometres<input type="number" min="0" step="1" inputMode="numeric" value={entry.kilometres} placeholder="Enter km" onChange={(event) => setTimeEntries((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, kilometres: event.target.value } : item))} required /></label>
-                        <button type="button" className="technician-remove-row" onClick={() => setTimeEntries((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Remove</button>
+                        <label>Date *<input type="date" value={entry.date} onChange={(event) => setTimeEntries((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, date: event.target.value } : item))} required /></label>
+                        <label>Total Hours *<input type="number" min="0.25" max="24" step="0.25" inputMode="decimal" value={entry.hours} placeholder="Enter hours" onChange={(event) => setTimeEntries((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, hours: event.target.value } : item))} required /></label>
+                        <label>Kilometres *<input type="number" min="0" step="1" inputMode="numeric" value={entry.kilometres} placeholder="Enter km" onChange={(event) => setTimeEntries((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, kilometres: event.target.value } : item))} required /></label>
+                        <button type="button" className="technician-remove-row" disabled={timeEntries.length === 1} title={timeEntries.length === 1 ? 'At least one time entry is required.' : undefined} onClick={() => setTimeEntries((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Remove</button>
                     </div>)}
                     <button type="button" className="technician-add-row" onClick={() => setTimeEntries((current) => [...current, newTimeEntry()])}>+ Add time entry</button>
                 </fieldset>

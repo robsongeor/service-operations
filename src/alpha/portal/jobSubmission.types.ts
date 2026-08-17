@@ -33,6 +33,7 @@ export type JobCardTimeEntryInput = {
 export type JobCardSubmissionInput = {
     story: string
     hourMeter?: number
+    lowerHourMeterConfirmed?: boolean
     timeEntries: JobCardTimeEntryInput[]
     parts: {
         description: string

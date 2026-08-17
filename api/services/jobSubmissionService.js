@@ -206,16 +206,19 @@ function validateSubmission(job, body) {
         return 'Hour meter must be a non-negative whole number.'
     }
     if (body.hourMeter != null && job.gr_Equipment?.gr_currenthourmeter != null
-        && body.hourMeter < job.gr_Equipment.gr_currenthourmeter) {
-        return 'Hour meter cannot be lower than the current equipment hour meter.'
+        && body.hourMeter < job.gr_Equipment.gr_currenthourmeter
+        && body.lowerHourMeterConfirmed !== true) {
+        return 'Confirm that the lower hour meter reading is correct before submitting.'
     }
-    if (!Array.isArray(body.timeEntries) || body.timeEntries.length > 50) return 'Time entries are invalid.'
+    if (!Array.isArray(body.timeEntries) || body.timeEntries.length < 1 || body.timeEntries.length > 50) {
+        return 'Add at least one time entry with a date and total hours.'
+    }
     for (const entry of body.timeEntries) {
         if (!entry || typeof entry.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(entry.date)
             || !Number.isFinite(Date.parse(`${entry.date}T00:00:00Z`))
-            || typeof entry.hours !== 'number' || !Number.isFinite(entry.hours) || entry.hours < 0 || entry.hours > 24
+            || typeof entry.hours !== 'number' || !Number.isFinite(entry.hours) || entry.hours <= 0 || entry.hours > 24
             || !Number.isSafeInteger(entry.kilometres) || entry.kilometres < 0) {
-            return 'Check each time entry. Hours must be between 0 and 24 and kilometres must be a whole number.'
+            return 'Check each time entry. Hours must be greater than 0 and no more than 24, and kilometres must be a whole number.'
         }
     }
     if (!Array.isArray(body.parts) || body.parts.length > 100

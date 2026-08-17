@@ -48,6 +48,10 @@ function baseJob(overrides = {}) {
     }
 }
 
+function validTimeEntries() {
+    return [{ date: '2026-08-17', hours: 1.5, kilometres: 0 }]
+}
+
 async function invoke(request) {
     const context = { log: { error() {} } }
     await submission(context, request)
@@ -67,6 +71,9 @@ function mockPublic(job, updateStatus = 204) {
         if (value.includes('login.microsoftonline.com')) return Response.json({ access_token: 'app-token' })
         if (value.includes('/gr_jobcardsubmissions?')) return new Response(null, { status: 404 })
         if (value.includes('/gr_jobs?')) return Response.json({ value: job ? [job] : [] })
+        if (value.endsWith('/$batch')) return updateStatus === 412
+            ? new Response('HTTP/1.1 412 Precondition Failed', { status: 200 })
+            : new Response('', { status: updateStatus })
         if (value.includes('/gr_jobs(') && options.method === 'PATCH') return new Response('', { status: updateStatus })
         throw new Error(`Unexpected request: ${value}`)
     }
@@ -95,10 +102,25 @@ test('public response includes only the dedicated Job-sheet fields', () => {
 
 test('submission validation requires story and valid service hour meter', () => {
     const job = baseJob()
-    assert.match(submission._test.validateSubmission(job, { story: '', hourMeter: 2500 }), /story/i)
-    assert.match(submission._test.validateSubmission(job, { story: 'Done' }), /hour meter/i)
-    assert.match(submission._test.validateSubmission(job, { story: 'Done', hourMeter: 2499 }), /lower/i)
-    assert.equal(submission._test.validateSubmission(job, { story: 'Done', hourMeter: 2500 }), '')
+    const timeEntries = validTimeEntries()
+    assert.match(submission._test.validateSubmission(job, { story: '', hourMeter: 2500, timeEntries }), /story/i)
+    assert.match(submission._test.validateSubmission(job, { story: 'Done', timeEntries }), /hour meter/i)
+    assert.match(submission._test.validateSubmission(job, { story: 'Done', hourMeter: 2499, timeEntries }), /confirm/i)
+    assert.equal(submission._test.validateSubmission(job, {
+        story: 'Done', hourMeter: 2499, lowerHourMeterConfirmed: true, timeEntries,
+    }), '')
+    assert.equal(submission._test.validateSubmission(job, { story: 'Done', hourMeter: 2500, timeEntries }), '')
+})
+
+test('submission validation requires at least one dated positive-hours entry', () => {
+    const common = { story: 'Completed', hourMeter: 2500, parts: [] }
+    assert.match(submission._test.validateSubmission(baseJob(), { ...common, timeEntries: [] }), /at least one time entry/i)
+    assert.match(submission._test.validateSubmission(baseJob(), {
+        ...common, timeEntries: [{ date: '2026-08-17', hours: 0, kilometres: 0 }],
+    }), /greater than 0/i)
+    assert.equal(submission._test.validateSubmission(baseJob(), {
+        ...common, timeEntries: validTimeEntries(),
+    }), '')
 })
 
 test('submission validation accepts multiple time entries, decimal hours, and parts', () => {
@@ -117,7 +139,7 @@ test('submission validation accepts multiple time entries, decimal hours, and pa
 })
 
 test('further work and safety details are required only when selected', () => {
-    const common = { story: 'Completed', hourMeter: 2500, timeEntries: [], parts: [] }
+    const common = { story: 'Completed', hourMeter: 2500, timeEntries: validTimeEntries(), parts: [] }
     assert.match(submission._test.validateSubmission(baseJob(), {
         ...common, furtherWorkRequired: true, furtherWorkDetails: '', safetyIssueIdentified: false,
     }), /further work/i)
@@ -161,7 +183,7 @@ test('expanded submission uses one change set and does not change operational Jo
 
 test('photo validation enforces type, size, count, and encoded byte length', () => {
     const common = {
-        story: 'Completed', hourMeter: 2500, timeEntries: [], parts: [],
+        story: 'Completed', hourMeter: 2500, timeEntries: validTimeEntries(), parts: [],
         furtherWorkRequired: false, safetyIssueIdentified: false,
     }
     assert.equal(submission._test.validateSubmission(baseJob(), {
@@ -231,25 +253,25 @@ test('successful submission changes only pending fields and Job Card status', { 
         if (value.includes('login.microsoftonline.com')) return Response.json({ access_token: 'app-token' })
         if (value.includes('/gr_jobcardsubmissions?')) return new Response(null, { status: 404 })
         if (value.includes('/gr_jobs?')) return Response.json({ value: [job] })
-        if (value.includes('/gr_jobs(')) {
-            patch = { headers: options.headers, body: JSON.parse(options.body) }
-            return new Response(null, { status: 204 })
+        if (value.endsWith('/$batch')) {
+            patch = { headers: options.headers, body: String(options.body) }
+            return new Response('', { status: 200 })
         }
         throw new Error(`Unexpected request: ${value}`)
     }
     const response = await invoke({
         method: 'POST',
         headers: {},
-        body: { token: 'd'.repeat(43), story: 'Completed service', hourMeter: 2510 },
+        body: { token: 'd'.repeat(43), story: 'Completed service', hourMeter: 2510, timeEntries: validTimeEntries() },
     })
     assert.equal(response.status, 200)
-    assert.equal(patch.headers['If-Match'], 'W/"10"')
-    assert.equal(patch.body.gr_jobcardstatus, 122830002)
-    assert.equal(patch.body.gr_techniciansubmissionhourmeter, 2510)
-    assert.equal(patch.body.gr_techniciansubmissionstory, 'Completed service')
-    assert.equal(patch.body.gr_status, undefined)
-    assert.equal(patch.body.gr_completeddate, undefined)
-    assert.equal(patch.body.gr_hourmeter, undefined)
+    assert.match(patch.body, /If-Match: W\/"10"/)
+    assert.match(patch.body, /"gr_jobcardstatus":122830002/)
+    assert.match(patch.body, /"gr_techniciansubmissionhourmeter":2510/)
+    assert.match(patch.body, /"gr_techniciansubmissionstory":"Completed service"/)
+    assert.doesNotMatch(patch.body, /"gr_status"/)
+    assert.doesNotMatch(patch.body, /"gr_completeddate"/)
+    assert.doesNotMatch(patch.body, /"gr_hourmeter"/)
 })
 
 test('failed Dataverse submission returns a bounded diagnostic without exposing its response body', { concurrency: false }, async () => {
@@ -261,14 +283,14 @@ test('failed Dataverse submission returns a bounded diagnostic without exposing 
         if (value.includes('/gr_jobcardsubmissions?')) return new Response(null, { status: 404 })
         if (value.includes('/gr_jobcardsubmissions?')) return new Response(null, { status: 404 })
         if (value.includes('/gr_jobs?')) return Response.json({ value: [job] })
-        if (value.includes('/gr_jobs(')) return Response.json({
+        if (value.endsWith('/$batch')) return Response.json({
             error: { code: '0x80040265', message: 'Sensitive internal Dataverse detail' },
         }, { status: 400 })
         throw new Error(`Unexpected request: ${value}`)
     }
     const response = await invoke({
         method: 'POST', headers: {},
-        body: { token: 'z'.repeat(43), story: 'Completed service', hourMeter: 2510 },
+        body: { token: 'z'.repeat(43), story: 'Completed service', hourMeter: 2510, timeEntries: validTimeEntries() },
     })
     assert.equal(response.status, 503)
     assert.match(response.body, /Job submission update failed \(400, 0x80040265\)/)
@@ -291,7 +313,7 @@ test('concurrent repeat submission is rejected by ETag', { concurrency: false },
     const response = await invoke({
         method: 'POST',
         headers: {},
-        body: { token: 'e'.repeat(43), story: 'Completed service', hourMeter: 2510 },
+        body: { token: 'e'.repeat(43), story: 'Completed service', hourMeter: 2510, timeEntries: validTimeEntries() },
     })
     assert.equal(response.status, 410)
     assert.match(response.body, /already been submitted/i)
@@ -425,18 +447,21 @@ test('normalized technician submission updates its own record instead of the Job
             '@odata.etag': 'W/"22"',
         }] })
         if (value.includes('/gr_jobs(00000000-0000-4000-8000-000000000001)?')) return Response.json(baseJob())
-        if (value.includes(`/gr_jobcardsubmissions(${submissionId})`) && options.method === 'PATCH') {
+        if (value.endsWith('/$batch')) {
             updatedUrl = value
-            fields = JSON.parse(options.body)
-            return new Response(null, { status: 204 })
+            fields = String(options.body)
+            return new Response('', { status: 200 })
         }
         throw new Error(`Unexpected request: ${value}`)
     }
-    const response = await invoke({ method: 'POST', headers: {}, body: { token: 'n'.repeat(43), story: 'Second technician work', hourMeter: 2520 } })
+    const response = await invoke({ method: 'POST', headers: {}, body: {
+        token: 'n'.repeat(43), story: 'Second technician work', hourMeter: 2520, timeEntries: validTimeEntries(),
+    } })
     assert.equal(response.status, 200)
-    assert.match(updatedUrl, /gr_jobcardsubmissions/)
-    assert.equal(fields.gr_story, 'Second technician work')
-    assert.equal(fields.gr_hourmeter, 2520)
-    assert.equal(fields.gr_jobcardstatus, undefined)
-    assert.equal(fields.gr_techniciansubmissionstory, undefined)
+    assert.match(updatedUrl, /\$batch$/)
+    assert.match(fields, new RegExp(`PATCH https://example\\.crm\\.dynamics\\.com/api/data/v9\\.2/gr_jobcardsubmissions\\(${submissionId}\\)`))
+    assert.match(fields, /"gr_story":"Second technician work"/)
+    assert.match(fields, /"gr_hourmeter":2520/)
+    assert.doesNotMatch(fields, /"gr_jobcardstatus"/)
+    assert.doesNotMatch(fields, /"gr_techniciansubmissionstory"/)
 })
