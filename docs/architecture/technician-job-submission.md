@@ -77,6 +77,9 @@ column-level boundary. See [Security](security.md) and
 
 - Default token lifetime is seven days.
 - A replacement link invalidates the previous unused link.
+- Resending after the latest card is Submitted or Closed creates a new pending submission cycle
+  for that Job and technician. The earlier card and all of its evidence remain immutable and are
+  retained as read-only previous submissions in the manager Job Card tab.
 - A successful submission consumes the token.
 - Concurrent or repeated submission is rejected.
 - At least one Time & Travel entry with a valid date and positive total hours is required; kilometres

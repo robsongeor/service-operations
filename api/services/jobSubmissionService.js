@@ -1,6 +1,7 @@
 const { createHash, randomBytes } = require('node:crypto')
 
 const JOB_CARD_SUBMITTED = 122830002
+const JOB_CARD_CLOSED = 122830003
 const JOB_CARD_SENT = 122830001
 const SUBMISSION_ROLE_PRIMARY = 122830000
 const SUBMISSION_ROLE_ADDITIONAL = 122830001
@@ -428,8 +429,11 @@ async function generate(request) {
         return jsonResponse(403, { error: 'Online Job Card access is currently limited to approved pilot recipients.' })
     }
     const role = assignmentId ? SUBMISSION_ROLE_ADDITIONAL : SUBMISSION_ROLE_PRIMARY
-    const identityKey = `${jobId}:${assignmentId || 'primary'}`.toLowerCase()
-    const existingResponse = await fetch(`${dataverseOrigin()}/api/data/v9.2/gr_jobcardsubmissions?$select=gr_jobcardsubmissionid,gr_status&$filter=gr_identitykey eq '${escapeOData(identityKey)}'&$top=1`, {
+    const baseIdentityKey = `${jobId}:${assignmentId || 'primary'}`.toLowerCase()
+    const assignmentFilter = assignmentId
+        ? `_gr_jobassignment_value eq ${assignmentId}`
+        : '_gr_jobassignment_value eq null'
+    const existingResponse = await fetch(`${dataverseOrigin()}/api/data/v9.2/gr_jobcardsubmissions?$select=gr_jobcardsubmissionid,gr_identitykey,gr_status&$filter=_gr_job_value eq ${jobId} and gr_role eq ${role} and ${assignmentFilter}&$orderby=createdon desc&$top=1`, {
         headers: { Authorization: authorization, Accept: 'application/json' },
     })
     if (existingResponse.status === 404) {
@@ -448,9 +452,13 @@ async function generate(request) {
     }
     if (!existingResponse.ok) return jsonResponse(502, { error: 'A submission link could not be created.' })
     const existing = ((await existingResponse.json()).value ?? [])[0]
-    if (existing && [JOB_CARD_SUBMITTED, 122830003].includes(existing.gr_status)) {
-        return jsonResponse(409, { error: 'This technician has already submitted this Job Card.' })
-    }
+    // An unused pending link can be safely replaced in place. Submitted and closed
+    // cards are immutable operational evidence, so a resend starts a new submission
+    // cycle with its own alternate-key identity instead of reopening the old record.
+    const startsNewCycle = existing && [JOB_CARD_SUBMITTED, JOB_CARD_CLOSED].includes(existing.gr_status)
+    const identityKey = startsNewCycle
+        ? `${baseIdentityKey}:${hashToken(token).slice(0, 12)}`
+        : existing?.gr_identitykey || baseIdentityKey
     const submissionAuthorization = `Bearer ${await applicationToken()}`
     const recipientName = typeof request.body?.recipientName === 'string' ? request.body.recipientName.trim().slice(0, 200) : ''
     const fields = {
