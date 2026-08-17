@@ -2,7 +2,7 @@
 
 Branch: `codex/job-card-entry-validation`
 
-## Technician Job Card resend cycles (deployment candidate)
+## Technician Job Card resend cycles (deployed)
 
 - Resending a Job Card after the same technician's latest card is Submitted or Closed now creates
   a fresh pending submission cycle instead of returning a conflict. The earlier submission and its
@@ -12,7 +12,7 @@ Branch: `codex/job-card-entry-validation`
   the newest cycle for each technician, so a fresh resend returns to awaiting-technician state.
 - No Dataverse schema, role, credential, routing, or cloud configuration change is required.
 
-## Technician Job Card entry validation (deployment candidate)
+## Technician Job Card entry validation (deployed)
 
 - The public Job Card permits a non-negative whole hour-meter value below the Equipment's previous
   reading only after the technician sees the two readings and explicitly confirms the lower value.
@@ -150,6 +150,14 @@ Branch: `codex/job-card-entry-validation`
   cloud-setting change, business-row mutation, credential creation, or real communication was
   performed during deployment verification. Signed-in Job Map and recipient-controlled Job Card/PDF
   business-flow smoke testing remains outstanding.
+
+- Technician Job Card entry validation and safe resend cycles were published from commit `604e9d9`
+  by successful Azure Static Web Apps run `32069714685` on 18 August 2026. Production-safe
+  verification returned `200` for `/` and `/jobs` and found the exact `604e9d9` marker in the
+  deployed client bundle. Existing Submitted/Closed evidence is preserved when a fresh resend cycle
+  is created; unused pending links are replaced in place. No Dataverse provisioning, cloud-setting
+  change, credential creation, business-row mutation, or real communication was performed during
+  deployment verification. A signed-in resend and recipient submission smoke test remains.
 
 ## Recently deployed work and remaining validation
 
