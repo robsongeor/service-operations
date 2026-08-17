@@ -2,6 +2,16 @@
 
 Branch: `codex/job-card-entry-validation`
 
+## Technician Job Card resend cycles (local, not deployed)
+
+- Resending a Job Card after the same technician's latest card is Submitted or Closed now creates
+  a fresh pending submission cycle instead of returning a conflict. The earlier submission and its
+  time, parts, photos, meter, and story remain immutable, read-only manager-visible evidence under
+  Previous submissions.
+- Resending an unused pending card still replaces only that pending token. Job Card progress follows
+  the newest cycle for each technician, so a fresh resend returns to awaiting-technician state.
+- No Dataverse schema, role, credential, routing, or cloud configuration change is required.
+
 ## Technician Job Card entry validation (local, not deployed)
 
 - The public Job Card permits a non-negative whole hour-meter value below the Equipment's previous

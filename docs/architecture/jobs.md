@@ -228,7 +228,10 @@ lists are not part of the initial Job Book load; they load only when the add-mac
 - Existing technician email actions generate a fresh secure submission link before
   preparing or dispatching the email. The primary technician's existing email address is
   required before token generation. Replacing an active unused link requires confirmation
-  because only the newest token hash remains valid.
+  because only the newest token hash remains valid. Resending after a technician has already
+  submitted or the office has closed their card preserves that immutable evidence and creates
+  a new submission cycle for the same Job and technician; it never reopens or overwrites the
+  earlier card.
 - Primary technician Job Card email uses the Email Dispatch/Power Automate delivery path from both
   the Jobs table and Job drawer. The table uses a non-blocking in-app composer and formatted HTML;
   assignment sends reuse the same formatted card. Generating a link does not change operational Job

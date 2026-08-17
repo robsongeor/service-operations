@@ -138,6 +138,15 @@ test('Jobs table uses the in-app composer and pilot-gated link generation', () =
     assert.match(hook, /waitForEmailDispatch/)
 })
 
+test('submitted technician cards can start a confirmed new submission cycle', () => {
+    const fields = readFileSync(new URL('../src/alpha/jobs/components/JobCardFields.tsx', import.meta.url), 'utf8')
+    assert.match(fields, /submitted \? 'Send again'/)
+    assert.match(fields, /status !== JOB_CARD_STATUSES\.NOT_SENT/)
+    assert.match(fields, /their evidence will be preserved and a new submission cycle will start/)
+    assert.match(fields, /Previous submissions/)
+    assert.match(fields, /allowSend=\{false\}/)
+})
+
 test('active link detection requires an unused, unexpired stored hash', () => {
     const active = {
         ...job,

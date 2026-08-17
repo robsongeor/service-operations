@@ -65,9 +65,10 @@ type CardProps = {
     onPhoto: (id: string) => void
     onDownload?: () => void
     isPdfBusy?: boolean
+    allowSend?: boolean
 }
 
-function TechnicianCard({ name, email, label, status, submission, isBusy, canSend, expanded, onToggle, onSend, onRemove, onPhoto, onDownload, isPdfBusy }: CardProps) {
+function TechnicianCard({ name, email, label, status, submission, isBusy, canSend, expanded, onToggle, onSend, onRemove, onPhoto, onDownload, isPdfBusy, allowSend = true }: CardProps) {
     const statusLabel = JOB_CARD_STATUS_OPTIONS.find((option) => option.value === status)?.label ?? 'Not sent'
     const submitted = status === JOB_CARD_STATUSES.SUBMITTED || Boolean(submission?.gr_submittedon)
     return <article className={`job-card-person ${expanded ? 'expanded' : ''}`}>
@@ -80,7 +81,7 @@ function TechnicianCard({ name, email, label, status, submission, isBusy, canSen
             <div className="job-card-person-actions">
                 {submitted && submission && onDownload && <button type="button" disabled={isPdfBusy} onClick={onDownload}>{isPdfBusy ? 'Preparing...' : 'Download PDF'}</button>}
                 {submission && <button type="button" onClick={onToggle}>{expanded ? 'Hide' : 'View'}</button>}
-                {!submitted && <button type="button" className="primary" disabled={isBusy || !canSend} onClick={onSend}>{isBusy ? 'Sending…' : status === JOB_CARD_STATUSES.SENT ? 'Resend' : 'Send'}</button>}
+                {allowSend && <button type="button" className="primary" disabled={isBusy || !canSend} onClick={onSend}>{isBusy ? 'Sending…' : submitted ? 'Send again' : status === JOB_CARD_STATUSES.SENT ? 'Resend' : 'Send'}</button>}
                 {onRemove && !submitted && <button type="button" className="danger" disabled={isBusy} onClick={onRemove}>Remove</button>}
             </div>
         </div>
@@ -122,9 +123,19 @@ export default function JobCardFields({ job, mechanics, assignments, onStatusCha
     }, [job])
     const primarySubmission = [...submissions].reverse().find((item) => item.gr_role === JOB_CARD_SUBMISSION_ROLES.PRIMARY)
     const legacy = submissions.find((item) => item.gr_role === JOB_CARD_SUBMISSION_ROLES.LEGACY)
+    const latestSubmissionIds = new Set([
+        (primarySubmission ?? legacy)?.gr_jobcardsubmissionid,
+        ...assignments.map((assignment) => [...submissions].reverse().find(
+            (item) => item._gr_jobassignment_value === assignment.gr_jobassignmentid,
+        )?.gr_jobcardsubmissionid),
+    ].filter((id): id is string => Boolean(id)))
+    const previousSubmissions = submissions.filter((item) =>
+        !latestSubmissionIds.has(item.gr_jobcardsubmissionid)
+        && (item.gr_status === JOB_CARD_STATUSES.SUBMITTED || item.gr_status === JOB_CARD_STATUSES.CLOSED || Boolean(item.gr_submittedon)),
+    )
     const requiredCount = 1 + assignments.length
-    const submittedCount = (primarySubmission || legacy ? 1 : 0) + assignments.filter((assignment) =>
-        submissions.some((item) => item._gr_jobassignment_value === assignment.gr_jobassignmentid && item.gr_status === JOB_CARD_STATUSES.SUBMITTED),
+    const submittedCount = (primarySubmission?.gr_status === JOB_CARD_STATUSES.SUBMITTED || (!primarySubmission && legacy) ? 1 : 0) + assignments.filter((assignment) =>
+        [...submissions].reverse().find((item) => item._gr_jobassignment_value === assignment.gr_jobassignmentid)?.gr_status === JOB_CARD_STATUSES.SUBMITTED,
     ).length
     const progressLabel = getJobCardStatus(job.gr_jobcardstatus) === JOB_CARD_STATUSES.CLOSED
         ? 'Closed'
@@ -148,7 +159,7 @@ export default function JobCardFields({ job, mechanics, assignments, onStatusCha
         finally { setIsUpdating(false); setBusyId(''); setPendingEmail(null) }
     }
     const requestSend = (target: 'primary' | JobAssignment, status: JobCardStatus) => {
-        if (status === JOB_CARD_STATUSES.SENT) setPendingEmail(target)
+        if (status !== JOB_CARD_STATUSES.NOT_SENT) setPendingEmail(target)
         else void performSend(target)
     }
     const addAssignment = async () => {
@@ -205,12 +216,25 @@ export default function JobCardFields({ job, mechanics, assignments, onStatusCha
                 })}
             </section>
 
+            {previousSubmissions.length > 0 && <section className="job-card-people" aria-label="Previous technician Job Cards">
+                <h4>Previous submissions</h4>
+                {[...previousSubmissions].reverse().map((submission) => <TechnicianCard
+                    key={submission.gr_jobcardsubmissionid}
+                    name={submission.gr_recipientname || 'Technician'} email={submission.gr_recipientemail} label="Previous submission"
+                    status={submission.gr_status} submission={submission} isBusy={false} canSend={false} allowSend={false}
+                    expanded={expandedId === submission.gr_jobcardsubmissionid}
+                    onToggle={() => setExpandedId((current) => current ? '' : submission.gr_jobcardsubmissionid)}
+                    onSend={() => undefined} onPhoto={(id) => showPhoto(submission, id)}
+                    onDownload={() => void downloadPdf(submission)} isPdfBusy={pdfBusyId === submission.gr_jobcardsubmissionid}
+                />)}
+            </section>}
+
             {showAssignmentForm && <div className="job-assignment-form"><label className="job-edit-field"><span>Technician</span><select value={mechanicId} onChange={(event) => setMechanicId(event.target.value)}><option value="">Select technician</option>{mechanics.filter((mechanic) => canBeAssignedJobs(mechanic) && mechanic.gr_mechanicid !== job.gr_Mechanic?.gr_mechanicid && !assignments.some((assignment) => assignment.gr_Mechanic?.gr_mechanicid === mechanic.gr_mechanicid)).map((mechanic) => <option key={mechanic.gr_mechanicid} value={mechanic.gr_mechanicid}>{mechanic.gr_name}</option>)}</select></label><button type="button" className="job-assignment-save" onClick={() => void addAssignment()} disabled={isUpdating}>{isUpdating ? 'Adding…' : 'Add technician'}</button></div>}
             <button type="button" className="job-assignment-add" onClick={() => setShowAssignmentForm((current) => !current)} disabled={isUpdating}>{showAssignmentForm ? 'Cancel' : '+ Add another technician'}</button>
             {error && <p className="job-card-error" role="alert">{error}</p>}
         </div>
 
-        {pendingEmail && <EditDrawerConfirmation eyebrow="Replace this technician's link" title="Send a new Job Card link?" message="Only this technician's previous link will stop working. Other technicians and submissions are unaffected." isBusy={isUpdating || Boolean(busyId)} confirmLabel="Generate and email" onCancel={() => setPendingEmail(null)} onConfirm={() => void performSend(pendingEmail)} />}
+        {pendingEmail && <EditDrawerConfirmation eyebrow="Confirm Job Card email" title="Send a new Job Card link?" message="An unused link will be replaced. If this technician has already submitted, their evidence will be preserved and a new submission cycle will start." isBusy={isUpdating || Boolean(busyId)} confirmLabel="Generate and email" onCancel={() => setPendingEmail(null)} onConfirm={() => void performSend(pendingEmail)} />}
         {preview && (() => { const photo = preview.submission.photos.find((item) => item.id === preview.photoId); return photo ? <div className="job-photo-preview" role="dialog" aria-modal="true" aria-label={photo.fileName} onClick={() => setPreview(null)}><button type="button" aria-label="Close photo preview" onClick={() => setPreview(null)}>×</button><img src={photo.previewUrl} alt={photo.fileName} onClick={(event) => event.stopPropagation()} /><span>{photo.fileName}</span></div> : null })()}
     </>
 }

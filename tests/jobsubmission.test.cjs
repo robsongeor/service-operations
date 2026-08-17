@@ -431,6 +431,71 @@ test('link generation creates an independent submission identity for an addition
     assert.equal(patch['gr_JobAssignment@odata.bind'], '/gr_jobassignments(00000000-0000-4000-8000-000000000004)')
 })
 
+test('link generation preserves a submitted card and creates a new submission cycle', { concurrency: false }, async () => {
+    configure()
+    const previousIdentity = '00000000-0000-4000-8000-000000000001:primary'
+    let target = ''
+    let fields
+    global.fetch = async (url, options = {}) => {
+        const value = String(url)
+        if (value.endsWith('/WhoAmI')) return Response.json({ UserId: 'office-user' })
+        if (value.includes('login.microsoftonline.com')) return Response.json({ access_token: 'app-token' })
+        if (value.includes('/gr_jobcardsubmissions?')) return Response.json({ value: [{
+            gr_jobcardsubmissionid: '00000000-0000-4000-8000-000000000006',
+            gr_identitykey: previousIdentity,
+            gr_status: 122830002,
+        }] })
+        if (value.includes("/gr_jobcardsubmissions(gr_identitykey='")) {
+            target = value
+            fields = JSON.parse(options.body)
+            return new Response(null, { status: 204 })
+        }
+        throw new Error(`Unexpected request: ${value}`)
+    }
+    const response = await invoke({
+        method: 'POST', headers: { Authorization: 'Bearer office-token' }, body: {
+            action: 'generate', jobId: '00000000-0000-4000-8000-000000000001',
+            mechanicId: '00000000-0000-4000-8000-000000000005',
+            recipientName: 'Mouhib', recipientEmail: 'nzmouhib@yahoo.co.nz',
+        },
+    })
+    assert.equal(response.status, 201)
+    assert.notEqual(fields.gr_identitykey, previousIdentity)
+    assert.match(fields.gr_identitykey, /^00000000-0000-4000-8000-000000000001:primary:[a-f0-9]{12}$/)
+    assert.match(target, /primary%3A[a-f0-9]{12}|primary:[a-f0-9]{12}/)
+    assert.equal(fields.gr_status, 122830001)
+})
+
+test('link generation replaces the latest unused pending cycle in place', { concurrency: false }, async () => {
+    configure()
+    const pendingIdentity = '00000000-0000-4000-8000-000000000001:primary:abc123def456'
+    let fields
+    global.fetch = async (url, options = {}) => {
+        const value = String(url)
+        if (value.endsWith('/WhoAmI')) return Response.json({ UserId: 'office-user' })
+        if (value.includes('login.microsoftonline.com')) return Response.json({ access_token: 'app-token' })
+        if (value.includes('/gr_jobcardsubmissions?')) return Response.json({ value: [{
+            gr_jobcardsubmissionid: '00000000-0000-4000-8000-000000000007',
+            gr_identitykey: pendingIdentity,
+            gr_status: 122830001,
+        }] })
+        if (value.includes("/gr_jobcardsubmissions(gr_identitykey='")) {
+            fields = JSON.parse(options.body)
+            return new Response(null, { status: 204 })
+        }
+        throw new Error(`Unexpected request: ${value}`)
+    }
+    const response = await invoke({
+        method: 'POST', headers: { Authorization: 'Bearer office-token' }, body: {
+            action: 'generate', jobId: '00000000-0000-4000-8000-000000000001',
+            recipientName: 'Mouhib', recipientEmail: 'nzmouhib@yahoo.co.nz',
+        },
+    })
+    assert.equal(response.status, 201)
+    assert.equal(fields.gr_identitykey, pendingIdentity)
+    assert.equal(fields.gr_tokenused, false)
+})
+
 test('normalized technician submission updates its own record instead of the Job', { concurrency: false }, async () => {
     configure()
     const submissionId = '00000000-0000-4000-8000-000000000006'
