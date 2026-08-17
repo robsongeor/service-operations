@@ -1,8 +1,8 @@
 # Current State
 
-Branch: `codex/job-map`
+Branch: `v1-deployment`
 
-## Job Map (local, not deployed)
+## Job Map (deployed)
 
 - `/job-map` displays Allocated, Unallocated, and Waiting for parts Jobs at each Job's recorded Site.
 - Independent status, Customer, Site, and text filters reuse the canonical Jobs loader and existing
@@ -10,7 +10,7 @@ Branch: `codex/job-map`
 - Selecting a Job opens the canonical Job drawer. No Dataverse schema, security, provider, or cloud
   configuration change is required.
 
-## Online Job Card pilot (local, not deployed)
+## Online Job Card pilot (deployed)
 
 - Secure online Job Card links are enabled only when the actual recipient is Mouhib
   (`nzmouhib@yahoo.co.nz`) or George's manually entered test address (`georger@liftrucks.co.nz`).
@@ -22,7 +22,7 @@ Branch: `codex/job-map`
 - The authenticated Job drawer can download the same editable PDF for each submitted technician,
   including the office-visible Site Contact details when present.
 
-## Usage-authoritative maintenance scheduling (local, not deployed)
+## Usage-authoritative maintenance scheduling (deployed)
 
 - Equipment service recommendations now use the machine-usage forecast as the authoritative time
   interval at 40% confidence or higher, whether that schedules earlier or later than the saved profile.
@@ -38,7 +38,7 @@ Branch: `codex/job-map`
   the projected hour-threshold date; unavailable or sub-40% forecasts restore the profile-derived
   fallback date. Service Jobs still reset their applicable service history and due-hour baselines.
 
-## Scheduler Job drawer parity (local, not deployed)
+## Scheduler Job drawer parity (deployed)
 
 - Scheduled items now open the shared Job drawer through the authoritative focused-refresh
   workflow, so linked Equipment and editor reference data are populated consistently with Jobs.
@@ -122,85 +122,87 @@ Branch: `codex/job-map`
   One signed-in Job Card generation/email smoke test remains outstanding; no email was sent during
   deployment verification.
 
-## Unfinished work
+- The Job Map, accumulated Equipment/Customer/Job workflow fixes, usage-authoritative maintenance
+  scheduling, restricted Online Job Card pilot, and completed Job sheet PDF workflow were published
+  from commit `a92f15d` by successful Azure Static Web Apps run `32012070076` on 17 August 2026.
+  Production-safe verification returned `200` for `/`, `/jobs`, `/job-map`, and the technician portal
+  route, and found the exact `a92f15d` marker in the deployed client asset. No Dataverse provisioning,
+  cloud-setting change, business-row mutation, credential creation, or real communication was
+  performed during deployment verification. Signed-in Job Map and recipient-controlled Job Card/PDF
+  business-flow smoke testing remains outstanding.
+
+## Recently deployed work and remaining validation
 
 - Creating a Job from Customer Dashboard or its Equipment workspace no longer runs a broad dashboard
   reload after the shared Job workflow succeeds. The selected Customer, expanded Site, scroll
   position, and retained Equipment drawer stay in place, while the new Job is merged into that
-  Equipment's history from the refreshed Jobs collection. This is implemented locally and is not
-  deployed.
+  Equipment's history from the refreshed Jobs collection.
 
 - Customer Dashboard Equipment Job History now reconciles its focused lazy rows with the
   authoritative Jobs collection after completion. Completion also reloads the dashboard's separate
   Equipment and service-plan projection, so Job status, hour meter, and maintenance due dates update
-  inside the retained workspace without a browser refresh. This is implemented locally and is not
-  deployed.
+  inside the retained workspace without a browser refresh.
 
 - Job completion dialogs now place Hour Meter at Completion before and alongside Job Completion Date.
   Hours receives initial focus and Date is next in keyboard order across standard, Service, and WOF
-  completion; estimate controls follow the pair and calculated hours remain read-only. This is
-  implemented locally and is not deployed.
+  completion; estimate controls follow the pair and calculated hours remain read-only.
 
 - All Job completion paths now force an authoritative Jobs refresh after the Dataverse mutation, so
   the Jobs table immediately reflects Complete instead of retaining a cached earlier status until
-  the focused Edit drawer is opened. This is implemented locally and is not deployed.
+  the focused Edit drawer is opened.
 
 - Customer Dashboard Equipment Job History cards now open the canonical Job editor by mouse or
   keyboard. The selected Job is refreshed through the full reference-data workflow before opening,
   so status completion and all relationship, scheduling, quote, assignment, office, Job Card, and
-  maintenance controls have their required data. Failed loads offer retry/cancel. This is implemented
-  locally and is not deployed.
+  maintenance controls have their required data. Failed loads offer retry/cancel.
 
 - Customer Dashboard maintenance counters and Equipment rows now use the same effective A/B/C plan
   hierarchy and hour-plus-date status calculation as the Equipment drawer. This removes stale raw
-  lower-plan thresholds such as FN1692's incorrect A-Service overdue display. This is implemented
-  locally and is not deployed.
+  lower-plan thresholds such as FN1692's incorrect A-Service overdue display.
 
 - Average Machine Usage now uses a 360-day forecast window and includes a concise evidence-based
   confidence explanation. It identifies the actual limiting factors such as too few readings inside
   that window, insufficient span,
   stale history, inconsistent usage, anomalies, resets, or estimates; Job type and Site remain
-  irrelevant to confidence. This is implemented locally and is not deployed.
+  irrelevant to confidence.
 
 - Customer Dashboard Create Job actions now wait for shared Job reference data before opening the
   drawer. Customer-level creation retains the selected Customer and sole Site, while Equipment-level
   creation retains the selected Equipment, current Site, derived Customer, and sole Site Contact.
-  Failed preparation offers retry/cancel without discarding the source Equipment context. This is
-  implemented locally and is not deployed.
+  Failed preparation offers retry/cancel without discarding the source Equipment context.
 
 - Chargeable Invoice Review's unmatched-invoice Job creation now also waits for the same lazy Job
   reference data before matching or rendering Equipment, Customer, and Site fields, with retry on
-  failure. This is implemented locally and is not deployed.
+  failure.
 
 - Creating a Job from Equipment Manager now waits for shared Job editor reference data before
   rendering, so the selected Equipment, current Site, derived Customer, and sole Site Contact are
-  populated automatically. This is implemented locally and is not deployed.
+  populated automatically.
 
 - Customer Dashboard and Equipment Manager drawers now open immediately while their focused
   Equipment Job history loads in the background. The History tab exposes loading and retry states;
   closing or switching away clears the focused rows and invalidates late responses so Job data cannot
-  leak between Equipment records. This is implemented locally and is not deployed.
+  leak between Equipment records.
 
 - Historical maintenance baselines now honour the A/B/C hierarchy: C refreshes C, B, and A;
   B refreshes B and A; A refreshes only A. The Equipment drawer also resolves existing older
   independent plan rows through that hierarchy and recalculates each lower service's own due
-  thresholds. This is implemented locally and is not deployed.
+  thresholds.
 
 - The Quote editor desktop dialog now uses a wider, viewport-bounded layout so the existing
   line-item grid has room for its GST and removal controls without changing mobile behaviour.
-  This is implemented locally and is not deployed.
 
 - Inline Equipment creation from New/Edit Job now accepts an alternate Fleet Number and can create
   the Equipment when that is the only known identifier. It normalizes and persists the value through
-  the existing Equipment alternate-fleet column. This is implemented locally and is not deployed.
+  the existing Equipment alternate-fleet column.
 
 - Jobs action notifications now include an accessible close control and automatically clear after
-  five seconds using one replacement-safe timer. This is implemented locally and is not deployed.
+  five seconds using one replacement-safe timer.
 
 - Job Book clipboard exports now append normalized alternate Fleet Numbers to the primary Fleet
   Number within the existing fleet cell, separated by ` / `. Single-row, bulk, and explicit
   spreadsheet copy paths use the same formatting. The technician email preview and delivered HTML
-  now reuse that combined Fleet Number presentation. This is implemented locally and is not deployed.
+  now reuse that combined Fleet Number presentation.
 
 - The Jobs-table technician email composer now accepts optional email-only comments, displays them in
   the bounded preview, and safely escapes them into the Email Dispatch HTML without changing the Job
@@ -208,13 +210,12 @@ Branch: `codex/job-map`
   remains visibly present but temporarily disabled in both preview and
   delivered HTML; secure-link generation is bypassed while the feature is paused, so localhost can
   still queue the email without calling the Job Card link endpoint. The linked Site Contact name,
-  phone, and email are shown in the preview and delivered card when available. This is implemented
-  locally and is not deployed.
+  phone, and email are shown in the preview and delivered card when available.
 
 - Site Checks now supports cadence rollover without waiting for every Job in the previous
   batch: an overdue row keeps **Open previous** and exposes **Start next batch**, late
   completion closes only the replaced occurrence, and future due dates remain anchored to
-  the configured cadence. This is implemented and locally verified but not deployed. A true
+  the configured cadence. This is deployed and locally verified. A true
   one-off Site Check is still outstanding; it needs an explicit ad-hoc occurrence contract
   rather than storing a false Weekly/Fortnightly/Monthly frequency.
 
@@ -222,8 +223,8 @@ Branch: `codex/job-map`
   16 August 2026 to use the existing WSSOperations Office 365 Outlook connection. It now sends the
   stored HTML body before marking Email Sent, and records a safe failure result on Outlook failure
   or timeout. The corresponding Jobs-table in-app composer, formatted Job Card, clickable secure
-  link, non-blocking queue behaviour, and background Sending/Sent/Failed state are implemented
-  locally and await commit/deployment and one deliberate recipient-controlled delivery smoke test.
+  link, non-blocking queue behaviour, and background Sending/Sent/Failed state are deployed and await
+  one deliberate recipient-controlled delivery smoke test.
 
 - Job Book Intake now has a provisioned, published, and verified organization-owned
   `gr_jobbookentry` Dataverse ledger in `ServiceOperationsNew`. Its primary Job Number is an
