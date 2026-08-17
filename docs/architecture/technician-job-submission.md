@@ -23,6 +23,19 @@ submission. The manager review is read-only in the existing Job Card tab of
 `JobEditDrawer`; no separate review drawer exists. The Jobs table Submitted action opens
 that same drawer and tab.
 
+After a successful public submission, the confirmation page can generate a local, editable
+field-service Job sheet from the tracked AcroForm in `docs/templates/jobsheet-template.pdf`. The
+download is intentionally unavailable before submission and uses the exact validated hour-meter,
+story, time, parts, and remarks payload that was accepted, together with the authorised Job,
+Equipment, Site, and technician-recipient projection. Downloading the PDF does not make another
+mutation or persist the document. Client signature/name remain blank. Site Contact remains blank
+because the portal Application User intentionally has no Contact-table access.
+
+The authenticated office Job drawer exposes the same download on each submitted technician card.
+It uses that specific submission plus the already-loaded Job relationships, so multi-technician
+evidence is not combined. Unlike the public projection, the office download may fill Site Contact
+name and phone from the authorised Job record. The action remains read-only and local.
+
 ## Dataverse model
 
 The Job stores token lifecycle, submitted-on, story, submitted hour meter, Further Work, and
@@ -43,7 +56,8 @@ Exact logical names, types, ownership, and provisioning status are in
 - creates cryptographically secure tokens and stores only SHA-256 hashes;
 - obtains the Application User token;
 - validates expiry, used state, and ETag;
-- returns a minimal public projection;
+- returns a bounded public projection containing the Job-sheet fields from the already-authorised
+  Job, Equipment, Site, Customer, and Job Card Submission tables;
 - validates field, child-row, and photo limits;
 - stages retry-safe File uploads;
 - creates time/material children and updates final Job submission state in one Dataverse
@@ -81,10 +95,13 @@ only the Job's authoritative evidence.
 
 The Jobs table uses its in-app Email Dispatch composer and permits optional bounded comments for the
 technician without changing the Job description. The Job drawer retains its established Email
-Dispatch/Power Automate workflow. While online Job Card access is paused, neither workflow generates
-or replaces a secure portal link. The generated HTML keeps Open Job Card visibly disabled and does
-not expose a URL. The linked Site Contact name, phone, and email are included when available. Missing
-recipient email still blocks dispatch.
+Dispatch/Power Automate workflow. Online Job Card access is currently restricted to Mouhib
+(`nzmouhib@yahoo.co.nz`) and George's manually entered test address (`georger@liftrucks.co.nz`): the
+browser and authenticated generation endpoint both require an allowlisted recipient email.
+Other recipients generate no secure portal link, and their HTML keeps Open Job Card visibly
+disabled. Changing the composer recipient away from an approved address disables the pilot before sending. The
+linked Site Contact name, phone, and email are included when available. Missing recipient email
+still blocks dispatch.
 
 ## Current limitations
 

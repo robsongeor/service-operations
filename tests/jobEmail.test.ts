@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { buildJobSubmissionPublicUrl, jobHasActiveSubmissionLink } from '../src/alpha/jobs/services/jobSubmissionLinkApi.ts'
@@ -8,8 +9,7 @@ import {
     buildTechnicianEmailSubject,
 } from '../src/alpha/jobs/utils/technicianMailto.ts'
 import type { Job } from '../src/alpha/jobs/types/job.types.ts'
-import { buildTechnicianJobCardHtml, ONLINE_JOB_CARD_ENABLED } from '../src/alpha/jobs/services/jobEmail.ts'
-import { readFileSync } from 'node:fs'
+import { buildTechnicianJobCardHtml, onlineJobCardPilotEnabled } from '../src/alpha/jobs/services/jobEmail.ts'
 
 const job = {
     gr_jobid: '00000000-0000-4000-8000-000000000001',
@@ -46,11 +46,7 @@ const job = {
 test('localhost Job Card links can target the deployed public app', () => {
     const path = '/portal/job/secure-token'
     assert.equal(
-        buildJobSubmissionPublicUrl(
-            path,
-            'http://localhost:5173',
-            'https://yellow-cliff-068680700.7.azurestaticapps.net',
-        ),
+        buildJobSubmissionPublicUrl(path, 'http://localhost:5173', 'https://yellow-cliff-068680700.7.azurestaticapps.net'),
         'https://yellow-cliff-068680700.7.azurestaticapps.net/portal/job/secure-token',
     )
     assert.equal(
@@ -71,7 +67,6 @@ test('technician email retains Job details and includes the generated portal URL
         subject: buildTechnicianEmailSubject(job),
         body,
     })
-
     assert.match(body, /145222/)
     assert.match(body, /Komatsu FD30T-17/)
     assert.match(body, /FN1758/)
@@ -83,44 +78,50 @@ test('technician email retains Job details and includes the generated portal URL
 })
 
 test('technician email subject includes Job, fleet, customer and description', () => {
-    assert.equal(
-        buildTechnicianEmailSubject(job),
-        'Job: 145222 - FN1758 - Waikato Auto Parts - Service',
-    )
+    assert.equal(buildTechnicianEmailSubject(job), 'Job: 145222 - FN1758 - Waikato Auto Parts - Service')
 })
 
-test('direct technician email renders escaped comments and a disabled Job Card action', () => {
+test('Mouhib pilot email renders escaped content and the generated secure link', () => {
     const portalUrl = 'https://service.example.test/portal/job/secure-token?a=1&b=2'
     const body = buildTechnicianJobCardHtml(
         { ...job, gr_description: 'Inspect <mast> & chains' },
-        'Anthony Example',
+        'Mouhib',
         portalUrl,
         'Use gate <B> & call site\nbefore entry.',
     )
     assert.match(body, /<!doctype html>/i)
     assert.match(body, /<table role="presentation"/)
-    assert.doesNotMatch(body, /href=/)
-    assert.doesNotMatch(body, /secure-token/)
-    assert.match(body, /Open Job Card — temporarily disabled/)
+    assert.match(body, /href="https:\/\/service\.example\.test\/portal\/job\/secure-token\?a=1&amp;b=2"/)
+    assert.match(body, /Open Job Card/)
     assert.match(body, /Inspect &lt;mast&gt; &amp; chains/)
     assert.match(body, /FN1758 \/ SITE-42 \/ VFL001758/)
     assert.doesNotMatch(body, /Inspect <mast>/)
     assert.match(body, /Use gate &lt;B&gt; &amp; call site<br>before entry\./)
     assert.doesNotMatch(body, /Use gate <B>/)
-    assert.match(body, /Site contact/)
     assert.match(body, /Aroha Example/)
     assert.match(body, /021 555 0123/)
     assert.match(body, /aroha@example\.test/)
 })
 
+test('online Job Card pilot is restricted to approved recipients and other email stays disabled', () => {
+    assert.equal(onlineJobCardPilotEnabled('nzmouhib@yahoo.co.nz'), true)
+    assert.equal(onlineJobCardPilotEnabled(' NZMOUHIB@YAHOO.CO.NZ '), true)
+    assert.equal(onlineJobCardPilotEnabled(' georger@liftrucks.co.nz '), true)
+    assert.equal(onlineJobCardPilotEnabled('another.technician@example.test'), false)
+    const body = buildTechnicianJobCardHtml(job, 'Anthony Example', '')
+    assert.doesNotMatch(body, /href=/)
+    assert.match(body, /temporarily disabled/)
+    assert.match(body, /Online Job Card access is currently disabled/)
+})
+
 test('technician email rejects comments beyond the bounded message limit', () => {
     assert.throws(
-        () => buildTechnicianJobCardHtml(job, 'Anthony Example', 'https://service.example.test', 'x'.repeat(2001)),
+        () => buildTechnicianJobCardHtml(job, 'Mouhib', 'https://service.example.test', 'x'.repeat(2001)),
         /2000 characters or fewer/,
     )
 })
 
-test('Jobs table opens the in-app composer and no longer hands off to mailto', () => {
+test('Jobs table uses the in-app composer and pilot-gated link generation', () => {
     const table = readFileSync(new URL('../src/alpha/jobs/components/JobsTable.tsx', import.meta.url), 'utf8')
     const composer = readFileSync(new URL('../src/alpha/jobs/components/JobEmailComposer.tsx', import.meta.url), 'utf8')
     const composerStyles = readFileSync(new URL('../src/alpha/jobs/components/JobEmailComposer.css', import.meta.url), 'utf8')
@@ -129,11 +130,10 @@ test('Jobs table opens the in-app composer and no longer hands off to mailto', (
     assert.doesNotMatch(table, /window\.location\.href|mailto:/)
     assert.match(composer, /Send Job Card/)
     assert.match(composer, /Comments for technician/)
-    assert.match(composer, /temporarily disabled/)
+    assert.match(composer, /onlineJobCardPilotEnabled/)
     assert.match(composer, /Contact email/)
     assert.match(composerStyles, /\.edit-form-dialog\.job-email-composer\s*\{[\s\S]*width: min\(840px, calc\(100vw - 32px\)\)/)
-    assert.equal(ONLINE_JOB_CARD_ENABLED, false)
-    assert.match(hook, /ONLINE_JOB_CARD_ENABLED/)
+    assert.match(hook, /onlineJobCardPilotEnabled/)
     assert.match(hook, /void \(async \(\) =>/)
     assert.match(hook, /waitForEmailDispatch/)
 })

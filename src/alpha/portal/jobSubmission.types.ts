@@ -1,9 +1,17 @@
 export type PublicJobSubmissionDetails = {
     jobNumber: string
+    orderNumber?: string
     equipmentDisplayName?: string
     fleetNumber?: string
+    equipmentMake?: string
+    equipmentModel?: string
+    equipmentSerial?: string
     customerName?: string
     siteName?: string
+    siteAddress?: string
+    siteContactName?: string
+    siteContactPhone?: string
+    technicianName?: string
     workRequired?: string
     requiresHourMeter: boolean
     currentHourMeter?: number

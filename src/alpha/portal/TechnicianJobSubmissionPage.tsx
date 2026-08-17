@@ -4,6 +4,7 @@ import { fetchPublicJobSubmission, JobSubmissionError, submitPublicJobCard } fro
 import type { JobCardTimeEntryInput, PublicJobSubmissionDetails, PublicSubmissionErrorCode } from './jobSubmission.types'
 import './TechnicianJobSubmissionPage.css'
 import { MAX_JOB_PHOTOS, prepareJobPhoto, removePendingJobPhoto, type PendingJobPhoto } from './jobPhoto'
+import { downloadJobSheetPdf, type JobSheetDraft } from './jobSheetPdf'
 
 const errorMessages: Record<PublicSubmissionErrorCode, string> = {
     invalid: 'This job card link is invalid.',
@@ -40,6 +41,9 @@ export default function TechnicianJobSubmissionPage() {
     const [validation, setValidation] = useState('')
     const [busy, setBusy] = useState(false)
     const [submitted, setSubmitted] = useState(false)
+    const [submittedPdfDraft, setSubmittedPdfDraft] = useState<JobSheetDraft | null>(null)
+    const [pdfBusy, setPdfBusy] = useState(false)
+    const [pdfFeedback, setPdfFeedback] = useState('')
 
     useEffect(() => {
         let current = true
@@ -77,17 +81,26 @@ export default function TechnicianJobSubmissionPage() {
         if (safetyIssueIdentified && !safetyIssueDetails.trim()) return setValidation('Enter the safety issue details.')
         setBusy(true)
         setValidation('')
+        const submission = {
+            story: trimmedStory,
+            hourMeter: hourMeter ? Number(hourMeter) : undefined,
+            timeEntries: parsedTimeEntries,
+            parts: parts.map((part) => ({ description: part.description.trim(), quantity: Number(part.quantity) })),
+            furtherWorkRequired,
+            furtherWorkDetails: furtherWorkRequired ? furtherWorkDetails.trim() : undefined,
+            safetyIssueIdentified,
+            safetyIssueDetails: safetyIssueIdentified ? safetyIssueDetails.trim() : undefined,
+            photos: photos.map(({ fileName, mimeType, size, data }) => ({ fileName, mimeType, size, data })),
+        }
         try {
-            await submitPublicJobCard(token, {
-                story: trimmedStory,
-                hourMeter: hourMeter ? Number(hourMeter) : undefined,
-                timeEntries: parsedTimeEntries,
-                parts: parts.map((part) => ({ description: part.description.trim(), quantity: Number(part.quantity) })),
-                furtherWorkRequired,
-                furtherWorkDetails: furtherWorkRequired ? furtherWorkDetails.trim() : undefined,
-                safetyIssueIdentified,
-                safetyIssueDetails: safetyIssueIdentified ? safetyIssueDetails.trim() : undefined,
-                photos: photos.map(({ fileName, mimeType, size, data }) => ({ fileName, mimeType, size, data })),
+            await submitPublicJobCard(token, submission)
+            setSubmittedPdfDraft({
+                hourMeter: submission.hourMeter == null ? undefined : String(submission.hourMeter),
+                story: submission.story,
+                timeEntries: submission.timeEntries,
+                parts: submission.parts,
+                furtherWorkDetails: submission.furtherWorkDetails,
+                safetyIssueDetails: submission.safetyIssueDetails,
             })
             setSubmitted(true)
         } catch (error) {
@@ -97,11 +110,23 @@ export default function TechnicianJobSubmissionPage() {
         }
     }
 
-    if (submitted) return <main className="technician-portal"><section className="technician-portal-card technician-portal-message">
+    if (submitted && job && submittedPdfDraft) return <main className="technician-portal"><section className="technician-portal-card technician-portal-message">
         <span className="technician-portal-mark" aria-hidden="true">✓</span>
         <h1>Job card submitted</h1>
         <p>Your job information has been sent to the office for review.</p>
-        <p>You may now close this page.</p>
+        <div className="technician-job-sheet-action">
+            <button type="button" disabled={pdfBusy} onClick={() => {
+                setPdfBusy(true)
+                setPdfFeedback('')
+                void downloadJobSheetPdf(job, submittedPdfDraft)
+                    .then(() => setPdfFeedback('Filled Job sheet sent to your browser downloads.'))
+                    .catch(() => setPdfFeedback('The filled Job sheet could not be created. Please try again.'))
+                    .finally(() => setPdfBusy(false))
+            }}>{pdfBusy ? 'Preparing PDF...' : 'Download completed Job sheet PDF'}</button>
+            <small>This editable PDF contains the Job Card information that was just submitted.</small>
+            {pdfFeedback && <p aria-live="polite">{pdfFeedback}</p>}
+        </div>
+        <p>You may close this page after saving the PDF.</p>
     </section></main>
 
     if (loadError) return <main className="technician-portal"><section className="technician-portal-card technician-portal-message">

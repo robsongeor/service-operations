@@ -1,6 +1,26 @@
 # Current State
 
-Branch: `codex/fixes`
+Branch: `codex/job-map`
+
+## Job Map (local, not deployed)
+
+- `/job-map` displays Allocated, Unallocated, and Waiting for parts Jobs at each Job's recorded Site.
+- Independent status, Customer, Site, and text filters reuse the canonical Jobs loader and existing
+  Site coordinate/geocoding cache. Unmapped Jobs remain explicitly counted.
+- Selecting a Job opens the canonical Job drawer. No Dataverse schema, security, provider, or cloud
+  configuration change is required.
+
+## Online Job Card pilot (local, not deployed)
+
+- Secure online Job Card links are enabled only when the actual recipient is Mouhib
+  (`nzmouhib@yahoo.co.nz`) or George's manually entered test address (`georger@liftrucks.co.nz`).
+  All other recipients retain the disabled action and receive no portal URL.
+- The authenticated server link-generation endpoint enforces the same allowlist, so changing or
+  bypassing the browser preview cannot generate a link for another recipient.
+- The pilot portal offers its editable, prefilled field-service Job sheet PDF only after a successful
+  Job Card submission. Generation remains local to the browser and does not persist a document.
+- The authenticated Job drawer can download the same editable PDF for each submitted technician,
+  including the office-visible Site Contact details when present.
 
 ## Usage-authoritative maintenance scheduling (local, not deployed)
 

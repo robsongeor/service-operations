@@ -1,0 +1,18 @@
+.job-map-toolbar { grid-template-columns: minmax(260px, 1.35fr) minmax(150px, .55fr) minmax(150px, .55fr) minmax(330px, 1fr); }
+.job-map-status-filter { display: flex; min-width: 0; align-items: end; gap: 6px; margin: 0; padding: 0; border: 0; }
+.job-map-status-filter legend { width: 100%; margin-bottom: 5px; color: #58675f; font-size: .7rem; font-weight: 750; }
+.job-map-status-filter label { display: flex; min-height: 38px; align-items: center; gap: 5px; padding: 0 9px; border: 1px solid #cdd8d2; border-radius: 999px; background: #fff; white-space: nowrap; }
+.job-map-status-filter input { width: auto; min-height: auto; margin: 0; accent-color: #176f66; }
+.job-map-marker-host.unallocated .equipment-map-marker { background: #d9722c; }
+.job-map-marker-host.waiting .equipment-map-marker { background: #417ca6; }
+.job-map-marker-host.mixed .equipment-map-marker { background: #73599b; }
+.job-map-marker-host.selected .equipment-map-marker { background: #17231e; }
+.job-map-details { width: min(410px, calc(100% - 32px)); }
+.job-map-details li button { grid-template-columns: auto 1fr; align-items: center; column-gap: 8px; }
+.job-map-details li button > strong, .job-map-details li button > span:last-child { grid-column: 1 / -1; }
+.job-map-status { justify-self: start; padding: 3px 7px; border-radius: 999px; background: #e9eeeb; color: #44524b !important; font-size: .63rem !important; font-weight: 800; }
+.job-map-status.status-122830000 { background: #dcf3e4; color: #17683b !important; }
+.job-map-status.status-122830001 { background: #fff0d9; color: #89530a !important; }
+.job-map-status.status-122830002 { background: #e2eef8; color: #285d86 !important; }
+@media (max-width: 1200px) { .job-map-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .job-map-toolbar { grid-template-columns: 1fr; } .job-map-status-filter { flex-wrap: wrap; } }

@@ -9,6 +9,10 @@ const DEFAULT_EXPIRY_HOURS = 168
 const MAX_PHOTOS = 20
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024
 const PHOTO_TYPES = new Set(['image/jpeg', 'image/png', 'image/heic', 'image/heif'])
+const ONLINE_JOB_CARD_PILOT_EMAILS = new Set([
+    'nzmouhib@yahoo.co.nz',
+    'georger@liftrucks.co.nz',
+])
 
 function jsonResponse(status, body, headers = {}) {
     return {
@@ -98,12 +102,12 @@ async function findJob(token, bearer) {
     if (typeof token !== 'string' || token.length < 40 || token.length > 100) return { error: tokenFailure('invalid') }
     const hash = hashToken(token)
     const select = [
-        'gr_jobid', 'gr_jobnumber', 'gr_description', 'gr_jobtype', 'gr_status', 'gr_jobcardstatus',
+        'gr_jobid', 'gr_jobnumber', 'gr_ordernumber', 'gr_description', 'gr_jobtype', 'gr_status', 'gr_jobcardstatus',
         'gr_techniciansubmissiontokenexpireson', 'gr_techniciansubmissiontokenused',
     ].join(',')
     const expand = [
-        'gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_currenthourmeter)',
-        'gr_Site($select=gr_name;$expand=gr_Customer($select=gr_name))',
+        'gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_serial,gr_currenthourmeter)',
+        'gr_Site($select=gr_name,gr_address;$expand=gr_Customer($select=gr_name))',
     ].join(',')
     const url = `${dataverseOrigin()}/api/data/v9.2/gr_jobs?$select=${select}&$expand=${expand}&$filter=gr_techniciansubmissiontokenhash eq '${escapeOData(hash)}'&$top=2`
     const response = await fetch(url, {
@@ -120,10 +124,10 @@ async function findJob(token, bearer) {
 }
 
 async function fetchJobById(jobId, bearer) {
-    const select = 'gr_jobid,gr_jobnumber,gr_description,gr_jobtype,gr_status,gr_jobcardstatus'
+    const select = 'gr_jobid,gr_jobnumber,gr_ordernumber,gr_description,gr_jobtype,gr_status,gr_jobcardstatus'
     const expand = [
-        'gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_currenthourmeter)',
-        'gr_Site($select=gr_name;$expand=gr_Customer($select=gr_name))',
+        'gr_Equipment($select=gr_equipmentid,gr_fleet,gr_make,gr_model,gr_serial,gr_currenthourmeter)',
+        'gr_Site($select=gr_name,gr_address;$expand=gr_Customer($select=gr_name))',
     ].join(',')
     const response = await fetch(`${dataverseOrigin()}/api/data/v9.2/gr_jobs(${jobId})?$select=${select}&$expand=${expand}`, {
         headers: { Authorization: bearer, Accept: 'application/json', Prefer: 'odata.include-annotations="*"' },
@@ -156,13 +160,19 @@ async function findSubmission(token, bearer) {
     return normalized || findJob(token, bearer)
 }
 
-function publicDetails(job) {
+function publicDetails(job, submission) {
     return {
         jobNumber: job.gr_jobnumber || 'Not recorded',
+        orderNumber: job.gr_ordernumber || undefined,
         equipmentDisplayName: [job.gr_Equipment?.gr_make, job.gr_Equipment?.gr_model].filter(Boolean).join(' ') || undefined,
         fleetNumber: job.gr_Equipment?.gr_fleet || undefined,
+        equipmentMake: job.gr_Equipment?.gr_make || undefined,
+        equipmentModel: job.gr_Equipment?.gr_model || undefined,
+        equipmentSerial: job.gr_Equipment?.gr_serial || undefined,
         customerName: job.gr_Site?.gr_Customer?.gr_name || undefined,
         siteName: job.gr_Site?.gr_name || undefined,
+        siteAddress: job.gr_Site?.gr_address || undefined,
+        technicianName: submission?.gr_recipientname || undefined,
         workRequired: job.gr_description || undefined,
         requiresHourMeter: job.gr_jobtype === SERVICE_JOB && Boolean(job.gr_Equipment?.gr_equipmentid),
         currentHourMeter: job.gr_Equipment?.gr_currenthourmeter ?? undefined,
@@ -408,6 +418,12 @@ async function generate(request) {
     if ((assignmentId && !guid.test(assignmentId)) || (mechanicId && !guid.test(mechanicId))) {
         return jsonResponse(400, { error: 'The technician assignment is invalid.' })
     }
+    const recipientEmail = typeof request.body?.recipientEmail === 'string'
+        ? request.body.recipientEmail.trim().slice(0, 320).toLowerCase()
+        : ''
+    if (!ONLINE_JOB_CARD_PILOT_EMAILS.has(recipientEmail)) {
+        return jsonResponse(403, { error: 'Online Job Card access is currently limited to approved pilot recipients.' })
+    }
     const role = assignmentId ? SUBMISSION_ROLE_ADDITIONAL : SUBMISSION_ROLE_PRIMARY
     const identityKey = `${jobId}:${assignmentId || 'primary'}`.toLowerCase()
     const existingResponse = await fetch(`${dataverseOrigin()}/api/data/v9.2/gr_jobcardsubmissions?$select=gr_jobcardsubmissionid,gr_status&$filter=gr_identitykey eq '${escapeOData(identityKey)}'&$top=1`, {
@@ -434,7 +450,6 @@ async function generate(request) {
     }
     const submissionAuthorization = `Bearer ${await applicationToken()}`
     const recipientName = typeof request.body?.recipientName === 'string' ? request.body.recipientName.trim().slice(0, 200) : ''
-    const recipientEmail = typeof request.body?.recipientEmail === 'string' ? request.body.recipientEmail.trim().slice(0, 320) : ''
     const fields = {
         gr_name: `${recipientName || 'Technician'} - Job Card`,
         gr_identitykey: identityKey,
@@ -473,7 +488,7 @@ async function generate(request) {
 async function handlePublicGet(request) {
     const bearer = `Bearer ${await applicationToken()}`
     const found = await findSubmission(request.query?.token, bearer)
-    return found.error || jsonResponse(200, publicDetails(found.job))
+    return found.error || jsonResponse(200, publicDetails(found.job, found.submission))
 }
 
 async function handlePublicPost(request) {

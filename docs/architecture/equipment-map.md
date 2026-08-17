@@ -27,6 +27,8 @@ on the same device does not repeat Geoapify requests for unchanged addresses. Re
 are also persisted as derived fields on the authoritative Site, allowing every device to reuse them.
 An exact source-address comparison invalidates prior coordinates when `gr_address` changes. Browser
 storage or shared persistence failure remains non-fatal and falls back to resolving addresses normally.
+Job Map reuses this same Site coordinate persistence and authenticated geocoding workflow; it does
+not introduce another provider or cache.
 
 Leaflet renders an interactive raster-tile map from configurable
 `VITE_EQUIPMENT_MAP_TILE_URL`, defaulting to the standard OpenStreetMap tile endpoint for normal,

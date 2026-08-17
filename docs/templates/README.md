@@ -17,3 +17,12 @@ PDF is a portable design/development reference; it is not loaded at runtime.
 
 Do not add generated `PO-approval-*`, quotation, imported GreenTree invoice, or other customer/job
 PDFs to this directory. Local generated samples remain under the ignored `output/pdf/` directory.
+
+## Technician Job sheet template
+
+[`jobsheet-template.pdf`](jobsheet-template.pdf) is the tracked one-page AcroForm used by the public
+Technician Job Card's post-submission **Download completed Job sheet PDF** action. The browser fills
+the named fields from the token-authorised Job projection and the exact accepted submission payload;
+it does not upload or persist the generated PDF. The legacy artwork contains a fixed serviceman name
+and date, which the renderer covers with the current token recipient and download date. Client name
+and signature remain blank and the result remains interactive after download.

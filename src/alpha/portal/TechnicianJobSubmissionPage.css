@@ -9,6 +9,9 @@
 .technician-portal-card dt { color: #65756e; font-size: .72rem; font-weight: 700; }
 .technician-portal-card dd { margin: 0; white-space: pre-wrap; font-size: .9rem; }
 .technician-portal-card form { display: grid; gap: 16px; }
+.technician-job-sheet-action { display: grid; gap: 7px; margin: 0 0 18px; padding: 13px; border: 1px solid #c9dbd3; border-radius: 10px; background: #f2f7f5; }
+.technician-job-sheet-action small, .technician-job-sheet-action p { margin: 0; color: #5c6e66; font-size: .74rem; line-height: 1.4; }
+.technician-portal-card .technician-job-sheet-action button { background: #245c4c; }
 .technician-portal-card label { display: grid; gap: 7px; font-size: .8rem; font-weight: 750; }
 .technician-portal-card input, .technician-portal-card textarea { box-sizing: border-box; width: 100%; padding: 11px 12px; border: 1px solid #afbeb7; border-radius: 8px; background: #fff; color: inherit; }
 .technician-portal-card input:focus, .technician-portal-card textarea:focus { outline: 3px solid rgba(36, 121, 94, .18); border-color: #24795e; }
@@ -35,6 +38,7 @@
 .technician-portal-error { margin: 0; color: #a12e2e; font-size: .78rem; }
 .technician-portal-message { margin-top: 10vh; text-align: center; }
 .technician-portal-message p { color: #56665f; }
+.technician-portal-message .technician-job-sheet-action { margin: 20px 0 14px; text-align: left; }
 .technician-portal-mark { display: inline-grid; width: 44px; height: 44px; place-items: center; margin-bottom: 12px; border-radius: 50%; background: #dff2e9; color: #176b51; font-size: 1.4rem; font-weight: 900; }
 
 /* Site Check technician workspace: one machine at a time, optimised for touch. */

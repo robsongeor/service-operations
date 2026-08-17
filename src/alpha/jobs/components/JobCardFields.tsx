@@ -9,6 +9,7 @@ import { getJobCardStatus, JOB_CARD_STATUSES, JOB_CARD_STATUS_OPTIONS, type JobC
 import { JOB_NUMBER_REQUIRED_EMAIL_MESSAGE, jobHasEmailableJobNumber } from '../services/jobEmailRules'
 import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation'
 import { formatTechnicianSubmissionHourMeter, hasTechnicianSubmission } from '../types/technicianSubmission'
+import { downloadSubmittedJobSheet } from '../services/submittedJobSheetPdf'
 
 type Props = {
     job: Job
@@ -62,9 +63,11 @@ type CardProps = {
     onSend: () => void
     onRemove?: () => void
     onPhoto: (id: string) => void
+    onDownload?: () => void
+    isPdfBusy?: boolean
 }
 
-function TechnicianCard({ name, email, label, status, submission, isBusy, canSend, expanded, onToggle, onSend, onRemove, onPhoto }: CardProps) {
+function TechnicianCard({ name, email, label, status, submission, isBusy, canSend, expanded, onToggle, onSend, onRemove, onPhoto, onDownload, isPdfBusy }: CardProps) {
     const statusLabel = JOB_CARD_STATUS_OPTIONS.find((option) => option.value === status)?.label ?? 'Not sent'
     const submitted = status === JOB_CARD_STATUSES.SUBMITTED || Boolean(submission?.gr_submittedon)
     return <article className={`job-card-person ${expanded ? 'expanded' : ''}`}>
@@ -75,6 +78,7 @@ function TechnicianCard({ name, email, label, status, submission, isBusy, canSen
             </button>
             <span className={`job-card-current status-${status}`}>{statusLabel}</span>
             <div className="job-card-person-actions">
+                {submitted && submission && onDownload && <button type="button" disabled={isPdfBusy} onClick={onDownload}>{isPdfBusy ? 'Preparing...' : 'Download PDF'}</button>}
                 {submission && <button type="button" onClick={onToggle}>{expanded ? 'Hide' : 'View'}</button>}
                 {!submitted && <button type="button" className="primary" disabled={isBusy || !canSend} onClick={onSend}>{isBusy ? 'Sending…' : status === JOB_CARD_STATUSES.SENT ? 'Resend' : 'Send'}</button>}
                 {onRemove && !submitted && <button type="button" className="danger" disabled={isBusy} onClick={onRemove}>Remove</button>}
@@ -109,6 +113,7 @@ export default function JobCardFields({ job, mechanics, assignments, onStatusCha
     const [pendingEmail, setPendingEmail] = useState<'primary' | JobAssignment | null>(null)
     const [expandedId, setExpandedId] = useState('')
     const [preview, setPreview] = useState<{ submission: JobCardSubmission; photoId: string } | null>(null)
+    const [pdfBusyId, setPdfBusyId] = useState('')
     const hasJobNumber = jobHasEmailableJobNumber(job)
     const submissions = useMemo(() => {
         const normalized = job.jobCardSubmissions ?? []
@@ -162,6 +167,13 @@ export default function JobCardFields({ job, mechanics, assignments, onStatusCha
         finally { setBusyId('') }
     }
     const showPhoto = (submission: JobCardSubmission, photoId: string) => setPreview({ submission, photoId })
+    const downloadPdf = async (submission: JobCardSubmission) => {
+        setPdfBusyId(submission.gr_jobcardsubmissionid)
+        setError('')
+        try { await downloadSubmittedJobSheet(job, submission) }
+        catch (caught) { setError(caught instanceof Error ? caught.message : 'The filled Job sheet could not be created.') }
+        finally { setPdfBusyId('') }
+    }
 
     return <>
         <div className="job-card-layout">
@@ -179,6 +191,8 @@ export default function JobCardFields({ job, mechanics, assignments, onStatusCha
                     onToggle={() => setExpandedId((current) => current ? '' : (primarySubmission ?? legacy)?.gr_jobcardsubmissionid ?? '')}
                     onSend={() => requestSend('primary', primarySubmission?.gr_status ?? getJobCardStatus(job.gr_jobcardstatus))}
                     onPhoto={(id) => (primarySubmission ?? legacy) && showPhoto((primarySubmission ?? legacy)!, id)}
+                    onDownload={(primarySubmission ?? legacy) ? () => void downloadPdf((primarySubmission ?? legacy)!) : undefined}
+                    isPdfBusy={pdfBusyId === (primarySubmission ?? legacy)?.gr_jobcardsubmissionid}
                 />
                 {assignments.map((assignment) => {
                     const submission = [...submissions].reverse().find((item) => item._gr_jobassignment_value === assignment.gr_jobassignmentid)
@@ -186,7 +200,8 @@ export default function JobCardFields({ job, mechanics, assignments, onStatusCha
                     return <TechnicianCard key={assignment.gr_jobassignmentid} name={assignment.gr_Mechanic?.gr_name ?? 'Unknown technician'} email={assignment.gr_Mechanic?.gr_email} label="Additional technician"
                         status={status} submission={submission} isBusy={busyId === assignment.gr_jobassignmentid} canSend={hasJobNumber && Boolean(assignment.gr_Mechanic?.gr_email)}
                         expanded={expandedId === submission?.gr_jobcardsubmissionid} onToggle={() => setExpandedId((current) => current ? '' : submission?.gr_jobcardsubmissionid ?? '')}
-                        onSend={() => requestSend(assignment, status)} onRemove={() => void removeAssignment(assignment)} onPhoto={(id) => submission && showPhoto(submission, id)} />
+                        onSend={() => requestSend(assignment, status)} onRemove={() => void removeAssignment(assignment)} onPhoto={(id) => submission && showPhoto(submission, id)}
+                        onDownload={submission ? () => void downloadPdf(submission) : undefined} isPdfBusy={pdfBusyId === submission?.gr_jobcardsubmissionid} />
                 })}
             </section>
 

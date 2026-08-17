@@ -27,6 +27,7 @@ function baseJob(overrides = {}) {
     return {
         gr_jobid: '00000000-0000-4000-8000-000000000001',
         gr_jobnumber: '145999',
+        gr_ordernumber: 'PO-88',
         gr_description: 'Service forklift',
         gr_jobtype: 122830001,
         gr_status: 122830000,
@@ -38,9 +39,10 @@ function baseJob(overrides = {}) {
             gr_fleet: 'FN24',
             gr_make: 'Still',
             gr_model: 'RX60',
+            gr_serial: 'SER-24',
             gr_currenthourmeter: 2500,
         },
-        gr_Site: { gr_name: 'Workshop', gr_Customer: { gr_name: 'Example Customer' } },
+        gr_Site: { gr_name: 'Workshop', gr_address: '1 Example Road', gr_Customer: { gr_name: 'Example Customer' } },
         '@odata.etag': 'W/"10"',
         ...overrides,
     }
@@ -80,13 +82,15 @@ test('secure tokens contain at least 32 bytes of URL-safe randomness', () => {
     assert.equal(submission._test.hashToken(first).length, 64)
 })
 
-test('public response includes only the dedicated minimum fields', () => {
-    const result = submission._test.publicDetails(baseJob({ secretInternalNote: 'do not expose' }))
+test('public response includes only the dedicated Job-sheet fields', () => {
+    const result = submission._test.publicDetails(baseJob({ secretInternalNote: 'do not expose' }), { gr_recipientname: 'Mouhib' })
     assert.deepEqual(Object.keys(result).sort(), [
-        'currentHourMeter', 'customerName', 'equipmentDisplayName', 'fleetNumber',
-        'jobNumber', 'requiresHourMeter', 'siteName', 'workRequired',
+        'currentHourMeter', 'customerName', 'equipmentDisplayName', 'equipmentMake',
+        'equipmentModel', 'equipmentSerial', 'fleetNumber', 'jobNumber', 'orderNumber',
+        'requiresHourMeter', 'siteAddress', 'siteName', 'technicianName', 'workRequired',
     ])
     assert.equal(JSON.stringify(result).includes('secretInternalNote'), false)
+    assert.equal(result.technicianName, 'Mouhib')
 })
 
 test('submission validation requires story and valid service hour meter', () => {
@@ -299,10 +303,29 @@ test('link generation requires an authenticated office user', { concurrency: fal
     const response = await invoke({
         method: 'POST',
         headers: {},
-        body: { action: 'generate', jobId: '00000000-0000-4000-8000-000000000001' },
+        body: { action: 'generate', jobId: '00000000-0000-4000-8000-000000000001', recipientEmail: 'nzmouhib@yahoo.co.nz' },
     })
     assert.equal(response.status, 401)
     assert.match(response.body, /authentication/i)
+})
+
+test('link generation rejects every recipient outside the approved pilot', { concurrency: false }, async () => {
+    configure()
+    global.fetch = async (url) => {
+        if (String(url).endsWith('/WhoAmI')) return Response.json({ UserId: 'office-user' })
+        throw new Error(`Unexpected request: ${String(url)}`)
+    }
+    const response = await invoke({
+        method: 'POST',
+        headers: { 'X-Dataverse-Authorization': 'Bearer office-token' },
+        body: {
+            action: 'generate',
+            jobId: '00000000-0000-4000-8000-000000000001',
+            recipientEmail: 'another.technician@example.test',
+        },
+    })
+    assert.equal(response.status, 403)
+    assert.match(response.body, /pilot recipients/i)
 })
 
 test('link generation replaces the stored hash without changing Job workflows', { concurrency: false }, async () => {
@@ -321,7 +344,7 @@ test('link generation replaces the stored hash without changing Job workflows', 
     const response = await invoke({
         method: 'POST',
         headers: { 'X-Dataverse-Authorization': 'Bearer office-token' },
-        body: { action: 'generate', jobId: '00000000-0000-4000-8000-000000000001' },
+        body: { action: 'generate', jobId: '00000000-0000-4000-8000-000000000001', recipientEmail: 'nzmouhib@yahoo.co.nz' },
     })
     assert.equal(response.status, 201)
     const result = JSON.parse(response.body)
@@ -333,7 +356,7 @@ test('link generation replaces the stored hash without changing Job workflows', 
     assert.equal(JSON.stringify(patch).includes(result.path.slice('/portal/job/'.length)), false)
 })
 
-test('link generation accepts opaque Dataverse GUIDs without RFC version bits', { concurrency: false }, async () => {
+test('link generation accepts George manual pilot email and opaque Dataverse GUIDs', { concurrency: false }, async () => {
     configure()
     let requestedUrl = ''
     global.fetch = async (url, options = {}) => {
@@ -349,7 +372,7 @@ test('link generation accepts opaque Dataverse GUIDs without RFC version bits', 
     const response = await invoke({
         method: 'POST',
         headers: { Authorization: 'Bearer office-token' },
-        body: { action: 'generate', jobId: 'df9a3779-4e83-f111-ab0f-0022489917ff' },
+        body: { action: 'generate', jobId: 'df9a3779-4e83-f111-ab0f-0022489917ff', recipientEmail: 'georger@liftrucks.co.nz' },
     })
     assert.equal(response.status, 201)
     assert.match(requestedUrl, /gr_jobs\(df9a3779-4e83-f111-ab0f-0022489917ff\)$/)
@@ -376,13 +399,13 @@ test('link generation creates an independent submission identity for an addition
             action: 'generate', jobId: '00000000-0000-4000-8000-000000000001',
             assignmentId: '00000000-0000-4000-8000-000000000004',
             mechanicId: '00000000-0000-4000-8000-000000000005',
-            recipientName: 'Second Tech', recipientEmail: 'second@example.com',
+            recipientName: 'Mouhib', recipientEmail: 'nzmouhib@yahoo.co.nz',
         },
     })
     assert.equal(response.status, 201)
     assert.match(target, /00000000-0000-4000-8000-000000000001%3A00000000|00000000-0000-4000-8000-000000000001:00000000/)
     assert.equal(patch.gr_role, 122830001)
-    assert.equal(patch.gr_recipientemail, 'second@example.com')
+    assert.equal(patch.gr_recipientemail, 'nzmouhib@yahoo.co.nz')
     assert.equal(patch['gr_JobAssignment@odata.bind'], '/gr_jobassignments(00000000-0000-4000-8000-000000000004)')
 })
 

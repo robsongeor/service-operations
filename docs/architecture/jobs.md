@@ -67,11 +67,18 @@ The composer uses an 840px desktop width with a viewport-safe responsive limit s
 contact details, and the card preview remain readable without changing shared dialog dimensions.
 The email preview and delivered card use the same combined Fleet Number presentation as Job Book:
 primary followed by normalized alternates separated by ` / `.
-The Open Job Card action is temporarily rendered disabled, no secure link is generated, and no URL
-is exposed in the email body. The preview and delivered card show the Job's linked Site Contact name,
+The secure technician portal includes a client-side **Download filled Job sheet PDF** action. It
+reuses the tracked interactive template and current unsaved technician form values without changing
+Job state or storing a generated document.
+Open Job Card is enabled as a bounded pilot only when the actual email recipient is Mouhib
+(`nzmouhib@yahoo.co.nz`) or George's manually entered test address (`georger@liftrucks.co.nz`).
+Every other recipient remains disabled, generates no secure link, and receives no portal URL. The
+authenticated server endpoint enforces the same allowlist. Editing the recipient away from an
+approved address disables the action immediately. The preview and delivered card show the Job's linked Site Contact name,
 phone, and email when those values exist, or state that no Site Contact is assigned. Confirmed sends create an Email Dispatch
 request and return immediately; Power Automate performs delivery asynchronously and the table shows
-Sending, Sent, or Failed. Existing unused links are left unchanged while online Job Cards are paused.
+Sending, Sent, or Failed. Existing unused links for non-pilot recipients remain unchanged while
+broader online Job Card access is paused.
 Job Card status changes only after confirmed delivery.
 Jobs action feedback is announced as a bottom-right toast, can be dismissed explicitly, and clears
 automatically after five seconds. A new message replaces the previous timer safely.

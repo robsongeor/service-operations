@@ -23,6 +23,7 @@ const SiteCheckAssignmentPage = lazy(() => import('./alpha/portal/SiteCheckAssig
 const ChecklistAdminScreen = lazy(() => import('./alpha/site-checks/ChecklistAdminScreen'))
 const ChargeableInvoiceReviewScreen = lazy(() => import('./alpha/chargeable-invoices/ChargeableInvoiceReviewScreen'))
 const EquipmentMapScreen = lazy(() => import('./alpha/equipment-map/EquipmentMapScreen'))
+const JobMapScreen = lazy(() => import('./alpha/job-map/JobMapScreen'))
 const GreentreeEquipmentTestScreen = lazy(() => import('./alpha/equipment-test/GreentreeEquipmentTestScreen'))
 const JobBookPrototypeScreen = lazy(() => import('./alpha/job-book/JobBookPrototypeScreen'))
 const OverviewScreen = lazy(() => import('./alpha/overview/OverviewScreen'))
@@ -77,6 +78,7 @@ function App() {
             <Route path="/equipment" element={<EquipmentScreen />} />
             <Route path="/equipment/greentree-test" element={<GreentreeEquipmentTestScreen />} />
             <Route path="/equipment-map" element={<EquipmentMapScreen key={signedInUser?.storageId || 'account-pending'} />} />
+            <Route path="/job-map" element={<JobMapScreen key={signedInUser?.storageId || 'account-pending'} />} />
             <Route path="/jobs" element={<JobsScreen key={signedInUser?.storageId || 'account-pending'} />} />
             <Route path="/job-book" element={<JobBookPrototypeScreen key={signedInUser?.storageId || 'account-pending'} />} />
             <Route path="/site-checks" element={<SiteChecksScreen />} />

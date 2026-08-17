@@ -31,7 +31,7 @@ import type { JobAssignment } from '../types/jobAssignment.types'
 import { fetchMechanics as fetchStaffDirectory } from '../../mechanics/services/mechanicsApi'
 import { subscribeToStaffChanges } from '../../mechanics/services/staffRealtime'
 import { createEmailDispatch, waitForEmailDispatch } from '../services/emailDispatchApi'
-import { buildAssignmentJobEmail, buildPrimaryJobEmail, ONLINE_JOB_CARD_ENABLED, type JobEmailDeliveryState, type JobEmailDraft } from '../services/jobEmail'
+import { buildAssignmentJobEmail, buildPrimaryJobEmail, onlineJobCardPilotEnabled, type JobEmailDeliveryState, type JobEmailDraft } from '../services/jobEmail'
 import { assertJobHasEmailableJobNumber } from '../services/jobEmailRules'
 import { generateJobSubmissionLink } from '../services/jobSubmissionLinkApi'
 import { isValidTechnicianEmail } from '../utils/technicianMailto'
@@ -669,7 +669,7 @@ export function useJobs() {
             throw new Error('The primary technician needs an email address before the job can be sent.')
         }
         const token = await getAccessToken()
-        const submissionUrl = ONLINE_JOB_CARD_ENABLED
+        const submissionUrl = onlineJobCardPilotEnabled(job.gr_Mechanic?.gr_email)
             ? (await generateJobSubmissionLink(token, {
                 jobId: job.gr_jobid,
                 mechanicId: job.gr_Mechanic?.gr_mechanicid,
@@ -699,7 +699,7 @@ export function useJobs() {
         }))
         try {
             const token = await getAccessToken()
-            const submissionUrl = ONLINE_JOB_CARD_ENABLED
+            const submissionUrl = onlineJobCardPilotEnabled(draft.recipientEmail)
                 ? (await generateJobSubmissionLink(token, {
                     jobId: job.gr_jobid,
                     mechanicId: job.gr_Mechanic?.gr_mechanicid,
@@ -746,7 +746,7 @@ export function useJobs() {
             throw new Error('This technician needs an email address before the job can be sent.')
         }
         const token = await getAccessToken()
-        const submissionUrl = ONLINE_JOB_CARD_ENABLED
+        const submissionUrl = onlineJobCardPilotEnabled(assignment.gr_Mechanic?.gr_email)
             ? (await generateJobSubmissionLink(token, {
                 jobId: job.gr_jobid,
                 mechanicId: assignment.gr_Mechanic?.gr_mechanicid,

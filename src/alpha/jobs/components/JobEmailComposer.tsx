@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Job } from '../types/job.types'
-import { ONLINE_JOB_CARD_ENABLED, TECHNICIAN_COMMENTS_MAX_LENGTH, type JobEmailDraft } from '../services/jobEmail'
+import { onlineJobCardPilotEnabled, TECHNICIAN_COMMENTS_MAX_LENGTH, type JobEmailDraft } from '../services/jobEmail'
 import { buildTechnicianEmailSubject } from '../utils/technicianMailto'
 import { isValidTechnicianEmail } from '../utils/technicianMailto'
 import { jobHasActiveSubmissionLink } from '../services/jobSubmissionLinkApi'
@@ -29,6 +29,7 @@ export default function JobEmailComposer({ job, onCancel, onSend }: Props) {
     const site = job.gr_Site
     const contact = job.gr_Contact
     const fleetNumbers = formatFleetNumbers(equipment?.gr_fleet, equipment?.gr_alternatefleetnumbers)
+    const onlineJobCardEnabled = onlineJobCardPilotEnabled(recipientEmail)
 
     const send = async () => {
         if (!canSend) return
@@ -50,7 +51,7 @@ export default function JobEmailComposer({ job, onCancel, onSend }: Props) {
 
     const requestSend = () => {
         if (!canSend) return
-        if (ONLINE_JOB_CARD_ENABLED && jobHasActiveSubmissionLink(job)) {
+        if (onlineJobCardEnabled && jobHasActiveSubmissionLink(job)) {
             setConfirmReplacement(true)
             return
         }
@@ -134,10 +135,15 @@ export default function JobEmailComposer({ job, onCancel, onSend }: Props) {
                         {contact?.gr_email && <><dt>Contact email</dt><dd>{contact.gr_email}</dd></>}
                         {job.gr_ordernumber && <><dt>Order number</dt><dd>{job.gr_ordernumber}</dd></>}
                     </dl>
+                    {onlineJobCardEnabled ? <>
+                        <span className="job-email-preview-button">Open Job Card</span>
+                        <small>A secure pilot Job Card link will be created for this approved recipient when the email is sent.</small>
+                    </> : <>
                     <span className="job-email-preview-button is-disabled" aria-disabled="true">
                         Open Job Card — temporarily disabled
                     </span>
-                    <small>Online Job Card access is temporarily unavailable.</small>
+                    <small>Online Job Card access is currently disabled.</small>
+                    </>}
                 </div>
             </section>
         </EditDrawerFormDialog>
