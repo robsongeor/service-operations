@@ -1,6 +1,16 @@
 # Current State
 
-Branch: `v1-deployment`
+Branch: `codex/job-card-entry-validation`
+
+## Technician Job Card entry validation (local, not deployed)
+
+- The public Job Card permits a non-negative whole hour-meter value below the Equipment's previous
+  reading only after the technician sees the two readings and explicitly confirms the lower value.
+  The API requires the same confirmation flag and continues to reject malformed meter values.
+- Every submission now requires at least one Time & Travel row with a valid date, positive total
+  hours, and non-negative whole kilometres. The form starts with one row and prevents removing the
+  final required entry; the API independently enforces the same minimum.
+- No Dataverse schema, role, routing, credential, or cloud configuration change is required.
 
 ## Job Map (deployed)
 

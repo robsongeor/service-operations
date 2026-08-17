@@ -79,6 +79,11 @@ column-level boundary. See [Security](security.md) and
 - A replacement link invalidates the previous unused link.
 - A successful submission consumes the token.
 - Concurrent or repeated submission is rejected.
+- At least one Time & Travel entry with a valid date and positive total hours is required; kilometres
+  remain a required non-negative whole number for that entry.
+- A non-negative whole hour-meter reading may be lower than the Equipment's previous reading only
+  after the technician explicitly confirms the lower value. The server enforces that confirmation
+  independently of the browser.
 - Technician submission does not complete the operational Job.
 - It does not set Completed Date, update Equipment hour meter, run maintenance completion,
   change assignments, create follow-up work, or create Quotes.
