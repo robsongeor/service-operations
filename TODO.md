@@ -29,6 +29,11 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
 
 ## Priority 2 — Product improvements
 
+- [ ] Make Equipment usage forecasting Site-aware. Use each historical Job's recorded Site to start
+  a new forecast segment when Equipment moves, so usage from a previous operating environment does
+  not determine the new Site's service forecast. Define an explicit fallback for legacy Jobs without
+  a recorded Site and preserve all readings as history rather than rewriting or deleting them.
+
 - [ ] Complete release validation for the provisioned Job `gr_hourmeterreadingtype` Choice and
   `gr_hourmeterrecordeddate` Date Only column: verify intended-manager read/write, smoke-test Actual
   and Estimated completion for every Job type, then separately approve the deployed

@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import type { Equipment } from '../../jobs/types/equipment.types'
 import JobCreateDrawer, { type JobCreateInitialValues } from '../../jobs/components/JobCreateDrawer'
 import { useJobs } from '../../jobs/hooks/useJobs'
@@ -25,15 +26,28 @@ export default function EquipmentJobCreateDrawer({ equipment, onClose, onCreated
         isLoading,
         loadError,
         retryInitialLoad,
+        referenceDataStatus,
+        referenceDataError,
+        prepareJobReferenceData,
     } = useJobs()
 
-    if (isLoading || loadError) {
-        return <div className="equipment-job-load-overlay" role={loadError ? 'alert' : 'status'}>
+    useEffect(() => {
+        void prepareJobReferenceData().catch(() => undefined)
+    }, [prepareJobReferenceData])
+
+    const preparationError = loadError || referenceDataError
+    const isPreparing = isLoading || referenceDataStatus !== 'ready'
+
+    if (isPreparing || preparationError) {
+        return <div className="equipment-job-load-overlay" role={preparationError ? 'alert' : 'status'}>
             <section>
-                <strong>{loadError ? 'Job form could not be loaded' : 'Loading job form…'}</strong>
-                <p>{loadError || 'Loading the additional Jobs data only when it is needed.'}</p>
+                <strong>{preparationError ? 'Job form could not be loaded' : 'Loading job form…'}</strong>
+                <p>{preparationError || 'Loading the additional Jobs data only when it is needed.'}</p>
                 <div>
-                    {loadError && <button type="button" onClick={retryInitialLoad}>Try again</button>}
+                    {preparationError && <button type="button" onClick={() => {
+                        retryInitialLoad()
+                        void prepareJobReferenceData().catch(() => undefined)
+                    }}>Try again</button>}
                     <button type="button" onClick={onClose}>Cancel</button>
                 </div>
             </section>

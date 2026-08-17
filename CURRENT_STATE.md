@@ -1,6 +1,29 @@
 # Current State
 
-Branch: `codex/job-book-integration`
+Branch: `codex/fixes`
+
+## Usage-authoritative maintenance scheduling (local, not deployed)
+
+- Equipment service recommendations now use the machine-usage forecast as the authoritative time
+  interval at 40% confidence or higher, whether that schedules earlier or later than the saved profile.
+- The Default Maintenance Profile remains the fallback below 40% confidence, or when the forecast is
+  unavailable or unsafe because of invalid history or a confirmed meter reset.
+- The Equipment maintenance drawer labels the active source and applies the same rule to the displayed
+  next-due date and maintenance status.
+- Customer Dashboard Equipment rows and maintenance summary counters now use the same shared
+  forecast-adjusted projection from the Jobs already loaded by the dashboard, so a trusted usage
+  forecast cannot be contradicted by an expired fallback profile date.
+- Completing any Job now recalculates the Equipment's usage forecast from the refreshed authoritative
+  history and persists every active service plan's effective Next Due Date. Trusted forecasts store
+  the projected hour-threshold date; unavailable or sub-40% forecasts restore the profile-derived
+  fallback date. Service Jobs still reset their applicable service history and due-hour baselines.
+
+## Scheduler Job drawer parity (local, not deployed)
+
+- Scheduled items now open the shared Job drawer through the authoritative focused-refresh
+  workflow, so linked Equipment and editor reference data are populated consistently with Jobs.
+- The Scheduler drawer now supports Office updates and Office attention changes through the
+  existing Job Office services.
 
 ## Deployment status
 
@@ -80,6 +103,93 @@ Branch: `codex/job-book-integration`
   deployment verification.
 
 ## Unfinished work
+
+- Creating a Job from Customer Dashboard or its Equipment workspace no longer runs a broad dashboard
+  reload after the shared Job workflow succeeds. The selected Customer, expanded Site, scroll
+  position, and retained Equipment drawer stay in place, while the new Job is merged into that
+  Equipment's history from the refreshed Jobs collection. This is implemented locally and is not
+  deployed.
+
+- Customer Dashboard Equipment Job History now reconciles its focused lazy rows with the
+  authoritative Jobs collection after completion. Completion also reloads the dashboard's separate
+  Equipment and service-plan projection, so Job status, hour meter, and maintenance due dates update
+  inside the retained workspace without a browser refresh. This is implemented locally and is not
+  deployed.
+
+- Job completion dialogs now place Hour Meter at Completion before and alongside Job Completion Date.
+  Hours receives initial focus and Date is next in keyboard order across standard, Service, and WOF
+  completion; estimate controls follow the pair and calculated hours remain read-only. This is
+  implemented locally and is not deployed.
+
+- All Job completion paths now force an authoritative Jobs refresh after the Dataverse mutation, so
+  the Jobs table immediately reflects Complete instead of retaining a cached earlier status until
+  the focused Edit drawer is opened. This is implemented locally and is not deployed.
+
+- Customer Dashboard Equipment Job History cards now open the canonical Job editor by mouse or
+  keyboard. The selected Job is refreshed through the full reference-data workflow before opening,
+  so status completion and all relationship, scheduling, quote, assignment, office, Job Card, and
+  maintenance controls have their required data. Failed loads offer retry/cancel. This is implemented
+  locally and is not deployed.
+
+- Customer Dashboard maintenance counters and Equipment rows now use the same effective A/B/C plan
+  hierarchy and hour-plus-date status calculation as the Equipment drawer. This removes stale raw
+  lower-plan thresholds such as FN1692's incorrect A-Service overdue display. This is implemented
+  locally and is not deployed.
+
+- Average Machine Usage now uses a 360-day forecast window and includes a concise evidence-based
+  confidence explanation. It identifies the actual limiting factors such as too few readings inside
+  that window, insufficient span,
+  stale history, inconsistent usage, anomalies, resets, or estimates; Job type and Site remain
+  irrelevant to confidence. This is implemented locally and is not deployed.
+
+- Customer Dashboard Create Job actions now wait for shared Job reference data before opening the
+  drawer. Customer-level creation retains the selected Customer and sole Site, while Equipment-level
+  creation retains the selected Equipment, current Site, derived Customer, and sole Site Contact.
+  Failed preparation offers retry/cancel without discarding the source Equipment context. This is
+  implemented locally and is not deployed.
+
+- Chargeable Invoice Review's unmatched-invoice Job creation now also waits for the same lazy Job
+  reference data before matching or rendering Equipment, Customer, and Site fields, with retry on
+  failure. This is implemented locally and is not deployed.
+
+- Creating a Job from Equipment Manager now waits for shared Job editor reference data before
+  rendering, so the selected Equipment, current Site, derived Customer, and sole Site Contact are
+  populated automatically. This is implemented locally and is not deployed.
+
+- Customer Dashboard and Equipment Manager drawers now open immediately while their focused
+  Equipment Job history loads in the background. The History tab exposes loading and retry states;
+  closing or switching away clears the focused rows and invalidates late responses so Job data cannot
+  leak between Equipment records. This is implemented locally and is not deployed.
+
+- Historical maintenance baselines now honour the A/B/C hierarchy: C refreshes C, B, and A;
+  B refreshes B and A; A refreshes only A. The Equipment drawer also resolves existing older
+  independent plan rows through that hierarchy and recalculates each lower service's own due
+  thresholds. This is implemented locally and is not deployed.
+
+- The Quote editor desktop dialog now uses a wider, viewport-bounded layout so the existing
+  line-item grid has room for its GST and removal controls without changing mobile behaviour.
+  This is implemented locally and is not deployed.
+
+- Inline Equipment creation from New/Edit Job now accepts an alternate Fleet Number and can create
+  the Equipment when that is the only known identifier. It normalizes and persists the value through
+  the existing Equipment alternate-fleet column. This is implemented locally and is not deployed.
+
+- Jobs action notifications now include an accessible close control and automatically clear after
+  five seconds using one replacement-safe timer. This is implemented locally and is not deployed.
+
+- Job Book clipboard exports now append normalized alternate Fleet Numbers to the primary Fleet
+  Number within the existing fleet cell, separated by ` / `. Single-row, bulk, and explicit
+  spreadsheet copy paths use the same formatting. The technician email preview and delivered HTML
+  now reuse that combined Fleet Number presentation. This is implemented locally and is not deployed.
+
+- The Jobs-table technician email composer now accepts optional email-only comments, displays them in
+  the bounded preview, and safely escapes them into the Email Dispatch HTML without changing the Job
+  description. Its desktop dialog is widened to 840px while remaining viewport-bounded. Open Job Card
+  remains visibly present but temporarily disabled in both preview and
+  delivered HTML; secure-link generation is bypassed while the feature is paused, so localhost can
+  still queue the email without calling the Job Card link endpoint. The linked Site Contact name,
+  phone, and email are shown in the preview and delivered card when available. This is implemented
+  locally and is not deployed.
 
 - Site Checks now supports cadence rollover without waiting for every Job in the previous
   batch: an overdue row keeps **Open previous** and exposes **Start next batch**, late

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
 import { getSignedInUserInfo } from '../../auth/signedInUser'
@@ -20,7 +20,9 @@ import type { Equipment } from '../jobs/types/equipment.types'
 import type { EquipmentCreateInitialValues } from '../equipment/types/equipmentManager.types'
 import type { Customer } from '../jobs/types/customer.types'
 import type { Site } from '../jobs/types/site.types'
-import { calculateHoursRemaining, calculatePrimaryNextService, calculateServiceStatus } from '../equipment/servicePlans/servicePlanStatus'
+import { calculateHoursRemaining, calculatePrimaryForecastAdjustedService } from '../equipment/servicePlans/servicePlanStatus'
+import { resolveEffectiveServicePlans } from '../equipment/servicePlans/servicePlanCalculations'
+import { calculateEquipmentUsageForecast } from '../equipment/servicePlans/equipmentUsageForecast'
 import { SERVICE_TYPE_OPTIONS } from '../equipment/servicePlans/equipmentServicePlan.types'
 import { MAINTENANCE_PROFILES } from '../equipment/servicePlans/maintenanceConfiguration'
 import CustomerDrawer, { type CustomerDraft, type CustomerDrawerTab } from './CustomerDrawer'
@@ -77,6 +79,10 @@ export default function CustomerDashboardScreen() {
         loadError,
         saveError,
         reload,
+        loadEquipmentJobs,
+        clearEquipmentJobs,
+        isEquipmentJobsLoading,
+        equipmentJobsError,
         clearSaveError,
         updateSites,
         updateSiteMaintenanceSettings,
@@ -128,6 +134,7 @@ export default function CustomerDashboardScreen() {
         loadError: jobsLoadError,
         fetchJobs,
         fetchJobForDrawer,
+        prepareJobReferenceData,
     } = useJobs()
 
     const [selectedCustomerId, setSelectedCustomerId] = useState(() => viewStorageKey
@@ -141,7 +148,11 @@ export default function CustomerDashboardScreen() {
     const [expandedSitesByCustomer, setExpandedSitesByCustomer] = useState<Record<string, Record<string, boolean>>>({})
     const [equipmentSortBySite, setEquipmentSortBySite] = useState<Record<string, SiteEquipmentSort>>({})
     const [creatingJobInitialValues, setCreatingJobInitialValues] = useState<JobCreateInitialValues | null>(null)
+    const [pendingJobCreateInitialValues, setPendingJobCreateInitialValues] = useState<JobCreateInitialValues | null>(null)
+    const [jobCreatePreparationError, setJobCreatePreparationError] = useState('')
     const [editingJob, setEditingJob] = useState<Job | null>(null)
+    const [pendingHistoryJob, setPendingHistoryJob] = useState<Job | null>(null)
+    const [historyJobLoadError, setHistoryJobLoadError] = useState('')
     const [activeTab, setActiveTab] = useState<'sites' | 'open-jobs' | 'quotes' | 'contacts' | 'info'>('sites')
     const [customerDrawerMode, setCustomerDrawerMode] = useState<'create' | 'edit' | null>(null)
     const [customerDrawerInitialTab, setCustomerDrawerInitialTab] = useState<CustomerDrawerTab>('info')
@@ -160,6 +171,55 @@ export default function CustomerDashboardScreen() {
     const siteCheckDetailsTriggerRef = useRef<HTMLButtonElement | null>(null)
     const siteSettingsTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({})
     const sitesHeadingRef = useRef<HTMLHeadingElement>(null)
+
+    const openEquipment = useCallback((record: Equipment) => {
+        setEditingEquipment(record)
+        void loadEquipmentJobs(record.gr_equipmentid).catch(() => undefined)
+    }, [loadEquipmentJobs])
+
+    const openEquipmentHistoryJob = useCallback(async (job: Job) => {
+        setPendingHistoryJob(job)
+        setHistoryJobLoadError('')
+        try {
+            const refreshedJob = await fetchJobForDrawer(job.gr_jobid)
+            if (!refreshedJob) throw new Error('The selected Job could not be found in Dataverse.')
+            setEditingJob(refreshedJob)
+            setPendingHistoryJob(null)
+        } catch (error) {
+            setHistoryJobLoadError(error instanceof Error ? error.message : 'The selected Job could not be loaded.')
+        }
+    }, [fetchJobForDrawer])
+
+    const editingEquipmentId = editingEquipment?.gr_equipmentid.toLowerCase() ?? ''
+    const visibleEquipmentJobs = useMemo(() => {
+        const authoritativeJobs = new Map(operationalJobs.map((job) => [job.gr_jobid.toLowerCase(), job]))
+        const reconciled = equipmentJobs.map((job) => authoritativeJobs.get(job.gr_jobid.toLowerCase()) ?? job)
+        const focusedJobIds = new Set(reconciled.map((job) => job.gr_jobid.toLowerCase()))
+        const newlyCreated = operationalJobs.filter((job) =>
+            editingEquipmentId
+            && job.gr_Equipment?.gr_equipmentid.toLowerCase() === editingEquipmentId
+            && !focusedJobIds.has(job.gr_jobid.toLowerCase()),
+        )
+        return [...reconciled, ...newlyCreated]
+    }, [editingEquipmentId, equipmentJobs, operationalJobs])
+    const currentEditingEquipment = editingEquipment
+        ? equipment.find((item) => item.gr_equipmentid.toLowerCase() === editingEquipment.gr_equipmentid.toLowerCase()) ?? editingEquipment
+        : null
+
+    const completeStandardFromDashboard = async (...args: Parameters<typeof completeStandardJob>) => {
+        await completeStandardJob(...args)
+        await reload()
+    }
+
+    const completeServiceFromDashboard = async (...args: Parameters<typeof completeServiceJob>) => {
+        await completeServiceJob(...args)
+        await reload()
+    }
+
+    const completeWofFromDashboard = async (...args: Parameters<typeof completeWofJob>) => {
+        await completeWofJob(...args)
+        await reload()
+    }
 
     useEffect(() => {
         if (!viewStorageKey) return
@@ -277,9 +337,20 @@ export default function CustomerDashboardScreen() {
             siteIds: recipient._gr_site_value ? [recipient._gr_site_value] : [],
         }] : []),
     ].filter((contact, index, all) => all.findIndex((candidate) => candidate.id.toLowerCase() === contact.id.toLowerCase()) === index)
-    const customerEquipment = equipment.filter((item) =>
+    const customerEquipment = useMemo(() => equipment.filter((item) =>
         item.gr_Site?.gr_Customer?.gr_customerid === selectedCustomerId,
-    )
+    ), [equipment, selectedCustomerId])
+    const today = currentNewZealandDateOnly()
+    const maintenanceByEquipment = useMemo(() => new Map(customerEquipment.map((item) => {
+        const plans = resolveEffectiveServicePlans(servicePlans.filter((plan) =>
+            plan._gr_equipment_value?.toLowerCase() === item.gr_equipmentid.toLowerCase(),
+        ), item)
+        const forecast = calculateEquipmentUsageForecast(item, operationalJobs)
+        return [item.gr_equipmentid, {
+            plans,
+            primary: calculatePrimaryForecastAdjustedService(plans, item, forecast, today),
+        }] as const
+    })), [customerEquipment, operationalJobs, servicePlans, today])
     const selectedCustomerSiteState = expandedSitesByCustomer[selectedCustomerId] ?? {}
     const siteIsExpanded = (siteId: string) => selectedCustomerSiteState[siteId] ?? false
     const setSiteExpanded = (siteId: string, expanded: boolean) => {
@@ -325,11 +396,7 @@ export default function CustomerDashboardScreen() {
     const lastJob = [...customerJobs].sort((a, b) => b.createdon.localeCompare(a.createdon))[0]
 
     const maintenanceCounts = customerEquipment.reduce((counts, item) => {
-        const plans = servicePlans.filter((plan) =>
-            plan._gr_equipment_value?.toLowerCase() === item.gr_equipmentid.toLowerCase(),
-        )
-        const primary = calculatePrimaryNextService(plans, item)
-        const status = primary ? calculateServiceStatus(item.gr_currenthourmeter ?? 0, primary.gr_nextduehours, primary.gr_nextduedate) : null
+        const status = maintenanceByEquipment.get(item.gr_equipmentid)?.primary?.status ?? null
         if (status === 'Due Soon') counts.dueSoon += 1
         if (status === 'Overdue' || status === 'Due') counts.overdue += 1
         return counts
@@ -427,6 +494,41 @@ export default function CustomerDashboardScreen() {
         siteId: record.gr_Site?.gr_siteid ?? '',
         customerId: record.gr_Site?.gr_Customer?.gr_customerid ?? selectedCustomerId,
     })
+
+    const openJobCreate = async (initialValues: JobCreateInitialValues) => {
+        setPendingJobCreateInitialValues(initialValues)
+        setJobCreatePreparationError('')
+        try {
+            const referenceData = await prepareJobReferenceData()
+            const selectedEquipment = initialValues.equipmentId
+                ? referenceData.equipment.find((record) =>
+                    record.gr_equipmentid.toLowerCase() === initialValues.equipmentId?.toLowerCase())
+                : undefined
+            const siteId = selectedEquipment?.gr_Site?.gr_siteid ?? initialValues.siteId ?? ''
+            const customerId = selectedEquipment?.gr_Site?.gr_Customer?.gr_customerid
+                ?? initialValues.customerId
+                ?? ''
+            const contactsForSite = referenceData.siteContacts.filter((siteContact) =>
+                siteContact.gr_Site?.gr_siteid.toLowerCase() === siteId.toLowerCase())
+            const contactId = initialValues.contactId
+                ?? (contactsForSite.length === 1 ? contactsForSite[0].gr_Contact?.gr_contactid : '')
+
+            clearEquipmentJobs()
+            setEditingEquipment(null)
+            setCreatingJobInitialValues({
+                ...initialValues,
+                equipmentId: selectedEquipment?.gr_equipmentid ?? initialValues.equipmentId,
+                siteId,
+                customerId,
+                contactId,
+            })
+            setPendingJobCreateInitialValues(null)
+        } catch (error) {
+            setJobCreatePreparationError(error instanceof Error
+                ? error.message
+                : 'Job details could not be prepared.')
+        }
+    }
 
     const customerDrawerInitialValue = selectedCustomer ? customerDrafts[selectedCustomer.gr_customerid] ?? {
         name: selectedCustomer.gr_name,
@@ -549,7 +651,7 @@ export default function CustomerDashboardScreen() {
                         type="button"
                         disabled={selectedCustomer.gr_customerid.startsWith('prototype-customer-')}
                         title={selectedCustomer.gr_customerid.startsWith('prototype-customer-') ? 'Save this Customer to Dataverse before creating Jobs.' : undefined}
-                        onClick={() => setCreatingJobInitialValues(initialJobValuesForCustomer(selectedCustomer))}
+                        onClick={() => void openJobCreate(initialJobValuesForCustomer(selectedCustomer))}
                     >Create Job</button>
                     <button type="button" onClick={() => { setCustomerDrawerInitialTab('sites'); setCustomerDrawerMode('edit') }}>Add Site</button>
                     <button type="button" onClick={() => { setCustomerDrawerInitialTab('info'); setCustomerDrawerMode('edit') }}>Edit Customer</button>
@@ -710,16 +812,17 @@ export default function CustomerDashboardScreen() {
                                 </tr></thead>
                                 <tbody>
                                     {rows.length === 0 ? <tr><td colSpan={9}>No equipment recorded for this site.</td></tr> : rows.map((item) => {
-                                        const plans = servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === item.gr_equipmentid.toLowerCase())
-                                        const primary = calculatePrimaryNextService(plans, item)
+                                        const maintenance = maintenanceByEquipment.get(item.gr_equipmentid)
+                                        const plans = maintenance?.plans ?? []
+                                        const primary = maintenance?.primary?.plan ?? null
                                         const remaining = primary ? calculateHoursRemaining(item.gr_currenthourmeter ?? 0, primary.gr_nextduehours) : null
-                                        const status = primary ? calculateServiceStatus(item.gr_currenthourmeter ?? 0, primary.gr_nextduehours) : null
+                                        const status = maintenance?.primary?.status ?? null
                                         const serviceLabel = primary ? SERVICE_TYPE_OPTIONS.find((option) => option.value === primary.gr_servicetype)?.label : null
-                                        return <tr key={item.gr_equipmentid} tabIndex={0} onClick={() => { clearSaveError(); setEditingEquipment(item) }} onKeyDown={(event) => {
+                                        return <tr key={item.gr_equipmentid} tabIndex={0} onClick={() => { clearSaveError(); void openEquipment(item) }} onKeyDown={(event) => {
                                             if (event.key === 'Enter' || event.key === ' ') {
                                                 event.preventDefault()
                                                 clearSaveError()
-                                                setEditingEquipment(item)
+                                                void openEquipment(item)
                                             }
                                         }}>
                                             <td><strong>{display(item.gr_fleet)}</strong></td>
@@ -869,7 +972,7 @@ export default function CustomerDashboardScreen() {
                 const record = equipment.find((item) => item.gr_equipmentid.toLowerCase() === equipmentId.toLowerCase())
                 if (!record) return
                 siteCheckNestedTriggerRef.current = trigger
-                setEditingEquipment(record)
+                void openEquipment(record)
             }}
             onClose={() => {
                 const trigger = siteCheckDetailsTriggerRef.current
@@ -880,28 +983,55 @@ export default function CustomerDashboardScreen() {
             }}
         />}
 
-        {editingEquipment && <EquipmentDrawer
+        {currentEditingEquipment && <EquipmentDrawer
             mode="edit"
-            equipment={editingEquipment}
+            equipment={currentEditingEquipment}
             equipmentList={equipment}
-            servicePlans={servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === editingEquipment.gr_equipmentid.toLowerCase())}
+            servicePlans={servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === currentEditingEquipment.gr_equipmentid.toLowerCase())}
             customers={customers}
             sites={sites}
-            jobs={equipmentJobs}
+            jobs={visibleEquipmentJobs}
+            isJobHistoryLoading={isEquipmentJobsLoading}
+            jobHistoryError={equipmentJobsError}
+            onRetryJobHistory={() => { void loadEquipmentJobs(currentEditingEquipment.gr_equipmentid).catch(() => undefined) }}
             isSaving={isSaving}
             saveError={saveError}
             siteCheckEnabledSiteIds={siteCheckEnabledSiteIds}
             onClose={() => {
                 const trigger = siteCheckNestedTriggerRef.current
                 siteCheckNestedTriggerRef.current = null
+                clearEquipmentJobs()
                 setEditingEquipment(null)
                 window.setTimeout(() => trigger?.focus(), 0)
             }}
-            onSave={async (input) => { const updated = await updateEquipment(editingEquipment, input); setEditingEquipment(updated) }}
-            onSaveMaintenanceHistory={async (plans, input) => { const updated = await saveEquipmentMaintenanceHistory(editingEquipment, plans, input); setEditingEquipment(updated.equipment) }}
-            onCreateJob={(record) => { setEditingEquipment(null); setCreatingJobInitialValues(initialJobValuesForEquipment(record)) }}
-            onDelete={async () => { await deleteEquipment(editingEquipment.gr_equipmentid); setEditingEquipment(null) }}
+            onSave={async (input) => { const updated = await updateEquipment(currentEditingEquipment, input); setEditingEquipment(updated) }}
+            onSaveMaintenanceHistory={async (plans, input) => { const updated = await saveEquipmentMaintenanceHistory(currentEditingEquipment, plans, input); setEditingEquipment(updated.equipment) }}
+            onCreateJob={(record) => { void openJobCreate(initialJobValuesForEquipment(record)) }}
+            onOpenJob={(job) => { void openEquipmentHistoryJob(job) }}
+            onDelete={async () => { await deleteEquipment(currentEditingEquipment.gr_equipmentid); clearEquipmentJobs(); setEditingEquipment(null) }}
         />}
+
+        {pendingHistoryJob && <div className="equipment-job-load-overlay" role={historyJobLoadError ? 'alert' : 'status'}>
+            <section>
+                <strong>{historyJobLoadError ? 'Job could not be opened' : `Loading Job ${pendingHistoryJob.gr_jobnumber || ''}…`}</strong>
+                <p>{historyJobLoadError || 'Loading the current Job and all Equipment, Customer, Site, Contact, scheduling, quote, assignment, office, and maintenance details.'}</p>
+                <div>
+                    {historyJobLoadError && <button type="button" onClick={() => void openEquipmentHistoryJob(pendingHistoryJob)}>Try again</button>}
+                    <button type="button" onClick={() => { setPendingHistoryJob(null); setHistoryJobLoadError('') }}>Cancel</button>
+                </div>
+            </section>
+        </div>}
+
+        {pendingJobCreateInitialValues && <div className="equipment-job-load-overlay" role={jobCreatePreparationError ? 'alert' : 'status'}>
+            <section>
+                <strong>{jobCreatePreparationError ? 'New Job could not be prepared' : 'Preparing New Job…'}</strong>
+                <p>{jobCreatePreparationError || 'Loading the selected Equipment, Customer, Site, and Contact.'}</p>
+                <div>
+                    {jobCreatePreparationError && <button type="button" onClick={() => void openJobCreate(pendingJobCreateInitialValues)}>Try again</button>}
+                    <button type="button" onClick={() => { setPendingJobCreateInitialValues(null); setJobCreatePreparationError('') }}>Cancel</button>
+                </div>
+            </section>
+        </div>}
 
         {creatingEquipmentInitialValues && <EquipmentDrawer
             mode="create"
@@ -1038,11 +1168,7 @@ export default function CustomerDashboardScreen() {
             onCreateSite={createJobSite}
             onCreateContact={createContactForSite}
             onCreateEquipment={createJobEquipment}
-            onCreateJob={async (input) => {
-                const jobId = await createJob(input)
-                await reload()
-                return jobId
-            }}
+            onCreateJob={createJob}
             onCreateScheduleOption={createScheduleOption}
             onClose={() => setCreatingJobInitialValues(null)}
         />}
@@ -1095,9 +1221,9 @@ export default function CustomerDashboardScreen() {
             error={completionError}
             onCancel={cancelJobCompletion}
             onSetupMaintenance={setupEquipmentMaintenance}
-            onCompleteStandard={completeStandardJob}
-            onCompleteService={completeServiceJob}
-            onCompleteWof={completeWofJob}
+            onCompleteStandard={completeStandardFromDashboard}
+            onCompleteService={completeServiceFromDashboard}
+            onCompleteWof={completeWofFromDashboard}
         />
 
         {customerDrawerMode && <CustomerDrawer

@@ -8,7 +8,7 @@ import {
     buildTechnicianEmailSubject,
 } from '../src/alpha/jobs/utils/technicianMailto.ts'
 import type { Job } from '../src/alpha/jobs/types/job.types.ts'
-import { buildTechnicianJobCardHtml } from '../src/alpha/jobs/services/jobEmail.ts'
+import { buildTechnicianJobCardHtml, ONLINE_JOB_CARD_ENABLED } from '../src/alpha/jobs/services/jobEmail.ts'
 import { readFileSync } from 'node:fs'
 
 const job = {
@@ -21,6 +21,7 @@ const job = {
         gr_make: 'Komatsu',
         gr_model: 'FD30T-17',
         gr_fleet: 'FN1758',
+        gr_alternatefleetnumbers: 'SITE-42\nVFL001758',
         gr_serial: '356685',
     },
     gr_Site: {
@@ -33,6 +34,12 @@ const job = {
         gr_mechanicid: 'mechanic-1',
         gr_name: 'Anthony Example',
         gr_email: 'anthony@example.test',
+    },
+    gr_Contact: {
+        gr_contactid: 'contact-1',
+        gr_name: 'Aroha Example',
+        gr_phone: '021 555 0123',
+        gr_email: 'aroha@example.test',
     },
 } as Job
 
@@ -82,24 +89,51 @@ test('technician email subject includes Job, fleet, customer and description', (
     )
 })
 
-test('direct technician email renders an Outlook-safe HTML Job Card with a clickable secure link', () => {
+test('direct technician email renders escaped comments and a disabled Job Card action', () => {
     const portalUrl = 'https://service.example.test/portal/job/secure-token?a=1&b=2'
-    const body = buildTechnicianJobCardHtml({ ...job, gr_description: 'Inspect <mast> & chains' }, 'Anthony Example', portalUrl)
+    const body = buildTechnicianJobCardHtml(
+        { ...job, gr_description: 'Inspect <mast> & chains' },
+        'Anthony Example',
+        portalUrl,
+        'Use gate <B> & call site\nbefore entry.',
+    )
     assert.match(body, /<!doctype html>/i)
     assert.match(body, /<table role="presentation"/)
-    assert.match(body, /href="https:\/\/service\.example\.test\/portal\/job\/secure-token\?a=1&amp;b=2"/)
-    assert.match(body, />Open Job Card<\/a>/)
+    assert.doesNotMatch(body, /href=/)
+    assert.doesNotMatch(body, /secure-token/)
+    assert.match(body, /Open Job Card — temporarily disabled/)
     assert.match(body, /Inspect &lt;mast&gt; &amp; chains/)
+    assert.match(body, /FN1758 \/ SITE-42 \/ VFL001758/)
     assert.doesNotMatch(body, /Inspect <mast>/)
+    assert.match(body, /Use gate &lt;B&gt; &amp; call site<br>before entry\./)
+    assert.doesNotMatch(body, /Use gate <B>/)
+    assert.match(body, /Site contact/)
+    assert.match(body, /Aroha Example/)
+    assert.match(body, /021 555 0123/)
+    assert.match(body, /aroha@example\.test/)
+})
+
+test('technician email rejects comments beyond the bounded message limit', () => {
+    assert.throws(
+        () => buildTechnicianJobCardHtml(job, 'Anthony Example', 'https://service.example.test', 'x'.repeat(2001)),
+        /2000 characters or fewer/,
+    )
 })
 
 test('Jobs table opens the in-app composer and no longer hands off to mailto', () => {
     const table = readFileSync(new URL('../src/alpha/jobs/components/JobsTable.tsx', import.meta.url), 'utf8')
     const composer = readFileSync(new URL('../src/alpha/jobs/components/JobEmailComposer.tsx', import.meta.url), 'utf8')
+    const composerStyles = readFileSync(new URL('../src/alpha/jobs/components/JobEmailComposer.css', import.meta.url), 'utf8')
     const hook = readFileSync(new URL('../src/alpha/jobs/hooks/useJobs.ts', import.meta.url), 'utf8')
     assert.match(table, /<JobEmailComposer/)
     assert.doesNotMatch(table, /window\.location\.href|mailto:/)
     assert.match(composer, /Send Job Card/)
+    assert.match(composer, /Comments for technician/)
+    assert.match(composer, /temporarily disabled/)
+    assert.match(composer, /Contact email/)
+    assert.match(composerStyles, /\.edit-form-dialog\.job-email-composer\s*\{[\s\S]*width: min\(840px, calc\(100vw - 32px\)\)/)
+    assert.equal(ONLINE_JOB_CARD_ENABLED, false)
+    assert.match(hook, /ONLINE_JOB_CARD_ENABLED/)
     assert.match(hook, /void \(async \(\) =>/)
     assert.match(hook, /waitForEmailDispatch/)
 })

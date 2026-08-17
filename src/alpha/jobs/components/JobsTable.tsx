@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import type { Job } from '../types/job.types'
 import type { Mechanic } from '../types/mechanic.types'
 import { getJobTypeLabel, JOB_TYPES } from '../types/jobType.types'
@@ -20,7 +20,7 @@ import JobsTableSortIcon from './JobsTableSortIcon'
 import { isValidTechnicianEmail } from '../utils/technicianMailto'
 import { getJobsTableColumnWidths, JOBS_TABLE_ACTIONS_WIDTH, JOBS_TABLE_COLUMNS, JOBS_TABLE_WIDTH, jobsStickyColumnStyle, type JobsStickyThroughColumnId, type JobsTableColumnId } from '../types/jobsTableColumns'
 import { hasTechnicianSubmission } from '../types/technicianSubmission'
-import { parseAlternateFleetNumbers } from '../../equipment/identifiers/alternateFleetNumbers'
+import { formatFleetNumbers, parseAlternateFleetNumbers } from '../../equipment/identifiers/alternateFleetNumbers'
 import { JOB_DESCRIPTION_MAX_LENGTH } from '../domain/jobDescription'
 import JobEmailComposer from './JobEmailComposer'
 import type { JobEmailDeliveryState, JobEmailDraft } from '../services/jobEmail'
@@ -60,6 +60,7 @@ const createdDateFormatter = new Intl.DateTimeFormat('en-NZ', {
     month: '2-digit',
     year: 'numeric',
 })
+const JOBS_FEEDBACK_TIMEOUT_MS = 5000
 
 export default function JobsTable({
     jobs,
@@ -123,6 +124,12 @@ export default function JobsTable({
         resizeObserver.observe(bodyScroll)
         return () => resizeObserver.disconnect()
     }, [])
+
+    useEffect(() => {
+        if (!copyFeedback) return
+        const timeout = window.setTimeout(() => setCopyFeedback(null), JOBS_FEEDBACK_TIMEOUT_MS)
+        return () => window.clearTimeout(timeout)
+    }, [copyFeedback])
 
     const sendEmail = async (job: Job, draft: JobEmailDraft) => {
         if (emailingJobId) return
@@ -231,6 +238,11 @@ export default function JobsTable({
     const spreadsheetCell = (value?: string | null) =>
         (value ?? '').replace(/[\t\r\n]+/g, ' ').trim()
 
+    const jobBookFleetCell = (job: Job) => spreadsheetCell(formatFleetNumbers(
+        job.gr_Equipment?.gr_fleet,
+        job.gr_Equipment?.gr_alternatefleetnumbers,
+    ))
+
     const buildJobBookSpreadsheetRow = (job: Job) => {
         const addressParts = spreadsheetCell(job.gr_Site?.gr_address)
             .split(',')
@@ -242,7 +254,7 @@ export default function JobsTable({
         return [
             job.gr_Mechanic?.gr_name,
             job.gr_Equipment?.gr_model,
-            job.gr_Equipment?.gr_fleet,
+            jobBookFleetCell(job),
             job.gr_Site?.gr_Customer?.gr_name,
             job.gr_description,
             siteAddress,
@@ -269,7 +281,6 @@ export default function JobsTable({
             })
         }
 
-        window.setTimeout(() => setCopyFeedback(null), 2600)
     }
 
     const selectedShownJobs = useMemo(
@@ -312,7 +323,6 @@ export default function JobsTable({
             })
         }
 
-        window.setTimeout(() => setCopyFeedback(null), 2600)
     }
 
     const pasteSelectedJobNumbers = async () => {
@@ -340,7 +350,6 @@ export default function JobsTable({
         } finally {
             setIsPastingJobNumbers(false)
         }
-        window.setTimeout(() => setCopyFeedback(null), 2600)
     }
 
     const copyJobForSpreadsheet = async (job: Job) => {
@@ -351,7 +360,7 @@ export default function JobsTable({
         const spreadsheetRow = [
             mechanic,
             jobNumber,
-            spreadsheetCell(job.gr_Equipment?.gr_fleet) || 'W/S',
+            jobBookFleetCell(job) || 'W/S',
             spreadsheetCell(job.gr_Site?.gr_Customer?.gr_name),
             '',
             mechanic,
@@ -371,7 +380,6 @@ export default function JobsTable({
             })
         }
 
-        window.setTimeout(() => setCopyFeedback(null), 2600)
     }
 
     const isInteractiveTarget = (target: EventTarget | null) =>
@@ -799,7 +807,12 @@ export default function JobsTable({
                     className={copyFeedback.isError ? 'jobs-copy-feedback error' : 'jobs-copy-feedback'}
                     role="status"
                 >
-                    {copyFeedback.message}
+                    <span>{copyFeedback.message}</span>
+                    <button
+                        type="button"
+                        aria-label="Dismiss notification"
+                        onClick={() => setCopyFeedback(null)}
+                    >×</button>
                 </div>
             )}
 

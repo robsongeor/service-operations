@@ -19,6 +19,14 @@ export function parseAlternateFleetNumbers(value?: string | null) {
         })
 }
 
+export function formatFleetNumbers(primaryFleet?: string | null, alternateFleetNumbers?: string | null) {
+    const primary = primaryFleet?.trim().replace(/\s+/g, ' ') ?? ''
+    const primaryKey = identityKey(primary)
+    const alternates = parseAlternateFleetNumbers(alternateFleetNumbers)
+        .filter((item) => identityKey(item) !== primaryKey)
+    return [primary, ...alternates].filter(Boolean).join(' / ')
+}
+
 export function normalizeAlternateFleetNumbers(value?: string | null, primaryFleet?: string | null) {
     const primaryKey = identityKey(primaryFleet ?? '')
     const values = parseAlternateFleetNumbers(value).filter((item) => identityKey(item) !== primaryKey)

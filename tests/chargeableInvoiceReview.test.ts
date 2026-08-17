@@ -964,6 +964,8 @@ test('Chargeable Invoice route uses shared page primitives and delegates intake 
     assert.match(screen, /intake\.importSelected/)
     assert.match(screen, /if \(allImported\) setMode\('queue'\)/)
     assert.match(screen, /<JobCreateDrawer/)
+    assert.match(screen, /void prepareJobReferenceData\(\)\.catch/)
+    assert.match(screen, /referenceDataStatus === 'idle'/)
     assert.match(screen, /requireJobNumber/)
     assert.match(screen, /jobNumber: item\.jobLookupValue\.trim\(\) \|\| revision\?\.gr_greentreereference/)
     assert.match(screen, /description: greenTreeJobDescription\(revision\?\.gr_headline\)/)

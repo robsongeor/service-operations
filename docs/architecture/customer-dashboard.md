@@ -24,6 +24,13 @@ Customer selection uses the shared searchable selector. Customer and Site editin
 shared drawer presentation while retaining Customer-owned forms and services. Embedded Job
 and Equipment actions delegate to their feature workflows.
 
+Equipment maintenance rows and summary counters reuse the shared forecast-adjusted service-plan
+projection. Completed Job hour readings already present in the dashboard's Jobs collection feed the
+same 360-day usage forecast used by the Equipment drawer. At 40% confidence or higher, projected
+hours determine the displayed status and primary next service; below that threshold, the saved
+maintenance-profile calendar date remains the fallback. This avoids per-Equipment history requests
+while keeping row status, customer totals, and Equipment details consistent.
+
 The Customer search opens with its input focused when the dashboard route mounts, so keyboard
 input can begin immediately. The selected Customer ID is retained in account-scoped browser
 session storage. Leaving the Customer route and returning during the same signed-in browser
@@ -143,6 +150,27 @@ Checks and Jobs projections.
 
 - Site Equipment is grouped by the actual Site relationship.
 - Equipment Customer is derived through Site.
+- Customer maintenance counters and Equipment rows resolve the same effective A/B/C service-plan
+  hierarchy as the Equipment drawer. A higher-level completion therefore refreshes satisfied lower
+  services consistently, and status considers both the recalculated hour threshold and due date.
+- Opening Equipment from the Customer Dashboard shows the shared drawer immediately and starts the
+  same focused, paged Equipment Job history load as Equipment Manager in the background. The History
+  tab distinguishes loading, failure/retry, and a confirmed empty result. Closing the drawer clears
+  that focused history and invalidates any in-flight response so another Equipment cannot inherit it.
+- Job History cards in that Equipment drawer are mouse- and keyboard-activatable. Opening one uses
+  the canonical focused Job refresh, which first prepares the complete shared editor reference data;
+  a missing or failed Job remains closed with retry/cancel rather than opening a stale partial record.
+- Completing a Job from an Equipment history card reconciles the focused lazy history with the
+  authoritative Jobs collection immediately. It also reloads Equipment and service plans, so the
+  completed status, recorded meter, and recalculated maintenance dates appear in the still-open
+  Customer workspace without a browser refresh.
+- Creating a Job from either the Customer header or an embedded Equipment drawer prepares the
+  shared Job reference data before opening the form. Equipment-originated Jobs retain the selected
+  Equipment and its current Site and Customer; a sole Site Contact is also selected automatically.
+  A failed preparation keeps the source context open and offers retry/cancel rather than opening an
+  empty relationship editor. Successful creation updates the shared Jobs collection and merges the
+  new row into the retained Equipment history; it does not broadly reload Customer, Site, Equipment,
+  or service-plan data or reset the dashboard workspace.
 - Current WOF expiry comes from the loaded Equipment summary, not a historical inspection
   snapshot.
 - Date Only values use shared WOF formatting.

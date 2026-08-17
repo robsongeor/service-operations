@@ -42,6 +42,10 @@ created date from its completed date. Each card also shows the recorded completi
 an Estimated marker where applicable; missing completion evidence is labelled rather than inferred.
 The Job description sits beside the Job number and truncates visually with its full value retained
 as hover text so long descriptions do not displace the created date or card layout.
+The Equipment Manager and Customer Dashboard open the Equipment drawer immediately, then load only
+that Equipment's linked Jobs in the background. History exposes distinct loading, failed/retry,
+empty, and populated states. Closing the drawer clears those focused rows and invalidates the active
+request so a late Dataverse response cannot appear against a subsequently opened Equipment record.
 The operational Job Status badge reuses the established status palette while Job Type and Job Card
 status remain neutral, keeping the primary workflow state visually distinct.
 The Equipment Manager table derives a linked-Job count from the already loaded Jobs projection,
@@ -59,6 +63,9 @@ occupying the drawer footer with persistent warning text.
 - When a saved Job establishes a Site, linked Equipment moves to that Site and local state
   reflects the change.
 - Current configuration changes must not delete Jobs, inspections, or service history.
+- Creating a Job from the Equipment drawer prepares the shared Job editor reference data before
+  rendering, then defaults the authoritative Equipment, its current Site, derived Customer, and
+  sole Site Contact when one exists. It uses the canonical Job creation workflow and services.
 - Alternate Fleet Numbers identify the same Equipment record; they never create duplicate assets,
   change Site ownership, or replace the Equipment Dataverse ID as the relationship key.
 - Customer is not stored directly on Equipment.
@@ -91,6 +98,10 @@ occupying the drawer footer with persistent warning text.
   native expandable disclosure. The separate Set Historical Baseline action belongs to Service
   History and Due Dates and is explicitly limited to maintenance not represented by Jobs; completed
   Service Jobs remain the normal workflow.
+- Service history is hierarchical for both completed Jobs and manually entered historical
+  baselines. A C Service satisfies C, B, and A; a B Service satisfies B and A; and an A Service
+  satisfies only A. Each lower plan uses the newest qualifying completion as its baseline and
+  recalculates its own hour and calendar due thresholds from that completion.
 
 ## Extension Points
 

@@ -1,5 +1,5 @@
-.job-email-composer {
-    width: min(720px, calc(100vw - 32px));
+.edit-form-dialog.job-email-composer {
+    width: min(840px, calc(100vw - 32px));
     max-height: calc(100vh - 40px);
     overflow-y: auto;
 }
@@ -21,7 +21,8 @@
     text-transform: uppercase;
 }
 
-.job-email-composer-fields input {
+.job-email-composer-fields input,
+.job-email-composer-fields textarea {
     min-width: 0;
     padding: 10px 12px;
     border: 1px solid #b9c9c2;
@@ -31,7 +32,13 @@
     font: inherit;
 }
 
-.job-email-composer-fields input:focus {
+.job-email-composer-fields textarea {
+    resize: vertical;
+    line-height: 1.45;
+}
+
+.job-email-composer-fields input:focus,
+.job-email-composer-fields textarea:focus {
     border-color: #167b70;
     outline: 2px solid #c8e7e1;
     outline-offset: 1px;
@@ -44,6 +51,10 @@
 .job-email-composer-fields label small {
     color: #9b4141;
     font-size: 0.68rem;
+}
+
+.job-email-composer-fields label .job-email-field-help {
+    color: #66736d;
 }
 
 .job-email-composer-intro {
@@ -125,6 +136,28 @@
     line-height: 1.45;
 }
 
+.job-email-comments {
+    display: grid;
+    gap: 5px;
+    margin: 4px 0;
+    padding: 12px 14px;
+    border-left: 4px solid #c78319;
+    border-radius: 6px;
+    background: #fff8e8;
+}
+
+.job-email-comments span {
+    color: #805719;
+    font-size: 0.62rem;
+    font-weight: 750;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.job-email-comments p {
+    white-space: pre-wrap;
+}
+
 .job-email-preview dl {
     display: grid;
     grid-template-columns: max-content minmax(0, 1fr);
@@ -152,6 +185,12 @@
     color: #fff;
     font-size: 0.75rem;
     font-weight: 750;
+}
+
+.job-email-preview-button.is-disabled {
+    background: #dce3e0;
+    color: #6a7771;
+    cursor: not-allowed;
 }
 
 .job-email-preview-body > small {

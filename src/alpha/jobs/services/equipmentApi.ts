@@ -7,6 +7,7 @@ import {
     writePersistedEquipmentSnapshot,
     type EquipmentCacheReadOptions,
 } from '../../equipment/services/equipmentDataCache'
+import { normalizeAlternateFleetNumbers } from '../../equipment/identifiers/alternateFleetNumbers'
 
 const DATAVERSE_URL = import.meta.env.VITE_DATAVERSE_URL
 const EQUIPMENT_QUERY = 'gr_equipments?$select=gr_equipmentid,gr_fleet,gr_alternatefleetnumbers,gr_serial,gr_make,gr_model,statecode,statuscode,gr_currenthourmeter,gr_currenthourmeterrecordeddate,gr_servicetrackingenabled,gr_registrationnumber,gr_compliancestatus,gr_wofrequired,gr_currentwofexpiry,gr_lastwofcompleted,gr_regoexpiry,gr_powertype,gr_serviceprogramme,gr_maintenanceprofile,gr_ownershiptype,gr_sitecheckavailability,gr_customaenabled,gr_custombenabled,gr_customcenabled,gr_customaintervaldays,gr_custombintervaldays,gr_customcintervaldays&$expand=gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name))'
@@ -82,11 +83,13 @@ export async function createEquipment(
     accessToken: string,
     equipment: {
         fleet: string
+        alternateFleet?: string
         serial: string
         make?: string
         model?: string
     },
 ): Promise<string> {
+    const alternateFleetNumbers = normalizeAlternateFleetNumbers(equipment.alternateFleet, equipment.fleet)
     const result = await fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_equipments`, {
         method: 'POST',
         headers: {
@@ -97,6 +100,7 @@ export async function createEquipment(
         },
         body: JSON.stringify({
             gr_fleet: equipment.fleet,
+            gr_alternatefleetnumbers: alternateFleetNumbers || null,
             gr_serial: equipment.serial,
             gr_make: equipment.make,
             gr_model: equipment.model,

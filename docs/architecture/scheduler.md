@@ -23,6 +23,12 @@ Scheduler uses shared Job drawers and the established scheduling and assignment 
 Changes made from the board must update the same authoritative records and local feature
 state as changes made from Jobs.
 
+Opening a scheduled item uses the same focused Job-editor preparation as the Jobs screen:
+editor reference data is loaded, the selected Job is refreshed from Dataverse, and the shared
+drawer receives the Job's Office updates and Office attention actions. If only the focused
+refresh fails after reference data has loaded, the visible scheduled Job remains available as
+a fallback.
+
 ## Important Business Rules
 
 - Unconfirmed Jobs are not schedulable.

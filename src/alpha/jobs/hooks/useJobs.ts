@@ -31,7 +31,7 @@ import type { JobAssignment } from '../types/jobAssignment.types'
 import { fetchMechanics as fetchStaffDirectory } from '../../mechanics/services/mechanicsApi'
 import { subscribeToStaffChanges } from '../../mechanics/services/staffRealtime'
 import { createEmailDispatch, waitForEmailDispatch } from '../services/emailDispatchApi'
-import { buildAssignmentJobEmail, buildPrimaryJobEmail, type JobEmailDeliveryState, type JobEmailDraft } from '../services/jobEmail'
+import { buildAssignmentJobEmail, buildPrimaryJobEmail, ONLINE_JOB_CARD_ENABLED, type JobEmailDeliveryState, type JobEmailDraft } from '../services/jobEmail'
 import { assertJobHasEmailableJobNumber } from '../services/jobEmailRules'
 import { generateJobSubmissionLink } from '../services/jobSubmissionLinkApi'
 import { isValidTechnicianEmail } from '../utils/technicianMailto'
@@ -81,6 +81,7 @@ import { updateSiteCheckJobStatus } from '../../site-checks/services/siteCheckCo
 import type { Quote } from '../../quotes/types/quote.types'
 import {
     fetchEquipmentServicePlans,
+    refreshEquipmentServicePlanDueDates,
     saveEquipmentMaintenanceHistory as saveEquipmentMaintenanceHistoryApi,
     syncEquipmentServiceProgramme,
     updateEquipmentCurrentHourMeter,
@@ -235,6 +236,7 @@ export function useJobs() {
 
     const createEquipment = async (equipment: {
         fleet: string
+        alternateFleet?: string
         serial: string
         make?: string
         model?: string
@@ -667,13 +669,15 @@ export function useJobs() {
             throw new Error('The primary technician needs an email address before the job can be sent.')
         }
         const token = await getAccessToken()
-        const submissionLink = await generateJobSubmissionLink(token, {
-            jobId: job.gr_jobid,
-            mechanicId: job.gr_Mechanic?.gr_mechanicid,
-            recipientName: job.gr_Mechanic?.gr_name ?? 'Technician',
-            recipientEmail: job.gr_Mechanic?.gr_email ?? '',
-        })
-        const email = buildPrimaryJobEmail(job, submissionLink.url)
+        const submissionUrl = ONLINE_JOB_CARD_ENABLED
+            ? (await generateJobSubmissionLink(token, {
+                jobId: job.gr_jobid,
+                mechanicId: job.gr_Mechanic?.gr_mechanicid,
+                recipientName: job.gr_Mechanic?.gr_name ?? 'Technician',
+                recipientEmail: job.gr_Mechanic?.gr_email ?? '',
+            })).url
+            : ''
+        const email = buildPrimaryJobEmail(job, submissionUrl)
         const dispatchId = await createEmailDispatch(token, {
             jobId: job.gr_jobid,
             ...email,
@@ -695,13 +699,15 @@ export function useJobs() {
         }))
         try {
             const token = await getAccessToken()
-            const submissionLink = await generateJobSubmissionLink(token, {
-                jobId: job.gr_jobid,
-                mechanicId: job.gr_Mechanic?.gr_mechanicid,
-                recipientName: job.gr_Mechanic?.gr_name ?? 'Technician',
-                recipientEmail: draft.recipientEmail,
-            })
-            const email = buildPrimaryJobEmail(job, submissionLink.url, draft)
+            const submissionUrl = ONLINE_JOB_CARD_ENABLED
+                ? (await generateJobSubmissionLink(token, {
+                    jobId: job.gr_jobid,
+                    mechanicId: job.gr_Mechanic?.gr_mechanicid,
+                    recipientName: job.gr_Mechanic?.gr_name ?? 'Technician',
+                    recipientEmail: draft.recipientEmail,
+                })).url
+                : ''
+            const email = buildPrimaryJobEmail(job, submissionUrl, draft)
             const dispatchId = await createEmailDispatch(token, { jobId: job.gr_jobid, ...email })
             void (async () => {
                 try {
@@ -740,14 +746,16 @@ export function useJobs() {
             throw new Error('This technician needs an email address before the job can be sent.')
         }
         const token = await getAccessToken()
-        const submissionLink = await generateJobSubmissionLink(token, {
-            jobId: job.gr_jobid,
-            mechanicId: assignment.gr_Mechanic?.gr_mechanicid,
-            assignmentId: assignment.gr_jobassignmentid,
-            recipientName: assignment.gr_Mechanic?.gr_name ?? 'Technician',
-            recipientEmail: assignment.gr_Mechanic?.gr_email ?? '',
-        })
-        const email = buildAssignmentJobEmail(job, assignment, submissionLink.url)
+        const submissionUrl = ONLINE_JOB_CARD_ENABLED
+            ? (await generateJobSubmissionLink(token, {
+                jobId: job.gr_jobid,
+                mechanicId: assignment.gr_Mechanic?.gr_mechanicid,
+                assignmentId: assignment.gr_jobassignmentid,
+                recipientName: assignment.gr_Mechanic?.gr_name ?? 'Technician',
+                recipientEmail: assignment.gr_Mechanic?.gr_email ?? '',
+            })).url
+            : ''
+        const email = buildAssignmentJobEmail(job, assignment, submissionUrl)
         const dispatchId = await createEmailDispatch(token, {
             jobId: job.gr_jobid,
             assignmentId: assignment.gr_jobassignmentid,
@@ -901,6 +909,21 @@ export function useJobs() {
         setCompletionError('')
     }
 
+    const refreshCompletionDataAndServiceDates = async (token: string, equipmentId: string) => {
+        const [nextJobs, nextEquipment, nextPlans] = await Promise.all([
+            fetchJobsApi(token, { forceRefresh: true }),
+            fetchEquipmentApi(token),
+            fetchEquipmentServicePlans(token),
+        ])
+        const completedEquipment = nextEquipment.find((item) => item.gr_equipmentid.toLowerCase() === equipmentId.toLowerCase())
+        const refreshedPlans = completedEquipment
+            ? await refreshEquipmentServicePlanDueDates(token, completedEquipment, nextPlans, nextJobs)
+            : nextPlans
+        setJobs(nextJobs)
+        setEquipmentList(nextEquipment)
+        setServicePlans(refreshedPlans)
+    }
+
     const completeStandardJob = async (
         hourMeter: number,
         hourMeterReadingType: HourMeterReadingType,
@@ -956,18 +979,13 @@ export function useJobs() {
             } else {
                 await updateJobStatusApi(token, request.job.gr_jobid, JOB_STATUSES.COMPLETE, completionTimestamp, hourMeter, hourMeterReadingType, hourMeterRecordedDate)
             }
-            const [nextJobs, nextEquipment] = await Promise.all([
-                fetchJobsApi(token),
-                fetchEquipmentApi(token),
-            ])
-            setJobs(nextJobs)
-            setEquipmentList(nextEquipment)
+            await refreshCompletionDataAndServiceDates(token, equipment.gr_equipmentid)
             setCompletionRequest(null)
         } catch (error) {
             try {
                 const token = await getAccessToken()
                 const [jobsResult, equipmentResult] = await Promise.allSettled([
-                    fetchJobsApi(token),
+                    fetchJobsApi(token, { forceRefresh: true }),
                     fetchEquipmentApi(token),
                 ])
                 if (jobsResult.status === 'fulfilled') setJobs(jobsResult.value)
@@ -1023,20 +1041,13 @@ export function useJobs() {
                 pendingSave: request.pendingSave,
             })
 
-            const [nextJobs, nextEquipment, nextPlans] = await Promise.all([
-                fetchJobsApi(token),
-                fetchEquipmentApi(token),
-                fetchEquipmentServicePlans(token),
-            ])
-            setJobs(nextJobs)
-            setEquipmentList(nextEquipment)
-            setServicePlans(nextPlans)
+            await refreshCompletionDataAndServiceDates(token, equipment.gr_equipmentid)
             setCompletionRequest(null)
         } catch (error) {
             try {
                 const token = await getAccessToken()
                 const [jobsResult, equipmentResult, plansResult] = await Promise.allSettled([
-                    fetchJobsApi(token),
+                    fetchJobsApi(token, { forceRefresh: true }),
                     fetchEquipmentApi(token),
                     fetchEquipmentServicePlans(token),
                 ])
@@ -1108,12 +1119,7 @@ export function useJobs() {
                     })
                     : updateJobStatusApi(token, request.job.gr_jobid, JOB_STATUSES.COMPLETE, completionTimestamp, hourMeter, hourMeterReadingType, hourMeterRecordedDate),
             )
-            const [nextJobs, nextEquipment] = await Promise.all([
-                fetchJobsApi(token),
-                fetchEquipmentApi(token),
-            ])
-            setJobs(nextJobs)
-            setEquipmentList(nextEquipment)
+            await refreshCompletionDataAndServiceDates(token, equipment.gr_equipmentid)
             setCompletionRequest(null)
         } catch (error) {
             setCompletionError(`${error instanceof Error ? error.message : 'The WOF Job could not be completed.'} Refresh before retrying if the expiry or hour reading was already saved.`)

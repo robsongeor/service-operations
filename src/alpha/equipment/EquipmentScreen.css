@@ -72,6 +72,9 @@
 .equipment-form-grid input, .equipment-form-grid select { height: 38px; }
 .equipment-history-list { display: grid; gap: 10px; }
 .equipment-history-list article { padding: 12px; border: 1px solid #e0e5e2; border-radius: 9px; background: #fafbf9; }
+.equipment-history-list article.equipment-history-card-clickable { cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease, background .15s ease; }
+.equipment-history-list article.equipment-history-card-clickable:hover { border-color: #83b9af; background: #f4faf8; box-shadow: 0 3px 10px rgba(19, 82, 74, .08); }
+.equipment-history-list article.equipment-history-card-clickable:focus-visible { outline: 2px solid #17776d; outline-offset: 2px; }
 .equipment-history-title { display: flex; justify-content: space-between; gap: 12px; }
 .equipment-history-title > div { display: flex; min-width: 0; align-items: baseline; gap: 8px; }
 .equipment-history-title > div strong { flex: 0 0 auto; }
@@ -182,6 +185,7 @@
 .equipment-usage-forecast-heading .confidence-low { background: #f7dddd; color: #923e3e; }
 .equipment-usage-forecast-details { padding: 0 .8rem .8rem; border-top: 1px solid #cfe2dc; }
 .equipment-usage-confidence-note { margin: .7rem 0 0; color: #5b716a; font-size: .7rem; line-height: 1.45; }
+.equipment-usage-confidence-summary { margin: .7rem 0 0; padding: 8px 10px; border-radius: 7px; background: #e7f1ee; color: #315f57; font-size: .72rem; line-height: 1.45; }
 .equipment-usage-signals { display: grid !important; gap: 6px; margin-top: .75rem; padding-top: .7rem; border-top: 1px solid #cfe2dc; }
 .equipment-usage-signals > strong { color: #315f57; font-size: .72rem; }
 .equipment-usage-signals > div { display: grid !important; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; color: #5b716a; font-size: .68rem; }

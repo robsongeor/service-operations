@@ -14,12 +14,13 @@ import FormSwitch from '../../shared/form-switch/FormSwitch'
 import type { EquipmentServicePlan } from '../servicePlans/equipmentServicePlan.types'
 import { SERVICE_TYPES, SERVICE_TYPE_OPTIONS, type PlannedServiceType } from '../servicePlans/equipmentServicePlan.types'
 import type { MaintenanceHistoryInput } from '../servicePlans/servicePlanApi'
-import { calculateHoursRemaining, calculateServiceStatus, calculateSuggestedServiceDate } from '../servicePlans/servicePlanStatus'
+import { calculateForecastAdjustedServicePlan, calculateHoursRemaining } from '../servicePlans/servicePlanStatus'
+import { resolveEffectiveServicePlans } from '../servicePlans/servicePlanCalculations'
 import { normalizeEquipmentInput, toEquipmentDateOnlyValue, type EquipmentCreateInitialValues, type EquipmentUpdateInput } from '../types/equipmentManager.types'
 import { classifyEquipmentIdentifier, deriveSiteNameFromAddress, normalizeCustomerName, parseSpreadsheetRow, type IdentifierClassification, type SpreadsheetRow } from '../utils/equipmentCreateHelpers'
 import SearchableSelect, { type SearchableSelectOption } from '../../shared/searchable-select/SearchableSelect'
 import { formatMaintenanceInterval, MAINTENANCE_PROFILES, POWER_TYPES, resolveMaintenanceConfiguration, SERVICE_PROGRAMMES, type MaintenanceProfile, type PowerType, type ServiceProgramme } from '../servicePlans/maintenanceConfiguration'
-import { calculateEquipmentUsageForecast, calculateUsageAdjustedServiceInterval, estimateUsageThresholdDate, MINIMUM_USAGE_SPAN_DAYS, resolveLatestHourMeterReading } from '../servicePlans/equipmentUsageForecast'
+import { calculateEquipmentUsageForecast, resolveLatestHourMeterReading } from '../servicePlans/equipmentUsageForecast'
 import {
     EQUIPMENT_COMPLIANCE_STATUSES,
     getEquipmentComplianceStatus,
@@ -68,6 +69,10 @@ type EditProps = SharedProps & {
     onSave: (input: EquipmentUpdateInput, resolvedSite?: Site) => Promise<void>
     onSaveMaintenanceHistory: (plans: EquipmentServicePlan[], input: MaintenanceHistoryInput) => Promise<void>
     onCreateJob?: (equipment: Equipment) => void
+    onOpenJob?: (job: Job) => void
+    isJobHistoryLoading?: boolean
+    jobHistoryError?: string
+    onRetryJobHistory?: () => void
     onDelete: () => Promise<void>
     onCreateCustomer?: (input: { name: string }) => Promise<Customer>
     onCreateSite?: (input: { customerId: string; name: string; address?: string }, customer?: Customer) => Promise<Site>
@@ -226,12 +231,12 @@ export default function EquipmentDrawer(props: Props) {
         : undefined
     const busy = isSaving || isDeleting || isComplianceSaving
     const equipmentName = equipment ? [equipment.gr_fleet, equipment.gr_make, equipment.gr_model].filter(Boolean).join(' - ') || 'this equipment' : ''
-    const plans = isCreate ? [] : props.servicePlans
+    const plans = isCreate ? [] : resolveEffectiveServicePlans(props.servicePlans, equipment)
     const maintenanceConfiguration = resolveMaintenanceConfiguration(equipment)
     const tabs: Array<{ id: EquipmentDrawerTab; label: string; count?: number }> = [
         { id: 'details', label: 'Details' },
         { id: 'maintenance', label: 'Maintenance' },
-        { id: 'history', label: 'Job History', count: history.length },
+        { id: 'history', label: 'Job History', count: props.mode === 'edit' && props.isJobHistoryLoading ? undefined : history.length },
     ]
 
     const openMaintenanceDialog = () => {
@@ -885,8 +890,9 @@ export default function EquipmentDrawer(props: Props) {
                                     <span className={`confidence-${usageForecast.confidence.toLowerCase()}`}>{usageForecast.confidenceScore}% {usageForecast.confidence} confidence</span>
                                 </summary>
                                 <div className="equipment-usage-forecast-details">
+                                    <p className="equipment-usage-confidence-summary"><strong>Why this confidence:</strong> {usageForecast.confidenceSummary}</p>
                                     {usageForecast.averageHoursPerDay == null
-                                        ? <p className="equipment-hour-meter-empty">Valid completed Job readings must span at least {MINIMUM_USAGE_SPAN_DAYS} days before usage can be estimated.</p>
+                                        ? null
                                         : <dl>
                                             <div><dt>Per Day</dt><dd>{usageForecast.averageHoursPerDay.toFixed(1)} h</dd></div>
                                             <div><dt>Per Week</dt><dd>{usageForecast.averageHoursPerWeek!.toFixed(1)} h</dd></div>
@@ -924,18 +930,13 @@ export default function EquipmentDrawer(props: Props) {
                                 const serviceLevel = maintenanceConfiguration.serviceLevels[serviceType]!
                                 const currentHours = latestHourMeterReading?.hours ?? 0
                                 const remaining = plan ? calculateHoursRemaining(currentHours, plan.gr_nextduehours) : null
-                                const status = plan ? calculateServiceStatus(currentHours, plan.gr_nextduehours, plan.gr_nextduedate) : null
-                                const adjustedInterval = usageForecast
-                                    ? calculateUsageAdjustedServiceInterval(usageForecast, serviceLevel.hours, serviceLevel.timeInterval)
+                                const projection = plan
+                                    ? calculateForecastAdjustedServicePlan(plan, { ...equipment, gr_currenthourmeter: currentHours }, usageForecast, currentNewZealandDateOnly())
                                     : null
-                                const estimatedHourDueDate = usageForecast && plan && adjustedInterval?.hasReliableUsage
-                                    ? estimateUsageThresholdDate(usageForecast, currentHours, plan.gr_nextduehours)
-                                    : null
-                                const suggestedService = calculateSuggestedServiceDate(
-                                    plan?.gr_nextduedate,
-                                    estimatedHourDueDate,
-                                    currentNewZealandDateOnly(),
-                                )
+                                const adjustedInterval = projection?.adjustedInterval ?? null
+                                const estimatedHourDueDate = projection?.estimatedHourDueDate ?? null
+                                const suggestedService = projection?.suggestedService ?? null
+                                const status = projection?.status ?? null
                                 const nextDueLabel = suggestedService ? formatDate(suggestedService.date) : 'Not configured'
                                 const nextServiceBasis = suggestedService?.basis === 'hours'
                                     ? `Projected hours · ${usageForecast?.confidenceScore ?? 0}% confidence`
@@ -947,8 +948,8 @@ export default function EquipmentDrawer(props: Props) {
                                     : suggestedService?.isDueToday ? `Due today · ${nextServiceBasis}` : nextServiceBasis
                                 const intervalLabel = adjustedInterval?.label ?? formatMaintenanceInterval(serviceLevel.timeInterval)
                                 const intervalBasis = adjustedInterval?.source === 'usage'
-                                    ? `Usage-adjusted · default ${formatMaintenanceInterval(serviceLevel.timeInterval)}`
-                                    : adjustedInterval?.hasReliableUsage ? 'Default remains earlier than usage forecast' : 'Default profile'
+                                    ? `Usage estimate · ${usageForecast?.confidenceScore ?? 0}% confidence`
+                                    : 'Default profile fallback · usage confidence below 40% or forecast unavailable'
                                 const lastCompletedSummary = plan?.gr_LastCompletedJob?.gr_jobnumber
                                     ? `Job ${plan.gr_LastCompletedJob.gr_jobnumber} · ${plan.gr_lastcompletedhours != null ? `${plan.gr_lastcompletedhours.toLocaleString('en-NZ')} hours` : 'hours not recorded'}`
                                     : 'No completed Job linked'
@@ -967,7 +968,7 @@ export default function EquipmentDrawer(props: Props) {
                                         <p className="equipment-service-plan-interval-detail">Interval: <strong>{intervalLabel}</strong> <span>{intervalBasis}</span></p>
                                         <dl>
                                             <div><dt>Due Hour</dt><dd>{plan?.gr_nextduehours ?? '-'}</dd></div>
-                                            <div><dt>Default Due Date</dt><dd>{plan?.gr_nextduedate ? formatDate(plan.gr_nextduedate) : '-'}</dd></div>
+                                            <div><dt>Stored Due Date</dt><dd>{plan?.gr_nextduedate ? formatDate(plan.gr_nextduedate) : '-'}</dd></div>
                                             <div><dt>Hours Remaining</dt><dd>{remaining == null ? '-' : remaining < 0 ? `${Math.abs(remaining)} overdue` : remaining}</dd></div>
                                             <div><dt>Projected Hour Date</dt><dd>{estimatedHourDueDate ? formatDate(estimatedHourDueDate) : '-'}</dd></div>
                                             <div><dt>Last Completed Date</dt><dd>{plan?.gr_lastcompleteddate ? formatDate(plan.gr_lastcompleteddate) : '-'}</dd></div>
@@ -980,9 +981,25 @@ export default function EquipmentDrawer(props: Props) {
                         </div>
                     </EditDrawerSection>}
 
-                    {!isCreate && activeTab === 'history' && <EditDrawerSection title="Job History" meta={<span className="equipment-history-count">{history.length} {history.length === 1 ? 'job' : 'jobs'}</span>}>
+                    {!isCreate && activeTab === 'history' && <EditDrawerSection title="Job History" meta={<span className="equipment-history-count">{props.isJobHistoryLoading ? 'Loading…' : `${history.length} ${history.length === 1 ? 'job' : 'jobs'}`}</span>}>
                         <p className="equipment-history-note">Historical rows use each Job's recorded Site and are not changed when this Equipment moves.</p>
-                        {history.length === 0 ? <div className="equipment-history-empty">No linked jobs found.</div> : <div className="equipment-history-list">{history.map((job) => <article key={job.gr_jobid}>
+                        {props.isJobHistoryLoading
+                            ? <div className="equipment-history-empty" role="status">Loading linked Jobs…</div>
+                            : props.jobHistoryError
+                                ? <div className="equipment-history-empty" role="alert"><p>{props.jobHistoryError}</p>{props.onRetryJobHistory && <button type="button" onClick={props.onRetryJobHistory}>Try again</button>}</div>
+                                : history.length === 0 ? <div className="equipment-history-empty">No linked jobs found.</div> : <div className="equipment-history-list">{history.map((job) => <article
+                            key={job.gr_jobid}
+                            className={!isCreate && props.onOpenJob ? 'equipment-history-card-clickable' : undefined}
+                            role={!isCreate && props.onOpenJob ? 'button' : undefined}
+                            tabIndex={!isCreate && props.onOpenJob ? 0 : undefined}
+                            aria-label={!isCreate && props.onOpenJob ? `Open Job ${job.gr_jobnumber || 'without a Job Number'}` : undefined}
+                            onClick={!isCreate && props.onOpenJob ? () => props.onOpenJob?.(job) : undefined}
+                            onKeyDown={!isCreate && props.onOpenJob ? (event) => {
+                                if (event.key !== 'Enter' && event.key !== ' ') return
+                                event.preventDefault()
+                                props.onOpenJob?.(job)
+                            } : undefined}
+                        >
                             <div className="equipment-history-title">
                                 <div><strong>{job.gr_jobnumber || 'Job number not set'}</strong><span title={job.gr_description || 'No description'}>{job.gr_description || 'No description'}</span></div>
                                 <time dateTime={job.createdon}>Created {formatDate(job.createdon)}</time>

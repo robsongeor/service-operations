@@ -1,6 +1,12 @@
 import type { EquipmentServicePlan, ServicePlanStatus } from './equipmentServicePlan.types.ts'
 import type { Equipment } from '../../jobs/types/equipment.types'
 import { resolveMaintenanceConfiguration } from './maintenanceConfiguration.ts'
+import {
+    calculateUsageAdjustedServiceInterval,
+    estimateUsageThresholdDate,
+    type EquipmentUsageForecast,
+    type UsageAdjustedServiceInterval,
+} from './equipmentUsageForecast.ts'
 
 export const SERVICE_STATUS_THRESHOLDS = { dueSoonHours: 50 } as const
 
@@ -9,6 +15,15 @@ export type SuggestedServiceDate = {
     basis: 'hours' | 'calendar' | 'both'
     isOverdue: boolean
     isDueToday: boolean
+}
+
+export type ForecastAdjustedServicePlan = {
+    plan: EquipmentServicePlan
+    adjustedInterval: UsageAdjustedServiceInterval | null
+    estimatedHourDueDate: string | null
+    usesUsageSchedule: boolean
+    suggestedService: SuggestedServiceDate | null
+    status: ServicePlanStatus | null
 }
 
 function validDateOnly(value?: string | null) {
@@ -43,6 +58,55 @@ export function calculateServiceStatus(currentHours: number, nextDueHours?: numb
     if (remaining === 0 || daysRemaining === 0) return 'Due'
     if ((remaining != null && remaining <= SERVICE_STATUS_THRESHOLDS.dueSoonHours) || (daysRemaining != null && daysRemaining <= 30)) return 'Due Soon'
     return 'OK'
+}
+
+export function calculateForecastAdjustedServicePlan(
+    plan: EquipmentServicePlan,
+    equipment: Partial<Equipment>,
+    forecast: EquipmentUsageForecast | null,
+    today = new Date().toISOString().slice(0, 10),
+): ForecastAdjustedServicePlan {
+    const currentHours = equipment.gr_currenthourmeter ?? 0
+    const serviceLevel = resolveMaintenanceConfiguration(equipment).serviceLevels[plan.gr_servicetype]
+    const adjustedInterval = forecast && serviceLevel
+        ? calculateUsageAdjustedServiceInterval(forecast, serviceLevel.hours, serviceLevel.timeInterval)
+        : null
+    const estimatedHourDueDate = forecast && adjustedInterval?.hasReliableUsage
+        ? estimateUsageThresholdDate(forecast, currentHours, plan.gr_nextduehours)
+        : null
+    const usesUsageSchedule = adjustedInterval?.source === 'usage' && Boolean(estimatedHourDueDate)
+    return {
+        plan,
+        adjustedInterval,
+        estimatedHourDueDate,
+        usesUsageSchedule,
+        suggestedService: calculateSuggestedServiceDate(
+            usesUsageSchedule ? null : plan.gr_nextduedate,
+            usesUsageSchedule ? estimatedHourDueDate : null,
+            today,
+        ),
+        status: calculateServiceStatus(
+            currentHours,
+            plan.gr_nextduehours,
+            usesUsageSchedule ? null : plan.gr_nextduedate,
+            today,
+        ),
+    }
+}
+
+export function calculatePrimaryForecastAdjustedService(
+    plans: EquipmentServicePlan[],
+    equipment: Partial<Equipment>,
+    forecast: EquipmentUsageForecast | null,
+    today = new Date().toISOString().slice(0, 10),
+) {
+    const rank = { Overdue: 0, Due: 1, 'Due Soon': 2, OK: 3 } as const
+    return getActiveServicePlans(plans, equipment)
+        .filter((plan) => plan.gr_nextduehours != null || plan.gr_nextduedate)
+        .map((plan) => calculateForecastAdjustedServicePlan(plan, equipment, forecast, today))
+        .sort((a, b) => (a.status ? rank[a.status] : 4) - (b.status ? rank[b.status] : 4)
+            || (a.suggestedService?.date ?? '9999-12-31').localeCompare(b.suggestedService?.date ?? '9999-12-31')
+            || (a.plan.gr_nextduehours ?? Infinity) - (b.plan.gr_nextduehours ?? Infinity))[0] ?? null
 }
 
 export function getActiveServicePlans(plans: EquipmentServicePlan[], equipment?: Partial<Equipment> | null) {

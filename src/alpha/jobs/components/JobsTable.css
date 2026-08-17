@@ -655,6 +655,32 @@
     color: #285746;
     font-size: 0.76rem;
     font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.jobs-copy-feedback span { flex: 1; }
+.jobs-copy-feedback button {
+    display: grid;
+    width: 24px;
+    height: 24px;
+    flex: 0 0 auto;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: currentColor;
+    font: inherit;
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+}
+.jobs-copy-feedback button:hover,
+.jobs-copy-feedback button:focus-visible {
+    background: rgba(20, 40, 31, .09);
+    outline: none;
 }
 
 .jobs-copy-feedback.error {

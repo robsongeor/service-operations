@@ -29,7 +29,7 @@ export type JobCreateInitialValues = {
     jobNumber?: string
     orderNumber?: string
     status?: JobStatus
-    equipmentDraft?: { fleet?: string; serial?: string; make?: string; model?: string }
+    equipmentDraft?: { fleet?: string; alternateFleet?: string; serial?: string; make?: string; model?: string }
     equipmentId?: string
     siteId?: string
     customerId?: string
@@ -49,7 +49,7 @@ type Props = {
     onCreateCustomer: (customer: { name: string }) => Promise<string>
     onCreateSite: (site: { customerId: string; name: string; address?: string }) => Promise<string>
     onCreateContact: (contact: { siteId: string; name: string; phone?: string; email?: string }) => Promise<string>
-    onCreateEquipment: (equipment: { fleet: string; serial: string; make?: string; model?: string }) => Promise<string>
+    onCreateEquipment: (equipment: { fleet: string; alternateFleet?: string; serial: string; make?: string; model?: string }) => Promise<string>
     onCreateJob: (job: JobSaveInput) => Promise<string>
     onCreated?: (jobId: string, job: JobSaveInput) => Promise<void> | void
     onCreateScheduleOption: (option: JobScheduleOptionInput) => Promise<void>

@@ -69,8 +69,30 @@ test('Jobs and Scheduler apply explicit Site Check integration contracts', () =>
     assert.match(jobsHook, /SITE_CHECK_SCHEDULER_MESSAGE/)
 })
 
+test('every Job completion refresh bypasses stale cached Jobs', () => {
+    const jobsHook = readFileSync(new URL('../src/alpha/jobs/hooks/useJobs.ts', import.meta.url), 'utf8')
+    assert.match(jobsHook, /const refreshCompletionDataAndServiceDates = async/)
+    assert.match(jobsHook, /fetchJobsApi\(token, \{ forceRefresh: true \}\)/)
+    assert.equal(jobsHook.match(/await refreshCompletionDataAndServiceDates\(token, equipment\.gr_equipmentid\)/g)?.length, 3)
+    assert.match(jobsHook, /setCompletionRequest\(null\)/)
+})
+
+test('Scheduler opens the authoritative Job editor workflow with Office actions', () => {
+    const scheduler = readFileSync(new URL('../src/alpha/scheduling/SchedulingScreen.tsx', import.meta.url), 'utf8')
+    assert.match(scheduler, /const openJob = async \(job: Job\)/)
+    assert.match(scheduler, /await prepareJobReferenceData\(\)/)
+    assert.match(scheduler, /await fetchJobForDrawer\(job\.gr_jobid\)/)
+    assert.match(scheduler, /officeUpdates=\{officeUpdates\.filter/)
+    assert.match(scheduler, /onCreateOfficeUpdate=\{createJobOfficeUpdate\}/)
+    assert.match(scheduler, /onSaveOfficeAttention=\{updateJobOfficeAttention\}/)
+})
+
 test('Jobs table supports copying selected visible Job Book rows in sorted order', () => {
     const jobsTable = readFileSync(new URL('../src/alpha/jobs/components/JobsTable.tsx', import.meta.url), 'utf8')
+    assert.match(jobsTable, /jobBookFleetCell[\s\S]*formatFleetNumbers/)
+    assert.match(jobsTable, /jobBookFleetCell\(job\)/)
+    assert.match(jobsTable, /JOBS_FEEDBACK_TIMEOUT_MS = 5000/)
+    assert.match(jobsTable, /aria-label="Dismiss notification"/)
     assert.match(jobsTable, /selectedShownJobs\.map\(buildJobBookSpreadsheetRow\)\.join\('\\n'\)/)
     assert.match(jobsTable, /Select all shown/)
     assert.match(jobsTable, /Select Job \$\{job\.gr_jobnumber \|\| 'row'\} for job book export/)

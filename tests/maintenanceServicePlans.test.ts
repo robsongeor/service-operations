@@ -10,6 +10,9 @@ import {
 } from '../src/alpha/equipment/servicePlans/maintenanceConfiguration.ts'
 import {
     applyServiceCompletion,
+    cascadeServiceHistoryBaselines,
+    recalculateServicePlanDueDates,
+    resolveEffectiveServicePlans,
     selectSatisfiedServicePlans,
 } from '../src/alpha/equipment/servicePlans/servicePlanCalculations.ts'
 import {
@@ -19,6 +22,7 @@ import {
     type PlannedServiceType,
 } from '../src/alpha/equipment/servicePlans/equipmentServicePlan.types.ts'
 import {
+    calculateForecastAdjustedServicePlan,
     calculatePrimaryNextService,
     calculateSuggestedServiceDate,
     calculateServiceStatus,
@@ -27,6 +31,7 @@ import {
     calculateEquipmentUsageForecast,
     calculateUsageAdjustedServiceInterval,
     estimateUsageThresholdDate,
+    MINIMUM_AUTHORITATIVE_USAGE_CONFIDENCE,
     MINIMUM_USAGE_SPAN_DAYS,
     resolveCurrentHourMeterRecordedDate,
     resolveLatestHourMeterReading,
@@ -171,6 +176,7 @@ test('usage forecast fails safely with insufficient history and estimates thresh
     ], new Date('2026-04-01T00:00:00Z'))
     assert.equal(insufficient.averageHoursPerDay, null)
     assert.equal(insufficient.confidence, 'Low')
+    assert.match(insufficient.confidenceSummary, /At least two valid readings/)
 
     const forecast = calculateEquipmentUsageForecast(forecastEquipment, [
         meterJob(JOB_TYPES.SERVICE, '2026-03-02T00:00:00Z', 700),
@@ -192,7 +198,7 @@ test('suggested service date uses the earlier calendar or projected-hour limit',
     assert.equal(calculateSuggestedServiceDate(null, null, '2026-08-14'), null)
 })
 
-test('reliable usage may shorten but never extend the default maintenance interval', () => {
+test('usage at 40% confidence becomes authoritative and the profile is the low-confidence fallback', () => {
     const highUsage = calculateEquipmentUsageForecast(forecastEquipment, [
         meterJob(JOB_TYPES.SERVICE, '2026-04-01T00:00:00Z', 1_000),
         meterJob(JOB_TYPES.BREAKDOWN, '2026-07-01T00:00:00Z', 1_455),
@@ -205,9 +211,19 @@ test('reliable usage may shorten but never extend the default maintenance interv
         meterJob(JOB_TYPES.SERVICE, '2026-01-01T00:00:00Z', 1_000),
         meterJob(JOB_TYPES.BREAKDOWN, '2026-07-01T00:00:00Z', 1_100),
     ], new Date('2026-07-01T00:00:00Z'))
-    const defaultLimited = calculateUsageAdjustedServiceInterval(lowUsage, 250, { unit: 'months', value: 3 })
-    assert.equal(defaultLimited.source, 'profile')
-    assert.equal(defaultLimited.label, '3 months')
+    const usageExtended = calculateUsageAdjustedServiceInterval({
+        ...lowUsage,
+        confidenceScore: MINIMUM_AUTHORITATIVE_USAGE_CONFIDENCE,
+    }, 250, { unit: 'months', value: 3 })
+    assert.equal(usageExtended.source, 'usage')
+    assert.ok(usageExtended.days > 3 * 30)
+
+    const profileFallback = calculateUsageAdjustedServiceInterval({
+        ...lowUsage,
+        confidenceScore: MINIMUM_AUTHORITATIVE_USAGE_CONFIDENCE - 1,
+    }, 250, { unit: 'months', value: 3 })
+    assert.equal(profileFallback.source, 'profile')
+    assert.equal(profileFallback.label, '3 months')
 
     const insufficient = calculateEquipmentUsageForecast(forecastEquipment, [
         meterJob(JOB_TYPES.SERVICE, '2026-07-01T00:00:00Z', 1_000),
@@ -349,6 +365,122 @@ test('C completion resets every ICE plan from the same baseline', () => {
     assert.ok(updated.every((item) => item.gr_lastcompleteddate === '2026-07-24'))
 })
 
+test('forecast-aware status ignores an expired profile date when trusted hours remain', () => {
+    const baseForecast = calculateEquipmentUsageForecast(forecastEquipment, [
+        meterJob(JOB_TYPES.SERVICE, '2026-07-01T00:00:00Z', 1_000),
+        meterJob(JOB_TYPES.BREAKDOWN, '2026-08-14T00:00:00Z', 1_100),
+    ], new Date('2026-08-17T00:00:00Z'))
+    const forecast = {
+        ...baseForecast,
+        averageHoursPerDay: 1,
+        averageHoursPerWeek: 7,
+        averageHoursPerMonth: 30.4375,
+        confidenceScore: 56,
+        confidence: 'Moderate' as const,
+        resetCount: 0,
+        latestReadingDate: '2026-08-14',
+    }
+    const equipment = { ...forecastEquipment, ...ICE, gr_currenthourmeter: 1_100 }
+    const servicePlan = plan(SERVICE_TYPES.A, 1_312, '2026-08-06')
+
+    const projected = calculateForecastAdjustedServicePlan(servicePlan, equipment, forecast, '2026-08-17')
+    assert.equal(projected.usesUsageSchedule, true)
+    assert.equal(projected.status, 'OK')
+    assert.equal(projected.suggestedService?.basis, 'hours')
+    assert.equal(projected.suggestedService?.date, '2027-03-14')
+
+    const fallback = calculateForecastAdjustedServicePlan(servicePlan, equipment, {
+        ...forecast,
+        confidenceScore: 39,
+        confidence: 'Low',
+    }, '2026-08-17')
+    assert.equal(fallback.usesUsageSchedule, false)
+    assert.equal(fallback.status, 'Overdue')
+    assert.equal(fallback.suggestedService?.basis, 'calendar')
+})
+
+test('every completed Job reading refreshes the stored effective service due date', () => {
+    const equipment = {
+        ...forecastEquipment,
+        ...ICE,
+        gr_currenthourmeter: 1_400,
+        gr_currenthourmeterrecordeddate: '2026-08-01',
+    }
+    const jobs = [
+        meterJob(JOB_TYPES.SERVICE, '2026-04-01T00:00:00Z', 1_000),
+        meterJob(JOB_TYPES.BREAKDOWN, '2026-05-01T00:00:00Z', 1_100),
+        meterJob(JOB_TYPES.WOF, '2026-06-01T00:00:00Z', 1_200),
+        meterJob(JOB_TYPES.WORKSHOP, '2026-07-01T00:00:00Z', 1_300),
+        meterJob(JOB_TYPES.SITE_CHECK, '2026-08-01T00:00:00Z', 1_400),
+    ]
+    const storedPlan = {
+        ...plan(SERVICE_TYPES.A, 1_650, '2026-08-01'),
+        gr_lastcompleteddate: '2026-06-01',
+        gr_lastcompletedhours: 1_200,
+        _gr_equipment_value: equipment.gr_equipmentid,
+    }
+    const [forecastUpdated] = recalculateServicePlanDueDates(equipment, [storedPlan], jobs)
+    assert.equal(forecastUpdated.gr_nextduedate, '2026-10-17')
+
+    const [profileFallback] = recalculateServicePlanDueDates(equipment, [storedPlan], [jobs.at(-1)!])
+    assert.equal(profileFallback.gr_nextduedate, '2026-09-01')
+})
+
+test('standard, Service, and WOF completion all persist refreshed service dates', () => {
+    const hook = readFileSync(new URL('../src/alpha/jobs/hooks/useJobs.ts', import.meta.url), 'utf8')
+    const api = readFileSync(new URL('../src/alpha/equipment/servicePlans/servicePlanApi.ts', import.meta.url), 'utf8')
+    assert.equal(hook.match(/await refreshCompletionDataAndServiceDates\(token, equipment\.gr_equipmentid\)/g)?.length, 3)
+    assert.match(hook, /fetchJobsApi\(token, \{ forceRefresh: true \}\)/)
+    assert.match(hook, /refreshEquipmentServicePlanDueDates\(token, completedEquipment, nextPlans, nextJobs\)/)
+    assert.match(api, /body: JSON\.stringify\(\{ gr_nextduedate: plan\.gr_nextduedate \?\? null \}\)/)
+})
+
+test('usage forecast keeps a 360-day baseline and explains its remaining confidence limits', () => {
+    const forecast = calculateEquipmentUsageForecast(forecastEquipment, [
+        meterJob(JOB_TYPES.SERVICE, '2024-09-05T00:00:00Z', 3_185),
+        meterJob(JOB_TYPES.BREAKDOWN, '2024-11-12T00:00:00Z', 3_276),
+        meterJob(JOB_TYPES.BREAKDOWN, '2025-01-21T00:00:00Z', 3_339),
+        meterJob(JOB_TYPES.WORKSHOP, '2025-05-27T00:00:00Z', 3_491),
+        meterJob(JOB_TYPES.BREAKDOWN, '2026-04-29T00:00:00Z', 3_636),
+    ], new Date('2026-08-17T00:00:00Z'))
+
+    assert.equal(forecast.confidenceScore, 45)
+    assert.equal(forecast.averageHoursPerDay, 145 / 337)
+    assert.equal(forecast.readingCount, 2)
+    assert.match(forecast.confidenceSummary, /Only 2 recent readings across 337 days are available/)
+    assert.match(forecast.confidenceSummary, /latest valid reading is 110 days old/)
+})
+
+test('historical C baseline satisfies B and A while a newer lower service remains authoritative', () => {
+    const cascaded = cascadeServiceHistoryBaselines([
+        { serviceType: SERVICE_TYPES.A, lastCompletedDate: '2026-05-10', lastCompletedHours: 2200 },
+        { serviceType: SERVICE_TYPES.B, lastCompletedDate: '2025-06-01', lastCompletedHours: 1000 },
+        { serviceType: SERVICE_TYPES.C, lastCompletedDate: '2026-04-20', lastCompletedHours: 2000 },
+    ], ICE)
+    assert.deepEqual(cascaded, [
+        { serviceType: SERVICE_TYPES.A, lastCompletedDate: '2026-05-10', lastCompletedHours: 2200 },
+        { serviceType: SERVICE_TYPES.B, lastCompletedDate: '2026-04-20', lastCompletedHours: 2000 },
+        { serviceType: SERVICE_TYPES.C, lastCompletedDate: '2026-04-20', lastCompletedHours: 2000 },
+    ])
+})
+
+test('effective plan display recalculates lower service due dates from a newer C baseline', () => {
+    const plans = [
+        { ...plan(SERVICE_TYPES.A, 1250), gr_equipmentserviceplanid: 'a', gr_lastcompleteddate: '2024-09-05', gr_lastcompletedhours: 1000 },
+        { ...plan(SERVICE_TYPES.B, 2000), gr_equipmentserviceplanid: 'b', gr_lastcompleteddate: '2024-09-05', gr_lastcompletedhours: 1000 },
+        { ...plan(SERVICE_TYPES.C, 5636), gr_equipmentserviceplanid: 'c', gr_lastcompleteddate: '2026-04-20', gr_lastcompletedhours: 3636 },
+    ]
+    const effective = resolveEffectiveServicePlans(plans, ICE)
+    const a = effective.find((item) => item.gr_servicetype === SERVICE_TYPES.A)!
+    const b = effective.find((item) => item.gr_servicetype === SERVICE_TYPES.B)!
+    assert.equal(a.gr_lastcompleteddate, '2026-04-20')
+    assert.equal(a.gr_lastcompletedhours, 3636)
+    assert.equal(a.gr_nextduehours, 3886)
+    assert.equal(a.gr_nextduedate, '2026-07-20')
+    assert.equal(b.gr_lastcompleteddate, '2026-04-20')
+    assert.equal(b.gr_nextduedate, '2027-04-20')
+})
+
 test('Electric C resets A and C, excludes B, and recalculates nearest service', () => {
     const updated = applyServiceCompletion(ALL_PLANS, {
         jobId: 'job-electric-c',
@@ -393,6 +525,11 @@ test('Service completion dialog constrains responsive hour-meter fields', () => 
   assert.match(workflow, /onCompleteStandard\(reading, readingType, readingDate, completionDate\)/)
   assert.match(workflow, /onCompleteWof\(wofExpiry, reading, readingType, readingDate, completionDate\)/)
   assert.equal(workflow.match(/Job Completion Date \*/g)?.length, 1)
+  const hourEntryIndex = workflow.indexOf("'Hour Meter at Completion *'")
+  const completionDateIndex = workflow.indexOf('Job Completion Date *')
+  const estimateControlIndex = workflow.indexOf('job-completion-estimate-toggle')
+  assert.ok(hourEntryIndex >= 0 && completionDateIndex > hourEntryIndex && estimateControlIndex > completionDateIndex)
+  assert.match(workflow, /value=\{readingValue\}[\s\S]*?autoFocus readOnly=\{isUsingEstimatedReading\}/)
   assert.match(workflow, /const readingDate = completionDate/)
   assert.doesNotMatch(workflow, /Hour Meter Reading Date \*/)
   assert.doesNotMatch(workflow, /readingDateInput/)
@@ -417,7 +554,7 @@ test('Service completion dialog constrains responsive hour-meter fields', () => 
     assert.match(styles, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/)
     assert.match(styles, /\.edit-form-dialog\.job-completion-dialog \{ width: min\(560px, calc\(100vw - 32px\)\); \}/)
     assert.match(styles, /\.job-completion-fields output small, \.job-completion-wof-fields output small \{ display: block;/)
-    assert.match(styles, /\.job-completion-hour-entry/)
+    assert.match(styles, /\.job-completion-current-meter output/)
     assert.match(styles, /\.job-completion-estimate-value/)
     assert.match(styles, /\.job-completion-summary \{ grid-column: 1 \/ -1; \}/)
     assert.match(styles, /\.job-completion-summary ul \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/)

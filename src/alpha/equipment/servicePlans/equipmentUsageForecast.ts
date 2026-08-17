@@ -4,8 +4,9 @@ import { JOB_STATUSES } from '../../jobs/types/jobStatus.types.ts'
 import { HOUR_METER_READING_TYPES, type HourMeterReadingType } from '../hourMeter/hourMeterReading.types.ts'
 import type { MaintenanceInterval } from './maintenanceConfiguration.ts'
 
-const HISTORY_WINDOW_DAYS = 180
+const HISTORY_WINDOW_DAYS = 360
 export const MINIMUM_USAGE_SPAN_DAYS = 7
+export const MINIMUM_AUTHORITATIVE_USAGE_CONFIDENCE = 40
 const DAY_MS = 24 * 60 * 60 * 1000
 
 export type HourMeterAssessment = 'Accepted' | 'Estimated' | 'Potentially incorrect' | 'Possible reset' | 'Confirmed reset'
@@ -34,6 +35,7 @@ export type EquipmentUsageForecast = {
     resetCount: number
     spanDays: number
     latestReadingDate: string | null
+    confidenceSummary: string
     readings: UsageReading[]
 }
 
@@ -71,14 +73,13 @@ export function calculateUsageAdjustedServiceInterval(
     const defaultDays = maintenanceIntervalDays(defaultInterval)
     const hasReliableUsage = forecast.averageHoursPerDay != null
         && forecast.averageHoursPerDay > 0
-        && forecast.confidenceScore >= 50
+        && forecast.confidenceScore >= MINIMUM_AUTHORITATIVE_USAGE_CONFIDENCE
         && forecast.resetCount === 0
     const usageDays = hasReliableUsage ? serviceHours / forecast.averageHoursPerDay! : Number.POSITIVE_INFINITY
-    const usesUsage = usageDays < defaultDays
     return {
-        days: Math.ceil(usesUsage ? usageDays : defaultDays),
-        label: usesUsage ? approximateIntervalLabel(usageDays) : `${defaultInterval.value} ${defaultInterval.unit}`,
-        source: usesUsage ? 'usage' : 'profile',
+        days: Math.ceil(hasReliableUsage ? usageDays : defaultDays),
+        label: hasReliableUsage ? approximateIntervalLabel(usageDays) : `${defaultInterval.value} ${defaultInterval.unit}`,
+        source: hasReliableUsage ? 'usage' : 'profile',
         hasReliableUsage,
     }
 }
@@ -157,8 +158,53 @@ function validPoint(
 
 function confidenceLabel(score: number): UsageForecastConfidence {
     if (score >= 75) return 'High'
-    if (score >= 50) return 'Moderate'
+    if (score >= MINIMUM_AUTHORITATIVE_USAGE_CONFIDENCE) return 'Moderate'
     return 'Low'
+}
+
+function confidenceSummary({
+    candidateCount,
+    usableCount,
+    intervalCount,
+    spanDays,
+    latestAgeDays,
+    score,
+    anomalyCount,
+    estimatedCount,
+    resetCount,
+    consistencyScore,
+}: {
+    candidateCount: number
+    usableCount: number
+    intervalCount: number
+    spanDays: number
+    latestAgeDays: number
+    score: number
+    anomalyCount: number
+    estimatedCount: number
+    resetCount: number
+    consistencyScore: number
+}) {
+    const reasons: string[] = []
+    if (usableCount < 2) {
+        reasons.push(candidateCount > usableCount
+            ? `Only ${usableCount} of ${candidateCount} valid readings is within the ${HISTORY_WINDOW_DAYS}-day forecast window, so no usage interval can be calculated.`
+            : `At least two valid readings are needed to calculate a usage interval; ${usableCount || 'none'} is currently available.`)
+    } else if (spanDays < MINIMUM_USAGE_SPAN_DAYS) {
+        reasons.push(`Recent readings span ${spanDays} day${spanDays === 1 ? '' : 's'}; at least ${MINIMUM_USAGE_SPAN_DAYS} days is required.`)
+    } else if (score < 50 && intervalCount < 5) {
+        reasons.push(`Only ${usableCount} recent readings across ${spanDays} days are available.`)
+    }
+    if (Number.isFinite(latestAgeDays) && latestAgeDays > 60) {
+        reasons.push(`The latest valid reading is ${Math.round(latestAgeDays)} days old.`)
+    }
+    if (score < 50 && intervalCount >= 2 && consistencyScore === 0) reasons.push('Usage varies significantly between readings.')
+    if (anomalyCount > 0) reasons.push(`${anomalyCount} anomalous reading${anomalyCount === 1 ? ' was' : 's were'} ignored.`)
+    if (resetCount > 0) reasons.push(`${resetCount} confirmed meter reset${resetCount === 1 ? ' reduces' : 's reduce'} confidence.`)
+    if (estimatedCount > 0) reasons.push(`${estimatedCount} estimated reading${estimatedCount === 1 ? ' contributes' : 's contribute'} less evidence than an actual reading.`)
+    if (reasons.length) return reasons.slice(0, 2).join(' ')
+    if (score >= 75) return `Strong evidence from ${usableCount} recent readings across ${spanDays} days.`
+    return `Based on ${usableCount} recent readings across ${spanDays} days; more recent history will improve confidence.`
 }
 
 function classifyReadings(readings: UsageReading[]) {
@@ -266,6 +312,18 @@ export function calculateEquipmentUsageForecast(
         - (readings.some((reading) => reading.assessment === 'Possible reset') ? 15 : 0)
         - Math.min(10, resetCount * 5),
     )))
+    const summary = confidenceSummary({
+        candidateCount: candidates.length,
+        usableCount: usable.length,
+        intervalCount: intervals.length,
+        spanDays,
+        latestAgeDays: latestAge,
+        score,
+        anomalyCount,
+        estimatedCount,
+        resetCount,
+        consistencyScore,
+    })
 
     return {
         averageHoursPerDay,
@@ -279,6 +337,7 @@ export function calculateEquipmentUsageForecast(
         resetCount,
         spanDays,
         latestReadingDate: latest?.date ?? null,
+        confidenceSummary: summary,
         readings,
     }
 }

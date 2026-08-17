@@ -11,11 +11,11 @@ import { equipmentIdentifierSearchValues, parseAlternateFleetNumbers } from '../
 type Props = {
     editor: ReturnType<typeof useJobEditor>
     equipmentList: Equipment[]
-    initialEquipmentDraft?: { fleet?: string; serial?: string; make?: string; model?: string }
+    initialEquipmentDraft?: { fleet?: string; alternateFleet?: string; serial?: string; make?: string; model?: string }
     onCreateCustomer: (customer: { name: string }) => Promise<string>
     onCreateSite: (site: { customerId: string; name: string; address?: string }) => Promise<string>
     onCreateContact: (contact: { siteId: string; name: string; phone?: string; email?: string }) => Promise<string>
-    onCreateEquipment: (equipment: { fleet: string; serial: string; make?: string; model?: string }) => Promise<string>
+    onCreateEquipment: (equipment: { fleet: string; alternateFleet?: string; serial: string; make?: string; model?: string }) => Promise<string>
 }
 
 type Panel = '' | 'equipment' | 'customer' | 'site' | 'contact'
@@ -45,6 +45,7 @@ export default function JobRelationshipFields({
     } = editor
     const initialEquipment = {
         fleet: initialEquipmentDraft?.fleet?.trim() ?? '',
+        alternateFleet: initialEquipmentDraft?.alternateFleet?.trim() ?? '',
         serial: initialEquipmentDraft?.serial?.trim() ?? '',
         make: initialEquipmentDraft?.make?.trim() ?? '',
         model: initialEquipmentDraft?.model?.trim() ?? '',
@@ -134,21 +135,23 @@ export default function JobRelationshipFields({
     }
 
     const createEquipment = async () => {
-        if (!equipment.fleet.trim() && !equipment.serial.trim()) {
-            setCreateError('Enter a fleet or serial number.')
+        if (!equipment.fleet.trim() && !equipment.alternateFleet.trim() && !equipment.serial.trim()) {
+            setCreateError('Enter a primary fleet, alternate fleet, or serial number.')
             return
         }
         try {
             setIsCreating(true)
             setCreateError('')
             const equipmentId = await onCreateEquipment({
-                fleet: equipment.fleet.trim(), serial: equipment.serial.trim(),
+                fleet: equipment.fleet.trim(),
+                alternateFleet: equipment.alternateFleet.trim() || undefined,
+                serial: equipment.serial.trim(),
                 make: equipment.make.trim() || undefined,
                 model: equipment.model.trim() || undefined,
             })
             setDraft((current) => ({ ...current, equipmentId }))
-            setEquipmentSearch(equipment.fleet.trim() || (equipment.serial.trim() ? `Serial ${equipment.serial.trim()}` : 'Equipment'))
-            setEquipment({ fleet: '', serial: '', make: '', model: '' })
+            setEquipmentSearch(equipment.fleet.trim() || equipment.alternateFleet.trim() || (equipment.serial.trim() ? `Serial ${equipment.serial.trim()}` : 'Equipment'))
+            setEquipment({ fleet: '', alternateFleet: '', serial: '', make: '', model: '' })
             setPanel('')
         } catch (error) {
             console.error(error)
@@ -275,6 +278,7 @@ export default function JobRelationshipFields({
         {panel === 'equipment' && <div className="job-edit-create-panel job-edit-field-wide">
             <div><h4>New equipment</h4><p>{initialEquipmentSearch ? 'Prefilled from the invoice. Confirm the details before creating and selecting this equipment.' : 'Create and select equipment for this job.'}</p></div>
             <label className="job-edit-field"><span>Fleet number</span><input autoFocus value={equipment.fleet} onChange={(e) => setEquipment({ ...equipment, fleet: e.target.value })} /></label>
+            <label className="job-edit-field"><span>Alternate fleet number</span><input value={equipment.alternateFleet} onChange={(e) => setEquipment({ ...equipment, alternateFleet: e.target.value })} /></label>
             <label className="job-edit-field"><span>Serial number</span><input value={equipment.serial} onChange={(e) => setEquipment({ ...equipment, serial: e.target.value })} /></label>
             <label className="job-edit-field"><span>Make</span><input value={equipment.make} onChange={(e) => setEquipment({ ...equipment, make: e.target.value })} /></label>
             <label className="job-edit-field"><span>Model</span><input value={equipment.model} onChange={(e) => setEquipment({ ...equipment, model: e.target.value })} /></label>

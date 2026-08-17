@@ -120,17 +120,15 @@ export default function JobCompletionWorkflow({ request, equipment, jobs, servic
         if (isLargeHourMeterIncrease(reading, currentHourMeter)) return 'large' as const
         return null
     }
-    const renderHourMeterFields = (autoFocus = false) => <>
-        <label>Current Equipment Hour Meter<output>{currentHourMeter.toLocaleString('en-NZ')} hours{currentHourMeterRecordedDate && <small>Recorded {formatWofDateOnly(currentHourMeterRecordedDate)}</small>}</output></label>
-        <div className="job-completion-hour-entry">
-            {!isUsingEstimatedReading && <label>Hour Meter at Completion *<input type="number" min="0" step="1" inputMode="numeric" value={hourMeter} onChange={(event) => { setHourMeter(event.target.value); setValidationError('') }} autoFocus={autoFocus} /></label>}
-            {HOUR_METER_CLASSIFICATION_ENABLED && <label className="job-completion-estimate-toggle"><input type="checkbox" checked={isUsingEstimatedReading} disabled={!canUseEstimatedReading} onChange={(event) => { setUseEstimatedReading(event.target.checked); setValidationError('') }} /><span><strong>Technician did not record hours</strong>{isUsingEstimatedReading && estimatedReading
-                ? <><b className="job-completion-estimate-value">Estimated: {estimatedReading.hours.toLocaleString('en-NZ')} hours</b><small>{estimatedReading.confidenceScore}% {estimatedReading.confidence} confidence. Calculated from previous Jobs, not editable, and saved as Estimated.</small></>
-                : <small>{canUseEstimatedReading ? 'Use an estimate calculated from previous Jobs.' : 'No usable previous Job reading is available, so an estimate cannot be generated.'}</small>}</span></label>}
-        </div>
+    const renderCompletionEntryFields = () => <>
+        <label className="job-completion-current-meter job-edit-field-wide">Current Equipment Hour Meter<output>{currentHourMeter.toLocaleString('en-NZ')} hours{currentHourMeterRecordedDate && <small>Recorded {formatWofDateOnly(currentHourMeterRecordedDate)}</small>}</output></label>
+        <label>{isUsingEstimatedReading ? 'Estimated Hour Meter at Completion' : 'Hour Meter at Completion *'}<input type="number" min="0" step="1" inputMode="numeric" value={readingValue} onChange={(event) => { if (!isUsingEstimatedReading) setHourMeter(event.target.value); setValidationError('') }} autoFocus readOnly={isUsingEstimatedReading} /></label>
+        <label>Job Completion Date *<input type="date" required max={currentNewZealandDateOnly()} value={completionDate} onChange={(event) => { if (request) setCompletionDateInput({ jobId: request.job.gr_jobid, value: event.target.value }); setValidationError('') }} /></label>
+        {HOUR_METER_CLASSIFICATION_ENABLED && <label className="job-completion-estimate-toggle job-edit-field-wide"><input type="checkbox" checked={isUsingEstimatedReading} disabled={!canUseEstimatedReading} onChange={(event) => { setUseEstimatedReading(event.target.checked); setValidationError('') }} /><span><strong>Technician did not record hours</strong>{isUsingEstimatedReading && estimatedReading
+            ? <><b className="job-completion-estimate-value">Estimated: {estimatedReading.hours.toLocaleString('en-NZ')} hours</b><small>{estimatedReading.confidenceScore}% {estimatedReading.confidence} confidence. Calculated from previous Jobs, not editable, and saved as Estimated.</small></>
+            : <small>{canUseEstimatedReading ? 'Use an estimate calculated from previous Jobs.' : 'No usable previous Job reading is available, so an estimate cannot be generated.'}</small>}</span></label>}
         {historicalReading && <p className="job-completion-historical-note job-edit-field-wide">This Job is earlier than the Equipment's current reading. Its hours will be retained in history without replacing the current meter.</p>}
     </>
-    const renderCompletionDateField = () => <label className="job-edit-field-wide">Job Completion Date *<input type="date" required max={currentNewZealandDateOnly()} value={completionDate} onChange={(event) => { if (request) setCompletionDateInput({ jobId: request.job.gr_jobid, value: event.target.value }); setValidationError('') }} /></label>
 
     if (!request) return null
 
@@ -157,8 +155,7 @@ export default function JobCompletionWorkflow({ request, equipment, jobs, servic
                     <p>{[selectedEquipment?.gr_make, selectedEquipment?.gr_model].filter(Boolean).join(' ') || 'Make and model not recorded'}</p>
                 </div>
                 <div className="job-completion-service"><span>Job Type</span><strong>{getJobTypeLabel(request.job.gr_jobtype)}</strong></div>
-                {renderCompletionDateField()}
-                {renderHourMeterFields(true)}
+                {renderCompletionEntryFields()}
                 <div className="job-completion-summary"><strong>This will update:</strong><ul><li>Job Completion Date</li><li>Equipment Current Hour Meter</li><li>Job Hour Meter</li><li>Job Status</li></ul></div>
             </EditDrawerFormDialog>
             {hourMeterWarning && <EditDrawerConfirmation eyebrow="Confirm hour meter" title={hourMeterWarning === 'lower' ? 'Lower hour meter reading' : 'Large hour meter increase'} message={hourMeterWarning === 'lower' ? 'This dated reading is lower than the current Equipment meter and may indicate a meter reset. Continue with this clearly signalled reading?' : 'The entered hour meter is much higher than the current equipment reading. Are you sure this is correct?'} error={error} isBusy={isCompleting} confirmLabel="Continue" onCancel={() => setHourMeterWarning(null)} onConfirm={() => void onCompleteStandard(Number(readingValue), readingType, readingDate, completionDate)} />}
@@ -210,7 +207,7 @@ export default function JobCompletionWorkflow({ request, equipment, jobs, servic
                 <strong>{selectedEquipment?.gr_fleet || 'No fleet number'}</strong>
                 <p>{[selectedEquipment?.gr_make, selectedEquipment?.gr_model].filter(Boolean).join(' ') || 'Make and model not recorded'}</p>
             </div>
-            {renderCompletionDateField()}
+            {renderCompletionEntryFields()}
             <label>
                 Current WOF expiry
                 <output>{formatWofDateOnly(selectedEquipment?.gr_currentwofexpiry) || 'Not recorded'}</output>
@@ -225,10 +222,8 @@ export default function JobCompletionWorkflow({ request, equipment, jobs, servic
                         setWofExpiryInput({ jobId: request.job.gr_jobid, value: event.target.value })
                         setValidationError('')
                     }}
-                    autoFocus
                 />
             </label>
-            {renderHourMeterFields()}
             <div className="job-completion-summary">
                 <strong>This will update:</strong>
                 <ul>
@@ -355,12 +350,11 @@ export default function JobCompletionWorkflow({ request, equipment, jobs, servic
                 </div>
             </section>}
             {missingServicePlans.length === 0 && <>
-                {renderCompletionDateField()}
+                {renderCompletionEntryFields()}
                 <JobMaintenanceSummary
                     equipment={selectedEquipment}
                     servicePlans={selectedEquipmentPlans}
                 />
-                {renderHourMeterFields(true)}
                 <div className="job-completion-summary">
                     <strong>This will update:</strong>
                     <ul>

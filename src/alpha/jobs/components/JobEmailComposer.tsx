@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import type { Job } from '../types/job.types'
-import type { JobEmailDraft } from '../services/jobEmail'
+import { ONLINE_JOB_CARD_ENABLED, TECHNICIAN_COMMENTS_MAX_LENGTH, type JobEmailDraft } from '../services/jobEmail'
 import { buildTechnicianEmailSubject } from '../utils/technicianMailto'
 import { isValidTechnicianEmail } from '../utils/technicianMailto'
 import { jobHasActiveSubmissionLink } from '../services/jobSubmissionLinkApi'
 import EditDrawerFormDialog from '../../shared/drawer/EditDrawerFormDialog'
 import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation'
+import { formatFleetNumbers } from '../../equipment/identifiers/alternateFleetNumbers'
 import './JobEmailComposer.css'
 
 type Props = {
@@ -18,6 +19,7 @@ export default function JobEmailComposer({ job, onCancel, onSend }: Props) {
     const mechanic = job.gr_Mechanic
     const [recipientEmail, setRecipientEmail] = useState(mechanic?.gr_email ?? '')
     const [subject, setSubject] = useState(() => buildTechnicianEmailSubject(job))
+    const [technicianComments, setTechnicianComments] = useState('')
     const [isSending, setIsSending] = useState(false)
     const [error, setError] = useState('')
     const [confirmReplacement, setConfirmReplacement] = useState(false)
@@ -25,13 +27,19 @@ export default function JobEmailComposer({ job, onCancel, onSend }: Props) {
     const canSend = recipientValid && Boolean(subject.trim())
     const equipment = job.gr_Equipment
     const site = job.gr_Site
+    const contact = job.gr_Contact
+    const fleetNumbers = formatFleetNumbers(equipment?.gr_fleet, equipment?.gr_alternatefleetnumbers)
 
     const send = async () => {
         if (!canSend) return
         try {
             setIsSending(true)
             setError('')
-            await onSend({ recipientEmail: recipientEmail.trim(), subject: subject.trim() })
+            await onSend({
+                recipientEmail: recipientEmail.trim(),
+                subject: subject.trim(),
+                technicianComments: technicianComments.trim(),
+            })
         } catch (sendError) {
             setError(sendError instanceof Error ? sendError.message : 'The Job Card email could not be queued.')
             setConfirmReplacement(false)
@@ -42,7 +50,7 @@ export default function JobEmailComposer({ job, onCancel, onSend }: Props) {
 
     const requestSend = () => {
         if (!canSend) return
-        if (jobHasActiveSubmissionLink(job)) {
+        if (ONLINE_JOB_CARD_ENABLED && jobHasActiveSubmissionLink(job)) {
             setConfirmReplacement(true)
             return
         }
@@ -86,6 +94,18 @@ export default function JobEmailComposer({ job, onCancel, onSend }: Props) {
                     onChange={(event) => setSubject(event.currentTarget.value)}
                 />
             </label>
+            <label>
+                <span>Comments for technician (optional)</span>
+                <textarea
+                    rows={3}
+                    maxLength={TECHNICIAN_COMMENTS_MAX_LENGTH}
+                    value={technicianComments}
+                    onChange={(event) => setTechnicianComments(event.currentTarget.value)}
+                />
+                <small className="job-email-field-help">
+                    Included in this email only; this does not change the Job description.
+                </small>
+            </label>
             <section className="job-email-preview" aria-label="Email preview">
                 <header>
                     <small>Service Operations</small>
@@ -98,17 +118,26 @@ export default function JobEmailComposer({ job, onCancel, onSend }: Props) {
                         <span>Work required</span>
                         <strong>{job.gr_description || 'No work description supplied.'}</strong>
                     </div>
+                    {technicianComments.trim() && <div className="job-email-comments">
+                        <span>Comments for technician</span>
+                        <p>{technicianComments.trim()}</p>
+                    </div>}
                     <dl>
                         {(equipment?.gr_make || equipment?.gr_model) && <><dt>Equipment</dt><dd>{[equipment.gr_make, equipment.gr_model].filter(Boolean).join(' ')}</dd></>}
-                        {equipment?.gr_fleet && <><dt>Fleet number</dt><dd>{equipment.gr_fleet}</dd></>}
+                        {fleetNumbers && <><dt>Fleet number</dt><dd>{fleetNumbers}</dd></>}
                         {equipment?.gr_serial && <><dt>Serial number</dt><dd>{equipment.gr_serial}</dd></>}
                         {site?.gr_Customer?.gr_name && <><dt>Customer</dt><dd>{site.gr_Customer.gr_name}</dd></>}
                         {site?.gr_name && <><dt>Site</dt><dd>{site.gr_name}</dd></>}
                         {site?.gr_address && <><dt>Address</dt><dd>{site.gr_address}</dd></>}
+                        <dt>Site contact</dt><dd>{contact?.gr_name || 'No site contact assigned'}</dd>
+                        {contact?.gr_phone && <><dt>Contact phone</dt><dd>{contact.gr_phone}</dd></>}
+                        {contact?.gr_email && <><dt>Contact email</dt><dd>{contact.gr_email}</dd></>}
                         {job.gr_ordernumber && <><dt>Order number</dt><dd>{job.gr_ordernumber}</dd></>}
                     </dl>
-                    <span className="job-email-preview-button">Open Job Card</span>
-                    <small>The delivered email contains the secure clickable Job Card link.</small>
+                    <span className="job-email-preview-button is-disabled" aria-disabled="true">
+                        Open Job Card — temporarily disabled
+                    </span>
+                    <small>Online Job Card access is temporarily unavailable.</small>
                 </div>
             </section>
         </EditDrawerFormDialog>

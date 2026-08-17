@@ -59,6 +59,7 @@ type Props = {
     }) => Promise<string>
     onCreateEquipment: (equipment: {
         fleet: string
+        alternateFleet?: string
         serial: string
         make?: string
         model?: string

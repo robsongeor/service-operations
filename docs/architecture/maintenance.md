@@ -60,24 +60,34 @@ helpers feed Equipment, Jobs, and Customer views. All Service completion entry p
   span at least seven calendar days; this avoids treating an overnight interval as a full day.
   Interval rates and their consistency influence are weighted by elapsed days, so longer baselines
   carry proportionally more weight than adjacent-day observations.
+- The expanded Average Machine Usage panel explains its confidence in plain language using the
+  actual limiting evidence, such as readings outside the 360-day forecast window, an insufficient
+  date span, stale evidence, inconsistent usage, anomalies, resets, or estimated readings. Job type
+  and Site do not affect confidence.
 - Usage history is ordered by the Job meter-recorded date, falling back to Completed Date only for
   legacy rows. Older Service readings do not roll current Equipment or newer active plan state back.
-- Each configured service plan derives a read-only Next Service recommendation from the earlier of
-  its stored calendar due date and the forecast date when average usage reaches its due-hour threshold.
+- Each configured service plan derives a read-only Next Service recommendation from the forecast date
+  when average usage reaches its due-hour threshold once forecast confidence is at least 40%. Below
+  that threshold, or when the forecast is unsafe or unavailable, the stored profile calendar date is
+  the fallback.
   The compact service disclosure keeps the effective interval beside the A, B, or C Service title and
   shows Last Completed and Next Due By dates at a glance. When Last Completed is linked to a Job, its
   compact summary also shows that Job number and recorded completion hours; due-hour calculations, interval reasoning,
   and other saved completion history expand on demand. The summary states whether
   calendar, projected hours, or both determined the recommendation and carries forecast confidence
   when hours determine it. An overdue recommendation says Book now. Missing or unsafe usage forecasts
-  fall back to the stored calendar date. Suggestions do not mutate plans, create Jobs, or create
-  Scheduler options.
-- Once the usage forecast reaches Moderate confidence (score 50 or higher), has a positive average,
-  and has no confirmed meter reset, each service level converts its fixed hour interval into a live
-  usage-adjusted time interval. That interval overrides the default profile only when it is shorter;
-  it never extends servicing beyond the manager-selected profile. The UI labels the saved selection
-  Default Maintenance Profile and shows whether each Suggested Interval is usage-adjusted or still
-  using the profile because it remains earlier or reliable history is unavailable.
+  fall back to the profile date recalculated from the plan's last-completed baseline.
+- Once the usage forecast reaches a score of 40 or higher, has a positive average, and has no confirmed
+  meter reset, each service level converts its fixed hour interval into the authoritative live time
+  interval and may schedule earlier or later than the manager-selected profile. The saved Default
+  Maintenance Profile is used only when confidence is below 40% or the forecast is unavailable or
+  unsafe. The UI keeps the forecast confidence and scheduling source visible on each service plan.
+- After every Job completion with an hour-meter reading, the completion workflow reloads authoritative
+  Jobs, Equipment, and service plans, recalculates the 360-day forecast, and persists each active
+  plan's effective `gr_nextduedate`. At 40% confidence or higher this is the projected due-hour date;
+  otherwise it is the current profile interval applied to the last-completed date. Service completion
+  additionally resets the satisfied A/B/C baselines and due-hour thresholds before this recalculation.
+  The estimator does not create Jobs or Scheduler options.
 - The historical service baseline workflow is a temporary/manual bridge for maintenance not
   represented by Jobs, especially newly entered Equipment. It is labelled separately from Job-backed
   usage forecasting. When completed Job meter evidence exists, the form does not offer to replace

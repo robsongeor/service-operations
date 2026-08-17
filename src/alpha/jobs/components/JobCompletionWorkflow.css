@@ -8,8 +8,7 @@
 .job-completion-reference span { color: #5d716a; font-size: .66rem; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
 .job-completion-reference strong { overflow-wrap: anywhere; color: #176f66; font-size: 1rem; }
 .job-completion-fields input, .job-completion-fields output, .job-completion-wof-fields input, .job-completion-wof-fields output { width: 100%; min-width: 0; max-width: 100%; }
-.job-completion-hour-entry { display: grid; align-content: start; gap: 8px; }
-.job-completion-hour-entry > label { min-width: 0; }
+.job-completion-current-meter output { max-width: 100%; }
 .job-completion-estimate-toggle { display: grid !important; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 7px !important; padding: 9px 10px; border: 1px solid #c7d7e8; border-radius: 8px; background: #f3f7fb; color: #34577d !important; }
 .job-completion-estimate-toggle input { width: auto; min-width: auto; min-height: auto; }
 .job-completion-estimate-toggle > span { display: grid; gap: 3px; }

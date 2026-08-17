@@ -4,9 +4,11 @@ import {
     type PlannedServiceType,
 } from './equipmentServicePlan.types'
 import type { Equipment } from '../../jobs/types/equipment.types'
+import type { Job } from '../../jobs/types/job.types'
 import { invalidateSharedEquipmentDataCache } from '../services/equipmentDataCache'
 import { calculateNextDueDate, resolveMaintenanceConfiguration } from './maintenanceConfiguration'
 import { shouldAdvanceCurrentHourMeter } from './equipmentUsageForecast'
+import { cascadeServiceHistoryBaselines, recalculateServicePlanDueDates } from './servicePlanCalculations'
 
 const API_URL = `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2`
 const PLAN_SELECT = 'gr_equipmentserviceplanid,gr_servicetype,gr_intervalhours,gr_lastcompleteddate,gr_lastcompletedhours,gr_nextduehours,gr_nextduedate,gr_active,_gr_equipment_value'
@@ -21,6 +23,29 @@ export async function fetchEquipmentServicePlans(token: string): Promise<Equipme
     })
     await ensureSuccess(response, 'Failed to fetch equipment service plans')
     return (await response.json()).value ?? []
+}
+
+export async function refreshEquipmentServicePlanDueDates(
+    token: string,
+    equipment: Equipment,
+    existingPlans: EquipmentServicePlan[],
+    jobs: readonly Job[],
+) {
+    const equipmentId = equipment.gr_equipmentid.toLowerCase()
+    const equipmentPlans = existingPlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === equipmentId)
+    const recalculated = recalculateServicePlanDueDates(equipment, equipmentPlans, jobs)
+    await Promise.all(recalculated.map(async (plan) => {
+        const existing = equipmentPlans.find((item) => item.gr_equipmentserviceplanid === plan.gr_equipmentserviceplanid)
+        if (existing?.gr_nextduedate === plan.gr_nextduedate) return
+        const response = await fetch(`${API_URL}/gr_equipmentserviceplans(${plan.gr_equipmentserviceplanid})`, {
+            method: 'PATCH',
+            headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ gr_nextduedate: plan.gr_nextduedate ?? null }),
+        })
+        await ensureSuccess(response, 'Failed to update the estimated service due date')
+    }))
+    const recalculatedById = new Map(recalculated.map((plan) => [plan.gr_equipmentserviceplanid, plan]))
+    return existingPlans.map((plan) => recalculatedById.get(plan.gr_equipmentserviceplanid) ?? plan)
 }
 
 export type MaintenanceHistoryPlanInput = {
@@ -49,8 +74,9 @@ export async function saveEquipmentMaintenanceHistory(
 ): Promise<EquipmentServicePlan[]> {
     await updateEquipmentCurrentHourMeter(token, equipmentId, input.currentHourMeter, input.readingRecordedDate)
     const configuration = resolveMaintenanceConfiguration(equipment)
+    const effectivePlanInputs = cascadeServiceHistoryBaselines(input.plans, equipment)
 
-    const nextPlans = await Promise.all(input.plans.map(async (planInput) => {
+    const nextPlans = await Promise.all(effectivePlanInputs.map(async (planInput) => {
         const existingPlan = existingPlans.find((plan) => plan.gr_servicetype === planInput.serviceType)
         const intervalHours = existingPlan?.gr_intervalhours ?? SERVICE_INTERVAL_HOURS[planInput.serviceType]
         const nextDueHours = calculateHistoryNextDueHours(planInput.serviceType, intervalHours, planInput.lastCompletedHours)

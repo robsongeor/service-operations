@@ -79,10 +79,12 @@ only the Job's authoritative evidence.
 
 ## Email integration
 
-The Jobs table retains `mailto:` composition. The Job drawer retains its established Email
-Dispatch/Power Automate workflow. Both generate the secure portal link before preparing the
-message. Missing recipient email blocks generation; replacing an active unused link
-requires confirmation.
+The Jobs table uses its in-app Email Dispatch composer and permits optional bounded comments for the
+technician without changing the Job description. The Job drawer retains its established Email
+Dispatch/Power Automate workflow. While online Job Card access is paused, neither workflow generates
+or replaces a secure portal link. The generated HTML keeps Open Job Card visibly disabled and does
+not expose a URL. The linked Site Contact name, phone, and email are included when available. Missing
+recipient email still blocks dispatch.
 
 ## Current limitations
 

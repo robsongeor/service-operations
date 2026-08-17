@@ -259,7 +259,7 @@ test('Equipment table omits the temporary linked Job count column', () => {
     assert.doesNotMatch(types, /'jobs'/)
 })
 
-test('Equipment loads focused Job history only when a record is opened', () => {
+test('Equipment lazily loads focused Job history in the background and unloads it on close', () => {
     const manager = readFileSync(new URL('../src/alpha/equipment/hooks/useEquipmentManager.ts', import.meta.url), 'utf8')
     const jobsApi = readFileSync(new URL('../src/alpha/jobs/services/jobsApi.ts', import.meta.url), 'utf8')
     const screen = readFileSync(new URL('../src/alpha/equipment/EquipmentScreen.tsx', import.meta.url), 'utf8')
@@ -267,7 +267,78 @@ test('Equipment loads focused Job history only when a record is opened', () => {
     assert.doesNotMatch(manager, /fetchJobs\(token\)/)
     assert.match(manager, /fetchEquipmentJobs\(await getToken\(\), equipmentId\)/)
     assert.match(jobsApi, /\$filter=_gr_equipment_value eq \$\{equipmentId\}/)
-    assert.match(screen, /await loadEquipmentJobs\(record\.gr_equipmentid\)/)
+    assert.match(screen, /setEditingEquipment\(record\)/)
+    assert.match(screen, /void loadEquipmentJobs\(record\.gr_equipmentid\)\.catch/)
+    assert.match(screen, /clearEquipmentJobs\(\); setEditingEquipment\(null\)/)
+    assert.match(manager, /equipmentJobsRequestRef\.current \+= 1/)
+    assert.match(manager, /setJobs\(\[\]\)/)
+})
+
+test('Customer Dashboard also opens Equipment immediately while focused Job history loads', () => {
+    const dashboard = readFileSync(new URL('../src/alpha/customers/CustomerDashboardScreen.tsx', import.meta.url), 'utf8')
+    assert.match(dashboard, /loadEquipmentJobs,/)
+    assert.match(dashboard, /const openEquipment = useCallback\(\(record: Equipment\)/)
+    assert.match(dashboard, /setEditingEquipment\(record\)/)
+    assert.match(dashboard, /void loadEquipmentJobs\(record\.gr_equipmentid\)\.catch/)
+    assert.match(dashboard, /void openEquipment\(item\)/)
+    assert.match(dashboard, /isJobHistoryLoading=\{isEquipmentJobsLoading\}/)
+    assert.match(dashboard, /clearEquipmentJobs\(\)/)
+})
+
+test('Customer Dashboard prepares Job reference data before applying Customer or Equipment defaults', () => {
+    const dashboard = readFileSync(new URL('../src/alpha/customers/CustomerDashboardScreen.tsx', import.meta.url), 'utf8')
+    assert.match(dashboard, /const referenceData = await prepareJobReferenceData\(\)/)
+    assert.match(dashboard, /void openJobCreate\(initialJobValuesForCustomer\(selectedCustomer\)\)/)
+    assert.match(dashboard, /void openJobCreate\(initialJobValuesForEquipment\(record\)\)/)
+    assert.match(dashboard, /equipmentId: selectedEquipment\?\.gr_equipmentid/)
+    assert.match(dashboard, /contactsForSite\.length === 1/)
+})
+
+test('Customer Dashboard uses the same effective hierarchical maintenance plans as Equipment details', () => {
+    const dashboard = readFileSync(new URL('../src/alpha/customers/CustomerDashboardScreen.tsx', import.meta.url), 'utf8')
+    assert.match(dashboard, /resolveEffectiveServicePlans\(servicePlans\.filter/)
+    assert.match(dashboard, /calculateEquipmentUsageForecast\(item, operationalJobs\)/)
+    assert.match(dashboard, /calculatePrimaryForecastAdjustedService\(plans, item, forecast, today\)/)
+    assert.match(dashboard, /maintenanceByEquipment\.get\(item\.gr_equipmentid\)\?\.primary\?\.status/)
+})
+
+test('Customer Dashboard Equipment history opens a fully refreshed canonical Job drawer', () => {
+    const dashboard = readFileSync(new URL('../src/alpha/customers/CustomerDashboardScreen.tsx', import.meta.url), 'utf8')
+    const drawer = readFileSync(new URL('../src/alpha/equipment/components/EquipmentDrawer.tsx', import.meta.url), 'utf8')
+    assert.match(drawer, /className=\{!isCreate && props\.onOpenJob \? 'equipment-history-card-clickable'/)
+    assert.match(drawer, /role=\{!isCreate && props\.onOpenJob \? 'button'/)
+    assert.match(drawer, /event\.key !== 'Enter' && event\.key !== ' '/)
+    assert.match(dashboard, /const refreshedJob = await fetchJobForDrawer\(job\.gr_jobid\)/)
+    assert.match(dashboard, /onOpenJob=\{\(job\) => \{ void openEquipmentHistoryJob\(job\) \}\}/)
+    assert.match(dashboard, /Loading the current Job and all Equipment, Customer, Site, Contact, scheduling, quote, assignment, office, and maintenance details/)
+})
+
+test('Customer Dashboard reconciles completed Jobs and Equipment state without a browser refresh', () => {
+    const dashboard = readFileSync(new URL('../src/alpha/customers/CustomerDashboardScreen.tsx', import.meta.url), 'utf8')
+    assert.match(dashboard, /const authoritativeJobs = new Map\(operationalJobs\.map/)
+    assert.match(dashboard, /jobs=\{visibleEquipmentJobs\}/)
+    assert.match(dashboard, /await completeStandardJob\(\.\.\.args\)\s+await reload\(\)/)
+    assert.match(dashboard, /await completeServiceJob\(\.\.\.args\)\s+await reload\(\)/)
+    assert.match(dashboard, /await completeWofJob\(\.\.\.args\)\s+await reload\(\)/)
+    assert.match(dashboard, /const currentEditingEquipment = editingEquipment/)
+    assert.match(dashboard, /equipment=\{currentEditingEquipment\}/)
+})
+
+test('Customer Dashboard creates an Equipment Job without broadly reloading the workspace', () => {
+    const dashboard = readFileSync(new URL('../src/alpha/customers/CustomerDashboardScreen.tsx', import.meta.url), 'utf8')
+    assert.match(dashboard, /onCreateJob=\{createJob\}/)
+    assert.doesNotMatch(dashboard, /const jobId = await createJob\(input\)\s+await reload\(\)/)
+    assert.match(dashboard, /const newlyCreated = operationalJobs\.filter/)
+    assert.match(dashboard, /return \[\.\.\.reconciled, \.\.\.newlyCreated\]/)
+})
+
+test('Equipment Create Job prepares relationship reference data before applying defaults', () => {
+    const drawer = readFileSync(new URL('../src/alpha/equipment/components/EquipmentJobCreateDrawer.tsx', import.meta.url), 'utf8')
+    assert.match(drawer, /void prepareJobReferenceData\(\)\.catch/)
+    assert.match(drawer, /referenceDataStatus !== 'ready'/)
+    assert.match(drawer, /equipmentId: equipment\.gr_equipmentid/)
+    assert.match(drawer, /siteId,/)
+    assert.match(drawer, /customerId: equipment\.gr_Site\?\.gr_Customer\?\.gr_customerid/)
 })
 
 test('Equipment Maintenance separates usage insight from legacy service baseline setup', () => {
@@ -288,7 +359,9 @@ test('Equipment Maintenance separates usage insight from legacy service baseline
     assert.match(drawer, /equipment-service-plan-interval/)
     assert.match(drawer, /lastCompletedSummary/)
     assert.match(drawer, /hours not recorded/)
-    assert.match(drawer, /Usage-adjusted · default/)
+    assert.match(drawer, /Usage estimate ·/)
+    assert.match(drawer, /Default profile fallback · usage confidence below 40%/)
+    assert.match(drawer, /calculateForecastAdjustedServicePlan\(plan,/)
     assert.match(drawer, /Projected hours/)
     assert.doesNotMatch(drawer, /<dt>Estimated Hour Due<\/dt>/)
     const styles = readFileSync(new URL('../src/alpha/equipment/EquipmentScreen.css', import.meta.url), 'utf8')

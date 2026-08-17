@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import {
     equipmentIdentifierSearchValues,
+    formatFleetNumbers,
     normalizeAlternateFleetNumbers,
     parseAlternateFleetNumbers,
     preservePreviousFleetNumber,
@@ -16,6 +17,7 @@ test('alternate Fleet Numbers normalize to distinct one-per-line values', () => 
         'Customer 01',
     ])
     assert.equal(normalizeAlternateFleetNumbers('FN2123; site-01;fn2123', 'SITE-01'), 'FN2123')
+    assert.equal(formatFleetNumbers('FN2123', 'Site-01; fn2123; Customer  01'), 'FN2123 / Site-01 / Customer 01')
 })
 
 test('changing the primary Fleet Number preserves the previous value as an alternate', () => {
@@ -49,6 +51,19 @@ test('Equipment projections and canonical editor include the alternate Fleet Num
     assert.match(managerApi, /gr_alternatefleetnumbers: normalized\.alternateFleetNumbers \|\| null/)
     assert.match(drawer, /Alternate Fleet Numbers/)
     assert.match(drawer, /preservePreviousFleetNumber/)
+})
+
+test('inline Job Equipment creation accepts and persists an alternate Fleet Number', () => {
+    const relationshipFields = readFileSync(new URL('../src/alpha/jobs/components/JobRelationshipFields.tsx', import.meta.url), 'utf8')
+    const equipmentApi = readFileSync(new URL('../src/alpha/jobs/services/equipmentApi.ts', import.meta.url), 'utf8')
+    const jobsHook = readFileSync(new URL('../src/alpha/jobs/hooks/useJobs.ts', import.meta.url), 'utf8')
+
+    assert.match(relationshipFields, /Alternate fleet number/)
+    assert.match(relationshipFields, /!equipment\.alternateFleet\.trim\(\)/)
+    assert.match(relationshipFields, /alternateFleet: equipment\.alternateFleet\.trim\(\) \|\| undefined/)
+    assert.match(jobsHook, /alternateFleet\?: string/)
+    assert.match(equipmentApi, /normalizeAlternateFleetNumbers\(equipment\.alternateFleet, equipment\.fleet\)/)
+    assert.match(equipmentApi, /gr_alternatefleetnumbers: alternateFleetNumbers \|\| null/)
 })
 
 test('alternate Fleet Number schema script validates without connecting to Dataverse', () => {

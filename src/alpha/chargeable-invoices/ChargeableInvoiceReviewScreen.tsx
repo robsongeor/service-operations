@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import PageHeader from '../shared/page-header/PageHeader.tsx'
 import MetricStrip from '../shared/metric-strip/MetricStrip.tsx'
 import { CHARGEABLE_INVOICE_MATCH_STATUSES } from './types/chargeableInvoice.types.ts'
@@ -54,20 +54,26 @@ type InvoiceJobCreateProps = {
 
 function InvoiceJobCreateDrawer({ item, onClose, onCreated }: InvoiceJobCreateProps) {
     const jobs = useJobs()
+    const { prepareJobReferenceData, referenceDataStatus, referenceDataError } = jobs
     const revision = item.extraction?.revision
+
+    useEffect(() => {
+        void prepareJobReferenceData().catch(() => undefined)
+    }, [prepareJobReferenceData])
+
     const matchedEquipment = uniqueExactEquipmentMatch(jobs.equipmentList, {
         fleet: revision?.gr_fleet,
         serial: revision?.gr_serial,
     })
 
-    if (jobs.isLoading) return <JobDrawerShell eyebrow="Create job" title={revision?.gr_greentreereference || 'New job'} busy onClose={onClose} footer={<button type="button" onClick={onClose}>Cancel</button>}>
+    if (referenceDataStatus === 'idle' || referenceDataStatus === 'loading') return <JobDrawerShell eyebrow="Create job" title={revision?.gr_greentreereference || 'New job'} busy onClose={onClose} footer={<button type="button" onClick={onClose}>Cancel</button>}>
         <p className="chargeable-job-create-status">Loading Customer, Site and Equipment choices…</p>
     </JobDrawerShell>
 
-    if (jobs.loadError) return <JobDrawerShell eyebrow="Create job" title={revision?.gr_greentreereference || 'New job'} onClose={onClose} footer={<button type="button" onClick={onClose}>Close</button>}>
+    if (referenceDataStatus === 'error') return <JobDrawerShell eyebrow="Create job" title={revision?.gr_greentreereference || 'New job'} onClose={onClose} footer={<button type="button" onClick={onClose}>Close</button>}>
         <div className="chargeable-job-create-status" role="alert">
-            <p>{jobs.loadError}</p>
-            <button type="button" className="chargeable-secondary" onClick={jobs.retryInitialLoad}>Try again</button>
+            <p>{referenceDataError}</p>
+            <button type="button" className="chargeable-secondary" onClick={() => { void prepareJobReferenceData().catch(() => undefined) }}>Try again</button>
         </div>
     </JobDrawerShell>
 

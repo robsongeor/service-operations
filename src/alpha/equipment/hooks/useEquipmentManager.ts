@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { useActiveMsalAccount } from '../../../auth/useActiveMsalAccount'
 import { createCustomer as createCustomerApi, fetchCustomers } from '../../jobs/services/customersApi'
@@ -43,6 +43,9 @@ export function useEquipmentManager() {
     const [customers, setCustomers] = useState<Customer[]>([])
     const [sites, setSites] = useState<Site[]>([])
     const [jobs, setJobs] = useState<Job[]>([])
+    const [isEquipmentJobsLoading, setIsEquipmentJobsLoading] = useState(false)
+    const [equipmentJobsError, setEquipmentJobsError] = useState('')
+    const equipmentJobsRequestRef = useRef(0)
     const [servicePlans, setServicePlans] = useState<EquipmentServicePlan[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [loadError, setLoadError] = useState('')
@@ -175,10 +178,31 @@ export function useEquipmentManager() {
     }, [account, getToken])
 
     const loadEquipmentJobs = useCallback(async (equipmentId: string) => {
-        const rows = await fetchEquipmentJobs(await getToken(), equipmentId)
-        setJobs(rows)
-        return rows
+        const requestId = equipmentJobsRequestRef.current + 1
+        equipmentJobsRequestRef.current = requestId
+        setJobs([])
+        setEquipmentJobsError('')
+        setIsEquipmentJobsLoading(true)
+        try {
+            const rows = await fetchEquipmentJobs(await getToken(), equipmentId)
+            if (equipmentJobsRequestRef.current === requestId) setJobs(rows)
+            return rows
+        } catch (error) {
+            if (equipmentJobsRequestRef.current === requestId) {
+                setEquipmentJobsError(error instanceof Error ? error.message : 'Equipment Job history could not be loaded.')
+            }
+            throw error
+        } finally {
+            if (equipmentJobsRequestRef.current === requestId) setIsEquipmentJobsLoading(false)
+        }
     }, [getToken])
+
+    const clearEquipmentJobs = useCallback(() => {
+        equipmentJobsRequestRef.current += 1
+        setJobs([])
+        setEquipmentJobsError('')
+        setIsEquipmentJobsLoading(false)
+    }, [])
 
     const updateEquipment = async (record: Equipment, input: EquipmentUpdateInput, resolvedSite?: Site) => {
         setIsSaving(true)
@@ -486,9 +510,10 @@ export function useEquipmentManager() {
     }
 
     return {
-        equipment, customers, sites, jobs, servicePlans, equipmentCacheStatus, equipmentRealtimeStatus, isLoading, isSaving, loadError, saveError,
+        equipment, customers, sites, jobs, servicePlans, equipmentCacheStatus, equipmentRealtimeStatus, isLoading, isSaving, isEquipmentJobsLoading, loadError, saveError, equipmentJobsError,
         reload: load,
         loadEquipmentJobs,
+        clearEquipmentJobs,
         clearSaveError: () => setSaveError(''),
         createCustomer,
         createSite,

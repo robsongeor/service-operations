@@ -54,20 +54,37 @@ request, a successful result remains in memory for the page session, and a faile
 retried without opening a partially populated drawer.
 
 Job create/edit drawers use shared drawer presentation and shared searchable selectors.
+Their inline New Equipment panel accepts primary Fleet Number, alternate Fleet Number, and Serial;
+any one identifier is sufficient for creation. Alternate Fleet input is normalized through the
+canonical Equipment identifier rules and saved to the existing `gr_alternatefleetnumbers` column.
 Scheduling and Customer Dashboard entry points reuse the Jobs workflow. Completion is routed
 through the completion framework rather than screen-specific writes.
 The Jobs-table email action opens the feature-owned Job Card composer instead of handing off to a
-desktop email client. Recipient and subject remain editable, while a bounded preview shows the
-Outlook-safe HTML card and secure clickable Job Card action. Confirmed sends create an Email Dispatch
+desktop email client. Recipient, subject, and optional email-only technician comments remain
+editable, while a bounded preview shows the Outlook-safe HTML card. Technician comments are bounded,
+escaped, stored only as part of the Email Dispatch body, and do not rewrite the Job description.
+The composer uses an 840px desktop width with a viewport-safe responsive limit so subjects, comments,
+contact details, and the card preview remain readable without changing shared dialog dimensions.
+The email preview and delivered card use the same combined Fleet Number presentation as Job Book:
+primary followed by normalized alternates separated by ` / `.
+The Open Job Card action is temporarily rendered disabled, no secure link is generated, and no URL
+is exposed in the email body. The preview and delivered card show the Job's linked Site Contact name,
+phone, and email when those values exist, or state that no Site Contact is assigned. Confirmed sends create an Email Dispatch
 request and return immediately; Power Automate performs delivery asynchronously and the table shows
-Sending, Sent, or Failed. A Job with an existing unused link requires explicit replacement
-confirmation before a new link is generated. Job Card status changes only after confirmed delivery.
+Sending, Sent, or Failed. Existing unused links are left unchanged while online Job Cards are paused.
+Job Card status changes only after confirmed delivery.
+Jobs action feedback is announced as a bottom-right toast, can be dismissed explicitly, and clears
+automatically after five seconds. A new message replaces the previous timer safely.
 Every transition into Complete requires linked Equipment and a whole-number hour-meter reading.
 Every completion dialog also displays a required Job Completion Date, initially today and editable
 to a valid non-future date. The selected calendar date is stored in the existing Job Completed Date
 column for every Job type. That same calendar date is stored as the Job's meter-recorded date, so the
 completion dialog does not ask for a duplicate date. The latest dated completed Job with usable meter evidence is the operational current
 reading. The Equipment current-meter fields are used only when no completed Job reading exists.
+For every completion type, the hour-meter input is the first editable field and receives initial
+focus. Job Completion Date is the adjacent field immediately after it in DOM and keyboard order, so
+Tab moves directly from Hours to Date. Estimate controls follow that primary pair; an active estimate
+is displayed in the hour field as read-only.
 Completion advances the Equipment snapshot only when the new reading date is the same as or later
 than that operational date; meter value and form-submission order do not determine which reading is current.
 Before a non-Service completion updates Equipment, the shared write service re-reads the Dataverse
@@ -75,6 +92,10 @@ row and uses its ETag so a stale browser or concurrent completion cannot replace
 reading. Breakdown, Workshop, and Site Check completions use the general hour-meter dialog; WOF
 collects the hour meter alongside its new expiry; Service additionally updates maintenance history
 and plans. Generated Site Check Jobs retain their occurrence/schedule completion orchestration.
+After any completion workflow succeeds, the Jobs collection is force-refreshed from Dataverse
+rather than accepting a fresh local/device cache entry. The table therefore reflects the completed
+status as soon as the completion dialog closes; opening the focused Job editor is not a refresh
+prerequisite.
 When the optional Hour Meter Reading Type schema is enabled, a manager may use a clearly marked
 estimate when a physical reading is unavailable. Actual is the default; estimated values remain in
 history and forecasting with a confidence penalty. Both columns are provisioned in the target
@@ -116,10 +137,13 @@ prefilled for confirmation. Neither path silently creates Equipment. Its initial
 uses the concise final segment of the extracted GreenTree headline rather than Work Completed. This
 historical invoice-recovery entry point defaults Job Status to Complete and copies only a meaningful
 extracted GreenTree Order No into the editable Job Order Number; standard Job creation retains its
-existing Unallocated default.
+existing Unallocated default. The invoice entry point also awaits the same lazy Job reference-data
+preparation before resolving an Equipment match or rendering the editor, with retry on failure.
 The feature-owned Jobs table also owns Job Book clipboard exchange. A row click copies one
 job-book row; its explicit multi-select controls copy selected, currently shown Jobs in the
-visible sorted order as tab-separated rows. The paired paste action reads one numeric Job
+visible sorted order as tab-separated rows. The existing Fleet Number cell contains the primary
+Fleet Number followed by each normalized alternate Fleet Number, separated by ` / `, without
+changing the Job Book column layout. The paired paste action reads one numeric Job
 number per clipboard line and atomically assigns them to that same sorted selection. It
 validates count, uniqueness, and ETags before any write, then refreshes the authoritative
 Jobs projection.
