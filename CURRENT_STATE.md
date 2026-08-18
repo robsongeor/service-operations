@@ -1,8 +1,8 @@
 # Current State
 
-Branch: `codex/disable-local-job-card-email`
+Branch: `v1-deployment`
 
-## Local Job Card email guard (deployment candidate)
+## Local Job Card email guard (deployed)
 
 - Job Card previews remain available on localhost, but the shared composer and Job Card workspace
   disable primary and additional-technician sends on localhost, subdomains of localhost, IPv4
@@ -11,7 +11,7 @@ Branch: `codex/disable-local-job-card-email`
   Dispatch creation. Production and non-loopback deployed hosts retain the existing delivery flow.
 - No Dataverse schema, role, API, route, credential, or cloud configuration change is required.
 
-## Deterministic Static Web App client deployment (deployment candidate)
+## Deterministic Static Web App client deployment (deployed)
 
 - The Azure workflow now builds the client explicitly with Node 20, `npm ci`, and `npm run build`,
   then uploads `dist` with Azure's automatic application build disabled. The managed API build stays
@@ -177,6 +177,13 @@ Branch: `codex/disable-local-job-card-email`
   is created; unused pending links are replaced in place. No Dataverse provisioning, cloud-setting
   change, credential creation, business-row mutation, or real communication was performed during
   deployment verification. A signed-in resend and recipient submission smoke test remains.
+
+- The localhost Job Card email guard and deterministic Static Web App build were published from
+  commit `f94167b` by successful Azure run `32121286297` on 18 August 2026. Production-safe
+  verification returned `200` for `/` and `/jobs`, confirmed the root references hashed `dist`
+  assets rather than raw `/src/main.tsx`, and found both the exact `f94167b` version marker and the
+  localhost-send guard in the deployed client bundle. No Dataverse provisioning, cloud-setting
+  change, credential creation, business-row mutation, or real communication was performed.
 
 ## Recently deployed work and remaining validation
 
