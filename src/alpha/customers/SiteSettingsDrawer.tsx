@@ -602,39 +602,42 @@ export default function SiteSettingsDrawer({
 
             <div role="tabpanel" aria-labelledby="drawer-tab-inductions" hidden={activeTab !== 'inductions'}>
                 <EditDrawerSection title="Induction and safety requirements">
-                    <label className="site-induction-required-field">
-                        <input
-                            type="checkbox"
-                            checked={inductionRequired}
-                            onChange={(event) => {
-                                const next = event.target.checked
-                                setInductionRequired(next)
-                                setLocalError('')
-                                setInductionDocumentError('')
-                            }}
-                            disabled={busy}
-                        />
-                        Inductions are required before equipment can be used at this Site
-                    </label>
-                    <div className="site-induction-required-details" hidden={!inductionRequired}>
-                        <label>
-                            Requirements and notes
-                            <textarea
-                                value={inductionRequirements}
+                    <div className="site-maintenance-setting site-induction-required-details">
+                        <label className="site-induction-required-field">
+                            <input
+                                type="checkbox"
+                                checked={inductionRequired}
                                 onChange={(event) => {
-                                    setInductionRequirements(event.target.value)
+                                    const next = event.target.checked
+                                    setInductionRequired(next)
                                     setLocalError('')
                                     setInductionDocumentError('')
                                 }}
-                                rows={6}
-                                placeholder="Enter required induction/safety steps, required documentation, and any special requirements."
                                 disabled={busy}
                             />
+                            Inductions are required before equipment can be used at this Site
                         </label>
+                        <div hidden={!inductionRequired}>
+                            <label>
+                                Requirements and notes
+                                <textarea
+                                    value={inductionRequirements}
+                                    onChange={(event) => {
+                                        setInductionRequirements(event.target.value)
+                                        setLocalError('')
+                                        setInductionDocumentError('')
+                                    }}
+                                    rows={6}
+                                    placeholder="Enter required induction/safety steps, required documentation, and any special requirements."
+                                    disabled={busy}
+                                />
+                            </label>
+                        </div>
                     </div>
                 </EditDrawerSection>
                 <EditDrawerSection title="Site induction documents">
-                    <div className="site-induction-documents-header">
+                    <div className="site-maintenance-setting site-induction-documents-header">
+                        <p>Upload and link induction-related forms, JSEA documents, and other safety records.</p>
                         <button
                             type="button"
                             onClick={() => inductionDocumentInputRef.current?.click()}
