@@ -14,6 +14,13 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
 
 ## Priority 1 — Security and reliability
 
+- [ ] Implement the phased shared data-loading and multi-user synchronization architecture in
+  [`docs/architecture/data-loading-and-synchronization.md`](docs/architecture/data-loading-and-synchronization.md).
+  Begin with request-generation/cancellation guards, complete Dataverse pagination, shared query
+  subscriptions, and performance instrumentation. Then migrate progressive drawers and scoped
+  screens before moving realtime dispatch to the app shell. Dataverse change tracking, new plugin
+  events, or Azure changes remain separately approved work.
+
 - [ ] Approve, provision, and verify a Dataverse alternate key for non-empty Job Number so two
   simultaneous first-time creates cannot bypass the application duplicate preflight. Confirm the
   existing data set contains no duplicates before provisioning; this is a separate Dataverse change.

@@ -31,6 +31,7 @@ validation. Shared UI provides presentation contracts without owning feature wri
 - [Shared components](shared-components.md)
 - [Reusable component inventory](reusable-components.md)
 - [Shared services](shared-services.md)
+- [Data loading and synchronization](data-loading-and-synchronization.md)
 - [Public portal](public-portal.md)
 - [Security](security.md)
 - [Deployment](deployment.md)
@@ -59,5 +60,6 @@ Detailed Dataverse field lists remain in the schema references linked from
 | Equipment or maintenance | `equipment.md`, `maintenance.md`, `dataverse.md` |
 | Customer Dashboard | `customer-dashboard.md`, `equipment.md`, `shared-components.md` |
 | Scheduler | `scheduler.md`, `jobs.md`, `shared-components.md` |
+| Loading, caching, or realtime synchronization | `data-loading-and-synchronization.md`, `shared-services.md`, `dataverse.md`, `authentication.md` |
 | WOF | `wof.md`, `jobs.md`, `equipment.md` |
 | Deployment | `deployment.md`, `security.md`, `authentication.md` |

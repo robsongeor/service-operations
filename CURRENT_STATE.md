@@ -1,6 +1,19 @@
 # Current State
 
-Branch: `v1-deployment`
+Branch: `codex/data-loading-architecture-review`
+
+## Data loading and multi-user synchronization architecture review (documentation only)
+
+- The current React hooks, Dataverse services, Jobs/Equipment IndexedDB caches, focused drawer
+  workflows, and SignalR invalidation paths have been traced across Jobs, Equipment, Customer
+  Dashboard, Scheduler, Job Map, WOF, and related consumers.
+- [`docs/architecture/data-loading-and-synchronization.md`](docs/architecture/data-loading-and-synchronization.md)
+  records the current data flow, concrete stale/race/loading problems, and the approved target shape:
+  one account-scoped Operational Data Client, bounded query keys, progressive drawers, scoped screen
+  queries, guarded mutations, app-shell realtime, reconnect recovery, and cross-tab invalidation.
+- This branch changes documentation only. It does not change runtime behaviour, Dataverse schema,
+  roles, plugins, Azure configuration, credentials, deployment, or communications. Implementation is
+  phased in the authoritative backlog and retains separate approval for cloud/configuration work.
 
 ## Local Job Card email guard (deployed)
 

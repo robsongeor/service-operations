@@ -6,6 +6,11 @@ Service Operations does not use one generic Dataverse client for every workflow.
 services own their queries and mutations, while cross-feature helpers provide stable
 authentication, date, presentation, and domain contracts.
 
+The planned Operational Data Client is a shared query, persistence, mutation-reconciliation, and
+realtime coordination layer; it does not replace feature services or become a generic owner of
+Dataverse payload construction. Its required contract and phased migration are documented in
+[Data Loading and Synchronization](data-loading-and-synchronization.md).
+
 ## Service boundaries
 
 - Components display values and raise actions.
@@ -26,6 +31,7 @@ workflow service and an atomic change set when partial success would corrupt bus
 | Site display naming | `src/alpha/shared/siteName.ts` |
 | Reusable presentation | `src/alpha/shared/` |
 | Technician portal persistence | `api/services/jobSubmissionService.js` |
+| Operational query/cache/realtime coordination | Planned account-scoped Operational Data Client; see `data-loading-and-synchronization.md` |
 
 Feature-owned business-rule owners are indexed in
 [Reusable Components](reusable-components.md#shared-business-and-domain-logic).
@@ -33,8 +39,8 @@ Feature-owned business-rule owners are indexed in
 ## Error and refresh rules
 
 - Return safe user-facing errors; do not expose upstream response bodies or configuration.
-- After a successful mutation, update local state or reload the authoritative affected
-  record.
+- After a successful mutation, reconcile shared state and reload the authoritative affected record
+  or bounded query keys. During migration, existing feature-local state remains supported.
 - Use ETags where stale state could overwrite concurrent work.
 - Avoid N+1 requests; expand or batch-load related data when a screen displays many rows.
 
@@ -48,3 +54,4 @@ Otherwise keep the service with its owning feature and expose a narrow adapter.
 - [Dataverse](dataverse.md)
 - [Shared components](shared-components.md)
 - [Security](security.md)
+- [Data loading and synchronization](data-loading-and-synchronization.md)

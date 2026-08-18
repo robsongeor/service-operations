@@ -30,6 +30,10 @@ Dataverse requests. Domain helpers own reusable business calculations and valida
   conversion.
 - Multi-record transitions use the existing workflow service and an atomic change set when
   partial success would corrupt state.
+- New loading, cache, focused-query, and realtime work follows
+  [`docs/architecture/data-loading-and-synchronization.md`](docs/architecture/data-loading-and-synchronization.md):
+  Dataverse remains authoritative, shared query state is account/environment scoped, and stale
+  requests must never overwrite newer mutations or refreshes.
 
 Feature-specific rules belong in their authoritative architecture documents.
 
@@ -44,7 +48,8 @@ Feature-specific rules belong in their authoritative architecture documents.
 5. Confirm Dataverse logical names, entity sets, relationships, and Choice values from
    metadata, code, or schema documentation.
 6. Keep Dataverse calls out of components and avoid N+1 request patterns.
-7. After mutations, update local state or reload authoritative affected data.
+7. After mutations, reconcile shared state and reload only the authoritative affected records or
+   query keys; do not use a whole-table reload when a bounded refresh is available.
 8. Run tests, lint, build, and `git diff --check` before handoff when proportionate.
 
 Do not provision Dataverse, deploy, commit, push, create credentials, or change cloud
