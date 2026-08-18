@@ -297,9 +297,30 @@ export default function CustomerDashboardScreen() {
         saveCustomerDashboardSelection(viewStorageKey, '')
     }, [isLoading, loadError, selectedCustomer, selectedCustomerId, viewStorageKey])
     const poRecipients = usePurchaseOrderRecipients(selectedCustomer?.gr_customerid)
-    const customerSites = allSites
-        .filter((site) => selectedCustomerId ? hasCustomer(site, selectedCustomerId) : false)
-        .sort((a, b) => a.gr_name.localeCompare(b.gr_name))
+    const customerSites = useMemo(() => {
+        if (!selectedCustomerId) return []
+        const direct = allSites.filter((site) => hasCustomer(site, selectedCustomerId))
+        const seen = new Set(direct.map((site) => site.gr_siteid.toLowerCase()))
+        const fallbackFromJobs: Site[] = []
+        const fallbackFromEquipment: Site[] = []
+
+        for (const item of operationalJobs) {
+            const site = item.gr_Site
+            if (site && hasCustomer(site, selectedCustomerId) && !seen.has(site.gr_siteid.toLowerCase())) {
+                fallbackFromJobs.push(site)
+                seen.add(site.gr_siteid.toLowerCase())
+            }
+        }
+        for (const item of equipment) {
+            const site = item.gr_Site
+            if (site && hasCustomer(site, selectedCustomerId) && !seen.has(site.gr_siteid.toLowerCase())) {
+                fallbackFromEquipment.push(site)
+                seen.add(site.gr_siteid.toLowerCase())
+            }
+        }
+
+        return [...direct, ...fallbackFromJobs, ...fallbackFromEquipment].sort((a, b) => a.gr_name.localeCompare(b.gr_name))
+    }, [allSites, equipment, operationalJobs, selectedCustomerId])
     const persistedCustomerSiteIds = customerSites
         .filter((site) => !site.gr_siteid.startsWith('prototype-site-'))
         .map((site) => site.gr_siteid)
