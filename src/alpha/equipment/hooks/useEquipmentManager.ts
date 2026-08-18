@@ -8,7 +8,13 @@ import { createSite as createSiteApi, fetchSites, updateSite as updateSiteApi } 
 import type { Customer } from '../../jobs/types/customer.types'
 import type { Equipment } from '../../jobs/types/equipment.types'
 import type { Job } from '../../jobs/types/job.types'
-import type { Site, SiteUpdateInput } from '../../jobs/types/site.types'
+import type { Site, SiteInductionDocument, SiteUpdateInput } from '../../jobs/types/site.types'
+import {
+    deleteSiteInductionDocument as deleteSiteInductionDocumentApi,
+    downloadSiteInductionDocument as downloadSiteInductionDocumentApi,
+    fetchSiteInductionDocuments as fetchSiteInductionDocumentsApi,
+    uploadSiteInductionDocuments as uploadSiteInductionDocumentsApi,
+} from '../../jobs/services/siteInductionDocumentsApi'
 import {
     applyEquipmentUpdate,
     createEquipment as createEquipmentApi,
@@ -285,6 +291,8 @@ export function useEquipmentManager() {
             gr_siteid: siteId,
             gr_name: input.name.trim(),
             gr_address: input.address?.trim() || '',
+            gr_inductionrequired: null,
+            gr_inductionrequirements: null,
             gr_Customer: customer ?? customerOverride,
         }
         setSites((current) => [...current, created])
@@ -302,7 +310,20 @@ export function useEquipmentManager() {
             setSites((current) => current.map((site) => {
                 const input = updatesById.get(site.gr_siteid)
                 return input
-                    ? { ...site, gr_name: input.name.trim(), gr_address: input.address.trim() }
+                    ? {
+                        ...site,
+                        gr_name: input.name.trim(),
+                        gr_address: input.address.trim(),
+                        ...(input.defaultMaintenanceProfile !== undefined
+                            ? { gr_defaultmaintenanceprofile: input.defaultMaintenanceProfile }
+                            : {}),
+                        ...(input.inductionRequired !== undefined
+                            ? { gr_inductionrequired: input.inductionRequired }
+                            : {}),
+                        ...(input.inductionRequirements !== undefined
+                            ? { gr_inductionrequirements: input.inductionRequirements }
+                            : {}),
+                    }
                     : site
             }))
         } catch (error) {
@@ -402,6 +423,47 @@ export function useEquipmentManager() {
             setIsSaving(false)
         }
     }
+
+    const loadSiteInductionDocuments = useCallback(async (site: Site): Promise<SiteInductionDocument[]> => {
+        const token = await getToken()
+        return fetchSiteInductionDocumentsApi(token, site.gr_siteid)
+    }, [getToken])
+
+    const uploadSiteInductionDocuments = useCallback(async (site: Site, files: File[]) => {
+        setIsSaving(true)
+        setSaveError('')
+        try {
+            const token = await getToken()
+            return await uploadSiteInductionDocumentsApi(token, site.gr_siteid, files)
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Site documents could not be uploaded.'
+            setSaveError(message)
+            throw error
+        } finally {
+            setIsSaving(false)
+        }
+    }, [getToken])
+
+    const deleteSiteInductionDocument = useCallback(async (site: Site, documentId: string) => {
+        setIsSaving(true)
+        setSaveError('')
+        try {
+            const token = await getToken()
+            await deleteSiteInductionDocumentApi(token, documentId)
+            return loadSiteInductionDocuments(site)
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Site documents could not be deleted.'
+            setSaveError(message)
+            throw error
+        } finally {
+            setIsSaving(false)
+        }
+    }, [getToken, loadSiteInductionDocuments])
+
+    const downloadSiteInductionDocument = useCallback(async (documentId: string) => {
+        const token = await getToken()
+        return downloadSiteInductionDocumentApi(token, documentId)
+    }, [getToken])
 
     const deleteEquipment = async (equipmentId: string) => {
         setIsSaving(true)
@@ -520,6 +582,10 @@ export function useEquipmentManager() {
         updateSites,
         updateSiteMaintenanceSettings,
         transferEquipment,
+        loadSiteInductionDocuments,
+        uploadSiteInductionDocuments,
+        deleteSiteInductionDocument,
+        downloadSiteInductionDocument,
         createEquipment,
         updateEquipment,
         saveEquipmentMaintenanceHistory,

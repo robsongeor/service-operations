@@ -86,6 +86,10 @@ export default function CustomerDashboardScreen() {
         clearSaveError,
         updateSites,
         updateSiteMaintenanceSettings,
+        loadSiteInductionDocuments,
+        uploadSiteInductionDocuments,
+        deleteSiteInductionDocument,
+        downloadSiteInductionDocument,
         updateEquipment,
         createEquipment: createDashboardEquipment,
         createCustomer: createDashboardCustomer,
@@ -260,6 +264,8 @@ export default function CustomerDashboardScreen() {
             gr_siteid: site.id,
             gr_name: site.name,
             gr_address: site.address,
+            gr_inductionrequired: null,
+            gr_inductionrequirements: null,
             gr_defaultmaintenanceprofile: null,
             gr_Customer: { gr_customerid: customerId, gr_name: draft.name },
         })))
@@ -1100,6 +1106,19 @@ export default function CustomerDashboardScreen() {
             onDetailsComplete={(name) => {
                 setSiteSuccess(`${name} updated successfully.`)
             }}
+            onSaveInductions={async (required, requirements) => { await updateSites([{
+                siteId: siteSettingsSite.gr_siteid,
+                input: {
+                    name: siteSettingsSite.gr_name,
+                    address: siteSettingsSite.gr_address,
+                    inductionRequired: required,
+                    inductionRequirements: requirements,
+                },
+            }]) }}
+            onLoadInductionDocuments={() => loadSiteInductionDocuments(siteSettingsSite)}
+            onUploadInductionDocuments={(files) => uploadSiteInductionDocuments(siteSettingsSite, files)}
+            onDeleteInductionDocument={(documentId) => deleteSiteInductionDocument(siteSettingsSite, documentId)}
+            onDownloadInductionDocument={(documentId) => downloadSiteInductionDocument(documentId)}
             onSettingsComplete={() => {
                 const trigger = siteSettingsTriggerRefs.current[siteSettingsSite.gr_siteid]
                 setSiteSuccess(`${siteSettingsSite.gr_name} maintenance settings updated.`)

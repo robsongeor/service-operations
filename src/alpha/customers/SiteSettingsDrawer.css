@@ -35,6 +35,114 @@
     color: #5f6d66;
     line-height: 1.55;
 }
+
+.site-induction-required-field {
+    display: flex !important;
+    align-items: center !important;
+    gap: .55rem;
+    color: #405049;
+    font-size: .78rem;
+    font-weight: 700;
+}
+
+.site-induction-required-field input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+}
+
+.site-induction-required-details {
+    margin-top: .55rem;
+}
+
+.site-induction-required-details label {
+    display: grid;
+    gap: .4rem;
+    color: #405049;
+    font-size: .78rem;
+    font-weight: 700;
+}
+
+.site-induction-required-details textarea {
+    width: 100%;
+    min-height: 120px;
+    resize: vertical;
+    border: 1px solid #ccd5d0;
+    border-radius: 8px;
+    padding: .6rem .7rem;
+    background: #fff;
+    color: #26332d;
+    font: inherit;
+    box-sizing: border-box;
+}
+
+.site-induction-documents {
+    display: grid;
+    gap: .7rem;
+}
+
+.site-induction-documents h3 {
+    margin: 0;
+    color: #2f3d38;
+    font-size: .98rem;
+}
+
+.site-induction-documents-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: .75rem;
+}
+
+.site-induction-documents-input {
+    display: none;
+}
+
+.site-induction-documents-empty {
+    margin: .2rem 0 0;
+    color: #5f6d66;
+}
+
+.site-induction-documents-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: .45rem;
+}
+
+.site-induction-documents-list li {
+    border: 1px solid #dce4df;
+    border-radius: .5rem;
+    padding: .55rem .7rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: .75rem;
+}
+
+.site-induction-documents-list li div {
+    display: grid;
+    gap: .15rem;
+}
+
+.site-induction-documents-list li strong {
+    color: #2f3d38;
+}
+
+.site-induction-documents-list li small {
+    color: #61706d;
+}
+
+.site-induction-documents-actions {
+    display: flex;
+    gap: .5rem;
+}
+
+.site-induction-documents-actions button {
+    min-height: 30px;
+    padding: 0 .6rem;
+}
+
 .site-checks-enable-row {
     display: flex;
     align-items: center;
@@ -88,6 +196,22 @@
     .site-checks-enable-row {
         align-items: flex-start;
         flex-direction: column;
+    }
+
+    .site-induction-documents-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .site-induction-documents-list li {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .site-induction-documents-actions {
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: wrap;
     }
 }
 .po-recipient-editor {

@@ -15,7 +15,7 @@ async function dataverseErrorMessage(response: Response, fallback: string) {
 
 export async function fetchSites(accessToken: string): Promise<Site[]> {
     const result = await fetch(
-        `${DATAVERSE_URL}/api/data/v9.2/gr_sites?$select=gr_siteid,gr_name,gr_address,gr_defaultmaintenanceprofile,gr_geocodelatitude,gr_geocodelongitude,gr_geocodesourceaddress,gr_geocodeformattedaddress,gr_geocoderesolvedon&$expand=gr_Customer($select=gr_customerid,gr_name)`,
+        `${DATAVERSE_URL}/api/data/v9.2/gr_sites?$select=gr_siteid,gr_name,gr_address,gr_defaultmaintenanceprofile,gr_inductionrequired,gr_inductionrequirements,gr_geocodelatitude,gr_geocodelongitude,gr_geocodesourceaddress,gr_geocodeformattedaddress,gr_geocoderesolvedon&$expand=gr_Customer($select=gr_customerid,gr_name)`,
         {
             headers: {
                 Authorization: `Bearer ${accessToken}`,
@@ -93,6 +93,12 @@ export async function updateSite(
             gr_address: site.address.trim() || null,
             ...(site.defaultMaintenanceProfile !== undefined
                 ? { gr_defaultmaintenanceprofile: site.defaultMaintenanceProfile }
+                : {}),
+            ...(site.inductionRequired !== undefined
+                ? { gr_inductionrequired: site.inductionRequired }
+                : {}),
+            ...(site.inductionRequirements !== undefined
+                ? { gr_inductionrequirements: site.inductionRequirements == null || !site.inductionRequirements.trim().length ? null : site.inductionRequirements.trim() }
                 : {}),
         }),
     })

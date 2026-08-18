@@ -1,7 +1,7 @@
-import { type FormEvent, useMemo, useState } from 'react'
+import { type ChangeEvent, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Equipment } from '../jobs/types/equipment.types'
 import { equipmentIdentifierSearchValues } from '../equipment/identifiers/alternateFleetNumbers'
-import type { Site } from '../jobs/types/site.types'
+import type { Site, SiteInductionDocument } from '../jobs/types/site.types'
 import {
     MAINTENANCE_PROFILES,
     type MaintenanceProfile,
@@ -34,7 +34,7 @@ import {
 import './SiteMaintenanceSettingsDrawer.css'
 import './SiteSettingsDrawer.css'
 
-export type SiteSettingsTab = 'details' | 'settings' | 'po-contacts' | 'site-checks' | 'bulk-equipment'
+export type SiteSettingsTab = 'details' | 'settings' | 'inductions' | 'po-contacts' | 'site-checks' | 'bulk-equipment'
 
 type Props = {
     site: Site
@@ -49,6 +49,11 @@ type Props = {
     siteChecksError: string
     onSaveDetails: (name: string, address: string) => Promise<void>
     onSaveSettings: (profile: MaintenanceProfile, equipmentIds: string[]) => Promise<void>
+    onSaveInductions: (required: boolean, requirements: string) => Promise<void>
+    onLoadInductionDocuments: () => Promise<SiteInductionDocument[]>
+    onUploadInductionDocuments: (files: File[]) => Promise<SiteInductionDocument[]>
+    onDeleteInductionDocument: (documentId: string) => Promise<SiteInductionDocument[]>
+    onDownloadInductionDocument: (documentId: string) => Promise<Blob>
     onSaveSiteChecks: (input: SiteCheckScheduleSaveInput) => Promise<void>
     onDetailsComplete: (name: string) => void
     onSettingsComplete: () => void
@@ -88,6 +93,11 @@ export default function SiteSettingsDrawer({
     siteChecksError,
     onSaveDetails,
     onSaveSettings,
+    onSaveInductions,
+    onLoadInductionDocuments,
+    onUploadInductionDocuments,
+    onDeleteInductionDocument,
+    onDownloadInductionDocument,
     onSaveSiteChecks,
     onDetailsComplete,
     onSettingsComplete,
@@ -109,8 +119,17 @@ export default function SiteSettingsDrawer({
         site.gr_defaultmaintenanceprofile ?? MAINTENANCE_PROFILES.STANDARD,
     )
     const [selectedIds, setSelectedIds] = useState<string[]>([])
+    const [inductionRequired, setInductionRequired] = useState(site.gr_inductionrequired ?? false)
+    const [inductionRequirements, setInductionRequirements] = useState(site.gr_inductionrequirements ?? '')
+    const [savedInductionState, setSavedInductionState] = useState({
+        inductionRequired: site.gr_inductionrequired ?? false,
+        inductionRequirements: site.gr_inductionrequirements ?? '',
+    })
+    const [inductionDocuments, setInductionDocuments] = useState<SiteInductionDocument[]>([])
+    const [isLoadingInductionDocuments, setIsLoadingInductionDocuments] = useState(false)
     const [confirming, setConfirming] = useState(false)
     const [localError, setLocalError] = useState('')
+    const [inductionDocumentError, setInductionDocumentError] = useState('')
     const [detailsSuccess, setDetailsSuccess] = useState('')
     const existingSiteCheckFrequency = siteCheckSchedule?.gr_frequency ?? '' as SiteCheckFrequency | ''
     const initialSiteChecks = {
@@ -138,18 +157,119 @@ export default function SiteSettingsDrawer({
     })
     const [, setSiteChecksSuccess] = useState('')
     const [confirmingDisable, setConfirmingDisable] = useState(false)
+    const inductionDocumentInputRef = useRef<HTMLInputElement>(null)
 
     const sortedEquipment = useMemo(() => [...equipment].sort((left, right) =>
         equipmentLabel(left).localeCompare(equipmentLabel(right), undefined, { numeric: true }),
     ), [equipment])
     const selected = sortedEquipment.filter((item) => selectedIds.includes(item.gr_equipmentid))
     const detailsDirty = name.trim() !== savedDetails.name.trim() || address.trim() !== savedDetails.address.trim()
+    const inductionDirty = inductionRequired !== savedInductionState.inductionRequired
+        || inductionRequirements.trim() !== savedInductionState.inductionRequirements.trim()
     const siteChecksDirty = siteChecksEnabled !== savedSiteChecks.enabled
         || siteChecksFrequency !== savedSiteChecks.frequency
         || siteChecksEquipmentScope !== savedSiteChecks.equipmentScope
         || siteChecksInitialDate !== savedSiteChecks.initialDate
         || [...siteCheckEquipmentIds].sort().join(',')
             !== [...savedSiteChecks.selectedEquipmentIds].sort().join(',')
+
+    const resetInductionSection = () => {
+        setInductionRequired(site.gr_inductionrequired ?? false)
+        setInductionRequirements(site.gr_inductionrequirements ?? '')
+        setSavedInductionState({
+            inductionRequired: site.gr_inductionrequired ?? false,
+            inductionRequirements: site.gr_inductionrequirements ?? '',
+        })
+        setInductionDocuments([])
+        setInductionDocumentError('')
+    }
+
+    useEffect(() => {
+        resetInductionSection()
+        setActiveTab('details')
+    }, [site.gr_siteid])
+
+    const loadInductionDocuments = useCallback(async () => {
+        setInductionDocumentError('')
+        setIsLoadingInductionDocuments(true)
+        try {
+            const documents = await onLoadInductionDocuments()
+            setInductionDocuments(documents)
+        } catch (caught) {
+            setInductionDocumentError(caught instanceof Error
+                ? caught.message
+                : 'Induction documents could not be loaded.')
+        } finally {
+            setIsLoadingInductionDocuments(false)
+        }
+    }, [onLoadInductionDocuments])
+
+    useEffect(() => {
+        if (activeTab === 'inductions') {
+            void loadInductionDocuments()
+        }
+    }, [activeTab, loadInductionDocuments])
+
+    const downloadInductionDocument = async (document: SiteInductionDocument) => {
+        try {
+            const blob = await onDownloadInductionDocument(document.id)
+            const url = URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.href = url
+            link.download = document.fileName || 'site-induction-document'
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            URL.revokeObjectURL(url)
+        } catch (caught) {
+            setInductionDocumentError(caught instanceof Error ? caught.message : 'The document could not be downloaded.')
+        }
+    }
+
+    const deleteInductionDocument = async (documentId: string) => {
+        setInductionDocumentError('')
+        try {
+            const next = await onDeleteInductionDocument(documentId)
+            setInductionDocuments(next)
+        } catch (caught) {
+            setInductionDocumentError(caught instanceof Error
+                ? caught.message
+                : 'The document could not be deleted.')
+        }
+    }
+
+    const uploadInductionDocuments = async (event: ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(event.target.files ?? [])
+        if (!files.length) return
+        setInductionDocumentError('')
+        setIsLoadingInductionDocuments(true)
+        try {
+            const next = await onUploadInductionDocuments(files)
+            setInductionDocuments(next)
+            if (inductionDocumentInputRef.current) inductionDocumentInputRef.current.value = ''
+        } catch (caught) {
+            setInductionDocumentError(caught instanceof Error
+                ? caught.message
+                : 'The selected documents could not be uploaded.')
+        } finally {
+            setIsLoadingInductionDocuments(false)
+            if (inductionDocumentInputRef.current) inductionDocumentInputRef.current.value = ''
+        }
+    }
+
+    const saveInductions = async () => {
+        setLocalError('')
+        try {
+            await onSaveInductions(inductionRequired, inductionRequirements)
+            setSavedInductionState({
+                inductionRequired,
+                inductionRequirements: inductionRequirements.trim(),
+            })
+            setLocalError('')
+        } catch (caught) {
+            setLocalError(caught instanceof Error ? caught.message : 'Induction requirements could not be saved.')
+        }
+    }
 
     const saveDetails = async (event: FormEvent) => {
         event.preventDefault()
@@ -245,13 +365,14 @@ export default function SiteSettingsDrawer({
 
     const requestClose = () => {
         if (busy) return
-        if ((detailsDirty || siteChecksDirty) && !window.confirm('Discard unsaved Site changes?')) return
+        if ((detailsDirty || siteChecksDirty || inductionDirty) && !window.confirm('Discard unsaved Site changes?')) return
         onClose()
     }
 
     const tabs = [
         { id: 'details' as const, label: 'Details', hasError: activeTab === 'details' && Boolean(localError) },
         { id: 'settings' as const, label: 'Settings', hasError: activeTab === 'settings' && Boolean(localError || error) },
+        { id: 'inductions' as const, label: 'Inductions', hasError: activeTab === 'inductions' && Boolean(inductionDirty || localError || inductionDocumentError) },
         { id: 'po-contacts' as const, label: 'PO Contacts', hasError: activeTab === 'po-contacts' && Boolean(poRecipientsError) },
         ...(bulkImportAllowed ? [{ id: 'bulk-equipment' as const, label: 'Bulk Add Equipment' }] : []),
     ]
@@ -265,6 +386,8 @@ export default function SiteSettingsDrawer({
             footer={<>
                 <span>{activeTab === 'settings'
                     ? `${selectedIds.length} machine${selectedIds.length === 1 ? '' : 's'} selected for update`
+                    : activeTab === 'inductions'
+                        ? `${inductionDocuments.length} induction document${inductionDocuments.length === 1 ? '' : 's'}`
                     : activeTab === 'bulk-equipment'
                         ? 'Customer and Site will be selected automatically.'
                         : detailsSuccess || 'Site name and address changes save to Dataverse.'}</span>
@@ -272,6 +395,7 @@ export default function SiteSettingsDrawer({
                     <button type="button" onClick={requestClose} disabled={busy}>Cancel</button>
                     {activeTab === 'details' && <button type="submit" form="site-settings-details-form" className="primary" disabled={busy || !detailsDirty}>Save changes</button>}
                     {activeTab === 'settings' && <button type="button" className="primary" onClick={requestSettingsSave} disabled={busy}>Save settings</button>}
+                    {activeTab === 'inductions' && <button type="button" className="primary" onClick={() => void saveInductions()} disabled={busy || !inductionDirty}>Save inductions</button>}
                     {activeTab === 'bulk-equipment' && <button type="button" className="primary" onClick={onOpenBulkImport}>Open bulk add</button>}
                 </div>
             </>}
@@ -475,6 +599,78 @@ export default function SiteSettingsDrawer({
                 </section>
             </div>
 
+            <div role="tabpanel" aria-labelledby="drawer-tab-inductions" hidden={activeTab !== 'inductions'}>
+                <EditDrawerSection title="Induction and safety requirements">
+                    <label className="site-induction-required-field">
+                        <input
+                            type="checkbox"
+                            checked={inductionRequired}
+                            onChange={(event) => {
+                                const next = event.target.checked
+                                setInductionRequired(next)
+                                setLocalError('')
+                                setInductionDocumentError('')
+                            }}
+                            disabled={busy}
+                        />
+                        Inductions are required before equipment can be used at this Site
+                    </label>
+                    <div className="site-induction-required-details" hidden={!inductionRequired}>
+                        <label>
+                            Requirements and notes
+                            <textarea
+                                value={inductionRequirements}
+                                onChange={(event) => {
+                                    setInductionRequirements(event.target.value)
+                                    setLocalError('')
+                                    setInductionDocumentError('')
+                                }}
+                                rows={6}
+                                placeholder="Enter required induction/safety steps, required documentation, and any special requirements."
+                                disabled={busy}
+                            />
+                        </label>
+                    </div>
+                </EditDrawerSection>
+                <section className="site-induction-documents">
+                    <div className="site-induction-documents-header">
+                        <h3>Site induction documents</h3>
+                        <button
+                            type="button"
+                            onClick={() => inductionDocumentInputRef.current?.click()}
+                            disabled={busy || isLoadingInductionDocuments}
+                        >Upload files</button>
+                    </div>
+                    <input
+                        ref={inductionDocumentInputRef}
+                        type="file"
+                        className="site-induction-documents-input"
+                        multiple
+                        onChange={(event) => void uploadInductionDocuments(event)}
+                        disabled={busy || isLoadingInductionDocuments}
+                    />
+                    <p>
+                        {isLoadingInductionDocuments
+                            ? 'Loading documents…'
+                            : `${inductionDocuments.length} document${inductionDocuments.length === 1 ? '' : 's'} available`}
+                    </p>
+                    {inductionDocuments.length === 0 && !isLoadingInductionDocuments
+                        ? <p className="site-induction-documents-empty">No induction documents have been uploaded yet.</p>
+                        : <ul className="site-induction-documents-list">
+                            {inductionDocuments.map((document) => <li key={document.id}>
+                                <div>
+                                    <strong>{document.fileName}</strong>
+                                    <small>{document.createdOn ? `Uploaded ${document.createdOn}` : 'Upload date unknown'}</small>
+                                </div>
+                                <div className="site-induction-documents-actions">
+                                    <button type="button" onClick={() => void downloadInductionDocument(document)} disabled={busy}>Download</button>
+                                    <button type="button" onClick={() => void deleteInductionDocument(document.id)} disabled={busy}>Delete</button>
+                                </div>
+                            </li>)}
+                        </ul>}
+                </section>
+            </div>
+
             <div role="tabpanel" aria-labelledby="drawer-tab-po-contacts" hidden={activeTab !== 'po-contacts'}>
                 <EditDrawerSection title="Site PO contacts">
                     <p>Use the Customer default, or replace it completely for this Site with a different primary recipient and CC list.</p>
@@ -486,7 +682,7 @@ export default function SiteSettingsDrawer({
                 <h3>Bulk Add Equipment</h3>
                 <p>Paste, validate, review, correct, and import Equipment using the existing bulk-add workflow. The destination is already set to <strong>{site.gr_name}</strong>.</p>
             </div>
-            {(localError || error || siteChecksError) && <p className="site-maintenance-error" role="alert">{localError || error || siteChecksError}</p>}
+            {(localError || error || siteChecksError || inductionDocumentError) && <p className="site-maintenance-error" role="alert">{localError || error || siteChecksError || inductionDocumentError}</p>}
         </EditDrawerShell>
 
         {confirming && <EditDrawerConfirmation
