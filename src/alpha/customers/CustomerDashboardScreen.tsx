@@ -52,7 +52,13 @@ import './CustomerDashboardScreen.css'
 const dateFormatter = new Intl.DateTimeFormat('en-NZ', { dateStyle: 'medium' })
 const CUSTOMER_DASHBOARD_AUTO_EXPAND_SITE_LIMIT = 2
 const CUSTOMER_DASHBOARD_AUTO_EXPAND_EQUIPMENT_LIMIT = 10
-type SiteWithCustomerLookup = Site & { _gr_customer_value?: string }
+type SiteCustomerReference = {
+    _gr_customer_value?: string
+    gr_Customer?: {
+        gr_customerid: string
+        gr_name: string
+    }
+}
 type SiteEquipmentSortKey = 'fleet' | 'wofExpiry' | 'dataStatus'
 type SiteEquipmentSort = { key: SiteEquipmentSortKey; direction: 'asc' | 'desc' }
 type SiteCheckDashboardFilter = ReportableSiteCheckState | 'all'
@@ -62,12 +68,11 @@ function display(value?: string | number | null) {
     return value == null || value === '' ? '-' : value
 }
 
-function getSiteCustomerId(site: Site): string {
-    const siteLookup = site as SiteWithCustomerLookup
-    return siteLookup.gr_Customer?.gr_customerid || siteLookup._gr_customer_value || ''
+function getSiteCustomerId(site: SiteCustomerReference): string {
+    return site.gr_Customer?.gr_customerid || site._gr_customer_value || ''
 }
 
-function hasCustomer(site: Site, customerId: string): boolean {
+function hasCustomer(site: SiteCustomerReference, customerId: string): boolean {
     return getSiteCustomerId(site).toLowerCase() === customerId.toLowerCase()
 }
 
@@ -316,14 +321,14 @@ export default function CustomerDashboardScreen() {
         for (const item of operationalJobs) {
             const site = item.gr_Site
             if (site && hasCustomer(site, selectedCustomerId) && !seen.has(site.gr_siteid.toLowerCase())) {
-                fallbackFromJobs.push(site)
+                fallbackFromJobs.push({ ...site, gr_address: site.gr_address ?? '' })
                 seen.add(site.gr_siteid.toLowerCase())
             }
         }
         for (const item of equipment) {
             const site = item.gr_Site
             if (site && hasCustomer(site, selectedCustomerId) && !seen.has(site.gr_siteid.toLowerCase())) {
-                fallbackFromEquipment.push(site)
+                fallbackFromEquipment.push({ ...site, gr_address: site.gr_address ?? '' })
                 seen.add(site.gr_siteid.toLowerCase())
             }
         }

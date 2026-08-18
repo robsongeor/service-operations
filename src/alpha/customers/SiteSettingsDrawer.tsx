@@ -182,25 +182,9 @@ export default function SiteSettingsDrawer({
         || [...siteCheckEquipmentIds].sort().join(',')
             !== [...savedSiteChecks.selectedEquipmentIds].sort().join(',')
 
-    const resetInductionSection = () => {
-        setInductionRequired(site.gr_inductionrequired ?? false)
-        setInductionRequirements(site.gr_inductionrequirements ?? '')
-        setSavedInductionState({
-            inductionRequired: site.gr_inductionrequired ?? false,
-            inductionRequirements: site.gr_inductionrequirements ?? '',
-        })
-        setInductionDocuments([])
-        setInductionDocumentError('')
-    }
-
     useEffect(() => {
         resizeInductionRequirementsInput()
     }, [inductionRequirements, resizeInductionRequirementsInput])
-
-    useEffect(() => {
-        resetInductionSection()
-        setActiveTab('details')
-    }, [site.gr_siteid])
 
     const loadInductionDocuments = useCallback(async () => {
         setInductionDocumentError('')
@@ -217,19 +201,19 @@ export default function SiteSettingsDrawer({
         }
     }, [onLoadInductionDocuments])
 
-    useEffect(() => {
-        if (activeTab === 'inductions') {
-            void loadInductionDocuments()
-        }
-    }, [activeTab, loadInductionDocuments])
+    const changeActiveTab = (tab: SiteSettingsTab) => {
+        setLocalError('')
+        setActiveTab(tab)
+        if (tab === 'inductions') void loadInductionDocuments()
+    }
 
-    const downloadInductionDocument = async (document: SiteInductionDocument) => {
+    const downloadInductionDocument = async (inductionDocument: SiteInductionDocument) => {
         try {
-            const blob = await onDownloadInductionDocument(document.id)
+            const blob = await onDownloadInductionDocument(inductionDocument.id)
             const url = URL.createObjectURL(blob)
             const link = document.createElement('a')
             link.href = url
-            link.download = document.fileName || 'site-induction-document'
+            link.download = inductionDocument.fileName || 'site-induction-document'
             document.body.appendChild(link)
             link.click()
             document.body.removeChild(link)
@@ -413,7 +397,7 @@ export default function SiteSettingsDrawer({
                 </div>
             </>}
         >
-            <DrawerTabs tabs={tabs} activeTab={activeTab} onChange={(tab) => { setLocalError(''); setActiveTab(tab) }} ariaLabel="Site settings sections" />
+            <DrawerTabs tabs={tabs} activeTab={activeTab} onChange={changeActiveTab} ariaLabel="Site settings sections" />
 
             <div role="tabpanel" aria-labelledby="drawer-tab-details" hidden={activeTab !== 'details'}>
                 <form id="site-settings-details-form" onSubmit={saveDetails}>

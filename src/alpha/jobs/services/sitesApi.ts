@@ -2,13 +2,6 @@ import type { Site, SiteUpdateInput } from '../types/site.types'
 
 const DATAVERSE_URL = import.meta.env.VITE_DATAVERSE_URL
 
-async function dataverseHeaders(accessToken: string) {
-    return {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: 'application/json',
-    }
-}
-
 async function dataverseErrorMessage(response: Response, fallback: string) {
     const responseText = await response.text()
     if (!responseText) return fallback
@@ -88,7 +81,7 @@ export async function updateSite(
     siteId: string,
     site: SiteUpdateInput,
 ): Promise<void> {
-    const payload = {
+    const payload: Record<string, unknown> = {
         gr_name: site.name.trim(),
         gr_address: site.address.trim() || null,
         ...(site.defaultMaintenanceProfile !== undefined
