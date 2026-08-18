@@ -88,9 +88,14 @@
 
 .site-induction-documents-header {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
     align-items: center;
     gap: .75rem;
+}
+
+.site-induction-documents-header button {
+    min-height: 36px;
+    padding: 0 .7rem;
 }
 
 .site-induction-documents-input {
@@ -118,6 +123,22 @@
     justify-content: space-between;
     align-items: center;
     gap: .75rem;
+}
+
+.site-induction-spinner {
+    display: inline-flex;
+    width: 12px;
+    height: 12px;
+    margin-right: .35rem;
+    border: 2px solid rgba(47, 61, 56, 0.35);
+    border-top-color: #2f3d38;
+    border-right-color: #2f3d38;
+    border-radius: 50%;
+    animation: site-induction-spin 0.8s linear infinite;
+}
+
+@keyframes site-induction-spin {
+    to { transform: rotate(360deg); }
 }
 
 .site-induction-documents-list li div {

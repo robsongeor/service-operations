@@ -1,6 +1,58 @@
 import type { Site, SiteUpdateInput } from '../types/site.types'
 
 const DATAVERSE_URL = import.meta.env.VITE_DATAVERSE_URL
+const INDUCTION_FIELDS = {
+    required: 'gr_inductionrequired',
+    requirements: 'gr_inductionrequirements',
+}
+
+type SiteInductionFieldSupport = {
+    inductionRequired: boolean
+    inductionRequirements: boolean
+}
+
+let cachedSiteInductionSupport: Promise<SiteInductionFieldSupport> | null = null
+
+async function dataverseHeaders(accessToken: string) {
+    return {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/json',
+    }
+}
+
+async function readSiteInductionFieldSupport(accessToken: string): Promise<SiteInductionFieldSupport> {
+    const headers = {
+        ...(await dataverseHeaders(accessToken)),
+    }
+    const result = await fetch(
+        `${DATAVERSE_URL}/api/data/v9.2/EntityDefinitions(LogicalName='gr_site')?$select=LogicalName&$expand=Attributes($select=LogicalName,IsValidForUpdate;$filter=LogicalName eq '${INDUCTION_FIELDS.required}' or LogicalName eq '${INDUCTION_FIELDS.requirements}')`,
+        { headers },
+    )
+    if (!result.ok) {
+        return { inductionRequired: false, inductionRequirements: false }
+    }
+    const data = await result.json()
+    const attributes = data.Attributes?.value ?? []
+    const writable = new Set(attributes.filter((attribute: { IsValidForUpdate?: boolean, LogicalName?: string }) =>
+        attribute.IsValidForUpdate !== false && typeof attribute.LogicalName === 'string',
+    ).map((attribute: { LogicalName: string }) => attribute.LogicalName))
+    return {
+        inductionRequired: writable.has(INDUCTION_FIELDS.required),
+        inductionRequirements: writable.has(INDUCTION_FIELDS.requirements),
+    }
+}
+
+function getSiteInductionFieldSupport(accessToken: string): Promise<SiteInductionFieldSupport> {
+    if (!cachedSiteInductionSupport) {
+        cachedSiteInductionSupport = readSiteInductionFieldSupport(accessToken)
+            .catch(() => ({ inductionRequired: false, inductionRequirements: false }))
+    }
+    return cachedSiteInductionSupport
+}
+
+function formatInductionError() {
+    return 'Induction fields are not available in this Dataverse environment yet.'
+}
 
 async function dataverseErrorMessage(response: Response, fallback: string) {
     const responseText = await response.text()
@@ -81,6 +133,28 @@ export async function updateSite(
     siteId: string,
     site: SiteUpdateInput,
 ): Promise<void> {
+    const payload = {
+        gr_name: site.name.trim(),
+        gr_address: site.address.trim() || null,
+        ...(site.defaultMaintenanceProfile !== undefined
+            ? { gr_defaultmaintenanceprofile: site.defaultMaintenanceProfile }
+            : {}),
+    }
+    const requestedInduction = site.inductionRequired !== undefined || site.inductionRequirements !== undefined
+    if (requestedInduction) {
+        const support = await getSiteInductionFieldSupport(accessToken)
+        if ((site.inductionRequired !== undefined && !support.inductionRequired)
+            || (site.inductionRequirements !== undefined && !support.inductionRequirements)) {
+            throw new Error(formatInductionError())
+        }
+        if (site.inductionRequired !== undefined && support.inductionRequired) {
+            payload.gr_inductionrequired = site.inductionRequired
+        }
+        if (site.inductionRequirements !== undefined && support.inductionRequirements) {
+            payload.gr_inductionrequirements = site.inductionRequirements == null || !site.inductionRequirements.trim().length
+                ? null : site.inductionRequirements.trim()
+        }
+    }
     const result = await fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_sites(${siteId})`, {
         method: 'PATCH',
         headers: {
@@ -88,19 +162,7 @@ export async function updateSite(
             'Content-Type': 'application/json',
             Accept: 'application/json',
         },
-        body: JSON.stringify({
-            gr_name: site.name.trim(),
-            gr_address: site.address.trim() || null,
-            ...(site.defaultMaintenanceProfile !== undefined
-                ? { gr_defaultmaintenanceprofile: site.defaultMaintenanceProfile }
-                : {}),
-            ...(site.inductionRequired !== undefined
-                ? { gr_inductionrequired: site.inductionRequired }
-                : {}),
-            ...(site.inductionRequirements !== undefined
-                ? { gr_inductionrequirements: site.inductionRequirements == null || !site.inductionRequirements.trim().length ? null : site.inductionRequirements.trim() }
-                : {}),
-        }),
+        body: JSON.stringify(payload),
     })
 
     if (!result.ok) {

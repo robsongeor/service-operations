@@ -127,6 +127,7 @@ export default function SiteSettingsDrawer({
     })
     const [inductionDocuments, setInductionDocuments] = useState<SiteInductionDocument[]>([])
     const [isLoadingInductionDocuments, setIsLoadingInductionDocuments] = useState(false)
+    const [isUploadingInductionDocuments, setIsUploadingInductionDocuments] = useState(false)
     const [confirming, setConfirming] = useState(false)
     const [localError, setLocalError] = useState('')
     const [inductionDocumentError, setInductionDocumentError] = useState('')
@@ -242,7 +243,7 @@ export default function SiteSettingsDrawer({
         const files = Array.from(event.target.files ?? [])
         if (!files.length) return
         setInductionDocumentError('')
-        setIsLoadingInductionDocuments(true)
+        setIsUploadingInductionDocuments(true)
         try {
             const next = await onUploadInductionDocuments(files)
             setInductionDocuments(next)
@@ -252,7 +253,7 @@ export default function SiteSettingsDrawer({
                 ? caught.message
                 : 'The selected documents could not be uploaded.')
         } finally {
-            setIsLoadingInductionDocuments(false)
+            setIsUploadingInductionDocuments(false)
             if (inductionDocumentInputRef.current) inductionDocumentInputRef.current.value = ''
         }
     }
@@ -632,14 +633,16 @@ export default function SiteSettingsDrawer({
                         </label>
                     </div>
                 </EditDrawerSection>
-                <section className="site-induction-documents">
+                <EditDrawerSection title="Site induction documents">
                     <div className="site-induction-documents-header">
-                        <h3>Site induction documents</h3>
                         <button
                             type="button"
                             onClick={() => inductionDocumentInputRef.current?.click()}
-                            disabled={busy || isLoadingInductionDocuments}
-                        >Upload files</button>
+                            disabled={busy || isLoadingInductionDocuments || isUploadingInductionDocuments}
+                        >
+                            <span className={isUploadingInductionDocuments ? 'site-induction-spinner' : undefined} aria-hidden="true"></span>
+                            {isUploadingInductionDocuments ? 'Uploading...' : 'Upload files'}
+                        </button>
                     </div>
                     <input
                         ref={inductionDocumentInputRef}
@@ -647,10 +650,12 @@ export default function SiteSettingsDrawer({
                         className="site-induction-documents-input"
                         multiple
                         onChange={(event) => void uploadInductionDocuments(event)}
-                        disabled={busy || isLoadingInductionDocuments}
+                        disabled={busy || isLoadingInductionDocuments || isUploadingInductionDocuments}
                     />
                     <p>
-                        {isLoadingInductionDocuments
+                        {isUploadingInductionDocuments
+                            ? 'Uploading induction documents…'
+                            : isLoadingInductionDocuments
                             ? 'Loading documents…'
                             : `${inductionDocuments.length} document${inductionDocuments.length === 1 ? '' : 's'} available`}
                     </p>
@@ -668,7 +673,7 @@ export default function SiteSettingsDrawer({
                                 </div>
                             </li>)}
                         </ul>}
-                </section>
+                </EditDrawerSection>
             </div>
 
             <div role="tabpanel" aria-labelledby="drawer-tab-po-contacts" hidden={activeTab !== 'po-contacts'}>
