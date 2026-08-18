@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Job } from '../types/job.types'
-import { onlineJobCardPilotEnabled, TECHNICIAN_COMMENTS_MAX_LENGTH, type JobEmailDraft } from '../services/jobEmail'
+import { jobEmailSendingAllowedForHostname, LOCAL_JOB_EMAIL_DISABLED_MESSAGE, onlineJobCardPilotEnabled, TECHNICIAN_COMMENTS_MAX_LENGTH, type JobEmailDraft } from '../services/jobEmail'
 import { buildTechnicianEmailSubject } from '../utils/technicianMailto'
 import { isValidTechnicianEmail } from '../utils/technicianMailto'
 import { jobHasActiveSubmissionLink } from '../services/jobSubmissionLinkApi'
@@ -23,8 +23,9 @@ export default function JobEmailComposer({ job, onCancel, onSend }: Props) {
     const [isSending, setIsSending] = useState(false)
     const [error, setError] = useState('')
     const [confirmReplacement, setConfirmReplacement] = useState(false)
+    const localSendingDisabled = !jobEmailSendingAllowedForHostname(window.location.hostname)
     const recipientValid = isValidTechnicianEmail(recipientEmail)
-    const canSend = recipientValid && Boolean(subject.trim())
+    const canSend = !localSendingDisabled && recipientValid && Boolean(subject.trim())
     const equipment = job.gr_Equipment
     const site = job.gr_Site
     const contact = job.gr_Contact
@@ -65,15 +66,15 @@ export default function JobEmailComposer({ job, onCancel, onSend }: Props) {
             error={error}
             isBusy={isSending}
             submitDisabled={!canSend}
-            submitLabel={isSending ? 'Queueing…' : 'Send Job Card'}
+            submitLabel={localSendingDisabled ? 'Sending disabled locally' : isSending ? 'Queueing…' : 'Send Job Card'}
             onCancel={onCancel}
             onSubmit={requestSend}
             dialogClassName="job-email-composer"
             fieldsClassName="job-email-composer-fields"
         >
-            <div className="job-email-composer-intro">
-                <strong>Ready to send</strong>
-                <span>The email is queued immediately; you can keep working while delivery completes.</span>
+            <div className={`job-email-composer-intro ${localSendingDisabled ? 'is-disabled' : ''}`} role={localSendingDisabled ? 'status' : undefined}>
+                <strong>{localSendingDisabled ? 'Local preview only' : 'Ready to send'}</strong>
+                <span>{localSendingDisabled ? LOCAL_JOB_EMAIL_DISABLED_MESSAGE : 'The email is queued immediately; you can keep working while delivery completes.'}</span>
             </div>
             <label>
                 <span>To</span>

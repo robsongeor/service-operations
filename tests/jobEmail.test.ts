@@ -9,7 +9,7 @@ import {
     buildTechnicianEmailSubject,
 } from '../src/alpha/jobs/utils/technicianMailto.ts'
 import type { Job } from '../src/alpha/jobs/types/job.types.ts'
-import { buildTechnicianJobCardHtml, onlineJobCardPilotEnabled } from '../src/alpha/jobs/services/jobEmail.ts'
+import { assertJobEmailSendingAllowed, buildTechnicianJobCardHtml, jobEmailSendingAllowedForHostname, onlineJobCardPilotEnabled } from '../src/alpha/jobs/services/jobEmail.ts'
 
 const job = {
     gr_jobid: '00000000-0000-4000-8000-000000000001',
@@ -114,6 +114,16 @@ test('online Job Card pilot is restricted to approved recipients and other email
     assert.match(body, /Online Job Card access is currently disabled/)
 })
 
+test('Job Card email sending is disabled on localhost and loopback hosts only', () => {
+    assert.equal(jobEmailSendingAllowedForHostname('localhost'), false)
+    assert.equal(jobEmailSendingAllowedForHostname('LOCALHOST.'), false)
+    assert.equal(jobEmailSendingAllowedForHostname('jobs.localhost'), false)
+    assert.equal(jobEmailSendingAllowedForHostname('127.0.0.1'), false)
+    assert.equal(jobEmailSendingAllowedForHostname('[::1]'), false)
+    assert.equal(jobEmailSendingAllowedForHostname('yellow-cliff-068680700.7.azurestaticapps.net'), true)
+    assert.throws(() => assertJobEmailSendingAllowed('localhost'), /disabled on localhost/)
+})
+
 test('technician email rejects comments beyond the bounded message limit', () => {
     assert.throws(
         () => buildTechnicianJobCardHtml(job, 'Mouhib', 'https://service.example.test', 'x'.repeat(2001)),
@@ -129,6 +139,8 @@ test('Jobs table uses the in-app composer and pilot-gated link generation', () =
     assert.match(table, /<JobEmailComposer/)
     assert.doesNotMatch(table, /window\.location\.href|mailto:/)
     assert.match(composer, /Send Job Card/)
+    assert.match(composer, /localSendingDisabled/)
+    assert.match(composer, /Sending disabled locally/)
     assert.match(composer, /Comments for technician/)
     assert.match(composer, /onlineJobCardPilotEnabled/)
     assert.match(composer, /Contact email/)
@@ -136,6 +148,7 @@ test('Jobs table uses the in-app composer and pilot-gated link generation', () =
     assert.match(hook, /onlineJobCardPilotEnabled/)
     assert.match(hook, /void \(async \(\) =>/)
     assert.match(hook, /waitForEmailDispatch/)
+    assert.match(hook, /assertJobEmailSendingAllowed\(window\.location\.hostname\)/)
 })
 
 test('submitted technician cards can start a confirmed new submission cycle', () => {

@@ -74,6 +74,15 @@
     white-space: nowrap;
 }
 
+.job-email-composer-intro.is-disabled {
+    background: #fff7e6;
+    color: #755218;
+}
+
+.job-email-composer-intro.is-disabled strong {
+    color: #805719;
+}
+
 .job-email-preview {
     overflow: hidden;
     border: 1px solid #d5e0db;

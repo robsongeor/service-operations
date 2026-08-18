@@ -1,6 +1,15 @@
 # Current State
 
-Branch: `codex/job-card-entry-validation`
+Branch: `codex/disable-local-job-card-email`
+
+## Local Job Card email guard (local, not deployed)
+
+- Job Card previews remain available on localhost, but the shared composer and Job Card workspace
+  disable primary and additional-technician sends on localhost, subdomains of localhost, IPv4
+  loopback, and IPv6 loopback hosts.
+- The Jobs workflow independently rejects a local send before secure-link generation or Email
+  Dispatch creation. Production and non-loopback deployed hosts retain the existing delivery flow.
+- No Dataverse schema, role, API, route, credential, or cloud configuration change is required.
 
 ## Technician Job Card resend cycles (deployed)
 

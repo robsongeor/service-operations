@@ -653,6 +653,7 @@
 .job-card-timeline strong { color: #39443e; font-size: 0.74rem; }
 .job-card-timeline small { color: #7c8580; font-size: 0.65rem; }
 .job-card-error { margin: 0; padding: 10px; border-radius: 8px; background: #fff0f0; color: #913b3b; font-size: 0.7rem; }
+.job-card-local-send-warning { margin: 0; padding: 10px; border-radius: 8px; background: #fff7e6; color: #755218; font-size: 0.7rem; }
 
 .job-card-layout {
     display: grid;

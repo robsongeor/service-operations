@@ -10,6 +10,7 @@ import { JOB_NUMBER_REQUIRED_EMAIL_MESSAGE, jobHasEmailableJobNumber } from '../
 import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation'
 import { formatTechnicianSubmissionHourMeter, hasTechnicianSubmission } from '../types/technicianSubmission'
 import { downloadSubmittedJobSheet } from '../services/submittedJobSheetPdf'
+import { jobEmailSendingAllowedForHostname, LOCAL_JOB_EMAIL_DISABLED_MESSAGE } from '../services/jobEmail'
 
 type Props = {
     job: Job
@@ -116,6 +117,7 @@ export default function JobCardFields({ job, mechanics, assignments, onStatusCha
     const [preview, setPreview] = useState<{ submission: JobCardSubmission; photoId: string } | null>(null)
     const [pdfBusyId, setPdfBusyId] = useState('')
     const hasJobNumber = jobHasEmailableJobNumber(job)
+    const localSendingDisabled = !jobEmailSendingAllowedForHostname(window.location.hostname)
     const submissions = useMemo(() => {
         const normalized = job.jobCardSubmissions ?? []
         const old = legacySubmission(job)
@@ -144,6 +146,7 @@ export default function JobCardFields({ job, mechanics, assignments, onStatusCha
                 : submissions.some((item) => item.gr_status === JOB_CARD_STATUSES.SENT) ? 'Awaiting technicians' : 'Not sent'
 
     const performSend = async (target: 'primary' | JobAssignment) => {
+        if (localSendingDisabled) return setError(LOCAL_JOB_EMAIL_DISABLED_MESSAGE)
         const email = target === 'primary' ? job.gr_Mechanic?.gr_email : target.gr_Mechanic?.gr_email
         if (!hasJobNumber) return setError(JOB_NUMBER_REQUIRED_EMAIL_MESSAGE)
         if (!email) return setError('This technician needs an email address before the job can be sent.')
@@ -192,12 +195,13 @@ export default function JobCardFields({ job, mechanics, assignments, onStatusCha
                 <div><span>Job Card progress</span><strong>{submittedCount} of {requiredCount} submitted</strong><small>{progressLabel}</small></div>
                 <label><span>Office status</span><select value={getJobCardStatus(job.gr_jobcardstatus)} disabled={isUpdating} onChange={(event) => void onStatusChange(job.gr_jobid, Number(event.target.value) as JobCardStatus)}>{JOB_CARD_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
             </header>
+            {localSendingDisabled && <p className="job-card-local-send-warning" role="status">{LOCAL_JOB_EMAIL_DISABLED_MESSAGE}</p>}
 
             <section className="job-card-people" aria-label="Technician Job Cards">
                 <TechnicianCard
                     name={job.gr_Mechanic?.gr_name ?? 'No primary technician'} email={job.gr_Mechanic?.gr_email} label="Primary technician"
                     status={primarySubmission?.gr_status ?? (legacy ? JOB_CARD_STATUSES.SUBMITTED : getJobCardStatus(job.gr_jobcardstatus))}
-                    submission={primarySubmission ?? legacy} isBusy={isUpdating} canSend={hasJobNumber && Boolean(job.gr_Mechanic?.gr_email)}
+                    submission={primarySubmission ?? legacy} isBusy={isUpdating} canSend={!localSendingDisabled && hasJobNumber && Boolean(job.gr_Mechanic?.gr_email)}
                     expanded={expandedId === (primarySubmission ?? legacy)?.gr_jobcardsubmissionid}
                     onToggle={() => setExpandedId((current) => current ? '' : (primarySubmission ?? legacy)?.gr_jobcardsubmissionid ?? '')}
                     onSend={() => requestSend('primary', primarySubmission?.gr_status ?? getJobCardStatus(job.gr_jobcardstatus))}
@@ -209,7 +213,7 @@ export default function JobCardFields({ job, mechanics, assignments, onStatusCha
                     const submission = [...submissions].reverse().find((item) => item._gr_jobassignment_value === assignment.gr_jobassignmentid)
                     const status = submission?.gr_status ?? getJobCardStatus(assignment.gr_jobcardstatus)
                     return <TechnicianCard key={assignment.gr_jobassignmentid} name={assignment.gr_Mechanic?.gr_name ?? 'Unknown technician'} email={assignment.gr_Mechanic?.gr_email} label="Additional technician"
-                        status={status} submission={submission} isBusy={busyId === assignment.gr_jobassignmentid} canSend={hasJobNumber && Boolean(assignment.gr_Mechanic?.gr_email)}
+                        status={status} submission={submission} isBusy={busyId === assignment.gr_jobassignmentid} canSend={!localSendingDisabled && hasJobNumber && Boolean(assignment.gr_Mechanic?.gr_email)}
                         expanded={expandedId === submission?.gr_jobcardsubmissionid} onToggle={() => setExpandedId((current) => current ? '' : submission?.gr_jobcardsubmissionid ?? '')}
                         onSend={() => requestSend(assignment, status)} onRemove={() => void removeAssignment(assignment)} onPhoto={(id) => submission && showPhoto(submission, id)}
                         onDownload={submission ? () => void downloadPdf(submission) : undefined} isPdfBusy={pdfBusyId === submission?.gr_jobcardsubmissionid} />

@@ -25,6 +25,10 @@ The Jobs-table composer returns as soon as the dispatch row is accepted. Deliver
 monitored in the background so the user can continue working; Job Card status changes to Sent only
 after the flow confirms success.
 
+Localhost and loopback builds are preview-only: the shared composer disables its send action and the
+Jobs workflow independently rejects primary and additional-technician dispatch attempts before
+creating a secure link or Email Dispatch row. Real delivery must be initiated from the deployed app.
+
 ## Site Checks
 
 Site Checks does not use this flow. Its approved workflow still generates the occurrence link and

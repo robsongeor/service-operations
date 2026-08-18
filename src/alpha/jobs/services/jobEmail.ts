@@ -22,10 +22,23 @@ export type JobEmailDeliveryState = {
 }
 
 export const TECHNICIAN_COMMENTS_MAX_LENGTH = 2000
+export const LOCAL_JOB_EMAIL_DISABLED_MESSAGE = 'Job Card email sending is disabled on localhost. Open the live app to send this email.'
 export const ONLINE_JOB_CARD_PILOT_EMAILS = [
     'nzmouhib@yahoo.co.nz',
     'georger@liftrucks.co.nz',
 ] as const
+
+export function jobEmailSendingAllowedForHostname(hostname: string) {
+    const normalizedHostname = hostname.trim().toLocaleLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '')
+    return normalizedHostname !== 'localhost'
+        && !normalizedHostname.endsWith('.localhost')
+        && normalizedHostname !== '::1'
+        && !/^127(?:\.\d{1,3}){3}$/.test(normalizedHostname)
+}
+
+export function assertJobEmailSendingAllowed(hostname: string) {
+    if (!jobEmailSendingAllowedForHostname(hostname)) throw new Error(LOCAL_JOB_EMAIL_DISABLED_MESSAGE)
+}
 
 export function onlineJobCardPilotEnabled(recipientEmail?: string | null) {
     const normalizedEmail = recipientEmail?.trim().toLocaleLowerCase()

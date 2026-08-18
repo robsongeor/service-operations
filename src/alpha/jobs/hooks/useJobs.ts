@@ -31,7 +31,7 @@ import type { JobAssignment } from '../types/jobAssignment.types'
 import { fetchMechanics as fetchStaffDirectory } from '../../mechanics/services/mechanicsApi'
 import { subscribeToStaffChanges } from '../../mechanics/services/staffRealtime'
 import { createEmailDispatch, waitForEmailDispatch } from '../services/emailDispatchApi'
-import { buildAssignmentJobEmail, buildPrimaryJobEmail, onlineJobCardPilotEnabled, type JobEmailDeliveryState, type JobEmailDraft } from '../services/jobEmail'
+import { assertJobEmailSendingAllowed, buildAssignmentJobEmail, buildPrimaryJobEmail, onlineJobCardPilotEnabled, type JobEmailDeliveryState, type JobEmailDraft } from '../services/jobEmail'
 import { assertJobHasEmailableJobNumber } from '../services/jobEmailRules'
 import { generateJobSubmissionLink } from '../services/jobSubmissionLinkApi'
 import { isValidTechnicianEmail } from '../utils/technicianMailto'
@@ -664,6 +664,7 @@ export function useJobs() {
     }
 
     const sendPrimaryJobEmail = async (job: Job) => {
+        assertJobEmailSendingAllowed(window.location.hostname)
         assertJobHasEmailableJobNumber(job)
         if (!isValidTechnicianEmail(job.gr_Mechanic?.gr_email)) {
             throw new Error('The primary technician needs an email address before the job can be sent.')
@@ -688,6 +689,7 @@ export function useJobs() {
     }
 
     const queuePrimaryJobEmail = async (job: Job, draft: JobEmailDraft) => {
+        assertJobEmailSendingAllowed(window.location.hostname)
         assertJobHasEmailableJobNumber(job)
         if (!isValidTechnicianEmail(draft.recipientEmail)) {
             throw new Error('Enter a valid technician email address before sending.')
@@ -741,6 +743,7 @@ export function useJobs() {
     }
 
     const sendAssignmentJobEmail = async (job: Job, assignment: JobAssignment) => {
+        assertJobEmailSendingAllowed(window.location.hostname)
         assertJobHasEmailableJobNumber(job)
         if (!isValidTechnicianEmail(assignment.gr_Mechanic?.gr_email)) {
             throw new Error('This technician needs an email address before the job can be sent.')

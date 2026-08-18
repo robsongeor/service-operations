@@ -63,6 +63,10 @@ The Jobs-table email action opens the feature-owned Job Card composer instead of
 desktop email client. Recipient, subject, and optional email-only technician comments remain
 editable, while a bounded preview shows the Outlook-safe HTML card. Technician comments are bounded,
 escaped, stored only as part of the Email Dispatch body, and do not rewrite the Job description.
+On localhost and other loopback hostnames, the composer remains available as a preview but every
+primary and additional-technician send path is disabled before link generation or Email Dispatch
+creation. Operators must open the deployed application to send a real Job Card, preventing local
+origins or development configuration from reaching technicians.
 The composer uses an 840px desktop width with a viewport-safe responsive limit so subjects, comments,
 contact details, and the card preview remain readable without changing shared dialog dimensions.
 The email preview and delivered card use the same combined Fleet Number presentation as Job Book:
