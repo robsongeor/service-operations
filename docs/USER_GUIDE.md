@@ -98,6 +98,7 @@ Each site section shows the site name, address, related equipment and key activi
 - Create a job with the customer and site already selected.
 - Open site settings.
 - Transfer existing equipment to the site.
+- Configure induction and safety requirements, including uploading site induction documents.
 - View or run Site Checks when they are enabled.
 
 Only transfer a machine when its current location has genuinely changed. Historical jobs stay with their original history even after a transfer.
@@ -108,6 +109,7 @@ Open the settings button beside a site to manage:
 
 - Site details.
 - Maintenance defaults for equipment at that site.
+- Induction requirements and safety documents.
 - Purchase-order recipients.
 - Bulk equipment import.
 - Site Check schedule and equipment scope.
@@ -369,7 +371,7 @@ This section is the detailed reference for the controls people see in the app. I
 | Customer header | The selected customer's name and actions. | Use it to edit customer information or create a new customer where your access allows it. |
 | Sites tab | One section for each customer site. | This is the main working view: open equipment, create jobs, use site settings, transfer equipment or open Site Check details. |
 | Contacts tab | Contacts and the sites they belong to. | Check phone and email details before dispatching work or preparing PO correspondence. |
-| Open Jobs tab | Jobs belonging to the customer. | Open a job to update it; use the table to see its status and allocation. |
+| Open Jobs tab | Jobs belonging to the customer. | Open a job to update it; the drawer now opens with refreshed job, site, and equipment data. |
 | Quotes tab | Quotes related to the customer. | Open an existing quote or create a new quote for this customer's work. |
 | Customer information tab | Accounts details, PO requirements and notes. | Keep long-term customer information here rather than adding it to a single job description. |
 
@@ -380,7 +382,7 @@ Each site can show a number of actions. Their intended use is:
 - **Create job:** starts a new job with the customer and site selected. Add the machine after starting if the work is equipment-specific.
 - **Add equipment:** creates a machine at that site. Check the fleet and serial number before saving.
 - **Open equipment:** opens the full machine record, including maintenance and job history.
-- **Site settings:** opens the site's details, maintenance, PO and Site Check configuration.
+- **Site settings:** opens the site's details, maintenance, inductions, PO and Site Check configuration.
 - **Transfer equipment:** moves existing records into this site. It does not create a copy; it changes the machine's current site.
 - **Bulk Add Equipment:** opens the import review for a group of machines at this site. The customer and site are preselected.
 - **Run Site Check:** is available for due/overdue enabled Site Check schedules. It creates the occurrence and the related work jobs.
@@ -394,6 +396,7 @@ The site settings panel is a combination of several tasks. Save the relevant par
 | --- | --- | --- |
 | Details | Correct the site name and address. | Job and customer searching relies on good site names. |
 | Maintenance | Choose the site's default maintenance profile and optionally apply it to existing equipment. | Applying it to existing equipment changes multiple records. Review the selected machines first. |
+| Inductions | Toggle induction requirements for this site and upload linked JSEA or safety documents. | The requirements field stores a checklist, and documents are loaded from the Inductions tab. |
 | PO recipients | Decide who receives PO request emails for this site. | A site setting can override the customer's standard PO recipients. |
 | Site Checks | Turn a schedule on/off and set its timing and equipment scope. | Disabling preserves history; it only prevents new occurrences. |
 | Bulk Add Equipment | Import many new machines after reviewing each row. | Do not use it to update existing machines. Resolve duplicates in the review first. |

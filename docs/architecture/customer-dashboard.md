@@ -63,6 +63,11 @@ Equipment is launched from its tab with the current Customer and Site supplied a
 the existing bulk-import workflow remains responsible for parsing, review, validation,
 correction, and creation.
 
+The same drawer also includes an Inductions tab for a site-level induction requirement
+toggle and free-text requirements text; this section persists `gr_inductionrequired` and
+`gr_inductionrequirements` on the same site record and uses linked Dataverse `annotation`
+documents for uploads and downloads.
+
 The same combined drawer includes a mounted Site Checks tab. A single customer-scoped Site
 Checks hook supplies the dashboard and the selected Site's settings, avoiding a second
 loader or token request. It resolves the active account and acquires silently once. Enabled
@@ -157,6 +162,9 @@ Checks and Jobs projections.
   same focused, paged Equipment Job history load as Equipment Manager in the background. The History
   tab distinguishes loading, failure/retry, and a confirmed empty result. Closing the drawer clears
   that focused history and invalidates any in-flight response so another Equipment cannot inherit it.
+- Opening an Open Job from Customer Open Jobs first fetches the full Job for the shared Job editor.
+  The drawer therefore opens with complete Equipment/Site/customer context rather than stale row
+  projections from the dashboard list.
 - Job History cards in that Equipment drawer are mouse- and keyboard-activatable. Opening one uses
   the canonical focused Job refresh, which first prepares the complete shared editor reference data;
   a missing or failed Job remains closed with retry/cancel rather than opening a stale partial record.

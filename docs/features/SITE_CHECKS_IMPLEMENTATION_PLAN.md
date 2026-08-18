@@ -142,9 +142,9 @@ payload builder and must not invent a Customer lookup.
 - Customer Dashboard uses `useEquipmentManager` plus `useJobs`. Its Sites tab groups all
   loaded Equipment by the actual `gr_Site` relationship. It does not currently exclude
   inactive Equipment.
-- The combined `SiteSettingsDrawer` keeps Details, Settings, and Bulk Add Equipment tabs
-  mounted and uses shared `EditDrawerShell`, `DrawerTabs`, sections, confirmation, and
-  selection patterns.
+- The combined `SiteSettingsDrawer` keeps Details, Settings, Inductions, Site Checks, and
+  Bulk Add Equipment tabs mounted and uses shared `EditDrawerShell`, `DrawerTabs`, sections,
+  confirmation, and selection patterns.
 - `useJobs.updateJobStatus` and `useJobs.updateJob` are the manager-facing Job Status
   coordination points. Standard status writes currently delegate to `jobsApi`; Service
   completion uses `completeServiceJobAtomically`; WOF has a separate workflow.
@@ -420,7 +420,7 @@ Fortnightly / Monthly, and Initial/Next due date.
 - Disabling never clears the active occurrence, changes Jobs, or deletes history. It hides
   status/reporting and blocks new creation. If an occurrence is active, require explicit
   confirmation that work remains accessible and can still complete.
-- Save schedule separately from Site details and maintenance settings so one failure does not
+- Save schedule separately from Site details, maintenance settings, and induction requirements so one failure does not
   imply another succeeded. After success, refresh the authoritative schedule.
 - First save posts the collection and relies on the verified active Site alternate key to
   reject a concurrent duplicate; updates use ETag `If-Match` to reject concurrent settings
@@ -935,7 +935,7 @@ Implementation notes/deviations:
 - 26 July 2026: added the Site Checks tab to the combined Site Settings drawer using
   `FormSwitch`, the verified frequency choices, and a Date Only input. Tab panels remain
   mounted, and Site Check dirty state participates in discard confirmation without coupling
-  its save to Site details or maintenance settings.
+  its save to Site details, maintenance settings, or induction requirements.
 - The focused hook is activated only while a Site Settings drawer is open and requests only
   that Site. First save posts the collection and lets the active one-Site alternate key
   reject a concurrent duplicate; updates use the record ID and loaded `If-Match` ETag. A

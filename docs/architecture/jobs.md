@@ -178,6 +178,9 @@ lists are not part of the initial Job Book load; they load only when the add-mac
 
 - Job descriptions support up to 4,000 characters across managed Jobs and Job Book Intake. The
   shared UI and service boundary enforce the same limit as the Dataverse columns.
+- Opening an Open Job from the Customer dashboard now refreshes the full Job record before opening the
+  Job drawer. This preserves complete Customer/Site/Equipment context in the editor when the list
+  projection can be stale.
 - A non-empty Job Number must be unique across Jobs. The canonical create service performs an exact,
   authenticated Dataverse preflight for every creation entry point before POST; the main Jobs drawer
   also rejects a normalized duplicate from its loaded projection immediately. Blank Job Numbers
