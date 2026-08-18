@@ -2,7 +2,7 @@
 
 Branch: `codex/disable-local-job-card-email`
 
-## Local Job Card email guard (local, not deployed)
+## Local Job Card email guard (deployment candidate)
 
 - Job Card previews remain available on localhost, but the shared composer and Job Card workspace
   disable primary and additional-technician sends on localhost, subdomains of localhost, IPv4
@@ -10,6 +10,16 @@ Branch: `codex/disable-local-job-card-email`
 - The Jobs workflow independently rejects a local send before secure-link generation or Email
   Dispatch creation. Production and non-loopback deployed hosts retain the existing delivery flow.
 - No Dataverse schema, role, API, route, credential, or cloud configuration change is required.
+
+## Deterministic Static Web App client deployment (deployment candidate)
+
+- The Azure workflow now builds the client explicitly with Node 20, `npm ci`, and `npm run build`,
+  then uploads `dist` with Azure's automatic application build disabled. The managed API build stays
+  unchanged.
+- This recovers from successful run `32116835069`, which published the repository development
+  `index.html` and raw `/src/main.tsx` instead of the Vite production artifact. Production-safe
+  inspection confirmed the invalid entrypoint before this correction; no business data or real
+  communication was used.
 
 ## Technician Job Card resend cycles (deployed)
 

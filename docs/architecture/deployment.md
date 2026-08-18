@@ -10,7 +10,8 @@ Deployment is separate from Dataverse provisioning.
 `.github/workflows/azure-static-web-apps-yellow-cliff-068680700.yml` builds and deploys pushes
 to `v1-deployment`.
 
-- Application source: `/`
+- Application build: explicit Node 20 `npm ci` followed by `npm run build`
+- Application artifact: `dist`, uploaded with Azure's application build disabled
 - API source: `api`
 - Client output: `dist`
 - Public Vite configuration: GitHub Actions repository variables
@@ -18,6 +19,11 @@ to `v1-deployment`.
 
 The workflow derives display version metadata from an exact Git tag or the current short
 commit SHA.
+
+The explicit client build is intentional. Azure Static Web Apps receives `dist` as the
+`app_location`, with `skip_app_build: true` and an empty `output_location`, so a successful workflow
+cannot publish the repository's development `index.html` or raw TypeScript entrypoint. The managed
+Functions API continues to build from `api` through the Azure deployment action.
 
 ## Configuration
 
