@@ -204,6 +204,15 @@ export default function CustomerDashboardScreen() {
         }
     }, [fetchJobForDrawer])
 
+    const openDashboardJob = useCallback(async (job: Job) => {
+        try {
+            const refreshedJob = await fetchJobForDrawer(job.gr_jobid)
+            setEditingJob(refreshedJob ?? job)
+        } catch {
+            setEditingJob(job)
+        }
+    }, [fetchJobForDrawer])
+
     const editingEquipmentId = editingEquipment?.gr_equipmentid.toLowerCase() ?? ''
     const visibleEquipmentJobs = useMemo(() => {
         const authoritativeJobs = new Map(operationalJobs.map((job) => [job.gr_jobid.toLowerCase(), job]))
@@ -888,7 +897,7 @@ export default function CustomerDashboardScreen() {
                 officeUpdates={officeUpdates}
                 isLoading={isJobsLoading}
                 error={jobsLoadError}
-                onOpenJob={setEditingJob}
+                onOpenJob={(job) => { void openDashboardJob(job) }}
             /> : activeTab === 'quotes' ? <CustomerQuotesTab
                 quotes={customerQuotes}
                 sites={customerSites}

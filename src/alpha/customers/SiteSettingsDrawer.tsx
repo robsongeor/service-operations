@@ -159,6 +159,14 @@ export default function SiteSettingsDrawer({
     const [, setSiteChecksSuccess] = useState('')
     const [confirmingDisable, setConfirmingDisable] = useState(false)
     const inductionDocumentInputRef = useRef<HTMLInputElement>(null)
+    const inductionRequirementsInputRef = useRef<HTMLTextAreaElement>(null)
+
+    const resizeInductionRequirementsInput = useCallback(() => {
+        const textarea = inductionRequirementsInputRef.current
+        if (!textarea) return
+        textarea.style.height = '0px'
+        textarea.style.height = `${Math.max(120, textarea.scrollHeight)}px`
+    }, [])
 
     const sortedEquipment = useMemo(() => [...equipment].sort((left, right) =>
         equipmentLabel(left).localeCompare(equipmentLabel(right), undefined, { numeric: true }),
@@ -184,6 +192,10 @@ export default function SiteSettingsDrawer({
         setInductionDocuments([])
         setInductionDocumentError('')
     }
+
+    useEffect(() => {
+        resizeInductionRequirementsInput()
+    }, [inductionRequirements, resizeInductionRequirementsInput])
 
     useEffect(() => {
         resetInductionSection()
@@ -621,12 +633,14 @@ export default function SiteSettingsDrawer({
                             <label>
                                 Requirements and notes
                                 <textarea
+                                    ref={inductionRequirementsInputRef}
                                     value={inductionRequirements}
                                     onChange={(event) => {
                                         setInductionRequirements(event.target.value)
                                         setLocalError('')
                                         setInductionDocumentError('')
                                     }}
+                                    onInput={resizeInductionRequirementsInput}
                                     rows={6}
                                     placeholder="Enter required induction/safety steps, required documentation, and any special requirements."
                                     disabled={busy}

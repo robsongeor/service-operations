@@ -65,7 +65,7 @@
 .site-induction-required-details textarea {
     width: 100%;
     min-height: 120px;
-    resize: vertical;
+    resize: none;
     border: 1px solid #ccd5d0;
     border-radius: 8px;
     padding: .6rem .7rem;
@@ -73,6 +73,7 @@
     color: #26332d;
     font: inherit;
     box-sizing: border-box;
+    overflow-y: auto;
 }
 
 .site-induction-documents {
