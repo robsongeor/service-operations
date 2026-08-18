@@ -52,6 +52,7 @@ import './CustomerDashboardScreen.css'
 const dateFormatter = new Intl.DateTimeFormat('en-NZ', { dateStyle: 'medium' })
 const CUSTOMER_DASHBOARD_AUTO_EXPAND_SITE_LIMIT = 2
 const CUSTOMER_DASHBOARD_AUTO_EXPAND_EQUIPMENT_LIMIT = 10
+type SiteWithCustomerLookup = Site & { _gr_customer_value?: string }
 type SiteEquipmentSortKey = 'fleet' | 'wofExpiry' | 'dataStatus'
 type SiteEquipmentSort = { key: SiteEquipmentSortKey; direction: 'asc' | 'desc' }
 type SiteCheckDashboardFilter = ReportableSiteCheckState | 'all'
@@ -59,6 +60,15 @@ const DEFAULT_SITE_EQUIPMENT_SORT: SiteEquipmentSort = { key: 'fleet', direction
 
 function display(value?: string | number | null) {
     return value == null || value === '' ? '-' : value
+}
+
+function getSiteCustomerId(site: Site): string {
+    const siteLookup = site as SiteWithCustomerLookup
+    return siteLookup.gr_Customer?.gr_customerid || siteLookup._gr_customer_value || ''
+}
+
+function hasCustomer(site: Site, customerId: string): boolean {
+    return getSiteCustomerId(site).toLowerCase() === customerId.toLowerCase()
 }
 
 export default function CustomerDashboardScreen() {
@@ -258,8 +268,11 @@ export default function CustomerDashboardScreen() {
     })), [customerDrafts, customers, localCustomers])
 
     const allSites = useMemo(() => {
-        const customersWithDrafts = new Set(Object.keys(customerDrafts))
-        const unchangedSites = sites.filter((site) => !site.gr_Customer?.gr_customerid || !customersWithDrafts.has(site.gr_Customer.gr_customerid))
+        const customersWithDrafts = new Set(Object.keys(customerDrafts).map((id) => id.toLowerCase()))
+        const unchangedSites = sites.filter((site) => {
+            const siteCustomerId = getSiteCustomerId(site)
+            return !siteCustomerId || !customersWithDrafts.has(siteCustomerId.toLowerCase())
+        })
         const draftSites: Site[] = Object.entries(customerDrafts).flatMap(([customerId, draft]) => draft.sites.map((site) => ({
             gr_siteid: site.id,
             gr_name: site.name,
@@ -285,7 +298,7 @@ export default function CustomerDashboardScreen() {
     }, [isLoading, loadError, selectedCustomer, selectedCustomerId, viewStorageKey])
     const poRecipients = usePurchaseOrderRecipients(selectedCustomer?.gr_customerid)
     const customerSites = allSites
-        .filter((site) => site.gr_Customer?.gr_customerid === selectedCustomerId)
+        .filter((site) => selectedCustomerId ? hasCustomer(site, selectedCustomerId) : false)
         .sort((a, b) => a.gr_name.localeCompare(b.gr_name))
     const persistedCustomerSiteIds = customerSites
         .filter((site) => !site.gr_siteid.startsWith('prototype-site-'))
@@ -380,7 +393,7 @@ export default function CustomerDashboardScreen() {
         if (!customerId) return
         setExpandedSitesByCustomer((current) => {
             if (current[customerId]) return current
-            const nextSites = allSites.filter((site) => site.gr_Customer?.gr_customerid === customerId)
+            const nextSites = allSites.filter((site) => hasCustomer(site, customerId))
             const nextEquipment = equipment.filter((item) =>
                 item.gr_Site?.gr_Customer?.gr_customerid === customerId,
             )
