@@ -116,7 +116,7 @@ These pieces should be migrated into a shared coordinator rather than discarded.
 The primary Jobs and Equipment list arrays are now shared by query key above routes. Every call to
 `useJobs()` or `useEquipmentManager()` still creates separate supporting reference arrays, readiness
 flags, background-refresh orchestration, and usually a realtime connection. Jobs is instantiated by
-the Jobs screen, Scheduler, Job Map, WOF drawer, Equipment Job creation, Chargeable Invoice review,
+the Jobs screen, WOF drawer, Equipment Job creation, Chargeable Invoice review,
 and Customer Dashboard. Customer Dashboard also instantiates Equipment Manager.
 
 Consequences:
@@ -157,9 +157,10 @@ instance. Job creation correctly remains gated on its required relationship choi
 
 Customer Dashboard has migrated its selected-Customer Sites, Equipment, Jobs, and service plans to
 server-filtered bounded queries. Scheduler now uses a seven-day Schedule Option query and batches
-only the referenced Jobs, with adjacent-window prefetch. Job Map still starts from the general Jobs
-hook, so its cost remains proportional to the complete business history. Customer and editor/
-reference collections also remain broader than their selected projections.
+only the referenced Jobs, with adjacent-window prefetch. Job Map now uses a minimal status/location
+Job projection with Site geocodes embedded in the recorded-Site expansion, so it starts neither the
+global Jobs collection nor the global Sites collection. Customer and editor/reference collections
+remain broader than their selected projections.
 
 Some smaller collection services do not follow `@odata.nextLink`, unlike Jobs and Equipment. Those
 services can silently become incomplete when the Dataverse page limit is exceeded.
@@ -402,7 +403,8 @@ reference data should explain and retry only that dependency.
   customer-scoped child queries, while retaining focused full Equipment history for completion;
 - [x] migrate Scheduler to date-window queries with adjacent-window prefetch and bounded mutation/
   Job-realtime reconciliation;
-- migrate Job Map to status/location summaries;
+- [x] migrate Job Map to status/location summaries with status-keyed caching, current-query
+  Job-realtime reconciliation, and no global Site read;
 - migrate remote Equipment/Customer/Site selectors to bounded search queries.
 
 ### Phase 5 — Multi-user synchronization

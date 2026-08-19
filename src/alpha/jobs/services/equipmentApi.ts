@@ -135,7 +135,8 @@ export function invalidateEquipmentCache(accessToken?: string) {
     invalidateSharedEquipmentDataCache(accessToken)
     invalidateOperationalQueries((key) =>
         (key[0] === 'equipment' && key[1] === 'operational-list')
-        || key[0] === 'customer-dashboard')
+        || key[0] === 'customer-dashboard'
+        || key[0] === 'job-map')
 }
 
 export async function createEquipment(

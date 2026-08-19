@@ -24,6 +24,9 @@
 - Replaced Scheduler's global Jobs and Schedule Option startup reads with shared seven-day window
   queries, batched referenced-Job loading, adjacent-week prefetch, and bounded mutation/Job-realtime
   reconciliation while preserving the canonical progressive Job drawer.
+- Replaced Job Map's global Jobs and Sites startup reads with a continuation-safe minimal
+  status/location projection, exact status-set query keys, reusable cached subsets, and bounded
+  mutation/Job-realtime reconciliation while preserving map filters, selection, and navigation.
 
 ## v1.7.0 — 15 August 2026
 

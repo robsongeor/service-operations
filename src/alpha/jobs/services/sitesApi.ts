@@ -84,7 +84,7 @@ export async function createSite(
         try {
             const data = JSON.parse(responseText)
             if (typeof data.gr_siteid === 'string' && data.gr_siteid) {
-                invalidateOperationalQueries((key) => key[0] === 'customer-dashboard')
+                invalidateOperationalQueries((key) => key[0] === 'customer-dashboard' || key[0] === 'job-map')
                 return data.gr_siteid
             }
         } catch {
@@ -94,7 +94,7 @@ export async function createSite(
     const entityId = result.headers.get('OData-EntityId') ?? result.headers.get('odata-entityid')
     const headerId = entityId?.match(/\(([^)]+)\)/)?.[1]
     if (headerId) {
-        invalidateOperationalQueries((key) => key[0] === 'customer-dashboard')
+        invalidateOperationalQueries((key) => key[0] === 'customer-dashboard' || key[0] === 'job-map')
         return headerId
     }
     throw new Error('The Site was created, but Dataverse did not return its record ID.')
@@ -132,5 +132,5 @@ export async function updateSite(
     if (!result.ok) {
         throw new Error(await dataverseErrorMessage(result, 'The Site could not be updated.'))
     }
-    invalidateOperationalQueries((key) => key[0] === 'customer-dashboard')
+    invalidateOperationalQueries((key) => key[0] === 'customer-dashboard' || key[0] === 'job-map')
 }

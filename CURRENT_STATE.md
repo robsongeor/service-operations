@@ -57,14 +57,20 @@ Branch: `codex/data-loading-architecture-review`
   cache. Schedule writes and Job mutations/realtime recovery refresh the active projection without
   clearing reference data already loaded by an open canonical Job drawer. A dedicated cross-client
   Schedule Option event remains future work.
+- Job Map no longer starts the global Jobs or Sites collections. It loads only the selected
+  Allocated, Unallocated, and Waiting for parts statuses through a minimal Job/Site-location
+  projection, reuses a complete cached status result while an exact subset revalidates, and follows
+  Dataverse continuation links. Job mutations and realtime recovery refresh the active status key;
+  application Site and Equipment mutations invalidate affected map projections. Centralized
+  cross-client Site and Equipment event dispatch remains future work.
 - The Operational Data Client now exposes privacy-safe in-memory metrics for request count,
   cache hits, concurrent-request deduplication, success/failure/abort, duration, and estimated
   payload bytes by normalized query family. It stores no record IDs, business content, or tokens;
   exported telemetry and event-to-visible latency remain future work.
 - Focused data-loading tests, the complete regression suite, lint, build, and diff validation pass.
   No Dataverse schema, role, plugin, Azure configuration, credential, deployment, or communication
-  change has been made. The remaining scoped screens,
-  bounded app-shell realtime, gap recovery, cross-tab invalidation, exported instrumentation, and replacement
+  change has been made. The remaining bounded selectors,
+  app-shell realtime, gap recovery, cross-tab invalidation, exported instrumentation, and replacement
   of broad full-list realtime reloads remain phased backlog work.
 
 ## Local Job Card email guard (deployed)
@@ -106,11 +112,11 @@ Branch: `codex/data-loading-architecture-review`
   final required entry; the API independently enforces the same minimum.
 - No Dataverse schema, role, routing, credential, or cloud configuration change is required.
 
-## Job Map (deployed)
+## Job Map (deployed feature; scoped loading implemented locally)
 
 - `/job-map` displays Allocated, Unallocated, and Waiting for parts Jobs at each Job's recorded Site.
-- Independent status, Customer, Site, and text filters reuse the canonical Jobs loader and existing
-  Site coordinate/geocoding cache. Unmapped Jobs remain explicitly counted.
+- Independent status, Customer, Site, and text filters reuse shared status-scoped queries and the
+  existing Site coordinate/geocoding cache. Unmapped Jobs remain explicitly counted.
 - Selecting a Job opens the canonical Job drawer. No Dataverse schema, security, provider, or cloud
   configuration change is required.
 

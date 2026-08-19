@@ -38,6 +38,11 @@ export function schedulerJobsQueryKey(startDate: string, endDate: string, jobFin
     return ['scheduler', 'jobs-v1', startDate, endDate, jobFingerprint] as const satisfies OperationalQueryKey
 }
 
+export function jobMapJobsQueryKey(statuses: readonly number[]) {
+    const statusFingerprint = [...new Set(statuses)].sort((a, b) => a - b).join(',') || 'none'
+    return ['job-map', 'jobs-v1', statusFingerprint] as const satisfies OperationalQueryKey
+}
+
 /** Focused Job records and their progressively loaded Job Card evidence. */
 export function focusedJobCoreQueryKey(jobId: string) {
     return ['job', jobId.toLowerCase(), 'core-v1'] as const satisfies OperationalQueryKey

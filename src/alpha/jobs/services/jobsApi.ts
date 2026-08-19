@@ -300,6 +300,7 @@ export function invalidateJobsCache(accessToken?: string) {
         || key[0] === 'job'
         || key[0] === 'jobs'
         || key[0] === 'customer-dashboard'
+        || key[0] === 'job-map'
         || (key[0] === 'scheduler' && key[1] === 'jobs-v1'))
 }
 
