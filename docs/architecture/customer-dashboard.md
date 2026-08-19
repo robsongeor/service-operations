@@ -151,6 +151,36 @@ an active Schedule pointer is cleared first. The Schedule, due configuration, Eq
 scope, and manual selections remain. Successful deletion refreshes both dashboard Site
 Checks and Jobs projections.
 
+## Data Loading and Synchronization
+
+The selected Customer is the query boundary. The dashboard loads the Customer's Sites first,
+Equipment and Jobs through bounded Site-ID filters second, and Equipment Service Plans through
+bounded Equipment-ID filters last. Empty parent collections resolve to empty child collections
+without a Dataverse request. This replaces the earlier pattern of starting the full global Jobs and
+Equipment loaders and filtering them in the browser.
+
+The four selected-Customer collections are owned by the account-scoped Operational Data Client.
+Concurrent consumers share a request, invalidation aborts or supersedes older work, and unobserved
+data is retained for two minutes to make short navigation away and back fast. Query keys contain the
+Customer ID and a normalized parent-ID fingerprint, but diagnostic metrics retain only the query
+family and never Customer, Site, Equipment, or Job IDs.
+
+Successful Site, Equipment, service-plan, and Job mutations invalidate the affected dashboard
+families and revalidate the mounted Customer projection. Matching realtime events use the same
+bounded invalidation path instead of starting a full Jobs or Equipment collection reload. This is
+server-confirmed reconciliation; dashboard state and browser storage are not independent business
+truth.
+
+The scoped list is deliberately not sufficient for hour-meter completion. Before opening any Job
+completion workflow from this dashboard, the Jobs coordinator loads the focused Equipment record,
+all linked Jobs for that Equipment, and its service plans. This preserves chronological readings and
+maintenance history when the Equipment has moved between Sites or Customers. After completion, the
+same focused collections and the mounted dashboard projection are refreshed.
+
+Customer directory and some editor/reference collections remain broad shared feature reads. They
+are the next selector/search migration boundary; Scheduler and Job Map also still start from the
+global Jobs list.
+
 ## Important Business Rules
 
 - Site Equipment is grouped by the actual Site relationship.

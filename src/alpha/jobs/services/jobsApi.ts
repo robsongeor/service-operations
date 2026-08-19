@@ -12,6 +12,9 @@ import {
 } from './jobsDataCache.ts'
 import { assertJobDescriptionLength } from '../domain/jobDescription.ts'
 import type { JobCardSubmission } from '../types/jobCardSubmission.types.ts'
+import { invalidateOperationalQueries } from '../../shared/data/OperationalDataClient.ts'
+import { fetchAllDataversePages } from '../../shared/dataverse/fetchAllDataversePages.ts'
+import { buildDataverseIdFilterBatches } from '../../shared/dataverse/boundedDataverseFilters.ts'
 
 const DATAVERSE_URL = import.meta.env?.VITE_DATAVERSE_URL ?? ''
 const HOUR_METER_READING_SELECT = HOUR_METER_CLASSIFICATION_ENABLED ? ',gr_hourmeterreadingtype,gr_hourmeterrecordeddate' : ''
@@ -58,36 +61,37 @@ function blobDataUrl(blob: Blob) {
     })
 }
 
-export async function fetchJobPhotos(accessToken: string, jobId: string): Promise<NonNullable<Job['jobPhotos']>> {
+export async function fetchJobPhotoMetadata(accessToken: string, jobId: string, signal?: AbortSignal): Promise<NonNullable<Job['jobPhotos']>> {
     const headers = { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' }
     const metadata = await fetch(
         `${DATAVERSE_URL}/api/data/v9.2/gr_jobphotos?$select=gr_jobphotoid,gr_filename,gr_uploadedon,gr_displayorder,_gr_job_value&$filter=_gr_job_value eq ${jobId}&$orderby=gr_displayorder asc`,
-        { cache: 'no-store', headers },
+        { cache: 'no-store', headers, signal },
     )
     if (!metadata.ok) return []
-    const rows = (await metadata.json()).value ?? []
-    return Promise.all(rows.map(async (row: Record<string, unknown>) => {
-        const id = String(row.gr_jobphotoid)
-        const response = await fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobphotos(${id})/gr_photo/$value`, {
-            cache: 'no-store',
-            headers,
-        })
-        if (!response.ok) throw new Error('A Job photo could not be loaded.')
-        return {
-            id,
-            fileName: String(row.gr_filename || 'Job photo'),
-            uploadedOn: String(row.gr_uploadedon || ''),
-            displayOrder: Number(row.gr_displayorder || 0),
-            previewUrl: await blobDataUrl(await response.blob()),
-        }
+    const rows = ((await metadata.json()).value ?? []) as Record<string, unknown>[]
+    return rows.map((row) => ({
+        id: String(row.gr_jobphotoid),
+        fileName: String(row.gr_filename || 'Job photo'),
+        uploadedOn: String(row.gr_uploadedon || ''),
+        displayOrder: Number(row.gr_displayorder || 0),
     }))
 }
 
-async function fetchJobCardSubmissions(accessToken: string, jobId: string): Promise<JobCardSubmission[]> {
+export async function fetchJobPhotoBody(accessToken: string, photoId: string, signal?: AbortSignal): Promise<string> {
+    const response = await fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobphotos(${photoId})/gr_photo/$value`, {
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/octet-stream' },
+        signal,
+    })
+    if (!response.ok) throw new Error('The Job Card photo could not be loaded.')
+    return blobDataUrl(await response.blob())
+}
+
+async function fetchJobCardSubmissions(accessToken: string, jobId: string, signal?: AbortSignal): Promise<JobCardSubmission[]> {
     const headers = { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' }
     const submissionResult = await fetch(
         `${DATAVERSE_URL}/api/data/v9.2/gr_jobcardsubmissions?$select=gr_jobcardsubmissionid,gr_name,gr_recipientname,gr_recipientemail,gr_role,gr_status,gr_required,gr_emailsenton,gr_submittedon,gr_closedon,gr_hourmeter,gr_story,gr_furtherworkrequired,gr_furtherworkdetails,gr_safetyissueidentified,gr_safetyissuedetails,gr_islegacy,_gr_job_value,_gr_mechanic_value,_gr_jobassignment_value&$filter=_gr_job_value eq ${jobId}&$orderby=createdon asc`,
-        { cache: 'no-store', headers },
+        { cache: 'no-store', headers, signal },
     )
     // The fallback keeps the app usable during the schema-first rollout.
     if (submissionResult.status === 404) return []
@@ -98,25 +102,19 @@ async function fetchJobCardSubmissions(accessToken: string, jobId: string): Prom
     const ids = submissions.map((item) => String(item.gr_jobcardsubmissionid))
     const submissionFilter = ids.map((id) => `_gr_jobcardsubmission_value eq ${id}`).join(' or ')
     const [timeResult, partsResult, photoResult] = await Promise.all([
-        fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobcardsubmissiontimeentries?$select=gr_jobcardsubmissiontimeentryid,gr_entrydate,gr_totalhours,gr_kilometres,_gr_jobcardsubmission_value&$filter=${encodeURIComponent(submissionFilter)}&$orderby=gr_entrydate asc`, { cache: 'no-store', headers }),
-        fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobmaterials?$select=gr_jobmaterialid,gr_material,gr_quantity,_gr_jobcardsubmission_value&$filter=${encodeURIComponent(submissionFilter)}&$orderby=gr_displayorder asc`, { cache: 'no-store', headers }),
-        fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobphotos?$select=gr_jobphotoid,gr_filename,gr_uploadedon,gr_displayorder,_gr_jobcardsubmission_value&$filter=${encodeURIComponent(submissionFilter)}&$orderby=gr_displayorder asc`, { cache: 'no-store', headers }),
+        fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobcardsubmissiontimeentries?$select=gr_jobcardsubmissiontimeentryid,gr_entrydate,gr_totalhours,gr_kilometres,_gr_jobcardsubmission_value&$filter=${encodeURIComponent(submissionFilter)}&$orderby=gr_entrydate asc`, { cache: 'no-store', headers, signal }),
+        fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobmaterials?$select=gr_jobmaterialid,gr_material,gr_quantity,_gr_jobcardsubmission_value&$filter=${encodeURIComponent(submissionFilter)}&$orderby=gr_displayorder asc`, { cache: 'no-store', headers, signal }),
+        fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobphotos?$select=gr_jobphotoid,gr_filename,gr_uploadedon,gr_displayorder,_gr_jobcardsubmission_value&$filter=${encodeURIComponent(submissionFilter)}&$orderby=gr_displayorder asc`, { cache: 'no-store', headers, signal }),
     ])
     const timeRows = timeResult.ok ? ((await timeResult.json()).value ?? []) as Record<string, unknown>[] : []
     const partRows = partsResult.ok ? ((await partsResult.json()).value ?? []) as Record<string, unknown>[] : []
     const photoRows = photoResult.ok ? ((await photoResult.json()).value ?? []) as Record<string, unknown>[] : []
-    const photos = await Promise.all(photoRows.map(async (row) => {
-        const id = String(row.gr_jobphotoid)
-        const response = await fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobphotos(${id})/gr_photo/$value`, { cache: 'no-store', headers })
-        if (!response.ok) throw new Error('A Job Card photo could not be loaded.')
-        return {
-            submissionId: String(row._gr_jobcardsubmission_value),
-            id,
-            fileName: String(row.gr_filename || 'Job photo'),
-            uploadedOn: String(row.gr_uploadedon || ''),
-            displayOrder: Number(row.gr_displayorder || 0),
-            previewUrl: await blobDataUrl(await response.blob()),
-        }
+    const photos = photoRows.map((row) => ({
+        submissionId: String(row._gr_jobcardsubmission_value),
+        id: String(row.gr_jobphotoid),
+        fileName: String(row.gr_filename || 'Job photo'),
+        uploadedOn: String(row.gr_uploadedon || ''),
+        displayOrder: Number(row.gr_displayorder || 0),
     }))
 
     return submissions.map((item) => {
@@ -144,7 +142,6 @@ async function fetchJobCardSubmissions(accessToken: string, jobId: string): Prom
                 fileName: photo.fileName,
                 uploadedOn: photo.uploadedOn,
                 displayOrder: photo.displayOrder,
-                previewUrl: photo.previewUrl,
             })),
         } as JobCardSubmission
     })
@@ -152,11 +149,13 @@ async function fetchJobCardSubmissions(accessToken: string, jobId: string): Prom
 
 export async function fetchJobs(accessToken: string, options: FetchJobsOptions = {}): Promise<Job[]> {
     const scope = jobsCacheScope(accessToken)
-    const loadNetwork = async () => {
+    const loadNetwork = async (generation = sharedJobsDataCache.captureGeneration(scope)) => {
         const rows = await fetchAllJobPages(accessToken)
-        const refreshedAt = Date.now()
-        void writePersistedJobsSnapshot(scope, rows, refreshedAt)
-        options.onBackgroundRefresh?.(rows, refreshedAt)
+        if (sharedJobsDataCache.isGenerationCurrent(scope, generation)) {
+            const refreshedAt = Date.now()
+            void writePersistedJobsSnapshot(scope, rows, refreshedAt)
+            options.onBackgroundRefresh?.(rows, refreshedAt)
+        }
         return rows
     }
 
@@ -165,8 +164,9 @@ export async function fetchJobs(accessToken: string, options: FetchJobsOptions =
             const snapshot = await readPersistedJobsSnapshot(scope)
             if (snapshot) {
                 options.onDeviceSnapshot?.(snapshot.rows, snapshot.savedAt)
-                void loadNetwork()
-                    .then((rows) => sharedJobsDataCache.write(scope, rows))
+                const generation = sharedJobsDataCache.captureGeneration(scope)
+                void loadNetwork(generation)
+                    .then((rows) => sharedJobsDataCache.writeIfCurrent(scope, generation, rows))
                     .catch(() => options.onBackgroundRefreshError?.())
                 return snapshot.rows
             }
@@ -175,22 +175,66 @@ export async function fetchJobs(accessToken: string, options: FetchJobsOptions =
     }, options)
 }
 
-export async function fetchJobForDrawer(accessToken: string, jobId: string): Promise<Job | undefined> {
+export async function fetchJobsForSites(accessToken: string, siteIds: readonly string[], signal?: AbortSignal): Promise<Job[]> {
+    const filters = buildDataverseIdFilterBatches('_gr_site_value', siteIds)
+    if (!filters.length) return []
+    const rows: Job[] = []
+    for (const filter of filters) {
+        rows.push(...await fetchAllDataversePages<Job>(
+            `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=${JOB_SELECT}&$expand=${JOB_EXPAND}&$filter=${encodeURIComponent(filter)}`,
+            {
+                cache: 'no-store',
+                signal,
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    Accept: 'application/json',
+                    'Cache-Control': 'no-cache',
+                    Prefer: 'odata.maxpagesize=5000',
+                },
+            },
+            async (response) => {
+                if (!response.ok) {
+                    const detail = await response.text()
+                    throw new Error(`Failed to fetch Customer Jobs: ${detail || `${response.status} ${response.statusText}`}`)
+                }
+            },
+        ))
+    }
+    return rows
+}
+
+export function subscribeToJobsData(
+    accessToken: string,
+    listener: (rows: Job[], loadedAt: number) => void,
+) {
+    return sharedJobsDataCache.subscribe(jobsCacheScope(accessToken), listener)
+}
+
+export async function fetchJobCore(accessToken: string, jobId: string, signal?: AbortSignal): Promise<Job | undefined> {
     const headers = { Authorization: `Bearer ${accessToken}`, Accept: 'application/json', 'Cache-Control': 'no-cache' }
-    const [jobResult, timeResult, partsResult, photos, submissions] = await Promise.all([
-        fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=${JOB_SELECT}&$expand=${JOB_EXPAND}&$filter=gr_jobid eq ${jobId}&$top=1`, { cache: 'no-store', headers }),
-        fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobcardsubmissiontimeentries?$select=gr_jobcardsubmissiontimeentryid,gr_entrydate,gr_totalhours,gr_kilometres,_gr_job_value&$filter=_gr_job_value eq ${jobId}&$orderby=gr_entrydate asc`, { cache: 'no-store', headers }),
-        fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobmaterials?$select=gr_jobmaterialid,gr_material,gr_quantity,_gr_job_value&$filter=_gr_job_value eq ${jobId}&$orderby=gr_displayorder asc`, { cache: 'no-store', headers }),
-        fetchJobPhotos(accessToken, jobId),
-        fetchJobCardSubmissions(accessToken, jobId),
-    ])
+    const jobResult = await fetch(
+        `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=${JOB_SELECT}&$expand=${JOB_EXPAND}&$filter=gr_jobid eq ${jobId}&$top=1`,
+        { cache: 'no-store', headers, signal },
+    )
     if (!jobResult.ok) throw new Error('The Job could not be refreshed for review.')
-    const job = ((await jobResult.json()) as { value?: Job[] }).value?.[0]
-    if (!job) return undefined
+    return ((await jobResult.json()) as { value?: Job[] }).value?.[0]
+}
+
+export type JobCardDetails = Pick<Job,
+    'technicianSubmissionTimeEntries' | 'technicianSubmissionParts' | 'jobPhotos' | 'jobCardSubmissions'
+>
+
+export async function fetchJobCardDetails(accessToken: string, jobId: string, signal?: AbortSignal): Promise<JobCardDetails> {
+    const headers = { Authorization: `Bearer ${accessToken}`, Accept: 'application/json', 'Cache-Control': 'no-cache' }
+    const [timeResult, partsResult, photos, submissions] = await Promise.all([
+        fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobcardsubmissiontimeentries?$select=gr_jobcardsubmissiontimeentryid,gr_entrydate,gr_totalhours,gr_kilometres,_gr_job_value&$filter=_gr_job_value eq ${jobId}&$orderby=gr_entrydate asc`, { cache: 'no-store', headers, signal }),
+        fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobmaterials?$select=gr_jobmaterialid,gr_material,gr_quantity,_gr_job_value&$filter=_gr_job_value eq ${jobId}&$orderby=gr_displayorder asc`, { cache: 'no-store', headers, signal }),
+        fetchJobPhotoMetadata(accessToken, jobId, signal),
+        fetchJobCardSubmissions(accessToken, jobId, signal),
+    ])
     const timeEntries = timeResult.ok ? ((await timeResult.json()).value ?? []) as Record<string, unknown>[] : []
     const parts = partsResult.ok ? ((await partsResult.json()).value ?? []) as Record<string, unknown>[] : []
     return {
-        ...job,
         technicianSubmissionTimeEntries: timeEntries.map((item) => ({
             id: String(item.gr_jobcardsubmissiontimeentryid),
             date: String(item.gr_entrydate),
@@ -207,11 +251,29 @@ export async function fetchJobForDrawer(accessToken: string, jobId: string): Pro
     }
 }
 
-export function invalidateJobsCache(accessToken?: string) {
-    invalidateSharedJobsDataCache(accessToken)
+/**
+ * Compatibility loader for callers that explicitly need every Job drawer section.
+ * Interactive drawers should prefer fetchJobCore first and fetchJobCardDetails only
+ * when the Job Card tab is opened.
+ */
+export async function fetchJobForDrawer(accessToken: string, jobId: string, signal?: AbortSignal): Promise<Job | undefined> {
+    const [job, details] = await Promise.all([
+        fetchJobCore(accessToken, jobId, signal),
+        fetchJobCardDetails(accessToken, jobId, signal),
+    ])
+    return job ? { ...job, ...details } : undefined
 }
 
-export async function fetchEquipmentJobs(accessToken: string, equipmentId: string): Promise<Job[]> {
+export function invalidateJobsCache(accessToken?: string) {
+    invalidateSharedJobsDataCache(accessToken)
+    invalidateOperationalQueries((key) =>
+        (key[0] === 'equipment' && key[2] === 'jobs')
+        || key[0] === 'job'
+        || key[0] === 'jobs'
+        || key[0] === 'customer-dashboard')
+}
+
+export async function fetchEquipmentJobs(accessToken: string, equipmentId: string, signal?: AbortSignal): Promise<Job[]> {
     const select = `gr_jobid,createdon,gr_jobnumber,gr_status,gr_description,gr_jobtype,gr_jobcardstatus,gr_hourmeter${HOUR_METER_READING_SELECT},gr_completeddate,gr_servicetype`
     const expand = 'gr_Equipment($select=gr_equipmentid),gr_Mechanic($select=gr_mechanicid,gr_name),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name))'
     const rows: Job[] = []
@@ -220,6 +282,7 @@ export async function fetchEquipmentJobs(accessToken: string, equipmentId: strin
     while (nextUrl) {
         const response = await fetch(nextUrl, {
             cache: 'no-store',
+            signal,
             headers: {
                 Authorization: `Bearer ${accessToken}`,
                 Accept: 'application/json',

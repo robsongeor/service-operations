@@ -45,8 +45,8 @@ export default function JobsScreen() {
         updateJobOfficeAttention,
         completionRequest, isCompletingJob, completionError, completeStandardJob, completeServiceJob, completeWofJob, cancelJobCompletion,
         jobsCacheStatus, jobsRealtimeStatus,
-        referenceDataStatus, referenceDataError, prepareJobReferenceData,
-        isLoading, loadError, retryInitialLoad, fetchJobForDrawer,
+        referenceDataStatus, referenceDataError, collaborationDataStatus, collaborationDataError, prepareJobReferenceData,
+        isLoading, loadError, retryInitialLoad, fetchJobForDrawer, fetchJobCardDetails, fetchJobPhotoBody,
     } = useJobs()
     const [editingJob, setEditingJob] = useState<Job | null>(null)
     const [editingInitialTab, setEditingInitialTab] = useState<'details' | 'jobcard'>('details')
@@ -91,16 +91,9 @@ export default function JobsScreen() {
         }))
     }
 
-    const openJob = async (job: Job, tab: 'details' | 'jobcard' = 'details') => {
+    const openJob = (job: Job, tab: 'details' | 'jobcard' = 'details') => {
         setEditingInitialTab(tab)
-        await prepareJobReferenceData()
-        try {
-            const refreshedJob = await fetchJobForDrawer(job.gr_jobid)
-            setEditingJob(refreshedJob ?? job)
-        } catch {
-            // Reference data is ready, so retain the existing Job if only its focused refresh failed.
-            setEditingJob(job)
-        }
+        setEditingJob(job)
     }
 
     const openEquipment = async (equipmentId: string) => {
@@ -122,12 +115,10 @@ export default function JobsScreen() {
             const next = new URLSearchParams(searchParams)
             next.delete('jobId')
             setSearchParams(next, { replace: true })
-            void fetchJobForDrawer(job.gr_jobid).then((refreshedJob) => {
-                setEditingJob(refreshedJob ?? job)
-            }).catch(() => undefined)
+            setEditingJob(job)
         }, 0)
         return () => window.clearTimeout(timer)
-    }, [editingJob, fetchJobForDrawer, isLoading, jobs, searchParams, setSearchParams])
+    }, [editingJob, isLoading, jobs, searchParams, setSearchParams])
 
     const currentMatchesDefault = viewState.selectedJobType === defaultView.selectedJobType
         && canonicaliseJobStatuses(viewState.visibleStatuses).join(',') === canonicaliseJobStatuses(defaultView.visibleStatuses).join(',')
@@ -164,6 +155,14 @@ export default function JobsScreen() {
         onCreateSite: createSite,
         onCreateContact: createContactForSite,
         onCreateEquipment: createEquipment,
+        referenceDataStatus,
+        referenceDataError,
+        collaborationDataStatus,
+        collaborationDataError,
+        onPrepareReferenceData: prepareJobReferenceData,
+        onRefreshJob: fetchJobForDrawer,
+        onLoadJobCardDetails: fetchJobCardDetails,
+        onLoadJobPhoto: fetchJobPhotoBody,
     }
 
     return (
@@ -273,8 +272,8 @@ export default function JobsScreen() {
                     onJobNumberAllocation={allocateJobNumbers}
                     onEmailTechnician={queuePrimaryJobEmail}
                     emailDeliveryStates={emailDeliveryStates}
-                    onEditJob={(job) => { void openJob(job).catch(() => undefined) }}
-                    onOpenJobCard={(job) => { void openJob(job, 'jobcard').catch(() => undefined) }}
+                    onEditJob={(job) => openJob(job)}
+                    onOpenJobCard={(job) => openJob(job, 'jobcard')}
                     onOpenEquipment={(equipmentId) => { void openEquipment(equipmentId).catch(() => undefined) }}
                     mechanics={mechanics}
                     officeUpdates={officeUpdates}

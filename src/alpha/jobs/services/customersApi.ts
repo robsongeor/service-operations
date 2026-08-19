@@ -1,11 +1,12 @@
 import type { Customer } from '../types/customer.types'
+import { fetchAllDataversePages } from '../../shared/dataverse/fetchAllDataversePages.ts'
 
 const DATAVERSE_URL = import.meta.env.VITE_DATAVERSE_URL
 
 export async function fetchCustomers(
     accessToken: string,
 ): Promise<Customer[]> {
-    const result = await fetch(
+    return fetchAllDataversePages<Customer>(
         `${DATAVERSE_URL}/api/data/v9.2/gr_customers?$select=gr_customerid,gr_name&$orderby=gr_name`,
         {
             headers: {
@@ -13,15 +14,12 @@ export async function fetchCustomers(
                 Accept: 'application/json',
             },
         },
+        async (result) => {
+            if (result.ok) return
+            const error = await result.text()
+            throw new Error(`Failed to fetch customers: ${error}`)
+        },
     )
-
-    if (!result.ok) {
-        const error = await result.text()
-        throw new Error(`Failed to fetch customers: ${error}`)
-    }
-
-    const data = await result.json()
-    return data.value ?? []
 }
 
 export async function createCustomer(

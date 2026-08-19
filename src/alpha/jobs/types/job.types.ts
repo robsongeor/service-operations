@@ -46,7 +46,7 @@ export type Job = {
         fileName: string
         uploadedOn: string
         displayOrder: number
-        previewUrl: string
+        previewUrl?: string
     }[]
     jobCardSubmissions?: JobCardSubmission[]
     gr_hourmeter?: number | null

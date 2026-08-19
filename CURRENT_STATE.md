@@ -2,7 +2,7 @@
 
 Branch: `codex/data-loading-architecture-review`
 
-## Data loading and multi-user synchronization architecture review (documentation only)
+## Data loading and multi-user synchronization foundation (implemented locally)
 
 - The current React hooks, Dataverse services, Jobs/Equipment IndexedDB caches, focused drawer
   workflows, and SignalR invalidation paths have been traced across Jobs, Equipment, Customer
@@ -11,9 +11,55 @@ Branch: `codex/data-loading-architecture-review`
   records the current data flow, concrete stale/race/loading problems, and the approved target shape:
   one account-scoped Operational Data Client, bounded query keys, progressive drawers, scoped screen
   queries, guarded mutations, app-shell realtime, reconnect recovery, and cross-tab invalidation.
-- This branch changes documentation only. It does not change runtime behaviour, Dataverse schema,
-  roles, plugins, Azure configuration, credentials, deployment, or communications. Implementation is
-  phased in the authoritative backlog and retains separate approval for cloud/configuration work.
+- Jobs and Equipment now reuse one generation-aware scoped cache primitive. Invalidated requests and
+  older non-authoritative reads cannot overwrite a newer mutation/refresh or repopulate IndexedDB;
+  accepted commits notify every mounted hook subscriber in the same account/environment scope.
+- Concurrent silent Dataverse token requests now share one MSAL request per account and refresh
+  intent. Forced and ordinary acquisition remain separate.
+- Customers, Sites, Site Contacts, Job Assignments, Job Schedule Options, Job Office Updates,
+  Equipment Service Plans, Mechanics, Quotes, and Quote Job lookups now follow Dataverse continuation
+  links through one reusable pager.
+- One environment/tenant/account-scoped Operational Data Client now lives above authenticated routes.
+  Its `useSyncExternalStore` registry deduplicates typed queries, exposes independent loading/error
+  states, cancels superseded requests, rejects obsolete results, invalidates bounded keys, and evicts
+  unobserved focused data after a configured cache window.
+- The main Jobs and Equipment arrays now have one app-shell owner under versioned operational-list
+  query keys. `useJobs()` and `useEquipmentManager()` retain their existing Dataverse,
+  generation-aware memory, IndexedDB stale-while-revalidate, mutation, and realtime workflows, but
+  accepted values and local mutation patches reconcile every mounted route through the shared
+  client. Navigating between Jobs, Equipment, Customer Dashboard, Scheduler, and other consumers can
+  reuse the last accepted list immediately instead of beginning with an empty route-local array.
+- Equipment Job history is the first migrated focused query. Equipment Manager and Customer
+  Dashboard share the same query contract, start loading as soon as the drawer opens, retain a fresh
+  result for 30 seconds, and release it 60 seconds after the last drawer closes. Job mutations and
+  atomic Service completion invalidate open Equipment histories and refresh them without a whole-page
+  reload.
+- Canonical Job edit drawers now open immediately from the selected summary instead of awaiting
+  Equipment, Customer, Site, Contact, Quote, assignment, service-plan, submission, and photo reads.
+  An exact Job-core refresh runs independently before editing/saving unlocks; relationship/service
+  data and Quote/assignment data have separate readiness and retry boundaries; Job Card time, parts,
+  submissions, and photos load only when the Job Card tab is selected. Jobs, Scheduler, Customer
+  Dashboard, and WOF entry points use the same progressive contract.
+- Exact Job core and Job Card metadata now have stable shared query keys across those entry points.
+  Concurrent drawers deduplicate requests, matching mutations and Job realtime events invalidate the
+  active focused keys, and unobserved results are evicted after bounded cache windows. Job Card
+  detail queries return photo metadata only; an individual full Dataverse File body is downloaded
+  when that photo is opened and is never written to IndexedDB.
+- Customer Dashboard no longer starts the global Jobs or Equipment collections. Selecting a
+  Customer progressively loads only its Sites, bounded Site-filtered Equipment and Jobs, and bounded
+  Equipment-filtered Service Plans through shared query keys. Mounted mutations and matching
+  realtime events invalidate that selected-Customer projection instead of broadly reloading Jobs or
+  Equipment. Before Job completion, the focused Equipment's exact record, full linked Job history,
+  and plans are loaded so moved Equipment retains correct chronological meter and maintenance rules.
+- The Operational Data Client now exposes privacy-safe in-memory metrics for request count,
+  cache hits, concurrent-request deduplication, success/failure/abort, duration, and estimated
+  payload bytes by normalized query family. It stores no record IDs, business content, or tokens;
+  exported telemetry and event-to-visible latency remain future work.
+- Focused data-loading tests, the complete regression suite, lint, build, and diff validation pass.
+  No Dataverse schema, role, plugin, Azure configuration, credential, deployment, or communication
+  change has been made. The remaining scoped screens,
+  bounded app-shell realtime, gap recovery, cross-tab invalidation, exported instrumentation, and replacement
+  of broad full-list realtime reloads remain phased backlog work.
 
 ## Local Job Card email guard (deployed)
 
@@ -247,9 +293,10 @@ Branch: `codex/data-loading-architecture-review`
   populated automatically.
 
 - Customer Dashboard and Equipment Manager drawers now open immediately while their focused
-  Equipment Job history loads in the background. The History tab exposes loading and retry states;
-  closing or switching away clears the focused rows and invalidates late responses so Job data cannot
-  leak between Equipment records.
+  Equipment Job history loads through the shared Operational Data Client. The History tab exposes
+  loading and retry states; switching Equipment changes query keys, and closing the final observer
+  releases the result after a short cache window while cancellation/generation guards prevent data
+  leaking between Equipment records.
 
 - Historical maintenance baselines now honour the A/B/C hierarchy: C refreshes C, B, and A;
   B refreshes B and A; A refreshes only A. The Equipment drawer also resolves existing older

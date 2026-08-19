@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type { Job } from '../types/job.types'
 import type { Mechanic } from '../types/mechanic.types'
 import type { JobAssignment } from '../types/jobAssignment.types'
@@ -11,6 +11,8 @@ import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation'
 import { formatTechnicianSubmissionHourMeter, hasTechnicianSubmission } from '../types/technicianSubmission'
 import { downloadSubmittedJobSheet } from '../services/submittedJobSheetPdf'
 import { jobEmailSendingAllowedForHostname, LOCAL_JOB_EMAIL_DISABLED_MESSAGE } from '../services/jobEmail'
+import { useOperationalQuery } from '../../shared/data/useOperationalQuery'
+import { jobPhotoBodyQueryKey } from '../../shared/data/operationalCollectionKeys'
 
 type Props = {
     job: Job
@@ -21,6 +23,7 @@ type Props = {
     onSendPrimary: (job: Job) => Promise<void>
     onSendAssignment: (job: Job, assignment: JobAssignment) => Promise<void>
     onDeleteAssignment: (assignmentId: string) => Promise<void>
+    onLoadPhoto?: (photoId: string, signal?: AbortSignal) => Promise<string>
 }
 
 const formatEntryDate = (value: string) => {
@@ -46,7 +49,10 @@ function Evidence({ submission, onPhoto }: { submission: JobCardSubmission; onPh
         {submission.gr_furtherworkrequired && <section className="job-card-evidence-alert further"><h4>Further work required</h4><p>{submission.gr_furtherworkdetails?.trim() || 'Details not supplied'}</p></section>}
         {submission.gr_safetyissueidentified && <section className="job-card-evidence-alert safety"><h4>Safety issue</h4><p>{submission.gr_safetyissuedetails?.trim() || 'Details not supplied'}</p></section>}
         {submission.photos.length > 0 && <section className="job-card-evidence-block"><h4>Photos</h4><div className="manager-job-photo-grid">
-            {submission.photos.map((photo) => <button type="button" key={photo.id} onClick={() => onPhoto(photo.id)}><img src={photo.previewUrl} alt={photo.fileName} /><span>{photo.fileName}</span></button>)}
+            {submission.photos.map((photo) => <button type="button" key={photo.id} onClick={() => onPhoto(photo.id)} aria-label={`Open ${photo.fileName}`}>
+                <span className="manager-job-photo-placeholder" aria-hidden="true">Photo</span>
+                <span>{photo.fileName}</span>
+            </button>)}
         </div></section>}
     </div>
 }
@@ -106,7 +112,7 @@ function legacySubmission(job: Job): JobCardSubmission | undefined {
     }
 }
 
-export default function JobCardFields({ job, mechanics, assignments, onStatusChange, onCreateAssignment, onSendPrimary, onSendAssignment, onDeleteAssignment }: Props) {
+export default function JobCardFields({ job, mechanics, assignments, onStatusChange, onCreateAssignment, onSendPrimary, onSendAssignment, onDeleteAssignment, onLoadPhoto }: Props) {
     const [isUpdating, setIsUpdating] = useState(false)
     const [busyId, setBusyId] = useState('')
     const [showAssignmentForm, setShowAssignmentForm] = useState(false)
@@ -116,6 +122,23 @@ export default function JobCardFields({ job, mechanics, assignments, onStatusCha
     const [expandedId, setExpandedId] = useState('')
     const [preview, setPreview] = useState<{ submission: JobCardSubmission; photoId: string } | null>(null)
     const [pdfBusyId, setPdfBusyId] = useState('')
+    const previewPhoto = preview?.submission.photos.find((item) => item.id === preview.photoId)
+    const previewPhotoId = previewPhoto?.id ?? ''
+    const existingPreviewPhotoUrl = previewPhoto?.previewUrl
+    const previewPhotoKey = useMemo(() => jobPhotoBodyQueryKey(previewPhotoId || 'none'), [previewPhotoId])
+    const previewPhotoLoader = useCallback(async ({ signal }: { signal: AbortSignal }) => {
+        if (existingPreviewPhotoUrl) return existingPreviewPhotoUrl
+        if (!onLoadPhoto || !previewPhotoId) throw new Error('The Job Card photo loader is unavailable.')
+        return onLoadPhoto(previewPhotoId, signal)
+    }, [existingPreviewPhotoUrl, onLoadPhoto, previewPhotoId])
+    const previewPhotoQuery = useOperationalQuery<string>({
+        key: previewPhotoKey,
+        enabled: Boolean(previewPhotoId && !existingPreviewPhotoUrl && onLoadPhoto),
+        queryFn: previewPhotoLoader,
+        staleTimeMs: 5 * 60_000,
+        cacheTimeMs: 30_000,
+    })
+    const previewPhotoUrl = existingPreviewPhotoUrl ?? previewPhotoQuery.data
     const hasJobNumber = jobHasEmailableJobNumber(job)
     const localSendingDisabled = !jobEmailSendingAllowedForHostname(window.location.hostname)
     const submissions = useMemo(() => {
@@ -239,6 +262,18 @@ export default function JobCardFields({ job, mechanics, assignments, onStatusCha
         </div>
 
         {pendingEmail && <EditDrawerConfirmation eyebrow="Confirm Job Card email" title="Send a new Job Card link?" message="An unused link will be replaced. If this technician has already submitted, their evidence will be preserved and a new submission cycle will start." isBusy={isUpdating || Boolean(busyId)} confirmLabel="Generate and email" onCancel={() => setPendingEmail(null)} onConfirm={() => void performSend(pendingEmail)} />}
-        {preview && (() => { const photo = preview.submission.photos.find((item) => item.id === preview.photoId); return photo ? <div className="job-photo-preview" role="dialog" aria-modal="true" aria-label={photo.fileName} onClick={() => setPreview(null)}><button type="button" aria-label="Close photo preview" onClick={() => setPreview(null)}>×</button><img src={photo.previewUrl} alt={photo.fileName} onClick={(event) => event.stopPropagation()} /><span>{photo.fileName}</span></div> : null })()}
+        {previewPhoto && <div className="job-photo-preview" role="dialog" aria-modal="true" aria-label={previewPhoto.fileName} onClick={() => setPreview(null)}>
+            <button type="button" aria-label="Close photo preview" onClick={() => setPreview(null)}>×</button>
+            {previewPhotoUrl
+                ? <img src={previewPhotoUrl} alt={previewPhoto.fileName} onClick={(event) => event.stopPropagation()} />
+                : previewPhotoQuery.status === 'error' || previewPhotoQuery.status === 'stale'
+                    ? <div className="job-photo-preview-state error" onClick={(event) => event.stopPropagation()}>
+                        <strong>Photo unavailable</strong>
+                        <span>{previewPhotoQuery.error?.message ?? 'The photo could not be loaded.'}</span>
+                        <button type="button" onClick={() => { void previewPhotoQuery.refetch().catch(() => undefined) }}>Try again</button>
+                    </div>
+                    : <div className="job-photo-preview-state" role="status" onClick={(event) => event.stopPropagation()}>Loading photo…</div>}
+            <span>{previewPhoto.fileName}</span>
+        </div>}
     </>
 }

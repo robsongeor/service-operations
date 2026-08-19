@@ -2,6 +2,7 @@ import type {
     JobScheduleOption,
     JobScheduleOptionInput,
 } from '../types/jobSchedule.types'
+import { fetchAllDataversePages } from '../../shared/dataverse/fetchAllDataversePages.ts'
 
 const DATAVERSE_URL = import.meta.env.VITE_DATAVERSE_URL
 const SCHEDULE_OPTIONS_URL =
@@ -29,7 +30,7 @@ function scheduleOptionBody(option: JobScheduleOptionInput) {
 export async function fetchJobScheduleOptions(
     accessToken: string,
 ): Promise<JobScheduleOption[]> {
-    const response = await fetch(
+    return fetchAllDataversePages<JobScheduleOption>(
         `${SCHEDULE_OPTIONS_URL}?$select=gr_jobscheduleoptionid,gr_name,gr_scheduletype,gr_scheduledate,gr_scheduletime,gr_confirmed,_gr_job_value`,
         {
             cache: 'no-store',
@@ -39,15 +40,12 @@ export async function fetchJobScheduleOptions(
                 'Cache-Control': 'no-cache',
             },
         },
+        async (response) => {
+            if (response.ok) return
+            const error = await response.text()
+            throw new Error(`Failed to fetch job schedule options: ${error}`)
+        },
     )
-
-    if (!response.ok) {
-        const error = await response.text()
-        throw new Error(`Failed to fetch job schedule options: ${error}`)
-    }
-
-    const data = await response.json()
-    return data.value ?? []
 }
 
 export async function createJobScheduleOption(

@@ -1,15 +1,7 @@
 import type { Equipment } from '../../jobs/types/equipment.types'
+import { ScopedDataCache, type ScopedDataCacheReadOptions } from '../../shared/data/ScopedDataCache.ts'
 
-type CacheEntry<T> = {
-    value?: T
-    loadedAt?: number
-    request?: Promise<T>
-}
-
-export type EquipmentCacheReadOptions = {
-    forceRefresh?: boolean
-    maxAgeMs?: number
-}
+export type EquipmentCacheReadOptions = ScopedDataCacheReadOptions
 
 export const DEFAULT_EQUIPMENT_CACHE_MAX_AGE_MS = 5 * 60 * 1000
 export const EQUIPMENT_DEVICE_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000
@@ -24,45 +16,12 @@ type PersistedEquipmentSnapshot = {
     rows: Equipment[]
 }
 
-export class EquipmentDataCache<T> {
-    private readonly entries = new Map<string, CacheEntry<T>>()
-
-    async read(
-        scope: string,
-        loader: () => Promise<T>,
-        options: EquipmentCacheReadOptions = {},
-    ): Promise<T> {
-        const entry = this.entries.get(scope) ?? {}
-        const maxAgeMs = options.maxAgeMs ?? DEFAULT_EQUIPMENT_CACHE_MAX_AGE_MS
-        const isFresh = entry.value !== undefined
-            && entry.loadedAt !== undefined
-            && Date.now() - entry.loadedAt < maxAgeMs
-
-        if (!options.forceRefresh && isFresh) return entry.value!
-        if (entry.request) return entry.request
-
-        const request = loader()
-            .then((value) => {
-                this.entries.set(scope, { value, loadedAt: Date.now() })
-                return value
-            })
-            .catch((error) => {
-                if (entry.value !== undefined) this.entries.set(scope, entry)
-                else this.entries.delete(scope)
-                throw error
-            })
-
-        this.entries.set(scope, { ...entry, request })
-        return request
-    }
-
-    invalidate(scope?: string) {
-        if (scope) this.entries.delete(scope)
-        else this.entries.clear()
-    }
-
-    write(scope: string, value: T) {
-        this.entries.set(scope, { value, loadedAt: Date.now() })
+export class EquipmentDataCache<T> extends ScopedDataCache<T> {
+    override read(scope: string, loader: () => Promise<T>, options: EquipmentCacheReadOptions = {}) {
+        return super.read(scope, loader, {
+            maxAgeMs: DEFAULT_EQUIPMENT_CACHE_MAX_AGE_MS,
+            ...options,
+        })
     }
 }
 

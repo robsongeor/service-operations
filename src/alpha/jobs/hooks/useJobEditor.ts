@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import type { Customer } from '../types/customer.types'
 import type { Site } from '../types/site.types'
 import type { SiteContact } from '../types/siteContact.types'
@@ -87,6 +87,12 @@ export function useJobEditor({
         }))
     }
 
+    const resetDraft = useCallback((nextDraft: JobEditorDraft, nextCustomerSearch = '') => {
+        setDraft(nextDraft)
+        setCustomerSearch(nextCustomerSearch)
+        setCustomerSearchOpen(false)
+    }, [])
+
     return {
         draft,
         setDraft,
@@ -99,5 +105,6 @@ export function useJobEditor({
         filteredContacts,
         selectCustomer,
         selectSite,
+        resetDraft,
     }
 }

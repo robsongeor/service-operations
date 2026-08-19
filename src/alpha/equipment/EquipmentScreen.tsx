@@ -21,6 +21,7 @@ import {
 import EquipmentJobCreateDrawer from './components/EquipmentJobCreateDrawer'
 import { paginateEquipmentRows } from './equipmentPagination'
 import { equipmentIdentifierSearchValues } from './identifiers/alternateFleetNumbers'
+import { useEquipmentJobHistory } from './hooks/useEquipmentJobHistory'
 
 type StateFilter = 'all' | 'active' | 'inactive'
 
@@ -31,7 +32,7 @@ export default function EquipmentScreen() {
     const activeAccount = useActiveMsalAccount()
     const signedInUser = getSignedInUserInfo(activeAccount)
     const csvToolsAllowed = canUseEquipmentCsvTools(signedInUser)
-    const { equipment, customers, sites, jobs, servicePlans, equipmentCacheStatus, equipmentRealtimeStatus, isLoading, isSaving, isEquipmentJobsLoading, loadError, saveError, equipmentJobsError, reload, loadEquipmentJobs, clearEquipmentJobs, clearSaveError, createCustomer, createSite, createEquipment, updateEquipment, saveEquipmentMaintenanceHistory, applyEquipmentCsvUpdates, deleteEquipment } = useEquipmentManager()
+    const { equipment, customers, sites, servicePlans, equipmentCacheStatus, equipmentRealtimeStatus, isLoading, isSaving, loadError, saveError, reload, clearSaveError, createCustomer, createSite, createEquipment, updateEquipment, saveEquipmentMaintenanceHistory, applyEquipmentCsvUpdates, deleteEquipment } = useEquipmentManager()
     const [editingEquipment, setEditingEquipment] = useState<Equipment | null>(null)
     const [creatingJobForEquipment, setCreatingJobForEquipment] = useState<Equipment | null>(null)
     const [isCreatingEquipment, setIsCreatingEquipment] = useState(false)
@@ -45,11 +46,11 @@ export default function EquipmentScreen() {
     const [csvError, setCsvError] = useState('')
     const [csvImport, setCsvImport] = useState<{ filename: string; rows: EquipmentCsvReviewRow[] } | null>(null)
     const [page, setPage] = useState(1)
+    const equipmentJobHistory = useEquipmentJobHistory(editingEquipment?.gr_equipmentid)
 
     const openEquipment = useCallback((record: Equipment) => {
         setEditingEquipment(record)
-        void loadEquipmentJobs(record.gr_equipmentid).catch(() => undefined)
-    }, [loadEquipmentJobs])
+    }, [])
 
     useEffect(() => {
         const equipmentId = searchParams.get('equipmentId')
@@ -116,7 +117,6 @@ export default function EquipmentScreen() {
         else { setSortKey(key); setSortDirection('asc') }
     }
     const openJobCreateForEquipment = (record: Equipment) => {
-        clearEquipmentJobs()
         setCreatingJobForEquipment(record)
         setEditingEquipment(null)
     }
@@ -175,7 +175,7 @@ export default function EquipmentScreen() {
                 {paged.totalPages > 1 && <nav className="equipment-pagination" aria-label="Equipment pages"><button type="button" onClick={() => setPage(Math.max(1, paged.page - 1))} disabled={paged.page === 1}>Previous</button><span>Page <strong>{paged.page}</strong> of <strong>{paged.totalPages}</strong></span><button type="button" onClick={() => setPage(Math.min(paged.totalPages, paged.page + 1))} disabled={paged.page === paged.totalPages}>Next</button></nav>}
             </section>}
             {isCreatingEquipment && <EquipmentDrawer mode="create" customers={customers} sites={sites} equipmentList={equipment} jobs={[]} isSaving={isSaving} saveError={saveError} onClose={() => setIsCreatingEquipment(false)} onCreateCustomer={createCustomer} onCreateSite={createSite} onCreate={async (input, resolvedSite) => { await createEquipment(input, resolvedSite); setIsCreatingEquipment(false) }} />}
-            {editingEquipment && <EquipmentDrawer mode="edit" equipment={editingEquipment} equipmentList={equipment} servicePlans={servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === editingEquipment.gr_equipmentid.toLowerCase())} customers={customers} sites={sites} jobs={jobs} isSaving={isSaving} saveError={saveError} isJobHistoryLoading={isEquipmentJobsLoading} jobHistoryError={equipmentJobsError} onRetryJobHistory={() => { void loadEquipmentJobs(editingEquipment.gr_equipmentid).catch(() => undefined) }} onClose={() => { clearEquipmentJobs(); setEditingEquipment(null) }} onCreateCustomer={createCustomer} onCreateSite={createSite} onSave={async (input, resolvedSite) => { const updated = await updateEquipment(editingEquipment, input, resolvedSite); setEditingEquipment(updated) }} onSaveMaintenanceHistory={async (plans, input) => { const updated = await saveEquipmentMaintenanceHistory(editingEquipment, plans, input); setEditingEquipment(updated.equipment) }} onCreateJob={openJobCreateForEquipment} onDelete={async () => { await deleteEquipment(editingEquipment.gr_equipmentid); clearEquipmentJobs(); setEditingEquipment(null) }} />}
+            {editingEquipment && <EquipmentDrawer mode="edit" equipment={editingEquipment} equipmentList={equipment} servicePlans={servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === editingEquipment.gr_equipmentid.toLowerCase())} customers={customers} sites={sites} jobs={equipmentJobHistory.jobs} isSaving={isSaving} saveError={saveError} isJobHistoryLoading={equipmentJobHistory.isLoading} jobHistoryError={equipmentJobHistory.error} onRetryJobHistory={() => { void equipmentJobHistory.refetch().catch(() => undefined) }} onClose={() => setEditingEquipment(null)} onCreateCustomer={createCustomer} onCreateSite={createSite} onSave={async (input, resolvedSite) => { const updated = await updateEquipment(editingEquipment, input, resolvedSite); setEditingEquipment(updated) }} onSaveMaintenanceHistory={async (plans, input) => { const updated = await saveEquipmentMaintenanceHistory(editingEquipment, plans, input); setEditingEquipment(updated.equipment) }} onCreateJob={openJobCreateForEquipment} onDelete={async () => { await deleteEquipment(editingEquipment.gr_equipmentid); setEditingEquipment(null) }} />}
             {creatingJobForEquipment && <EquipmentJobCreateDrawer
                 equipment={creatingJobForEquipment}
                 onCreated={reload}

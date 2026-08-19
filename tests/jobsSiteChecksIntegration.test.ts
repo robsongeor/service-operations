@@ -77,11 +77,13 @@ test('every Job completion refresh bypasses stale cached Jobs', () => {
     assert.match(jobsHook, /setCompletionRequest\(null\)/)
 })
 
-test('Scheduler opens the authoritative Job editor workflow with Office actions', () => {
+test('Scheduler opens the Job drawer immediately and progressively refreshes its data', () => {
     const scheduler = readFileSync(new URL('../src/alpha/scheduling/SchedulingScreen.tsx', import.meta.url), 'utf8')
-    assert.match(scheduler, /const openJob = async \(job: Job\)/)
-    assert.match(scheduler, /await prepareJobReferenceData\(\)/)
-    assert.match(scheduler, /await fetchJobForDrawer\(job\.gr_jobid\)/)
+    assert.match(scheduler, /const openJob = \(job: Job\)/)
+    assert.match(scheduler, /setEditingJob\(job\)/)
+    assert.match(scheduler, /onPrepareReferenceData=\{prepareJobReferenceData\}/)
+    assert.match(scheduler, /onRefreshJob=\{fetchJobForDrawer\}/)
+    assert.match(scheduler, /onLoadJobCardDetails=\{fetchJobCardDetails\}/)
     assert.match(scheduler, /officeUpdates=\{officeUpdates\.filter/)
     assert.match(scheduler, /onCreateOfficeUpdate=\{createJobOfficeUpdate\}/)
     assert.match(scheduler, /onSaveOfficeAttention=\{updateJobOfficeAttention\}/)

@@ -120,6 +120,54 @@
     gap: 16px;
 }
 
+.job-progressive-fieldset {
+    display: contents;
+}
+
+.job-progressive-state {
+    display: grid;
+    gap: 5px;
+    padding: 12px 14px;
+    border: 1px solid #c9ddd8;
+    border-radius: 9px;
+    background: #f2f8f6;
+    color: #37544d;
+}
+
+.job-progressive-state strong {
+    color: #245f57;
+    font-size: 0.8rem;
+}
+
+.job-progressive-state span {
+    font-size: 0.75rem;
+    line-height: 1.45;
+}
+
+.job-progressive-state.error {
+    border-color: #e6b9b9;
+    background: #fff6f6;
+    color: #913c3c;
+}
+
+.job-progressive-state.error strong {
+    color: #913c3c;
+}
+
+.job-progressive-state button {
+    width: fit-content;
+    min-height: 32px;
+    margin-top: 3px;
+    padding: 0 11px;
+    border: 1px solid currentColor;
+    border-radius: 7px;
+    background: #ffffff;
+    color: inherit;
+    font: inherit;
+    font-weight: 750;
+    cursor: pointer;
+}
+
 .job-edit-field {
     display: flex;
     min-width: 0;
@@ -714,10 +762,14 @@
 .manager-job-photo-grid button { display: grid; gap: 5px; min-width: 0; padding: 0; border: 0; background: transparent; color: #65716b; font: inherit; cursor: pointer; text-align: left; }
 .manager-job-photo-grid img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; background: #edf2ef; }
 .manager-job-photo-grid span { overflow: hidden; font-size: .62rem; text-overflow: ellipsis; white-space: nowrap; }
+.manager-job-photo-grid .manager-job-photo-placeholder { display: grid; width: 100%; aspect-ratio: 1; place-items: center; border: 1px dashed #b9cdc4; border-radius: 8px; background: #edf4f1; color: #32685b; font-size: .66rem; font-weight: 800; text-transform: uppercase; }
 .job-photo-preview { position: fixed; z-index: 1200; inset: 0; display: grid; place-items: center; padding: 48px 20px; background: rgba(12, 22, 18, .86); }
 .job-photo-preview img { max-width: min(100%, 1100px); max-height: calc(100vh - 110px); object-fit: contain; }
 .job-photo-preview > button { position: absolute; top: 18px; right: 22px; border: 0; background: transparent; color: #fff; font-size: 2rem; cursor: pointer; }
 .job-photo-preview > span { color: #fff; font-size: .75rem; }
+.job-photo-preview-state { display: grid; max-width: 360px; gap: 8px; justify-items: center; padding: 24px; border-radius: 10px; background: #f5faf8; color: #31564b; text-align: center; }
+.job-photo-preview-state.error { background: #fff3f3; color: #943f3f; }
+.job-photo-preview-state button { min-height: 34px; padding: 0 12px; border: 1px solid currentColor; border-radius: 7px; background: transparent; color: inherit; cursor: pointer; }
 .technician-submission-empty { padding: 14px; border-radius: 9px; background: #f4f6f5; color: #56615b; }
 .technician-submission-empty p { margin: 0; font-size: 0.7rem; line-height: 1.45; }
 

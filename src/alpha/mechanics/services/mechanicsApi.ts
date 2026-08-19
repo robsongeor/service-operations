@@ -1,4 +1,5 @@
 import type { Mechanic } from '../../jobs/types/mechanic.types'
+import { fetchAllDataversePages, type DataverseCollectionPage } from '../../shared/dataverse/fetchAllDataversePages.ts'
 
 const API_URL = `${import.meta.env?.VITE_DATAVERSE_URL ?? ''}/api/data/v9.2`
 
@@ -54,8 +55,15 @@ export async function fetchMechanics(token: string): Promise<Mechanic[]> {
         }
     }
     await ensureSuccess(response, 'Failed to load staff')
-    const data = await response.json()
-    return data.value ?? []
+    const firstPage = await response.json() as DataverseCollectionPage<Mechanic>
+    const remaining = firstPage['@odata.nextLink']
+        ? await fetchAllDataversePages<Mechanic>(
+            firstPage['@odata.nextLink'],
+            { cache: 'no-store', headers: headers(token) },
+            (nextResponse) => ensureSuccess(nextResponse, 'Failed to load staff'),
+        )
+        : []
+    return [...(firstPage.value ?? []), ...remaining]
 }
 
 export async function createMechanic(token: string, mechanic: MechanicInput): Promise<Mechanic> {

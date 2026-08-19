@@ -8,6 +8,7 @@ import { useActiveMsalAccount } from './auth/useActiveMsalAccount'
 import { isServiceOperationsAdministrator } from './auth/adminAuthorization'
 import DataverseSessionRecovery from './auth/DataverseSessionRecovery'
 import StaffRealtimeBridge from './alpha/mechanics/StaffRealtimeBridge'
+import { OperationalDataClientProvider } from './alpha/shared/data/OperationalDataClientProvider'
 
 const JobsScreen = lazy(() => import('./alpha/jobs/JobsScreen'))
 const SchedulingScreen = lazy(() => import('./alpha/scheduling/SchedulingScreen'))
@@ -60,7 +61,10 @@ function App() {
     return <LoginScreen />
   }
 
+  const operationalDataScope = `${import.meta.env.VITE_DATAVERSE_URL ?? 'dataverse'}:${activeAccount?.tenantId ?? 'tenant'}:${signedInUser?.storageId ?? activeAccount?.homeAccountId ?? 'account'}`
+
   return (
+    <OperationalDataClientProvider scope={operationalDataScope}>
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       <DataverseSessionRecovery />
       <StaffRealtimeBridge />
@@ -97,6 +101,7 @@ function App() {
         </Suspense>
       </div>
     </div>
+    </OperationalDataClientProvider>
   )
 }
 

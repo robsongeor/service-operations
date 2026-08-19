@@ -5,7 +5,11 @@ import type { Job } from '../types/job.types'
 import type { Equipment } from '../types/equipment.types'
 import {
     fetchJobs as fetchJobsApi,
-    fetchJobForDrawer as fetchJobForDrawerApi,
+    fetchEquipmentJobs as fetchEquipmentJobsApi,
+    subscribeToJobsData,
+    fetchJobCore as fetchJobCoreApi,
+    fetchJobCardDetails as fetchJobCardDetailsApi,
+    fetchJobPhotoBody as fetchJobPhotoBodyApi,
     createJob as createJobApi,
     updateJobStatus as updateJobStatusApi,
     updateJobCardStatus as updateJobCardStatusApi,
@@ -49,6 +53,7 @@ import {
 
 import {
     fetchEquipment as fetchEquipmentApi,
+    fetchEquipmentById as fetchEquipmentByIdApi,
     createEquipment as createEquipmentApi,
     updateEquipmentSite
 } from '../services/equipmentApi'
@@ -81,6 +86,7 @@ import { updateSiteCheckJobStatus } from '../../site-checks/services/siteCheckCo
 import type { Quote } from '../../quotes/types/quote.types'
 import {
     fetchEquipmentServicePlans,
+    fetchEquipmentServicePlansForEquipment,
     refreshEquipmentServicePlanDueDates,
     saveEquipmentMaintenanceHistory as saveEquipmentMaintenanceHistoryApi,
     syncEquipmentServiceProgramme,
@@ -118,6 +124,15 @@ import { completeServiceJobAtomically } from '../completion/serviceCompletionApi
 import { updateWofExpiryForCompletion } from '../../wof/services/wofApi'
 import { acquireDataverseAccessToken } from '../../../auth/dataverseAuthentication'
 import type { HourMeterReadingType } from '../../equipment/hourMeter/hourMeterReading.types'
+import { useOperationalQueryState } from '../../shared/data/useOperationalQueryState'
+import {
+    EQUIPMENT_OPERATIONAL_LIST_QUERY_KEY,
+    JOBS_OPERATIONAL_LIST_QUERY_KEY,
+} from '../../shared/data/operationalCollectionKeys'
+import { invalidateOperationalQueries } from '../../shared/data/OperationalDataClient'
+
+const EMPTY_JOBS: Job[] = []
+const EMPTY_EQUIPMENT: Equipment[] = []
 
 type JobReferenceData = {
     equipment: Equipment[]
@@ -129,21 +144,58 @@ type JobReferenceData = {
     servicePlans: EquipmentServicePlan[]
 }
 
+type JobEditorReferenceData = Pick<JobReferenceData,
+    'equipment' | 'sites' | 'customers' | 'siteContacts' | 'servicePlans'
+>
 
-export function useJobs() {
+type JobCollaborationData = Pick<JobReferenceData, 'quotes' | 'assignments'>
+
+
+type UseJobsOptions = Readonly<{
+    loadGlobalOperationalData?: boolean
+    scopedData?: Readonly<{
+        jobs: Job[]
+        equipment: Equipment[]
+        sites: Site[]
+        servicePlans: EquipmentServicePlan[]
+    }>
+    onScopedDataChanged?: () => void | Promise<void>
+}>
+
+export function useJobs(options: UseJobsOptions = {}) {
+    const loadGlobalOperationalData = options.loadGlobalOperationalData !== false
     const { instance } = useMsal()
     const account = useActiveMsalAccount()
 
-    const [jobs, setJobs] = useState<Job[]>([])
-    const [equipmentList, setEquipmentList] = useState<Equipment[]>([])
+    const {
+        data: sharedJobs,
+        hasData: hasSharedJobs,
+        setData: setSharedJobs,
+    } = useOperationalQueryState<Job[]>(JOBS_OPERATIONAL_LIST_QUERY_KEY, EMPTY_JOBS)
+    const {
+        data: sharedEquipmentList,
+        setData: setSharedEquipmentList,
+    } = useOperationalQueryState<Equipment[]>(EQUIPMENT_OPERATIONAL_LIST_QUERY_KEY, EMPTY_EQUIPMENT)
+    const [scopedJobs, setScopedJobs] = useState<Job[]>(options.scopedData?.jobs ?? [])
+    const [scopedEquipmentList, setScopedEquipmentList] = useState<Equipment[]>(options.scopedData?.equipment ?? [])
+    const jobs = loadGlobalOperationalData ? sharedJobs : scopedJobs
+    const equipmentList = loadGlobalOperationalData ? sharedEquipmentList : scopedEquipmentList
+    const setJobs = useCallback((updater: Job[] | ((current: Job[]) => Job[])) => {
+        if (loadGlobalOperationalData) setSharedJobs(updater)
+        else setScopedJobs(updater)
+    }, [loadGlobalOperationalData, setSharedJobs])
+    const setEquipmentList = useCallback((updater: Equipment[] | ((current: Equipment[]) => Equipment[])) => {
+        if (loadGlobalOperationalData) setSharedEquipmentList(updater)
+        else setScopedEquipmentList(updater)
+    }, [loadGlobalOperationalData, setSharedEquipmentList])
     const [mechanics, setMechanics] = useState<Mechanic[]>([])
     const [customers, setCustomers] = useState<Customer[]>([])
-    const [sites, setSites] = useState<Site[]>([])
+    const [sites, setSites] = useState<Site[]>(options.scopedData?.sites ?? [])
     const [siteContacts, setSiteContacts] = useState<SiteContact[]>([])
     const [scheduleOptions, setScheduleOptions] = useState<JobScheduleOption[]>([])
     const [jobQuotes, setJobQuotes] = useState<Quote[]>([])
     const [jobAssignments, setJobAssignments] = useState<JobAssignment[]>([])
-    const [servicePlans, setServicePlans] = useState<EquipmentServicePlan[]>([])
+    const [servicePlans, setServicePlans] = useState<EquipmentServicePlan[]>(options.scopedData?.servicePlans ?? [])
     const [officeUpdates, setOfficeUpdates] = useState<JobOfficeUpdate[]>([])
     const [isLoading, setIsLoading] = useState(false)
     const [loadError, setLoadError] = useState('')
@@ -161,62 +213,156 @@ export function useJobs() {
     const [jobsRealtimeStatus, setJobsRealtimeStatus] = useState<JobsRealtimeStatus>('disabled')
     const [referenceDataStatus, setReferenceDataStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
     const [referenceDataError, setReferenceDataError] = useState('')
+    const [collaborationDataStatus, setCollaborationDataStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
+    const [collaborationDataError, setCollaborationDataError] = useState('')
     const [emailDeliveryStates, setEmailDeliveryStates] = useState<Record<string, JobEmailDeliveryState>>({})
     const referenceDataRequestRef = useRef<Promise<JobReferenceData> | null>(null)
     const referenceDataValueRef = useRef<JobReferenceData | null>(null)
     const referenceDataReadyRef = useRef(false)
+    const editorReferenceDataRequestRef = useRef<Promise<JobEditorReferenceData> | null>(null)
+    const editorReferenceDataValueRef = useRef<JobEditorReferenceData | null>(null)
+    const collaborationDataRequestRef = useRef<Promise<JobCollaborationData> | null>(null)
+    const collaborationDataValueRef = useRef<JobCollaborationData | null>(null)
+    const hasSharedJobsRef = useRef(hasSharedJobs)
+    const scopedJobsRef = useRef(scopedJobs)
+    const onScopedDataChangedRef = useRef(options.onScopedDataChanged)
+
+    useEffect(() => {
+        scopedJobsRef.current = scopedJobs
+    }, [scopedJobs])
+
+    useEffect(() => {
+        onScopedDataChangedRef.current = options.onScopedDataChanged
+    }, [options.onScopedDataChanged])
+
+    const scopedDataJobs = options.scopedData?.jobs
+    const scopedDataEquipment = options.scopedData?.equipment
+    const scopedDataSites = options.scopedData?.sites
+    const scopedDataServicePlans = options.scopedData?.servicePlans
+    useEffect(() => {
+        if (loadGlobalOperationalData || !scopedDataJobs || !scopedDataEquipment || !scopedDataSites || !scopedDataServicePlans) return
+        setScopedJobs(scopedDataJobs)
+        setScopedEquipmentList(scopedDataEquipment)
+        setSites(scopedDataSites)
+        setServicePlans(scopedDataServicePlans)
+    }, [loadGlobalOperationalData, scopedDataEquipment, scopedDataJobs, scopedDataServicePlans, scopedDataSites])
+
+    useEffect(() => {
+        hasSharedJobsRef.current = hasSharedJobs
+    }, [hasSharedJobs])
 
     const getAccessToken = useCallback(async () => {
         return acquireDataverseAccessToken(instance, account)
     }, [account, instance])
 
-    const prepareJobReferenceData = useCallback(async () => {
-        if (referenceDataReadyRef.current && referenceDataValueRef.current) return referenceDataValueRef.current
-        if (referenceDataRequestRef.current) return referenceDataRequestRef.current
+    useEffect(() => {
+        if (!account || !loadGlobalOperationalData) return
+        let cancelled = false
+        let unsubscribe: (() => void) | undefined
+        void getAccessToken().then((token) => {
+            if (cancelled) return
+            unsubscribe = subscribeToJobsData(token, (rows) => {
+                if (!cancelled) setJobs(rows)
+            })
+        }).catch(() => undefined)
+        return () => {
+            cancelled = true
+            unsubscribe?.()
+        }
+    }, [account, getAccessToken, loadGlobalOperationalData, setJobs])
+
+    const prepareJobEditorReferenceData = useCallback(async () => {
+        if (editorReferenceDataValueRef.current) return editorReferenceDataValueRef.current
+        if (editorReferenceDataRequestRef.current) return editorReferenceDataRequestRef.current
 
         setReferenceDataStatus('loading')
         setReferenceDataError('')
-
         const request = (async () => {
             try {
                 const token = await getAccessToken()
-                const [equipment, siteRows, customerRows, contacts, quotes, assignments, plans] = await Promise.all([
+                const [equipment, siteRows, customerRows, contacts, plans] = await Promise.all([
                     fetchEquipmentApi(token),
                     fetchSitesApi(token),
                     fetchCustomersApi(token),
                     fetchSiteContactsApi(token),
-                    fetchQuotesApi(token),
-                    fetchJobAssignmentsApi(token),
                     fetchEquipmentServicePlans(token),
                 ])
-
-                const data: JobReferenceData = {
+                const data: JobEditorReferenceData = {
                     equipment,
                     sites: siteRows,
                     customers: customerRows,
                     siteContacts: contacts,
-                    quotes,
-                    assignments,
                     servicePlans: plans,
                 }
                 setEquipmentList(data.equipment)
                 setSites(data.sites)
                 setCustomers(data.customers)
                 setSiteContacts(data.siteContacts)
-                setJobQuotes(data.quotes)
-                setJobAssignments(data.assignments)
                 setServicePlans(data.servicePlans)
-                referenceDataValueRef.current = data
-                referenceDataReadyRef.current = true
+                editorReferenceDataValueRef.current = data
                 setReferenceDataStatus('ready')
                 return data
             } catch (error) {
-                const message = error instanceof Error
-                    ? error.message
-                    : 'Job details could not be prepared.'
-                setReferenceDataError(message)
+                setReferenceDataError(error instanceof Error ? error.message : 'Job editor choices could not be prepared.')
                 setReferenceDataStatus('error')
                 throw error
+            } finally {
+                editorReferenceDataRequestRef.current = null
+            }
+        })()
+        editorReferenceDataRequestRef.current = request
+        return request
+    }, [getAccessToken, setEquipmentList])
+
+    const prepareJobCollaborationData = useCallback(async () => {
+        if (collaborationDataValueRef.current) return collaborationDataValueRef.current
+        if (collaborationDataRequestRef.current) return collaborationDataRequestRef.current
+
+        setCollaborationDataStatus('loading')
+        setCollaborationDataError('')
+        const request = (async () => {
+            try {
+                const token = await getAccessToken()
+                const [quotes, assignments] = await Promise.all([
+                    fetchQuotesApi(token),
+                    fetchJobAssignmentsApi(token),
+                ])
+                const data: JobCollaborationData = { quotes, assignments }
+                setJobQuotes(data.quotes)
+                setJobAssignments(data.assignments)
+                collaborationDataValueRef.current = data
+                setCollaborationDataStatus('ready')
+                return data
+            } catch (error) {
+                setCollaborationDataError(error instanceof Error ? error.message : 'Job Quotes and assignments could not be prepared.')
+                setCollaborationDataStatus('error')
+                throw error
+            } finally {
+                collaborationDataRequestRef.current = null
+            }
+        })()
+        collaborationDataRequestRef.current = request
+        return request
+    }, [getAccessToken])
+
+    const prepareJobReferenceData = useCallback(async () => {
+        if (referenceDataReadyRef.current && referenceDataValueRef.current) return referenceDataValueRef.current
+        if (referenceDataRequestRef.current) return referenceDataRequestRef.current
+
+        const request = (async () => {
+            try {
+                const [editorData, collaborationData] = await Promise.all([
+                    prepareJobEditorReferenceData(),
+                    prepareJobCollaborationData(),
+                ])
+
+                const data: JobReferenceData = {
+                    ...editorData,
+                    ...collaborationData,
+                }
+                referenceDataValueRef.current = data
+                referenceDataReadyRef.current = true
+                return data
             } finally {
                 referenceDataRequestRef.current = null
             }
@@ -224,9 +370,15 @@ export function useJobs() {
 
         referenceDataRequestRef.current = request
         return request
-    }, [getAccessToken])
+    }, [prepareJobCollaborationData, prepareJobEditorReferenceData])
 
     useEffect(() => {
+        if (editorReferenceDataValueRef.current) {
+            editorReferenceDataValueRef.current = {
+                ...editorReferenceDataValueRef.current,
+                equipment: equipmentList,
+            }
+        }
         if (!referenceDataValueRef.current) return
         referenceDataValueRef.current = {
             ...referenceDataValueRef.current,
@@ -444,6 +596,10 @@ export function useJobs() {
     }
 
     const fetchJobs = async () => {
+        if (!loadGlobalOperationalData) {
+            await onScopedDataChangedRef.current?.()
+            return scopedJobsRef.current
+        }
         const token = await getAccessToken()
         const jobs = await fetchJobsApi(token, { forceRefresh: true })
         setJobs(jobs)
@@ -451,16 +607,23 @@ export function useJobs() {
         return jobs
     }
 
-    const fetchJobForDrawer = useCallback(async (jobId: string) => {
-        const [, token] = await Promise.all([
-            prepareJobReferenceData(),
-            getAccessToken(),
-        ])
-        const refreshed = await fetchJobForDrawerApi(token, jobId)
+    const fetchJobForDrawer = useCallback(async (jobId: string, signal?: AbortSignal) => {
+        const token = await getAccessToken()
+        const refreshed = await fetchJobCoreApi(token, jobId, signal)
         if (!refreshed) return undefined
-        setJobs((current) => current.map((job) => job.gr_jobid === jobId ? refreshed : job))
+        setJobs((current) => current.map((job) => job.gr_jobid.toLowerCase() === jobId.toLowerCase() ? refreshed : job))
         return refreshed
-    }, [getAccessToken, prepareJobReferenceData])
+    }, [getAccessToken, setJobs])
+
+    const fetchJobCardDetails = useCallback(async (jobId: string, signal?: AbortSignal) => {
+        const token = await getAccessToken()
+        return fetchJobCardDetailsApi(token, jobId, signal)
+    }, [getAccessToken])
+
+    const fetchJobPhotoBody = useCallback(async (photoId: string, signal?: AbortSignal) => {
+        const token = await getAccessToken()
+        return fetchJobPhotoBodyApi(token, photoId, signal)
+    }, [getAccessToken])
 
     const fetchScheduleOptions = async () => {
         const token = await getAccessToken()
@@ -471,9 +634,16 @@ export function useJobs() {
     const assertJobOperational = async (token: string, jobId: string) => {
         let job = jobs.find((candidate) => candidate.gr_jobid.toLowerCase() === jobId.toLowerCase())
         if (!job) {
-            const refreshedJobs = await fetchJobsApi(token)
-            setJobs(refreshedJobs)
-            job = refreshedJobs.find((candidate) => candidate.gr_jobid.toLowerCase() === jobId.toLowerCase())
+            if (loadGlobalOperationalData) {
+                const refreshedJobs = await fetchJobsApi(token)
+                setJobs(refreshedJobs)
+                job = refreshedJobs.find((candidate) => candidate.gr_jobid.toLowerCase() === jobId.toLowerCase())
+            } else {
+                job = await fetchJobCoreApi(token, jobId)
+                if (job) setJobs((current) => current.some((candidate) => candidate.gr_jobid === jobId)
+                    ? current.map((candidate) => candidate.gr_jobid === jobId ? job! : candidate)
+                    : [...current, job!])
+            }
         }
         if (!job) throw new Error('The job could not be found. Refresh the page and try again.')
         if (!jobIsOperational(job.gr_status)) throw new Error(UNCONFIRMED_OPERATION_MESSAGE)
@@ -570,9 +740,43 @@ export function useJobs() {
     }
 
     const fetchEquipment = async () => {
+        if (!loadGlobalOperationalData) {
+            await onScopedDataChangedRef.current?.()
+            return
+        }
         const token = await getAccessToken()
         const equipment = await fetchEquipmentApi(token)
         setEquipmentList(equipment)
+    }
+
+    const prepareScopedCompletionContext = async (job: Job, equipmentIdOverride?: string) => {
+        if (loadGlobalOperationalData) return
+        const equipmentId = equipmentIdOverride || job.gr_Equipment?.gr_equipmentid
+        if (!equipmentId) return
+
+        const token = await getAccessToken()
+        const [equipmentJobs, completionEquipment, equipmentPlans] = await Promise.all([
+            fetchEquipmentJobsApi(token, equipmentId),
+            fetchEquipmentByIdApi(token, equipmentId),
+            fetchEquipmentServicePlansForEquipment(token, [equipmentId]),
+        ])
+
+        setJobs((current) => {
+            const merged = new Map(current.map((item) => [item.gr_jobid.toLowerCase(), item]))
+            equipmentJobs.forEach((item) => merged.set(item.gr_jobid.toLowerCase(), item))
+            return [...merged.values()]
+        })
+        if (completionEquipment) {
+            setEquipmentList((current) => {
+                const merged = new Map(current.map((item) => [item.gr_equipmentid.toLowerCase(), item]))
+                merged.set(completionEquipment.gr_equipmentid.toLowerCase(), completionEquipment)
+                return [...merged.values()]
+            })
+        }
+        setServicePlans((current) => [
+            ...current.filter((plan) => plan._gr_equipment_value?.toLowerCase() !== equipmentId.toLowerCase()),
+            ...equipmentPlans,
+        ])
     }
 
     const fetchJobOfficeUpdates = async () => {
@@ -601,6 +805,9 @@ export function useJobs() {
         if (!currentJob) throw new Error('The job could not be found. Refresh the page and try again.')
         const isCompleting = status === JOB_STATUSES.COMPLETE && currentJob.gr_status !== JOB_STATUSES.COMPLETE
         const completionKind = getJobCompletionKind(currentJob.gr_jobtype)
+        if (isCompleting) {
+            await prepareScopedCompletionContext(currentJob)
+        }
         if (isCompleting && completionKind === 'service') {
             const contextError = validateServiceCompletionContext(currentJob)
             if (contextError) throw new Error(contextError)
@@ -815,6 +1022,9 @@ export function useJobs() {
         if (!currentJob) throw new Error('The job could not be found. Refresh the page and try again.')
         const isCompleting = job.status === JOB_STATUSES.COMPLETE && currentJob.gr_status !== JOB_STATUSES.COMPLETE
         const completionKind = getJobCompletionKind(job.jobType)
+        if (isCompleting) {
+            await prepareScopedCompletionContext(currentJob, job.equipmentId)
+        }
         if (isCompleting && completionKind === 'service') {
             const contextError = validateServiceCompletionContext(currentJob, job)
             if (contextError) throw new Error(contextError)
@@ -913,6 +1123,32 @@ export function useJobs() {
     }
 
     const refreshCompletionDataAndServiceDates = async (token: string, equipmentId: string) => {
+        if (!loadGlobalOperationalData) {
+            const [equipmentJobs, completedEquipment, equipmentPlans] = await Promise.all([
+                fetchEquipmentJobsApi(token, equipmentId),
+                fetchEquipmentByIdApi(token, equipmentId),
+                fetchEquipmentServicePlansForEquipment(token, [equipmentId]),
+            ])
+            const refreshedPlans = completedEquipment
+                ? await refreshEquipmentServicePlanDueDates(token, completedEquipment, equipmentPlans, equipmentJobs)
+                : equipmentPlans
+            const equipmentJobIds = new Set(equipmentJobs.map((job) => job.gr_jobid.toLowerCase()))
+            setJobs((current) => [
+                ...current.filter((job) => !equipmentJobIds.has(job.gr_jobid.toLowerCase())),
+                ...equipmentJobs,
+            ])
+            if (completedEquipment) {
+                setEquipmentList((current) => current.some((item) => item.gr_equipmentid.toLowerCase() === equipmentId.toLowerCase())
+                    ? current.map((item) => item.gr_equipmentid.toLowerCase() === equipmentId.toLowerCase() ? completedEquipment : item)
+                    : [...current, completedEquipment])
+            }
+            setServicePlans((current) => [
+                ...current.filter((plan) => plan._gr_equipment_value?.toLowerCase() !== equipmentId.toLowerCase()),
+                ...refreshedPlans,
+            ])
+            await onScopedDataChangedRef.current?.()
+            return
+        }
         const [nextJobs, nextEquipment, nextPlans] = await Promise.all([
             fetchJobsApi(token, { forceRefresh: true }),
             fetchEquipmentApi(token),
@@ -1174,14 +1410,13 @@ export function useJobs() {
             referenceDataReadyRef.current = false
             setReferenceDataStatus('idle')
             setReferenceDataError('')
-            setEquipmentList([])
-            setSites([])
+            if (loadGlobalOperationalData) setSites([])
             setCustomers([])
             setSiteContacts([])
             setJobQuotes([])
             setJobAssignments([])
-            setServicePlans([])
-            setIsLoading(true)
+            if (loadGlobalOperationalData) setServicePlans([])
+            setIsLoading(loadGlobalOperationalData && !hasSharedJobsRef.current)
             setLoadError('')
 
             try {
@@ -1194,7 +1429,7 @@ export function useJobs() {
                     initialOfficeUpdates,
                     mechanicsData,
                 ] = await Promise.all([
-                    fetchJobsApi(token, {
+                    loadGlobalOperationalData ? fetchJobsApi(token, {
                         useDeviceCache: true,
                         onDeviceSnapshot: (rows, savedAt) => {
                             deviceSnapshotRestored = true
@@ -1213,7 +1448,7 @@ export function useJobs() {
                         onBackgroundRefreshError: () => {
                             if (!cancelled) setJobsCacheStatus((current) => current ? { ...current, refreshing: false } : current)
                         },
-                    }),
+                    }) : Promise.resolve(scopedJobsRef.current),
                     fetchJobScheduleOptionsApi(token),
                     fetchJobOfficeUpdatesApi(token),
                     mechanicsRequest,
@@ -1221,7 +1456,7 @@ export function useJobs() {
 
                 if (cancelled) return
 
-                setJobs(initialJobs)
+                if (loadGlobalOperationalData) setJobs(initialJobs)
                 setScheduleOptions(initialScheduleOptions)
                 setOfficeUpdates(initialOfficeUpdates)
                 setMechanics(mechanicsData)
@@ -1246,7 +1481,7 @@ export function useJobs() {
         return () => {
             cancelled = true
         }
-    }, [account, instance, reloadKey])
+    }, [account, instance, loadGlobalOperationalData, reloadKey, setEquipmentList, setJobs])
 
     useEffect(() => {
         const apiUrl = import.meta.env.VITE_EQUIPMENT_REALTIME_API_URL?.trim() ?? ''
@@ -1255,6 +1490,11 @@ export function useJobs() {
         let cancelled = false
         let refreshTimer: number | undefined
         const refreshJobs = () => {
+            invalidateOperationalQueries((key) => key[0] === 'customer-dashboard')
+            if (!loadGlobalOperationalData) {
+                void onScopedDataChangedRef.current?.()
+                return
+            }
             if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
             refreshTimer = window.setTimeout(async () => {
                 if (cancelled) return
@@ -1274,7 +1514,11 @@ export function useJobs() {
             apiUrl,
             getAccessToken,
             onStatus: (status) => { if (!cancelled) setJobsRealtimeStatus(status) },
-            onEvent: refreshJobs,
+            onEvent: (event) => {
+                const jobId = event.jobId.toLowerCase()
+                invalidateOperationalQueries((key) => key[0] === 'job' && key[1] === jobId)
+                refreshJobs()
+            },
             onReconnected: refreshJobs,
         })
         const refreshWhenVisible = () => {
@@ -1288,7 +1532,7 @@ export function useJobs() {
             document.removeEventListener('visibilitychange', refreshWhenVisible)
             stop()
         }
-    }, [account, getAccessToken])
+    }, [account, getAccessToken, loadGlobalOperationalData, setJobs])
 
     useEffect(() => {
         if (!account) return
@@ -1323,12 +1567,16 @@ export function useJobs() {
         jobsRealtimeStatus,
         referenceDataStatus,
         referenceDataError,
+        collaborationDataStatus,
+        collaborationDataError,
         prepareJobReferenceData,
         equipmentList,
         sites,
         customers,
         fetchJobs,
         fetchJobForDrawer,
+        fetchJobCardDetails,
+        fetchJobPhotoBody,
         fetchScheduleOptions,
         fetchEquipment,
         fetchJobOfficeUpdates,

@@ -5,6 +5,7 @@ import type {
     QuoteLine,
     QuoteLineInput,
 } from '../types/quote.types'
+import { fetchAllDataversePages } from '../../shared/dataverse/fetchAllDataversePages.ts'
 
 const DATAVERSE_URL = import.meta.env?.VITE_DATAVERSE_URL ?? 'https://dataverse.invalid'
 const API_URL = `${DATAVERSE_URL}/api/data/v9.2`
@@ -31,13 +32,11 @@ async function ensureSuccess(response: Response, action: string) {
 }
 
 export async function fetchQuoteJobs(accessToken: string): Promise<QuoteJob[]> {
-    const response = await fetch(
+    return fetchAllDataversePages<QuoteJob>(
         `${API_URL}/gr_jobs?$select=gr_jobid,gr_jobnumber,gr_description&$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_alternatefleetnumbers,gr_make,gr_model,gr_serial),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name))&$orderby=createdon desc`,
         { cache: 'no-store', headers: headers(accessToken) },
+        (response) => ensureSuccess(response, 'Failed to load jobs for quotes'),
     )
-    await ensureSuccess(response, 'Failed to load jobs for quotes')
-    const data = await response.json()
-    return data.value ?? []
 }
 
 export async function fetchQuotes(accessToken: string): Promise<Quote[]> {
@@ -47,13 +46,11 @@ export async function fetchQuotes(accessToken: string): Promise<Quote[]> {
         'gr_gst', 'gr_total', 'createdon', '_gr_job_value', '_gr_customer_value',
         '_gr_equipment_value', '_createdby_value',
     ].join(',')
-    const response = await fetch(
+    return fetchAllDataversePages<Quote>(
         `${API_URL}/gr_quotes?$select=${fields}&$expand=gr_Job($select=gr_jobid,gr_jobnumber,gr_description;$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_alternatefleetnumbers,gr_make,gr_model,gr_serial),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name))),gr_Customer($select=gr_customerid,gr_name),gr_Equipment($select=gr_equipmentid,gr_fleet,gr_alternatefleetnumbers,gr_make,gr_model,gr_serial;$expand=gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name))),createdby($select=systemuserid,fullname,azureactivedirectoryobjectid)&$orderby=createdon desc`,
         { cache: 'no-store', headers: headers(accessToken) },
+        (response) => ensureSuccess(response, 'Failed to load quotes'),
     )
-    await ensureSuccess(response, 'Failed to load quotes')
-    const data = await response.json()
-    return data.value ?? []
 }
 
 export async function fetchQuotesForJob(accessToken: string, jobId: string): Promise<Quote[]> {

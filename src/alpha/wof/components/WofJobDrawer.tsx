@@ -88,6 +88,14 @@ export default function WofJobDrawer({ jobId, onChanged, onClose }: Props) {
                 await manager.updateJobOfficeAttention(savedJobId, required)
                 await onChanged()
             }}
+            referenceDataStatus={manager.referenceDataStatus}
+            referenceDataError={manager.referenceDataError}
+            collaborationDataStatus={manager.collaborationDataStatus}
+            collaborationDataError={manager.collaborationDataError}
+            onPrepareReferenceData={manager.prepareJobReferenceData}
+            onRefreshJob={manager.fetchJobForDrawer}
+            onLoadJobCardDetails={manager.fetchJobCardDetails}
+            onLoadJobPhoto={manager.fetchJobPhotoBody}
             onClose={onClose}
         />
         <JobCompletionWorkflow

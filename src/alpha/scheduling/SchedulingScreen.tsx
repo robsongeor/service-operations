@@ -185,6 +185,12 @@ export default function SchedulingScreen() {
         retryInitialLoad,
         prepareJobReferenceData,
         fetchJobForDrawer,
+        fetchJobCardDetails,
+        fetchJobPhotoBody,
+        referenceDataStatus,
+        referenceDataError,
+        collaborationDataStatus,
+        collaborationDataError,
     } = useJobs()
     const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
     const [editingJob, setEditingJob] = useState<Job | null>(null)
@@ -217,15 +223,8 @@ export default function SchedulingScreen() {
         navigate(`/quotes?quoteId=${encodeURIComponent(quoteId)}`)
     }
 
-    const openJob = async (job: Job) => {
-        await prepareJobReferenceData()
-        try {
-            const refreshedJob = await fetchJobForDrawer(job.gr_jobid)
-            setEditingJob(refreshedJob ?? job)
-        } catch {
-            // Reference data is ready, so retain the visible Job if only its focused refresh failed.
-            setEditingJob(job)
-        }
+    const openJob = (job: Job) => {
+        setEditingJob(job)
     }
 
     const weekDays = useMemo(
@@ -360,7 +359,7 @@ export default function SchedulingScreen() {
                                         key={option.gr_jobscheduleoptionid}
                                         option={option}
                                         job={jobsById.get(option._gr_job_value?.toLowerCase())}
-                                        onOpen={(job) => { void openJob(job).catch(() => undefined) }}
+                                        onOpen={(job) => openJob(job)}
                                         variant={getCardVariant(displayMode, option, todayKey)}
                                     />
                                 ))}
@@ -393,7 +392,7 @@ export default function SchedulingScreen() {
                                                 key={option.gr_jobscheduleoptionid}
                                                 option={option}
                                                 job={jobsById.get(option._gr_job_value?.toLowerCase())}
-                                                onOpen={(job) => { void openJob(job).catch(() => undefined) }}
+                                                onOpen={(job) => openJob(job)}
                                                 variant={getCardVariant(displayMode, option, todayKey)}
                                             />
                                         ))}
@@ -447,6 +446,14 @@ export default function SchedulingScreen() {
                     )}
                     onCreateOfficeUpdate={createJobOfficeUpdate}
                     onSaveOfficeAttention={updateJobOfficeAttention}
+                    referenceDataStatus={referenceDataStatus}
+                    referenceDataError={referenceDataError}
+                    collaborationDataStatus={collaborationDataStatus}
+                    collaborationDataError={collaborationDataError}
+                    onPrepareReferenceData={prepareJobReferenceData}
+                    onRefreshJob={fetchJobForDrawer}
+                    onLoadJobCardDetails={fetchJobCardDetails}
+                    onLoadJobPhoto={fetchJobPhotoBody}
                     onClose={() => setEditingJob(null)}
                 />
             )}

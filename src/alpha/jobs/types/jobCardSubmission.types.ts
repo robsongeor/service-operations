@@ -26,7 +26,7 @@ export type JobCardSubmissionPhoto = {
     fileName: string
     uploadedOn: string
     displayOrder: number
-    previewUrl: string
+    previewUrl?: string
 }
 
 export type JobCardSubmission = {

@@ -3,6 +3,7 @@ import type {
     JobAssignmentInput,
 } from '../types/jobAssignment.types'
 import { JOB_CARD_STATUSES, type JobCardStatus } from '../types/jobCardStatus.types'
+import { fetchAllDataversePages } from '../../shared/dataverse/fetchAllDataversePages.ts'
 
 const API_URL = `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2`
 
@@ -33,13 +34,10 @@ export async function fetchJobAssignments(token: string): Promise<JobAssignment[
         '$expand=gr_Mechanic($select=gr_mechanicid,gr_name,gr_phone,gr_email)',
         '$orderby=gr_assignedon desc',
     ].join('&')
-    const response = await fetch(`${API_URL}/gr_jobassignments?${query}`, {
+    return fetchAllDataversePages<JobAssignment>(`${API_URL}/gr_jobassignments?${query}`, {
         cache: 'no-store',
         headers: headers(token),
-    })
-    await ensureSuccess(response, 'Failed to load technician assignments')
-    const data = await response.json()
-    return data.value ?? []
+    }, (response) => ensureSuccess(response, 'Failed to load technician assignments'))
 }
 
 export async function createJobAssignment(

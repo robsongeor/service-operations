@@ -16,9 +16,19 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
 
 - [ ] Implement the phased shared data-loading and multi-user synchronization architecture in
   [`docs/architecture/data-loading-and-synchronization.md`](docs/architecture/data-loading-and-synchronization.md).
-  Begin with request-generation/cancellation guards, complete Dataverse pagination, shared query
-  subscriptions, and performance instrumentation. Then migrate progressive drawers and scoped
-  screens before moving realtime dispatch to the app shell. Dataverse change tracking, new plugin
+  Request-generation guards, silent-token coalescing, shared Jobs/Equipment cache subscriptions,
+  primary startup/reference continuation paging, and the app-shell Operational Data Client are
+  complete locally. Equipment Job history is the first shared focused query with cancellation,
+  bounded invalidation, prefetch, and short-window eviction. Main Jobs/Equipment list ownership is
+  also migrated to versioned app-shell query keys while retaining the existing IndexedDB adapters.
+  Canonical Job edit drawers now open immediately, refresh Job core independently, separate editor
+  relationships from Quote/assignment readiness, and defer Job Card children/photos until that tab.
+  Focused Job core and Job Card metadata now use shared query keys with bounded invalidation and
+  eviction; full photo bytes load only when one photo is opened. Selected-Customer Dashboard Sites,
+  Equipment, Jobs, and Service Plans now use bounded scoped queries and focused Equipment completion
+  restores full linked history. The query client now exposes privacy-safe in-memory request/cache/
+  duration/payload metrics. Next migrate Scheduler and Job Map to bounded queries, reduce broad
+  editor/reference collections, and centralise realtime dispatch. Dataverse change tracking, new plugin
   events, or Azure changes remain separately approved work.
 
 - [ ] Approve, provision, and verify a Dataverse alternate key for non-empty Job Number so two

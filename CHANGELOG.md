@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- Moved the accepted main Jobs and Equipment list values into the account-scoped Operational Data
+  Client so mounted screens and route changes reuse and reconcile one in-memory result while
+  preserving the existing generation-aware memory and IndexedDB stale-while-revalidate loaders.
+- Added shared operational-list query keys and functional query-data updates so local Job/Equipment
+  mutations are visible to every mounted consumer without waiting for another full cache commit.
+- Made canonical Job edit drawers open immediately from their selected summary, refresh the exact
+  Job independently, load relationship/service-plan and Quote/assignment data behind separate
+  boundaries, and defer Job Card children and photos until the Job Card tab is selected. Scoped
+  errors no longer blank or unnecessarily block unrelated drawer sections.
+- Shared focused Job core and Job Card metadata across drawer entry points with bounded cache
+  lifetimes and mutation/realtime reconciliation. Job Card detail now loads photo metadata first and
+  downloads only the individual full photo that an operator opens.
+- Replaced Customer Dashboard's global Jobs and Equipment startup reads with progressive
+  selected-Customer Sites, Equipment, Jobs, and Service Plan queries using bounded Dataverse
+  filters, shared cache lifetimes, and mutation/realtime invalidation.
+- Preserved moved-Equipment completion correctness by loading the focused Equipment's full linked
+  Job history and service plans before hour-meter and maintenance calculations.
+- Added privacy-safe in-memory Operational Data Client metrics for cache use, deduplicated requests,
+  request outcome/duration, and estimated payload size without retaining business identifiers.
+
 ## v1.7.0 — 15 August 2026
 
 - Added an Equipment Map that groups Equipment at their assigned Site address, clusters dense

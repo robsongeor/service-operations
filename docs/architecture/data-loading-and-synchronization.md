@@ -25,13 +25,15 @@ so migrations can be incremental and testable.
 ```text
 Route component
     -> feature hook instance (`useJobs` or `useEquipmentManager`)
-        -> hook-local arrays and loading flags
+        -> shared Jobs/Equipment list value in the app-shell Operational Data Client
+        -> hook-local workflow/reference data and loading flags
         -> feature Dataverse services
             -> MSAL delegated access token
             -> Dataverse Web API
 
 Jobs and Equipment list services
-    -> module-level in-memory full-table snapshot (5-minute TTL)
+    -> shared generation-aware in-memory full-table snapshot (5-minute TTL)
+    -> subscribed hook consumers receive accepted cache commits
     -> account/environment-scoped IndexedDB full-table snapshot (24-hour TTL)
     -> stale-while-revalidate full-table request
 
@@ -41,7 +43,9 @@ Jobs and Equipment feature hooks
     -> debounced full-table refresh
 ```
 
-Dataverse is the source of truth. React hook state is the active screen copy. IndexedDB contains
+Dataverse is the source of truth. The app-shell query registry owns the accepted in-memory Jobs and
+Equipment list values; feature hooks still orchestrate their established service/cache callbacks and
+own supporting workflow state. IndexedDB contains
 disposable Jobs or Equipment list snapshots only; it is not a write queue and must never be treated
 as proof that a Dataverse write succeeded. MSAL owns its own token cache.
 
@@ -49,8 +53,8 @@ as proof that a Dataverse write succeeded. MSAL owns its own token cache.
 
 | Data | Current collection path | Local lifetime | Realtime behaviour |
 | --- | --- | --- | --- |
-| Jobs | All paged Jobs with several expanded relationships | Hook state plus 5-minute memory and 24-hour IndexedDB snapshots | Job event, reconnect, or visibility recovery can trigger a full Jobs reload |
-| Equipment | All paged Equipment with expanded Site and Customer | Hook state plus 5-minute memory and 24-hour IndexedDB snapshots | Equipment event triggers a full Equipment reload |
+| Jobs | All paged Jobs with several expanded relationships | App-shell query value plus 5-minute service memory and 24-hour IndexedDB snapshots | Job event, reconnect, or visibility recovery can trigger a full Jobs reload |
+| Equipment | All paged Equipment with expanded Site and Customer | App-shell query value plus 5-minute service memory and 24-hour IndexedDB snapshots | Equipment event triggers a full Equipment reload |
 | Customers | Full direct Dataverse query | Hook instance | None |
 | Sites | Full direct Dataverse query with Customer expansion | Hook instance | None |
 | Site Contacts | Full direct Dataverse query with Site and Contact expansion | `useJobs` hook instance | None |
@@ -58,8 +62,19 @@ as proof that a Dataverse write succeeded. MSAL owns its own token cache.
 | Equipment Service Plans | Full direct Dataverse query | Hook instance | Indirect local updates; no cross-client plan invalidation |
 | Job Schedule Options | Full collection on Jobs hook startup | Hook instance | No dedicated cross-client invalidation |
 | Job Office Updates | Full collection on Jobs hook startup | Hook instance | No dedicated cross-client invalidation |
-| Quotes and Assignments used by Job editing | Loaded as part of the broad on-demand Job reference bundle | `useJobs` hook instance | No shared invalidation |
-| Job detail children and photos | Focused Job fetch plus time, parts, submissions, and photo bodies | Focused hook state | Reloaded with the drawer workflow |
+| Job editor relationships | Equipment, Customers, Sites, Site Contacts, and Service Plans load together after an edit drawer opens | `useJobs` hook instance | No shared invalidation |
+| Quotes and Assignments used by Job editing | Independent collaboration bundle started after an edit drawer opens | `useJobs` hook instance | No shared invalidation |
+| Job core | One exact Job projection started after the shell opens; it does not wait for lookups or child tables | Shared focused query: 15-second stale window and 2-minute unobserved retention | A matching Job event or mutation invalidates and refreshes the observed focused record |
+| Job Card detail | Time, parts, submissions, submission children, and photo metadata load only when the Job Card tab is selected | Shared focused query: 30-second stale window and 1-minute unobserved retention | Job invalidation refreshes the observed metadata query |
+| Job Card photo body | One Dataverse File body requested only when that photo is opened | Shared focused query: 5-minute stale window and 30-second unobserved retention; never IndexedDB persisted | Independent retry; closing the last observer starts eviction |
+
+Customer Dashboard is now an intentional exception to the global Jobs and Equipment rows above.
+After Customer selection it loads only that Customer's Sites, then bounded Site-filtered Equipment
+and Jobs, then bounded Equipment-filtered service plans. These four collections use shared
+customer-dashboard query keys with 20–30-second stale windows and two-minute unobserved retention.
+They are not written to IndexedDB. Equipment completion additionally loads the focused Equipment's
+complete Job history before applying hour-meter or maintenance rules, because historical Jobs may
+belong to a Site outside the currently selected Customer projection.
 
 ### Existing reusable strengths
 
@@ -68,7 +83,19 @@ as proof that a Dataverse write succeeded. MSAL owns its own token cache.
 - Jobs and Equipment cache entries are scoped by Dataverse resource, tenant, and account;
 - device snapshots permit stale-while-revalidate rendering;
 - in-flight full-list requests are deduplicated within each cache module;
-- focused Job and Equipment-history queries exist and can become bounded query primitives;
+- the shared scoped cache prevents invalidated or superseded requests from restoring older memory
+  or device snapshots;
+- accepted Jobs and Equipment cache commits are published to every mounted hook subscriber for the
+  same account/environment scope;
+- Jobs and Equipment route hooks now read and reconcile one app-shell query value rather than
+  creating independent authoritative list arrays;
+- concurrent silent delegated-token requests with the same account and refresh intent are coalesced;
+- the main Job/Equipment reference collections use one reusable Dataverse continuation-page reader;
+- focused Job core, Job Card metadata, individual Job Card photo bodies, and Equipment history use
+  bounded shared query keys with request deduplication, cancellation, and unobserved eviction;
+- canonical Job drawers now open from the available summary immediately, refresh the exact Job in
+  the background, and keep editor, collaboration, and Job Card failures inside separate retry
+  boundaries;
 - Jobs and Equipment SignalR events identify the changed record and operation;
 - most successful mutations already update the active hook state or invalidate the relevant
   feature cache;
@@ -78,21 +105,21 @@ These pieces should be migrated into a shared coordinator rather than discarded.
 
 ## Problems in the current implementation
 
-### 1. Data ownership is tied to hook instances
+### 1. Supporting data and orchestration remain tied to hook instances
 
-Every call to `useJobs()` or `useEquipmentManager()` creates separate React arrays, readiness
-flags, background-refresh callbacks, and usually a realtime connection. Jobs is instantiated by
+The primary Jobs and Equipment list arrays are now shared by query key above routes. Every call to
+`useJobs()` or `useEquipmentManager()` still creates separate supporting reference arrays, readiness
+flags, background-refresh orchestration, and usually a realtime connection. Jobs is instantiated by
 the Jobs screen, Scheduler, Job Map, WOF drawer, Equipment Job creation, Chargeable Invoice review,
 and Customer Dashboard. Customer Dashboard also instantiates Equipment Manager.
 
 Consequences:
 
-- navigation discards useful route state even when the same records are needed next;
-- two mounted consumers can display different versions of one record;
-- a local mutation patches only the hook instance that performed it;
+- navigation now retains the primary Jobs and Equipment values, but supporting reference state is
+  still discarded;
+- mutations to the main lists reconcile every mounted consumer, while supporting feature-local
+  collections can still diverge until refreshed;
 - each new hook can repeat Customers, Sites, plans, schedule, assignment, or other reference reads;
-- a cache background-refresh callback updates only the caller that started that request, not every
-  consumer that received the shared snapshot;
 - multiple hook instances can open duplicate SignalR connections.
 
 ### 2. Invalidation is too broad and can still become stale
@@ -102,31 +129,31 @@ Reconnect and visibility recovery also use broad reads. This is acceptable at hu
 will become slower and more expensive as history grows, and a burst separated by more than the
 debounce window repeats the work.
 
-The cache modules remove a cache entry on invalidation but cannot cancel or supersede its existing
-promise. An earlier request can therefore finish after a mutation, restore its older snapshot, and
-write that snapshot back to IndexedDB. `forceRefresh` can also join an existing request that began
-before the caller required authoritative post-write data.
+The generation-aware shared cache now prevents an older request from committing after invalidation,
+a direct write, or a newer authoritative refresh. Remaining work is to pass abort signals into the
+network layer and compare server ETags/modified versions so unnecessary responses can be cancelled
+and realtime echoes can be ignored without a re-read.
 
-There is no generation, server version, ETag, or watermark comparison protecting newer state from
-an older response.
+### 3. Remaining drawer/reference work
 
-### 3. Drawers wait for unrelated data
+The canonical Job edit drawer no longer waits for one broad reference bundle. It opens immediately,
+shares the exact Job core by stable key across every entry point, separates relationship/service-plan
+data from Quotes and Assignments, and loads Job Card children and photo metadata only when that tab
+is selected. A full photo body is requested only when the operator opens that photo. Core,
+relationship, collaboration, Job Card metadata, and photo-body failures have scoped retry states;
+save remains guarded until the exact Job and relationship choices are ready.
 
-The focused Job drawer prepares a broad reference bundle containing Equipment, Customers, Sites,
-Site Contacts, Quotes, Assignments, and Equipment Service Plans. Its exact Job request is coupled to
-that preparation. Equipment Job creation creates a fresh `useJobs()` instance and blocks the form
-until the same broad bundle is ready.
+The remaining limitations are that relationship and collaboration groups still perform full-table
+reads inside a `useJobs()` instance, and Equipment Job creation still creates a fresh `useJobs()`
+instance. Job creation correctly remains gated on its required relationship choices.
 
-The focused Job read also requests time rows, parts, submissions, submission children, and every
-photo body. Downloading photo bytes before their tab or preview is used delays useful text and form
-controls.
+### 4. Some screens still fetch global data for scoped views
 
-### 4. Screens fetch global data for scoped views
-
-Customer Dashboard currently combines a full Equipment Manager load with a full Jobs load, then
-filters those arrays in the browser. Scheduler and Job Map also start from the general Jobs hook.
-This guarantees convenient reuse but makes the cost of a scoped view proportional to the complete
-business history.
+Customer Dashboard has migrated its selected-Customer Sites, Equipment, Jobs, and service plans to
+server-filtered bounded queries. It no longer starts the global Jobs or Equipment loaders. Scheduler
+and Job Map still start from the general Jobs hook, so their cost remains proportional to the
+complete business history. Customer and editor/reference collections also remain broader than the
+selected dashboard projection.
 
 Some smaller collection services do not follow `@odata.nextLink`, unlike Jobs and Equipment. Those
 services can silently become incomplete when the Dataverse page limit is exceeded.
@@ -152,11 +179,13 @@ can render early, but reference panels and actions have no standard independent 
 The UI has no consistent distinction among **cached**, **refreshing**, **fresh**, **stale**, and
 **offline** data.
 
-### 7. Observability is insufficient for performance decisions
+### 7. Observability is not yet exported
 
-There is no shared measurement of cache hit source, request duration, payload size, duplicate request
-count, event-to-screen latency, or stale-response suppression. Performance regressions are therefore
-found mainly through visible user delay.
+The Operational Data Client now retains privacy-safe in-memory counters for request count, cache
+hits, concurrent-request deduplication, success/failure/abort, duration, and estimated payload bytes.
+Metrics use normalized query-family labels and do not retain Dataverse record IDs, business content,
+or tokens. There is not yet a production telemetry exporter, event-to-visible-update measurement, or
+stale-response suppression counter, so regressions still need local snapshots and visible testing.
 
 ## Target architecture
 
@@ -182,10 +211,13 @@ Route / drawer
     -> feature command (writes, patches returned record, invalidates bounded dependants)
 ```
 
-The client may be implemented with a proven React query library or a small external store based on
-`useSyncExternalStore`. Before implementation, record the selected library and persistence support
-in `shared-services.md`. Whichever implementation is chosen must provide the contracts below; feature
-hooks must not recreate independent authoritative arrays.
+The first implementation uses a small internal external store based on `useSyncExternalStore`,
+recorded in `shared-services.md`. This avoids another runtime dependency while the migration is
+incremental. It currently provides typed keys, shared request/state, cancellation, request
+generations, bounded invalidation, short-window eviction, and privacy-safe in-memory query metrics.
+IndexedDB query persistence, entity normalization, exported telemetry, and app-shell realtime remain
+future extensions. Feature hooks must
+not recreate independent authoritative arrays after their query is migrated.
 
 ### Query key contract
 
@@ -319,31 +351,49 @@ reference data should explain and retry only that dependency.
 
 ### Phase 1 — Correctness and measurement foundation
 
-- add request generation and cancellation to the existing Jobs and Equipment caches;
-- prevent invalidated or older in-flight results from repopulating memory or IndexedDB;
-- coalesce concurrent silent token acquisition through the authentication coordinator;
-- instrument request count/duration, cache source, payload size where available, stale-result drops,
-  and event-to-visible-update latency without logging business content or tokens;
-- make every full collection service follow `@odata.nextLink`.
+- [x] add request generations to the existing Jobs and Equipment caches;
+- [x] prevent invalidated or older in-flight results from repopulating memory or IndexedDB;
+- [x] coalesce concurrent silent token acquisition through the authentication coordinator;
+- [x] use one continuation-page reader for the primary startup and Job/Equipment reference
+  collections;
+- [ ] pass cancellation signals through all caches and Dataverse services; focused Equipment Job
+  history now supports cancellation as the first migrated query;
+- [x] instrument request count/duration, memory-cache hits, request deduplication, outcomes, and
+  estimated payload size in memory without logging business content, record IDs, or tokens;
+- [ ] add stale-result-drop and event-to-visible-update metrics, then export only approved aggregate
+  telemetry;
+- audit the remaining feature-specific full collections and make each follow `@odata.nextLink`.
 
 ### Phase 2 — Shared Operational Data Client
 
-- introduce the account/environment-scoped client at the authenticated app shell;
-- define typed query keys and shared subscriptions;
-- migrate Jobs and Equipment list caches without changing business services;
-- make successful mutations update all mounted consumers;
-- keep route state warm for the configured stale window.
+- [x] publish accepted Jobs and Equipment cache commits to every mounted consumer in the same scope;
+- [x] introduce the account/environment-scoped client at the authenticated app shell;
+- [x] define typed query keys, shared subscriptions, request generations, cancellation, and
+  unobserved-query eviction;
+- [x] migrate Jobs and Equipment list ownership without changing business services; established
+  generation-aware memory/IndexedDB loaders remain the data-source adapters during migration;
+- [x] make successful main-list mutations update all mounted consumers; Job mutations also
+  invalidate observed Equipment Job-history queries as the first bounded path;
+- keep route state warm for the configured stale window; focused Equipment Job history now uses a
+  30-second stale window and 60-second unobserved retention.
 
 ### Phase 3 — Progressive focused workflows
 
-- split Job core, editable lookup, Office, Scheduling, Quotes, submission, and photo queries;
-- split Equipment core, Job history, service plans, documents, and usage evidence queries;
-- prefetch Equipment Job history in the background and avoid retaining it after its short cache window;
-- stop blocking drawers on broad reference bundles.
+- [x] split Job core from editor relationships, Quotes/Assignments, Job Card submissions, and photo
+  work; canonical Job drawers open from summary immediately and use scoped readiness/error guards;
+- [x] migrate focused Job core and Job Card metadata into shared query keys with cancellation,
+  mutation/realtime invalidation, and short unobserved retention;
+- [x] split Job Card photo metadata from full photo bodies and load only the opened photo body;
+- split Equipment core, service plans, documents, and usage evidence queries;
+- [x] move Equipment Job history into a shared focused query, prefetch it when either Equipment
+  drawer opens, abort superseded work, and evict it after its short unobserved cache window;
+- [x] stop canonical Job edit drawers from blocking on broad reference bundles; Job creation remains
+  intentionally gated on its required relationship choices.
 
 ### Phase 4 — Scoped screens
 
-- migrate Customer Dashboard to customer-scoped aggregates and paged child queries;
+- [x] migrate Customer Dashboard Sites, Equipment, Jobs, and service plans to bounded
+  customer-scoped child queries, while retaining focused full Equipment history for completion;
 - migrate Scheduler to date-window queries;
 - migrate Job Map to status/location summaries;
 - migrate remote Equipment/Customer/Site selectors to bounded search queries.
@@ -398,4 +448,3 @@ signed-in multi-client smoke testing.
 - [`shared-services.md`](shared-services.md)
 - [`dataverse.md`](dataverse.md)
 - [`authentication.md`](authentication.md)
-

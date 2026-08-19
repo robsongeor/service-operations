@@ -45,13 +45,20 @@ therefore performs one debounced authoritative refresh after SignalR reconnects 
 Jobs tab becomes visible. This closes missed-event gaps without background polling or constant
 Dataverse queries.
 
-Jobs startup is deliberately split into two phases. The table phase loads Jobs and Staff plus the
+Jobs startup is deliberately split into progressive phases. The table phase loads Jobs and Staff plus the
 Schedule Options and Office Updates that directly drive visible table filtering and summaries. It
 does not request the full Equipment, Customer, Site, Site Contact, Quote, Assignment, or Equipment
-Service Plan collections. Those reference collections load only when a user first opens Job create,
-Job edit, Equipment details, or a workflow that needs them. Concurrent opens share one in-flight
-request, a successful result remains in memory for the page session, and a failed request can be
-retried without opening a partially populated drawer.
+Service Plan collections. Job create remains gated on the relationship choices it requires. Job edit
+opens immediately from the selected summary, refreshes one exact Job independently, loads Equipment,
+Customer, Site, Site Contact, and Service Plan editor data separately from Quotes and Assignments,
+and fetches Job Card child rows and photo metadata only when that tab is selected. The exact Job core
+and Job Card metadata are shared by stable focused query keys across Jobs, Scheduler, Customer
+Dashboard, Equipment, and WOF entry points. A photo body is fetched only when the operator opens that
+photo and is released shortly after the preview is no longer observed. Core, editor-reference,
+collaboration, Job Card metadata, and photo-body failures have scoped retry states. Save is unavailable until exact Job
+core and relationship choices are ready, preventing a partial reference load from clearing a valid
+Dataverse relationship. Concurrent reference opens share their respective in-flight request and
+focused values use bounded stale and cache windows rather than route-local lifetime.
 
 Job create/edit drawers use shared drawer presentation and shared searchable selectors.
 Their inline New Equipment panel accepts primary Fleet Number, alternate Fleet Number, and Serial;
@@ -178,9 +185,10 @@ lists are not part of the initial Job Book load; they load only when the add-mac
 
 - Job descriptions support up to 4,000 characters across managed Jobs and Job Book Intake. The
   shared UI and service boundary enforce the same limit as the Dataverse columns.
-- Opening an Open Job from the Customer dashboard now refreshes the full Job record before opening the
-  Job drawer. This preserves complete Customer/Site/Equipment context in the editor when the list
-  projection can be stale.
+- Opening a Job from Jobs, Scheduler, Customer Dashboard, Equipment history, or WOF displays the
+  canonical drawer immediately from the available summary. The drawer then refreshes the exact Job;
+  editing and saving unlock only after that authoritative core arrives, preserving complete
+  Customer/Site/Equipment context without delaying the shell for unrelated lookups or photos.
 - A non-empty Job Number must be unique across Jobs. The canonical create service performs an exact,
   authenticated Dataverse preflight for every creation entry point before POST; the main Jobs drawer
   also rejects a normalized duplicate from its loaded projection immediately. Blank Job Numbers
