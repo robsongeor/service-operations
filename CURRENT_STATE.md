@@ -51,6 +51,12 @@ Branch: `codex/data-loading-architecture-review`
   realtime events invalidate that selected-Customer projection instead of broadly reloading Jobs or
   Equipment. Before Job completion, the focused Equipment's exact record, full linked Job history,
   and plans are loaded so moved Equipment retains correct chronological meter and maintenance rules.
+- Scheduler no longer starts the global Jobs collection or reads every Schedule Option. Its visible
+  Monday-to-Sunday range loads only matching Schedule Options and the unique referenced Jobs through
+  shared bounded query keys, while the previous and next weeks prefetch into a five-minute memory
+  cache. Schedule writes and Job mutations/realtime recovery refresh the active projection without
+  clearing reference data already loaded by an open canonical Job drawer. A dedicated cross-client
+  Schedule Option event remains future work.
 - The Operational Data Client now exposes privacy-safe in-memory metrics for request count,
   cache hits, concurrent-request deduplication, success/failure/abort, duration, and estimated
   payload bytes by normalized query family. It stores no record IDs, business content, or tokens;

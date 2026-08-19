@@ -3,8 +3,9 @@ import type {
     JobScheduleOptionInput,
 } from '../types/jobSchedule.types'
 import { fetchAllDataversePages } from '../../shared/dataverse/fetchAllDataversePages.ts'
+import { invalidateOperationalQueries } from '../../shared/data/OperationalDataClient.ts'
 
-const DATAVERSE_URL = import.meta.env.VITE_DATAVERSE_URL
+const DATAVERSE_URL = import.meta.env?.VITE_DATAVERSE_URL ?? ''
 const SCHEDULE_OPTIONS_URL =
     `${DATAVERSE_URL}/api/data/v9.2/gr_jobscheduleoptions`
 
@@ -48,6 +49,45 @@ export async function fetchJobScheduleOptions(
     )
 }
 
+function assertDateOnly(value: string) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        throw new Error('Schedule windows require Date Only values.')
+    }
+}
+
+export async function fetchJobScheduleOptionsForWindow(
+    accessToken: string,
+    startDate: string,
+    endDate: string,
+    signal?: AbortSignal,
+): Promise<JobScheduleOption[]> {
+    assertDateOnly(startDate)
+    assertDateOnly(endDate)
+    if (startDate > endDate) throw new Error('The schedule window start must not follow its end.')
+    const filter = `gr_scheduledate ge ${startDate} and gr_scheduledate le ${endDate}`
+    return fetchAllDataversePages<JobScheduleOption>(
+        `${SCHEDULE_OPTIONS_URL}?$select=gr_jobscheduleoptionid,gr_name,gr_scheduletype,gr_scheduledate,gr_scheduletime,gr_confirmed,_gr_job_value&$filter=${encodeURIComponent(filter)}`,
+        {
+            cache: 'no-store',
+            signal,
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                Accept: 'application/json',
+                'Cache-Control': 'no-cache',
+            },
+        },
+        async (response) => {
+            if (response.ok) return
+            const error = await response.text()
+            throw new Error(`Failed to fetch the schedule window: ${error}`)
+        },
+    )
+}
+
+function invalidateSchedulerWindows() {
+    invalidateOperationalQueries((key) => key[0] === 'scheduler')
+}
+
 export async function createJobScheduleOption(
     accessToken: string,
     option: JobScheduleOptionInput,
@@ -66,6 +106,7 @@ export async function createJobScheduleOption(
         const error = await response.text()
         throw new Error(`Failed to create job schedule option: ${error}`)
     }
+    invalidateSchedulerWindows()
 }
 
 export async function updateJobScheduleOption(
@@ -87,6 +128,7 @@ export async function updateJobScheduleOption(
         const error = await response.text()
         throw new Error(`Failed to update job schedule option: ${error}`)
     }
+    invalidateSchedulerWindows()
 }
 
 export async function updateJobScheduleConfirmation(
@@ -108,6 +150,7 @@ export async function updateJobScheduleConfirmation(
         const error = await response.text()
         throw new Error(`Failed to update schedule confirmation: ${error}`)
     }
+    invalidateSchedulerWindows()
 }
 
 export async function deleteJobScheduleOption(
@@ -126,4 +169,5 @@ export async function deleteJobScheduleOption(
         const error = await response.text()
         throw new Error(`Failed to delete job schedule option: ${error}`)
     }
+    invalidateSchedulerWindows()
 }

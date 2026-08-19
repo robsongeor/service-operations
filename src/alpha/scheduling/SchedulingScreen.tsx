@@ -22,6 +22,12 @@ import {
     type SchedulingDisplayMode,
     type SchedulingJobTypeFilter,
 } from './schedulingDisplayMode'
+import { useSchedulerWindowData } from './useSchedulerWindowData'
+import {
+    addSchedulerDays as addDays,
+    schedulerDateKey as dateKey,
+    startOfSchedulerWeek as startOfWeek,
+} from './schedulerWindow'
 
 const dayHeadingFormatter = new Intl.DateTimeFormat('en-NZ', { weekday: 'short' })
 const dayNumberFormatter = new Intl.DateTimeFormat('en-NZ', {
@@ -37,29 +43,9 @@ const timeFormatter = new Intl.DateTimeFormat('en-NZ', {
     hour: 'numeric',
     minute: '2-digit',
 })
-
-function startOfWeek(value: Date) {
-    const date = new Date(value)
-    date.setHours(12, 0, 0, 0)
-    const daysSinceMonday = (date.getDay() + 6) % 7
-    date.setDate(date.getDate() - daysSinceMonday)
-    return date
-}
-
-function addDays(value: Date, days: number) {
-    const date = new Date(value)
-    date.setDate(date.getDate() + days)
-    return date
-}
-
-function dateKey(value: Date | string) {
-    if (typeof value === 'string') return value.slice(0, 10)
-
-    const year = value.getFullYear()
-    const month = String(value.getMonth() + 1).padStart(2, '0')
-    const day = String(value.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
-}
+const EMPTY_SCOPED_EQUIPMENT: never[] = []
+const EMPTY_SCOPED_SITES: never[] = []
+const EMPTY_SCOPED_SERVICE_PLANS: never[] = []
 
 function scheduleLabel(option: JobScheduleOption) {
     switch (option.gr_scheduletype) {
@@ -150,6 +136,15 @@ function getCardVariant(
 
 export default function SchedulingScreen() {
     const navigate = useNavigate()
+    const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
+    const schedulerData = useSchedulerWindowData(weekStart)
+    const scopedSchedulerData = useMemo(() => ({
+        jobs: schedulerData.jobs,
+        equipment: EMPTY_SCOPED_EQUIPMENT,
+        sites: EMPTY_SCOPED_SITES,
+        servicePlans: EMPTY_SCOPED_SERVICE_PLANS,
+        scheduleOptions: schedulerData.scheduleOptions,
+    }), [schedulerData.jobs, schedulerData.scheduleOptions])
     const {
         jobs,
         scheduleOptions,
@@ -180,9 +175,6 @@ export default function SchedulingScreen() {
         deleteScheduleOption,
         completionRequest, isCompletingJob, completionError, completeStandardJob, completeServiceJob, completeWofJob, cancelJobCompletion,
         setupEquipmentMaintenance,
-        isLoading,
-        loadError,
-        retryInitialLoad,
         prepareJobReferenceData,
         fetchJobForDrawer,
         fetchJobCardDetails,
@@ -191,8 +183,11 @@ export default function SchedulingScreen() {
         referenceDataError,
         collaborationDataStatus,
         collaborationDataError,
-    } = useJobs()
-    const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
+    } = useJobs({
+        loadGlobalOperationalData: false,
+        scopedData: scopedSchedulerData,
+        onScopedDataChanged: schedulerData.refetch,
+    })
     const [editingJob, setEditingJob] = useState<Job | null>(null)
     const [displayMode, setDisplayMode] = useState<SchedulingDisplayMode>(restoreSchedulingDisplayMode)
     const [selectedJobType, setSelectedJobType] = useState<SchedulingJobTypeFilter>(restoreSchedulingJobTypeFilter)
@@ -283,22 +278,22 @@ export default function SchedulingScreen() {
                 </div>
             </header>
 
-            {isLoading ? (
+            {schedulerData.isLoading ? (
                 <section className="scheduling-data-state" aria-live="polite">
                     <h2>Loading schedule</h2>
                     <p>Connecting to Dataverse and preparing the weekly planner.</p>
                 </section>
-            ) : loadError ? (
+            ) : schedulerData.error ? (
                 <section className="scheduling-data-state scheduling-data-state-error" role="alert">
                     <div>
                         <h2>Schedule could not be loaded</h2>
                         <p>Dataverse returned an error. Check the details or try again.</p>
                         <details>
                             <summary>Error details</summary>
-                            <pre>{loadError}</pre>
+                            <pre>{schedulerData.error}</pre>
                         </details>
                     </div>
-                    <button type="button" onClick={retryInitialLoad}>Try again</button>
+                    <button type="button" onClick={() => void schedulerData.refetch()}>Try again</button>
                 </section>
             ) : (
             <>

@@ -203,6 +203,35 @@ export async function fetchJobsForSites(accessToken: string, siteIds: readonly s
     return rows
 }
 
+export async function fetchJobsByIds(accessToken: string, jobIds: readonly string[], signal?: AbortSignal): Promise<Job[]> {
+    const filters = buildDataverseIdFilterBatches('gr_jobid', jobIds)
+    if (!filters.length) return []
+    const rows: Job[] = []
+    for (const filter of filters) {
+        rows.push(...await fetchAllDataversePages<Job>(
+            `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=${JOB_SELECT}&$expand=${JOB_EXPAND}&$filter=${encodeURIComponent(filter)}`,
+            {
+                cache: 'no-store',
+                signal,
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    Accept: 'application/json',
+                    'Cache-Control': 'no-cache',
+                    Prefer: 'odata.maxpagesize=5000',
+                },
+            },
+            async (response) => {
+                if (!response.ok) {
+                    const detail = await response.text()
+                    throw new Error(`Failed to fetch scheduled Jobs: ${detail || `${response.status} ${response.statusText}`}`)
+                }
+            },
+        ))
+    }
+    const jobsById = new Map(rows.map((job) => [job.gr_jobid.toLowerCase(), job]))
+    return [...jobsById.values()]
+}
+
 export function subscribeToJobsData(
     accessToken: string,
     listener: (rows: Job[], loadedAt: number) => void,
@@ -270,7 +299,8 @@ export function invalidateJobsCache(accessToken?: string) {
         (key[0] === 'equipment' && key[2] === 'jobs')
         || key[0] === 'job'
         || key[0] === 'jobs'
-        || key[0] === 'customer-dashboard')
+        || key[0] === 'customer-dashboard'
+        || (key[0] === 'scheduler' && key[1] === 'jobs-v1'))
 }
 
 export async function fetchEquipmentJobs(accessToken: string, equipmentId: string, signal?: AbortSignal): Promise<Job[]> {

@@ -21,6 +21,9 @@
   Job history and service plans before hour-meter and maintenance calculations.
 - Added privacy-safe in-memory Operational Data Client metrics for cache use, deduplicated requests,
   request outcome/duration, and estimated payload size without retaining business identifiers.
+- Replaced Scheduler's global Jobs and Schedule Option startup reads with shared seven-day window
+  queries, batched referenced-Job loading, adjacent-week prefetch, and bounded mutation/Job-realtime
+  reconciliation while preserving the canonical progressive Job drawer.
 
 ## v1.7.0 — 15 August 2026
 

@@ -6,6 +6,7 @@ import { useOperationalQuery } from '../shared/data/useOperationalQuery'
 import {
     customerDashboardEquipmentQueryKey,
     customerDashboardJobsQueryKey,
+    operationalIdFingerprint,
     customerDashboardServicePlansQueryKey,
     customerDashboardSitesQueryKey,
 } from '../shared/data/operationalCollectionKeys'
@@ -22,16 +23,6 @@ const EMPTY_SITES: Site[] = []
 const EMPTY_EQUIPMENT: Equipment[] = []
 const EMPTY_JOBS: Job[] = []
 const EMPTY_SERVICE_PLANS: EquipmentServicePlan[] = []
-
-function idFingerprint(ids: readonly string[]) {
-    let hash = 2166136261
-    const value = [...ids].map((id) => id.toLowerCase()).sort().join('|')
-    for (let index = 0; index < value.length; index += 1) {
-        hash ^= value.charCodeAt(index)
-        hash = Math.imul(hash, 16777619)
-    }
-    return `${ids.length}-${(hash >>> 0).toString(36)}`
-}
 
 export function useCustomerDashboardData(customerId: string) {
     const { instance } = useMsal()
@@ -56,7 +47,7 @@ export function useCustomerDashboardData(customerId: string) {
     })
     const sites = sitesQuery.data ?? EMPTY_SITES
     const siteIds = useMemo(() => sites.map((site) => site.gr_siteid), [sites])
-    const siteFingerprint = useMemo(() => idFingerprint(siteIds), [siteIds])
+    const siteFingerprint = useMemo(() => operationalIdFingerprint(siteIds), [siteIds])
     const equipmentKey = useMemo(
         () => customerDashboardEquipmentQueryKey(persistedCustomerId || 'none', siteFingerprint),
         [persistedCustomerId, siteFingerprint],
@@ -83,7 +74,7 @@ export function useCustomerDashboardData(customerId: string) {
     })
     const equipment = equipmentQuery.data ?? EMPTY_EQUIPMENT
     const equipmentIds = useMemo(() => equipment.map((item) => item.gr_equipmentid), [equipment])
-    const equipmentFingerprint = useMemo(() => idFingerprint(equipmentIds), [equipmentIds])
+    const equipmentFingerprint = useMemo(() => operationalIdFingerprint(equipmentIds), [equipmentIds])
     const servicePlansKey = useMemo(
         () => customerDashboardServicePlansQueryKey(persistedCustomerId || 'none', equipmentFingerprint),
         [equipmentFingerprint, persistedCustomerId],

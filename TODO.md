@@ -27,8 +27,9 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
   eviction; full photo bytes load only when one photo is opened. Selected-Customer Dashboard Sites,
   Equipment, Jobs, and Service Plans now use bounded scoped queries and focused Equipment completion
   restores full linked history. The query client now exposes privacy-safe in-memory request/cache/
-  duration/payload metrics. Next migrate Scheduler and Job Map to bounded queries, reduce broad
-  editor/reference collections, and centralise realtime dispatch. Dataverse change tracking, new plugin
+  duration/payload metrics. Scheduler now uses bounded visible-week queries with adjacent prefetch.
+  Next migrate Job Map to bounded queries, reduce broad editor/reference collections, add dedicated
+  Schedule Option synchronization, and centralise realtime dispatch. Dataverse change tracking, new plugin
   events, or Azure changes remain separately approved work.
 
 - [ ] Approve, provision, and verify a Dataverse alternate key for non-empty Job Number so two

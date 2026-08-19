@@ -80,6 +80,9 @@ function metricFamily(key: OperationalQueryKey) {
     if (resource === 'customer-dashboard') {
         return `${resource}:${typeof key[2] === 'string' ? key[2] : 'scoped'}`
     }
+    if (resource === 'scheduler') {
+        return `${resource}:${typeof key[1] === 'string' ? key[1] : 'window'}`
+    }
     if (resource === 'job' || resource === 'job-photo') {
         return `${resource}:${typeof key[2] === 'string' ? key[2] : 'focused'}`
     }

@@ -60,7 +60,7 @@ as proof that a Dataverse write succeeded. MSAL owns its own token cache.
 | Site Contacts | Full direct Dataverse query with Site and Contact expansion | `useJobs` hook instance | None |
 | Mechanics/Staff | Full collection used by the feature hook | Hook instance | Staff events refresh the collection used by that hook |
 | Equipment Service Plans | Full direct Dataverse query | Hook instance | Indirect local updates; no cross-client plan invalidation |
-| Job Schedule Options | Full collection on Jobs hook startup | Hook instance | No dedicated cross-client invalidation |
+| Job Schedule Options | Full collection on general Jobs-hook startup; Scheduler uses a server-filtered seven-day window | Hook instance or shared Scheduler window query | Scheduler mutations invalidate bounded windows; no dedicated cross-client Schedule Option event |
 | Job Office Updates | Full collection on Jobs hook startup | Hook instance | No dedicated cross-client invalidation |
 | Job editor relationships | Equipment, Customers, Sites, Site Contacts, and Service Plans load together after an edit drawer opens | `useJobs` hook instance | No shared invalidation |
 | Quotes and Assignments used by Job editing | Independent collaboration bundle started after an edit drawer opens | `useJobs` hook instance | No shared invalidation |
@@ -75,6 +75,12 @@ customer-dashboard query keys with 20–30-second stale windows and two-minute u
 They are not written to IndexedDB. Equipment completion additionally loads the focused Equipment's
 complete Job history before applying hour-meter or maintenance rules, because historical Jobs may
 belong to a Site outside the currently selected Customer projection.
+
+Scheduler is also a scoped exception. It loads only the visible week's Schedule Options and only
+the Jobs referenced by those rows, then prefetches the adjacent weeks. Window results are shared for
+20 seconds and retained unobserved for five minutes without IndexedDB persistence. Existing Job
+events, reconnect recovery, visibility recovery, and successful mutations refresh the active
+bounded projection; a Schedule Option-only cross-client event remains future work.
 
 ### Existing reusable strengths
 
@@ -150,10 +156,10 @@ instance. Job creation correctly remains gated on its required relationship choi
 ### 4. Some screens still fetch global data for scoped views
 
 Customer Dashboard has migrated its selected-Customer Sites, Equipment, Jobs, and service plans to
-server-filtered bounded queries. It no longer starts the global Jobs or Equipment loaders. Scheduler
-and Job Map still start from the general Jobs hook, so their cost remains proportional to the
-complete business history. Customer and editor/reference collections also remain broader than the
-selected dashboard projection.
+server-filtered bounded queries. Scheduler now uses a seven-day Schedule Option query and batches
+only the referenced Jobs, with adjacent-window prefetch. Job Map still starts from the general Jobs
+hook, so its cost remains proportional to the complete business history. Customer and editor/
+reference collections also remain broader than their selected projections.
 
 Some smaller collection services do not follow `@odata.nextLink`, unlike Jobs and Equipment. Those
 services can silently become incomplete when the Dataverse page limit is exceeded.
@@ -394,7 +400,8 @@ reference data should explain and retry only that dependency.
 
 - [x] migrate Customer Dashboard Sites, Equipment, Jobs, and service plans to bounded
   customer-scoped child queries, while retaining focused full Equipment history for completion;
-- migrate Scheduler to date-window queries;
+- [x] migrate Scheduler to date-window queries with adjacent-window prefetch and bounded mutation/
+  Job-realtime reconciliation;
 - migrate Job Map to status/location summaries;
 - migrate remote Equipment/Customer/Site selectors to bounded search queries.
 

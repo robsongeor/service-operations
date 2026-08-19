@@ -158,6 +158,7 @@ type UseJobsOptions = Readonly<{
         equipment: Equipment[]
         sites: Site[]
         servicePlans: EquipmentServicePlan[]
+        scheduleOptions?: JobScheduleOption[]
     }>
     onScopedDataChanged?: () => void | Promise<void>
 }>
@@ -192,7 +193,7 @@ export function useJobs(options: UseJobsOptions = {}) {
     const [customers, setCustomers] = useState<Customer[]>([])
     const [sites, setSites] = useState<Site[]>(options.scopedData?.sites ?? [])
     const [siteContacts, setSiteContacts] = useState<SiteContact[]>([])
-    const [scheduleOptions, setScheduleOptions] = useState<JobScheduleOption[]>([])
+    const [scheduleOptions, setScheduleOptions] = useState<JobScheduleOption[]>(options.scopedData?.scheduleOptions ?? [])
     const [jobQuotes, setJobQuotes] = useState<Quote[]>([])
     const [jobAssignments, setJobAssignments] = useState<JobAssignment[]>([])
     const [servicePlans, setServicePlans] = useState<EquipmentServicePlan[]>(options.scopedData?.servicePlans ?? [])
@@ -225,11 +226,16 @@ export function useJobs(options: UseJobsOptions = {}) {
     const collaborationDataValueRef = useRef<JobCollaborationData | null>(null)
     const hasSharedJobsRef = useRef(hasSharedJobs)
     const scopedJobsRef = useRef(scopedJobs)
+    const scopedScheduleOptionsRef = useRef(scheduleOptions)
     const onScopedDataChangedRef = useRef(options.onScopedDataChanged)
 
     useEffect(() => {
         scopedJobsRef.current = scopedJobs
     }, [scopedJobs])
+
+    useEffect(() => {
+        scopedScheduleOptionsRef.current = scheduleOptions
+    }, [scheduleOptions])
 
     useEffect(() => {
         onScopedDataChangedRef.current = options.onScopedDataChanged
@@ -239,13 +245,28 @@ export function useJobs(options: UseJobsOptions = {}) {
     const scopedDataEquipment = options.scopedData?.equipment
     const scopedDataSites = options.scopedData?.sites
     const scopedDataServicePlans = options.scopedData?.servicePlans
+    const scopedDataScheduleOptions = options.scopedData?.scheduleOptions
+    const hasScopedScheduleOptions = scopedDataScheduleOptions !== undefined
     useEffect(() => {
-        if (loadGlobalOperationalData || !scopedDataJobs || !scopedDataEquipment || !scopedDataSites || !scopedDataServicePlans) return
+        if (loadGlobalOperationalData || !scopedDataJobs) return
         setScopedJobs(scopedDataJobs)
+    }, [loadGlobalOperationalData, scopedDataJobs])
+    useEffect(() => {
+        if (loadGlobalOperationalData || !scopedDataEquipment) return
         setScopedEquipmentList(scopedDataEquipment)
+    }, [loadGlobalOperationalData, scopedDataEquipment])
+    useEffect(() => {
+        if (loadGlobalOperationalData || !scopedDataSites) return
         setSites(scopedDataSites)
+    }, [loadGlobalOperationalData, scopedDataSites])
+    useEffect(() => {
+        if (loadGlobalOperationalData || !scopedDataServicePlans) return
         setServicePlans(scopedDataServicePlans)
-    }, [loadGlobalOperationalData, scopedDataEquipment, scopedDataJobs, scopedDataServicePlans, scopedDataSites])
+    }, [loadGlobalOperationalData, scopedDataServicePlans])
+    useEffect(() => {
+        if (loadGlobalOperationalData || !scopedDataScheduleOptions) return
+        setScheduleOptions(scopedDataScheduleOptions)
+    }, [loadGlobalOperationalData, scopedDataScheduleOptions])
 
     useEffect(() => {
         hasSharedJobsRef.current = hasSharedJobs
@@ -626,9 +647,14 @@ export function useJobs(options: UseJobsOptions = {}) {
     }, [getAccessToken])
 
     const fetchScheduleOptions = async () => {
+        if (hasScopedScheduleOptions) {
+            await onScopedDataChangedRef.current?.()
+            return scopedScheduleOptionsRef.current
+        }
         const token = await getAccessToken()
         const options = await fetchJobScheduleOptionsApi(token)
         setScheduleOptions(options)
+        return options
     }
 
     const assertJobOperational = async (token: string, jobId: string) => {
@@ -734,9 +760,7 @@ export function useJobs(options: UseJobsOptions = {}) {
     const deleteScheduleOption = async (optionId: string) => {
         const token = await getAccessToken()
         await deleteJobScheduleOptionApi(token, optionId)
-        setScheduleOptions((currentOptions) => currentOptions.filter(
-            (option) => option.gr_jobscheduleoptionid !== optionId,
-        ))
+        await fetchScheduleOptions()
     }
 
     const fetchEquipment = async () => {
@@ -1449,7 +1473,9 @@ export function useJobs(options: UseJobsOptions = {}) {
                             if (!cancelled) setJobsCacheStatus((current) => current ? { ...current, refreshing: false } : current)
                         },
                     }) : Promise.resolve(scopedJobsRef.current),
-                    fetchJobScheduleOptionsApi(token),
+                    hasScopedScheduleOptions
+                        ? Promise.resolve(scopedScheduleOptionsRef.current)
+                        : fetchJobScheduleOptionsApi(token),
                     fetchJobOfficeUpdatesApi(token),
                     mechanicsRequest,
                 ])
@@ -1457,7 +1483,7 @@ export function useJobs(options: UseJobsOptions = {}) {
                 if (cancelled) return
 
                 if (loadGlobalOperationalData) setJobs(initialJobs)
-                setScheduleOptions(initialScheduleOptions)
+                if (!hasScopedScheduleOptions) setScheduleOptions(initialScheduleOptions)
                 setOfficeUpdates(initialOfficeUpdates)
                 setMechanics(mechanicsData)
             } catch (error) {
@@ -1481,7 +1507,7 @@ export function useJobs(options: UseJobsOptions = {}) {
         return () => {
             cancelled = true
         }
-    }, [account, instance, loadGlobalOperationalData, reloadKey, setEquipmentList, setJobs])
+    }, [account, hasScopedScheduleOptions, instance, loadGlobalOperationalData, reloadKey, setEquipmentList, setJobs])
 
     useEffect(() => {
         const apiUrl = import.meta.env.VITE_EQUIPMENT_REALTIME_API_URL?.trim() ?? ''
