@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { fetchJobCardDetails, fetchJobCore, fetchJobs } from '../src/alpha/jobs/services/jobsApi.ts'
+import { fetchJobAssignmentsForJob } from '../src/alpha/jobs/services/jobAssignmentsApi.ts'
 
 const useJobsSource = readFileSync(new URL('../src/alpha/jobs/hooks/useJobs.ts', import.meta.url), 'utf8')
 const jobDrawerSource = readFileSync(new URL('../src/alpha/jobs/components/JobEditDrawer.tsx', import.meta.url), 'utf8')
@@ -49,7 +50,9 @@ test('Jobs startup defers drawer-only reference tables and focused records', () 
     assert.notEqual(initialLoadStart, -1)
     assert.notEqual(initialLoadEnd, -1)
     assert.match(initialLoad, /fetchJobsApi\(/)
-    assert.match(initialLoad, /fetchStaffDirectory\(token\)/)
+    assert.doesNotMatch(initialLoad, /fetchStaffDirectory\(token\)/)
+    assert.match(useJobsSource, /STAFF_DIRECTORY_QUERY_KEY/)
+    assert.match(useJobsSource, /useOperationalQuery<Mechanic\[\]>/)
     assert.match(initialLoad, /fetchJobScheduleOptionsApi\(token\)/)
     assert.match(initialLoad, /fetchJobOfficeUpdatesApi\(token\)/)
     assert.doesNotMatch(initialLoad, /fetchEquipmentApi\(token\)/)
@@ -62,13 +65,50 @@ test('Jobs startup defers drawer-only reference tables and focused records', () 
 
     assert.match(useJobsSource, /if \(referenceDataRequestRef\.current\) return referenceDataRequestRef\.current/)
     assert.match(useJobsSource, /const prepareJobReferenceData = useCallback/)
+    const editorPreparationStart = useJobsSource.indexOf('const prepareJobEditorReferenceData = useCallback')
+    const editorPreparationEnd = useJobsSource.indexOf('const searchEquipmentForEditor', editorPreparationStart)
+    const editorPreparation = useJobsSource.slice(editorPreparationStart, editorPreparationEnd)
+    assert.doesNotMatch(editorPreparation, /fetchEquipmentApi\(/)
+    assert.doesNotMatch(editorPreparation, /fetchSitesApi\(/)
+    assert.doesNotMatch(editorPreparation, /fetchCustomersApi\(/)
+    assert.doesNotMatch(editorPreparation, /fetchSiteContactsApi\(/)
+    assert.doesNotMatch(editorPreparation, /fetchEquipmentServicePlans\(/)
+    assert.match(useJobsSource, /searchEquipmentApi\(/)
+    assert.match(useJobsSource, /searchCustomersApi\(/)
+    assert.match(useJobsSource, /fetchCustomerSitesApi\(/)
+    assert.match(useJobsSource, /fetchSiteContactsForSiteApi\(/)
+    assert.match(useJobsSource, /fetchEquipmentServicePlansForEquipment\(/)
     assert.match(useJobsSource, /fetchJobCoreApi\(token, jobId, signal\)/)
     assert.doesNotMatch(useJobsSource, /prepareJobReferenceData\(\),\s*getAccessToken\(\)/)
     assert.match(useJobsSource, /fetchJobCardDetailsApi\(token, jobId, signal\)/)
+    assert.match(useJobsSource, /fetchQuotesForJobApi\(await getAccessToken\(\), jobId, signal\)/)
+    assert.match(useJobsSource, /fetchJobAssignmentsForJobApi\(await getAccessToken\(\), jobId, signal\)/)
     assert.match(jobDrawerSource, /useOperationalQuery<Job>\(/)
     assert.match(jobDrawerSource, /focusedJobCoreQueryKey\(normalizedJobId\)/)
     assert.match(jobDrawerSource, /focusedJobCardMetadataQueryKey\(normalizedJobId\)/)
+    assert.match(jobDrawerSource, /focusedJobQuotesQueryKey\(normalizedJobId\)/)
+    assert.match(jobDrawerSource, /focusedJobAssignmentsQueryKey\(normalizedJobId\)/)
     assert.match(jobCardSource, /jobPhotoBodyQueryKey\(previewPhotoId \|\| 'none'\)/)
+})
+
+test('focused Job assignments request is bounded to the opened Job', async () => {
+    const originalFetch = globalThis.fetch
+    let requestedUrl = ''
+    globalThis.fetch = async (input) => {
+        requestedUrl = String(input)
+        return Response.json({ value: [{ gr_jobassignmentid: 'assignment-id' }] })
+    }
+    try {
+        const assignments = await fetchJobAssignmentsForJob(token, 'job-id')
+        const url = new URL(requestedUrl)
+        assert.equal(assignments.length, 1)
+        assert.equal(url.searchParams.get('$filter'), '_gr_job_value eq job-id')
+        assert.equal(url.searchParams.get('$top'), '51')
+        assert.equal(url.searchParams.get('$orderby'), 'gr_assignedon desc')
+        assert.match(url.searchParams.get('$expand') ?? '', /gr_Mechanic/)
+    } finally {
+        globalThis.fetch = originalFetch
+    }
 })
 
 test('focused Job core and Job Card detail use independent requests', async () => {

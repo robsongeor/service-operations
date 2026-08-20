@@ -1,6 +1,7 @@
 import type { Site, SiteUpdateInput } from '../types/site.types'
 import { fetchAllDataversePages } from '../../shared/dataverse/fetchAllDataversePages.ts'
 import { invalidateOperationalQueries } from '../../shared/data/OperationalDataClient.ts'
+import { buildCustomerSitesUrl } from './jobRelationshipLookupUrls'
 
 const DATAVERSE_URL = import.meta.env.VITE_DATAVERSE_URL
 
@@ -32,7 +33,7 @@ export async function fetchSites(accessToken: string): Promise<Site[]> {
 
 export async function fetchCustomerSites(accessToken: string, customerId: string, signal?: AbortSignal): Promise<Site[]> {
     return fetchAllDataversePages<Site>(
-        `${DATAVERSE_URL}/api/data/v9.2/gr_sites?$select=gr_siteid,gr_name,gr_address,gr_defaultmaintenanceprofile,gr_inductionrequired,gr_inductionrequirements,gr_geocodelatitude,gr_geocodelongitude,gr_geocodesourceaddress,gr_geocodeformattedaddress,gr_geocoderesolvedon,_gr_customer_value&$expand=gr_Customer($select=gr_customerid,gr_name)&$filter=_gr_customer_value eq ${customerId}`,
+        buildCustomerSitesUrl(DATAVERSE_URL, customerId),
         {
             signal,
             headers: {

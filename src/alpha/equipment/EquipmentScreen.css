@@ -207,6 +207,10 @@
 .equipment-maintenance-service-heading button:hover { background: #fff3d8; }
 .equipment-maintenance-service-heading button:focus-visible { outline: 2px solid #8a611d; outline-offset: 2px; }
 .equipment-maintenance-service-heading button:disabled { cursor: wait; opacity: .55; }
+.equipment-maintenance-load-state { display: grid; gap: 8px; padding: 16px; border: 1px solid #d8e2dd; border-radius: 8px; background: #f5f8f6; color: #5d6b64; font-size: .75rem; }
+.equipment-maintenance-load-state p { margin: 0; }
+.equipment-maintenance-load-state.error { border-color: #e7b8b8; background: #fff5f5; color: #9f3232; }
+.equipment-maintenance-load-state button { justify-self: start; min-height: 30px; padding: 0 10px; border: 1px solid currentColor; border-radius: 6px; background: #fff; color: inherit; font: inherit; font-weight: 700; cursor: pointer; }
 .equipment-historical-baseline-note { margin: -.35rem 0 0; padding: .55rem .7rem; border: 1px dashed #d7b878; border-radius: 7px; background: #fffaf0; color: #7c6543; font-size: .68rem; line-height: 1.4; }
 .equipment-maintenance-plans .equipment-hour-meter-reading { display: grid; justify-content: start; gap: .2rem; margin-top: .65rem; }
 .equipment-hour-meter-reading > strong { color: #173f5b; font-size: 1.35rem; line-height: 1.15; }

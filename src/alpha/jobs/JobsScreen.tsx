@@ -18,19 +18,20 @@ import { JOBS_TABLE_COLUMNS, type JobsStickyThroughColumnId } from './types/jobs
 import JobCompletionWorkflow from './components/JobCompletionWorkflow'
 import EquipmentDrawer from '../equipment/components/EquipmentDrawer'
 import type { Equipment } from './types/equipment.types'
+import { useQuoteEditorOverlay } from '../quotes/QuoteEditorOverlayContext'
+import { useOperationalScreenReady } from '../shared/data/OperationalScreenPerformanceContext'
 
 export default function JobsScreen() {
     const navigate = useNavigate()
+    const quoteEditor = useQuoteEditorOverlay()
     const [searchParams, setSearchParams] = useSearchParams()
     const activeAccount = useActiveMsalAccount()
     const signedInUser = getSignedInUserInfo(activeAccount)
     const storageKey = signedInUser ? getJobsViewStateKey(signedInUser.storageId) : null
     const defaultViewStorageKey = signedInUser ? getJobsDefaultViewKey(signedInUser.storageId) : null
     const {
-        jobs, equipmentList, mechanics, sites, customers, siteContacts,
+        jobs, equipmentList, mechanics, mechanicsLoading, mechanicsError, retryMechanics, sites, customers, siteContacts,
         scheduleOptions,
-        jobQuotes,
-        jobAssignments,
         servicePlans,
         officeUpdates,
         createJob, updateJob, deleteJob, updateJobStatus, updateJobFields, allocateJobNumbers,
@@ -45,9 +46,13 @@ export default function JobsScreen() {
         updateJobOfficeAttention,
         completionRequest, isCompletingJob, completionError, completeStandardJob, completeServiceJob, completeWofJob, cancelJobCompletion,
         jobsCacheStatus, jobsRealtimeStatus,
-        referenceDataStatus, referenceDataError, collaborationDataStatus, collaborationDataError, prepareJobReferenceData,
+        referenceDataStatus, referenceDataError, prepareJobReferenceData, loadJobQuotes, loadJobAssignments,
+        searchEquipmentForEditor, searchCustomersForEditor,
+        loadCustomerSitesForEditor, loadSiteContactsForEditor, loadEquipmentForEditor,
+        loadEquipmentServicePlansForEditor,
         isLoading, loadError, retryInitialLoad, fetchJobForDrawer, fetchJobCardDetails, fetchJobPhotoBody,
     } = useJobs()
+    useOperationalScreenReady('Jobs', !isLoading)
     const [editingJob, setEditingJob] = useState<Job | null>(null)
     const [editingInitialTab, setEditingInitialTab] = useState<'details' | 'jobcard'>('details')
     const [isCreatingJob, setIsCreatingJob] = useState(false)
@@ -74,12 +79,12 @@ export default function JobsScreen() {
 
     const createQuoteForJob = (jobId: string) => {
         setEditingJob(null)
-        navigate(`/quotes?new=1&jobId=${encodeURIComponent(jobId)}`)
+        quoteEditor.createQuote(jobId)
     }
 
     const openQuote = (quoteId: string) => {
         setEditingJob(null)
-        navigate(`/quotes?quoteId=${encodeURIComponent(quoteId)}`)
+        quoteEditor.openQuote(quoteId)
     }
 
     const toggleStatus = (status: JobStatus) => {
@@ -97,9 +102,9 @@ export default function JobsScreen() {
     }
 
     const openEquipment = async (equipmentId: string) => {
-        const referenceData = await prepareJobReferenceData()
-        const equipment = referenceData.equipment.find((item) =>
+        const equipment = equipmentList.find((item) =>
             item.gr_equipmentid.toLowerCase() === equipmentId.toLowerCase())
+            ?? await loadEquipmentForEditor(equipmentId)
         if (!equipment) return
         clearEquipmentSaveError()
         setEditingEquipment(equipment)
@@ -146,6 +151,9 @@ export default function JobsScreen() {
     }
     const sharedDrawerProps = {
         mechanics,
+        mechanicsLoading,
+        mechanicsError,
+        onRetryMechanics: () => { void retryMechanics().catch(() => undefined) },
         equipmentList,
         sites,
         customers,
@@ -155,11 +163,17 @@ export default function JobsScreen() {
         onCreateSite: createSite,
         onCreateContact: createContactForSite,
         onCreateEquipment: createEquipment,
+        onSearchEquipment: searchEquipmentForEditor,
+        onSearchCustomers: searchCustomersForEditor,
+        onLoadCustomerSites: loadCustomerSitesForEditor,
+        onLoadSiteContacts: loadSiteContactsForEditor,
+        onLoadEquipment: loadEquipmentForEditor,
+        onLoadEquipmentServicePlans: loadEquipmentServicePlansForEditor,
         referenceDataStatus,
         referenceDataError,
-        collaborationDataStatus,
-        collaborationDataError,
         onPrepareReferenceData: prepareJobReferenceData,
+        onLoadJobQuotes: loadJobQuotes,
+        onLoadJobAssignments: loadJobAssignments,
         onRefreshJob: fetchJobForDrawer,
         onLoadJobCardDetails: fetchJobCardDetails,
         onLoadJobPhoto: fetchJobPhotoBody,
@@ -206,19 +220,14 @@ export default function JobsScreen() {
                     <button
                         className="jobs-create-button"
                         type="button"
-                        onClick={() => {
-                            void prepareJobReferenceData().then(() => setIsCreatingJob(true)).catch(() => undefined)
-                        }}
-                        disabled={isLoading || Boolean(loadError) || referenceDataStatus === 'loading'}
+                        onClick={() => setIsCreatingJob(true)}
+                        disabled={isLoading || Boolean(loadError)}
                     >
-                        {referenceDataStatus === 'loading' ? 'Preparing details…' : '+ Create job'}
+                        + Create job
                     </button>
                 </div>
             </header>
 
-            {referenceDataStatus === 'loading' && (
-                <div className="jobs-reference-data-state" role="status">Preparing Job details…</div>
-            )}
             {referenceDataStatus === 'error' && (
                 <div className="jobs-reference-data-state jobs-reference-data-error" role="alert">
                     <span>Job details could not be prepared. {referenceDataError}</span>
@@ -401,12 +410,6 @@ export default function JobsScreen() {
                     onCreateScheduleOption={createScheduleOption}
                     onUpdateScheduleOption={updateScheduleOption}
                     onDeleteScheduleOption={deleteScheduleOption}
-                    quotes={jobQuotes.filter((quote) =>
-                        quote._gr_job_value?.toLowerCase() === editingJob.gr_jobid.toLowerCase(),
-                    )}
-                    assignments={jobAssignments.filter((assignment) =>
-                        assignment._gr_job_value?.toLowerCase() === editingJob.gr_jobid.toLowerCase(),
-                    )}
                     servicePlans={servicePlans}
                     onCreateQuote={createQuoteForJob}
                     onOpenQuote={openQuote}

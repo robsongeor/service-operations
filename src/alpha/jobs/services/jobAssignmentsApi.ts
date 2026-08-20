@@ -2,10 +2,11 @@ import type {
     JobAssignment,
     JobAssignmentInput,
 } from '../types/jobAssignment.types'
-import { JOB_CARD_STATUSES, type JobCardStatus } from '../types/jobCardStatus.types'
+import { JOB_CARD_STATUSES, type JobCardStatus } from '../types/jobCardStatus.types.ts'
 import { fetchAllDataversePages } from '../../shared/dataverse/fetchAllDataversePages.ts'
 
-const API_URL = `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2`
+const DATAVERSE_URL = import.meta.env?.VITE_DATAVERSE_URL ?? 'https://dataverse.invalid'
+const API_URL = `${DATAVERSE_URL}/api/data/v9.2`
 
 function headers(token: string, includeContentType = false) {
     return {
@@ -38,6 +39,31 @@ export async function fetchJobAssignments(token: string): Promise<JobAssignment[
         cache: 'no-store',
         headers: headers(token),
     }, (response) => ensureSuccess(response, 'Failed to load technician assignments'))
+}
+
+export async function fetchJobAssignmentsForJob(
+    token: string,
+    jobId: string,
+    signal?: AbortSignal,
+): Promise<JobAssignment[]> {
+    const url = new URL(`${API_URL}/gr_jobassignments`)
+    url.searchParams.set('$select', 'gr_jobassignmentid,gr_name,gr_workinstructions,gr_assignedon,gr_jobcardstatus,gr_emailsenton,gr_submittedon,gr_closedon,_gr_job_value')
+    url.searchParams.set('$expand', 'gr_Mechanic($select=gr_mechanicid,gr_name,gr_phone,gr_email)')
+    url.searchParams.set('$filter', `_gr_job_value eq ${jobId}`)
+    url.searchParams.set('$orderby', 'gr_assignedon desc')
+    url.searchParams.set('$top', '51')
+    const response = await fetch(url.toString(), {
+        cache: 'no-store',
+        headers: headers(token),
+        signal,
+    })
+    await ensureSuccess(response, 'Failed to load technician assignments for this Job')
+    const data = await response.json()
+    const assignments = (data.value ?? []) as JobAssignment[]
+    if (assignments.length > 50 || data['@odata.nextLink']) {
+        throw new Error('This Job has more than 50 technician assignments and cannot be displayed safely.')
+    }
+    return assignments
 }
 
 export async function createJobAssignment(

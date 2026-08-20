@@ -154,12 +154,18 @@ Checks and Jobs projections.
 ## Data Loading and Synchronization
 
 The selected Customer is the query boundary. The dashboard loads the Customer's Sites first,
-Equipment and Jobs through bounded Site-ID filters second, and Equipment Service Plans through
-bounded Equipment-ID filters last. Empty parent collections resolve to empty child collections
-without a Dataverse request. This replaces the earlier pattern of starting the full global Jobs and
-Equipment loaders and filtering them in the browser.
+Equipment and Jobs through bounded Site-ID filters second, Equipment Service Plans through bounded
+Equipment-ID filters, and Schedule Options plus Office Updates through bounded Job-ID filters.
+Empty parent collections resolve to empty child collections without a Dataverse request. This
+replaces the earlier pattern of starting full global collections and filtering them in the browser.
 
-The four selected-Customer collections are owned by the account-scoped Operational Data Client.
+The Jobs tab presents that bounded Customer Job collection as a read-only register and opens the
+canonical Job drawer for editing. It filters by open/closed state, text, and inclusive Created or
+Completed Date Only ranges. A Closed last month shortcut selects completed Jobs from the previous
+calendar month. Spreadsheet export downloads the currently filtered rows as an Excel-compatible
+UTF-8 CSV; it performs no additional Dataverse read and does not export hidden Job Card details.
+
+The selected-Customer collections are owned by the account-scoped Operational Data Client.
 Concurrent consumers share a request, invalidation aborts or supersedes older work, and unobserved
 data is retained for two minutes to make short navigation away and back fast. Query keys contain the
 Customer ID and a normalized parent-ID fingerprint, but diagnostic metrics retain only the query
@@ -178,8 +184,8 @@ maintenance history when the Equipment has moved between Sites or Customers. Aft
 same focused collections and the mounted dashboard projection are refreshed.
 
 Customer directory and some editor/reference collections remain broad shared feature reads. They
-are the next selector/search migration boundary; Scheduler and Job Map also still start from the
-global Jobs list.
+are the next selector/search migration boundary. Scheduler and Job Map now use bounded shared
+queries and do not start the global Jobs list.
 
 ## Important Business Rules
 

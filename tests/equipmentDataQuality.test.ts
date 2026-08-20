@@ -290,6 +290,31 @@ test('Customer Dashboard also opens Equipment immediately while focused Job hist
     assert.doesNotMatch(dashboard, /clearEquipmentJobs/)
 })
 
+test('Equipment maintenance plans load only when the maintenance tab needs them', () => {
+    const keys = readFileSync(new URL('../src/alpha/shared/data/operationalCollectionKeys.ts', import.meta.url), 'utf8')
+    const drawer = readFileSync(new URL('../src/alpha/equipment/components/EquipmentDrawer.tsx', import.meta.url), 'utf8')
+    const manager = readFileSync(new URL('../src/alpha/equipment/hooks/useEquipmentManager.ts', import.meta.url), 'utf8')
+    const equipmentScreen = readFileSync(new URL('../src/alpha/equipment/EquipmentScreen.tsx', import.meta.url), 'utf8')
+    const dashboard = readFileSync(new URL('../src/alpha/customers/CustomerDashboardScreen.tsx', import.meta.url), 'utf8')
+    const wofScreen = readFileSync(new URL('../src/alpha/wof/WofScreen.tsx', import.meta.url), 'utf8')
+
+    assert.match(keys, /focusedEquipmentServicePlansQueryKey/)
+    assert.match(drawer, /enabled: activeTab === 'maintenance'/)
+    assert.match(drawer, /Loading service history and due dates/)
+    assert.match(manager, /fetchEquipmentServicePlansForEquipment\(token, \[equipmentId\], signal\)/)
+    assert.match(equipmentScreen, /onLoadServicePlans=\{loadEquipmentServicePlans\}/)
+    assert.match(dashboard, /onLoadServicePlans=\{loadEquipmentServicePlans\}/)
+    assert.match(wofScreen, /onLoadServicePlans=\{loadEquipmentServicePlans\}/)
+})
+
+test('WOF Equipment drawer uses the same focused Job history workflow', () => {
+    const wofScreen = readFileSync(new URL('../src/alpha/wof/WofScreen.tsx', import.meta.url), 'utf8')
+    assert.match(wofScreen, /useEquipmentJobHistory\(editingEquipment\?\.gr_equipmentid\)/)
+    assert.match(wofScreen, /jobs=\{equipmentJobHistory\.jobs\}/)
+    assert.match(wofScreen, /isJobHistoryLoading=\{equipmentJobHistory\.isLoading\}/)
+    assert.match(wofScreen, /onRetryJobHistory=/)
+})
+
 test('Customer Dashboard prepares Job reference data before applying Customer or Equipment defaults', () => {
     const dashboard = readFileSync(new URL('../src/alpha/customers/CustomerDashboardScreen.tsx', import.meta.url), 'utf8')
     assert.match(dashboard, /const referenceData = await prepareJobReferenceData\(\)/)
@@ -338,10 +363,15 @@ test('Customer Dashboard creates an Equipment Job without broadly reloading the 
     assert.match(dashboard, /return \[\.\.\.reconciled, \.\.\.newlyCreated\]/)
 })
 
-test('Equipment Create Job prepares relationship reference data before applying defaults', () => {
+test('Equipment Create Job applies exact defaults immediately and hydrates bounded relationships', () => {
     const drawer = readFileSync(new URL('../src/alpha/equipment/components/EquipmentJobCreateDrawer.tsx', import.meta.url), 'utf8')
-    assert.match(drawer, /void prepareJobReferenceData\(\)\.catch/)
-    assert.match(drawer, /referenceDataStatus !== 'ready'/)
+    assert.doesNotMatch(drawer, /prepareJobEditorReferenceData/)
+    assert.doesNotMatch(drawer, /referenceDataStatus !== 'ready'/)
+    assert.match(drawer, /loadGlobalOperationalData: false/)
+    assert.match(drawer, /equipment: \[equipment\]/)
+    assert.match(drawer, /onSearchEquipment=\{searchEquipmentForEditor\}/)
+    assert.match(drawer, /onLoadEquipment=\{loadEquipmentForEditor\}/)
+    assert.match(drawer, /mechanicsLoading=\{mechanicsLoading\}/)
     assert.match(drawer, /equipmentId: equipment\.gr_equipmentid/)
     assert.match(drawer, /siteId,/)
     assert.match(drawer, /customerId: equipment\.gr_Site\?\.gr_Customer\?\.gr_customerid/)
@@ -384,4 +414,26 @@ test('linked Job deletion guidance is attached to the disabled Equipment delete 
     assert.match(drawer, /aria-describedby=\{history\.length > 0 \? 'equipment-delete-explanation'/)
     assert.match(styles, /\.equipment-delete-control:hover \.equipment-delete-tooltip/)
     assert.match(styles, /\.equipment-delete-control:focus \.equipment-delete-tooltip/)
+})
+
+test('Equipment Manager progressively loads register support instead of full startup directories', () => {
+    const screen = readFileSync(new URL('../src/alpha/equipment/EquipmentScreen.tsx', import.meta.url), 'utf8')
+    const drawer = readFileSync(new URL('../src/alpha/equipment/components/EquipmentDrawer.tsx', import.meta.url), 'utf8')
+    const manager = readFileSync(new URL('../src/alpha/equipment/hooks/useEquipmentManager.ts', import.meta.url), 'utf8')
+    const map = readFileSync(new URL('../src/alpha/equipment-map/EquipmentMapScreen.tsx', import.meta.url), 'utf8')
+
+    assert.match(screen, /loadGlobalRelationships: false/)
+    assert.match(screen, /loadGlobalServicePlans: false/)
+    assert.match(screen, /item\.gr_Site\?\.gr_Customer/)
+    assert.match(screen, /sortKey === 'dataStatus' \? preliminaryRows : preliminaryPage\.rows/)
+    assert.match(screen, /loadEquipmentServicePlansForIds\(servicePlanEquipmentIds, signal\)/)
+    assert.match(screen, /loadEquipmentCsvReferenceData\(\)/)
+    assert.match(screen, /servicePlansUnavailable=\{Boolean\(servicePlansError\)\}/)
+    assert.match(drawer, /resultLimit=\{8\}/)
+    assert.match(drawer, /onSearchCustomers\(customerSearch, controller\.signal\)/)
+    assert.match(drawer, /onLoadCustomerSites\(customerId, controller\.signal\)/)
+    assert.match(manager, /loadGlobalRelationships \? getToken\(\)\.then\(fetchCustomers\) : Promise\.resolve\(\[\]\)/)
+    assert.match(manager, /loadGlobalServicePlans \? getToken\(\)\.then\(fetchEquipmentServicePlans\) : Promise\.resolve\(\[\]\)/)
+    assert.match(manager, /operationalDataClient\.fetchQuery\([\s\S]*?EQUIPMENT_OPERATIONAL_LIST_QUERY_KEY/)
+    assert.match(map, /loadGlobalServicePlans: false/)
 })

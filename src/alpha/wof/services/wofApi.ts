@@ -10,11 +10,12 @@ import type { CreateWofInput, ServiceProvider, TechnicianQualification, UpdateWo
 import { WOF_RESULTS } from '../types/wof.types'
 import { getWofJobCreationDisposition, normalizeWofDateOnly, verifyWofExpiryWithRetry, wofDatesMatch } from '../utils/wofRules'
 import { newZealandDateOnly } from '../../shared/dates/dateOnly'
+import { fetchAllDataversePages } from '../../shared/dataverse/fetchAllDataversePages'
 
 const API_URL = `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2`
 
-async function getJson<T>(token: string, path: string): Promise<T[]> {
-    const response = await fetch(`${API_URL}/${path}`, { cache: 'no-store', headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } })
+async function getJson<T>(token: string, path: string, signal?: AbortSignal): Promise<T[]> {
+    const response = await fetch(`${API_URL}/${path}`, { cache: 'no-store', headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }, signal })
     if (!response.ok) throw new Error(`Dataverse request failed: ${await response.text()}`)
     return (await response.json()).value ?? []
 }
@@ -41,9 +42,14 @@ function mapWofInspection(row: WofInspectionDataverseRow): WofInspection {
     }
 }
 
-export async function fetchWofInspections(token: string): Promise<WofInspection[]> {
-    const rows = await getJson<WofInspectionDataverseRow>(token,
-        `gr_wofinspections?$select=${WOF_INSPECTION_SELECT}&$expand=${WOF_INSPECTION_EXPAND}`)
+export async function fetchWofInspections(token: string, signal?: AbortSignal): Promise<WofInspection[]> {
+    const rows = await fetchAllDataversePages<WofInspectionDataverseRow>(
+        `${API_URL}/gr_wofinspections?$select=${WOF_INSPECTION_SELECT}&$expand=${WOF_INSPECTION_EXPAND}&$orderby=createdon desc`,
+        { cache: 'no-store', headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }, signal },
+        async (response) => {
+            if (!response.ok) throw new Error(`Dataverse request failed: ${await response.text()}`)
+        },
+    )
     return rows.map(mapWofInspection)
 }
 

@@ -301,6 +301,7 @@ export function invalidateJobsCache(accessToken?: string) {
         || key[0] === 'jobs'
         || key[0] === 'customer-dashboard'
         || key[0] === 'job-map'
+        || (key[0] === 'staff' && (key[1] === 'open-job-allocations-v1' || key[2] === 'jobs-v1'))
         || (key[0] === 'scheduler' && key[1] === 'jobs-v1'))
 }
 

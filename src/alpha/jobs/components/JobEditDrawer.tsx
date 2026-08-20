@@ -9,7 +9,7 @@ import { JOB_TYPES, JOB_TYPE_OPTIONS, STANDARD_JOB_TYPE_OPTIONS, jobRequiresMain
 import type { JobSaveInput } from '../types/jobSave.types'
 import { useJobEditor } from '../hooks/useJobEditor'
 import JobCoreFields from './JobCoreFields'
-import JobRelationshipFields from './JobRelationshipFields'
+import JobRelationshipFields, { type JobRelationshipLookupProps } from './JobRelationshipFields'
 import JobScheduleFields from './JobScheduleFields'
 import { JOB_STATUSES, UNCONFIRMED_OPERATION_MESSAGE } from '../types/jobStatus.types'
 import JobDrawerShell from './JobDrawerShell'
@@ -36,8 +36,10 @@ import { jobHasActiveSubmissionLink } from '../services/jobSubmissionLinkApi'
 import type { JobCardDetails } from '../services/jobsApi'
 import { useOperationalQuery } from '../../shared/data/useOperationalQuery'
 import {
+    focusedJobAssignmentsQueryKey,
     focusedJobCardMetadataQueryKey,
     focusedJobCoreQueryKey,
+    focusedJobQuotesQueryKey,
 } from '../../shared/data/operationalCollectionKeys'
 
 type ProgressiveLoadStatus = 'idle' | 'loading' | 'ready' | 'error'
@@ -46,6 +48,8 @@ const FOCUSED_JOB_STALE_TIME_MS = 15_000
 const FOCUSED_JOB_CACHE_TIME_MS = 2 * 60_000
 const JOB_CARD_METADATA_STALE_TIME_MS = 30_000
 const JOB_CARD_METADATA_CACHE_TIME_MS = 60_000
+const JOB_COLLABORATION_STALE_TIME_MS = 15_000
+const JOB_COLLABORATION_CACHE_TIME_MS = 60_000
 
 function createJobEditorDraft(job: Job) {
     return {
@@ -63,7 +67,7 @@ function createJobEditorDraft(job: Job) {
     }
 }
 
-type Props = {
+type Props = JobRelationshipLookupProps & {
     job: Job
     mechanics: Mechanic[]
     equipmentList: Equipment[]
@@ -71,8 +75,8 @@ type Props = {
     customers: Customer[]
     siteContacts: SiteContact[]
     scheduleOptions: JobScheduleOption[]
-    quotes: Quote[]
-    assignments: JobAssignment[]
+    quotes?: Quote[]
+    assignments?: JobAssignment[]
     servicePlans: EquipmentServicePlan[]
     onCreateCustomer: (customer: { name: string }) => Promise<string>
     onCreateSite: (site: {
@@ -113,9 +117,9 @@ type Props = {
     onSaveOfficeAttention?: (jobId: string, officeAttentionRequired: boolean) => Promise<void>
     referenceDataStatus?: ProgressiveLoadStatus
     referenceDataError?: string
-    collaborationDataStatus?: ProgressiveLoadStatus
-    collaborationDataError?: string
     onPrepareReferenceData?: () => Promise<unknown>
+    onLoadJobQuotes?: (jobId: string, signal?: AbortSignal) => Promise<Quote[]>
+    onLoadJobAssignments?: (jobId: string, signal?: AbortSignal) => Promise<JobAssignment[]>
     onRefreshJob?: (jobId: string, signal?: AbortSignal) => Promise<Job | undefined>
     onLoadJobCardDetails?: (jobId: string, signal?: AbortSignal) => Promise<JobCardDetails>
     onLoadJobPhoto?: (photoId: string, signal?: AbortSignal) => Promise<string>
@@ -131,13 +135,19 @@ export default function JobEditDrawer({
     customers,
     siteContacts,
     scheduleOptions,
-    quotes,
-    assignments,
+    quotes = [],
+    assignments = [],
     servicePlans,
     onCreateCustomer,
     onCreateSite,
     onCreateContact,
     onCreateEquipment,
+    onSearchEquipment,
+    onSearchCustomers,
+    onLoadCustomerSites,
+    onLoadSiteContacts,
+    onLoadEquipment,
+    onLoadEquipmentServicePlans,
     onSave,
     onDelete,
     onCreateScheduleOption,
@@ -155,9 +165,9 @@ export default function JobEditDrawer({
     onSaveOfficeAttention = async () => { throw new Error('Office attention is unavailable in this view.') },
     referenceDataStatus = 'ready',
     referenceDataError = '',
-    collaborationDataStatus = 'ready',
-    collaborationDataError = '',
     onPrepareReferenceData,
+    onLoadJobQuotes,
+    onLoadJobAssignments,
     onRefreshJob,
     onLoadJobCardDetails,
     onLoadJobPhoto,
@@ -229,9 +239,66 @@ export default function JobEditDrawer({
                 : activeTab === 'jobcard' ? 'loading' : 'idle'
     const jobCardError = jobCardMetadataQuery.error?.message ?? ''
     const jobCardDetails = jobCardMetadataQuery.data ?? null
+    const jobQuotesKey = useMemo(() => focusedJobQuotesQueryKey(normalizedJobId), [normalizedJobId])
+    const jobQuotesLoader = useCallback(async ({ signal }: { signal: AbortSignal }) => {
+        if (!onLoadJobQuotes) return quotes
+        return onLoadJobQuotes(normalizedJobId, signal)
+    }, [normalizedJobId, onLoadJobQuotes, quotes])
+    const jobQuotesQuery = useOperationalQuery<Quote[]>({
+        key: jobQuotesKey,
+        enabled: activeTab === 'quotes' && Boolean(onLoadJobQuotes),
+        queryFn: jobQuotesLoader,
+        staleTimeMs: JOB_COLLABORATION_STALE_TIME_MS,
+        cacheTimeMs: JOB_COLLABORATION_CACHE_TIME_MS,
+    })
+    const jobQuotesStatus: ProgressiveLoadStatus = !onLoadJobQuotes
+        ? 'ready'
+        : jobQuotesQuery.status === 'error' || jobQuotesQuery.status === 'stale'
+            ? 'error'
+            : jobQuotesQuery.status === 'fresh'
+                ? 'ready'
+                : activeTab === 'quotes' ? 'loading' : 'idle'
+    const focusedQuotes = onLoadJobQuotes ? jobQuotesQuery.data ?? [] : quotes
+    const jobQuotesError = jobQuotesQuery.error?.message ?? ''
+
+    const jobAssignmentsKey = useMemo(() => focusedJobAssignmentsQueryKey(normalizedJobId), [normalizedJobId])
+    const jobAssignmentsLoader = useCallback(async ({ signal }: { signal: AbortSignal }) => {
+        if (!onLoadJobAssignments) return assignments
+        return onLoadJobAssignments(normalizedJobId, signal)
+    }, [assignments, normalizedJobId, onLoadJobAssignments])
+    const jobAssignmentsQuery = useOperationalQuery<JobAssignment[]>({
+        key: jobAssignmentsKey,
+        enabled: activeTab === 'jobcard' && Boolean(onLoadJobAssignments),
+        queryFn: jobAssignmentsLoader,
+        staleTimeMs: JOB_COLLABORATION_STALE_TIME_MS,
+        cacheTimeMs: JOB_COLLABORATION_CACHE_TIME_MS,
+    })
+    const jobAssignmentsStatus: ProgressiveLoadStatus = !onLoadJobAssignments
+        ? 'ready'
+        : jobAssignmentsQuery.status === 'error' || jobAssignmentsQuery.status === 'stale'
+            ? 'error'
+            : jobAssignmentsQuery.status === 'fresh'
+                ? 'ready'
+                : activeTab === 'jobcard' ? 'loading' : 'idle'
+    const focusedAssignments = onLoadJobAssignments ? jobAssignmentsQuery.data ?? [] : assignments
+    const jobAssignmentsError = jobAssignmentsQuery.error?.message ?? ''
     const referenceDataReady = referenceDataStatus === 'ready'
-    const collaborationDataReady = collaborationDataStatus === 'ready'
     const editorReady = coreStatus === 'ready' && referenceDataReady
+
+    const createAssignmentAndRefresh = useCallback(async (input: JobAssignmentInput) => {
+        await onCreateAssignment(input)
+        if (onLoadJobAssignments) await jobAssignmentsQuery.refetch()
+    }, [jobAssignmentsQuery, onCreateAssignment, onLoadJobAssignments])
+
+    const sendAssignmentAndRefresh = useCallback(async (currentJob: Job, assignment: JobAssignment) => {
+        await onSendAssignment(currentJob, assignment)
+        if (onLoadJobAssignments) await jobAssignmentsQuery.refetch()
+    }, [jobAssignmentsQuery, onLoadJobAssignments, onSendAssignment])
+
+    const deleteAssignmentAndRefresh = useCallback(async (assignmentId: string) => {
+        await onDeleteAssignment(assignmentId)
+        if (onLoadJobAssignments) await jobAssignmentsQuery.refetch()
+    }, [jobAssignmentsQuery, onDeleteAssignment, onLoadJobAssignments])
 
     useEffect(() => {
         if (!onPrepareReferenceData) return
@@ -516,10 +583,17 @@ export default function JobEditDrawer({
                                     <JobRelationshipFields
                                         editor={editor}
                                         equipmentList={equipmentList}
+                                        customers={customers}
                                         onCreateCustomer={onCreateCustomer}
                                         onCreateSite={onCreateSite}
                                         onCreateContact={onCreateContact}
                                         onCreateEquipment={onCreateEquipment}
+                                        onSearchEquipment={onSearchEquipment}
+                                        onSearchCustomers={onSearchCustomers}
+                                        onLoadCustomerSites={onLoadCustomerSites}
+                                        onLoadSiteContacts={onLoadSiteContacts}
+                                        onLoadEquipment={onLoadEquipment}
+                                        onLoadEquipmentServicePlans={onLoadEquipmentServicePlans}
                                     />
                                 </>}
                         {job.gr_status === JOB_STATUSES.COMPLETE && <div className="job-completion-history job-edit-field-wide">
@@ -548,26 +622,26 @@ export default function JobEditDrawer({
 
                 {activeTab === 'quotes' && (
                     <div className="job-edit-grid">
-                        {collaborationDataReady
+                        {jobQuotesStatus === 'ready'
                             ? <JobQuotesSection
-                                quotes={quotes}
+                                quotes={focusedQuotes}
                                 onCreateQuote={() => onCreateQuote(job.gr_jobid)}
                                 onOpenQuote={onOpenQuote}
                             />
-                            : <div className={`job-progressive-state job-edit-field-wide${collaborationDataStatus === 'error' ? ' error' : ''}`} role={collaborationDataStatus === 'error' ? 'alert' : 'status'}>
-                                <strong>{collaborationDataStatus === 'error' ? 'Quotes unavailable' : 'Loading Quotes…'}</strong>
-                                <span>{collaborationDataStatus === 'error' ? collaborationDataError : 'Quote references are loading independently from the Job.'}</span>
-                                {collaborationDataStatus === 'error' && onPrepareReferenceData && <button type="button" onClick={() => { void onPrepareReferenceData().catch(() => undefined) }}>Try again</button>}
+                            : <div className={`job-progressive-state job-edit-field-wide${jobQuotesStatus === 'error' ? ' error' : ''}`} role={jobQuotesStatus === 'error' ? 'alert' : 'status'}>
+                                <strong>{jobQuotesStatus === 'error' ? 'Quotes unavailable' : 'Loading Quotes…'}</strong>
+                                <span>{jobQuotesStatus === 'error' ? jobQuotesError : 'Only Quotes linked to this Job are loading.'}</span>
+                                {jobQuotesStatus === 'error' && <button type="button" onClick={() => { void jobQuotesQuery.refetch().catch(() => undefined) }}>Try again</button>}
                             </div>}
                     </div>
                 )}
 
                 {activeTab === 'jobcard' && (
-                    !collaborationDataReady
-                        ? <div className={`job-progressive-state${collaborationDataStatus === 'error' ? ' error' : ''}`} role={collaborationDataStatus === 'error' ? 'alert' : 'status'}>
-                            <strong>{collaborationDataStatus === 'error' ? 'Job Card assignments unavailable' : 'Loading technician assignments…'}</strong>
-                            <span>{collaborationDataStatus === 'error' ? collaborationDataError : 'Assignment choices are loading independently from the Job.'}</span>
-                            {collaborationDataStatus === 'error' && onPrepareReferenceData && <button type="button" onClick={() => { void onPrepareReferenceData().catch(() => undefined) }}>Try again</button>}
+                    jobAssignmentsStatus !== 'ready'
+                        ? <div className={`job-progressive-state${jobAssignmentsStatus === 'error' ? ' error' : ''}`} role={jobAssignmentsStatus === 'error' ? 'alert' : 'status'}>
+                            <strong>{jobAssignmentsStatus === 'error' ? 'Job Card assignments unavailable' : 'Loading technician assignments…'}</strong>
+                            <span>{jobAssignmentsStatus === 'error' ? jobAssignmentsError : 'Only technician assignments linked to this Job are loading.'}</span>
+                            {jobAssignmentsStatus === 'error' && <button type="button" onClick={() => { void jobAssignmentsQuery.refetch().catch(() => undefined) }}>Try again</button>}
                         </div>
                         : jobCardStatusLoad === 'loading'
                             ? <div className="job-progressive-state" role="status">
@@ -583,12 +657,12 @@ export default function JobEditDrawer({
                                 : <JobCardFields
                                     job={jobCardDetails ? { ...job, ...jobCardDetails } : job}
                                     mechanics={mechanics}
-                                    assignments={assignments}
+                                    assignments={focusedAssignments}
                                     onStatusChange={onJobCardStatusChange}
-                                    onCreateAssignment={onCreateAssignment}
+                                    onCreateAssignment={createAssignmentAndRefresh}
                                     onSendPrimary={onSendPrimary}
-                                    onSendAssignment={onSendAssignment}
-                                    onDeleteAssignment={onDeleteAssignment}
+                                    onSendAssignment={sendAssignmentAndRefresh}
+                                    onDeleteAssignment={deleteAssignmentAndRefresh}
                                     onLoadPhoto={onLoadJobPhoto}
                                 />
                 )}

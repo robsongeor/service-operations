@@ -6,6 +6,8 @@ import type {
     QuoteLineInput,
 } from '../types/quote.types'
 import { fetchAllDataversePages } from '../../shared/dataverse/fetchAllDataversePages.ts'
+import type { Customer } from '../../jobs/types/customer.types'
+import type { Equipment } from '../../jobs/types/equipment.types'
 
 const DATAVERSE_URL = import.meta.env?.VITE_DATAVERSE_URL ?? 'https://dataverse.invalid'
 const API_URL = `${DATAVERSE_URL}/api/data/v9.2`
@@ -31,29 +33,145 @@ async function ensureSuccess(response: Response, action: string) {
     throw new Error(`${action}: ${detail || `${response.status} ${response.statusText}`}`)
 }
 
-export async function fetchQuoteJobs(accessToken: string): Promise<QuoteJob[]> {
-    return fetchAllDataversePages<QuoteJob>(
-        `${API_URL}/gr_jobs?$select=gr_jobid,gr_jobnumber,gr_description&$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_alternatefleetnumbers,gr_make,gr_model,gr_serial),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name))&$orderby=createdon desc`,
-        { cache: 'no-store', headers: headers(accessToken) },
-        (response) => ensureSuccess(response, 'Failed to load jobs for quotes'),
-    )
+const quoteJobFields = 'gr_jobid,gr_jobnumber,gr_description'
+const quoteJobExpansions = 'gr_Equipment($select=gr_equipmentid,gr_fleet,gr_alternatefleetnumbers,gr_make,gr_model,gr_serial),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name))'
+const quoteEquipmentFields = 'gr_equipmentid,gr_fleet,gr_alternatefleetnumbers,gr_make,gr_model,gr_serial,statecode'
+const quoteEquipmentExpansions = 'gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name))'
+
+function escapedODataText(value: string) {
+    return value.trim().replace(/'/g, "''")
 }
 
-export async function fetchQuotes(accessToken: string): Promise<Quote[]> {
-    const fields = [
-        'gr_quoteid', 'gr_name', 'gr_quotenumber', 'gr_quotestatus', 'gr_revision',
-        'gr_quotedate', 'gr_validuntil', 'gr_notes', 'gr_gstrate', 'gr_subtotal',
-        'gr_gst', 'gr_total', 'createdon', '_gr_job_value', '_gr_customer_value',
-        '_gr_equipment_value', '_createdby_value',
-    ].join(',')
+async function fetchBoundedRows<T>(
+    collection: string,
+    accessToken: string,
+    options: { select: string; expand?: string; filter?: string; orderBy?: string; top?: number },
+    action: string,
+    signal?: AbortSignal,
+): Promise<T[]> {
+    const url = new URL(`${API_URL}/${collection}`)
+    url.searchParams.set('$select', options.select)
+    if (options.expand) url.searchParams.set('$expand', options.expand)
+    if (options.filter) url.searchParams.set('$filter', options.filter)
+    if (options.orderBy) url.searchParams.set('$orderby', options.orderBy)
+    url.searchParams.set('$top', String(options.top ?? 8))
+    const response = await fetch(url.toString(), {
+        cache: 'no-store',
+        headers: { ...headers(accessToken), 'Cache-Control': 'no-cache' },
+        signal,
+    })
+    await ensureSuccess(response, action)
+    return ((await response.json()) as { value?: T[] }).value ?? []
+}
+
+export async function fetchQuoteJobById(accessToken: string, jobId: string, signal?: AbortSignal): Promise<QuoteJob | undefined> {
+    const rows = await fetchBoundedRows<QuoteJob>('gr_jobs', accessToken, {
+        select: quoteJobFields,
+        expand: quoteJobExpansions,
+        filter: `gr_jobid eq ${jobId}`,
+        top: 1,
+    }, 'Failed to load the selected Job for this Quote', signal)
+    return rows[0]
+}
+
+export async function searchQuoteJobs(accessToken: string, query: string, signal?: AbortSignal): Promise<QuoteJob[]> {
+    const search = escapedODataText(query)
+    const filter = search
+        ? `(contains(gr_jobnumber,'${search}') or contains(gr_description,'${search}') or contains(gr_Equipment/gr_fleet,'${search}') or contains(gr_Equipment/gr_alternatefleetnumbers,'${search}') or contains(gr_Site/gr_Customer/gr_name,'${search}'))`
+        : undefined
+    return fetchBoundedRows<QuoteJob>('gr_jobs', accessToken, {
+        select: quoteJobFields,
+        expand: quoteJobExpansions,
+        filter,
+        orderBy: 'createdon desc',
+    }, 'Job search failed', signal)
+}
+
+export async function fetchQuoteCustomerById(accessToken: string, customerId: string, signal?: AbortSignal): Promise<Customer | undefined> {
+    const rows = await fetchBoundedRows<Customer>('gr_customers', accessToken, {
+        select: 'gr_customerid,gr_name',
+        filter: `gr_customerid eq ${customerId}`,
+        top: 1,
+    }, 'Failed to load the selected Customer for this Quote', signal)
+    return rows[0]
+}
+
+export async function searchQuoteCustomers(accessToken: string, query: string, signal?: AbortSignal): Promise<Customer[]> {
+    const search = escapedODataText(query)
+    return fetchBoundedRows<Customer>('gr_customers', accessToken, {
+        select: 'gr_customerid,gr_name',
+        filter: search ? `contains(gr_name,'${search}')` : undefined,
+        orderBy: 'gr_name',
+    }, 'Customer search failed', signal)
+}
+
+export async function fetchQuoteEquipmentById(accessToken: string, equipmentId: string, signal?: AbortSignal): Promise<Equipment | undefined> {
+    const rows = await fetchBoundedRows<Equipment>('gr_equipments', accessToken, {
+        select: quoteEquipmentFields,
+        expand: quoteEquipmentExpansions,
+        filter: `gr_equipmentid eq ${equipmentId}`,
+        top: 1,
+    }, 'Failed to load the selected Equipment for this Quote', signal)
+    return rows[0]
+}
+
+export async function searchQuoteEquipment(accessToken: string, query: string, signal?: AbortSignal): Promise<Equipment[]> {
+    const search = escapedODataText(query)
+    const identifiers = search
+        ? `(contains(gr_fleet,'${search}') or contains(gr_alternatefleetnumbers,'${search}') or contains(gr_serial,'${search}') or contains(gr_make,'${search}') or contains(gr_model,'${search}') or contains(gr_Site/gr_Customer/gr_name,'${search}'))`
+        : undefined
+    return fetchBoundedRows<Equipment>('gr_equipments', accessToken, {
+        select: quoteEquipmentFields,
+        expand: quoteEquipmentExpansions,
+        filter: identifiers ? `statecode eq 0 and ${identifiers}` : 'statecode eq 0',
+        orderBy: 'gr_fleet',
+    }, 'Equipment search failed', signal)
+}
+
+const quoteFields = [
+    'gr_quoteid', 'gr_name', 'gr_quotenumber', 'gr_quotestatus', 'gr_revision',
+    'gr_quotedate', 'gr_validuntil', 'gr_notes', 'gr_gstrate', 'gr_subtotal',
+    'gr_gst', 'gr_total', 'createdon', '_gr_job_value', '_gr_customer_value',
+    '_gr_equipment_value', '_createdby_value',
+].join(',')
+
+const quoteExpansions = 'gr_Job($select=gr_jobid,gr_jobnumber,gr_description;$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_alternatefleetnumbers,gr_make,gr_model,gr_serial),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name))),gr_Customer($select=gr_customerid,gr_name),gr_Equipment($select=gr_equipmentid,gr_fleet,gr_alternatefleetnumbers,gr_make,gr_model,gr_serial;$expand=gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name))),createdby($select=systemuserid,fullname,azureactivedirectoryobjectid)'
+
+export async function fetchQuotes(accessToken: string, signal?: AbortSignal): Promise<Quote[]> {
     return fetchAllDataversePages<Quote>(
-        `${API_URL}/gr_quotes?$select=${fields}&$expand=gr_Job($select=gr_jobid,gr_jobnumber,gr_description;$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_alternatefleetnumbers,gr_make,gr_model,gr_serial),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name))),gr_Customer($select=gr_customerid,gr_name),gr_Equipment($select=gr_equipmentid,gr_fleet,gr_alternatefleetnumbers,gr_make,gr_model,gr_serial;$expand=gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name))),createdby($select=systemuserid,fullname,azureactivedirectoryobjectid)&$orderby=createdon desc`,
-        { cache: 'no-store', headers: headers(accessToken) },
+        `${API_URL}/gr_quotes?$select=${quoteFields}&$expand=${quoteExpansions}&$orderby=createdon desc`,
+        { cache: 'no-store', headers: headers(accessToken), signal },
         (response) => ensureSuccess(response, 'Failed to load quotes'),
     )
 }
 
-export async function fetchQuotesForJob(accessToken: string, jobId: string): Promise<Quote[]> {
+export async function fetchQuoteById(
+    accessToken: string,
+    quoteId: string,
+    signal?: AbortSignal,
+): Promise<Quote | undefined> {
+    const url = new URL(`${API_URL}/gr_quotes`)
+    url.searchParams.set('$select', quoteFields)
+    url.searchParams.set('$expand', quoteExpansions)
+    url.searchParams.set('$filter', `gr_quoteid eq ${quoteId}`)
+    url.searchParams.set('$top', '2')
+    const response = await fetch(url.toString(), {
+        cache: 'no-store',
+        headers: headers(accessToken),
+        signal,
+    })
+    await ensureSuccess(response, 'Failed to load quote')
+    const data = await response.json()
+    const rows = (data.value ?? []) as Quote[]
+    if (rows.length > 1 || data['@odata.nextLink']) throw new Error('Dataverse returned more than one Quote for this identity.')
+    return rows[0]
+}
+
+export async function fetchQuotesForJob(
+    accessToken: string,
+    jobId: string,
+    signal?: AbortSignal,
+): Promise<Quote[]> {
     const fields = [
         'gr_quoteid', 'gr_name', 'gr_quotenumber', 'gr_quotestatus', 'gr_revision',
         'gr_quotedate', 'gr_validuntil', 'gr_notes', 'gr_gstrate', 'gr_subtotal',
@@ -66,7 +184,11 @@ export async function fetchQuotesForJob(accessToken: string, jobId: string): Pro
     url.searchParams.set('$filter', `_gr_job_value eq ${jobId}`)
     url.searchParams.set('$orderby', 'createdon desc')
     url.searchParams.set('$top', '51')
-    const response = await fetch(url.toString(), { cache: 'no-store', headers: headers(accessToken) })
+    const response = await fetch(url.toString(), {
+        cache: 'no-store',
+        headers: headers(accessToken),
+        signal,
+    })
     await ensureSuccess(response, 'Failed to load quotes for this Job')
     const data = await response.json()
     const quotes = (data.value ?? []) as Quote[]
@@ -76,9 +198,41 @@ export async function fetchQuotesForJob(accessToken: string, jobId: string): Pro
     return quotes
 }
 
+export async function fetchQuotesForCustomer(
+    accessToken: string,
+    customerId: string,
+    signal?: AbortSignal,
+): Promise<Quote[]> {
+    const fields = [
+        'gr_quoteid', 'gr_name', 'gr_quotenumber', 'gr_quotestatus', 'gr_revision',
+        'gr_quotedate', 'gr_validuntil', 'gr_notes', 'gr_gstrate', 'gr_subtotal',
+        'gr_gst', 'gr_total', 'createdon', '_gr_job_value', '_gr_customer_value',
+        '_gr_equipment_value', '_createdby_value',
+    ].join(',')
+    const url = new URL(`${API_URL}/gr_quotes`)
+    url.searchParams.set('$select', fields)
+    url.searchParams.set('$expand', 'gr_Job($select=gr_jobid,gr_jobnumber,gr_description;$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_alternatefleetnumbers,gr_make,gr_model,gr_serial),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name))),gr_Customer($select=gr_customerid,gr_name),gr_Equipment($select=gr_equipmentid,gr_fleet,gr_alternatefleetnumbers,gr_make,gr_model,gr_serial;$expand=gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name))),createdby($select=systemuserid,fullname,azureactivedirectoryobjectid)')
+    url.searchParams.set('$filter', `_gr_customer_value eq ${customerId}`)
+    url.searchParams.set('$orderby', 'createdon desc')
+    url.searchParams.set('$top', '501')
+    const response = await fetch(url.toString(), {
+        cache: 'no-store',
+        headers: headers(accessToken),
+        signal,
+    })
+    await ensureSuccess(response, 'Failed to load quotes for this Customer')
+    const data = await response.json()
+    const quotes = (data.value ?? []) as Quote[]
+    if (quotes.length > 500 || data['@odata.nextLink']) {
+        throw new Error('This Customer has more than 500 linked quotes and cannot be displayed safely.')
+    }
+    return quotes
+}
+
 export async function fetchQuoteLines(
     accessToken: string,
     quoteId: string,
+    signal?: AbortSignal,
 ): Promise<QuoteLine[]> {
     const fields = [
         'gr_quotelineid', 'gr_name', '_gr_quote_value', '_gr_pricingitem_value',
@@ -90,7 +244,7 @@ export async function fetchQuoteLines(
     url.searchParams.set('$filter', `_gr_quote_value eq ${quoteId}`)
     url.searchParams.set('$orderby', 'gr_sortorder asc')
     url.searchParams.set('$top', '201')
-    const response = await fetch(url.toString(), { cache: 'no-store', headers: headers(accessToken) })
+    const response = await fetch(url.toString(), { cache: 'no-store', headers: headers(accessToken), signal })
     await ensureSuccess(response, 'Failed to load quote lines')
     const data = await response.json()
     const lines = (data.value ?? []) as QuoteLine[]

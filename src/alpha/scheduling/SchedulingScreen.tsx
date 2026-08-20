@@ -12,8 +12,8 @@ import JobTypeTabs from '../jobs/components/JobTypeTabs'
 import { JOB_TYPES, SCHEDULER_JOB_TYPE_OPTIONS } from '../jobs/types/jobType.types'
 import '../jobs/components/JobTypeControls.css'
 import './SchedulingScreen.css'
-import { useNavigate } from 'react-router-dom'
 import { getJobTypeLabel } from '../jobs/types/jobType.types'
+import { useQuoteEditorOverlay } from '../quotes/QuoteEditorOverlayContext'
 import {
     SCHEDULING_DISPLAY_MODE_KEY,
     SCHEDULING_JOB_TYPE_FILTER_KEY,
@@ -28,6 +28,7 @@ import {
     schedulerDateKey as dateKey,
     startOfSchedulerWeek as startOfWeek,
 } from './schedulerWindow'
+import { useOperationalScreenReady } from '../shared/data/OperationalScreenPerformanceContext'
 
 const dayHeadingFormatter = new Intl.DateTimeFormat('en-NZ', { weekday: 'short' })
 const dayNumberFormatter = new Intl.DateTimeFormat('en-NZ', {
@@ -135,21 +136,21 @@ function getCardVariant(
 }
 
 export default function SchedulingScreen() {
-    const navigate = useNavigate()
+    const quoteEditor = useQuoteEditorOverlay()
     const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
     const schedulerData = useSchedulerWindowData(weekStart)
+    useOperationalScreenReady('Scheduling', !schedulerData.isLoading)
     const scopedSchedulerData = useMemo(() => ({
         jobs: schedulerData.jobs,
         equipment: EMPTY_SCOPED_EQUIPMENT,
         sites: EMPTY_SCOPED_SITES,
         servicePlans: EMPTY_SCOPED_SERVICE_PLANS,
         scheduleOptions: schedulerData.scheduleOptions,
-    }), [schedulerData.jobs, schedulerData.scheduleOptions])
+        officeUpdates: schedulerData.officeUpdates,
+    }), [schedulerData.jobs, schedulerData.officeUpdates, schedulerData.scheduleOptions])
     const {
         jobs,
         scheduleOptions,
-        jobQuotes,
-        jobAssignments,
         servicePlans,
         officeUpdates,
         mechanics,
@@ -176,13 +177,19 @@ export default function SchedulingScreen() {
         completionRequest, isCompletingJob, completionError, completeStandardJob, completeServiceJob, completeWofJob, cancelJobCompletion,
         setupEquipmentMaintenance,
         prepareJobReferenceData,
+        loadJobQuotes,
+        loadJobAssignments,
+        searchEquipmentForEditor,
+        searchCustomersForEditor,
+        loadCustomerSitesForEditor,
+        loadSiteContactsForEditor,
+        loadEquipmentForEditor,
+        loadEquipmentServicePlansForEditor,
         fetchJobForDrawer,
         fetchJobCardDetails,
         fetchJobPhotoBody,
         referenceDataStatus,
         referenceDataError,
-        collaborationDataStatus,
-        collaborationDataError,
     } = useJobs({
         loadGlobalOperationalData: false,
         scopedData: scopedSchedulerData,
@@ -210,12 +217,12 @@ export default function SchedulingScreen() {
 
     const createQuoteForJob = (jobId: string) => {
         setEditingJob(null)
-        navigate(`/quotes?new=1&jobId=${encodeURIComponent(jobId)}`)
+        quoteEditor.createQuote(jobId)
     }
 
     const openQuote = (quoteId: string) => {
         setEditingJob(null)
-        navigate(`/quotes?quoteId=${encodeURIComponent(quoteId)}`)
+        quoteEditor.openQuote(quoteId)
     }
 
     const openJob = (job: Job) => {
@@ -418,17 +425,17 @@ export default function SchedulingScreen() {
                     onCreateSite={createSite}
                     onCreateContact={createContactForSite}
                     onCreateEquipment={createEquipment}
+                    onSearchEquipment={searchEquipmentForEditor}
+                    onSearchCustomers={searchCustomersForEditor}
+                    onLoadCustomerSites={loadCustomerSitesForEditor}
+                    onLoadSiteContacts={loadSiteContactsForEditor}
+                    onLoadEquipment={loadEquipmentForEditor}
+                    onLoadEquipmentServicePlans={loadEquipmentServicePlansForEditor}
                     onSave={updateJob}
                     onDelete={deleteJob}
                     onCreateScheduleOption={createScheduleOption}
                     onUpdateScheduleOption={updateScheduleOption}
                     onDeleteScheduleOption={deleteScheduleOption}
-                    quotes={jobQuotes.filter((quote) =>
-                        quote._gr_job_value?.toLowerCase() === editingJob.gr_jobid.toLowerCase(),
-                    )}
-                    assignments={jobAssignments.filter((assignment) =>
-                        assignment._gr_job_value?.toLowerCase() === editingJob.gr_jobid.toLowerCase(),
-                    )}
                     onCreateQuote={createQuoteForJob}
                     onOpenQuote={openQuote}
                     onJobCardStatusChange={updateJobCardStatus}
@@ -443,9 +450,9 @@ export default function SchedulingScreen() {
                     onSaveOfficeAttention={updateJobOfficeAttention}
                     referenceDataStatus={referenceDataStatus}
                     referenceDataError={referenceDataError}
-                    collaborationDataStatus={collaborationDataStatus}
-                    collaborationDataError={collaborationDataError}
                     onPrepareReferenceData={prepareJobReferenceData}
+                    onLoadJobQuotes={loadJobQuotes}
+                    onLoadJobAssignments={loadJobAssignments}
                     onRefreshJob={fetchJobForDrawer}
                     onLoadJobCardDetails={fetchJobCardDetails}
                     onLoadJobPhoto={fetchJobPhotoBody}

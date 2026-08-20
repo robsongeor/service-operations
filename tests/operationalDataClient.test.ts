@@ -145,3 +145,31 @@ test('query metrics aggregate cache, deduplication, duration, and payload size w
     assert.equal(JSON.stringify(metric).includes('secret-site-hash'), false)
     client.dispose()
 })
+
+test('diagnostics subscribers receive privacy-safe query and useful-content timing snapshots that can be reset', async () => {
+    const client = new OperationalDataClient('SECRET-ACCOUNT-SCOPE')
+    let notifications = 0
+    const stop = client.subscribeDiagnostics(() => { notifications += 1 })
+
+    client.recordScreenVisit('Jobs')
+    await client.fetchQuery(
+        ['jobs', 'operational-list', 'summary-v1', 'SECRET-RECORD-ID'],
+        async () => [{ id: 'job-1' }],
+    )
+    client.recordScreenReady('Jobs', 125.4)
+
+    const snapshot = client.getDiagnosticsSnapshot()
+    assert.equal(snapshot.screens[0].screen, 'Jobs')
+    assert.equal(snapshot.screens[0].visits, 1)
+    assert.equal(snapshot.screens[0].readySamples, 1)
+    assert.equal(snapshot.screens[0].lastReadyMs, 125.4)
+    assert.equal(snapshot.queries[0].family, 'jobs:operational-list')
+    assert.equal(JSON.stringify(snapshot).includes('SECRET-ACCOUNT-SCOPE'), false)
+    assert.equal(JSON.stringify(snapshot).includes('SECRET-RECORD-ID'), false)
+    assert.ok(notifications >= 4)
+
+    client.resetDiagnostics()
+    assert.deepEqual(client.getDiagnosticsSnapshot(), { queries: [], screens: [] })
+    stop()
+    client.dispose()
+})

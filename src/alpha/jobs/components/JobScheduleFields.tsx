@@ -120,7 +120,7 @@ export default function JobScheduleFields({
     const [scheduleType, setScheduleType] = useState<ScheduleType>(
         SCHEDULE_TYPE.EXACT_TIME,
     )
-    const [isExpanded, setIsExpanded] = useState(false)
+    const [isExpanded, setIsExpanded] = useState(true)
     const [scheduleDate, setScheduleDate] = useState('')
     const [scheduleTime, setScheduleTime] = useState('')
     const [confirmed, setConfirmed] = useState(false)

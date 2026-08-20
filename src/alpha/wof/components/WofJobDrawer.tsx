@@ -1,30 +1,73 @@
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
 import JobCompletionWorkflow from '../../jobs/components/JobCompletionWorkflow'
 import JobDrawerShell from '../../jobs/components/JobDrawerShell'
 import JobEditDrawer from '../../jobs/components/JobEditDrawer'
 import { useJobs } from '../../jobs/hooks/useJobs'
+import type { Job } from '../../jobs/types/job.types'
+import type { JobScheduleOption } from '../../jobs/types/jobSchedule.types'
+import { useQuoteEditorOverlay } from '../../quotes/QuoteEditorOverlayContext'
 
 type Props = {
     jobId: string
+    scheduleOptions: JobScheduleOption[]
     onChanged: () => Promise<void>
     onClose: () => void
 }
 
-export default function WofJobDrawer({ jobId, onChanged, onClose }: Props) {
-    const navigate = useNavigate()
-    const manager = useJobs()
-    const job = manager.jobs.find((item) => item.gr_jobid.toLowerCase() === jobId.toLowerCase())
+export default function WofJobDrawer({ jobId, scheduleOptions, onChanged, onClose }: Props) {
+    const quoteEditor = useQuoteEditorOverlay()
+    const scopedData = useMemo(() => ({
+        jobs: [],
+        equipment: [],
+        sites: [],
+        servicePlans: [],
+        scheduleOptions,
+        officeUpdates: [],
+    }), [scheduleOptions])
+    const manager = useJobs({
+        loadGlobalOperationalData: false,
+        scopedData,
+        onScopedDataChanged: onChanged,
+    })
+    const { fetchJobForDrawer, loadJobOfficeUpdatesForEditor } = manager
+    const [job, setJob] = useState<Job | null>(null)
+    const [isLoading, setIsLoading] = useState(true)
+    const [loadError, setLoadError] = useState('')
+    const [loadAttempt, setLoadAttempt] = useState(0)
 
-    if (manager.isLoading) {
+    useEffect(() => {
+        const controller = new AbortController()
+        void Promise.all([
+            fetchJobForDrawer(jobId, controller.signal),
+            loadJobOfficeUpdatesForEditor(jobId, controller.signal),
+        ]).then(([loadedJob]) => {
+            if (controller.signal.aborted) return
+            setJob(loadedJob ?? null)
+            if (!loadedJob) setLoadError('The linked Job could not be found in Dataverse. The WOF record has not been changed.')
+        }).catch((error) => {
+            if (!controller.signal.aborted) setLoadError(error instanceof Error ? error.message : 'The linked Job could not be loaded.')
+        }).finally(() => {
+            if (!controller.signal.aborted) setIsLoading(false)
+        })
+        return () => controller.abort()
+    }, [fetchJobForDrawer, jobId, loadAttempt, loadJobOfficeUpdatesForEditor])
+
+    const refreshJobAndParent = async () => {
+        await onChanged()
+        const refreshed = await fetchJobForDrawer(jobId)
+        if (refreshed) setJob(refreshed)
+    }
+
+    if (isLoading) {
         return <JobDrawerShell eyebrow="WOF Job" title="Loading Job…" onClose={onClose} footer={<button type="button" onClick={onClose}>Close</button>}>
             <div className="wof-state" role="status">Loading the linked Job and its operational details…</div>
         </JobDrawerShell>
     }
 
-    if (manager.loadError || !job) {
-        return <JobDrawerShell eyebrow="WOF Job" title="Job unavailable" onClose={onClose} footer={<><button type="button" onClick={manager.retryInitialLoad}>Try again</button><button type="button" onClick={onClose}>Close</button></>}>
+    if (loadError || !job) {
+        return <JobDrawerShell eyebrow="WOF Job" title="Job unavailable" onClose={onClose} footer={<><button type="button" onClick={() => { setIsLoading(true); setLoadError(''); setJob(null); setLoadAttempt((current) => current + 1) }}>Try again</button><button type="button" onClick={onClose}>Close</button></>}>
             <div className="wof-state error" role="alert">
-                {manager.loadError || 'The linked Job could not be found in Dataverse. The WOF record has not been changed.'}
+                {loadError || 'The linked Job could not be found in Dataverse. The WOF record has not been changed.'}
             </div>
         </JobDrawerShell>
     }
@@ -38,16 +81,20 @@ export default function WofJobDrawer({ jobId, onChanged, onClose }: Props) {
             customers={manager.customers}
             siteContacts={manager.siteContacts}
             scheduleOptions={manager.scheduleOptions}
-            quotes={manager.jobQuotes.filter((quote) => quote._gr_job_value?.toLowerCase() === jobId.toLowerCase())}
-            assignments={manager.jobAssignments.filter((assignment) => assignment._gr_job_value?.toLowerCase() === jobId.toLowerCase())}
             servicePlans={manager.servicePlans}
             onCreateCustomer={manager.createCustomer}
             onCreateSite={manager.createSite}
             onCreateContact={manager.createContactForSite}
             onCreateEquipment={manager.createEquipment}
+            onSearchEquipment={manager.searchEquipmentForEditor}
+            onSearchCustomers={manager.searchCustomersForEditor}
+            onLoadCustomerSites={manager.loadCustomerSitesForEditor}
+            onLoadSiteContacts={manager.loadSiteContactsForEditor}
+            onLoadEquipment={manager.loadEquipmentForEditor}
+            onLoadEquipmentServicePlans={manager.loadEquipmentServicePlansForEditor}
             onSave={async (savedJobId, input) => {
                 const saved = await manager.updateJob(savedJobId, input)
-                if (saved !== false) await onChanged()
+                if (saved !== false) await refreshJobAndParent()
                 return saved
             }}
             onDelete={async (savedJobId) => {
@@ -66,8 +113,8 @@ export default function WofJobDrawer({ jobId, onChanged, onClose }: Props) {
                 await manager.deleteScheduleOption(optionId)
                 await onChanged()
             }}
-            onCreateQuote={(savedJobId) => navigate(`/quotes?new=1&jobId=${encodeURIComponent(savedJobId)}`)}
-            onOpenQuote={(quoteId) => navigate(`/quotes?quoteId=${encodeURIComponent(quoteId)}`)}
+            onCreateQuote={(savedJobId) => { onClose(); quoteEditor.createQuote(savedJobId) }}
+            onOpenQuote={(quoteId) => { onClose(); quoteEditor.openQuote(quoteId) }}
             onJobCardStatusChange={async (savedJobId, status) => {
                 await manager.updateJobCardStatus(savedJobId, status)
                 await onChanged()
@@ -82,7 +129,7 @@ export default function WofJobDrawer({ jobId, onChanged, onClose }: Props) {
                 await manager.deleteJobAssignment(assignmentId)
                 await onChanged()
             }}
-            officeUpdates={manager.officeUpdates.filter((update) => update.jobId.toLowerCase() === jobId.toLowerCase())}
+            officeUpdates={manager.officeUpdates}
             onCreateOfficeUpdate={manager.createJobOfficeUpdate}
             onSaveOfficeAttention={async (savedJobId, required) => {
                 await manager.updateJobOfficeAttention(savedJobId, required)
@@ -90,9 +137,9 @@ export default function WofJobDrawer({ jobId, onChanged, onClose }: Props) {
             }}
             referenceDataStatus={manager.referenceDataStatus}
             referenceDataError={manager.referenceDataError}
-            collaborationDataStatus={manager.collaborationDataStatus}
-            collaborationDataError={manager.collaborationDataError}
             onPrepareReferenceData={manager.prepareJobReferenceData}
+            onLoadJobQuotes={manager.loadJobQuotes}
+            onLoadJobAssignments={manager.loadJobAssignments}
             onRefreshJob={manager.fetchJobForDrawer}
             onLoadJobCardDetails={manager.fetchJobCardDetails}
             onLoadJobPhoto={manager.fetchJobPhotoBody}
@@ -111,11 +158,11 @@ export default function WofJobDrawer({ jobId, onChanged, onClose }: Props) {
             onCompleteStandard={manager.completeStandardJob}
             onCompleteService={async (hourMeter, readingType, readingDate, completionDate) => {
                 await manager.completeServiceJob(hourMeter, readingType, readingDate, completionDate)
-                await onChanged()
+                await refreshJobAndParent()
             }}
             onCompleteWof={async (newExpiry, hourMeter, readingType, readingDate, completionDate) => {
                 await manager.completeWofJob(newExpiry, hourMeter, readingType, readingDate, completionDate)
-                await onChanged()
+                await refreshJobAndParent()
             }}
         />
     </>

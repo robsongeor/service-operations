@@ -22,6 +22,12 @@ import EquipmentJobCreateDrawer from './components/EquipmentJobCreateDrawer'
 import { paginateEquipmentRows } from './equipmentPagination'
 import { equipmentIdentifierSearchValues } from './identifiers/alternateFleetNumbers'
 import { useEquipmentJobHistory } from './hooks/useEquipmentJobHistory'
+import { useOperationalQuery } from '../shared/data/useOperationalQuery'
+import {
+    equipmentRegisterServicePlansQueryKey,
+    operationalIdFingerprint,
+} from '../shared/data/operationalCollectionKeys'
+import { useOperationalScreenReady } from '../shared/data/OperationalScreenPerformanceContext'
 
 type StateFilter = 'all' | 'active' | 'inactive'
 
@@ -32,7 +38,33 @@ export default function EquipmentScreen() {
     const activeAccount = useActiveMsalAccount()
     const signedInUser = getSignedInUserInfo(activeAccount)
     const csvToolsAllowed = canUseEquipmentCsvTools(signedInUser)
-    const { equipment, customers, sites, servicePlans, equipmentCacheStatus, equipmentRealtimeStatus, isLoading, isSaving, loadError, saveError, reload, clearSaveError, createCustomer, createSite, createEquipment, updateEquipment, saveEquipmentMaintenanceHistory, applyEquipmentCsvUpdates, deleteEquipment } = useEquipmentManager()
+    const {
+        equipment,
+        equipmentCacheStatus,
+        equipmentRealtimeStatus,
+        isLoading,
+        isSaving,
+        loadError,
+        saveError,
+        reload,
+        clearSaveError,
+        createCustomer,
+        createSite,
+        createEquipment,
+        updateEquipment,
+        loadEquipmentServicePlans,
+        loadEquipmentServicePlansForIds,
+        searchEquipmentCustomers,
+        loadEquipmentCustomerSites,
+        loadEquipmentCsvReferenceData,
+        saveEquipmentMaintenanceHistory,
+        applyEquipmentCsvUpdates,
+        deleteEquipment,
+    } = useEquipmentManager({
+        loadGlobalRelationships: false,
+        loadGlobalServicePlans: false,
+    })
+    useOperationalScreenReady('Equipment', !isLoading)
     const [editingEquipment, setEditingEquipment] = useState<Equipment | null>(null)
     const [creatingJobForEquipment, setCreatingJobForEquipment] = useState<Equipment | null>(null)
     const [isCreatingEquipment, setIsCreatingEquipment] = useState(false)
@@ -67,17 +99,24 @@ export default function EquipmentScreen() {
         return () => window.clearTimeout(timer)
     }, [editingEquipment, equipment, isLoading, openEquipment, searchParams, setSearchParams])
 
-    const siteOptions = sites.filter((site) => !customerId || site.gr_Customer?.gr_customerid === customerId)
-    const plansByEquipment = useMemo(() => {
-        const grouped = new Map<string, typeof servicePlans>()
-        servicePlans.forEach((plan) => {
-            const equipmentId = plan._gr_equipment_value?.toLowerCase()
-            if (!equipmentId) return
-            grouped.set(equipmentId, [...(grouped.get(equipmentId) ?? []), plan])
+    const filterCustomers = useMemo(() => {
+        const byId = new Map<string, NonNullable<Equipment['gr_Site']>['gr_Customer']>()
+        equipment.forEach((item) => {
+            const customer = item.gr_Site?.gr_Customer
+            if (customer) byId.set(customer.gr_customerid.toLowerCase(), customer)
         })
-        return grouped
-    }, [servicePlans])
-    const rows = useMemo(() => {
+        return [...byId.values()].filter((customer): customer is NonNullable<typeof customer> => Boolean(customer))
+            .sort((a, b) => a.gr_name.localeCompare(b.gr_name))
+    }, [equipment])
+    const filterSites = useMemo(() => {
+        const byId = new Map<string, NonNullable<Equipment['gr_Site']>>()
+        equipment.forEach((item) => {
+            if (item.gr_Site) byId.set(item.gr_Site.gr_siteid.toLowerCase(), item.gr_Site)
+        })
+        return [...byId.values()].sort((a, b) => a.gr_name.localeCompare(b.gr_name))
+    }, [equipment])
+    const siteOptions = filterSites.filter((site) => !customerId || site.gr_Customer?.gr_customerid === customerId)
+    const preliminaryRows = useMemo(() => {
         const query = search.trim().toLocaleLowerCase()
         const sortValue = (item: Equipment) => {
             if (sortKey === 'fleet') return item.gr_fleet
@@ -101,14 +140,48 @@ export default function EquipmentScreen() {
                 item.gr_Site?.gr_Customer?.gr_name,
             ].some((value) => text(value).includes(query))
         }).sort((a, b) => {
-            if (sortKey === 'dataStatus') {
-                const plansFor = (item: Equipment) => plansByEquipment.get(item.gr_equipmentid.toLowerCase()) ?? []
-                return compareEquipmentDataQuality(a, plansFor(a), b, plansFor(b), sortDirection)
-            }
+            if (sortKey === 'dataStatus') return text(a.gr_fleet).localeCompare(text(b.gr_fleet), undefined, { numeric: true })
             return text(sortValue(a)).localeCompare(text(sortValue(b)), undefined, { numeric: true }) * (sortDirection === 'asc' ? 1 : -1)
         })
-    }, [customerId, equipment, plansByEquipment, search, siteId, sortDirection, sortKey, stateFilter])
+    }, [customerId, equipment, search, siteId, sortDirection, sortKey, stateFilter])
 
+    const preliminaryPage = useMemo(() => paginateEquipmentRows(preliminaryRows, page), [page, preliminaryRows])
+    const servicePlanEquipmentIds = useMemo(() => (
+        sortKey === 'dataStatus' ? preliminaryRows : preliminaryPage.rows
+    ).map((item) => item.gr_equipmentid), [preliminaryPage.rows, preliminaryRows, sortKey])
+    const servicePlanFingerprint = useMemo(
+        () => operationalIdFingerprint(servicePlanEquipmentIds),
+        [servicePlanEquipmentIds],
+    )
+    const servicePlanQueryKey = useMemo(
+        () => equipmentRegisterServicePlansQueryKey(servicePlanFingerprint),
+        [servicePlanFingerprint],
+    )
+    const servicePlanQuery = useOperationalQuery({
+        key: servicePlanQueryKey,
+        enabled: servicePlanEquipmentIds.length > 0,
+        queryFn: ({ signal }) => loadEquipmentServicePlansForIds(servicePlanEquipmentIds, signal),
+        staleTimeMs: 30_000,
+        cacheTimeMs: 120_000,
+    })
+    const servicePlans = useMemo(() => servicePlanQuery.data ?? [], [servicePlanQuery.data])
+    const servicePlansLoading = servicePlanEquipmentIds.length > 0
+        && servicePlanQuery.data === undefined
+        && (servicePlanQuery.status === 'initial' || servicePlanQuery.status === 'loading')
+    const servicePlansError = servicePlanQuery.data === undefined ? servicePlanQuery.error?.message ?? '' : ''
+    const plansByEquipment = useMemo(() => {
+        const grouped = new Map<string, typeof servicePlans>()
+        servicePlans.forEach((plan) => {
+            const equipmentId = plan._gr_equipment_value?.toLowerCase()
+            if (!equipmentId) return
+            grouped.set(equipmentId, [...(grouped.get(equipmentId) ?? []), plan])
+        })
+        return grouped
+    }, [servicePlans])
+    const rows = useMemo(() => sortKey !== 'dataStatus' ? preliminaryRows : [...preliminaryRows].sort((a, b) => {
+        const plansFor = (item: Equipment) => plansByEquipment.get(item.gr_equipmentid.toLowerCase()) ?? []
+        return compareEquipmentDataQuality(a, plansFor(a), b, plansFor(b), sortDirection)
+    }), [plansByEquipment, preliminaryRows, sortDirection, sortKey])
     const paged = useMemo(() => paginateEquipmentRows(rows, page), [page, rows])
 
     const changeSort = (key: EquipmentSortKey) => {
@@ -149,7 +222,8 @@ export default function EquipmentScreen() {
             return
         }
         try {
-            const review = reviewEquipmentCsv(await file.text(), equipment, sites)
+            const references = await loadEquipmentCsvReferenceData()
+            const review = reviewEquipmentCsv(await file.text(), equipment, references.sites)
             setCsvError('')
             setSettingsOpen(false)
             setCsvImport({ filename: file.name, rows: review.rows })
@@ -166,16 +240,17 @@ export default function EquipmentScreen() {
             ) : <section className="equipment-list-card">
                 <div className="equipment-toolbar">
                     <label className="equipment-search"><span className="equipment-visually-hidden">Search equipment</span><input type="search" placeholder="Search primary or alternate fleet, serial, make, model, Site or Customer" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1) }} /></label>
-                    <label>Customer<select value={customerId} onChange={(event) => { const next = event.target.value; setCustomerId(next); setPage(1); if (siteId && !sites.some((site) => site.gr_siteid === siteId && (!next || site.gr_Customer?.gr_customerid === next))) setSiteId('') }}><option value="">All Customers</option>{customers.map((customer) => <option key={customer.gr_customerid} value={customer.gr_customerid}>{customer.gr_name}</option>)}</select></label>
+                    <label>Customer<select value={customerId} onChange={(event) => { const next = event.target.value; setCustomerId(next); setPage(1); if (siteId && !filterSites.some((site) => site.gr_siteid === siteId && (!next || site.gr_Customer?.gr_customerid === next))) setSiteId('') }}><option value="">All Customers</option>{filterCustomers.map((customer) => <option key={customer.gr_customerid} value={customer.gr_customerid}>{customer.gr_name}</option>)}</select></label>
                     <label>Site<select value={siteId} onChange={(event) => { setSiteId(event.target.value); setPage(1) }}><option value="">All Sites</option>{siteOptions.map((site) => <option key={site.gr_siteid} value={site.gr_siteid}>{site.gr_name || 'Unnamed Site'}</option>)}</select></label>
                     <label>State<select value={stateFilter} onChange={(event) => { setStateFilter(event.target.value as StateFilter); setPage(1) }}><option value="all">All states</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
                 </div>
                 <div className="equipment-results-count">Showing {rows.length ? paged.start + 1 : 0}–{paged.end} of {rows.length}{rows.length !== equipment.length ? ` filtered (${equipment.length} total)` : ''}</div>
-                <EquipmentTable equipment={paged.rows} servicePlans={servicePlans} sortKey={sortKey} sortDirection={sortDirection} onSort={changeSort} onEdit={(item) => { clearSaveError(); void openEquipment(item) }} />
+                {servicePlansError && <div className="equipment-data-state error" role="alert"><div><strong>Maintenance summaries are temporarily unavailable.</strong><p>The Equipment list remains available.</p></div><button type="button" onClick={() => void servicePlanQuery.refetch()}>Try again</button></div>}
+                <EquipmentTable equipment={paged.rows} servicePlans={servicePlans} servicePlansLoading={servicePlansLoading} servicePlansUnavailable={Boolean(servicePlansError)} sortKey={sortKey} sortDirection={sortDirection} onSort={changeSort} onEdit={(item) => { clearSaveError(); void openEquipment(item) }} />
                 {paged.totalPages > 1 && <nav className="equipment-pagination" aria-label="Equipment pages"><button type="button" onClick={() => setPage(Math.max(1, paged.page - 1))} disabled={paged.page === 1}>Previous</button><span>Page <strong>{paged.page}</strong> of <strong>{paged.totalPages}</strong></span><button type="button" onClick={() => setPage(Math.min(paged.totalPages, paged.page + 1))} disabled={paged.page === paged.totalPages}>Next</button></nav>}
             </section>}
-            {isCreatingEquipment && <EquipmentDrawer mode="create" customers={customers} sites={sites} equipmentList={equipment} jobs={[]} isSaving={isSaving} saveError={saveError} onClose={() => setIsCreatingEquipment(false)} onCreateCustomer={createCustomer} onCreateSite={createSite} onCreate={async (input, resolvedSite) => { await createEquipment(input, resolvedSite); setIsCreatingEquipment(false) }} />}
-            {editingEquipment && <EquipmentDrawer mode="edit" equipment={editingEquipment} equipmentList={equipment} servicePlans={servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === editingEquipment.gr_equipmentid.toLowerCase())} customers={customers} sites={sites} jobs={equipmentJobHistory.jobs} isSaving={isSaving} saveError={saveError} isJobHistoryLoading={equipmentJobHistory.isLoading} jobHistoryError={equipmentJobHistory.error} onRetryJobHistory={() => { void equipmentJobHistory.refetch().catch(() => undefined) }} onClose={() => setEditingEquipment(null)} onCreateCustomer={createCustomer} onCreateSite={createSite} onSave={async (input, resolvedSite) => { const updated = await updateEquipment(editingEquipment, input, resolvedSite); setEditingEquipment(updated) }} onSaveMaintenanceHistory={async (plans, input) => { const updated = await saveEquipmentMaintenanceHistory(editingEquipment, plans, input); setEditingEquipment(updated.equipment) }} onCreateJob={openJobCreateForEquipment} onDelete={async () => { await deleteEquipment(editingEquipment.gr_equipmentid); setEditingEquipment(null) }} />}
+            {isCreatingEquipment && <EquipmentDrawer mode="create" customers={[]} sites={[]} equipmentList={equipment} jobs={[]} isSaving={isSaving} saveError={saveError} onSearchCustomers={searchEquipmentCustomers} onLoadCustomerSites={loadEquipmentCustomerSites} onClose={() => setIsCreatingEquipment(false)} onCreateCustomer={createCustomer} onCreateSite={createSite} onCreate={async (input, resolvedSite) => { await createEquipment(input, resolvedSite); setIsCreatingEquipment(false) }} />}
+            {editingEquipment && <EquipmentDrawer mode="edit" equipment={editingEquipment} equipmentList={equipment} onLoadServicePlans={loadEquipmentServicePlans} customers={editingEquipment.gr_Site?.gr_Customer ? [editingEquipment.gr_Site.gr_Customer] : []} sites={editingEquipment.gr_Site ? [{ ...editingEquipment.gr_Site, gr_address: editingEquipment.gr_Site.gr_address ?? '' }] : []} jobs={equipmentJobHistory.jobs} isSaving={isSaving} saveError={saveError} isJobHistoryLoading={equipmentJobHistory.isLoading} jobHistoryError={equipmentJobHistory.error} onRetryJobHistory={() => { void equipmentJobHistory.refetch().catch(() => undefined) }} onSearchCustomers={searchEquipmentCustomers} onLoadCustomerSites={loadEquipmentCustomerSites} onClose={() => setEditingEquipment(null)} onCreateCustomer={createCustomer} onCreateSite={createSite} onSave={async (input, resolvedSite) => { const updated = await updateEquipment(editingEquipment, input, resolvedSite); setEditingEquipment(updated) }} onSaveMaintenanceHistory={async (plans, input) => { const updated = await saveEquipmentMaintenanceHistory(editingEquipment, plans, input); setEditingEquipment(updated.equipment) }} onCreateJob={openJobCreateForEquipment} onDelete={async () => { await deleteEquipment(editingEquipment.gr_equipmentid); setEditingEquipment(null) }} />}
             {creatingJobForEquipment && <EquipmentJobCreateDrawer
                 equipment={creatingJobForEquipment}
                 onCreated={reload}

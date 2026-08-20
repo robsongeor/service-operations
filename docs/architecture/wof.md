@@ -18,7 +18,35 @@ and confirmed schedule option. Due Soon or Expired Equipment opens the shared Jo
 WOF, Equipment, Customer, and Site preselected. Existing work opens the manager-facing
 shared Job edit drawer in place on the WOF screen; the WOF feature does not implement a
 second Job editor. Successful Job mutations refresh only the WOF workflow datasets needed
-by the affected row.
+by the affected row. Opening that shared drawer fetches the exact linked Job and office updates
+filtered to its ID, while the WOF register supplies only that Job's already-bounded Schedule Options.
+
+### Progressive data-loading contract
+
+The WOF register starts with the shared cached Equipment projection and the account-scoped
+`['wof', 'inspections-v1']` query. Inspection history is fresh for 20 seconds, retained for two
+minutes while unobserved, follows every Dataverse continuation link, and accepts request
+cancellation. A dependent shared Schedule Option query is keyed by the deterministic fingerprint
+of the unique Jobs referenced by those inspections and uses the same bounded lifetime. The register
+must not start the global Jobs, Customer, Site, Site Contact, Staff, Provider, Qualification, or
+Equipment Service Plan collections. Customer and Site labels needed by the register are seeded from
+the Equipment relationship expansions already returned by that query.
+
+Opening the WOF Inspection editor progressively loads its editor-only Provider, Qualification,
+Customer, and Site directories. Opening WOF Job creation loads Staff plus only the selected Site's
+contacts and selected Equipment's service plans. Equipment and Customer searches remain bounded,
+and selecting a relationship loads only its exact Equipment, Customer Sites, Site Contacts, or
+service plans. Opening an existing linked Job does not start the global Jobs, Schedule Option, or
+Office Update collections: it hydrates one exact Job and one Job-ID-filtered office-update query.
+Saving Equipment maintenance performs a fresh focused service-plan read for that Equipment before
+synchronising its programme.
+
+These deferred collections are disposable UI support data. Dataverse remains authoritative, and
+successful WOF or Job mutations force-refresh the shared bounded register keys rather than treating
+browser state as proof of the write. Published Job events refresh both observed WOF queries;
+published Equipment events refresh Inspection history because its Equipment expansion can change.
+Visibility and reconnect recovery use those same dependencies. Dedicated WOF Inspection and
+Schedule Option events remain future server work.
 
 ## Major Dataverse Relationships
 

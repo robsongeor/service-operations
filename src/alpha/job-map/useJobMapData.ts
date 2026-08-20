@@ -1,11 +1,9 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { acquireDataverseAccessToken } from '../../auth/dataverseAuthentication'
 import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
-import { startJobsRealtime } from '../jobs/services/jobsRealtime'
 import type { Job } from '../jobs/types/job.types'
 import type { JobStatus } from '../jobs/types/jobStatus.types'
-import { invalidateOperationalQueries } from '../shared/data/OperationalDataClient'
 import { jobMapJobsQueryKey } from '../shared/data/operationalCollectionKeys'
 import { useOperationalDataClient } from '../shared/data/OperationalDataClientContext'
 import { useOperationalQuery } from '../shared/data/useOperationalQuery'
@@ -44,40 +42,6 @@ export function useJobMapData(requestedStatuses: readonly JobStatus[]) {
         ? (query.data ?? allStatusJobs?.filter((job) => statuses.includes(job.gr_status)) ?? EMPTY_JOBS)
         : EMPTY_JOBS
     const hasUsableData = query.data !== undefined || allStatusJobs !== undefined
-
-    useEffect(() => {
-        const apiUrl = import.meta.env.VITE_EQUIPMENT_REALTIME_API_URL?.trim() ?? ''
-        if (!enabled || !apiUrl) return
-        let stopped = false
-        let refreshTimer: number | undefined
-        const scheduleRefresh = () => {
-            if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
-            refreshTimer = window.setTimeout(() => {
-                if (!stopped) invalidateOperationalQueries((queryKey) => queryKey[0] === 'job-map')
-            }, 1_000)
-        }
-        const stopRealtime = startJobsRealtime({
-            apiUrl,
-            getAccessToken: getToken,
-            onStatus: () => undefined,
-            onEvent: (event) => {
-                const jobId = event.jobId.toLowerCase()
-                invalidateOperationalQueries((queryKey) => queryKey[0] === 'job' && queryKey[1] === jobId)
-                scheduleRefresh()
-            },
-            onReconnected: scheduleRefresh,
-        })
-        const refreshWhenVisible = () => {
-            if (document.visibilityState === 'visible') scheduleRefresh()
-        }
-        document.addEventListener('visibilitychange', refreshWhenVisible)
-        return () => {
-            stopped = true
-            if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
-            document.removeEventListener('visibilitychange', refreshWhenVisible)
-            stopRealtime()
-        }
-    }, [enabled, getToken])
 
     const refetchQuery = query.refetch
     const refetch = useCallback(async () => {

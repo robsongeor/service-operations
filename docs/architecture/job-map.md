@@ -42,10 +42,9 @@ completion workflows.
 - The map position is not reset by a background data refresh. The existing viewport key changes
   only for an intentional search, Customer, Site, or status-filter change.
 - The Site geocoding response continues to update the current map immediately and persists through
-  the existing authenticated server boundary. The Job Map currently subscribes only to Job events,
-  so Site- or Equipment-only changes made by another user reconcile on the next visibility return or
-  stale route re-entry unless a Job event also occurs. Central app-shell Site and Equipment realtime
-  dispatch remains a later synchronization phase.
+  the existing authenticated server boundary. The app-shell dispatcher refreshes Job Map for Job or
+  Equipment events. Dataverse does not yet publish an approved Site event, so Site-only changes made
+  by another user reconcile on the next visibility return or stale route re-entry.
 
 ## Business Rules
 

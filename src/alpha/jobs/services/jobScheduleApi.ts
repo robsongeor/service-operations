@@ -3,6 +3,7 @@ import type {
     JobScheduleOptionInput,
 } from '../types/jobSchedule.types'
 import { fetchAllDataversePages } from '../../shared/dataverse/fetchAllDataversePages.ts'
+import { buildDataverseIdFilterBatches } from '../../shared/dataverse/boundedDataverseFilters.ts'
 import { invalidateOperationalQueries } from '../../shared/data/OperationalDataClient.ts'
 
 const DATAVERSE_URL = import.meta.env?.VITE_DATAVERSE_URL ?? ''
@@ -47,6 +48,36 @@ export async function fetchJobScheduleOptions(
             throw new Error(`Failed to fetch job schedule options: ${error}`)
         },
     )
+}
+
+export async function fetchJobScheduleOptionsForJobs(
+    accessToken: string,
+    jobIds: readonly string[],
+    signal?: AbortSignal,
+): Promise<JobScheduleOption[]> {
+    const filters = buildDataverseIdFilterBatches('_gr_job_value', jobIds)
+    if (!filters.length) return []
+    const rows: JobScheduleOption[] = []
+    for (const filter of filters) {
+        rows.push(...await fetchAllDataversePages<JobScheduleOption>(
+            `${SCHEDULE_OPTIONS_URL}?$select=gr_jobscheduleoptionid,gr_name,gr_scheduletype,gr_scheduledate,gr_scheduletime,gr_confirmed,_gr_job_value&$filter=${encodeURIComponent(filter)}`,
+            {
+                cache: 'no-store',
+                signal,
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    Accept: 'application/json',
+                    'Cache-Control': 'no-cache',
+                },
+            },
+            async (response) => {
+                if (response.ok) return
+                const error = await response.text()
+                throw new Error(`Failed to fetch scoped Job schedule options: ${error}`)
+            },
+        ))
+    }
+    return rows
 }
 
 function assertDateOnly(value: string) {

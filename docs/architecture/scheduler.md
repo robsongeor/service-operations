@@ -15,8 +15,9 @@ model.
 
 The board owns a Monday-to-Sunday visible window rather than consuming the global Jobs list.
 It first requests only Schedule Options whose Date Only value falls inside that window, then
-batch-loads only the unique Jobs referenced by those options. Dataverse filters are bounded and
-all continuation pages are followed. The previous and next weeks are prefetched through the
+batch-loads only the unique Jobs referenced by those options and Office Updates filtered to those
+same Job IDs. Dataverse filters are bounded and all continuation pages are followed. The previous
+and next schedule/Job weeks are prefetched through the
 account-scoped Operational Data Client after the visible week succeeds, so normal week navigation
 can reuse a warm result.
 
@@ -25,9 +26,9 @@ five-minute unobserved retention. They are memory-only and are not written to In
 shared client deduplicates concurrent readers, aborts superseded requests, and prevents an older
 week response from replacing a newer selection.
 
-The Scheduler passes its bounded Jobs and Schedule Options into the canonical Jobs hook in scoped
-mode. Equipment, Customer, Site, Contact, Quote, assignment, Office, and service-plan data remain
-owned by the established Job drawer workflows and are loaded progressively when needed. Refreshing
+The Scheduler passes its bounded Jobs, Schedule Options, and Office Updates into the canonical Jobs
+hook in scoped mode. Equipment, Customer, Site, Contact, Quote, assignment, and service-plan data
+remain owned by the established Job drawer workflows and are loaded progressively when needed. Refreshing
 the board does not clear reference data already loaded for an open drawer.
 
 Successful Schedule Option writes invalidate Scheduler window keys. Successful Job writes

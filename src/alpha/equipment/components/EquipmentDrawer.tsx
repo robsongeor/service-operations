@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import type { Equipment } from '../../jobs/types/equipment.types'
 import type { Customer } from '../../jobs/types/customer.types'
 import type { Job } from '../../jobs/types/job.types'
@@ -36,6 +36,8 @@ import {
     type EquipmentSiteCheckAvailability,
 } from '../types/equipmentSiteCheckAvailability.types'
 import { HOUR_METER_READING_TYPES } from '../hourMeter/hourMeterReading.types'
+import { useOperationalQuery } from '../../shared/data/useOperationalQuery'
+import { focusedEquipmentServicePlansQueryKey } from '../../shared/data/operationalCollectionKeys'
 import {
     equipmentIdentifierSearchValues,
     parseAlternateFleetNumbers,
@@ -46,6 +48,8 @@ import '../EquipmentScreen.css'
 type SharedProps = {
     customers: Customer[]
     sites: Site[]
+    onSearchCustomers?: (query: string, signal?: AbortSignal) => Promise<Customer[]>
+    onLoadCustomerSites?: (customerId: string, signal?: AbortSignal) => Promise<Site[]>
     equipmentList: Equipment[]
     jobs: Job[]
     isSaving: boolean
@@ -65,7 +69,8 @@ type CreateProps = SharedProps & {
 type EditProps = SharedProps & {
     mode: 'edit'
     equipment: Equipment
-    servicePlans: EquipmentServicePlan[]
+    servicePlans?: EquipmentServicePlan[]
+    onLoadServicePlans?: (equipmentId: string, signal?: AbortSignal) => Promise<EquipmentServicePlan[]>
     onSave: (input: EquipmentUpdateInput, resolvedSite?: Site) => Promise<void>
     onSaveMaintenanceHistory: (plans: EquipmentServicePlan[], input: MaintenanceHistoryInput) => Promise<void>
     onCreateJob?: (equipment: Equipment) => void
@@ -90,17 +95,45 @@ type SiteMode = 'none' | 'existing' | 'new'
 
 const siteOptionLabel = (site: Site) => site.gr_name || 'Unnamed site'
 
+function mergeRecords<T>(current: T[], incoming: readonly T[], getId: (record: T) => string) {
+    const merged = new Map(current.map((record) => [getId(record).toLowerCase(), record]))
+    incoming.forEach((record) => merged.set(getId(record).toLowerCase(), record))
+    return [...merged.values()]
+}
+
 const formatDate = (value: string) => {
     const date = new Date(value)
     return Number.isNaN(date.getTime()) ? '-' : new Intl.DateTimeFormat('en-NZ', { dateStyle: 'medium' }).format(date)
 }
 
 export default function EquipmentDrawer(props: Props) {
-    const { customers, sites, jobs, isSaving, saveError, onClose } = props
+    const {
+        customers: suppliedCustomers,
+        sites: suppliedSites,
+        jobs,
+        isSaving,
+        saveError,
+        onClose,
+        onSearchCustomers,
+        onLoadCustomerSites,
+    } = props
     const isCreate = props.mode === 'create'
     const equipment = isCreate ? undefined : props.equipment
     const canCreateRelationships = Boolean(props.onCreateCustomer && props.onCreateSite)
     const initialValues = isCreate ? props.initialValues : undefined
+    const [loadedCustomers, setAvailableCustomers] = useState<Customer[]>([])
+    const [loadedSites, setAvailableSites] = useState<Site[]>([])
+    const customers = useMemo(
+        () => mergeRecords([...suppliedCustomers], loadedCustomers, (customer) => customer.gr_customerid),
+        [loadedCustomers, suppliedCustomers],
+    )
+    const sites = useMemo(
+        () => mergeRecords([...suppliedSites], loadedSites, (site) => site.gr_siteid),
+        [loadedSites, suppliedSites],
+    )
+    const [customerSearch, setCustomerSearch] = useState('')
+    const [customerSearchState, setCustomerSearchState] = useState<'idle' | 'loading' | 'error'>('idle')
+    const [siteLoadState, setSiteLoadState] = useState<'idle' | 'loading' | 'error'>('idle')
     const initialSite = isCreate && initialValues?.siteId
         ? sites.find((site) => site.gr_siteid === initialValues.siteId)
         : undefined
@@ -183,6 +216,74 @@ export default function EquipmentDrawer(props: Props) {
     const [isComplianceSaving, setIsComplianceSaving] = useState(false)
     const [showProgrammeChangeConfirm, setShowProgrammeChangeConfirm] = useState(false)
 
+    useEffect(() => {
+        if (!onSearchCustomers) return
+        const controller = new AbortController()
+        const timer = window.setTimeout(() => {
+            setCustomerSearchState('loading')
+            void onSearchCustomers(customerSearch, controller.signal)
+                .then((rows) => {
+                    if (controller.signal.aborted) return
+                    setAvailableCustomers((current) => mergeRecords(current, rows, (customer) => customer.gr_customerid))
+                    setCustomerSearchState('idle')
+                })
+                .catch(() => {
+                    if (!controller.signal.aborted) setCustomerSearchState('error')
+                })
+        }, 250)
+        return () => {
+            window.clearTimeout(timer)
+            controller.abort()
+        }
+    }, [customerSearch, onSearchCustomers])
+
+    useEffect(() => {
+        if (!customerId || !onLoadCustomerSites) {
+            return
+        }
+        const controller = new AbortController()
+        queueMicrotask(() => {
+            if (!controller.signal.aborted) setSiteLoadState('loading')
+        })
+        void onLoadCustomerSites(customerId, controller.signal)
+            .then((rows) => {
+                if (controller.signal.aborted) return
+                setAvailableSites((current) => mergeRecords(current, rows, (site) => site.gr_siteid))
+                setSiteLoadState('idle')
+            })
+            .catch(() => {
+                if (!controller.signal.aborted) setSiteLoadState('error')
+            })
+        return () => controller.abort()
+    }, [customerId, onLoadCustomerSites])
+
+    const normalizedEquipmentId = equipment?.gr_equipmentid.toLowerCase() ?? ''
+    const loadServicePlans = props.mode === 'edit' ? props.onLoadServicePlans : undefined
+    const providedServicePlans = props.mode === 'edit' ? props.servicePlans : undefined
+    const fallbackServicePlans = useMemo(
+        () => providedServicePlans ?? [],
+        [providedServicePlans],
+    )
+    const servicePlansKey = useMemo(
+        () => focusedEquipmentServicePlansQueryKey(normalizedEquipmentId || 'none'),
+        [normalizedEquipmentId],
+    )
+    const servicePlansQueryFn = async ({ signal }: { signal: AbortSignal }) => {
+        if (!normalizedEquipmentId || !loadServicePlans) return fallbackServicePlans
+        return loadServicePlans(normalizedEquipmentId, signal)
+    }
+    const servicePlansQuery = useOperationalQuery<EquipmentServicePlan[]>({
+        key: servicePlansKey,
+        enabled: activeTab === 'maintenance' && Boolean(normalizedEquipmentId && loadServicePlans),
+        queryFn: servicePlansQueryFn,
+        staleTimeMs: 30_000,
+        cacheTimeMs: 60_000,
+    })
+    const servicePlansLoading = Boolean(loadServicePlans) && servicePlansQuery.data === undefined
+        && (servicePlansQuery.status === 'initial' || servicePlansQuery.status === 'loading')
+    const servicePlansError = servicePlansQuery.data === undefined ? servicePlansQuery.error?.message ?? '' : ''
+    const focusedServicePlans = loadServicePlans ? servicePlansQuery.data ?? [] : fallbackServicePlans
+
     const history = equipment
         ? jobs
             .filter((job) => job.gr_Equipment?.gr_equipmentid.toLowerCase() === equipment.gr_equipmentid.toLowerCase())
@@ -231,7 +332,7 @@ export default function EquipmentDrawer(props: Props) {
         : undefined
     const busy = isSaving || isDeleting || isComplianceSaving
     const equipmentName = equipment ? [equipment.gr_fleet, equipment.gr_make, equipment.gr_model].filter(Boolean).join(' - ') || 'this equipment' : ''
-    const plans = isCreate ? [] : resolveEffectiveServicePlans(props.servicePlans, equipment)
+    const plans = isCreate ? [] : resolveEffectiveServicePlans(focusedServicePlans, equipment)
     const maintenanceConfiguration = resolveMaintenanceConfiguration(equipment)
     const tabs: Array<{ id: EquipmentDrawerTab; label: string; count?: number }> = [
         { id: 'details', label: 'Details' },
@@ -321,6 +422,7 @@ export default function EquipmentDrawer(props: Props) {
                 readingRecordedDate: maintenanceForm.readingRecordedDate,
                 plans: nextPlans,
             })
+            if (loadServicePlans) await servicePlansQuery.refetch()
             setMaintenanceDialogOpen(false)
         } catch (error) {
             setMaintenanceError(error instanceof Error ? error.message : 'Maintenance history could not be saved.')
@@ -517,6 +619,7 @@ export default function EquipmentDrawer(props: Props) {
                     if (!props.onCreateCustomer) throw new Error('Customer creation is not available from this Equipment view.')
                     const duplicate = customers.find((customer) => normalizeCustomerName(customer.gr_name) === normalizeCustomerName(customerQuery))
                     resolvedCustomer = duplicate ?? await props.onCreateCustomer({ name: customerQuery.trim() })
+                    setAvailableCustomers((current) => mergeRecords(current, [resolvedCustomer!], (customer) => customer.gr_customerid))
                     createdRelatedRecords = !duplicate
                     setCustomerId(resolvedCustomer.gr_customerid)
                     setCustomerMode('existing')
@@ -539,6 +642,7 @@ export default function EquipmentDrawer(props: Props) {
                         name: effectiveNewSiteName,
                         address: newSite.address.trim() || undefined,
                     }, resolvedCustomer)
+                    setAvailableSites((current) => mergeRecords(current, [resolvedSite!], (site) => site.gr_siteid))
                     createdRelatedRecords = true
                     updateField('siteId', resolvedSite.gr_siteid)
                     setSiteMode('existing')
@@ -780,6 +884,10 @@ export default function EquipmentDrawer(props: Props) {
                                     placeholder="Select a customer"
                                     searchPlaceholder="Search customers"
                                     emptyLabel="No matching customers"
+                                    resultLimit={8}
+                                    onSearchChange={props.onSearchCustomers ? setCustomerSearch : undefined}
+                                    isSearching={customerSearchState === 'loading'}
+                                    searchError={customerSearchState === 'error' ? 'Customer search is temporarily unavailable.' : ''}
                                 />
                                 {canCreateRelationships && customerMode !== 'new' && <button className="equipment-autocomplete-create" type="button" onClick={() => {
                                     if (customerMode === 'existing') setCustomerQuery('')
@@ -814,8 +922,13 @@ export default function EquipmentDrawer(props: Props) {
                                     }}
                                     placeholder={selectedCustomer ? 'No Site selected' : 'Select a customer first'}
                                     searchPlaceholder="Search Site name, address or Customer"
-                                    emptyLabel={selectedCustomer ? 'No matching Sites' : 'Select a customer before choosing a Site.'}
+                                    emptyLabel={selectedCustomer
+                                        ? siteLoadState === 'loading' ? 'Loading Sites…' : 'No matching Sites'
+                                        : 'Select a customer before choosing a Site.'}
                                     disabled={!selectedCustomer}
+                                    resultLimit={8}
+                                    isSearching={siteLoadState === 'loading'}
+                                    searchError={siteLoadState === 'error' ? 'Sites are temporarily unavailable.' : ''}
                                 />}
                                 {canCreateRelationships && selectedCustomer && siteMode !== 'new' && <button className="equipment-autocomplete-create" type="button" onClick={() => { updateField('siteId', ''); setSiteMode('new'); setNewSite({ name: '', address: '' }); setRelatedError('') }}>+ Add new site</button>}
                                 {canCreateRelationships && customerMode === 'new' && siteMode !== 'new' && <button className="equipment-autocomplete-create" type="button" onClick={() => { setSiteMode('new'); setNewSite({ name: '', address: '' }) }}>+ Add first site</button>}
@@ -917,6 +1030,11 @@ export default function EquipmentDrawer(props: Props) {
                                     </div>}
                                 </div>
                             </details>}
+                            {servicePlansLoading
+                                ? <div className="equipment-maintenance-load-state" role="status">Loading service history and due dates…</div>
+                                : servicePlansError
+                                    ? <div className="equipment-maintenance-load-state error" role="alert"><p>{servicePlansError}</p><button type="button" onClick={() => { void servicePlansQuery.refetch().catch(() => undefined) }}>Try again</button></div>
+                                    : <>
                             <div className="equipment-maintenance-service-heading">
                                 <div>
                                     <strong>Service history and due dates</strong>
@@ -978,6 +1096,7 @@ export default function EquipmentDrawer(props: Props) {
                                     </div>
                                 </details>
                             })}
+                            </>}
                         </div>
                     </EditDrawerSection>}
 

@@ -10,11 +10,61 @@ import { buildQuotePoRequestEmail } from '../src/alpha/quotes/utils/quotePoReque
 import { PURCHASE_ORDER_RECIPIENT_ROLES, type PurchaseOrderRecipient } from '../src/alpha/customers/purchaseOrderRecipient.types.ts'
 
 test('Quotes register prioritizes operational context and omits the revision column', async () => {
-    const screen = await readFile(new URL('../src/alpha/quotes/QuotesScreen.tsx', import.meta.url), 'utf8')
+    const [screen, searchableSelect, searchableSelectStyles] = await Promise.all([
+        readFile(new URL('../src/alpha/quotes/QuotesScreen.tsx', import.meta.url), 'utf8'),
+        readFile(new URL('../src/alpha/shared/searchable-select/SearchableSelect.tsx', import.meta.url), 'utf8'),
+        readFile(new URL('../src/alpha/shared/searchable-select/SearchableSelect.css', import.meta.url), 'utf8'),
+    ])
     assert.match(screen, /<th>Customer<\/th><th>Job<\/th><th>Equipment<\/th><th>Quote description<\/th>/)
     assert.match(screen, /linkedEquipment\?\.gr_make, linkedEquipment\?\.gr_model/)
     assert.doesNotMatch(screen, /<th>Revision<\/th>/)
     assert.doesNotMatch(screen, /Rev \{quote\.gr_revision\}/)
+    assert.match(searchableSelect, /title=\{!multiple \? selected\?\.label : undefined\}/)
+    assert.match(searchableSelectStyles, /\.searchable-select-trigger\s*\{[^}]*min-width:\s*0[^}]*max-width:\s*100%[^}]*box-sizing:\s*border-box[^}]*overflow:\s*hidden/)
+    assert.match(searchableSelectStyles, /\.searchable-select-trigger > span:first-child[^}]*flex:\s*1 1 auto[^}]*min-width:\s*0[^}]*text-overflow:\s*ellipsis/)
+})
+
+test('Quote workflows stay in the current workspace and keep dense rows compact', async () => {
+    const [app, jobs, customer, scheduler, wof, invoice, editor, styles] = await Promise.all([
+        readFile(new URL('../src/App.tsx', import.meta.url), 'utf8'),
+        readFile(new URL('../src/alpha/jobs/JobsScreen.tsx', import.meta.url), 'utf8'),
+        readFile(new URL('../src/alpha/customers/CustomerDashboardScreen.tsx', import.meta.url), 'utf8'),
+        readFile(new URL('../src/alpha/scheduling/SchedulingScreen.tsx', import.meta.url), 'utf8'),
+        readFile(new URL('../src/alpha/wof/components/WofJobDrawer.tsx', import.meta.url), 'utf8'),
+        readFile(new URL('../src/alpha/chargeable-invoices/components/ChargeableInvoiceWorkspace.tsx', import.meta.url), 'utf8'),
+        readFile(new URL('../src/alpha/quotes/components/QuoteEditorDialog.tsx', import.meta.url), 'utf8'),
+        readFile(new URL('../src/alpha/quotes/QuotesScreen.css', import.meta.url), 'utf8'),
+    ])
+    assert.match(app, /<QuoteEditorOverlayProvider>/)
+    for (const source of [jobs, customer, scheduler, wof, invoice]) {
+        assert.match(source, /useQuoteEditorOverlay/)
+        assert.doesNotMatch(source, /\/quotes\?quoteId=/)
+    }
+    for (const source of [jobs, customer, scheduler]) {
+        assert.match(source, /setEditingJob\(null\);?\s*quoteEditor\.(?:createQuote|openQuote)/)
+    }
+    assert.match(wof, /onClose\(\);?\s*quoteEditor\.(?:createQuote|openQuote)/)
+    assert.match(editor, /className="quote-line-header"[\s\S]*Catalogue item[\s\S]*Extended[\s\S]*GST/)
+    assert.match(editor, /className="quote-field quote-title-field"/)
+    assert.match(styles, /\.quotes-job-value[^}]*text-overflow:\s*ellipsis/)
+    assert.match(styles, /\.quote-title-field\s*\{[^}]*grid-column:\s*span 3/)
+    assert.match(styles, /\.quote-dialog-backdrop[^}]*z-index:\s*1200/)
+})
+
+test('Pricing catalogue supports confirmed Dataverse deletion', async () => {
+    const [screen, hook, api] = await Promise.all([
+        readFile(new URL('../src/alpha/quotes/PricingScreen.tsx', import.meta.url), 'utf8'),
+        readFile(new URL('../src/alpha/quotes/hooks/usePricingItems.ts', import.meta.url), 'utf8'),
+        readFile(new URL('../src/alpha/quotes/services/pricingApi.ts', import.meta.url), 'utf8'),
+    ])
+    assert.match(screen, /<EditDrawerConfirmation[\s\S]*Delete item/)
+    assert.match(hook, /deleteItem:[\s\S]*deletePricingItemApi/)
+    assert.match(api, /export async function deletePricingItem[\s\S]*method:\s*'DELETE'/)
+})
+
+test('Job scheduling editor opens its summary or add form immediately', async () => {
+    const source = await readFile(new URL('../src/alpha/jobs/components/JobScheduleFields.tsx', import.meta.url), 'utf8')
+    assert.match(source, /const \[isExpanded, setIsExpanded\] = useState\(true\)/)
 })
 
 const quote: Quote = {

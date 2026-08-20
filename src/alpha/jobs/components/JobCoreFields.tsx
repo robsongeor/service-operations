@@ -14,13 +14,16 @@ type Props = {
     draft: JobEditorDraft
     setDraft: Dispatch<SetStateAction<JobEditorDraft>>
     mechanics: Mechanic[]
+    mechanicsLoading?: boolean
+    mechanicsError?: string
+    onRetryMechanics?: () => void
     allowEmptyJobType?: boolean
     jobTypeError?: string
     jobTypeOptions?: typeof JOB_TYPE_OPTIONS
     equipment?: Equipment
 }
 
-export default function JobCoreFields({ draft, setDraft, mechanics, equipment, allowEmptyJobType = false, jobTypeError = '', jobTypeOptions = JOB_TYPE_OPTIONS }: Props) {
+export default function JobCoreFields({ draft, setDraft, mechanics, mechanicsLoading = false, mechanicsError = '', onRetryMechanics, equipment, allowEmptyJobType = false, jobTypeError = '', jobTypeOptions = JOB_TYPE_OPTIONS }: Props) {
     const [mechanicSelectOpen, setMechanicSelectOpen] = useState(false)
 
     return (
@@ -113,6 +116,10 @@ export default function JobCoreFields({ draft, setDraft, mechanics, equipment, a
                         setMechanicSelectOpen(false)
                     }}
                 />}
+                {draft.status !== JOB_STATUSES.UNCONFIRMED && mechanicsLoading && <small>Loading Staff choices…</small>}
+                {draft.status !== JOB_STATUSES.UNCONFIRMED && mechanicsError && <small className="job-edit-field-error" role="alert">
+                    Staff choices are unavailable. {onRetryMechanics && <button type="button" onClick={onRetryMechanics}>Try again</button>}
+                </small>}
             </label>
 
             {jobRequiresMaintenance(draft.jobType) && <>

@@ -21,6 +21,11 @@ const equipmentGeocodingService = require('./api/services/equipmentGeocodingServ
   searchAddresses: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
   jsonResponse: (status: number, body: object, headers?: Record<string, string>) => LocalFunctionResponse
 }
+const equipmentPhotoService = require('./api/services/equipmentPhotoService') as {
+  searchJobs: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
+  upload: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
+  jsonResponse: (status: number, body: object, headers?: Record<string, string>) => LocalFunctionResponse
+}
 
 const LIFTTRUCKS_API_ORIGIN = 'https://webview.liftrucks.co.nz'
 const LIFTTRUCKS_API_KEY = '500256'
@@ -144,6 +149,54 @@ function jobSubmissionProxy(env: Record<string, string | undefined>): Plugin {
     configurePreviewServer(server) {
       installMiddleware(server.middlewares)
     },
+  }
+}
+
+function equipmentPhotoProxy(env: Record<string, string | undefined>): Plugin {
+  const serverSettings = [
+    'DATAVERSE_URL', 'DATAVERSE_TENANT_ID', 'EQUIPMENT_PHOTO_UPLOAD_ENABLED',
+    'SHAREPOINT_TENANT_ID', 'SHAREPOINT_CLIENT_ID', 'SHAREPOINT_CLIENT_SECRET',
+    'SHAREPOINT_HOSTNAME', 'SHAREPOINT_SITE_PATH', 'SHAREPOINT_LIBRARY_NAME', 'SHAREPOINT_ROOT_FOLDER',
+  ]
+  serverSettings.forEach((name) => {
+    process.env[name] ||= env[name]
+  })
+  process.env.DATAVERSE_URL ||= env.VITE_DATAVERSE_URL
+  process.env.DATAVERSE_TENANT_ID ||= env.VITE_MSAL_TENANT_ID
+  const maximumRequestBytes = 11 * 1024 * 1024
+
+  const installMiddleware = (middlewares: { use: (handler: (request: IncomingMessage, response: ServerResponse, next: () => void) => void) => void }) => {
+    middlewares.use((request, response, next) => {
+      if (!request.url) return next()
+      const requestUrl = new URL(request.url, 'http://localhost')
+      if (requestUrl.pathname !== '/api/equipmentphotos') return next()
+      void (async () => {
+        let body: Record<string, unknown> = {}
+        if (request.method === 'POST') {
+          const parsed = await readLimitedJsonBody(request, maximumRequestBytes)
+          if (parsed.tooLarge) return sendFunctionResponse(response, equipmentPhotoService.jsonResponse(413, { error: 'The photo upload request is too large.' }))
+          if (parsed.body === null) return sendFunctionResponse(response, equipmentPhotoService.jsonResponse(400, { error: 'The request body is invalid.' }))
+          body = parsed.body
+        }
+        const localRequest: LocalFunctionRequest = {
+          method: request.method,
+          headers: request.headers,
+          query: Object.fromEntries(requestUrl.searchParams),
+          body,
+        }
+        const result = request.method === 'GET'
+          ? await equipmentPhotoService.searchJobs(localRequest)
+          : request.method === 'POST'
+            ? await equipmentPhotoService.upload(localRequest)
+            : equipmentPhotoService.jsonResponse(405, { error: 'Method not allowed.' }, { Allow: 'GET, POST' })
+        sendFunctionResponse(response, result)
+      })().catch(() => sendFunctionResponse(response, equipmentPhotoService.jsonResponse(503, { error: 'The equipment photo service is temporarily unavailable.' })))
+    })
+  }
+  return {
+    name: 'equipment-photo-api-proxy',
+    configureServer(server) { installMiddleware(server.middlewares) },
+    configurePreviewServer(server) { installMiddleware(server.middlewares) },
   }
 }
 
@@ -511,6 +564,7 @@ export default defineConfig(({ mode }) => {
       chargeableInvoicePreviewProxy(env),
       chargeableInvoiceApprovalProxy(env),
       equipmentGeocodingProxy(env),
+      equipmentPhotoProxy(env),
     ],
   }
 })

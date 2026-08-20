@@ -36,31 +36,53 @@ events only; clients debounce those events and refresh from Dataverse. Technicia
 and photos are drawer-only details and are fetched for the selected Job rather than for the entire
 table.
 
-The authenticated app shell also listens for bounded Staff invalidation events. An active Jobs
-screen re-reads only `gr_mechanics` after a short debounce, so technician names and assignment
-choices update across PCs without reloading the Job collection or the browser page.
+The authenticated app shell owns one connection for bounded Job, Equipment, and Staff invalidation
+events. An active Jobs screen re-reads only `gr_mechanics` after a short debounce for a Staff event,
+so technician names and assignment choices update across PCs without reloading the Job collection
+or the browser page.
 
-Job invalidations are not replayable while a laptop is asleep or disconnected. The Jobs client
-therefore performs one debounced authoritative refresh after SignalR reconnects and when a hidden
-Jobs tab becomes visible. This closes missed-event gaps without background polling or constant
+Job invalidations are not replayable while a laptop is asleep or disconnected. The app-shell
+provider therefore invalidates currently observed Job-dependent queries after SignalR reconnects and
+when a hidden tab becomes visible; a mounted legacy global Jobs list performs one debounced
+authoritative refresh. This closes missed-event gaps without background polling or constant
 Dataverse queries.
 
-Jobs startup is deliberately split into progressive phases. The table phase loads Jobs and Staff plus the
-Schedule Options and Office Updates that directly drive visible table filtering and summaries. It
+Jobs startup is deliberately split into progressive phases. The table phase loads Jobs plus the shared,
+account-scoped Staff directory and the Schedule Options and Office Updates that directly drive visible
+table filtering and summaries. It
 does not request the full Equipment, Customer, Site, Site Contact, Quote, Assignment, or Equipment
-Service Plan collections. Job create remains gated on the relationship choices it requires. Job edit
+Service Plan collections. Job create opens immediately from its supplied context; its Staff selector,
+exact Equipment refresh, maintenance plans, selected-Customer Sites, and selected-Site Contacts each
+have independent loading/error/retry state. Job edit
 opens immediately from the selected summary, refreshes one exact Job independently, loads Equipment,
-Customer, Site, Site Contact, and Service Plan editor data separately from Quotes and Assignments,
+Customer, Site, Site Contact, and Service Plan editor data through bounded search or selected-parent
+queries, loads at most 50 linked Quotes only when the Quotes tab opens, loads at most 50 linked
+Assignments only when the Job Card tab opens,
 and fetches Job Card child rows and photo metadata only when that tab is selected. The exact Job core
 and Job Card metadata are shared by stable focused query keys across Jobs, Scheduler, Customer
 Dashboard, Equipment, and WOF entry points. A photo body is fetched only when the operator opens that
 photo and is released shortly after the preview is no longer observed. Core, editor-reference,
-collaboration, Job Card metadata, and photo-body failures have scoped retry states. Save is unavailable until exact Job
+Quote, Assignment, Job Card metadata, and photo-body failures have scoped retry states. Save is unavailable until exact Job
 core and relationship choices are ready, preventing a partial reference load from clearing a valid
 Dataverse relationship. Concurrent reference opens share their respective in-flight request and
 focused values use bounded stale and cache windows rather than route-local lifetime.
 
+Scoped `useJobs()` consumers do not inherit those two full-table reads. Customer Dashboard supplies
+Schedule Options and Office Updates filtered to its selected Customer's loaded Job IDs, while
+Scheduler supplies its visible-window Schedule Options and Office Updates filtered to the Jobs in
+that window. A smaller scoped consumer that supplies neither receives empty supporting collections
+instead of silently requesting every Schedule Option and Office Update in Dataverse.
+
 Job create/edit drawers use shared drawer presentation and shared searchable selectors.
+Their Equipment and Customer comboboxes debounce remote Dataverse search and cap results at eight;
+Customer Sites, Site Contacts, the exact selected Equipment, and its Service Plans load only after
+their parent is selected. Superseded requests abort, the source screen's exact Equipment/Customer/Site
+defaults render immediately, and a secondary dependency failure does not blank or close the drawer.
+The shared Staff directory is reused across mounted Job consumers instead of being fetched separately
+by every drawer entry point. Existing relationships remain visible while scoped results merge into
+the editor.
+The Scheduling tab expands its canonical schedule section immediately: an existing visit is shown
+without another click, while an unscheduled Job opens directly on the add-schedule fields.
 Their inline New Equipment panel accepts primary Fleet Number, alternate Fleet Number, and Serial;
 any one identifier is sufficient for creation. Alternate Fleet input is normalized through the
 canonical Equipment identifier rules and saved to the existing `gr_alternatefleetnumbers` column.
@@ -110,10 +132,13 @@ row and uses its ETag so a stale browser or concurrent completion cannot replace
 reading. Breakdown, Workshop, and Site Check completions use the general hour-meter dialog; WOF
 collects the hour meter alongside its new expiry; Service additionally updates maintenance history
 and plans. Generated Site Check Jobs retain their occurrence/schedule completion orchestration.
-After any completion workflow succeeds, the Jobs collection is force-refreshed from Dataverse
-rather than accepting a fresh local/device cache entry. The table therefore reflects the completed
-status as soon as the completion dialog closes; opening the focused Job editor is not a refresh
-prerequisite.
+After any completion workflow succeeds, reconciliation is bounded to the completed Job and its
+Equipment. The client re-reads the exact Job, exact Equipment, that Equipment's complete linked Job
+history, and only that Equipment's Service Plans; it then recalculates due dates and patches the
+matching row in any mounted Jobs register. Error recovery uses those same focused reads. This keeps
+historical hour-meter and maintenance calculations authoritative without reloading the global Jobs,
+Equipment, or Service Plan collections, and the completed status is visible without reopening the
+focused Job editor.
 When the optional Hour Meter Reading Type schema is enabled, a manager may use a clearly marked
 estimate when a physical reading is unavailable. Actual is the default; estimated values remain in
 history and forecasting with a confidence penalty. Both columns are provisioned in the target
@@ -155,8 +180,8 @@ prefilled for confirmation. Neither path silently creates Equipment. Its initial
 uses the concise final segment of the extracted GreenTree headline rather than Work Completed. This
 historical invoice-recovery entry point defaults Job Status to Complete and copies only a meaningful
 extracted GreenTree Order No into the editable Job Order Number; standard Job creation retains its
-existing Unallocated default. The invoice entry point also awaits the same lazy Job reference-data
-preparation before resolving an Equipment match or rendering the editor, with retry on failure.
+existing Unallocated default. The invoice entry point awaits a bounded Equipment identifier lookup
+before resolving a match or rendering the editor; it does not load the global Equipment register.
 The feature-owned Jobs table also owns Job Book clipboard exchange. A row click copies one
 job-book row; its explicit multi-select controls copy selected, currently shown Jobs in the
 visible sorted order as tab-separated rows. The existing Fleet Number cell contains the primary
@@ -178,8 +203,12 @@ Intake row Promoted together; both Job Number alternate keys are Active.
 Job Book uses a dedicated lightweight Equipment picker projection rather than the full Equipment
 management payload. That index contains Equipment identity plus its authoritative Site/Customer
 display context, is scoped by Dataverse environment and signed-in account, and uses an IndexedDB
-snapshot for immediate repeat loads followed by a background refresh. Customer and Site suggestion
-lists are not part of the initial Job Book load; they load only when the add-machine dialog opens.
+snapshot for immediate repeat loads followed by a background refresh. Staff is an independent shared
+query and cannot block the Job/Equipment shell. Customer selectors issue debounced, abortable bounded
+searches and seed the currently saved Customer so a delayed response cannot clear it. The add-machine
+dialog loads Sites only after a Customer record is selected, cancels superseded Customer/Site reads,
+and exposes independent retries. Free-text Customer details remain permitted for unconfigured legacy
+intake, but Site suggestions require a linked Customer.
 
 ## Important Business Rules
 

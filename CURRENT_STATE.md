@@ -19,13 +19,26 @@ Branch: `codex/data-loading-architecture-review`
 - Customers, Sites, Site Contacts, Job Assignments, Job Schedule Options, Job Office Updates,
   Equipment Service Plans, Mechanics, Quotes, and Quote Job lookups now follow Dataverse continuation
   links through one reusable pager.
+- Staff now renders from its own shared directory key without downloading the complete Jobs
+  collection. Open counts use a minimal allocation projection, detailed Jobs are scoped to the
+  selected person and tab, qualifications fail independently, and qualification types are deferred
+  until an existing assignable person is edited. Job events and mutations invalidate only Staff
+  workload keys; Staff writes patch the directory immediately.
 - One environment/tenant/account-scoped Operational Data Client now lives above authenticated routes.
   Its `useSyncExternalStore` registry deduplicates typed queries, exposes independent loading/error
   states, cancels superseded requests, rejects obsolete results, invalidates bounded keys, and evicts
   unobserved focused data after a configured cache window.
+- One account-scoped Operational Realtime Provider now sits beside that client above authenticated
+  routes. It owns the only SignalR connection in an app shell, validates bounded Job, Equipment, and
+  Staff events, immediately invalidates a matching focused record, and coalesces dependent query
+  invalidation after bursts. Reconnect and visibility return trigger bounded recovery of observed
+  Job/Equipment queries and active Staff consumers without polling. Successful local Job and
+  Equipment cache invalidations are also broadcast to other tabs in the same hashed account/
+  environment scope; receiving tabs coalesce bounded authoritative refreshes without echoing the
+  message or sharing record IDs, business data, or credentials.
 - The main Jobs and Equipment arrays now have one app-shell owner under versioned operational-list
   query keys. `useJobs()` and `useEquipmentManager()` retain their existing Dataverse,
-  generation-aware memory, IndexedDB stale-while-revalidate, mutation, and realtime workflows, but
+  generation-aware memory, IndexedDB stale-while-revalidate, and mutation workflows, but
   accepted values and local mutation patches reconcile every mounted route through the shared
   client. Navigating between Jobs, Equipment, Customer Dashboard, Scheduler, and other consumers can
   reuse the last accepted list immediately instead of beginning with an empty route-local array.
@@ -34,12 +47,31 @@ Branch: `codex/data-loading-architecture-review`
   result for 30 seconds, and release it 60 seconds after the last drawer closes. Job mutations and
   atomic Service completion invalidate open Equipment histories and refresh them without a whole-page
   reload.
+- The canonical Equipment drawer now treats its selected editable Equipment row as immediate core
+  data. Equipment Manager, Customer Dashboard, and WOF load only that Equipment's Service Plans when
+  Maintenance is selected, with an independent loading/retry boundary and one-minute unobserved
+  retention. The already-focused Job history supplies both usage evidence and the History tab, so
+  opening Equipment no longer requires route-owned Job or plan child collections.
+- Equipment Manager no longer blocks its register on complete Customer, Site, and Equipment Service
+  Plan directories. It derives filters from the expanded Equipment projection, shares a 30-second
+  query for visible-page maintenance summaries, and deliberately expands that plan query only for
+  Data Status sorting. Its create/edit drawer uses abortable eight-result Customer search and
+  selected-Customer Site reads. Equipment Map retains all Sites but skips plans; authorised CSV
+  import loads its complete Site/plan references only when a file is selected. Supporting-plan
+  failures are shown as Unavailable rather than false Not Configured results.
 - Canonical Job edit drawers now open immediately from the selected summary instead of awaiting
   Equipment, Customer, Site, Contact, Quote, assignment, service-plan, submission, and photo reads.
   An exact Job-core refresh runs independently before editing/saving unlocks; relationship/service
   data and Quote/assignment data have separate readiness and retry boundaries; Job Card time, parts,
   submissions, and photos load only when the Job Card tab is selected. Jobs, Scheduler, Customer
   Dashboard, and WOF entry points use the same progressive contract.
+- Canonical Job creation now follows the same progressive contract. Jobs, Equipment Manager,
+  Customer Dashboard, and Chargeable Invoice Review render the drawer and supplied exact defaults
+  immediately instead of waiting on a broad reference-data preparation gate. Staff choices reuse the
+  shared account-scoped directory query; exact Equipment/maintenance data, selected-Customer Sites,
+  and selected-Site Contacts load independently with cancellation and scoped retry messages. A
+  secondary lookup failure no longer blanks the whole create workflow or silently presents an empty
+  dependent selector as authoritative.
 - Exact Job core and Job Card metadata now have stable shared query keys across those entry points.
   Concurrent drawers deduplicate requests, matching mutations and Job realtime events invalidate the
   active focused keys, and unobserved results are evicted after bounded cache windows. Job Card
@@ -47,13 +79,16 @@ Branch: `codex/data-loading-architecture-review`
   when that photo is opened and is never written to IndexedDB.
 - Customer Dashboard no longer starts the global Jobs or Equipment collections. Selecting a
   Customer progressively loads only its Sites, bounded Site-filtered Equipment and Jobs, and bounded
-  Equipment-filtered Service Plans through shared query keys. Mounted mutations and matching
+  Equipment-filtered Service Plans through shared query keys. Schedule Options and Office Updates
+  are now additionally filtered to that Customer projection's Job IDs instead of reading either
+  complete child table. Mounted mutations and matching
   realtime events invalidate that selected-Customer projection instead of broadly reloading Jobs or
   Equipment. Before Job completion, the focused Equipment's exact record, full linked Job history,
   and plans are loaded so moved Equipment retains correct chronological meter and maintenance rules.
 - Scheduler no longer starts the global Jobs collection or reads every Schedule Option. Its visible
   Monday-to-Sunday range loads only matching Schedule Options and the unique referenced Jobs through
-  shared bounded query keys, while the previous and next weeks prefetch into a five-minute memory
+  shared bounded query keys; Office Updates are filtered to those same Job IDs. The previous and
+  next weeks prefetch into a five-minute memory
   cache. Schedule writes and Job mutations/realtime recovery refresh the active projection without
   clearing reference data already loaded by an open canonical Job drawer. A dedicated cross-client
   Schedule Option event remains future work.
@@ -61,17 +96,83 @@ Branch: `codex/data-loading-architecture-review`
   Allocated, Unallocated, and Waiting for parts statuses through a minimal Job/Site-location
   projection, reuses a complete cached status result while an exact subset revalidates, and follows
   Dataverse continuation links. Job mutations and realtime recovery refresh the active status key;
-  application Site and Equipment mutations invalidate affected map projections. Centralized
-  cross-client Site and Equipment event dispatch remains future work.
+  application Site and Equipment mutations invalidate affected map projections. The app-shell
+  Equipment event path now refreshes Job Map across users; a dedicated Site event remains future
+  work.
+- Job create/edit relationship loading no longer reads the complete Equipment, Customer, Site,
+  Site Contact, and Equipment Service Plan tables. Equipment and Customer searches are debounced
+  and capped at eight Dataverse results; Customer Sites, Site Contacts, exact Equipment, and plans
+  load only for the selected parent with cancellation. Results merge into the open editor, and
+  related-record creates reconcile the returned/scoped rows instead of refreshing a whole table.
+  Equipment-originated Job creation is seeded from the selected Equipment and does not start the
+  global Jobs or Equipment registers.
+- Scoped `useJobs()` instances no longer silently fall back to the complete Schedule Option or
+  Office Update tables. Screens that need those children supply their own bounded projections;
+  smaller focused consumers receive empty supporting collections until they explicitly load them.
+- WOF no longer starts global Jobs or its editor-only Customer, Site, Site Contact, Staff,
+  Provider, Qualification, and Equipment Service Plan collections. The register reuses shared
+  Equipment and account-scoped WOF Inspection/Schedule Option keys with a 20-second stale window and
+  two-minute unobserved retention. Inspection history is abortable and continuation-safe; Schedule
+  Options are keyed only to referenced Jobs. Job/Equipment events and reconnect/visibility recovery
+  invalidate the relevant observed keys. Inspection-editor directories load when that editor opens;
+  WOF Job creation loads Staff and only the selected Site/Equipment relationships. Equipment
+  maintenance save performs a focused service-plan read before synchronisation.
+- Opening an existing linked WOF Job now hydrates one exact Job plus Office Updates filtered to that
+  Job and reuses only its supplied bounded Schedule Options. Chargeable Invoice Job creation also
+  uses an empty scoped Jobs shell. The final call-site audit confirms that only the primary Jobs
+  register invokes global `useJobs()` loading; explicit Equipment Map/CSV reference reads remain
+  documented workflow requirements.
+- Successful Job completion no longer reloads the global Jobs, Equipment, and Service Plan
+  collections. It authoritatively reconciles the exact completed Job, exact Equipment, that
+  Equipment's complete linked Job history, and its focused Service Plans, then patches mounted
+  global or scoped rows and recalculates due dates. Completion recovery uses the same bounded scope.
+- Job-drawer Quotes and technician Assignments now load through separate shared focused Job keys.
+  Each Dataverse request is filtered to the opened Job and capped at 50 rows; Quotes start only on
+  the Quotes tab, Assignments only on the Job Card tab, and Assignment actions refresh only that
+  focused key. Customer Dashboard's Quotes tab now independently loads the selected Customer's
+  bounded Quote projection instead of relying on the Job editor's former full collection.
+- The standalone Quotes register now uses one continuation-safe account-scoped query and renders
+  without waiting for editor-only support. Cross-screen editing fetches one exact Quote and its
+  bounded lines. Pricing and Staff now start as independent shared queries only when an editor is
+  requested: the Pricing screen and Quote editors reuse one catalogue key, while Quotes reuse the
+  account-scoped Staff directory already used by Jobs. Staff failure no longer blocks Quote editing;
+  it disables only PO email routing and provides a scoped retry. Job, Customer, and active Equipment
+  selectors use debounced `$top=8`
+  Dataverse searches plus exact-ID hydration for saved selections and Job-originated creates.
+  Superseded searches abort. Quote mutations patch shared register/focused keys
+  immediately and publish content-free same-scope tab invalidation. Job/Equipment changes and
+  reconnect/visibility recovery refresh observed dependent Quote projections; a dedicated Quote
+  server event remains future work.
 - The Operational Data Client now exposes privacy-safe in-memory metrics for request count,
   cache hits, concurrent-request deduplication, success/failure/abort, duration, and estimated
-  payload bytes by normalized query family. It stores no record IDs, business content, or tokens;
-  exported telemetry and event-to-visible latency remain future work.
-- Focused data-loading tests, the complete regression suite, lint, build, and diff validation pass.
+  payload bytes by normalized query family. Development builds expose those metrics through a
+  Sidebar Data diagnostics panel together with route-to-useful-content timings for Jobs, Customer
+  Dashboard, Equipment, Scheduling, and WOF. The panel supports a resettable cold/warm baseline and
+  copyable privacy-safe JSON; it stores no record IDs, account scope, business content, response
+  bodies, or tokens. Exported telemetry and event-to-visible latency remain future work.
+- The first signed-in diagnostic baseline measured Customer Dashboard at about 465 ms, Scheduling
+  at 287 ms, and Equipment at 2,435 ms. Customer Schedule Option and Office Update query keys are
+  now stable across unchanged renders, removing repeated cache/deduplication churn. Full Equipment
+  register reads now use the shared `equipment:operational-list` request as well as its existing
+  memory/IndexedDB cache, so Equipment Manager and Equipment Map deduplicate the load and the next
+  report can attribute the remaining cold-start delay directly.
+- Job drawer Scheduling content now opens immediately, exposing the existing visit or add-schedule
+  form without a second disclosure click.
+- Quote editing remains feature-owned but is available as a lazy app-shell overlay from Jobs,
+  Customer Dashboard, Scheduler, WOF, and Chargeable Invoice Review. Those screens retain their
+  current state underneath the editor; an originating Job drawer closes first. Quote rows retain their compact visible column header,
+  oversized register or selected Job values truncate with an ellipsis while retaining the full hover title, and the Quote title consumes
+  the remaining desktop editor row beside Author.
+- Pricing catalogue rows now support explicit confirmed deletion through the existing Dataverse
+  service. Referential-integrity or permission failures remain blocking and visible; no schema or
+  security-role changes were made.
+- Focused data-loading tests, the complete regression suite, targeted lint, build, and diff
+  validation pass. Full-repository lint remains blocked only by the existing unrelated React rules
+  in `src/Sidebar.tsx` and `src/alpha/equipment-photos/EquipmentPhotoUploadScreen.tsx`.
   No Dataverse schema, role, plugin, Azure configuration, credential, deployment, or communication
-  change has been made. The remaining bounded selectors,
-  app-shell realtime, gap recovery, cross-tab invalidation, exported instrumentation, and replacement
-  of broad full-list realtime reloads remain phased backlog work.
+  change has been made. Capturing the signed-in cold/warm baseline, server watermark/delta recovery, exported
+  instrumentation, and replacement of the deliberate primary-register full-list adapters remain
+  phased backlog work.
 
 ## Local Job Card email guard (deployed)
 
@@ -385,15 +486,24 @@ Branch: `codex/data-loading-architecture-review`
   SignalR messages contain only the changed record ID, operation, and event time.
 
 - Staff realtime invalidation was published from commit `0adbe3d` on 16 August 2026. The
-  authenticated app shell opens one Staff notification listener, and active Staff,
-  Jobs, and Job Book screens debounce a `gr_mechanic` change before re-reading only the Staff
-  directory. The notification contains only Staff ID, operation, and event time. Azure indexes the
+  authenticated app shell opens one Staff notification listener, and active Staff, Jobs, Quotes,
+  and Job Book consumers reuse the same account-scoped Staff directory query. A debounced
+  `gr_mechanic` event therefore re-reads one shared directory rather than one copy per screen. The
+  notification contains only Staff ID, operation, and event time. Azure indexes the
   `equipmentchanged` and `negotiate` Functions; authenticated negotiation returned HTTP 200 and a
   protected synthetic Staff event returned HTTP 202. Three enabled asynchronous PostOperation
   `gr_mechanic` steps were registered and independently verified: Create
   `d5d1b607-1799-f111-b8db-6045bde57026`, Update
   `d7d1b607-1799-f111-b8db-6045bde57026`, and Delete
   `d9d1b607-1799-f111-b8db-6045bde57026`.
+
+- Job Book Legacy now renders its Job/Equipment shell independently of Staff. Customer selection
+  performs bounded, debounced and abortable Dataverse searches; the add-machine workflow preserves
+  a selected Customer label and loads only that Customer's Sites. Staff, Customer search, and Site
+  failures keep the existing row and expose scoped retries instead of reloading or blanking the
+  legacy table. The Equipment picker continues to use its deliberate account/environment-scoped
+  lightweight index and IndexedDB snapshot because legacy paste/intake work requires immediate
+  cross-customer Equipment lookup.
 
 - Local Job Card link generation now reloads its CommonJS API service per Vite request. This prevents
   the hot-reloaded browser client and long-running localhost middleware from disagreeing about the

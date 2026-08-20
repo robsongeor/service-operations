@@ -1,5 +1,6 @@
 import type { Equipment } from '../../jobs/types/equipment.types'
 import { ScopedDataCache, type ScopedDataCacheReadOptions } from '../../shared/data/ScopedDataCache.ts'
+import { publishLocalOperationalInvalidation } from '../../shared/realtime/operationalCrossTabInvalidation.ts'
 
 export type EquipmentCacheReadOptions = ScopedDataCacheReadOptions
 
@@ -124,8 +125,9 @@ export function equipmentCacheScope(accessToken: string) {
 
 export const sharedEquipmentDataCache = new EquipmentDataCache<Equipment[]>()
 
-export function invalidateSharedEquipmentDataCache(accessToken?: string) {
+export function invalidateSharedEquipmentDataCache(accessToken?: string, options: { broadcast?: boolean } = {}) {
     const scope = accessToken ? equipmentCacheScope(accessToken) : undefined
     sharedEquipmentDataCache.invalidate(scope)
     void deletePersistedEquipmentSnapshot(scope)
+    if (options.broadcast !== false) publishLocalOperationalInvalidation('equipment')
 }

@@ -1,5 +1,6 @@
 import type { Job } from '../types/job.types'
 import { ScopedDataCache, type ScopedDataCacheReadOptions } from '../../shared/data/ScopedDataCache.ts'
+import { publishLocalOperationalInvalidation } from '../../shared/realtime/operationalCrossTabInvalidation.ts'
 
 export type JobsCacheReadOptions = ScopedDataCacheReadOptions
 
@@ -122,8 +123,9 @@ export function jobsCacheScope(accessToken: string) {
 
 export const sharedJobsDataCache = new JobsDataCache<Job[]>()
 
-export function invalidateSharedJobsDataCache(accessToken?: string) {
+export function invalidateSharedJobsDataCache(accessToken?: string, options: { broadcast?: boolean } = {}) {
     const scope = accessToken ? jobsCacheScope(accessToken) : undefined
     sharedJobsDataCache.invalidate(scope)
     void deletePersistedJobsSnapshot(scope)
+    if (options.broadcast !== false) publishLocalOperationalInvalidation('jobs')
 }

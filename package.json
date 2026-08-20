@@ -11,7 +11,7 @@
     "test": "npm run test:overview && npm run test:api && npm run test:data-loading && npm run test:maintenance && npm run test:wof && npm run test:equipment && npm run test:job-book && npm run test:job-email && npm run test:technician-submission && npm run test:job-sheet && npm run test:site-check-assignment && npm run test:job-photo && npm run test:customer-dashboard && npm run test:site-checks && npm run test:jobs-site-checks && npm run test:quotes && npm run test:chargeable-invoices && npm run test:staff",
     "test:overview": "node --experimental-strip-types --test tests/overview.test.ts",
     "test:api": "node --test tests/joblookup.test.cjs tests/jobsubmission.test.cjs tests/chargeableInvoicePreview.test.cjs tests/chargeableInvoiceApproval.test.cjs",
-    "test:data-loading": "node --experimental-strip-types --test tests/dataverseAuthentication.test.ts tests/dataversePagination.test.ts tests/equipmentDataCache.test.ts tests/jobsDataCache.test.ts tests/operationalDataClient.test.ts",
+    "test:data-loading": "node --experimental-strip-types --test tests/dataverseAuthentication.test.ts tests/dataversePagination.test.ts tests/equipmentDataCache.test.ts tests/jobCreateProgressiveLoading.test.ts tests/jobsDataCache.test.ts tests/jobsBoundedEditorLookups.test.ts tests/operationalDataClient.test.ts tests/scopedJobSupportingData.test.ts",
     "test:maintenance": "node --experimental-strip-types --test tests/maintenanceServicePlans.test.ts",
     "test:wof": "node --experimental-strip-types --test tests/wofWorkflow.test.ts",
     "test:equipment": "node --experimental-strip-types --test tests/equipmentAlternateFleetNumbers.test.ts tests/equipmentDataCache.test.ts tests/equipmentDataQuality.test.ts tests/equipmentMap.test.ts tests/equipmentPagination.test.ts tests/equipmentRealtime.test.ts tests/equipmentRealtimeApi.test.cjs tests/greentreeEquipmentReconciliation.test.ts",
@@ -21,12 +21,12 @@
     "test:job-sheet": "node --experimental-strip-types --test tests/jobSheetPdf.test.ts",
     "test:site-check-assignment": "node --experimental-strip-types --test tests/siteCheckAssignment.test.ts",
     "test:job-photo": "node --experimental-strip-types --test tests/jobPhoto.test.ts",
-    "test:customer-dashboard": "node --experimental-strip-types --test tests/customerDashboardSiteSettings.test.ts tests/purchaseOrderRecipients.test.ts",
+    "test:customer-dashboard": "node --experimental-strip-types --test tests/customerDashboardJobs.test.ts tests/customerDashboardSiteSettings.test.ts tests/purchaseOrderRecipients.test.ts",
     "test:site-checks": "node --experimental-strip-types --test tests/siteChecks.test.ts tests/siteCheckChecklistAdmin.test.ts",
     "test:jobs-site-checks": "node --experimental-strip-types --test tests/jobDescription.test.ts tests/jobMap.test.ts tests/jobsDataCache.test.ts tests/jobsPagination.test.ts tests/jobsRealtime.test.ts tests/jobsSiteChecksIntegration.test.ts tests/schedulerDataLoading.test.ts",
-    "test:quotes": "node --experimental-strip-types --test tests/quotePoRequestInvoice.test.ts",
+    "test:quotes": "node --experimental-strip-types --test tests/quotePoRequestInvoice.test.ts tests/quotesDataLoading.test.ts",
     "test:chargeable-invoices": "node --experimental-strip-types --test tests/chargeableInvoiceReview.test.ts tests/chargeableInvoiceReleaseReadiness.test.ts",
-    "test:staff": "node --experimental-strip-types --test tests/staffDirectory.test.ts tests/staffRealtime.test.ts"
+    "test:staff": "node --experimental-strip-types --test tests/staffDirectory.test.ts tests/staffRealtime.test.ts tests/staffDataLoading.test.ts"
   },
   "dependencies": {
     "@azure/msal-browser": "^5.9.0",

@@ -69,12 +69,23 @@ test('Jobs and Scheduler apply explicit Site Check integration contracts', () =>
     assert.match(jobsHook, /SITE_CHECK_SCHEDULER_MESSAGE/)
 })
 
-test('every Job completion refresh bypasses stale cached Jobs', () => {
+test('every Job completion reconciles bounded authoritative records', () => {
     const jobsHook = readFileSync(new URL('../src/alpha/jobs/hooks/useJobs.ts', import.meta.url), 'utf8')
     assert.match(jobsHook, /const refreshCompletionDataAndServiceDates = async/)
-    assert.match(jobsHook, /fetchJobsApi\(token, \{ forceRefresh: true \}\)/)
-    assert.equal(jobsHook.match(/await refreshCompletionDataAndServiceDates\(token, equipment\.gr_equipmentid\)/g)?.length, 3)
+    assert.match(jobsHook, /const recoverCompletionData = async/)
+    assert.match(jobsHook, /fetchEquipmentJobsApi\(token, equipmentId\)/)
+    assert.match(jobsHook, /fetchJobCoreApi\(token, jobId\)/)
+    assert.equal(jobsHook.match(/await refreshCompletionDataAndServiceDates\(token, equipment\.gr_equipmentid, request\.job\.gr_jobid\)/g)?.length, 3)
+    assert.doesNotMatch(jobsHook, /fetchEquipmentServicePlans\(token\)/)
     assert.match(jobsHook, /setCompletionRequest\(null\)/)
+})
+
+test('focused Job hydration appends an absent Job and loads only its office updates', () => {
+    const jobsHook = readFileSync(new URL('../src/alpha/jobs/hooks/useJobs.ts', import.meta.url), 'utf8')
+    assert.match(jobsHook, /const fetchJobForDrawer = useCallback/)
+    assert.match(jobsHook, /:\s*\[\.\.\.current, refreshed\]/)
+    assert.match(jobsHook, /fetchJobOfficeUpdatesForJobsApi\(await getAccessToken\(\), \[jobId\], signal\)/)
+    assert.match(jobsHook, /loadJobOfficeUpdatesForEditor/)
 })
 
 test('Scheduler opens the Job drawer immediately and progressively refreshes its data', () => {

@@ -1,5 +1,6 @@
 import type { Customer } from '../types/customer.types'
 import { fetchAllDataversePages } from '../../shared/dataverse/fetchAllDataversePages.ts'
+import { buildCustomerSearchUrl } from './jobRelationshipLookupUrls'
 
 const DATAVERSE_URL = import.meta.env.VITE_DATAVERSE_URL
 
@@ -20,6 +21,30 @@ export async function fetchCustomers(
             throw new Error(`Failed to fetch customers: ${error}`)
         },
     )
+}
+
+export async function searchCustomers(
+    accessToken: string,
+    query: string,
+    signal?: AbortSignal,
+): Promise<Customer[]> {
+    const result = await fetch(
+        buildCustomerSearchUrl(DATAVERSE_URL, query),
+        {
+            cache: 'no-store',
+            signal,
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                Accept: 'application/json',
+                'Cache-Control': 'no-cache',
+            },
+        },
+    )
+    if (!result.ok) {
+        const error = await result.text()
+        throw new Error(`Customer search failed: ${error || `${result.status} ${result.statusText}`}`)
+    }
+    return ((await result.json()) as { value?: Customer[] }).value ?? []
 }
 
 export async function createCustomer(

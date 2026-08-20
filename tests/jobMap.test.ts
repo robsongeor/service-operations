@@ -99,6 +99,6 @@ test('Job Map screen uses the shared status-scoped loader without global Job or 
     assert.doesNotMatch(screen, /useJobs\(/)
     assert.doesNotMatch(screen, /fetchSites/)
     assert.match(hook, /jobMapJobsQueryKey\(statuses\)/)
-    assert.match(hook, /startJobsRealtime/)
-    assert.match(hook, /queryKey\[0\] === 'job-map'/)
+    assert.doesNotMatch(hook, /startJobsRealtime/)
+    assert.doesNotMatch(hook, /visibilitychange/)
 })

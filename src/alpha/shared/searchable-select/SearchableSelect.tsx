@@ -26,6 +26,9 @@ type Props = {
     values?: string[]
     onValuesChange?: (values: string[]) => void
     resultLimit?: number
+    onSearchChange?: (query: string) => void
+    isSearching?: boolean
+    searchError?: string
 }
 
 const normalize = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase()
@@ -47,6 +50,9 @@ export default function SearchableSelect({
     values = [],
     onValuesChange,
     resultLimit,
+    onSearchChange,
+    isSearching = false,
+    searchError = '',
 }: Props) {
     const rootRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLInputElement>(null)
@@ -121,7 +127,11 @@ export default function SearchableSelect({
                 autoComplete="off"
                 placeholder={searchPlaceholder}
                 value={query}
-                onChange={(event) => { setQuery(event.target.value); setActiveIndex(0) }}
+                onChange={(event) => {
+                    setQuery(event.target.value)
+                    onSearchChange?.(event.target.value)
+                    setActiveIndex(0)
+                }}
                 onKeyDown={(event) => {
                     if (event.key === 'ArrowDown') { event.preventDefault(); setActiveIndex((current) => Math.min(current + 1, Math.max(optionCount - 1, 0))) }
                     if (event.key === 'ArrowUp') { event.preventDefault(); setActiveIndex((current) => Math.max(current - 1, 0)) }
@@ -136,8 +146,14 @@ export default function SearchableSelect({
                 aria-haspopup="listbox"
                 aria-expanded="false"
                 aria-describedby={error ? errorId : undefined}
+                title={!multiple ? selected?.label : undefined}
                 disabled={disabled}
-                onClick={() => { setOpen(true); setQuery(''); setActiveIndex(0) }}
+                onClick={() => {
+                    setOpen(true)
+                    setQuery('')
+                    onSearchChange?.('')
+                    setActiveIndex(0)
+                }}
             >
                 <span>{multiple && values.length > 0 ? `${values.length} selected` : selected?.label ?? placeholder}</span><span aria-hidden="true">⌄</span>
             </button>}
@@ -152,7 +168,9 @@ export default function SearchableSelect({
                                 <strong>{option.label}</strong>{option.secondary && <small>{option.secondary}</small>}
                             </button>
                         ))}
-                        {results.length === 0 && <span>{emptyLabel}</span>}
+                        {isSearching && <span>Searching…</span>}
+                        {!isSearching && searchError && <span role="alert">{searchError}</span>}
+                        {!isSearching && !searchError && results.length === 0 && <span>{emptyLabel}</span>}
                     </div>
                 </div>
             )}

@@ -39,6 +39,22 @@ export type OperationalQueryMetric = Readonly<{
     payloadBytes: number
 }>
 
+export type OperationalScreenName = 'Jobs' | 'Customer Dashboard' | 'Equipment' | 'Scheduling' | 'WOF'
+
+export type OperationalScreenMetric = Readonly<{
+    screen: OperationalScreenName
+    visits: number
+    readySamples: number
+    totalReadyMs: number
+    lastReadyMs: number
+    slowestReadyMs: number
+}>
+
+export type OperationalDiagnosticsSnapshot = Readonly<{
+    queries: OperationalQueryMetric[]
+    screens: OperationalScreenMetric[]
+}>
+
 type QueryEntry<T = unknown> = {
     key: OperationalQueryKey
     state: OperationalQueryState<T>
@@ -115,6 +131,15 @@ type MutableOperationalQueryMetric = {
     payloadBytes: number
 }
 
+type MutableOperationalScreenMetric = {
+    screen: OperationalScreenName
+    visits: number
+    readySamples: number
+    totalReadyMs: number
+    lastReadyMs: number
+    slowestReadyMs: number
+}
+
 /**
  * Account/environment-scoped query registry used above route components.
  *
@@ -124,6 +149,8 @@ type MutableOperationalQueryMetric = {
 export class OperationalDataClient {
     private readonly entries = new Map<string, QueryEntry>()
     private readonly metrics = new Map<string, MutableOperationalQueryMetric>()
+    private readonly screenMetrics = new Map<OperationalScreenName, MutableOperationalScreenMetric>()
+    private readonly diagnosticsListeners = new Set<() => void>()
     private nextRequestId = 0
     readonly scope: string
 
@@ -153,7 +180,67 @@ export class OperationalDataClient {
 
     /** Privacy-safe, in-memory aggregates for development diagnostics and future monitoring export. */
     getMetricsSnapshot(): OperationalQueryMetric[] {
-        return [...this.metrics.values()].map((metric) => ({ ...metric }))
+        return [...this.metrics.values()]
+            .map((metric) => ({ ...metric }))
+            .sort((left, right) => left.family.localeCompare(right.family))
+    }
+
+    getDiagnosticsSnapshot(): OperationalDiagnosticsSnapshot {
+        return {
+            queries: this.getMetricsSnapshot(),
+            screens: [...this.screenMetrics.values()]
+                .map((metric) => ({ ...metric }))
+                .sort((left, right) => left.screen.localeCompare(right.screen)),
+        }
+    }
+
+    subscribeDiagnostics(listener: () => void) {
+        this.diagnosticsListeners.add(listener)
+        return () => {
+            this.diagnosticsListeners.delete(listener)
+        }
+    }
+
+    private notifyDiagnostics() {
+        this.diagnosticsListeners.forEach((listener) => listener())
+    }
+
+    resetDiagnostics() {
+        this.metrics.clear()
+        this.screenMetrics.clear()
+        this.notifyDiagnostics()
+    }
+
+    recordScreenVisit(screen: OperationalScreenName) {
+        const metric = this.screenMetrics.get(screen) ?? {
+            screen,
+            visits: 0,
+            readySamples: 0,
+            totalReadyMs: 0,
+            lastReadyMs: 0,
+            slowestReadyMs: 0,
+        }
+        metric.visits += 1
+        this.screenMetrics.set(screen, metric)
+        this.notifyDiagnostics()
+    }
+
+    recordScreenReady(screen: OperationalScreenName, durationMs: number) {
+        const metric = this.screenMetrics.get(screen) ?? {
+            screen,
+            visits: 1,
+            readySamples: 0,
+            totalReadyMs: 0,
+            lastReadyMs: 0,
+            slowestReadyMs: 0,
+        }
+        const safeDuration = Math.max(0, durationMs)
+        metric.readySamples += 1
+        metric.totalReadyMs += safeDuration
+        metric.lastReadyMs = safeDuration
+        metric.slowestReadyMs = Math.max(metric.slowestReadyMs, safeDuration)
+        this.screenMetrics.set(screen, metric)
+        this.notifyDiagnostics()
     }
 
     private ensureEntry<T>(key: OperationalQueryKey, options: OperationalQueryOptions = {}) {
@@ -218,11 +305,13 @@ export class OperationalDataClient {
 
         if (!options.forceRefresh && isFresh) {
             this.metric(key).cacheHits += 1
+            this.notifyDiagnostics()
             return entry.state.data as T
         }
         if (entry.request) {
             if (!options.forceRefresh || entry.requestKind === 'force') {
                 this.metric(key).deduplicatedRequests += 1
+                this.notifyDiagnostics()
                 return entry.request
             }
             entry.generation += 1
@@ -238,6 +327,7 @@ export class OperationalDataClient {
         const startedAt = performance.now()
         const metric = this.metric(key)
         metric.requests += 1
+        this.notifyDiagnostics()
         const controller = new AbortController()
         const hasData = entry.state.data !== undefined
         entry.state = {
@@ -265,6 +355,7 @@ export class OperationalDataClient {
                 metric.successes += 1
                 metric.totalDurationMs += Math.max(0, performance.now() - startedAt)
                 metric.payloadBytes += estimatePayloadBytes(data)
+                this.notifyDiagnostics()
                 this.notify(current as QueryEntry)
                 return data
             })
@@ -272,6 +363,7 @@ export class OperationalDataClient {
                 metric.totalDurationMs += Math.max(0, performance.now() - startedAt)
                 if (isAbortError(error)) metric.aborted += 1
                 else metric.failures += 1
+                this.notifyDiagnostics()
                 const current = this.entries.get(hashOperationalQueryKey(key)) as QueryEntry<T> | undefined
                 if (current && current.generation === generation && current.requestId === requestId && !isAbortError(error)) {
                     current.state = {
@@ -369,6 +461,7 @@ export class OperationalDataClient {
             if (entry.evictionTimer) clearTimeout(entry.evictionTimer)
         })
         this.entries.clear()
+        this.diagnosticsListeners.clear()
     }
 }
 

@@ -94,6 +94,19 @@
     font-weight: 750;
 }
 
+.job-book-inline-retry {
+    width: fit-content;
+    padding: 3px 7px;
+    border: 1px solid #b66b5f;
+    border-radius: 6px;
+    background: #fff8f6;
+    color: #8c3f35;
+    font: inherit;
+    font-size: .66rem;
+    font-weight: 750;
+    cursor: pointer;
+}
+
 .job-book-primary,
 .job-book-secondary,
 .job-book-warning-button {

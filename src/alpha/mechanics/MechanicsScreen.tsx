@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { getJobTypeLabel } from '../jobs/types/jobType.types'
-import { JOB_STATUSES, JOB_STATUS_OPTIONS } from '../jobs/types/jobStatus.types'
+import { JOB_STATUS_OPTIONS } from '../jobs/types/jobStatus.types'
 import type { Mechanic } from '../jobs/types/mechanic.types'
 import MechanicDialog from './components/MechanicDialog'
-import { useMechanics } from './hooks/useMechanics'
+import { useMechanics, useStaffJobs } from './hooks/useMechanics'
 import type { MechanicInput } from './services/mechanicsApi'
 import './MechanicsScreen.css'
 import { getQualificationStatus } from '../wof/utils/wofRules'
@@ -16,24 +16,6 @@ function initials(name: string) {
 }
 
 export default function MechanicsScreen() {
-    const {
-        mechanics,
-        jobs,
-        qualifications,
-        qualificationTypes,
-        isLoading,
-        isSaving,
-        loadError,
-        saveError,
-        reload,
-        clearSaveError,
-        createMechanic,
-        updateMechanic,
-        setMechanicActive,
-        createQualification,
-        updateQualification,
-        deactivateQualification,
-    } = useMechanics()
     const [selectedId, setSelectedId] = useState('')
     const [search, setSearch] = useState('')
     const [showInactive, setShowInactive] = useState(false)
@@ -41,6 +23,32 @@ export default function MechanicsScreen() {
     const [jobView, setJobView] = useState<'open' | 'complete' | 'all'>('open')
     const [editingMechanic, setEditingMechanic] = useState<Mechanic | null | undefined>(undefined)
     const [actionError, setActionError] = useState('')
+    const {
+        mechanics,
+        openJobCounts,
+        qualifications,
+        qualificationTypes,
+        isLoading,
+        allocationCountsLoading,
+        qualificationsLoading,
+        qualificationTypesLoading,
+        isSaving,
+        loadError,
+        allocationCountsError,
+        qualificationsError,
+        qualificationTypesError,
+        saveError,
+        reload,
+        retryQualifications,
+        retryQualificationTypes,
+        clearSaveError,
+        createMechanic,
+        updateMechanic,
+        setMechanicActive,
+        createQualification,
+        updateQualification,
+        deactivateQualification,
+    } = useMechanics({ loadQualificationTypes: Boolean(editingMechanic) })
 
     const visibleMechanics = useMemo(() => {
         const query = search.trim().toLowerCase()
@@ -55,20 +63,13 @@ export default function MechanicsScreen() {
 
     const selectedMechanic = mechanics.find((mechanic) => mechanic.gr_mechanicid === selectedId)
         ?? visibleMechanics[0]
+    const selectedStaffJobs = useStaffJobs(
+        selectedMechanic && canBeAssignedJobs(selectedMechanic) ? selectedMechanic.gr_mechanicid : undefined,
+        jobView,
+    )
+    const selectedJobs = selectedStaffJobs.jobs
 
-    const selectedJobs = useMemo(() => {
-        if (!selectedMechanic) return []
-        return jobs.filter((job) => {
-            if (job.gr_Mechanic?.gr_mechanicid !== selectedMechanic.gr_mechanicid) return false
-            if (jobView === 'open') return job.gr_status !== JOB_STATUSES.COMPLETE
-            if (jobView === 'complete') return job.gr_status === JOB_STATUSES.COMPLETE
-            return true
-        })
-    }, [jobView, jobs, selectedMechanic])
-
-    const openJobCount = (mechanicId: string) => jobs.filter(
-        (job) => job.gr_Mechanic?.gr_mechanicid === mechanicId && job.gr_status !== JOB_STATUSES.COMPLETE,
-    ).length
+    const openJobCount = (mechanicId: string) => openJobCounts[mechanicId.toLowerCase()] ?? 0
 
     const qualificationsFor = (mechanicId: string) => qualifications.filter((qualification) => qualification.gr_Technician?.gr_mechanicid === mechanicId)
     const validQualificationsFor = (mechanicId: string) => qualificationsFor(mechanicId).filter((qualification) => getQualificationStatus(qualification) === 'valid')
@@ -109,7 +110,7 @@ export default function MechanicsScreen() {
             </header>
 
             {isLoading ? (
-                <section className="mechanics-data-state"><h2>Loading staff</h2><p>Connecting to Dataverse and finding staff and allocated jobs.</p></section>
+                <section className="mechanics-data-state"><h2>Loading staff</h2><p>Connecting to Dataverse and loading the Staff directory.</p></section>
             ) : loadError ? (
                 <section className="mechanics-data-state mechanics-data-error" role="alert">
                     <div><h2>Staff could not be loaded</h2><p>{loadError}</p></div>
@@ -139,7 +140,15 @@ export default function MechanicsScreen() {
                                         <span className="mechanic-avatar">{initials(mechanic.gr_name)}</span>
                                         <span className="mechanic-card-copy">
                                             <strong>{mechanic.gr_name}</strong>
-                                            <small>{mechanic.statecode !== 0 ? 'Inactive' : canBeAssignedJobs(mechanic) ? `${count} open ${count === 1 ? 'job' : 'jobs'}` : staffDepartmentLabel(mechanic.gr_department)}</small>
+                                            <small>{mechanic.statecode !== 0
+                                                ? 'Inactive'
+                                                : canBeAssignedJobs(mechanic)
+                                                    ? allocationCountsLoading
+                                                        ? 'Loading open Jobs…'
+                                                        : allocationCountsError
+                                                            ? 'Open Jobs unavailable'
+                                                            : `${count} open ${count === 1 ? 'job' : 'jobs'}`
+                                                    : staffDepartmentLabel(mechanic.gr_department)}</small>
                                             {canBeAssignedJobs(mechanic) && validQualificationsFor(mechanic.gr_mechanicid).length > 0 && <span className="mechanic-qualification-summary">{validQualificationsFor(mechanic.gr_mechanicid)[0].gr_QualificationType?.gr_name}{validQualificationsFor(mechanic.gr_mechanicid).length > 1 ? ` +${validQualificationsFor(mechanic.gr_mechanicid).length - 1}` : ''}</span>}
                                         </span>
                                         <span aria-hidden="true">›</span>
@@ -189,7 +198,7 @@ export default function MechanicsScreen() {
                                     </div>
 
                                     <div className="mechanic-jobs-table-shell">
-                                        <table className="mechanic-jobs-table">
+                                        {!selectedStaffJobs.isLoading && !selectedStaffJobs.loadError && <table className="mechanic-jobs-table">
                                             <thead><tr><th>Job</th><th>Status</th><th>Type</th><th>Customer / site</th><th>Equipment</th><th>Description</th><th>Created</th></tr></thead>
                                             <tbody>
                                                 {selectedJobs.map((job) => (
@@ -204,8 +213,10 @@ export default function MechanicsScreen() {
                                                     </tr>
                                                 ))}
                                             </tbody>
-                                        </table>
-                                        {selectedJobs.length === 0 && <div className="mechanic-jobs-empty"><strong>No {jobView === 'all' ? '' : jobView} jobs</strong><span>Jobs assigned to this staff member will appear here.</span></div>}
+                                        </table>}
+                                        {selectedStaffJobs.isLoading ? <div className="mechanic-jobs-empty"><strong>Loading allocated Jobs</strong><span>Only this Staff member’s {jobView === 'all' ? '' : jobView} Jobs are being loaded.</span></div>
+                                            : selectedStaffJobs.loadError ? <div className="mechanic-jobs-empty mechanic-jobs-error" role="alert"><strong>Allocated Jobs could not be loaded</strong><span>{selectedStaffJobs.loadError}</span><button type="button" onClick={() => void selectedStaffJobs.refetch()}>Try again</button></div>
+                                                : selectedJobs.length === 0 && <div className="mechanic-jobs-empty"><strong>No {jobView === 'all' ? '' : jobView} jobs</strong><span>Jobs assigned to this staff member will appear here.</span></div>}
                                     </div>
                                 </section> : <div className="staff-non-assignable"><strong>Office staff member</strong><span>This person can be selected for internal email recipients but is not shown in Job or technician assignment lists.</span></div>}
                             </>
@@ -225,6 +236,12 @@ export default function MechanicsScreen() {
                     onSave={saveMechanic}
                     qualifications={editingMechanic ? qualificationsFor(editingMechanic.gr_mechanicid) : []}
                     qualificationTypes={qualificationTypes}
+                    qualificationsLoading={qualificationsLoading}
+                    qualificationTypesLoading={qualificationTypesLoading}
+                    qualificationsError={qualificationsError}
+                    qualificationTypesError={qualificationTypesError}
+                    onRetryQualifications={() => { void retryQualifications() }}
+                    onRetryQualificationTypes={() => { void retryQualificationTypes() }}
                     onCreateQualification={createQualification}
                     onUpdateQualification={updateQualification}
                     onDeactivateQualification={deactivateQualification}

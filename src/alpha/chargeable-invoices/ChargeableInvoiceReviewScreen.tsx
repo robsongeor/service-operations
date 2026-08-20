@@ -15,6 +15,14 @@ import './ChargeableInvoiceReviewScreen.css'
 import { parseAlternateFleetNumbers } from '../equipment/identifiers/alternateFleetNumbers.ts'
 
 const money = new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' })
+const EMPTY_INVOICE_JOB_SCOPE = {
+    jobs: [],
+    equipment: [],
+    sites: [],
+    servicePlans: [],
+    scheduleOptions: [],
+    officeUpdates: [],
+}
 
 function matchLabel(status: number | undefined) {
     if (status === CHARGEABLE_INVOICE_MATCH_STATUSES.MATCHED_EXACTLY) return 'Exact Job match'
@@ -53,32 +61,55 @@ type InvoiceJobCreateProps = {
 }
 
 function InvoiceJobCreateDrawer({ item, onClose, onCreated }: InvoiceJobCreateProps) {
-    const jobs = useJobs()
-    const { prepareJobReferenceData, referenceDataStatus, referenceDataError } = jobs
+    const jobs = useJobs({
+        loadGlobalOperationalData: false,
+        scopedData: EMPTY_INVOICE_JOB_SCOPE,
+    })
+    const { searchEquipmentForEditor } = jobs
     const revision = item.extraction?.revision
+    const [equipmentLookupPending, setEquipmentLookupPending] = useState(true)
+    const [equipmentLookupError, setEquipmentLookupError] = useState('')
+    const [equipmentLookupAttempt, setEquipmentLookupAttempt] = useState(0)
 
     useEffect(() => {
-        void prepareJobReferenceData().catch(() => undefined)
-    }, [prepareJobReferenceData])
+        const controller = new AbortController()
+        const query = revision?.gr_fleet?.trim() || revision?.gr_serial?.trim() || ''
+        const timer = window.setTimeout(() => {
+            setEquipmentLookupPending(true)
+            setEquipmentLookupError('')
+            void (query ? searchEquipmentForEditor(query, {}, controller.signal) : Promise.resolve([])).catch((error) => {
+                if (!controller.signal.aborted) setEquipmentLookupError(error instanceof Error ? error.message : 'Equipment could not be checked.')
+            }).finally(() => {
+                if (!controller.signal.aborted) setEquipmentLookupPending(false)
+            })
+        }, 0)
+        return () => {
+            window.clearTimeout(timer)
+            controller.abort()
+        }
+    }, [equipmentLookupAttempt, revision?.gr_fleet, revision?.gr_serial, searchEquipmentForEditor])
 
     const matchedEquipment = uniqueExactEquipmentMatch(jobs.equipmentList, {
         fleet: revision?.gr_fleet,
         serial: revision?.gr_serial,
     })
 
-    if (referenceDataStatus === 'idle' || referenceDataStatus === 'loading') return <JobDrawerShell eyebrow="Create job" title={revision?.gr_greentreereference || 'New job'} busy onClose={onClose} footer={<button type="button" onClick={onClose}>Cancel</button>}>
-        <p className="chargeable-job-create-status">Loading Customer, Site and Equipment choices…</p>
+    if (equipmentLookupPending) return <JobDrawerShell eyebrow="Create job" title={revision?.gr_greentreereference || 'New job'} busy onClose={onClose} footer={<button type="button" onClick={onClose}>Cancel</button>}>
+        <p className="chargeable-job-create-status">Checking the proposed Equipment identifiers…</p>
     </JobDrawerShell>
 
-    if (referenceDataStatus === 'error') return <JobDrawerShell eyebrow="Create job" title={revision?.gr_greentreereference || 'New job'} onClose={onClose} footer={<button type="button" onClick={onClose}>Close</button>}>
+    if (equipmentLookupError) return <JobDrawerShell eyebrow="Create job" title={revision?.gr_greentreereference || 'New job'} onClose={onClose} footer={<button type="button" onClick={onClose}>Close</button>}>
         <div className="chargeable-job-create-status" role="alert">
-            <p>{referenceDataError}</p>
-            <button type="button" className="chargeable-secondary" onClick={() => { void prepareJobReferenceData().catch(() => undefined) }}>Try again</button>
+            <p>{equipmentLookupError}</p>
+            <button type="button" className="chargeable-secondary" onClick={() => setEquipmentLookupAttempt((current) => current + 1)}>Try again</button>
         </div>
     </JobDrawerShell>
 
     return <JobCreateDrawer
         mechanics={jobs.mechanics}
+        mechanicsLoading={jobs.mechanicsLoading}
+        mechanicsError={jobs.mechanicsError}
+        onRetryMechanics={() => { void jobs.retryMechanics().catch(() => undefined) }}
         equipmentList={jobs.equipmentList}
         sites={jobs.sites}
         customers={jobs.customers}
@@ -88,6 +119,12 @@ function InvoiceJobCreateDrawer({ item, onClose, onCreated }: InvoiceJobCreatePr
         onCreateSite={jobs.createSite}
         onCreateContact={jobs.createContactForSite}
         onCreateEquipment={jobs.createEquipment}
+        onSearchEquipment={jobs.searchEquipmentForEditor}
+        onSearchCustomers={jobs.searchCustomersForEditor}
+        onLoadCustomerSites={jobs.loadCustomerSitesForEditor}
+        onLoadSiteContacts={jobs.loadSiteContactsForEditor}
+        onLoadEquipment={jobs.loadEquipmentForEditor}
+        onLoadEquipmentServicePlans={jobs.loadEquipmentServicePlansForEditor}
         onCreateJob={jobs.createJob}
         onCreateScheduleOption={jobs.createScheduleOption}
         initialValues={{

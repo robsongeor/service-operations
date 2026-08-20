@@ -23,6 +23,8 @@ async function ensureSuccess(response: Response, action: string) {
 function invalidateMaintenanceQueries() {
     invalidateOperationalQueries((key) =>
         key[0] === 'customer-dashboard'
+        || (key[0] === 'equipment' && key[2] === 'service-plans-v1')
+        || key[0] === 'equipment-register'
         || (key[0] === 'equipment' && key[1] === 'operational-list'))
 }
 

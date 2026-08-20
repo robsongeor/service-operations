@@ -1,7 +1,8 @@
 .searchable-select { position: relative; display: grid; min-width: 0; gap: 6px; }
 .searchable-select > label { color: #526059; font-size: .68rem; font-weight: 750; }
-.searchable-select-trigger { display: flex; width: 100%; min-height: 39px; align-items: center; justify-content: space-between; gap: 8px; padding: 0 9px; border: 1px solid #ced7d2; border-radius: 8px; background: #fff; color: #26312b; font: inherit; text-align: left; cursor: pointer; }
-.searchable-select-trigger > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.searchable-select-trigger { display: flex; width: 100%; min-width: 0; max-width: 100%; min-height: 39px; box-sizing: border-box; align-items: center; justify-content: space-between; gap: 8px; overflow: hidden; padding: 0 9px; border: 1px solid #ced7d2; border-radius: 8px; background: #fff; color: #26312b; font: inherit; text-align: left; cursor: pointer; }
+.searchable-select-trigger > span:first-child { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.searchable-select-trigger > span:last-child { flex: 0 0 auto; }
 .searchable-select-trigger:focus-visible { border-color: #43877a; outline: 3px solid rgba(23,111,102,.12); }
 .searchable-select-input { width: 100%; min-height: 39px; box-sizing: border-box; padding: 0 9px; border: 1px solid #43877a; border-radius: 8px; background: #fff; color: #26312b; font: inherit; }
 .searchable-select-input:focus { outline: 3px solid rgba(23,111,102,.12); }

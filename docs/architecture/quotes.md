@@ -25,10 +25,19 @@ Quote forms use shared presentation and selection components where applicable. R
 rows should obtain related Customer, Equipment, Job, and Author data through the existing
 query and lookup expansions.
 
+`QuoteEditorDialog` is the canonical create/edit workflow. The authenticated app shell owns a
+lazy `QuoteEditorOverlayProvider`, so Jobs, Customer Dashboard, Scheduler, WOF, and Chargeable
+Invoice Review can open that editor over their current screen rather than navigating away. The
+overlay and its Quote data do not mount until requested. A Job drawer closes before its Quote opens,
+while non-Job workspaces remain underneath the higher-layer editor. The standalone Quotes register
+continues to use the same editor.
+
 The editor composes the persisted Quote title from protected linked-record context in the order
 `Job number - Equipment fleet/serial - Job description`. Users may append their own wording, but
 cannot remove those available contextual parts through the editor. Job selection presents both the
 Job number and description in the closed control and search results.
+On desktop, Author keeps one bounded column and Quote title consumes the remaining first-row editor
+width; responsive layouts return both fields to the ordinary single-column flow.
 When a Job is selected, its related Customer (through Site) and Equipment populate the Quote fields
 when those relationships are available. Existing direct Quote Customer and Equipment selections
 remain authoritative when an existing Quote is first opened.
@@ -72,11 +81,43 @@ The single-page template supports up to 20 Quote lines. Dense quotes reduce line
 established 7.5 pt minimum while keeping totals beneath the populated line region. The editor uses
 this shared renderer limit rather than a separate UI-only threshold.
 
+Quote lines retain the compact visible column-heading row so Catalogue Item, Description, Category,
+Quantity, Unit, Unit Price, Extended, and GST remain easy to scan. Their inputs also keep accessible
+names. The Quote register bounds the Job column, and both the register and the editor's selected Job
+control truncate oversized displayed values with an ellipsis while retaining the full value as a
+hover title.
+
+The Job drawer does not load the Quote register. Opening its Quotes tab starts one shared bounded
+query for at most 50 Quote headers linked to that Job. Customer Dashboard similarly loads Quotes
+only for the selected Customer when its Quotes tab opens. These focused readers have independent
+loading and retry states and do not block Job core or relationship editing.
+
+The standalone Quote register is a continuation-safe account-scoped Operational Data Client query.
+It renders independently of editor reference data and reuses its last accepted result across route
+changes. Pricing and Staff start only after an editor is requested, but use separate shared
+account-scoped keys with five-minute unobserved retention. The Pricing screen and every Quote editor
+therefore reuse one catalogue value; Quote editors also reuse the same Staff directory as Jobs.
+Pricing readiness governs the line editor, while Staff loading or failure affects only PO email
+routing and exposes a scoped retry without blocking Quote editing. Job, Customer, and active
+Equipment choices use debounced `$top=8` remote searches;
+opening a selector performs only its bounded initial search. Existing linked records seed the editor,
+and a new Quote opened from a Job hydrates that exact Job by ID before applying its Customer and
+Equipment defaults. Existing Quotes opened from another screen use one exact-ID Quote query and one
+bounded Quote Line query rather than downloading the whole register. All relationship requests are
+abortable and closing the editor releases its transient search results.
+
+Successful Quote create, update, and delete operations patch the shared register and exact-record
+keys immediately, then publish a content-free, account/environment-scoped cross-tab invalidation.
+Because Quote register rows expand Job and Equipment labels, matching Job or Equipment events also
+invalidate observed Quote projections. Reconnect and visibility recovery re-read observed Quote
+queries. There is no approved dedicated Quote server event yet, so changes made by another user are
+guaranteed to recover on the bounded recovery path rather than through a Quote-specific push event.
+
 Chargeable Invoice Review reuses the Quote identity, status labels, pricing-category labels and
 line reader in a read-only `Related quotes` panel. It performs one bounded header query for the
 matched Job when the review opens (maximum 50 Quotes), then loads at most 200 Quote Lines only when
-the manager expands a Quote. The full editor opens through `/quotes?quoteId=...` in a new tab so the
-invoice review state is preserved.
+the manager expands a Quote. Opening the full editor uses the app-shell overlay so the invoice
+review state is preserved in place.
 
 ## Important Business Rules
 
@@ -92,6 +133,9 @@ invoice review state is preserved.
   responsible for saving the Quote separately when those edits should persist to Dataverse.
 - Saving refreshes the persisted Quote and Quote Line identities while leaving the editor open.
   Closing the editor is always a separate explicit action.
+- Pricing Items provide defaults only. Operators can activate/deactivate them or permanently delete
+  one after explicit confirmation. Existing Quote Line snapshots retain copied values; Dataverse
+  relationship or permission errors block deletion and remain visible to the operator.
 
 ## Extension Points
 
@@ -103,11 +147,14 @@ Quote identity and revision model while coordinating explicitly with Jobs.
 Avoid per-row Dataverse lookup requests. Preserve creator and revision history. Keep
 commercial state distinct from operational Job and Job Card state. Quote PDF generation must
 remain client-local and must not require Chargeable Invoice server flags or authentication.
+Editor-only support must not block the Quote register. Relationship selectors must use bounded,
+abortable remote search while preserving existing direct Quote selections and Job-derived defaults.
 
 ## Related Files and Documents
 
 - [`../../src/alpha/quotes/QuotesScreen.tsx`](../../src/alpha/quotes/QuotesScreen.tsx)
 - [`../../src/alpha/quotes/PricingScreen.tsx`](../../src/alpha/quotes/PricingScreen.tsx)
+- [`../../src/alpha/quotes/QuoteEditorOverlayProvider.tsx`](../../src/alpha/quotes/QuoteEditorOverlayProvider.tsx)
 - [`../../src/alpha/quotes/services/quotesApi.ts`](../../src/alpha/quotes/services/quotesApi.ts)
 - [`../../src/alpha/quotes/services/pricingApi.ts`](../../src/alpha/quotes/services/pricingApi.ts)
 - [Quotes Dataverse schema](../quotes-dataverse-schema.md)

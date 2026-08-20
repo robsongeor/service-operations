@@ -1,5 +1,6 @@
 import type { SiteContact } from '../types/siteContact.types'
 import { fetchAllDataversePages } from '../../shared/dataverse/fetchAllDataversePages.ts'
+import { buildSiteContactsUrl } from './jobRelationshipLookupUrls'
 
 const DATAVERSE_URL = import.meta.env.VITE_DATAVERSE_URL
 
@@ -18,6 +19,30 @@ export async function fetchSiteContacts(
             if (result.ok) return
             const error = await result.text()
             throw new Error(`Failed to fetch site contacts: ${error}`)
+        },
+    )
+}
+
+export async function fetchSiteContactsForSite(
+    accessToken: string,
+    siteId: string,
+    signal?: AbortSignal,
+): Promise<SiteContact[]> {
+    return fetchAllDataversePages<SiteContact>(
+        buildSiteContactsUrl(DATAVERSE_URL, siteId),
+        {
+            cache: 'no-store',
+            signal,
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                Accept: 'application/json',
+                'Cache-Control': 'no-cache',
+            },
+        },
+        async (result) => {
+            if (result.ok) return
+            const error = await result.text()
+            throw new Error(`Failed to fetch Site contacts: ${error || `${result.status} ${result.statusText}`}`)
         },
     )
 }

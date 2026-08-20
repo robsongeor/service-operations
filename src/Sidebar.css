@@ -195,7 +195,33 @@
 }
 
 @media (max-width: 760px) {
+    .sidebar {
+        position: fixed;
+        left: 0;
+        box-shadow: 18px 0 42px rgba(20, 35, 28, 0.16);
+    }
+
     .sidebar.open {
-        width: 220px;
+        width: min(82vw, 280px);
+    }
+
+    .sidebar.collapsed {
+        width: 0;
+        padding: 0;
+        border: 0;
+        box-shadow: none;
+    }
+
+    .sidebar.collapsed .sidebar-header,
+    .sidebar.collapsed .sidebar-section-title,
+    .sidebar.collapsed .sidebar-nav,
+    .sidebar.collapsed .sidebar-spacer,
+    .sidebar.collapsed .sidebar-footer {
+        display: none;
+    }
+
+    .sidebar.collapsed .sidebar-toggle {
+        top: 18px;
+        right: -42px;
     }
 }

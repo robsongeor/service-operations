@@ -11,6 +11,7 @@ import { normalizeAlternateFleetNumbers } from '../../equipment/identifiers/alte
 import { invalidateOperationalQueries } from '../../shared/data/OperationalDataClient'
 import { fetchAllDataversePages } from '../../shared/dataverse/fetchAllDataversePages'
 import { buildDataverseIdFilterBatches } from '../../shared/dataverse/boundedDataverseFilters'
+import { buildEquipmentSearchUrl } from './jobRelationshipLookupUrls'
 
 const DATAVERSE_URL = import.meta.env.VITE_DATAVERSE_URL
 const EQUIPMENT_SELECT = 'gr_equipmentid,gr_fleet,gr_alternatefleetnumbers,gr_serial,gr_make,gr_model,statecode,statuscode,gr_currenthourmeter,gr_currenthourmeterrecordeddate,gr_servicetrackingenabled,gr_registrationnumber,gr_compliancestatus,gr_wofrequired,gr_currentwofexpiry,gr_lastwofcompleted,gr_regoexpiry,gr_powertype,gr_serviceprogramme,gr_maintenanceprofile,gr_ownershiptype,gr_sitecheckavailability,gr_customaenabled,gr_custombenabled,gr_customcenabled,gr_customaintervaldays,gr_custombintervaldays,gr_customcintervaldays'
@@ -122,6 +123,28 @@ export async function fetchEquipmentById(accessToken: string, equipmentId: strin
     )
     if (!response.ok) throw new Error('The Equipment could not be refreshed.')
     return ((await response.json()) as { value?: Equipment[] }).value?.[0]
+}
+
+export async function searchEquipment(
+    accessToken: string,
+    query: string,
+    _context: { customerId?: string; siteId?: string } = {},
+    signal?: AbortSignal,
+): Promise<Equipment[]> {
+    void _context
+    const response = await fetch(
+        buildEquipmentSearchUrl(DATAVERSE_URL, query),
+        {
+            cache: 'no-store',
+            signal,
+            headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json', 'Cache-Control': 'no-cache' },
+        },
+    )
+    if (!response.ok) {
+        const detail = await response.text()
+        throw new Error(`Equipment search failed: ${detail || `${response.status} ${response.statusText}`}`)
+    }
+    return ((await response.json()) as { value?: Equipment[] }).value ?? []
 }
 
 export function subscribeToEquipmentData(

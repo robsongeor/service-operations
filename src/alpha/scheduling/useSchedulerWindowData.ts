@@ -4,11 +4,14 @@ import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
 import { acquireDataverseAccessToken } from '../../auth/dataverseAuthentication'
 import { fetchJobsByIds } from '../jobs/services/jobsApi'
 import { fetchJobScheduleOptionsForWindow } from '../jobs/services/jobScheduleApi'
+import { fetchJobOfficeUpdatesForJobs } from '../jobs/services/jobOfficeUpdatesApi'
 import type { Job } from '../jobs/types/job.types'
 import type { JobScheduleOption } from '../jobs/types/jobSchedule.types'
+import type { JobOfficeUpdate } from '../jobs/types/officeAction.types'
 import {
     operationalIdFingerprint,
     schedulerJobsQueryKey,
+    schedulerOfficeUpdatesQueryKey,
     schedulerOptionsQueryKey,
 } from '../shared/data/operationalCollectionKeys'
 import { useOperationalDataClient } from '../shared/data/OperationalDataClientContext'
@@ -17,6 +20,7 @@ import { adjacentSchedulerWindows, schedulerWindow, type SchedulerWindow } from 
 
 const EMPTY_OPTIONS: JobScheduleOption[] = []
 const EMPTY_JOBS: Job[] = []
+const EMPTY_OFFICE_UPDATES: JobOfficeUpdate[] = []
 const WINDOW_STALE_TIME_MS = 20_000
 const WINDOW_CACHE_TIME_MS = 5 * 60_000
 
@@ -67,6 +71,13 @@ export function useSchedulerWindowData(weekStart: Date) {
         cacheTimeMs: WINDOW_CACHE_TIME_MS,
         queryFn: async ({ signal }) => fetchJobsByIds(await getToken(), jobIds, signal),
     })
+    const officeUpdatesQuery = useOperationalQuery<JobOfficeUpdate[]>({
+        key: schedulerOfficeUpdatesQueryKey(window.startDate, window.endDate, jobFingerprint),
+        enabled: enabled && optionsReady,
+        staleTimeMs: WINDOW_STALE_TIME_MS,
+        cacheTimeMs: WINDOW_CACHE_TIME_MS,
+        queryFn: async ({ signal }) => fetchJobOfficeUpdatesForJobs(await getToken(), jobIds, signal),
+    })
 
     useEffect(() => {
         if (!enabled || optionsQuery.data === undefined) return
@@ -99,8 +110,8 @@ export function useSchedulerWindowData(weekStart: Date) {
 
     const refetch = useCallback(async () => {
         if (!enabled) return
-        await Promise.all([optionsQuery.refetch(), jobsQuery.refetch()])
-    }, [enabled, jobsQuery, optionsQuery])
+        await Promise.all([optionsQuery.refetch(), jobsQuery.refetch(), officeUpdatesQuery.refetch()])
+    }, [enabled, jobsQuery, officeUpdatesQuery, optionsQuery])
     const statuses = [optionsQuery.status, jobsQuery.status]
     const isLoading = enabled && statuses.some((status) => status === 'initial' || status === 'loading')
     const error = optionsQuery.error ?? jobsQuery.error
@@ -108,6 +119,7 @@ export function useSchedulerWindowData(weekStart: Date) {
     return {
         jobs: jobsQuery.data ?? EMPTY_JOBS,
         scheduleOptions,
+        officeUpdates: officeUpdatesQuery.data ?? EMPTY_OFFICE_UPDATES,
         isLoading,
         isRefreshing: statuses.some((status) => status === 'refreshing'),
         error: error?.message ?? '',

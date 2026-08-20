@@ -147,7 +147,7 @@ test('Site Check history opens from cached data and retains an exact-Job fallbac
 })
 
 test('Customer Dashboard loads selected-customer collections without starting global Jobs or Equipment reads', () => {
-    assert.match(dashboardSource, /useCustomerDashboardData\(selectedCustomerId\)/)
+    assert.match(dashboardSource, /useCustomerDashboardData\(selectedCustomerId, activeTab === 'quotes'\)/)
     assert.match(dashboardSource, /useEquipmentManager\(\{[\s\S]*?loadGlobalOperationalData: false/)
     assert.match(dashboardSource, /useJobs\(\{[\s\S]*?loadGlobalOperationalData: false/)
     assert.match(customerDataSource, /fetchCustomerSites/)
@@ -159,6 +159,10 @@ test('Customer Dashboard loads selected-customer collections without starting gl
 test('Customer Dashboard scoped reads retain bounded cache and explicit mutation reconciliation', () => {
     assert.match(customerDataSource, /cacheTimeMs: 2 \* 60_000/)
     assert.match(customerDataSource, /staleTimeMs: 20_000/)
+    assert.match(customerDataSource, /const scheduleOptionsKey = useMemo\(/)
+    assert.match(customerDataSource, /const officeUpdatesKey = useMemo\(/)
+    assert.match(customerDataSource, /key: scheduleOptionsKey/)
+    assert.match(customerDataSource, /key: officeUpdatesKey/)
     assert.match(dashboardSource, /onScopedDataChanged: customerData\.refetch/)
     assert.match(dashboardSource, /await customerData\.refetch\(\)/)
 })
