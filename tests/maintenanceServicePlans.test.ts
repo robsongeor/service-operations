@@ -429,9 +429,13 @@ test('every completed Job reading refreshes the stored effective service due dat
 test('standard, Service, and WOF completion all persist refreshed service dates', () => {
     const hook = readFileSync(new URL('../src/alpha/jobs/hooks/useJobs.ts', import.meta.url), 'utf8')
     const api = readFileSync(new URL('../src/alpha/equipment/servicePlans/servicePlanApi.ts', import.meta.url), 'utf8')
-    assert.equal(hook.match(/await refreshCompletionDataAndServiceDates\(token, equipment\.gr_equipmentid\)/g)?.length, 3)
-    assert.match(hook, /fetchJobsApi\(token, \{ forceRefresh: true \}\)/)
-    assert.match(hook, /refreshEquipmentServicePlanDueDates\(token, completedEquipment, nextPlans, nextJobs\)/)
+    assert.equal(hook.match(/await refreshCompletionDataAndServiceDates\(token, equipment\.gr_equipmentid, request\.job\.gr_jobid\)/g)?.length, 3)
+    assert.match(hook, /fetchEquipmentJobsApi\(token, equipmentId\)/)
+    assert.match(hook, /fetchJobCoreApi\(token, jobId\)/)
+    assert.match(hook, /fetchEquipmentByIdApi\(token, equipmentId\)/)
+    assert.match(hook, /fetchEquipmentServicePlansForEquipment\(token, \[equipmentId\]\)/)
+    assert.match(hook, /refreshEquipmentServicePlanDueDates\(token, completedEquipment, equipmentPlans, equipmentJobs\)/)
+    assert.doesNotMatch(hook, /fetchEquipmentServicePlans\(token\)/)
     assert.match(api, /body: JSON\.stringify\(\{ gr_nextduedate: plan\.gr_nextduedate \?\? null \}\)/)
 })
 

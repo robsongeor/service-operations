@@ -1,4 +1,7 @@
 import type { Site, SiteUpdateInput } from '../types/site.types'
+import { fetchAllDataversePages } from '../../shared/dataverse/fetchAllDataversePages.ts'
+import { invalidateOperationalQueries } from '../../shared/data/OperationalDataClient.ts'
+import { buildCustomerSitesUrl } from './jobRelationshipLookupUrls'
 
 const DATAVERSE_URL = import.meta.env.VITE_DATAVERSE_URL
 
@@ -14,7 +17,7 @@ async function dataverseErrorMessage(response: Response, fallback: string) {
 }
 
 export async function fetchSites(accessToken: string): Promise<Site[]> {
-    const result = await fetch(
+    return fetchAllDataversePages<Site>(
         `${DATAVERSE_URL}/api/data/v9.2/gr_sites?$select=gr_siteid,gr_name,gr_address,gr_defaultmaintenanceprofile,gr_inductionrequired,gr_inductionrequirements,gr_geocodelatitude,gr_geocodelongitude,gr_geocodesourceaddress,gr_geocodeformattedaddress,gr_geocoderesolvedon,_gr_customer_value&$expand=gr_Customer($select=gr_customerid,gr_name)`,
         {
             headers: {
@@ -22,10 +25,26 @@ export async function fetchSites(accessToken: string): Promise<Site[]> {
                 Accept: 'application/json',
             },
         },
+        async (result) => {
+            if (!result.ok) throw new Error(await dataverseErrorMessage(result, 'Failed to fetch Sites.'))
+        },
     )
+}
 
-    const data = await result.json()
-    return data.value ?? []
+export async function fetchCustomerSites(accessToken: string, customerId: string, signal?: AbortSignal): Promise<Site[]> {
+    return fetchAllDataversePages<Site>(
+        buildCustomerSitesUrl(DATAVERSE_URL, customerId),
+        {
+            signal,
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                Accept: 'application/json',
+            },
+        },
+        async (result) => {
+            if (!result.ok) throw new Error(await dataverseErrorMessage(result, 'Failed to fetch Customer Sites.'))
+        },
+    )
 }
 
 export async function createSite(
@@ -65,14 +84,20 @@ export async function createSite(
     if (responseText) {
         try {
             const data = JSON.parse(responseText)
-            if (typeof data.gr_siteid === 'string' && data.gr_siteid) return data.gr_siteid
+            if (typeof data.gr_siteid === 'string' && data.gr_siteid) {
+                invalidateOperationalQueries((key) => key[0] === 'customer-dashboard' || key[0] === 'job-map')
+                return data.gr_siteid
+            }
         } catch {
             // Some Dataverse configurations return only the entity ID header.
         }
     }
     const entityId = result.headers.get('OData-EntityId') ?? result.headers.get('odata-entityid')
     const headerId = entityId?.match(/\(([^)]+)\)/)?.[1]
-    if (headerId) return headerId
+    if (headerId) {
+        invalidateOperationalQueries((key) => key[0] === 'customer-dashboard' || key[0] === 'job-map')
+        return headerId
+    }
     throw new Error('The Site was created, but Dataverse did not return its record ID.')
 }
 
@@ -108,4 +133,5 @@ export async function updateSite(
     if (!result.ok) {
         throw new Error(await dataverseErrorMessage(result, 'The Site could not be updated.'))
     }
+    invalidateOperationalQueries((key) => key[0] === 'customer-dashboard' || key[0] === 'job-map')
 }

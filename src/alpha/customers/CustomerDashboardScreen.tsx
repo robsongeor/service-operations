@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
 import { getSignedInUserInfo } from '../../auth/signedInUser'
 import { useEquipmentManager } from '../equipment/hooks/useEquipmentManager'
+import { useEquipmentJobHistory } from '../equipment/hooks/useEquipmentJobHistory'
 import EquipmentDrawer from '../equipment/components/EquipmentDrawer'
 import EquipmentDataQualityIndicator from '../equipment/components/EquipmentDataQualityIndicator'
 import { compareEquipmentDataQuality } from '../equipment/dataQuality/equipmentDataQuality'
@@ -28,7 +29,7 @@ import { MAINTENANCE_PROFILES } from '../equipment/servicePlans/maintenanceConfi
 import CustomerDrawer, { type CustomerDraft, type CustomerDrawerTab } from './CustomerDrawer'
 import { customerContactsFromSiteLinks, type CustomerContact } from './customerContact.types'
 import { usePurchaseOrderRecipients } from './usePurchaseOrderRecipients'
-import CustomerOpenJobsTab from './CustomerOpenJobsTab'
+import CustomerJobsTab from './CustomerJobsTab'
 import CustomerQuotesTab from './CustomerQuotesTab'
 import SearchableSelect from '../shared/searchable-select/SearchableSelect'
 import MetricStrip, { type MetricStripItem } from '../shared/metric-strip/MetricStrip'
@@ -36,6 +37,7 @@ import PageHeader from '../shared/page-header/PageHeader'
 import PageSettingsButton from '../shared/settings/PageSettingsButton'
 import { formatWofDateOnly, getWofDueStatus } from '../wof/utils/wofRules'
 import { useSiteChecks } from '../site-checks/hooks/useSiteChecks'
+import { useCustomerDashboardData } from './useCustomerDashboardData'
 import { buildSiteCheckDashboardProjection, type ReportableSiteCheckState } from '../site-checks/domain/siteCheckDashboard'
 import { SITE_CHECK_FREQUENCY_OPTIONS } from '../site-checks/types/siteCheck.types'
 import { currentNewZealandDateOnly } from '../shared/dates/dateOnly'
@@ -48,6 +50,8 @@ import {
     saveCustomerDashboardSelection,
 } from './customerDashboardViewState'
 import './CustomerDashboardScreen.css'
+import { useQuoteEditorOverlay } from '../quotes/QuoteEditorOverlayContext'
+import { useOperationalScreenReady } from '../shared/data/OperationalScreenPerformanceContext'
 
 const dateFormatter = new Intl.DateTimeFormat('en-NZ', { dateStyle: 'medium' })
 const CUSTOMER_DASHBOARD_AUTO_EXPAND_SITE_LIMIT = 2
@@ -77,27 +81,24 @@ function hasCustomer(site: SiteCustomerReference, customerId: string): boolean {
 }
 
 export default function CustomerDashboardScreen() {
-    const navigate = useNavigate()
+    const quoteEditor = useQuoteEditorOverlay()
     const [searchParams, setSearchParams] = useSearchParams()
     const activeAccount = useActiveMsalAccount()
     const signedInUser = getSignedInUserInfo(activeAccount)
     const viewStorageKey = signedInUser ? getCustomerDashboardViewStateKey(signedInUser.storageId) : null
     const bulkImportAllowed = canUseBulkEquipmentImport(signedInUser)
+    const [selectedCustomerId, setSelectedCustomerId] = useState(() => viewStorageKey
+        ? restoreCustomerDashboardSelection(viewStorageKey)
+        : '')
+    const [activeTab, setActiveTab] = useState<'sites' | 'jobs' | 'quotes' | 'contacts' | 'info'>('sites')
+    const customerData = useCustomerDashboardData(selectedCustomerId, activeTab === 'quotes')
     const {
-        equipment,
         customers,
-        sites,
-        jobs: equipmentJobs,
-        servicePlans,
-        isLoading,
+        isLoading: isCustomerListLoading,
         isSaving,
-        loadError,
+        loadError: customerListLoadError,
         saveError,
         reload,
-        loadEquipmentJobs,
-        clearEquipmentJobs,
-        isEquipmentJobsLoading,
-        equipmentJobsError,
         clearSaveError,
         updateSites,
         updateSiteMaintenanceSettings,
@@ -106,23 +107,32 @@ export default function CustomerDashboardScreen() {
         deleteSiteInductionDocument,
         downloadSiteInductionDocument,
         updateEquipment,
+        loadEquipmentServicePlans,
         createEquipment: createDashboardEquipment,
         createCustomer: createDashboardCustomer,
         createSite: createDashboardSite,
         saveEquipmentMaintenanceHistory,
         deleteEquipment,
-    } = useEquipmentManager()
+    } = useEquipmentManager({
+        loadGlobalOperationalData: false,
+        scopedData: {
+            equipment: customerData.equipment,
+            sites: customerData.sites,
+            servicePlans: customerData.servicePlans,
+        },
+        onScopedDataChanged: customerData.refetch,
+    })
     const {
-        jobs: operationalJobs,
         equipmentList: jobEquipmentList,
         mechanics,
+        mechanicsLoading,
+        mechanicsError,
+        retryMechanics,
         sites: jobSites,
         customers: jobCustomers,
         siteContacts,
         servicePlans: jobServicePlans,
         scheduleOptions,
-        jobQuotes,
-        jobAssignments,
         officeUpdates,
         createJob,
         createCustomer: createJobCustomer,
@@ -153,12 +163,38 @@ export default function CustomerDashboardScreen() {
         loadError: jobsLoadError,
         fetchJobs,
         fetchJobForDrawer,
+        fetchJobCardDetails,
+        fetchJobPhotoBody,
         prepareJobReferenceData,
-    } = useJobs()
-
-    const [selectedCustomerId, setSelectedCustomerId] = useState(() => viewStorageKey
-        ? restoreCustomerDashboardSelection(viewStorageKey)
-        : '')
+        loadJobQuotes,
+        loadJobAssignments,
+        searchEquipmentForEditor,
+        searchCustomersForEditor,
+        loadCustomerSitesForEditor,
+        loadSiteContactsForEditor,
+        loadEquipmentForEditor,
+        loadEquipmentServicePlansForEditor,
+        referenceDataStatus,
+        referenceDataError,
+    } = useJobs({
+        loadGlobalOperationalData: false,
+        scopedData: {
+            jobs: customerData.jobs,
+            equipment: customerData.equipment,
+            sites: customerData.sites,
+            servicePlans: customerData.servicePlans,
+            scheduleOptions: customerData.scheduleOptions,
+            officeUpdates: customerData.officeUpdates,
+        },
+        onScopedDataChanged: customerData.refetch,
+    })
+    const equipment = customerData.equipment
+    const sites = customerData.sites
+    const servicePlans = customerData.servicePlans
+    const operationalJobs = customerData.jobs
+    const isLoading = isCustomerListLoading || (Boolean(selectedCustomerId) && customerData.isLoading)
+    const loadError = customerListLoadError || customerData.error
+    useOperationalScreenReady('Customer Dashboard', !isLoading)
     const [editingEquipment, setEditingEquipment] = useState<Equipment | null>(null)
     const [creatingEquipmentInitialValues, setCreatingEquipmentInitialValues] = useState<EquipmentCreateInitialValues | null>(null)
     const [bulkImportSite, setBulkImportSite] = useState<Site | null>(null)
@@ -170,9 +206,6 @@ export default function CustomerDashboardScreen() {
     const [pendingJobCreateInitialValues, setPendingJobCreateInitialValues] = useState<JobCreateInitialValues | null>(null)
     const [jobCreatePreparationError, setJobCreatePreparationError] = useState('')
     const [editingJob, setEditingJob] = useState<Job | null>(null)
-    const [pendingHistoryJob, setPendingHistoryJob] = useState<Job | null>(null)
-    const [historyJobLoadError, setHistoryJobLoadError] = useState('')
-    const [activeTab, setActiveTab] = useState<'sites' | 'open-jobs' | 'quotes' | 'contacts' | 'info'>('sites')
     const [customerDrawerMode, setCustomerDrawerMode] = useState<'create' | 'edit' | null>(null)
     const [customerDrawerInitialTab, setCustomerDrawerInitialTab] = useState<CustomerDrawerTab>('info')
     const [editingSiteId, setEditingSiteId] = useState('')
@@ -190,38 +223,24 @@ export default function CustomerDashboardScreen() {
     const siteCheckDetailsTriggerRef = useRef<HTMLButtonElement | null>(null)
     const siteSettingsTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({})
     const sitesHeadingRef = useRef<HTMLHeadingElement>(null)
+    const equipmentJobHistory = useEquipmentJobHistory(editingEquipment?.gr_equipmentid)
 
     const openEquipment = useCallback((record: Equipment) => {
         setEditingEquipment(record)
-        void loadEquipmentJobs(record.gr_equipmentid).catch(() => undefined)
-    }, [loadEquipmentJobs])
+    }, [])
 
-    const openEquipmentHistoryJob = useCallback(async (job: Job) => {
-        setPendingHistoryJob(job)
-        setHistoryJobLoadError('')
-        try {
-            const refreshedJob = await fetchJobForDrawer(job.gr_jobid)
-            if (!refreshedJob) throw new Error('The selected Job could not be found in Dataverse.')
-            setEditingJob(refreshedJob)
-            setPendingHistoryJob(null)
-        } catch (error) {
-            setHistoryJobLoadError(error instanceof Error ? error.message : 'The selected Job could not be loaded.')
-        }
-    }, [fetchJobForDrawer])
+    const openEquipmentHistoryJob = useCallback((job: Job) => {
+        setEditingJob(job)
+    }, [])
 
-    const openDashboardJob = useCallback(async (job: Job) => {
-        try {
-            const refreshedJob = await fetchJobForDrawer(job.gr_jobid)
-            setEditingJob(refreshedJob ?? job)
-        } catch {
-            setEditingJob(job)
-        }
-    }, [fetchJobForDrawer])
+    const openDashboardJob = useCallback((job: Job) => {
+        setEditingJob(job)
+    }, [])
 
     const editingEquipmentId = editingEquipment?.gr_equipmentid.toLowerCase() ?? ''
     const visibleEquipmentJobs = useMemo(() => {
         const authoritativeJobs = new Map(operationalJobs.map((job) => [job.gr_jobid.toLowerCase(), job]))
-        const reconciled = equipmentJobs.map((job) => authoritativeJobs.get(job.gr_jobid.toLowerCase()) ?? job)
+        const reconciled = equipmentJobHistory.jobs.map((job) => authoritativeJobs.get(job.gr_jobid.toLowerCase()) ?? job)
         const focusedJobIds = new Set(reconciled.map((job) => job.gr_jobid.toLowerCase()))
         const newlyCreated = operationalJobs.filter((job) =>
             editingEquipmentId
@@ -229,24 +248,24 @@ export default function CustomerDashboardScreen() {
             && !focusedJobIds.has(job.gr_jobid.toLowerCase()),
         )
         return [...reconciled, ...newlyCreated]
-    }, [editingEquipmentId, equipmentJobs, operationalJobs])
+    }, [editingEquipmentId, equipmentJobHistory.jobs, operationalJobs])
     const currentEditingEquipment = editingEquipment
         ? equipment.find((item) => item.gr_equipmentid.toLowerCase() === editingEquipment.gr_equipmentid.toLowerCase()) ?? editingEquipment
         : null
 
     const completeStandardFromDashboard = async (...args: Parameters<typeof completeStandardJob>) => {
         await completeStandardJob(...args)
-        await reload()
+        await customerData.refetch()
     }
 
     const completeServiceFromDashboard = async (...args: Parameters<typeof completeServiceJob>) => {
         await completeServiceJob(...args)
-        await reload()
+        await customerData.refetch()
     }
 
     const completeWofFromDashboard = async (...args: Parameters<typeof completeWofJob>) => {
         await completeWofJob(...args)
-        await reload()
+        await customerData.refetch()
     }
 
     useEffect(() => {
@@ -444,9 +463,7 @@ export default function CustomerDashboardScreen() {
         job.gr_Site?.gr_Customer?.gr_customerid === selectedCustomerId,
     )
     const openJobs = customerJobs.filter(isOpenJob)
-    const customerQuotes = jobQuotes.filter((quote) =>
-        quote.gr_Job?.gr_Site?.gr_Customer?.gr_customerid === selectedCustomerId,
-    )
+    const customerQuotes = customerData.quotes
     const lastJob = [...customerJobs].sort((a, b) => b.createdon.localeCompare(a.createdon))[0]
 
     const maintenanceCounts = customerEquipment.reduce((counts, item) => {
@@ -567,7 +584,6 @@ export default function CustomerDashboardScreen() {
             const contactId = initialValues.contactId
                 ?? (contactsForSite.length === 1 ? contactsForSite[0].gr_Contact?.gr_contactid : '')
 
-            clearEquipmentJobs()
             setEditingEquipment(null)
             setCreatingJobInitialValues({
                 ...initialValues,
@@ -686,7 +702,7 @@ export default function CustomerDashboardScreen() {
         {isLoading ? <section className="customer-dashboard-state">Loading customer data...</section> : loadError ? (
             <section className="customer-dashboard-state error">
                 <div><strong>Customer dashboard could not be loaded.</strong><p>{loadError}</p></div>
-                <button type="button" onClick={() => void reload()}>Try again</button>
+                <button type="button" onClick={() => void Promise.all([reload(), customerData.refetch()])}>Try again</button>
             </section>
         ) : !selectedCustomer ? (
             <section className="customer-dashboard-empty">
@@ -716,7 +732,7 @@ export default function CustomerDashboardScreen() {
 
             <nav className="customer-dashboard-tabs" aria-label="Customer sections" role="tablist">
                 <button type="button" role="tab" aria-selected={activeTab === 'sites'} className={activeTab === 'sites' ? 'active' : ''} onClick={() => setActiveTab('sites')}>Sites <span>{customerSites.length}</span></button>
-                <button type="button" role="tab" aria-selected={activeTab === 'open-jobs'} className={activeTab === 'open-jobs' ? 'active' : ''} onClick={() => setActiveTab('open-jobs')}>Open Jobs <span>{openJobs.length}</span></button>
+                <button type="button" role="tab" aria-selected={activeTab === 'jobs'} className={activeTab === 'jobs' ? 'active' : ''} onClick={() => setActiveTab('jobs')}>Jobs <span>{customerJobs.length}</span></button>
                 <button type="button" role="tab" aria-selected={activeTab === 'quotes'} className={activeTab === 'quotes' ? 'active' : ''} onClick={() => setActiveTab('quotes')}>Quotes <span>{customerQuotes.length}</span></button>
                 <button type="button" role="tab" aria-selected={activeTab === 'contacts'} className={activeTab === 'contacts' ? 'active' : ''} onClick={() => setActiveTab('contacts')}>Contacts <span>{customerContacts.length}</span></button>
                 <button type="button" role="tab" aria-selected={activeTab === 'info'} className={activeTab === 'info' ? 'active' : ''} onClick={() => setActiveTab('info')}>Info</button>
@@ -897,18 +913,18 @@ export default function CustomerDashboardScreen() {
                         </div>
                     </article>
                 })}
-            </section> : activeTab === 'open-jobs' ? <CustomerOpenJobsTab
-                jobs={openJobs}
-                officeUpdates={officeUpdates}
+            </section> : activeTab === 'jobs' ? <CustomerJobsTab
+                customerName={selectedCustomer.gr_name}
+                jobs={customerJobs}
                 isLoading={isJobsLoading}
                 error={jobsLoadError}
                 onOpenJob={(job) => { void openDashboardJob(job) }}
             /> : activeTab === 'quotes' ? <CustomerQuotesTab
                 quotes={customerQuotes}
                 sites={customerSites}
-                isLoading={isJobsLoading}
-                error={jobsLoadError}
-                onOpenQuote={(quote) => navigate(`/quotes?quoteId=${encodeURIComponent(quote.gr_quoteid)}`)}
+                isLoading={customerData.quotesLoading}
+                error={customerData.quotesError}
+                onOpenQuote={(quote) => quoteEditor.openQuote(quote.gr_quoteid)}
             /> : activeTab === 'contacts' ? <section className="customer-contacts-panel" role="tabpanel">
                 <header>
                     <div><span>Customer contacts</span><h3>Contacts</h3></div>
@@ -1018,9 +1034,15 @@ export default function CustomerDashboardScreen() {
             }}
             onOpenJob={(jobId, trigger) => {
                 siteCheckNestedTriggerRef.current = trigger
-                void fetchJobForDrawer(jobId).then((job) => {
-                    if (job) setEditingJob(job)
-                }).catch(() => undefined)
+                const job = operationalJobs.find((candidate) => candidate.gr_jobid.toLowerCase() === jobId.toLowerCase())
+                if (job) {
+                    setEditingJob(job)
+                    return
+                }
+
+                void fetchJobForDrawer(jobId).then((refreshedJob) => {
+                    if (refreshedJob) setEditingJob(refreshedJob)
+                })
             }}
             onOpenEquipment={(equipmentId, trigger) => {
                 const record = equipment.find((item) => item.gr_equipmentid.toLowerCase() === equipmentId.toLowerCase())
@@ -1041,20 +1063,19 @@ export default function CustomerDashboardScreen() {
             mode="edit"
             equipment={currentEditingEquipment}
             equipmentList={equipment}
-            servicePlans={servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === currentEditingEquipment.gr_equipmentid.toLowerCase())}
+            onLoadServicePlans={loadEquipmentServicePlans}
             customers={customers}
             sites={sites}
             jobs={visibleEquipmentJobs}
-            isJobHistoryLoading={isEquipmentJobsLoading}
-            jobHistoryError={equipmentJobsError}
-            onRetryJobHistory={() => { void loadEquipmentJobs(currentEditingEquipment.gr_equipmentid).catch(() => undefined) }}
+            isJobHistoryLoading={equipmentJobHistory.isLoading}
+            jobHistoryError={equipmentJobHistory.error}
+            onRetryJobHistory={() => { void equipmentJobHistory.refetch().catch(() => undefined) }}
             isSaving={isSaving}
             saveError={saveError}
             siteCheckEnabledSiteIds={siteCheckEnabledSiteIds}
             onClose={() => {
                 const trigger = siteCheckNestedTriggerRef.current
                 siteCheckNestedTriggerRef.current = null
-                clearEquipmentJobs()
                 setEditingEquipment(null)
                 window.setTimeout(() => trigger?.focus(), 0)
             }}
@@ -1062,19 +1083,8 @@ export default function CustomerDashboardScreen() {
             onSaveMaintenanceHistory={async (plans, input) => { const updated = await saveEquipmentMaintenanceHistory(currentEditingEquipment, plans, input); setEditingEquipment(updated.equipment) }}
             onCreateJob={(record) => { void openJobCreate(initialJobValuesForEquipment(record)) }}
             onOpenJob={(job) => { void openEquipmentHistoryJob(job) }}
-            onDelete={async () => { await deleteEquipment(currentEditingEquipment.gr_equipmentid); clearEquipmentJobs(); setEditingEquipment(null) }}
+            onDelete={async () => { await deleteEquipment(currentEditingEquipment.gr_equipmentid); setEditingEquipment(null) }}
         />}
-
-        {pendingHistoryJob && <div className="equipment-job-load-overlay" role={historyJobLoadError ? 'alert' : 'status'}>
-            <section>
-                <strong>{historyJobLoadError ? 'Job could not be opened' : `Loading Job ${pendingHistoryJob.gr_jobnumber || ''}…`}</strong>
-                <p>{historyJobLoadError || 'Loading the current Job and all Equipment, Customer, Site, Contact, scheduling, quote, assignment, office, and maintenance details.'}</p>
-                <div>
-                    {historyJobLoadError && <button type="button" onClick={() => void openEquipmentHistoryJob(pendingHistoryJob)}>Try again</button>}
-                    <button type="button" onClick={() => { setPendingHistoryJob(null); setHistoryJobLoadError('') }}>Cancel</button>
-                </div>
-            </section>
-        </div>}
 
         {pendingJobCreateInitialValues && <div className="equipment-job-load-overlay" role={jobCreatePreparationError ? 'alert' : 'status'}>
             <section>
@@ -1093,7 +1103,7 @@ export default function CustomerDashboardScreen() {
             equipmentList={equipment}
             customers={customers}
             sites={sites}
-            jobs={equipmentJobs}
+            jobs={[]}
             isSaving={isSaving}
             saveError={saveError}
             siteCheckEnabledSiteIds={siteCheckEnabledSiteIds}
@@ -1225,6 +1235,9 @@ export default function CustomerDashboardScreen() {
 
         {creatingJobInitialValues && <JobCreateDrawer
             mechanics={mechanics}
+            mechanicsLoading={mechanicsLoading}
+            mechanicsError={mechanicsError}
+            onRetryMechanics={retryMechanics}
             equipmentList={jobEquipmentList}
             sites={jobSites}
             customers={jobCustomers}
@@ -1235,6 +1248,12 @@ export default function CustomerDashboardScreen() {
             onCreateSite={createJobSite}
             onCreateContact={createContactForSite}
             onCreateEquipment={createJobEquipment}
+            onSearchEquipment={searchEquipmentForEditor}
+            onSearchCustomers={searchCustomersForEditor}
+            onLoadCustomerSites={loadCustomerSitesForEditor}
+            onLoadSiteContacts={loadSiteContactsForEditor}
+            onLoadEquipment={loadEquipmentForEditor}
+            onLoadEquipmentServicePlans={loadEquipmentServicePlansForEditor}
             onCreateJob={createJob}
             onCreateScheduleOption={createScheduleOption}
             onClose={() => setCreatingJobInitialValues(null)}
@@ -1252,16 +1271,20 @@ export default function CustomerDashboardScreen() {
             onCreateSite={createJobSite}
             onCreateContact={createContactForSite}
             onCreateEquipment={createJobEquipment}
+            onSearchEquipment={searchEquipmentForEditor}
+            onSearchCustomers={searchCustomersForEditor}
+            onLoadCustomerSites={loadCustomerSitesForEditor}
+            onLoadSiteContacts={loadSiteContactsForEditor}
+            onLoadEquipment={loadEquipmentForEditor}
+            onLoadEquipmentServicePlans={loadEquipmentServicePlansForEditor}
             onSave={updateJob}
             onDelete={deleteJob}
             scheduleOptions={scheduleOptions}
             onCreateScheduleOption={createScheduleOption}
             onUpdateScheduleOption={updateScheduleOption}
             onDeleteScheduleOption={deleteScheduleOption}
-            quotes={jobQuotes.filter((quote) => quote._gr_job_value?.toLowerCase() === editingJob.gr_jobid.toLowerCase())}
-            assignments={jobAssignments.filter((assignment) => assignment._gr_job_value?.toLowerCase() === editingJob.gr_jobid.toLowerCase())}
-            onCreateQuote={(jobId) => { setEditingJob(null); navigate(`/quotes?new=1&jobId=${encodeURIComponent(jobId)}`) }}
-            onOpenQuote={(quoteId) => { setEditingJob(null); navigate(`/quotes?quoteId=${encodeURIComponent(quoteId)}`) }}
+            onCreateQuote={(jobId) => { setEditingJob(null); quoteEditor.createQuote(jobId) }}
+            onOpenQuote={(quoteId) => { setEditingJob(null); quoteEditor.openQuote(quoteId) }}
             onJobCardStatusChange={updateJobCardStatus}
             onCreateAssignment={createJobAssignment}
             onSendPrimary={sendPrimaryJobEmail}
@@ -1270,6 +1293,14 @@ export default function CustomerDashboardScreen() {
             officeUpdates={officeUpdates.filter((update) => update.jobId.toLowerCase() === editingJob.gr_jobid.toLowerCase())}
             onCreateOfficeUpdate={createJobOfficeUpdate}
             onSaveOfficeAttention={updateJobOfficeAttention}
+            referenceDataStatus={referenceDataStatus}
+            referenceDataError={referenceDataError}
+            onPrepareReferenceData={prepareJobReferenceData}
+            onLoadJobQuotes={loadJobQuotes}
+            onLoadJobAssignments={loadJobAssignments}
+            onRefreshJob={fetchJobForDrawer}
+            onLoadJobCardDetails={fetchJobCardDetails}
+            onLoadJobPhoto={fetchJobPhotoBody}
             onClose={() => {
                 const trigger = siteCheckNestedTriggerRef.current
                 siteCheckNestedTriggerRef.current = null

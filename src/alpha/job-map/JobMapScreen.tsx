@@ -7,11 +7,9 @@ import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
 import PageHeader from '../shared/page-header/PageHeader'
 import { equipmentMapCacheKey, restoreEquipmentMapCache, saveEquipmentMapCache, type CachedCoordinate } from '../equipment-map/equipmentMapCache'
 import { geocodeEquipmentSites } from '../equipment-map/equipmentGeocodingApi'
-import { useJobs } from '../jobs/hooks/useJobs'
-import { fetchSites } from '../jobs/services/sitesApi'
 import { JOB_STATUSES, type JobStatus } from '../jobs/types/jobStatus.types'
-import type { Site } from '../jobs/types/site.types'
 import { groupJobsBySite, isJobMapStatus, jobMapMarkerTone, jobMapStatusLabel, jobsWithoutSite } from './jobMap'
+import { useJobMapData } from './useJobMapData'
 import '../equipment-map/EquipmentMapScreen.css'
 import './JobMapScreen.css'
 
@@ -34,11 +32,6 @@ export default function JobMapScreen() {
     const { instance } = useMsal()
     const account = useActiveMsalAccount()
     const signedInUser = getSignedInUserInfo(account)
-    const { jobs, isLoading, loadError, retryInitialLoad } = useJobs()
-    const [sites, setSites] = useState<Site[]>([])
-    const [sitesLoading, setSitesLoading] = useState(true)
-    const [sitesError, setSitesError] = useState('')
-    const [sitesReloadKey, setSitesReloadKey] = useState(0)
     const storageId = signedInUser?.storageId || 'account-pending'
     const storageKey = equipmentMapCacheKey(storageId, import.meta.env.VITE_DATAVERSE_URL)
     const [coordinates, setCoordinates] = useState<Record<string, CachedCoordinate>>({})
@@ -55,28 +48,25 @@ export default function JobMapScreen() {
     })
     const [selectedSiteId, setSelectedSiteId] = useState('')
     const [detailsOpen, setDetailsOpen] = useState(true)
-
-    useEffect(() => {
-        if (!account) return
-        let cancelled = false
-        void acquireDataverseAccessToken(instance, account)
-            .then(fetchSites)
-            .then((rows) => { if (!cancelled) setSites(rows) })
-            .catch((error) => { if (!cancelled) setSitesError(error instanceof Error ? error.message : 'Site locations could not be loaded.') })
-            .finally(() => { if (!cancelled) setSitesLoading(false) })
-        return () => { cancelled = true }
-    }, [account, instance, sitesReloadKey])
+    const requestedStatuses = useMemo(
+        () => statusFilters.filter((status) => enabledStatuses[status.value]).map((status) => status.value),
+        [enabledStatuses],
+    )
+    const jobMapData = useJobMapData(requestedStatuses)
+    const jobs = jobMapData.jobs
 
     const targetJobs = useMemo(() => jobs.filter((job) => isJobMapStatus(job.gr_status)), [jobs])
     const groupedSites = useMemo(() => groupJobsBySite(targetJobs), [targetJobs])
-    const sharedCoordinates = useMemo(() => Object.fromEntries(sites.flatMap((site) => {
+    const sharedCoordinates = useMemo(() => Object.fromEntries(targetJobs.flatMap((job) => {
+        const site = job.gr_Site
+        if (!site?.gr_siteid) return []
         const address = site.gr_address?.trim() || ''
         const resolved = Boolean(address && site.gr_geocodesourceaddress === address && site.gr_geocoderesolvedon)
         const coordinate = resolved && typeof site.gr_geocodelatitude === 'number' && typeof site.gr_geocodelongitude === 'number'
             ? { latitude: site.gr_geocodelatitude, longitude: site.gr_geocodelongitude, formattedAddress: site.gr_geocodeformattedaddress || address }
             : null
         return resolved ? [[site.gr_siteid, { address, coordinate, status: coordinate ? 'matched' as const : 'not_found' as const }]] : []
-    })), [sites])
+    })), [targetJobs])
     const effectiveCoordinates = useMemo(() => ({ ...coordinates, ...sharedCoordinates }), [coordinates, sharedCoordinates])
 
     useEffect(() => {
@@ -88,7 +78,7 @@ export default function JobMapScreen() {
     }, [storageId, storageKey])
 
     useEffect(() => {
-        if (!cacheReady || sitesLoading || sitesError || !account || groupedSites.length === 0) return
+        if (!cacheReady || !account || groupedSites.length === 0) return
         const missing = groupedSites.filter((site) => site.address
             && sharedCoordinates[site.siteId]?.address !== site.address
             && sharedResolutionAttempts[site.siteId] !== site.address).slice(0, 20)
@@ -118,7 +108,7 @@ export default function JobMapScreen() {
                 .catch((error) => { if (!cancelled) setGeocodingError(error instanceof Error ? error.message : 'Job locations could not be resolved.') })
         }, 0)
         return () => { cancelled = true; window.clearTimeout(timer) }
-    }, [account, cacheReady, groupedSites, instance, sharedCoordinates, sharedResolutionAttempts, sitesError, sitesLoading, storageKey])
+    }, [account, cacheReady, groupedSites, instance, sharedCoordinates, sharedResolutionAttempts, storageKey])
 
     const filteredSites = useMemo(() => {
         const query = normalized(search)
@@ -159,7 +149,9 @@ export default function JobMapScreen() {
             <label><span>Site</span><select value={siteId} onChange={(event) => setSiteId(event.currentTarget.value)}><option value="">All Sites</option>{siteOptions.map((site) => <option key={site.siteId} value={site.siteId}>{site.siteName}</option>)}</select></label>
             <fieldset className="job-map-status-filter"><legend>Status</legend>{statusFilters.map((status) => <label key={status.value} className={status.tone}><input type="checkbox" checked={enabledStatuses[status.value]} onChange={(event) => { const checked = event.currentTarget.checked; setEnabledStatuses((current) => ({ ...current, [status.value]: checked })) }} /><span>{status.label}</span></label>)}</fieldset>
         </section>
-        {isLoading || sitesLoading ? <section className="equipment-map-state">Loading Job locations…</section> : loadError || sitesError ? <section className="equipment-map-state error"><div><strong>Job locations could not be loaded.</strong><p>{loadError || sitesError}</p></div><button type="button" onClick={() => { retryInitialLoad(); setSitesError(''); setSitesLoading(true); setSitesReloadKey((current) => current + 1) }}>Try again</button></section> : <>
+        {jobMapData.isLoading ? <section className="equipment-map-state">Loading Job locations…</section> : jobMapData.loadError ? <section className="equipment-map-state error"><div><strong>Job locations could not be loaded.</strong><p>{jobMapData.loadError}</p></div><button type="button" onClick={() => { void jobMapData.refetch() }}>Try again</button></section> : <>
+            {jobMapData.isRefreshing && <p className="equipment-map-notice" role="status">Updating Job locations…</p>}
+            {jobMapData.refreshError && <p className="equipment-map-notice warning" role="alert">Job locations could not be refreshed. The last available locations remain visible.</p>}
             {pendingAddressCount > 0 && !geocodingError && <p className="equipment-map-notice" role="status">Resolving Site addresses… {resolvedAddressCount} of {addressedSites.length} · {mappedSites.length} mapped</p>}
             {geocodingError && <p className="equipment-map-notice warning" role="alert">{geocodingError} Any locations already resolved remain available.</p>}
             {unmappedJobCount > 0 && pendingAddressCount === 0 && <p className="equipment-map-notice warning">{unmappedJobCount} matching {unmappedJobCount === 1 ? 'Job is' : 'Jobs are'} not mapped because no usable Site location is available.</p>}

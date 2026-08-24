@@ -1,6 +1,8 @@
 import type { JobOfficeUpdate } from '../types/officeAction.types'
+import { fetchAllDataversePages } from '../../shared/dataverse/fetchAllDataversePages.ts'
+import { buildDataverseIdFilterBatches } from '../../shared/dataverse/boundedDataverseFilters.ts'
 
-const API_URL = `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2`
+const API_URL = `${import.meta.env?.VITE_DATAVERSE_URL ?? ''}/api/data/v9.2`
 const select = '$select=gr_jobofficeupdateid,gr_update,createdon,_gr_job_value'
 const expand = '$expand=createdby($select=fullname)'
 
@@ -23,10 +25,35 @@ async function fetchJobOfficeUpdate(token: string, updateId: string): Promise<Jo
 }
 
 export async function fetchJobOfficeUpdates(token: string): Promise<JobOfficeUpdate[]> {
-    const response = await fetch(`${API_URL}/gr_jobofficeupdates?${select}&${expand}&$orderby=createdon desc`, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } })
-    if (!response.ok) throw new Error(`Failed to load office updates: ${await response.text()}`)
-    const data = await response.json()
-    return (data.value ?? []).map(mapUpdate)
+    const rows = await fetchAllDataversePages<Record<string, unknown>>(
+        `${API_URL}/gr_jobofficeupdates?${select}&${expand}&$orderby=createdon desc`,
+        { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } },
+        async (response) => {
+            if (!response.ok) throw new Error(`Failed to load office updates: ${await response.text()}`)
+        },
+    )
+    return rows.map(mapUpdate)
+}
+
+export async function fetchJobOfficeUpdatesForJobs(
+    token: string,
+    jobIds: readonly string[],
+    signal?: AbortSignal,
+): Promise<JobOfficeUpdate[]> {
+    const filters = buildDataverseIdFilterBatches('_gr_job_value', jobIds)
+    if (!filters.length) return []
+    const rows: JobOfficeUpdate[] = []
+    for (const filter of filters) {
+        const values = await fetchAllDataversePages<Record<string, unknown>>(
+            `${API_URL}/gr_jobofficeupdates?${select}&${expand}&$filter=${encodeURIComponent(filter)}&$orderby=createdon desc`,
+            { signal, headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } },
+            async (response) => {
+                if (!response.ok) throw new Error(`Failed to load scoped Job office updates: ${await response.text()}`)
+            },
+        )
+        rows.push(...values.map(mapUpdate))
+    }
+    return rows
 }
 
 export async function createJobOfficeUpdate(token: string, input: { jobId: string; jobNumber?: string | null; text: string }): Promise<JobOfficeUpdate> {

@@ -56,6 +56,9 @@ Expected entity set: `gr_pricingitems`.
 | Sort order | `gr_sortorder` | Whole number | No | Controls display order |
 
 Use the table's built-in **Status** field to activate or deactivate pricing items instead of adding a second custom Active field.
+The Pricing screen also exposes confirmed permanent deletion. Existing Quote Lines are historical
+snapshots, but Dataverse relationship behaviour remains authoritative and may reject deletion while
+a relationship depends on the Pricing Item.
 
 Create the first record:
 
@@ -166,8 +169,9 @@ total    = 4340.85
 - `/pricing` — pricing catalogue and standard rate maintenance
 
 The Job editor shows linked quotes and provides a **Create quote** action. Chargeable Invoice Review
-also shows a read-only, Job-scoped related-quote summary and lazily loads its lines for comparison;
-editing remains owned by the standalone Quotes page.
+also shows a read-only, Job-scoped related-quote summary and lazily loads its lines for comparison.
+Editing remains Quote-feature-owned through the canonical app-shell overlay, which allows Jobs,
+Customer Dashboard, Scheduler, WOF, and Chargeable Invoice Review to keep their current screen open.
 
 ## Build sequence
 

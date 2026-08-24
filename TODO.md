@@ -14,6 +14,53 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
 
 ## Priority 1 — Security and reliability
 
+- [ ] Implement the phased shared data-loading and multi-user synchronization architecture in
+  [`docs/architecture/data-loading-and-synchronization.md`](docs/architecture/data-loading-and-synchronization.md).
+  Request-generation guards, silent-token coalescing, shared Jobs/Equipment cache subscriptions,
+  primary startup/reference continuation paging, and the app-shell Operational Data Client are
+  complete locally. Equipment Job history is the first shared focused query with cancellation,
+  bounded invalidation, prefetch, and short-window eviction. Main Jobs/Equipment list ownership is
+  also migrated to versioned app-shell query keys while retaining the existing IndexedDB adapters.
+  Canonical Job edit drawers now open immediately, refresh Job core independently, separate editor
+  relationships from Quote/assignment readiness, and defer Job Card children/photos until that tab.
+  Focused Job core and Job Card metadata now use shared query keys with bounded invalidation and
+  eviction; full photo bytes load only when one photo is opened. Selected-Customer Dashboard Sites,
+  Equipment, Jobs, and Service Plans now use bounded scoped queries and focused Equipment completion
+  restores full linked history. The query client now exposes privacy-safe in-memory request/cache/
+  duration/payload metrics. Scheduler now uses bounded visible-week queries with adjacent prefetch,
+  and Job Map now uses a minimal status/location projection without global Job or Site reads. One
+  app-shell SignalR provider now dispatches the currently published Job, Equipment, and Staff events,
+  coalesces dependent query invalidation, performs bounded reconnect/visibility recovery, and shares
+  successful local Job/Equipment invalidations across account/environment-scoped browser tabs.
+  Job editor Equipment/Customer searches and dependent Site/Contact/Service Plan reads are now
+  bounded and cancellable, and related-record creates no longer refresh whole tables. Canonical Job
+  creation now renders supplied defaults immediately, shares the Staff directory, and exposes
+  dependency-specific loading/retry state instead of waiting on a broad reference bundle. Job-drawer
+  Quotes and Assignments now use separate tab-triggered focused Job queries, and Customer Dashboard
+  Quotes use a selected-Customer query. Equipment drawers now render their supplied core immediately,
+  load focused Service Plans only on Maintenance, and share focused Job history for usage evidence
+  across Equipment, Customer Dashboard, and WOF. Scoped Jobs consumers no longer trigger implicit
+  full Schedule Option or Office Update reads; Customer Dashboard and Scheduler supply bounded
+  Job-ID-filtered projections. WOF startup now reuses shared Equipment plus shared, paged Inspection
+  and referenced-Job Schedule Option queries, and defers editor-only directories and selected
+  relationship reads until their workflows open. The Quote register and exact-record editor reads
+  now use shared keys, defer editor support, reconcile same-scope tabs after local mutations, and
+  use bounded abortable Job, Customer, and active Equipment selectors with exact-record hydration.
+  Equipment Manager now renders from the shared Equipment projection without full Customer/Site/
+  Service Plan startup reads, uses visible-page maintenance queries and bounded drawer relationships,
+  and reserves complete reference loading for explicit Map/CSV needs. Quote Pricing and Staff now use
+  independent shared keys reused across Pricing, Quotes, and Jobs. Job Book now shares Staff, uses
+  bounded abortable Customer search, and loads Sites only for the selected Customer while retaining
+  its deliberate lightweight Equipment index. The final `useJobs()` call-site audit is complete:
+  linked WOF Job editing and Chargeable Invoice Job creation are scoped, completion reconciliation
+  uses exact Job/Equipment plus focused history/plans, and only the primary Jobs register remains a
+  deliberate global consumer. A development-only Sidebar diagnostic now exposes resettable
+  privacy-safe query-family and route-to-useful-content timings for the five remaining primary
+  registers. Next capture comparable signed-in cold/warm baselines, optimize the worst query family,
+  then separately approve dedicated WOF Inspection, Schedule Option, and Site events
+  or Dataverse watermark/delta recovery. New plugin events or Azure changes remain separately
+  approved work.
+
 - [ ] Approve, provision, and verify a Dataverse alternate key for non-empty Job Number so two
   simultaneous first-time creates cannot bypass the application duplicate preflight. Confirm the
   existing data set contains no duplicates before provisioning; this is a separate Dataverse change.

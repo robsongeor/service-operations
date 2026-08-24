@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { useActiveMsalAccount } from '../../../auth/useActiveMsalAccount'
-import { createCustomer as createCustomerApi, fetchCustomers } from '../../jobs/services/customersApi'
-import { fetchEquipmentJobs } from '../../jobs/services/jobsApi'
+import { createCustomer as createCustomerApi, fetchCustomers, searchCustomers } from '../../jobs/services/customersApi'
 import { updateEquipmentSite } from '../../jobs/services/equipmentApi'
-import { createSite as createSiteApi, fetchSites, updateSite as updateSiteApi } from '../../jobs/services/sitesApi'
+import { createSite as createSiteApi, fetchCustomerSites, fetchSites, updateSite as updateSiteApi } from '../../jobs/services/sitesApi'
 import type { Customer } from '../../jobs/types/customer.types'
 import type { Equipment } from '../../jobs/types/equipment.types'
-import type { Job } from '../../jobs/types/job.types'
 import type { Site, SiteInductionDocument, SiteUpdateInput } from '../../jobs/types/site.types'
 import {
     deleteSiteInductionDocument as deleteSiteInductionDocumentApi,
@@ -26,6 +24,7 @@ import {
 import { normalizeEquipmentInput, type EquipmentUpdateInput } from '../types/equipmentManager.types'
 import {
     fetchEquipmentServicePlans,
+    fetchEquipmentServicePlansForEquipment,
     syncEquipmentServiceProgramme,
     saveEquipmentMaintenanceHistory as saveEquipmentMaintenanceHistoryApi,
     type MaintenanceHistoryInput,
@@ -40,19 +39,50 @@ import {
     type EquipmentCsvReviewRow,
 } from '../utils/equipmentCsv'
 import { acquireDataverseAccessToken } from '../../../auth/dataverseAuthentication'
-import { startEquipmentRealtime, type EquipmentRealtimeStatus } from '../services/equipmentRealtime'
+import { subscribeToEquipmentChanges } from '../services/equipmentRealtime'
+import { useOperationalQueryState } from '../../shared/data/useOperationalQueryState'
+import { EQUIPMENT_OPERATIONAL_LIST_QUERY_KEY } from '../../shared/data/operationalCollectionKeys'
+import { useOperationalDataClient } from '../../shared/data/OperationalDataClientContext'
+import { subscribeToOperationalRealtimeRecovery } from '../../shared/realtime/operationalRealtimeEvents'
+import { useOperationalRealtimeStatus } from '../../shared/realtime/OperationalRealtimeStatusContext'
 
-export function useEquipmentManager() {
+const EMPTY_EQUIPMENT: Equipment[] = []
+
+type UseEquipmentManagerOptions = Readonly<{
+    loadGlobalOperationalData?: boolean
+    loadGlobalRelationships?: boolean
+    loadGlobalServicePlans?: boolean
+    scopedData?: Readonly<{
+        equipment: Equipment[]
+        sites: Site[]
+        servicePlans: EquipmentServicePlan[]
+    }>
+    onScopedDataChanged?: () => void | Promise<void>
+}>
+
+export function useEquipmentManager(options: UseEquipmentManagerOptions = {}) {
+    const loadGlobalOperationalData = options.loadGlobalOperationalData !== false
+    const loadGlobalRelationships = options.loadGlobalRelationships !== false
+    const loadGlobalServicePlans = options.loadGlobalServicePlans !== false
     const { instance } = useMsal()
     const account = useActiveMsalAccount()
-    const [equipment, setEquipment] = useState<Equipment[]>([])
+    const operationalDataClient = useOperationalDataClient()
+    const {
+        data: sharedEquipment,
+        hasData: hasSharedEquipment,
+        setData: setSharedEquipment,
+    } = useOperationalQueryState<Equipment[]>(EQUIPMENT_OPERATIONAL_LIST_QUERY_KEY, EMPTY_EQUIPMENT)
+    const [scopedEquipment, setScopedEquipment] = useState<Equipment[]>(options.scopedData?.equipment ?? [])
+    const equipment = loadGlobalOperationalData ? sharedEquipment : options.scopedData?.equipment ?? scopedEquipment
+    const setEquipment = useCallback((updater: Equipment[] | ((current: Equipment[]) => Equipment[])) => {
+        if (loadGlobalOperationalData) setSharedEquipment(updater)
+        else setScopedEquipment(updater)
+    }, [loadGlobalOperationalData, setSharedEquipment])
     const [customers, setCustomers] = useState<Customer[]>([])
-    const [sites, setSites] = useState<Site[]>([])
-    const [jobs, setJobs] = useState<Job[]>([])
-    const [isEquipmentJobsLoading, setIsEquipmentJobsLoading] = useState(false)
-    const [equipmentJobsError, setEquipmentJobsError] = useState('')
-    const equipmentJobsRequestRef = useRef(0)
-    const [servicePlans, setServicePlans] = useState<EquipmentServicePlan[]>([])
+    const [storedSites, setSites] = useState<Site[]>(options.scopedData?.sites ?? [])
+    const [storedServicePlans, setServicePlans] = useState<EquipmentServicePlan[]>(options.scopedData?.servicePlans ?? [])
+    const sites = loadGlobalOperationalData ? storedSites : options.scopedData?.sites ?? storedSites
+    const servicePlans = loadGlobalOperationalData ? storedServicePlans : options.scopedData?.servicePlans ?? storedServicePlans
     const [isLoading, setIsLoading] = useState(true)
     const [loadError, setLoadError] = useState('')
     const [isSaving, setIsSaving] = useState(false)
@@ -62,31 +92,63 @@ export function useEquipmentManager() {
         savedAt: number
         refreshing: boolean
     } | null>(null)
-    const [equipmentRealtimeStatus, setEquipmentRealtimeStatus] = useState<EquipmentRealtimeStatus>('disabled')
+    const equipmentRealtimeStatus = useOperationalRealtimeStatus()
+    const hasSharedEquipmentRef = useRef(hasSharedEquipment)
+    const onScopedDataChangedRef = useRef(options.onScopedDataChanged)
+
+    useEffect(() => {
+        onScopedDataChangedRef.current = options.onScopedDataChanged
+    }, [options.onScopedDataChanged])
+
+    useEffect(() => {
+        hasSharedEquipmentRef.current = hasSharedEquipment
+    }, [hasSharedEquipment])
 
     const getToken = useCallback(async () => {
         return acquireDataverseAccessToken(instance, account)
     }, [account, instance])
 
+    const loadEquipmentServicePlans = useCallback(async (equipmentId: string, signal?: AbortSignal) => {
+        const token = await getToken()
+        return fetchEquipmentServicePlansForEquipment(token, [equipmentId], signal)
+    }, [getToken])
+
+    const loadEquipmentServicePlansForIds = useCallback(async (equipmentIds: readonly string[], signal?: AbortSignal) => {
+        const token = await getToken()
+        return fetchEquipmentServicePlansForEquipment(token, equipmentIds, signal)
+    }, [getToken])
+
+    const searchEquipmentCustomers = useCallback(async (query: string, signal?: AbortSignal) => {
+        return searchCustomers(await getToken(), query, signal)
+    }, [getToken])
+
+    const loadEquipmentCustomerSites = useCallback(async (customerId: string, signal?: AbortSignal) => {
+        return fetchCustomerSites(await getToken(), customerId, signal)
+    }, [getToken])
+
     const load = useCallback(async () => {
         if (!account) return
-        setIsLoading(true)
+        setIsLoading(!hasSharedEquipmentRef.current)
         setLoadError('')
         try {
-            const token = await getToken()
+            if (!loadGlobalOperationalData) {
+                const token = await getToken()
+                setCustomers(await fetchCustomers(token))
+                await onScopedDataChangedRef.current?.()
+                return
+            }
             const [nextEquipment, nextCustomers, nextSites, nextServicePlans] = await Promise.all([
-                fetchEquipment(token, {
-                    forceRefresh: true,
-                    onBackgroundRefresh: (rows, refreshedAt) => {
-                        setEquipment(rows)
-                        setEquipmentCacheStatus({ source: 'network', savedAt: refreshedAt, refreshing: false })
-                    },
-                }),
-                fetchCustomers(token),
-                fetchSites(token),
-                fetchEquipmentServicePlans(token),
+                operationalDataClient.fetchQuery(
+                    EQUIPMENT_OPERATIONAL_LIST_QUERY_KEY,
+                    async () => fetchEquipment(await getToken(), { forceRefresh: true }),
+                    { forceRefresh: true, staleTimeMs: 30_000, cacheTimeMs: 5 * 60_000 },
+                ),
+                loadGlobalRelationships ? getToken().then(fetchCustomers) : Promise.resolve([]),
+                loadGlobalRelationships ? getToken().then(fetchSites) : Promise.resolve([]),
+                loadGlobalServicePlans ? getToken().then(fetchEquipmentServicePlans) : Promise.resolve([]),
             ])
-            setEquipment(nextEquipment)
+            void nextEquipment
+            setEquipmentCacheStatus({ source: 'network', savedAt: Date.now(), refreshing: false })
             setCustomers(nextCustomers)
             setSites(nextSites)
             setServicePlans(nextServicePlans)
@@ -95,41 +157,52 @@ export function useEquipmentManager() {
         } finally {
             setIsLoading(false)
         }
-    }, [account, getToken])
+    }, [account, getToken, loadGlobalOperationalData, loadGlobalRelationships, loadGlobalServicePlans, operationalDataClient])
 
     useEffect(() => {
         let cancelled = false
         let deviceSnapshotRestored = false
         if (!account) return
         const loadInitialData = async () => {
-            setIsLoading(true)
+            setIsLoading(!hasSharedEquipmentRef.current)
             setLoadError('')
             try {
-                const token = await getToken()
+                if (!loadGlobalOperationalData) {
+                    const token = await getToken()
+                    const nextCustomers = await fetchCustomers(token)
+                    if (!cancelled) setCustomers(nextCustomers)
+                    return
+                }
                 const [nextEquipment, nextCustomers, nextSites, nextServicePlans] = await Promise.all([
-                    fetchEquipment(token, {
-                        useDeviceCache: true,
-                        onDeviceSnapshot: (rows, savedAt) => {
-                            deviceSnapshotRestored = true
-                            if (!cancelled) {
-                                setEquipment(rows)
-                                setIsLoading(false)
-                                setEquipmentCacheStatus({ source: 'device', savedAt, refreshing: true })
-                            }
-                        },
-                        onBackgroundRefresh: (rows, refreshedAt) => {
-                            if (!cancelled) {
-                                setEquipment(rows)
-                                setEquipmentCacheStatus({ source: 'network', savedAt: refreshedAt, refreshing: false })
-                            }
-                        },
-                        onBackgroundRefreshError: () => {
-                            if (!cancelled) setEquipmentCacheStatus((current) => current ? { ...current, refreshing: false } : current)
-                        },
-                    }), fetchCustomers(token), fetchSites(token), fetchEquipmentServicePlans(token),
+                    operationalDataClient.fetchQuery(
+                        EQUIPMENT_OPERATIONAL_LIST_QUERY_KEY,
+                        async () => fetchEquipment(await getToken(), {
+                            useDeviceCache: true,
+                            onDeviceSnapshot: (_rows, savedAt) => {
+                                deviceSnapshotRestored = true
+                                if (!cancelled) {
+                                    setIsLoading(false)
+                                    setEquipmentCacheStatus({ source: 'device', savedAt, refreshing: true })
+                                }
+                            },
+                            onBackgroundRefresh: (rows, refreshedAt) => {
+                                if (!cancelled) {
+                                    setEquipment(rows)
+                                    setEquipmentCacheStatus({ source: 'network', savedAt: refreshedAt, refreshing: false })
+                                }
+                            },
+                            onBackgroundRefreshError: () => {
+                                if (!cancelled) setEquipmentCacheStatus((current) => current ? { ...current, refreshing: false } : current)
+                            },
+                        }),
+                        { staleTimeMs: 30_000, cacheTimeMs: 5 * 60_000 },
+                    ),
+                    loadGlobalRelationships ? getToken().then(fetchCustomers) : Promise.resolve([]),
+                    loadGlobalRelationships ? getToken().then(fetchSites) : Promise.resolve([]),
+                    loadGlobalServicePlans ? getToken().then(fetchEquipmentServicePlans) : Promise.resolve([]),
                 ])
                 if (!cancelled) {
-                    setEquipment(nextEquipment)
+                    void nextEquipment
                     setCustomers(nextCustomers)
                     setSites(nextSites)
                     setServicePlans(nextServicePlans)
@@ -146,69 +219,42 @@ export function useEquipmentManager() {
         }
         void loadInitialData()
         return () => { cancelled = true }
-    }, [account, getToken])
+    }, [account, getToken, loadGlobalOperationalData, loadGlobalRelationships, loadGlobalServicePlans, operationalDataClient, setEquipment])
 
     useEffect(() => {
-        const apiUrl = import.meta.env.VITE_EQUIPMENT_REALTIME_API_URL?.trim() ?? ''
-        if (!account || !apiUrl) return
+        if (!account || !loadGlobalOperationalData) return
 
         let cancelled = false
         let refreshTimer: number | undefined
-        const stop = startEquipmentRealtime({
-            apiUrl,
-            getAccessToken: getToken,
-            onStatus: (status) => { if (!cancelled) setEquipmentRealtimeStatus(status) },
-            onEvent: () => {
-                if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
-                refreshTimer = window.setTimeout(async () => {
-                    if (cancelled) return
-                    setEquipmentCacheStatus((current) => current ? { ...current, refreshing: true } : current)
-                    try {
-                        const rows = await fetchEquipment(await getToken(), { forceRefresh: true })
-                        if (!cancelled) {
-                            setEquipment(rows)
-                            setEquipmentCacheStatus({ source: 'network', savedAt: Date.now(), refreshing: false })
-                        }
-                    } catch {
-                        if (!cancelled) setEquipmentCacheStatus((current) => current ? { ...current, refreshing: false } : current)
+        const refreshEquipment = () => {
+            if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
+            refreshTimer = window.setTimeout(async () => {
+                if (cancelled) return
+                setEquipmentCacheStatus((current) => current ? { ...current, refreshing: true } : current)
+                try {
+                    await operationalDataClient.fetchQuery(
+                        EQUIPMENT_OPERATIONAL_LIST_QUERY_KEY,
+                        async () => fetchEquipment(await getToken(), { forceRefresh: true }),
+                        { forceRefresh: true, staleTimeMs: 30_000, cacheTimeMs: 5 * 60_000 },
+                    )
+                    if (!cancelled) {
+                        setEquipmentCacheStatus({ source: 'network', savedAt: Date.now(), refreshing: false })
                     }
-                }, 2_000)
-            },
-        })
+                } catch {
+                    if (!cancelled) setEquipmentCacheStatus((current) => current ? { ...current, refreshing: false } : current)
+                }
+            }, 2_000)
+        }
+        const unsubscribeChanges = subscribeToEquipmentChanges(refreshEquipment)
+        const unsubscribeRecovery = subscribeToOperationalRealtimeRecovery(refreshEquipment)
 
         return () => {
             cancelled = true
             if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
-            stop()
+            unsubscribeChanges()
+            unsubscribeRecovery()
         }
-    }, [account, getToken])
-
-    const loadEquipmentJobs = useCallback(async (equipmentId: string) => {
-        const requestId = equipmentJobsRequestRef.current + 1
-        equipmentJobsRequestRef.current = requestId
-        setJobs([])
-        setEquipmentJobsError('')
-        setIsEquipmentJobsLoading(true)
-        try {
-            const rows = await fetchEquipmentJobs(await getToken(), equipmentId)
-            if (equipmentJobsRequestRef.current === requestId) setJobs(rows)
-            return rows
-        } catch (error) {
-            if (equipmentJobsRequestRef.current === requestId) {
-                setEquipmentJobsError(error instanceof Error ? error.message : 'Equipment Job history could not be loaded.')
-            }
-            throw error
-        } finally {
-            if (equipmentJobsRequestRef.current === requestId) setIsEquipmentJobsLoading(false)
-        }
-    }, [getToken])
-
-    const clearEquipmentJobs = useCallback(() => {
-        equipmentJobsRequestRef.current += 1
-        setJobs([])
-        setEquipmentJobsError('')
-        setIsEquipmentJobsLoading(false)
-    }, [])
+    }, [account, getToken, loadGlobalOperationalData, operationalDataClient])
 
     const updateEquipment = async (record: Equipment, input: EquipmentUpdateInput, resolvedSite?: Site) => {
         setIsSaving(true)
@@ -218,7 +264,7 @@ export function useEquipmentManager() {
             await updateEquipmentApi(token, record.gr_equipmentid, input)
             const selectedSite = resolvedSite ?? sites.find((site) => site.gr_siteid === input.siteId)
             const updated = applyEquipmentUpdate(record, input, selectedSite)
-            const recordPlans = servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === record.gr_equipmentid.toLowerCase())
+            const recordPlans = await fetchEquipmentServicePlansForEquipment(token, [record.gr_equipmentid])
             const syncedPlans = await syncEquipmentServiceProgramme(token, updated, recordPlans)
             setServicePlans((current) => [...current.filter((plan) => plan._gr_equipment_value?.toLowerCase() !== record.gr_equipmentid.toLowerCase()), ...syncedPlans])
             setEquipment((current) => current.map((item) =>
@@ -571,11 +617,20 @@ export function useEquipmentManager() {
         }
     }
 
+    const loadEquipmentCsvReferenceData = useCallback(async () => {
+        const token = await getToken()
+        const [nextSites, nextServicePlans] = await Promise.all([
+            fetchSites(token),
+            fetchEquipmentServicePlans(token),
+        ])
+        setSites(nextSites)
+        setServicePlans(nextServicePlans)
+        return { sites: nextSites, servicePlans: nextServicePlans }
+    }, [getToken])
+
     return {
-        equipment, customers, sites, jobs, servicePlans, equipmentCacheStatus, equipmentRealtimeStatus, isLoading, isSaving, isEquipmentJobsLoading, loadError, saveError, equipmentJobsError,
+        equipment, customers, sites, servicePlans, equipmentCacheStatus, equipmentRealtimeStatus, isLoading, isSaving, loadError, saveError,
         reload: load,
-        loadEquipmentJobs,
-        clearEquipmentJobs,
         clearSaveError: () => setSaveError(''),
         createCustomer,
         createSite,
@@ -588,6 +643,11 @@ export function useEquipmentManager() {
         downloadSiteInductionDocument,
         createEquipment,
         updateEquipment,
+        loadEquipmentServicePlans,
+        loadEquipmentServicePlansForIds,
+        searchEquipmentCustomers,
+        loadEquipmentCustomerSites,
+        loadEquipmentCsvReferenceData,
         saveEquipmentMaintenanceHistory,
         applyEquipmentCsvUpdates,
         deleteEquipment,

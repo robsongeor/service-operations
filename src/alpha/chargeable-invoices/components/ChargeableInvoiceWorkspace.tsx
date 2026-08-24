@@ -33,6 +33,7 @@ import { isValidRecipientEmail } from '../../jobs/utils/technicianMailto.ts'
 import { resolvePurchaseOrderRecipients } from '../../customers/purchaseOrderRecipientRules.ts'
 import { QUOTE_STATUS_LABELS, QUOTE_STATUSES, type Quote, type QuoteLine } from '../../quotes/types/quote.types.ts'
 import { PRICING_CATEGORY_LABELS } from '../../quotes/types/pricing.types.ts'
+import { useQuoteEditorOverlay } from '../../quotes/QuoteEditorOverlayContext.ts'
 
 type Tab = 'amendments' | 'requests' | 'waiting' | 'history'
 type CorrectionEditorState =
@@ -157,12 +158,13 @@ function quotePriceComparison(quoteTotal: number, invoiceTotal?: number | null) 
     return `${money.format(Math.abs(difference))} ${difference > 0 ? 'above' : 'below'} current invoice`
 }
 
-function RelatedQuotes({ quotes, error, jobNumber, invoiceTotal, onLoadLines }: {
+function RelatedQuotes({ quotes, error, jobNumber, invoiceTotal, onLoadLines, onOpenQuote }: {
     quotes: Quote[]
     error?: string
     jobNumber?: string | null
     invoiceTotal?: number | null
     onLoadLines: (quoteId: string) => Promise<QuoteLine[]>
+    onOpenQuote: (quoteId: string) => void
 }) {
     const [expandedId, setExpandedId] = useState<string | null>(null)
     const [linesByQuote, setLinesByQuote] = useState<Record<string, QuoteLine[]>>({})
@@ -209,7 +211,7 @@ function RelatedQuotes({ quotes, error, jobNumber, invoiceTotal, onLoadLines }: 
                         <span><strong>{money.format(quote.gr_total)}</strong><small>{quotePriceComparison(quote.gr_total, invoiceTotal)}</small></span>
                         <span className="chargeable-related-quote-chevron" aria-hidden="true">⌄</span>
                     </button>
-                    <a className="chargeable-secondary chargeable-related-quote-open" href={`/quotes?quoteId=${encodeURIComponent(quote.gr_quoteid)}`} target="_blank" rel="noopener noreferrer">Open quote</a>
+                    <button type="button" className="chargeable-secondary chargeable-related-quote-open" onClick={() => onOpenQuote(quote.gr_quoteid)}>Open quote</button>
                 </div>
                 {expanded && <div className="chargeable-related-quote-detail">
                     <dl><div><dt>Author</dt><dd>{quote.createdby?.fullname || 'Not recorded'}</dd></div><div><dt>Valid until</dt><dd>{quote.gr_validuntil || 'Not set'}</dd></div></dl>
@@ -728,6 +730,7 @@ export default function ChargeableInvoiceWorkspace({
     onPreparePhotoRequest, onPreparePoRequest, onUploadPhotos, onDeletePhotos,
     onMarkReady, onReturnToInProgress, onMarkDoNotProcess, onDelete, onAddCorrection, onReplaceCorrection, onSupersedeCorrection, onLoadDocument, onDownload, onLoadQuoteLines, onGenerateApprovalPdf, onClose,
 }: Props) {
+    const quoteEditor = useQuoteEditorOverlay()
     const [tab, setTab] = useState<Tab>('amendments')
     const [showReadyConfirmation, setShowReadyConfirmation] = useState(false)
     const [showReturnConfirmation, setShowReturnConfirmation] = useState(false)
@@ -906,7 +909,7 @@ export default function ChargeableInvoiceWorkspace({
                     </div>
                 </EditDrawerSection>
                 <EditDrawerSection title={`Related quotes (${workspace?.relatedQuotes.length ?? 0})`}>
-                    <RelatedQuotes quotes={workspace?.relatedQuotes ?? []} error={workspace?.relatedQuotesError} jobNumber={review?.gr_Job?.gr_jobnumber || review?.gr_greentreereference} invoiceTotal={currentRevision.gr_total} onLoadLines={onLoadQuoteLines} />
+                    <RelatedQuotes quotes={workspace?.relatedQuotes ?? []} error={workspace?.relatedQuotesError} jobNumber={review?.gr_Job?.gr_jobnumber || review?.gr_greentreereference} invoiceTotal={currentRevision.gr_total} onLoadLines={onLoadQuoteLines} onOpenQuote={quoteEditor.openQuote} />
                 </EditDrawerSection>
                 <EditDrawerSection title="Invoice lines">
                     <div className="chargeable-section-heading"><p>Original invoice values remain visible. Amendments appear directly beneath their source line.</p>{canCorrect && <button type="button" className="chargeable-secondary" disabled={correctionActionsDisabled} onClick={() => setCorrectionEditor({ kind: 'add-line' })}>Add new line</button>}</div>

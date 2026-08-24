@@ -1,4 +1,5 @@
 import type { Mechanic } from '../../jobs/types/mechanic.types'
+import { fetchAllDataversePages, type DataverseCollectionPage } from '../../shared/dataverse/fetchAllDataversePages.ts'
 
 const API_URL = `${import.meta.env?.VITE_DATAVERSE_URL ?? ''}/api/data/v9.2`
 
@@ -35,27 +36,35 @@ async function ensureSuccess(response: Response, action: string) {
     throw new Error(`${action}: ${detail || `${response.status} ${response.statusText}`}`)
 }
 
-export async function fetchMechanics(token: string): Promise<Mechanic[]> {
+export async function fetchMechanics(token: string, signal?: AbortSignal): Promise<Mechanic[]> {
     const baseUrl = `${API_URL}/gr_mechanics?`
+    const init = { cache: 'no-store' as const, headers: headers(token), signal }
     let response = await fetch(
         `${baseUrl}$select=gr_mechanicid,gr_name,gr_phone,gr_email,gr_camnumber,gr_rego,gr_region,gr_department,gr_jobassignmentenabled,gr_customeremailccenabled,statecode&$orderby=gr_name asc`,
-        { cache: 'no-store', headers: headers(token) },
+        init,
     )
     if (response.status === 400) {
         response = await fetch(
             `${baseUrl}$select=gr_mechanicid,gr_name,gr_phone,gr_email,gr_camnumber,gr_rego,gr_region,gr_department,gr_jobassignmentenabled,statecode&$orderby=gr_name asc`,
-            { cache: 'no-store', headers: headers(token) },
+            init,
         )
         if (response.status === 400) {
             response = await fetch(
                 `${baseUrl}$select=gr_mechanicid,gr_name,gr_phone,gr_email,gr_camnumber,gr_rego,gr_region,statecode&$orderby=gr_name asc`,
-                { cache: 'no-store', headers: headers(token) },
+                init,
             )
         }
     }
     await ensureSuccess(response, 'Failed to load staff')
-    const data = await response.json()
-    return data.value ?? []
+    const firstPage = await response.json() as DataverseCollectionPage<Mechanic>
+    const remaining = firstPage['@odata.nextLink']
+        ? await fetchAllDataversePages<Mechanic>(
+            firstPage['@odata.nextLink'],
+            init,
+            (nextResponse) => ensureSuccess(nextResponse, 'Failed to load staff'),
+        )
+        : []
+    return [...(firstPage.value ?? []), ...remaining]
 }
 
 export async function createMechanic(token: string, mechanic: MechanicInput): Promise<Mechanic> {

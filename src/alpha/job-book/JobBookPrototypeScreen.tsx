@@ -1,17 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { useNavigate } from 'react-router-dom'
 import { acquireDataverseAccessToken } from '../../auth/dataverseAuthentication'
 import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
-import { fetchCustomers } from '../jobs/services/customersApi'
-import { fetchSites } from '../jobs/services/sitesApi'
-import { fetchMechanics } from '../mechanics/services/mechanicsApi'
-import { subscribeToStaffChanges } from '../mechanics/services/staffRealtime'
+import { searchCustomers } from '../jobs/services/customersApi'
+import { fetchCustomerSites } from '../jobs/services/sitesApi'
+import { fetchMechanics as fetchStaffDirectory } from '../mechanics/services/mechanicsApi'
 import type { Customer } from '../jobs/types/customer.types'
 import type { Mechanic } from '../jobs/types/mechanic.types'
 import type { Site } from '../jobs/types/site.types'
 import VerifiedAddressField from '../jobs/components/VerifiedAddressField'
 import SearchableSelect, { type SearchableSelectOption } from '../shared/searchable-select/SearchableSelect'
+import { useOperationalQuery } from '../shared/data/useOperationalQuery'
+import { STAFF_DIRECTORY_QUERY_KEY } from '../shared/data/operationalCollectionKeys'
 import { STANDARD_JOB_TYPE_OPTIONS, type JobType } from '../jobs/types/jobType.types'
 import { JOB_DESCRIPTION_MAX_LENGTH } from '../jobs/domain/jobDescription'
 import { createJobBookIntakeRow, fetchJobBookIntakeRows, fetchRecentJobBookRows, updateJobBookIntakeRow, updateManagedJobBookMarker } from './jobBookApi'
@@ -121,20 +122,45 @@ function EquipmentPicker({
     />
 }
 
-function CustomerPicker({ id, value, customerName, customers, equipment, site, loading, onOpen, onChange }: {
+function CustomerPicker({ id, value, customerName, equipment, site, onSearchCustomers, onChange }: {
     id: string
     value: string
     customerName: string
-    customers: Customer[]
     equipment: PrototypeEquipment[]
     site: string
-    loading: boolean
-    onOpen: () => void
+    onSearchCustomers: (query: string, signal: AbortSignal) => Promise<Customer[]>
     onChange: (customerId: string, customerName: string) => void
 }) {
+    const [remoteCustomers, setRemoteCustomers] = useState<Customer[]>([])
+    const [searchQuery, setSearchQuery] = useState('')
+    const [searchAttempt, setSearchAttempt] = useState(0)
+    const [searchStatus, setSearchStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+
+    useEffect(() => {
+        if (searchAttempt === 0) return
+        const controller = new AbortController()
+        const timer = window.setTimeout(() => {
+            setSearchStatus('loading')
+            void onSearchCustomers(searchQuery, controller.signal)
+                .then((rows) => {
+                    if (controller.signal.aborted) return
+                    setRemoteCustomers(rows)
+                    setSearchStatus('idle')
+                })
+                .catch((error) => {
+                    if (controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) return
+                    setSearchStatus('error')
+                })
+        }, 250)
+        return () => {
+            window.clearTimeout(timer)
+            controller.abort()
+        }
+    }, [onSearchCustomers, searchAttempt, searchQuery])
+
     const options = useMemo<SearchableSelectOption[]>(() => {
         const byId = new Map<string, SearchableSelectOption>()
-        customers.forEach((customer) => byId.set(customer.gr_customerid, {
+        remoteCustomers.forEach((customer) => byId.set(customer.gr_customerid, {
             value: customer.gr_customerid,
             label: customer.gr_name,
         }))
@@ -144,15 +170,15 @@ function CustomerPicker({ id, value, customerName, customers, equipment, site, l
                 label: item.customer,
             })
         })
-        if (!value && customerName) byId.set('__saved-customer-text__', {
-            value: '__saved-customer-text__',
+        if (customerName) byId.set(value || '__saved-customer-text__', {
+            value: value || '__saved-customer-text__',
             label: customerName,
-            secondary: 'Saved customer text; choose a Customer to link it',
+            secondary: value ? 'Currently linked Customer' : 'Saved customer text; choose a Customer to link it',
         })
         return [...byId.values()].sort((a, b) => a.label.localeCompare(b.label))
-    }, [customerName, customers, equipment, value])
+    }, [customerName, equipment, remoteCustomers, value])
 
-    return <div className="job-book-customer-editor" onFocusCapture={onOpen} onPointerDownCapture={onOpen}>
+    return <div className="job-book-customer-editor">
         <SearchableSelect
             id={id}
             label="Customer"
@@ -160,13 +186,20 @@ function CustomerPicker({ id, value, customerName, customers, equipment, site, l
             options={options}
             placeholder="Select Customer"
             searchPlaceholder="Search Customers"
-            emptyLabel={loading ? 'Loading Customers…' : 'No matching Customers'}
+            emptyLabel="No matching Customers"
             resultLimit={50}
+            onSearchChange={(query) => {
+                setSearchQuery(query)
+                setSearchAttempt((current) => current + 1)
+            }}
+            isSearching={searchStatus === 'loading'}
+            searchError={searchStatus === 'error' ? 'Customer search failed.' : ''}
             onChange={(nextValue) => onChange(
                 nextValue === '__saved-customer-text__' ? '' : nextValue,
                 options.find((option) => option.value === nextValue)?.label ?? '',
             )}
         />
+        {searchStatus === 'error' && <button type="button" className="job-book-inline-retry" onClick={() => setSearchAttempt((current) => current + 1)}>Retry Customer search</button>}
         {site && <small>{site}</small>}
     </div>
 }
@@ -234,13 +267,22 @@ export default function JobBookPrototypeScreen() {
     const navigate = useNavigate()
     const { instance } = useMsal()
     const account = useActiveMsalAccount()
+    const getAccessToken = useCallback(
+        () => acquireDataverseAccessToken(instance, account),
+        [account, instance],
+    )
+    const staffDirectoryQuery = useOperationalQuery<Mechanic[]>({
+        key: STAFF_DIRECTORY_QUERY_KEY,
+        enabled: Boolean(account),
+        staleTimeMs: 20_000,
+        cacheTimeMs: 5 * 60_000,
+        queryFn: async ({ signal }) => fetchStaffDirectory(await getAccessToken(), signal),
+    })
+    const mechanics = staffDirectoryQuery.data ?? []
     const [recentRows, setRecentRows] = useState<JobBookRow[]>([])
     const [intakeRows, setIntakeRows] = useState<JobBookRow[]>([])
     const [draft, setDraft] = useState<JobBookRow>(() => createBlankJobBookRow(0))
     const [equipment, setEquipment] = useState<PrototypeEquipment[]>([])
-    const [customers, setCustomers] = useState<Customer[]>([])
-    const [sites, setSites] = useState<Site[]>([])
-    const [mechanics, setMechanics] = useState<Mechanic[]>([])
     const [loading, setLoading] = useState(true)
     const [loadError, setLoadError] = useState('')
     const [machineDialogOpen, setMachineDialogOpen] = useState(false)
@@ -255,12 +297,17 @@ export default function JobBookPrototypeScreen() {
     const [savingIntake, setSavingIntake] = useState(false)
     const [savingEntryMarkers, setSavingEntryMarkers] = useState<Set<string>>(() => new Set())
     const [saveError, setSaveError] = useState('')
-    const [machineReferencesLoaded, setMachineReferencesLoaded] = useState(false)
-    const [machineReferencesLoading, setMachineReferencesLoading] = useState(false)
-    const [machineReferencesError, setMachineReferencesError] = useState('')
-    const machineReferenceRequestRef = useRef<Promise<void> | null>(null)
-    const machineReferenceLoadVersionRef = useRef(0)
-    const machineReferenceAccountRef = useRef('')
+    const [machineCustomerResults, setMachineCustomerResults] = useState<Customer[]>([])
+    const [machineCustomerSearch, setMachineCustomerSearch] = useState('')
+    const [machineCustomerSearchAttempt, setMachineCustomerSearchAttempt] = useState(0)
+    const [machineCustomerSearchStatus, setMachineCustomerSearchStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+    const [machineSites, setMachineSites] = useState<Site[]>([])
+    const [machineSiteLoadAttempt, setMachineSiteLoadAttempt] = useState(0)
+    const [machineSiteLoadStatus, setMachineSiteLoadStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+
+    const searchJobBookCustomers = useCallback(async (query: string, signal: AbortSignal) => (
+        searchCustomers(await getAccessToken(), query, signal)
+    ), [getAccessToken])
 
     useEffect(() => {
         if (!account) return
@@ -270,7 +317,7 @@ export default function JobBookPrototypeScreen() {
             setLoadError('')
             try {
                 const token = await acquireDataverseAccessToken(instance, account)
-                const [equipmentRows, mechanicRows, jobRows, loadedIntakeRows] = await Promise.all([
+                const [equipmentRows, jobRows, loadedIntakeRows] = await Promise.all([
                     fetchJobBookEquipmentIndex(token, {
                         useDeviceCache: true,
                         onDeviceSnapshot: (cached) => {
@@ -286,7 +333,6 @@ export default function JobBookPrototypeScreen() {
                             ])
                         },
                     }),
-                    fetchMechanics(token),
                     fetchRecentJobBookRows(token),
                     fetchJobBookIntakeRows(token),
                 ])
@@ -295,7 +341,6 @@ export default function JobBookPrototypeScreen() {
                         ...equipmentRows,
                         ...current.filter((item) => item.isLocal),
                     ])
-                    setMechanics(mechanicRows)
                     setRecentRows(jobRows)
                     setIntakeRows(loadedIntakeRows)
                 }
@@ -310,30 +355,44 @@ export default function JobBookPrototypeScreen() {
     }, [account, instance])
 
     useEffect(() => {
-        if (!account) return
-        let cancelled = false
-        let refreshTimer: number | undefined
-        const unsubscribe = subscribeToStaffChanges(() => {
-            if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
-            refreshTimer = window.setTimeout(async () => {
-                try {
-                    const token = await acquireDataverseAccessToken(instance, account)
-                    const rows = await fetchMechanics(token)
-                    if (!cancelled) setMechanics(rows)
-                } catch {
-                    // Preserve the current picker contents if a background refresh fails.
-                }
-            }, 750)
-        })
+        if (!machineDialogOpen || machineCustomerSearchAttempt === 0 || machineCustomerSearch.trim().length < 2) return
+        const controller = new AbortController()
+        const timer = window.setTimeout(() => {
+            setMachineCustomerSearchStatus('loading')
+            void searchJobBookCustomers(machineCustomerSearch, controller.signal)
+                .then((rows) => {
+                    if (controller.signal.aborted) return
+                    setMachineCustomerResults(rows)
+                    setMachineCustomerSearchStatus('idle')
+                })
+                .catch((error) => {
+                    if (controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) return
+                    setMachineCustomerSearchStatus('error')
+                })
+        }, 250)
         return () => {
-            cancelled = true
-            if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
-            unsubscribe()
+            window.clearTimeout(timer)
+            controller.abort()
         }
-    }, [account, instance])
+    }, [machineCustomerSearch, machineCustomerSearchAttempt, machineDialogOpen, searchJobBookCustomers])
 
-    const customerSites = useMemo(() => sites.filter((site) => !machineDraft.customer
-        || site.gr_Customer?.gr_name === machineDraft.customer), [machineDraft.customer, sites])
+    useEffect(() => {
+        if (!machineDialogOpen || !machineDraft.customerId) return
+        const customerId = machineDraft.customerId
+        const controller = new AbortController()
+        void getAccessToken()
+            .then((token) => fetchCustomerSites(token, customerId, controller.signal))
+            .then((rows) => {
+                if (controller.signal.aborted) return
+                setMachineSites(rows)
+                setMachineSiteLoadStatus('idle')
+            })
+            .catch((error) => {
+                if (controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) return
+                setMachineSiteLoadStatus('error')
+            })
+        return () => controller.abort()
+    }, [getAccessToken, machineDialogOpen, machineDraft.customerId, machineSiteLoadAttempt])
 
     const allRows = useMemo(() => [...intakeRows, ...recentRows]
         .map((row) => {
@@ -363,44 +422,7 @@ export default function JobBookPrototypeScreen() {
     const customerSiteFilterOptions = useMemo(() => [...new Set(allRows.flatMap((row) => [row.customer.trim(), row.site.trim()]).filter(Boolean))].sort(), [allRows])
     const filtersActive = Object.values(filters).some(Boolean)
     const activeFilterCount = Object.values(filters).filter(Boolean).length
-    const ensureMachineReferenceData = () => {
-        if (!account) return
-        const accountKey = account.homeAccountId
-        const sameAccount = machineReferenceAccountRef.current === accountKey
-        if (sameAccount && (machineReferencesLoaded || machineReferenceRequestRef.current)) return
-        if (!sameAccount) {
-            machineReferenceLoadVersionRef.current += 1
-            machineReferenceRequestRef.current = null
-            machineReferenceAccountRef.current = accountKey
-            setCustomers([])
-            setSites([])
-            setMachineReferencesLoaded(false)
-            setMachineReferencesError('')
-        }
-        const loadVersion = machineReferenceLoadVersionRef.current
-        setMachineReferencesLoading(true)
-        setMachineReferencesError('')
-        const request = acquireDataverseAccessToken(instance, account)
-            .then((token) => Promise.all([fetchCustomers(token), fetchSites(token)]))
-            .then(([customerRows, siteRows]) => {
-                if (loadVersion !== machineReferenceLoadVersionRef.current) return
-                setCustomers(customerRows)
-                setSites(siteRows)
-                setMachineReferencesLoaded(true)
-            })
-            .catch((error) => {
-                if (loadVersion !== machineReferenceLoadVersionRef.current) return
-                setMachineReferencesError(error instanceof Error ? error.message : 'Customer and Site suggestions could not be loaded.')
-            })
-            .finally(() => {
-                if (loadVersion !== machineReferenceLoadVersionRef.current) return
-                machineReferenceRequestRef.current = null
-                setMachineReferencesLoading(false)
-            })
-        machineReferenceRequestRef.current = request
-    }
     const openMachineDialog = (target: 'draft' | 'edit' = 'draft', sourceOverride?: JobBookRow) => {
-        ensureMachineReferenceData()
         const source = sourceOverride ?? (target === 'edit' && editingRow ? editingRow : draft)
         setMachineTarget(target)
         setMachineDialogOpen(true)
@@ -411,6 +433,12 @@ export default function JobBookPrototypeScreen() {
         })
         setMachineWarning('')
         setKeepEquipmentUnconfigured(source.equipmentReviewRequired)
+        setMachineCustomerSearch(source.customer)
+        setMachineCustomerResults(source.customerId && source.customer ? [{ gr_customerid: source.customerId, gr_name: source.customer }] : [])
+        setMachineCustomerSearchStatus('idle')
+        setMachineCustomerSearchAttempt(source.customer.trim().length >= 2 ? 1 : 0)
+        setMachineSites([])
+        setMachineSiteLoadStatus(source.customerId ? 'loading' : 'idle')
     }
     const saveMachine = () => {
         const configured = isEquipmentConfigured(machineDraft)
@@ -506,7 +534,7 @@ export default function JobBookPrototypeScreen() {
         setSaveError('This row is no longer backed by Dataverse. Reload the page before editing it.')
     }
     const chooseSite = (siteName: string) => {
-        const site = sites.find((item) => item.gr_name === siteName)
+        const site = machineSites.find((item) => item.gr_name === siteName)
         setMachineDraft((current) => ({
             ...current,
             site: siteName,
@@ -537,6 +565,8 @@ export default function JobBookPrototypeScreen() {
                     <span>{equipment.length.toLocaleString()} equipment</span>
                     {loading && <span>Refreshing…</span>}
                     {loadError && <span className="job-book-error" title={loadError}>Load warning</span>}
+                    {staffDirectoryQuery.data === undefined && (staffDirectoryQuery.status === 'initial' || staffDirectoryQuery.status === 'loading') && <span>Loading Staff…</span>}
+                    {staffDirectoryQuery.data === undefined && staffDirectoryQuery.error && <button type="button" className="job-book-inline-retry" title={staffDirectoryQuery.error.message} onClick={() => void staffDirectoryQuery.refetch().catch(() => undefined)}>Retry Staff</button>}
                     <span className="job-book-local-badge">LEGACY VIEW</span>
                 </div>
             </header>
@@ -561,8 +591,8 @@ export default function JobBookPrototypeScreen() {
                             ? <button type="button" className="job-book-unconfigured-link" onClick={() => openMachineDialog()}><strong>Equipment not configured</strong><small>Click to add Fleet or Serial</small></button>
                             : <EquipmentPicker id="job-book-draft-equipment" key={`${draft.id}-${draft.equipmentId}`} value={draft.equipmentId} customerId={draft.customerId} equipment={equipment}
                                 onSelect={(item) => setDraft((current) => applyEquipmentToRow(current, item))} onClear={() => setDraft((current) => clearEquipmentContext(current, current.customerId, current.customer))} onAdd={() => openMachineDialog()} />}</td>
-                        <td><CustomerPicker id="job-book-draft-customer" value={draft.customerId} customerName={draft.customer} customers={customers} equipment={equipment} site={draft.site} loading={machineReferencesLoading}
-                            onOpen={ensureMachineReferenceData} onChange={(customerId, customerName) => setDraft((current) => applyCustomerSelection(current, customerId, customerName))} /></td>
+                        <td><CustomerPicker id="job-book-draft-customer" value={draft.customerId} customerName={draft.customer} equipment={equipment} site={draft.site}
+                            onSearchCustomers={searchJobBookCustomers} onChange={(customerId, customerName) => setDraft((current) => applyCustomerSelection(current, customerId, customerName))} /></td>
                         <td className={!draft.description.trim() ? 'job-book-required-missing' : undefined}><textarea required maxLength={JOB_DESCRIPTION_MAX_LENGTH} aria-label="Job description (required)" placeholder="Required" rows={2} value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} /></td>
                         <td className="job-book-address-cell"><div className="job-book-address-editor"><VerifiedAddressField compact verified={draft.addressVerified} value={draft.address}
                             onChange={(address, selection) => setDraft((current) => ({ ...current, address, addressVerified: Boolean(selection), addressNotFoundConfirmed: false }))} />
@@ -622,8 +652,8 @@ export default function JobBookPrototypeScreen() {
                                 ? <button type="button" className="job-book-unconfigured-link" onClick={() => { setEditingRow(row); openMachineDialog('edit', row) }}><strong>Equipment not configured</strong><small>Click to add Fleet or Serial</small></button>
                                 : <span className="job-book-table-value job-book-equipment-value"><strong>{shown.fleet || shown.serial || '—'}</strong>{(shown.make || shown.model) && <small>{[shown.make, shown.model].filter(Boolean).join(' ')}</small>}</span>}</td>
                         <td>{isEditing
-                            ? <CustomerPicker id={`job-book-edit-customer-${shown.id}`} value={shown.customerId} customerName={shown.customer} customers={customers} equipment={equipment} site={shown.site} loading={machineReferencesLoading}
-                                onOpen={ensureMachineReferenceData} onChange={(customerId, customerName) => setEditingRow((current) => current ? applyCustomerSelection(current, customerId, customerName) : current)} />
+                            ? <CustomerPicker id={`job-book-edit-customer-${shown.id}`} value={shown.customerId} customerName={shown.customer} equipment={equipment} site={shown.site}
+                                onSearchCustomers={searchJobBookCustomers} onChange={(customerId, customerName) => setEditingRow((current) => current ? applyCustomerSelection(current, customerId, customerName) : current)} />
                             : <span className="job-book-table-value job-book-customer-value"><strong>{shown.customer || '—'}</strong>{shown.site && <small>{shown.site}</small>}</span>}</td>
                         <td className={isEditing && !shown.description.trim() ? 'job-book-required-missing' : undefined}>{isEditing
                             ? <textarea required maxLength={JOB_DESCRIPTION_MAX_LENGTH} aria-label={`Description for Job ${shown.jobNumber} (required)`} placeholder="Required" rows={2} value={shown.description} onChange={(event) => setEditingRow((current) => current ? { ...current, description: event.target.value } : current)} />
@@ -678,21 +708,27 @@ export default function JobBookPrototypeScreen() {
             <section className="job-book-dialog" role="dialog" aria-modal="true" aria-labelledby="machine-dialog-title">
                 <header><div><span className="job-book-eyebrow">LEGACY JOB BOOK MACHINE</span><h2 id="machine-dialog-title">Add machine details</h2></div><button type="button" aria-label="Close" onClick={() => setMachineDialogOpen(false)}>×</button></header>
                 <p className="job-book-dialog-note">This only fills the Job Book row. It will not create Equipment, a Customer, or a Site in Dataverse.</p>
-                {machineReferencesLoading && <p className="job-book-dialog-note" role="status">Loading Customer and Site suggestions…</p>}
-                {machineReferencesError && <p className="job-book-dialog-error">{machineReferencesError}</p>}
                 <div className="job-book-form-grid">
                     <label>Fleet number<input autoFocus value={machineDraft.fleet} onChange={(event) => setMachineDraft((current) => ({ ...current, fleet: event.target.value }))} /></label>
                     <label>Serial number<input value={machineDraft.serial} onChange={(event) => setMachineDraft((current) => ({ ...current, serial: event.target.value }))} /></label>
                     <label>Make<input value={machineDraft.make} onChange={(event) => setMachineDraft((current) => ({ ...current, make: event.target.value }))} /></label>
                     <label>Model<input value={machineDraft.model} onChange={(event) => setMachineDraft((current) => ({ ...current, model: event.target.value }))} /></label>
-                    <label>Customer<input list="job-book-customers" value={machineDraft.customer} onChange={(event) => setMachineDraft((current) => ({ ...current, customer: event.target.value, customerId: '', site: '', siteId: '' }))} /></label>
-                    <label>Site<input list="job-book-sites" value={machineDraft.site} onChange={(event) => chooseSite(event.target.value)} /></label>
+                    <label>Customer<input list="job-book-customers" value={machineDraft.customer} onChange={(event) => {
+                        const customer = event.target.value
+                        const linked = machineCustomerResults.find((item) => item.gr_name.localeCompare(customer, undefined, { sensitivity: 'accent' }) === 0)
+                        setMachineCustomerSearch(customer)
+                        setMachineCustomerSearchAttempt((current) => current + 1)
+                        setMachineSites([])
+                        setMachineSiteLoadStatus(linked ? 'loading' : 'idle')
+                        setMachineDraft((current) => ({ ...current, customer, customerId: linked?.gr_customerid ?? '', site: '', siteId: '' }))
+                    }} />{machineCustomerSearchStatus === 'loading' && <small>Searching Customers…</small>}{machineCustomerSearchStatus === 'error' && <button type="button" className="job-book-inline-retry" onClick={() => setMachineCustomerSearchAttempt((current) => current + 1)}>Retry Customer search</button>}</label>
+                    <label>Site<input list="job-book-sites" disabled={!machineDraft.customerId || machineSiteLoadStatus === 'loading'} value={machineDraft.site} onChange={(event) => chooseSite(event.target.value)} />{machineSiteLoadStatus === 'loading' && <small>Loading this Customer’s Sites…</small>}{machineSiteLoadStatus === 'error' && <button type="button" className="job-book-inline-retry" onClick={() => { setMachineSiteLoadStatus('loading'); setMachineSiteLoadAttempt((current) => current + 1) }}>Retry Sites</button>}</label>
                     <div className="full-width"><VerifiedAddressField verified={machineDraft.addressVerified} value={machineDraft.address}
                         onChange={(address, selection) => setMachineDraft((current) => ({ ...current, address, addressVerified: Boolean(selection), addressNotFoundConfirmed: false }))} />
                         {machineDraft.address.trim() && !machineDraft.addressVerified && <label className="job-book-address-confirm dialog"><input type="checkbox" checked={machineDraft.addressNotFoundConfirmed} onChange={(event) => setMachineDraft((current) => ({ ...current, addressNotFoundConfirmed: event.target.checked }))} /><span>Address<br />not found</span></label>}</div>
                 </div>
-                <datalist id="job-book-customers">{customers.map((item) => <option key={item.gr_customerid} value={item.gr_name} />)}</datalist>
-                <datalist id="job-book-sites">{customerSites.map((item) => <option key={item.gr_siteid} value={item.gr_name} />)}</datalist>
+                <datalist id="job-book-customers">{machineCustomerResults.map((item) => <option key={item.gr_customerid} value={item.gr_name} />)}</datalist>
+                <datalist id="job-book-sites">{machineSites.map((item) => <option key={item.gr_siteid} value={item.gr_name} />)}</datalist>
                 {!isEquipmentConfigured(machineDraft) && <label className="job-book-keep-unconfigured"><input type="checkbox" checked={keepEquipmentUnconfigured} onChange={(event) => setKeepEquipmentUnconfigured(event.target.checked)} /><span><strong>Keep as unconfigured for now</strong><small>The Job row will be highlighted until a Fleet or Serial Number is added.</small></span></label>}
                 {machineWarning && <p className="job-book-dialog-error">{machineWarning}</p>}
                 <footer>

@@ -1,5 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { Equipment } from '../types/equipment.types'
+import type { Customer } from '../types/customer.types'
+import type { Site } from '../types/site.types'
+import type { SiteContact } from '../types/siteContact.types'
 import { SERVICE_TYPES } from '../../equipment/servicePlans/equipmentServicePlan.types'
 import { isServiceTypeEnabled } from '../../equipment/servicePlans/maintenanceConfiguration'
 import type { useJobEditor } from '../hooks/useJobEditor'
@@ -8,10 +11,23 @@ import VerifiedAddressField from './VerifiedAddressField'
 import type { VerifiedAddressSuggestion } from '../services/addressSearchApi'
 import { equipmentIdentifierSearchValues, parseAlternateFleetNumbers } from '../../equipment/identifiers/alternateFleetNumbers'
 
-type Props = {
+export type JobRelationshipLookupProps = {
+    onSearchEquipment?: (query: string, context: { customerId?: string; siteId?: string }, signal?: AbortSignal) => Promise<Equipment[]>
+    onSearchCustomers?: (query: string, signal?: AbortSignal) => Promise<Customer[]>
+    onLoadCustomerSites?: (customerId: string, signal?: AbortSignal) => Promise<Site[]>
+    onLoadSiteContacts?: (siteId: string, signal?: AbortSignal) => Promise<SiteContact[]>
+    onLoadEquipment?: (equipmentId: string, signal?: AbortSignal) => Promise<Equipment | undefined>
+    onLoadEquipmentServicePlans?: (equipmentId: string, signal?: AbortSignal) => Promise<unknown>
+}
+
+type Props = JobRelationshipLookupProps & {
     editor: ReturnType<typeof useJobEditor>
     equipmentList: Equipment[]
+    customers: Customer[]
     initialEquipmentDraft?: { fleet?: string; alternateFleet?: string; serial?: string; make?: string; model?: string }
+    equipmentDependencyStatus?: 'idle' | 'loading' | 'ready' | 'error'
+    equipmentDependencyError?: string
+    onRetryEquipmentDependencies?: () => void
     onCreateCustomer: (customer: { name: string }) => Promise<string>
     onCreateSite: (site: { customerId: string; name: string; address?: string }) => Promise<string>
     onCreateContact: (contact: { siteId: string; name: string; phone?: string; email?: string }) => Promise<string>
@@ -32,11 +48,19 @@ const equipmentLabel = (item: Equipment) => ({
 export default function JobRelationshipFields({
     editor,
     equipmentList,
+    customers,
     initialEquipmentDraft,
+    equipmentDependencyStatus = 'idle',
+    equipmentDependencyError = '',
+    onRetryEquipmentDependencies,
     onCreateCustomer,
     onCreateSite,
     onCreateContact,
     onCreateEquipment,
+    onSearchEquipment,
+    onSearchCustomers,
+    onLoadCustomerSites,
+    onLoadSiteContacts,
 }: Props) {
     const {
         draft, setDraft, customerSearch, setCustomerSearch,
@@ -77,6 +101,20 @@ export default function JobRelationshipFields({
         : initialEquipmentSearch)
     const [equipmentSearchOpen, setEquipmentSearchOpen] = useState(false)
     const [equipmentActiveIndex, setEquipmentActiveIndex] = useState(0)
+    const [remoteEquipmentResults, setRemoteEquipmentResults] = useState<Equipment[]>([])
+    const [remoteCustomerResults, setRemoteCustomerResults] = useState<Customer[]>([])
+    const [equipmentSearchStatus, setEquipmentSearchStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+    const [customerSearchStatus, setCustomerSearchStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+    const [siteLoadStatus, setSiteLoadStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
+    const [siteLoadError, setSiteLoadError] = useState('')
+    const [siteLoadAttempt, setSiteLoadAttempt] = useState(0)
+    const [contactLoadStatus, setContactLoadStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
+    const [contactLoadError, setContactLoadError] = useState('')
+    const [contactLoadAttempt, setContactLoadAttempt] = useState(0)
+    const equipmentRemoteQueryActive = equipmentSearch.trim().length >= 2
+    const customerRemoteQueryActive = customerSearch.trim().length >= 2
+    const visibleEquipmentSearchStatus = equipmentRemoteQueryActive ? equipmentSearchStatus : 'idle'
+    const visibleCustomerSearchStatus = customerRemoteQueryActive ? customerSearchStatus : 'idle'
     const [showLegacyEquipmentSelect] = useState(false)
     const equipmentConflictsWithCustomer = (customerId: string) => {
         const equipmentCustomerId = selectedEquipment?.gr_Site?.gr_Customer?.gr_customerid
@@ -88,7 +126,9 @@ export default function JobRelationshipFields({
     }
     const equipmentResults = useMemo(() => {
         const query = normalizeSearch(equipmentSearch)
-        return equipmentList.map((item) => {
+        const records = new Map(equipmentList.map((item) => [item.gr_equipmentid.toLowerCase(), item]))
+        if (equipmentRemoteQueryActive) remoteEquipmentResults.forEach((item) => records.set(item.gr_equipmentid.toLowerCase(), item))
+        return [...records.values()].map((item) => {
             const identifiers = equipmentIdentifierSearchValues(item).map(normalizeSearch)
             const details = [item.gr_make, item.gr_model, item.gr_Site?.gr_Customer?.gr_name, item.gr_Site?.gr_name, item.gr_Site?.gr_address].map(normalizeSearch)
             if (!query) {
@@ -97,7 +137,142 @@ export default function JobRelationshipFields({
             }
             return { item, score: identifiers.some((value) => value.includes(query)) ? 0 : details.some((value) => value.includes(query)) ? 1 : 2 }
         }).filter(({ score }) => !query || score < 2).sort((a, b) => a.score - b.score || equipmentLabel(a.item).identifier.localeCompare(equipmentLabel(b.item).identifier)).slice(0, 5).map(({ item }) => item)
-    }, [draft.customerId, draft.siteId, equipmentList, equipmentSearch])
+    }, [draft.customerId, draft.siteId, equipmentList, equipmentRemoteQueryActive, equipmentSearch, remoteEquipmentResults])
+
+    const customerResults = useMemo(() => {
+        const records = new Map(filteredCustomers.map((item) => [item.gr_customerid.toLowerCase(), item]))
+        if (customerRemoteQueryActive) remoteCustomerResults.forEach((item) => records.set(item.gr_customerid.toLowerCase(), item))
+        return [...records.values()].slice(0, 8)
+    }, [customerRemoteQueryActive, filteredCustomers, remoteCustomerResults])
+
+    useEffect(() => {
+        if (!equipmentSearchOpen || !onSearchEquipment) return
+        const query = equipmentSearch.trim()
+        if (query.length < 2) return
+        const controller = new AbortController()
+        const timer = window.setTimeout(() => {
+            setEquipmentSearchStatus('loading')
+            void onSearchEquipment(query, { customerId: draft.customerId || undefined, siteId: draft.siteId || undefined }, controller.signal)
+                .then((rows) => {
+                    if (!controller.signal.aborted) {
+                        setRemoteEquipmentResults(rows)
+                        setEquipmentSearchStatus('idle')
+                    }
+                })
+                .catch((error) => {
+                    if (!controller.signal.aborted && !(error instanceof DOMException && error.name === 'AbortError')) setEquipmentSearchStatus('error')
+                })
+        }, 250)
+        return () => {
+            window.clearTimeout(timer)
+            controller.abort()
+        }
+    }, [draft.customerId, draft.siteId, equipmentSearch, equipmentSearchOpen, onSearchEquipment])
+
+    useEffect(() => {
+        if (!customerSearchOpen || !onSearchCustomers) return
+        const query = customerSearch.trim()
+        if (query.length < 2) return
+        const controller = new AbortController()
+        const timer = window.setTimeout(() => {
+            setCustomerSearchStatus('loading')
+            void onSearchCustomers(query, controller.signal)
+                .then((rows) => {
+                    if (!controller.signal.aborted) {
+                        setRemoteCustomerResults(rows)
+                        setCustomerSearchStatus('idle')
+                    }
+                })
+                .catch((error) => {
+                    if (!controller.signal.aborted && !(error instanceof DOMException && error.name === 'AbortError')) setCustomerSearchStatus('error')
+                })
+        }, 250)
+        return () => {
+            window.clearTimeout(timer)
+            controller.abort()
+        }
+    }, [customerSearch, customerSearchOpen, onSearchCustomers])
+
+    useEffect(() => {
+        if (!selectedEquipment || selectedEquipment.gr_equipmentid !== draft.equipmentId) return
+        const timer = window.setTimeout(() => {
+            setEquipmentSearch(equipmentLabel(selectedEquipment).identifier)
+            const selectedCustomer = selectedEquipment.gr_Site?.gr_Customer
+            if (selectedCustomer && selectedCustomer.gr_customerid === draft.customerId) {
+                setCustomerSearch(selectedCustomer.gr_name)
+            }
+        }, 0)
+        return () => window.clearTimeout(timer)
+    }, [draft.customerId, draft.equipmentId, selectedEquipment, setCustomerSearch])
+
+    useEffect(() => {
+        if (!draft.customerId || customerSearch.trim()) return
+        const selectedCustomer = customers.find((item) => item.gr_customerid === draft.customerId)
+        if (selectedCustomer) setCustomerSearch(selectedCustomer.gr_name)
+    }, [customerSearch, customers, draft.customerId, setCustomerSearch])
+
+    useEffect(() => {
+        const customerId = draft.customerId
+        const controller = new AbortController()
+        const timer = window.setTimeout(() => {
+            if (!customerId || !onLoadCustomerSites) {
+                setSiteLoadStatus('idle')
+                setSiteLoadError('')
+                return
+            }
+            setSiteLoadStatus('loading')
+            setSiteLoadError('')
+            void onLoadCustomerSites(customerId, controller.signal).then((rows) => {
+                if (controller.signal.aborted) return
+                setSiteLoadStatus('ready')
+                if (rows.length === 1) {
+                    setDraft((current) => current.customerId === customerId && !current.siteId
+                        ? { ...current, siteId: rows[0].gr_siteid }
+                        : current)
+                }
+            }).catch((error) => {
+                if (controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) return
+                setSiteLoadStatus('error')
+                setSiteLoadError(error instanceof Error ? error.message : 'Sites could not be loaded.')
+            })
+        }, 0)
+        return () => {
+            window.clearTimeout(timer)
+            controller.abort()
+        }
+    }, [draft.customerId, onLoadCustomerSites, setDraft, siteLoadAttempt])
+
+    useEffect(() => {
+        const siteId = draft.siteId
+        const controller = new AbortController()
+        const timer = window.setTimeout(() => {
+            if (!siteId || !onLoadSiteContacts) {
+                setContactLoadStatus('idle')
+                setContactLoadError('')
+                return
+            }
+            setContactLoadStatus('loading')
+            setContactLoadError('')
+            void onLoadSiteContacts(siteId, controller.signal).then((rows) => {
+                if (controller.signal.aborted) return
+                setContactLoadStatus('ready')
+                if (rows.length === 1) {
+                    const contactId = rows[0].gr_Contact?.gr_contactid ?? ''
+                    setDraft((current) => current.siteId === siteId && !current.contactId
+                        ? { ...current, contactId }
+                        : current)
+                }
+            }).catch((error) => {
+                if (controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) return
+                setContactLoadStatus('error')
+                setContactLoadError(error instanceof Error ? error.message : 'Site Contacts could not be loaded.')
+            })
+        }, 0)
+        return () => {
+            window.clearTimeout(timer)
+            controller.abort()
+        }
+    }, [contactLoadAttempt, draft.siteId, onLoadSiteContacts, setDraft])
 
     const openPanel = (nextPanel: Panel) => {
         setPanel(nextPanel)
@@ -248,7 +423,7 @@ export default function JobRelationshipFields({
 
         <label className="job-edit-field job-edit-field-wide job-edit-combobox">
             <span>Equipment</span>
-            {selectedEquipment ? <div className="job-equipment-selected"><div><strong>{equipmentLabel(selectedEquipment).identifier}</strong>{equipmentLabel(selectedEquipment).model && <small>{equipmentLabel(selectedEquipment).model}</small>}{equipmentLabel(selectedEquipment).location && <small>{equipmentLabel(selectedEquipment).location}</small>}</div><button type="button" aria-label="Change selected equipment" onClick={clearEquipment}>Change</button></div> : <><input role="combobox" aria-expanded={equipmentSearchOpen} aria-controls="job-editor-equipment-results" autoComplete="off" placeholder="Search primary or alternate fleet, serial, make or model..." value={equipmentSearch} onFocus={() => setEquipmentSearchOpen(true)} onChange={(event) => { setEquipmentSearch(event.target.value); setEquipmentSearchOpen(true); setEquipmentActiveIndex(0) }} onKeyDown={(event) => { if (event.key === 'ArrowDown') { event.preventDefault(); setEquipmentActiveIndex((current) => Math.min(current + 1, equipmentResults.length - 1)) } if (event.key === 'ArrowUp') { event.preventDefault(); setEquipmentActiveIndex((current) => Math.max(current - 1, 0)) } if (event.key === 'Enter' && equipmentResults[equipmentActiveIndex]) { event.preventDefault(); selectEquipment(equipmentResults[equipmentActiveIndex]) } if (event.key === 'Escape') setEquipmentSearchOpen(false) }} />{equipmentSearchOpen && <div className="job-edit-results job-equipment-results" id="job-editor-equipment-results" role="listbox"><button type="button" className="job-edit-add-result" onClick={clearEquipment}>No Equipment</button><button type="button" className="job-edit-add-result" onClick={openNewEquipmentPanel}>+ Add new equipment</button>{equipmentResults.map((item, index) => { const label = equipmentLabel(item); return <button key={item.gr_equipmentid} type="button" role="option" aria-selected={index === equipmentActiveIndex} className={index === equipmentActiveIndex ? 'active' : ''} onMouseEnter={() => setEquipmentActiveIndex(index)} onClick={() => selectEquipment(item)}><strong>{label.identifier}</strong>{label.model && <small>{label.model}</small>}{label.location && <small>{label.location}</small>}</button> })}{equipmentSearch.trim() && equipmentResults.length === 0 && <span>No Equipment found for &quot;{equipmentSearch.trim()}&quot;</span>}</div>}</>}
+            {selectedEquipment ? <div className="job-equipment-selected"><div><strong>{equipmentLabel(selectedEquipment).identifier}</strong>{equipmentLabel(selectedEquipment).model && <small>{equipmentLabel(selectedEquipment).model}</small>}{equipmentLabel(selectedEquipment).location && <small>{equipmentLabel(selectedEquipment).location}</small>}</div><button type="button" aria-label="Change selected equipment" onClick={clearEquipment}>Change</button></div> : <><input role="combobox" aria-expanded={equipmentSearchOpen} aria-controls="job-editor-equipment-results" autoComplete="off" placeholder="Search primary or alternate fleet, serial, make or model..." value={equipmentSearch} onFocus={() => setEquipmentSearchOpen(true)} onChange={(event) => { setEquipmentSearch(event.target.value); setEquipmentSearchOpen(true); setEquipmentActiveIndex(0) }} onKeyDown={(event) => { if (event.key === 'ArrowDown') { event.preventDefault(); setEquipmentActiveIndex((current) => Math.min(current + 1, equipmentResults.length - 1)) } if (event.key === 'ArrowUp') { event.preventDefault(); setEquipmentActiveIndex((current) => Math.max(current - 1, 0)) } if (event.key === 'Enter' && equipmentResults[equipmentActiveIndex]) { event.preventDefault(); selectEquipment(equipmentResults[equipmentActiveIndex]) } if (event.key === 'Escape') setEquipmentSearchOpen(false) }} />{equipmentSearchOpen && <div className="job-edit-results job-equipment-results" id="job-editor-equipment-results" role="listbox"><button type="button" className="job-edit-add-result" onClick={clearEquipment}>No Equipment</button><button type="button" className="job-edit-add-result" onClick={openNewEquipmentPanel}>+ Add new equipment</button>{equipmentResults.map((item, index) => { const label = equipmentLabel(item); return <button key={item.gr_equipmentid} type="button" role="option" aria-selected={index === equipmentActiveIndex} className={index === equipmentActiveIndex ? 'active' : ''} onMouseEnter={() => setEquipmentActiveIndex(index)} onClick={() => selectEquipment(item)}><strong>{label.identifier}</strong>{label.model && <small>{label.model}</small>}{label.location && <small>{label.location}</small>}</button> })}{visibleEquipmentSearchStatus === 'loading' && <span>Searching Equipment…</span>}{visibleEquipmentSearchStatus === 'error' && <span>Equipment search is temporarily unavailable.</span>}{visibleEquipmentSearchStatus !== 'loading' && equipmentSearch.trim() && equipmentResults.length === 0 && <span>No Equipment found for &quot;{equipmentSearch.trim()}&quot;</span>}</div>}</>}
             {showLegacyEquipmentSelect && <select value={draft.equipmentId} onChange={(event) => {
                 if (event.target.value === '__new__') return openPanel('equipment')
 
@@ -274,6 +449,10 @@ export default function JobRelationshipFields({
                     {item.gr_fleet || 'No fleet'} — {item.gr_make} {item.gr_model} — {item.gr_serial}
                 </option>)}
             </select>}
+            {draft.equipmentId && equipmentDependencyStatus === 'loading' && <small role="status">Refreshing selected Equipment details…</small>}
+            {draft.equipmentId && equipmentDependencyStatus === 'error' && <small className="job-edit-field-error" role="alert">
+                Selected Equipment details are temporarily unavailable. {equipmentDependencyError} {onRetryEquipmentDependencies && <button type="button" onClick={onRetryEquipmentDependencies}>Try again</button>}
+            </small>}
         </label>
         {panel === 'equipment' && <div className="job-edit-create-panel job-edit-field-wide">
             <div><h4>New equipment</h4><p>{initialEquipmentSearch ? 'Prefilled from the invoice. Confirm the details before creating and selecting this equipment.' : 'Create and select equipment for this job.'}</p></div>
@@ -300,13 +479,15 @@ export default function JobRelationshipFields({
                     setCustomerSearchOpen(false)
                     openPanel('customer')
                 }}>+ Add new customer</button>
-                {filteredCustomers.map((item) => <button key={item.gr_customerid} type="button" role="option" aria-selected={item.gr_customerid === draft.customerId} onClick={() => {
+                {customerResults.map((item) => <button key={item.gr_customerid} type="button" role="option" aria-selected={item.gr_customerid === draft.customerId} onClick={() => {
                     setCustomerSearch(item.gr_name)
                     setCustomerSearchOpen(false)
                     if (equipmentConflictsWithCustomer(item.gr_customerid)) clearEquipment()
                     selectCustomer(item.gr_customerid)
                 }}>{item.gr_name}</button>)}
-                {filteredCustomers.length === 0 && <span>No customers found</span>}
+                {visibleCustomerSearchStatus === 'loading' && <span>Searching customers…</span>}
+                {visibleCustomerSearchStatus === 'error' && <span>Customer search is temporarily unavailable.</span>}
+                {visibleCustomerSearchStatus !== 'loading' && customerResults.length === 0 && <span>No customers found</span>}
             </div>}
         </label>
         {panel === 'customer' && <div className="job-edit-create-panel job-edit-field-wide">
@@ -329,6 +510,10 @@ export default function JobRelationshipFields({
                 {draft.customerId && <option value="__new__">+ Add new site</option>}
                 {filteredSites.map((item) => <option key={item.gr_siteid} value={item.gr_siteid}>{item.gr_name} — {item.gr_address}</option>)}
             </select>
+            {draft.customerId && siteLoadStatus === 'loading' && <small role="status">Loading Sites for this Customer…</small>}
+            {draft.customerId && siteLoadStatus === 'error' && <small className="job-edit-field-error" role="alert">
+                Sites are temporarily unavailable. {siteLoadError} <button type="button" onClick={() => setSiteLoadAttempt((current) => current + 1)}>Try again</button>
+            </small>}
         </label>
         {panel === 'site' && <div className="job-edit-create-panel job-edit-field-wide">
             <div><h4>New site</h4><p>Create a site for {customerSearch} and select it for this job.</p></div>
@@ -350,6 +535,10 @@ export default function JobRelationshipFields({
                     {item.gr_Contact?.gr_name}{item.gr_Contact?.gr_phone ? ` — ${item.gr_Contact.gr_phone}` : ''}
                 </option>)}
             </select>
+            {draft.siteId && contactLoadStatus === 'loading' && <small role="status">Loading Contacts for this Site…</small>}
+            {draft.siteId && contactLoadStatus === 'error' && <small className="job-edit-field-error" role="alert">
+                Site Contacts are temporarily unavailable. {contactLoadError} <button type="button" onClick={() => setContactLoadAttempt((current) => current + 1)}>Try again</button>
+            </small>}
         </label>
         {panel === 'contact' && <div className="job-edit-create-panel job-edit-field-wide">
             <div><h4>New contact</h4><p>Create and select a contact for the chosen site.</p></div>

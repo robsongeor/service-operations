@@ -12,8 +12,16 @@ import { calculateNextDueDate, isServiceTypeEnabled, resolveMaintenanceConfigura
 import type { MaintenanceProfile, ServiceProgramme } from '../../equipment/servicePlans/maintenanceConfiguration'
 import { HOUR_METER_CLASSIFICATION_ENABLED, type HourMeterReadingType } from '../../equipment/hourMeter/hourMeterReading.types'
 import { invalidateSharedEquipmentDataCache } from '../../equipment/services/equipmentDataCache'
+import { invalidateOperationalQueries } from '../../shared/data/OperationalDataClient'
 
 const API_URL = `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2`
+
+function invalidateCompletedEquipmentJobHistory(equipmentId: string) {
+    invalidateOperationalQueries((key) =>
+        key[0] === 'equipment'
+        && key[1] === equipmentId.toLowerCase()
+        && key[2] === 'jobs')
+}
 
 type DataverseRecord = {
     '@odata.etag': string
@@ -355,6 +363,7 @@ export async function completeServiceJobAtomically(
 
     if (context.job.gr_status === JOB_STATUSES.COMPLETE) {
         if (completionAlreadyCommitted(context, input)) {
+            invalidateCompletedEquipmentJobHistory(input.equipmentId)
             return { completedDate: context.job.gr_completeddate!, alreadyCompleted: true }
         }
         throw new Error('This Service Job is already complete with different completion data. Refresh before continuing.')
@@ -364,11 +373,13 @@ export async function completeServiceJobAtomically(
     try {
         await executeAtomicChanges(token, completionRequests(context, input, completedDate))
         invalidateSharedEquipmentDataCache(token)
+        invalidateCompletedEquipmentJobHistory(input.equipmentId)
         return { completedDate, alreadyCompleted: false }
     } catch (error) {
         try {
             context = await loadCompletionContext(token, input.jobId, input.equipmentId)
             if (completionAlreadyCommitted(context, input)) {
+                invalidateCompletedEquipmentJobHistory(input.equipmentId)
                 return { completedDate: context.job.gr_completeddate!, alreadyCompleted: true }
             }
         } catch {

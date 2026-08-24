@@ -1,11 +1,11 @@
-import { fetchEquipment, invalidateEquipmentCache } from '../../jobs/services/equipmentApi'
+import { fetchEquipment, invalidateEquipmentCache, subscribeToEquipmentData } from '../../jobs/services/equipmentApi'
 import type { Equipment } from '../../jobs/types/equipment.types'
 import { normalizeEquipmentInput, type EquipmentUpdateInput } from '../types/equipmentManager.types'
 import type { EquipmentMaintenanceSetupInput, MaintenanceProfile } from '../servicePlans/maintenanceConfiguration'
 
 const API_URL = `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2`
 
-export { fetchEquipment }
+export { fetchEquipment, subscribeToEquipmentData }
 
 function equipmentPayload(input: EquipmentUpdateInput) {
     const normalized = normalizeEquipmentInput(input)

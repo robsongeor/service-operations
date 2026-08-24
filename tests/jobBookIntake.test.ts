@@ -108,3 +108,19 @@ test('Job Book intake uses the shared bounded selectors for Equipment and Custom
     assert.match(sharedSelect, /resultLimit\?: number/)
     assert.match(sharedSelect, /matching\.slice\(0, resultLimit\)/)
 })
+
+test('Job Book progressively loads shared Staff and bounded Customer Site relationships', () => {
+    const screen = readFileSync(new URL('../src/alpha/job-book/JobBookPrototypeScreen.tsx', import.meta.url), 'utf8')
+
+    assert.match(screen, /STAFF_DIRECTORY_QUERY_KEY/)
+    assert.match(screen, /useOperationalQuery<Mechanic\[]>/)
+    assert.match(screen, /searchCustomers\(await getAccessToken\(\), query, signal\)/)
+    assert.match(screen, /fetchCustomerSites\(token, customerId, controller\.signal\)/)
+    assert.match(screen, /new AbortController\(\)/)
+    assert.match(screen, /Retry Staff/)
+    assert.match(screen, /Retry Customer search/)
+    assert.match(screen, /Retry Sites/)
+    assert.doesNotMatch(screen, /fetchCustomers\(token\)/)
+    assert.doesNotMatch(screen, /fetchSites\(token\)/)
+    assert.doesNotMatch(screen, /subscribeToStaffChanges/)
+})

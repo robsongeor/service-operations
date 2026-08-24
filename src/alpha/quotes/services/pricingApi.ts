@@ -44,7 +44,7 @@ function toDataverseItem(item: PricingItemInput) {
     }
 }
 
-export async function fetchPricingItems(accessToken: string): Promise<PricingItem[]> {
+export async function fetchPricingItems(accessToken: string, signal?: AbortSignal): Promise<PricingItem[]> {
     const response = await fetch(
         `${PRICING_ITEMS_URL}?$select=${pricingItemFields}&$orderby=gr_sortorder asc,gr_name asc`,
         {
@@ -53,6 +53,7 @@ export async function fetchPricingItems(accessToken: string): Promise<PricingIte
                 ...headers(accessToken),
                 'Cache-Control': 'no-cache',
             },
+            signal,
         },
     )
 
@@ -106,4 +107,16 @@ export async function setPricingItemActive(
         response,
         `Failed to ${active ? 'activate' : 'deactivate'} pricing item`,
     )
+}
+
+export async function deletePricingItem(
+    accessToken: string,
+    itemId: string,
+): Promise<void> {
+    const response = await fetch(`${PRICING_ITEMS_URL}(${itemId})`, {
+        method: 'DELETE',
+        headers: headers(accessToken),
+    })
+
+    await throwDataverseError(response, 'Failed to delete pricing item')
 }

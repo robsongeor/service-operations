@@ -8,7 +8,6 @@ import { isRoadRegistered } from '../../equipment/compliance/equipmentCompliance
 import type { EquipmentUpdateInput } from '../../equipment/types/equipmentManager.types'
 import type { Customer } from '../../jobs/types/customer.types'
 import type { Equipment } from '../../jobs/types/equipment.types'
-import type { Job } from '../../jobs/types/job.types'
 import { JOB_STATUSES } from '../../jobs/types/jobStatus.types'
 import type { JobScheduleOption } from '../../jobs/types/jobSchedule.types'
 import type { Site } from '../../jobs/types/site.types'
@@ -19,7 +18,7 @@ import { parseAlternateFleetNumbers } from '../../equipment/identifiers/alternat
 
 type Props = {
     inspection?: WofInspection; schedule?: JobScheduleOption
-    equipment: Equipment[]; customers: Customer[]; sites: Site[]; jobs: Job[]
+    equipment: Equipment[]; customers: Customer[]; sites: Site[]
     qualifications: TechnicianQualification[]; providers: ServiceProvider[]
     onCreate: (input: CreateWofInput) => Promise<void>; onUpdate: (input: UpdateWofInput) => Promise<void>
     onDelete: (inspection: WofInspection) => Promise<void>
@@ -30,7 +29,7 @@ type Props = {
 }
 
 export default function WofEditorDrawer(props: Props) {
-    const { inspection, schedule, equipment, customers, sites, jobs, qualifications, providers, onCreate, onUpdate, onDelete, onCreateCustomer, onCreateSite, onCreateEquipment, onClose } = props
+    const { inspection, schedule, equipment, customers, sites, qualifications, providers, onCreate, onUpdate, onDelete, onCreateCustomer, onCreateSite, onCreateEquipment, onClose } = props
     const editing = Boolean(inspection)
     const completed = inspection?.gr_Job?.gr_status === JOB_STATUSES.COMPLETE
     const initialMode: WofAssignmentMode = inspection?.gr_ExternalProvider ? 'external' : 'internal'
@@ -133,7 +132,7 @@ export default function WofEditorDrawer(props: Props) {
                 </div>}
             </div>
         </EditDrawerShell>
-        {creatingEquipment && <EquipmentDrawer mode="create" initialValues={{ wofRequired: true }} customers={customers} sites={sites} equipmentList={equipment} jobs={jobs} isSaving={equipmentSaving} saveError={equipmentError} onClose={() => { if (!equipmentSaving) setCreatingEquipment(false) }} onCreateCustomer={onCreateCustomer} onCreateSite={onCreateSite} onCreate={async (input, resolvedSite) => { try { setEquipmentSaving(true); setEquipmentError(''); const created = await onCreateEquipment(input, resolvedSite); setEquipmentId(created.gr_equipmentid); setCreatingEquipment(false) } catch (caught) { setEquipmentError(caught instanceof Error ? caught.message : 'Equipment could not be created.'); throw caught } finally { setEquipmentSaving(false) } }} />}
+        {creatingEquipment && <EquipmentDrawer mode="create" initialValues={{ wofRequired: true }} customers={customers} sites={sites} equipmentList={equipment} jobs={[]} isSaving={equipmentSaving} saveError={equipmentError} onClose={() => { if (!equipmentSaving) setCreatingEquipment(false) }} onCreateCustomer={onCreateCustomer} onCreateSite={onCreateSite} onCreate={async (input, resolvedSite) => { try { setEquipmentSaving(true); setEquipmentError(''); const created = await onCreateEquipment(input, resolvedSite); setEquipmentId(created.gr_equipmentid); setCreatingEquipment(false) } catch (caught) { setEquipmentError(caught instanceof Error ? caught.message : 'Equipment could not be created.'); throw caught } finally { setEquipmentSaving(false) } }} />}
         {confirmEquipmentChange && <EditDrawerConfirmation eyebrow="Equipment change" title="Replace WOF snapshot values?" message="Changing Equipment will replace the Registration Number snapshot and Previous WOF Expiry with values from the newly selected Equipment." confirmLabel="Replace and save" isBusy={busy} onCancel={() => setConfirmEquipmentChange(false)} onConfirm={() => { setConfirmEquipmentChange(false); void save(true) }} />}
         {confirmDelete && inspection && <EditDrawerConfirmation eyebrow="Delete WOF" title="Delete this orphan WOF record?" message={<><p>This will permanently delete the WOF Inspection record. No Job is linked, and no Job or Scheduler record will be deleted.</p><dl className="wof-delete-summary"><div><dt>Equipment</dt><dd>{selectedEquipment?.gr_fleet || selectedEquipment?.gr_serial || 'Unnamed equipment'}</dd></div><div><dt>REGO</dt><dd>{selectedEquipment?.gr_registrationnumber || registrationSnapshot || 'Not recorded'}</dd></div><div><dt>Customer</dt><dd>{selectedEquipment?.gr_Site?.gr_Customer?.gr_name || 'Not recorded'}</dd></div></dl></>} confirmLabel={deleting ? 'Deleting...' : 'Delete WOF'} isBusy={deleting} error={deleteError} onCancel={() => { setConfirmDelete(false); setDeleteError('') }} onConfirm={() => void deleteCurrentWof()} />}
     </>

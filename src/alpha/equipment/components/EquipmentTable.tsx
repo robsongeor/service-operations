@@ -9,6 +9,8 @@ import { parseAlternateFleetNumbers } from '../identifiers/alternateFleetNumbers
 type Props = {
     equipment: Equipment[]
     servicePlans: EquipmentServicePlan[]
+    servicePlansLoading?: boolean
+    servicePlansUnavailable?: boolean
     sortKey: EquipmentSortKey
     sortDirection: SortDirection
     onSort: (key: EquipmentSortKey) => void
@@ -28,7 +30,7 @@ function valueOrDash(value?: string | null) {
     return value?.trim() || '—'
 }
 
-export default function EquipmentTable({ equipment, servicePlans, sortKey, sortDirection, onSort, onEdit }: Props) {
+export default function EquipmentTable({ equipment, servicePlans, servicePlansLoading = false, servicePlansUnavailable = false, sortKey, sortDirection, onSort, onEdit }: Props) {
     return (
         <div className="equipment-table-scroll">
             <table className="equipment-table">
@@ -80,8 +82,8 @@ export default function EquipmentTable({ equipment, servicePlans, sortKey, sortD
                             <td>{valueOrDash(item.gr_model)}</td>
                             <td>{valueOrDash(item.gr_serial)}</td>
                             <td><span className={item.statecode === 0 ? 'equipment-state active' : 'equipment-state'}>{item.statecode === 0 ? 'Active' : 'Inactive'}</span></td>
-                            <td>{primary ? <span className="equipment-maintenance-summary"><strong>{label} @ {primary.gr_nextduehours}</strong><small>{remaining != null ? `${Math.abs(remaining)} hrs ${remaining < 0 ? 'overdue' : 'remaining'}` : 'Due hours unavailable'}</small></span> : 'Not Configured'}</td>
-                            <td className="equipment-data-quality-cell"><EquipmentDataQualityIndicator equipment={item} servicePlans={itemServicePlans} /></td>
+                            <td>{servicePlansLoading ? <span className="equipment-maintenance-summary"><small>Loading…</small></span> : servicePlansUnavailable ? <span title="Maintenance summaries could not be loaded.">Unavailable</span> : primary ? <span className="equipment-maintenance-summary"><strong>{label} @ {primary.gr_nextduehours}</strong><small>{remaining != null ? `${Math.abs(remaining)} hrs ${remaining < 0 ? 'overdue' : 'remaining'}` : 'Due hours unavailable'}</small></span> : 'Not Configured'}</td>
+                            <td className="equipment-data-quality-cell">{servicePlansLoading ? <span className="equipment-data-quality-loading" role="status">Loading…</span> : servicePlansUnavailable ? <span title="Maintenance data quality could not be calculated.">Unavailable</span> : <EquipmentDataQualityIndicator equipment={item} servicePlans={itemServicePlans} />}</td>
                             <td>
                                 <button
                                     className="equipment-edit-action"

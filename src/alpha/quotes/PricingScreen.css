@@ -402,6 +402,8 @@
     font-size: 0.72rem;
 }
 
+.pricing-row-actions .pricing-delete-action { border-color: #e1bcbc; color: #963e3e; }
+
 .pricing-dialog form > footer {
     display: flex;
     justify-content: flex-end;

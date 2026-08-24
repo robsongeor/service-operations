@@ -15,6 +15,7 @@ const menuItems = [
     { label: 'Equipment Map', shortLabel: 'M', path: '/equipment-map' },
     { label: 'WOF / REGO', shortLabel: 'W', path: '/wof' },
     { label: 'Jobs', shortLabel: 'J', path: '/jobs' },
+    { label: 'Equipment Photos', shortLabel: 'P', path: '/equipment-photos' },
     { label: 'Job Map', shortLabel: 'JM', path: '/job-map' },
     { label: 'Job Book Legacy', shortLabel: 'JB', path: '/job-book' },
     { label: 'Site Checks', shortLabel: 'S', path: '/site-checks' },
@@ -25,7 +26,7 @@ const menuItems = [
 ]
 
 export default function Sidebar() {
-    const [isOpen, setIsOpen] = useState(true)
+    const [isOpen, setIsOpen] = useState(() => globalThis.innerWidth > 760)
     const activeAccount = useActiveMsalAccount()
     const isAdmin = isServiceOperationsAdministrator(getSignedInUserInfo(activeAccount))
     const visibleMenuItems = isAdmin
@@ -67,6 +68,9 @@ export default function Sidebar() {
                         className={({ isActive }) =>
                             isActive ? 'sidebar-link active' : 'sidebar-link'
                         }
+                        onClick={() => {
+                            if (globalThis.innerWidth <= 760) setIsOpen(false)
+                        }}
                     >
                         <span className="sidebar-link-icon" aria-hidden="true">{item.shortLabel}</span>
                         <span className="sidebar-link-label">{item.label}</span>

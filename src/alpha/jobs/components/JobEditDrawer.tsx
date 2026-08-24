@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Job } from '../types/job.types'
 import type { Mechanic } from '../types/mechanic.types'
 import type { Equipment } from '../types/equipment.types'
@@ -9,7 +9,7 @@ import { JOB_TYPES, JOB_TYPE_OPTIONS, STANDARD_JOB_TYPE_OPTIONS, jobRequiresMain
 import type { JobSaveInput } from '../types/jobSave.types'
 import { useJobEditor } from '../hooks/useJobEditor'
 import JobCoreFields from './JobCoreFields'
-import JobRelationshipFields from './JobRelationshipFields'
+import JobRelationshipFields, { type JobRelationshipLookupProps } from './JobRelationshipFields'
 import JobScheduleFields from './JobScheduleFields'
 import { JOB_STATUSES, UNCONFIRMED_OPERATION_MESSAGE } from '../types/jobStatus.types'
 import JobDrawerShell from './JobDrawerShell'
@@ -33,8 +33,41 @@ import { JOB_NUMBER_REQUIRED_EMAIL_MESSAGE, jobHasEmailableJobNumber } from '../
 import { OFFICE_ACTIONS, type JobOfficeUpdate } from '../types/officeAction.types'
 import JobOfficeFields from './JobOfficeFields'
 import { jobHasActiveSubmissionLink } from '../services/jobSubmissionLinkApi'
+import type { JobCardDetails } from '../services/jobsApi'
+import { useOperationalQuery } from '../../shared/data/useOperationalQuery'
+import {
+    focusedJobAssignmentsQueryKey,
+    focusedJobCardMetadataQueryKey,
+    focusedJobCoreQueryKey,
+    focusedJobQuotesQueryKey,
+} from '../../shared/data/operationalCollectionKeys'
 
-type Props = {
+type ProgressiveLoadStatus = 'idle' | 'loading' | 'ready' | 'error'
+
+const FOCUSED_JOB_STALE_TIME_MS = 15_000
+const FOCUSED_JOB_CACHE_TIME_MS = 2 * 60_000
+const JOB_CARD_METADATA_STALE_TIME_MS = 30_000
+const JOB_CARD_METADATA_CACHE_TIME_MS = 60_000
+const JOB_COLLABORATION_STALE_TIME_MS = 15_000
+const JOB_COLLABORATION_CACHE_TIME_MS = 60_000
+
+function createJobEditorDraft(job: Job) {
+    return {
+        jobNumber: job.gr_jobnumber ?? '',
+        orderNumber: job.gr_ordernumber ?? '',
+        description: job.gr_description ?? '',
+        jobType: job.gr_jobtype ?? JOB_TYPES.BREAKDOWN,
+        mechanicId: job.gr_Mechanic?.gr_mechanicid ?? '',
+        status: job.gr_status,
+        equipmentId: job.gr_Equipment?.gr_equipmentid ?? '',
+        customerId: job.gr_Site?.gr_Customer?.gr_customerid ?? '',
+        siteId: job.gr_Site?.gr_siteid ?? '',
+        contactId: job.gr_Contact?.gr_contactid ?? '',
+        serviceType: job.gr_servicetype ?? SERVICE_TYPES.NONE,
+    }
+}
+
+type Props = JobRelationshipLookupProps & {
     job: Job
     mechanics: Mechanic[]
     equipmentList: Equipment[]
@@ -42,8 +75,8 @@ type Props = {
     customers: Customer[]
     siteContacts: SiteContact[]
     scheduleOptions: JobScheduleOption[]
-    quotes: Quote[]
-    assignments: JobAssignment[]
+    quotes?: Quote[]
+    assignments?: JobAssignment[]
     servicePlans: EquipmentServicePlan[]
     onCreateCustomer: (customer: { name: string }) => Promise<string>
     onCreateSite: (site: {
@@ -82,25 +115,39 @@ type Props = {
     officeUpdates?: JobOfficeUpdate[]
     onCreateOfficeUpdate?: (input: { jobId: string; jobNumber?: string | null; text: string }) => Promise<JobOfficeUpdate>
     onSaveOfficeAttention?: (jobId: string, officeAttentionRequired: boolean) => Promise<void>
+    referenceDataStatus?: ProgressiveLoadStatus
+    referenceDataError?: string
+    onPrepareReferenceData?: () => Promise<unknown>
+    onLoadJobQuotes?: (jobId: string, signal?: AbortSignal) => Promise<Quote[]>
+    onLoadJobAssignments?: (jobId: string, signal?: AbortSignal) => Promise<JobAssignment[]>
+    onRefreshJob?: (jobId: string, signal?: AbortSignal) => Promise<Job | undefined>
+    onLoadJobCardDetails?: (jobId: string, signal?: AbortSignal) => Promise<JobCardDetails>
+    onLoadJobPhoto?: (photoId: string, signal?: AbortSignal) => Promise<string>
     initialTab?: 'details' | 'office' | 'scheduling' | 'jobcard' | 'quotes'
     onClose: () => void
 }
 
 export default function JobEditDrawer({
-    job,
+    job: initialJob,
     mechanics,
     equipmentList,
     sites,
     customers,
     siteContacts,
     scheduleOptions,
-    quotes,
-    assignments,
+    quotes = [],
+    assignments = [],
     servicePlans,
     onCreateCustomer,
     onCreateSite,
     onCreateContact,
     onCreateEquipment,
+    onSearchEquipment,
+    onSearchCustomers,
+    onLoadCustomerSites,
+    onLoadSiteContacts,
+    onLoadEquipment,
+    onLoadEquipmentServicePlans,
     onSave,
     onDelete,
     onCreateScheduleOption,
@@ -116,29 +163,26 @@ export default function JobEditDrawer({
     officeUpdates = [],
     onCreateOfficeUpdate = async () => { throw new Error('Office updates are unavailable in this view.') },
     onSaveOfficeAttention = async () => { throw new Error('Office attention is unavailable in this view.') },
+    referenceDataStatus = 'ready',
+    referenceDataError = '',
+    onPrepareReferenceData,
+    onLoadJobQuotes,
+    onLoadJobAssignments,
+    onRefreshJob,
+    onLoadJobCardDetails,
+    onLoadJobPhoto,
     initialTab = 'details',
     onClose,
 }: Props) {
+    const [job, setJob] = useState(initialJob)
     const editor = useJobEditor({
-        initialDraft: {
-            jobNumber: job.gr_jobnumber ?? '',
-            orderNumber: job.gr_ordernumber ?? '',
-            description: job.gr_description ?? '',
-            jobType: job.gr_jobtype ?? JOB_TYPES.BREAKDOWN,
-            mechanicId: job.gr_Mechanic?.gr_mechanicid ?? '',
-            status: job.gr_status,
-            equipmentId: job.gr_Equipment?.gr_equipmentid ?? '',
-            customerId: job.gr_Site?.gr_Customer?.gr_customerid ?? '',
-            siteId: job.gr_Site?.gr_siteid ?? '',
-            contactId: job.gr_Contact?.gr_contactid ?? '',
-            serviceType: job.gr_servicetype ?? SERVICE_TYPES.NONE,
-        },
+        initialDraft: createJobEditorDraft(initialJob),
         initialCustomerSearch: job.gr_Site?.gr_Customer?.gr_name ?? '',
         customers,
         sites,
         siteContacts,
     })
-    const { draft, setDraft } = editor
+    const { draft, setDraft, resetDraft } = editor
     const [isSaving, setIsSaving] = useState(false)
     const [saveError, setSaveError] = useState('')
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -150,6 +194,131 @@ export default function JobEditDrawer({
     const [officeAction, setOfficeAction] = useState(job.gr_currentofficeaction ?? OFFICE_ACTIONS.NONE)
     const [officeActionOwner, setOfficeActionOwner] = useState(job.gr_officeactionowner ?? '')
     const [officeAttentionRequired, setOfficeAttentionRequired] = useState(job.gr_officeattentionrequired === true)
+    const normalizedJobId = initialJob.gr_jobid.toLowerCase()
+    const focusedJobKey = useMemo(() => focusedJobCoreQueryKey(normalizedJobId), [normalizedJobId])
+    const focusedJobLoader = useCallback(async ({ signal }: { signal: AbortSignal }) => {
+        if (!onRefreshJob) return initialJob
+        const refreshed = await onRefreshJob(normalizedJobId, signal)
+        if (!refreshed) throw new Error('The Job could not be found in Dataverse.')
+        return refreshed
+    }, [initialJob, normalizedJobId, onRefreshJob])
+    const focusedJobQuery = useOperationalQuery<Job>({
+        key: focusedJobKey,
+        enabled: Boolean(onRefreshJob),
+        queryFn: focusedJobLoader,
+        staleTimeMs: FOCUSED_JOB_STALE_TIME_MS,
+        cacheTimeMs: FOCUSED_JOB_CACHE_TIME_MS,
+    })
+    const coreStatus: ProgressiveLoadStatus = !onRefreshJob
+        ? 'ready'
+        : focusedJobQuery.status === 'error' || focusedJobQuery.status === 'stale'
+            ? 'error'
+            : focusedJobQuery.status === 'fresh'
+                ? 'ready'
+                : 'loading'
+    const coreError = focusedJobQuery.error?.message ?? ''
+
+    const jobCardMetadataKey = useMemo(() => focusedJobCardMetadataQueryKey(normalizedJobId), [normalizedJobId])
+    const jobCardMetadataLoader = useCallback(async ({ signal }: { signal: AbortSignal }) => {
+        if (!onLoadJobCardDetails) return {} as JobCardDetails
+        return onLoadJobCardDetails(normalizedJobId, signal)
+    }, [normalizedJobId, onLoadJobCardDetails])
+    const jobCardMetadataQuery = useOperationalQuery<JobCardDetails>({
+        key: jobCardMetadataKey,
+        enabled: activeTab === 'jobcard' && Boolean(onLoadJobCardDetails),
+        queryFn: jobCardMetadataLoader,
+        staleTimeMs: JOB_CARD_METADATA_STALE_TIME_MS,
+        cacheTimeMs: JOB_CARD_METADATA_CACHE_TIME_MS,
+    })
+    const jobCardStatusLoad: ProgressiveLoadStatus = !onLoadJobCardDetails
+        ? 'ready'
+        : jobCardMetadataQuery.status === 'error' || jobCardMetadataQuery.status === 'stale'
+            ? 'error'
+            : jobCardMetadataQuery.status === 'fresh'
+                ? 'ready'
+                : activeTab === 'jobcard' ? 'loading' : 'idle'
+    const jobCardError = jobCardMetadataQuery.error?.message ?? ''
+    const jobCardDetails = jobCardMetadataQuery.data ?? null
+    const jobQuotesKey = useMemo(() => focusedJobQuotesQueryKey(normalizedJobId), [normalizedJobId])
+    const jobQuotesLoader = useCallback(async ({ signal }: { signal: AbortSignal }) => {
+        if (!onLoadJobQuotes) return quotes
+        return onLoadJobQuotes(normalizedJobId, signal)
+    }, [normalizedJobId, onLoadJobQuotes, quotes])
+    const jobQuotesQuery = useOperationalQuery<Quote[]>({
+        key: jobQuotesKey,
+        enabled: activeTab === 'quotes' && Boolean(onLoadJobQuotes),
+        queryFn: jobQuotesLoader,
+        staleTimeMs: JOB_COLLABORATION_STALE_TIME_MS,
+        cacheTimeMs: JOB_COLLABORATION_CACHE_TIME_MS,
+    })
+    const jobQuotesStatus: ProgressiveLoadStatus = !onLoadJobQuotes
+        ? 'ready'
+        : jobQuotesQuery.status === 'error' || jobQuotesQuery.status === 'stale'
+            ? 'error'
+            : jobQuotesQuery.status === 'fresh'
+                ? 'ready'
+                : activeTab === 'quotes' ? 'loading' : 'idle'
+    const focusedQuotes = onLoadJobQuotes ? jobQuotesQuery.data ?? [] : quotes
+    const jobQuotesError = jobQuotesQuery.error?.message ?? ''
+
+    const jobAssignmentsKey = useMemo(() => focusedJobAssignmentsQueryKey(normalizedJobId), [normalizedJobId])
+    const jobAssignmentsLoader = useCallback(async ({ signal }: { signal: AbortSignal }) => {
+        if (!onLoadJobAssignments) return assignments
+        return onLoadJobAssignments(normalizedJobId, signal)
+    }, [assignments, normalizedJobId, onLoadJobAssignments])
+    const jobAssignmentsQuery = useOperationalQuery<JobAssignment[]>({
+        key: jobAssignmentsKey,
+        enabled: activeTab === 'jobcard' && Boolean(onLoadJobAssignments),
+        queryFn: jobAssignmentsLoader,
+        staleTimeMs: JOB_COLLABORATION_STALE_TIME_MS,
+        cacheTimeMs: JOB_COLLABORATION_CACHE_TIME_MS,
+    })
+    const jobAssignmentsStatus: ProgressiveLoadStatus = !onLoadJobAssignments
+        ? 'ready'
+        : jobAssignmentsQuery.status === 'error' || jobAssignmentsQuery.status === 'stale'
+            ? 'error'
+            : jobAssignmentsQuery.status === 'fresh'
+                ? 'ready'
+                : activeTab === 'jobcard' ? 'loading' : 'idle'
+    const focusedAssignments = onLoadJobAssignments ? jobAssignmentsQuery.data ?? [] : assignments
+    const jobAssignmentsError = jobAssignmentsQuery.error?.message ?? ''
+    const referenceDataReady = referenceDataStatus === 'ready'
+    const editorReady = coreStatus === 'ready' && referenceDataReady
+
+    const createAssignmentAndRefresh = useCallback(async (input: JobAssignmentInput) => {
+        await onCreateAssignment(input)
+        if (onLoadJobAssignments) await jobAssignmentsQuery.refetch()
+    }, [jobAssignmentsQuery, onCreateAssignment, onLoadJobAssignments])
+
+    const sendAssignmentAndRefresh = useCallback(async (currentJob: Job, assignment: JobAssignment) => {
+        await onSendAssignment(currentJob, assignment)
+        if (onLoadJobAssignments) await jobAssignmentsQuery.refetch()
+    }, [jobAssignmentsQuery, onLoadJobAssignments, onSendAssignment])
+
+    const deleteAssignmentAndRefresh = useCallback(async (assignmentId: string) => {
+        await onDeleteAssignment(assignmentId)
+        if (onLoadJobAssignments) await jobAssignmentsQuery.refetch()
+    }, [jobAssignmentsQuery, onDeleteAssignment, onLoadJobAssignments])
+
+    useEffect(() => {
+        if (!onPrepareReferenceData) return
+        void onPrepareReferenceData().catch(() => undefined)
+    }, [onPrepareReferenceData])
+
+    useEffect(() => {
+        const current = focusedJobQuery.data
+        if (!current) return
+        let cancelled = false
+        void Promise.resolve().then(() => {
+            if (cancelled) return
+            setJob(current)
+            resetDraft(createJobEditorDraft(current), current.gr_Site?.gr_Customer?.gr_name ?? '')
+            setOfficeAction(current.gr_currentofficeaction ?? OFFICE_ACTIONS.NONE)
+            setOfficeActionOwner(current.gr_officeactionowner ?? '')
+            setOfficeAttentionRequired(current.gr_officeattentionrequired === true)
+        })
+        return () => { cancelled = true }
+    }, [focusedJobQuery.data, resetDraft])
     const jobScheduleCount = scheduleOptions.filter(
         (option) => option._gr_job_value?.toLowerCase() === job.gr_jobid.toLowerCase(),
     ).length
@@ -172,6 +341,10 @@ export default function JobEditDrawer({
     const canEmailJob = hasJobNumber && Boolean(job.gr_Mechanic) && jobCardStatus === JOB_CARD_STATUSES.NOT_SENT
 
     const saveChanges = async () => {
+        if (!editorReady) {
+            setSaveError('Wait for the latest Job details and editor choices to finish loading before saving.')
+            return
+        }
         if (!draft.jobType) {
             setSaveError('Select a job type before saving.')
             return
@@ -279,7 +452,7 @@ export default function JobEditDrawer({
                     className={`job-drawer-email-action status-${jobCardStatus}`}
                     title={emailTitle}
                     onClick={() => void emailJob()}
-                    disabled={isSaving || isDeleting || isEmailing || !canEmailJob}
+                    disabled={coreStatus !== 'ready' || isSaving || isDeleting || isEmailing || !canEmailJob}
                 >
                     {emailLabel}
                 </button>
@@ -294,7 +467,7 @@ export default function JobEditDrawer({
                                 setDeleteError('')
                                 setShowDeleteConfirm(true)
                             }}
-                            disabled={isSaving}
+                            disabled={isSaving || coreStatus !== 'ready'}
                         >
                             Delete job
                         </button>
@@ -308,7 +481,7 @@ export default function JobEditDrawer({
                             type="button"
                             className="primary"
                             onClick={saveChanges}
-                            disabled={isSaving}
+                            disabled={isSaving || !editorReady}
                         >
                             {isSaving ? 'Saving...' : 'Save changes'}
                         </button>
@@ -367,36 +540,68 @@ export default function JobEditDrawer({
             </nav>
 
             <div className="job-edit-tab-panel" role="tabpanel">
+                {coreStatus === 'loading' && <div className="job-progressive-state" role="status">
+                    <strong>Refreshing latest Job details…</strong>
+                    <span>The drawer is open; editing will be available as soon as the current Dataverse record arrives.</span>
+                </div>}
+                {coreStatus === 'error' && <div className="job-progressive-state error" role="alert">
+                    <strong>Latest Job details unavailable</strong>
+                    <span>{coreError || 'The focused Job refresh did not complete.'}</span>
+                    <button type="button" onClick={() => { void focusedJobQuery.refetch().catch(() => undefined) }}>Try again</button>
+                </div>}
                 {activeTab === 'details' && (
                     <div className="job-edit-grid">
-                        <JobCoreFields
-                            jobTypeOptions={job.gr_jobtype === JOB_TYPES.WOF || job.gr_jobtype === JOB_TYPES.SITE_CHECK
-                                ? JOB_TYPE_OPTIONS.filter((option) => option.value === job.gr_jobtype)
-                                : STANDARD_JOB_TYPE_OPTIONS}
-                            draft={draft}
-                            setDraft={setDraft}
-                            mechanics={mechanics}
-                            equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)}
-                        />
+                        <fieldset className="job-progressive-fieldset" disabled={coreStatus !== 'ready'}>
+                            <JobCoreFields
+                                jobTypeOptions={job.gr_jobtype === JOB_TYPES.WOF || job.gr_jobtype === JOB_TYPES.SITE_CHECK
+                                    ? JOB_TYPE_OPTIONS.filter((option) => option.value === job.gr_jobtype)
+                                    : STANDARD_JOB_TYPE_OPTIONS}
+                                draft={draft}
+                                setDraft={setDraft}
+                                mechanics={mechanics}
+                                equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)}
+                            />
+                        </fieldset>
 
-                        {jobRequiresMaintenance(draft.jobType) && <JobMaintenanceSummary
-                            equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)}
-                            servicePlans={servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === draft.equipmentId.toLowerCase())}
-                        />}
+                        {referenceDataStatus === 'loading' || referenceDataStatus === 'idle'
+                            ? <div className="job-progressive-state job-edit-field-wide" role="status">
+                                <strong>Loading Equipment and customer choices…</strong>
+                                <span>Core Job fields are available independently; relationship editing and saving will unlock shortly.</span>
+                            </div>
+                            : referenceDataStatus === 'error'
+                                ? <div className="job-progressive-state error job-edit-field-wide" role="alert">
+                                    <strong>Editor choices could not be loaded</strong>
+                                    <span>{referenceDataError || 'Equipment, customer, Site, Quote, or assignment data is unavailable.'}</span>
+                                    {onPrepareReferenceData && <button type="button" onClick={() => { void onPrepareReferenceData().catch(() => undefined) }}>Try again</button>}
+                                </div>
+                                : <>
+                                    {jobRequiresMaintenance(draft.jobType) && <JobMaintenanceSummary
+                                        equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)}
+                                        servicePlans={servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === draft.equipmentId.toLowerCase())}
+                                    />}
+
+                                    <JobRelationshipFields
+                                        editor={editor}
+                                        equipmentList={equipmentList}
+                                        customers={customers}
+                                        onCreateCustomer={onCreateCustomer}
+                                        onCreateSite={onCreateSite}
+                                        onCreateContact={onCreateContact}
+                                        onCreateEquipment={onCreateEquipment}
+                                        onSearchEquipment={onSearchEquipment}
+                                        onSearchCustomers={onSearchCustomers}
+                                        onLoadCustomerSites={onLoadCustomerSites}
+                                        onLoadSiteContacts={onLoadSiteContacts}
+                                        onLoadEquipment={onLoadEquipment}
+                                        onLoadEquipmentServicePlans={onLoadEquipmentServicePlans}
+                                    />
+                                </>}
                         {job.gr_status === JOB_STATUSES.COMPLETE && <div className="job-completion-history job-edit-field-wide">
                             <span>Hour Meter at Completion</span>
                             <strong>{job.gr_hourmeter == null ? 'Not recorded' : `${job.gr_hourmeter.toLocaleString('en-NZ')} hours${job.gr_hourmeterreadingtype === HOUR_METER_READING_TYPES.ESTIMATED ? ' · Estimated' : ''}`}</strong>
                             <small>Reading date: {(job.gr_hourmeterrecordeddate ?? job.gr_completeddate)?.slice(0, 10) || 'Not recorded'}</small>
                         </div>}
 
-                        <JobRelationshipFields
-                            editor={editor}
-                            equipmentList={equipmentList}
-                            onCreateCustomer={onCreateCustomer}
-                            onCreateSite={onCreateSite}
-                            onCreateContact={onCreateContact}
-                            onCreateEquipment={onCreateEquipment}
-                        />
                     </div>
                 )}
 
@@ -417,25 +622,49 @@ export default function JobEditDrawer({
 
                 {activeTab === 'quotes' && (
                     <div className="job-edit-grid">
-                        <JobQuotesSection
-                            quotes={quotes}
-                            onCreateQuote={() => onCreateQuote(job.gr_jobid)}
-                            onOpenQuote={onOpenQuote}
-                        />
+                        {jobQuotesStatus === 'ready'
+                            ? <JobQuotesSection
+                                quotes={focusedQuotes}
+                                onCreateQuote={() => onCreateQuote(job.gr_jobid)}
+                                onOpenQuote={onOpenQuote}
+                            />
+                            : <div className={`job-progressive-state job-edit-field-wide${jobQuotesStatus === 'error' ? ' error' : ''}`} role={jobQuotesStatus === 'error' ? 'alert' : 'status'}>
+                                <strong>{jobQuotesStatus === 'error' ? 'Quotes unavailable' : 'Loading Quotes…'}</strong>
+                                <span>{jobQuotesStatus === 'error' ? jobQuotesError : 'Only Quotes linked to this Job are loading.'}</span>
+                                {jobQuotesStatus === 'error' && <button type="button" onClick={() => { void jobQuotesQuery.refetch().catch(() => undefined) }}>Try again</button>}
+                            </div>}
                     </div>
                 )}
 
                 {activeTab === 'jobcard' && (
-                    <JobCardFields
-                        job={job}
-                        mechanics={mechanics}
-                        assignments={assignments}
-                        onStatusChange={onJobCardStatusChange}
-                        onCreateAssignment={onCreateAssignment}
-                        onSendPrimary={onSendPrimary}
-                        onSendAssignment={onSendAssignment}
-                        onDeleteAssignment={onDeleteAssignment}
-                    />
+                    jobAssignmentsStatus !== 'ready'
+                        ? <div className={`job-progressive-state${jobAssignmentsStatus === 'error' ? ' error' : ''}`} role={jobAssignmentsStatus === 'error' ? 'alert' : 'status'}>
+                            <strong>{jobAssignmentsStatus === 'error' ? 'Job Card assignments unavailable' : 'Loading technician assignments…'}</strong>
+                            <span>{jobAssignmentsStatus === 'error' ? jobAssignmentsError : 'Only technician assignments linked to this Job are loading.'}</span>
+                            {jobAssignmentsStatus === 'error' && <button type="button" onClick={() => { void jobAssignmentsQuery.refetch().catch(() => undefined) }}>Try again</button>}
+                        </div>
+                        : jobCardStatusLoad === 'loading'
+                            ? <div className="job-progressive-state" role="status">
+                                <strong>Loading Job Card history and photos…</strong>
+                                <span>This larger section is fetched only when it is opened.</span>
+                            </div>
+                            : jobCardStatusLoad === 'error'
+                                ? <div className="job-progressive-state error" role="alert">
+                                    <strong>Job Card details unavailable</strong>
+                                    <span>{jobCardError}</span>
+                                    <button type="button" onClick={() => { void jobCardMetadataQuery.refetch().catch(() => undefined) }}>Try again</button>
+                                </div>
+                                : <JobCardFields
+                                    job={jobCardDetails ? { ...job, ...jobCardDetails } : job}
+                                    mechanics={mechanics}
+                                    assignments={focusedAssignments}
+                                    onStatusChange={onJobCardStatusChange}
+                                    onCreateAssignment={createAssignmentAndRefresh}
+                                    onSendPrimary={onSendPrimary}
+                                    onSendAssignment={sendAssignmentAndRefresh}
+                                    onDeleteAssignment={deleteAssignmentAndRefresh}
+                                    onLoadPhoto={onLoadJobPhoto}
+                                />
                 )}
             </div>
         </JobDrawerShell>

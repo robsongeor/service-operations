@@ -12,8 +12,8 @@ import JobTypeTabs from '../jobs/components/JobTypeTabs'
 import { JOB_TYPES, SCHEDULER_JOB_TYPE_OPTIONS } from '../jobs/types/jobType.types'
 import '../jobs/components/JobTypeControls.css'
 import './SchedulingScreen.css'
-import { useNavigate } from 'react-router-dom'
 import { getJobTypeLabel } from '../jobs/types/jobType.types'
+import { useQuoteEditorOverlay } from '../quotes/QuoteEditorOverlayContext'
 import {
     SCHEDULING_DISPLAY_MODE_KEY,
     SCHEDULING_JOB_TYPE_FILTER_KEY,
@@ -22,6 +22,13 @@ import {
     type SchedulingDisplayMode,
     type SchedulingJobTypeFilter,
 } from './schedulingDisplayMode'
+import { useSchedulerWindowData } from './useSchedulerWindowData'
+import {
+    addSchedulerDays as addDays,
+    schedulerDateKey as dateKey,
+    startOfSchedulerWeek as startOfWeek,
+} from './schedulerWindow'
+import { useOperationalScreenReady } from '../shared/data/OperationalScreenPerformanceContext'
 
 const dayHeadingFormatter = new Intl.DateTimeFormat('en-NZ', { weekday: 'short' })
 const dayNumberFormatter = new Intl.DateTimeFormat('en-NZ', {
@@ -37,29 +44,9 @@ const timeFormatter = new Intl.DateTimeFormat('en-NZ', {
     hour: 'numeric',
     minute: '2-digit',
 })
-
-function startOfWeek(value: Date) {
-    const date = new Date(value)
-    date.setHours(12, 0, 0, 0)
-    const daysSinceMonday = (date.getDay() + 6) % 7
-    date.setDate(date.getDate() - daysSinceMonday)
-    return date
-}
-
-function addDays(value: Date, days: number) {
-    const date = new Date(value)
-    date.setDate(date.getDate() + days)
-    return date
-}
-
-function dateKey(value: Date | string) {
-    if (typeof value === 'string') return value.slice(0, 10)
-
-    const year = value.getFullYear()
-    const month = String(value.getMonth() + 1).padStart(2, '0')
-    const day = String(value.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
-}
+const EMPTY_SCOPED_EQUIPMENT: never[] = []
+const EMPTY_SCOPED_SITES: never[] = []
+const EMPTY_SCOPED_SERVICE_PLANS: never[] = []
 
 function scheduleLabel(option: JobScheduleOption) {
     switch (option.gr_scheduletype) {
@@ -149,12 +136,21 @@ function getCardVariant(
 }
 
 export default function SchedulingScreen() {
-    const navigate = useNavigate()
+    const quoteEditor = useQuoteEditorOverlay()
+    const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
+    const schedulerData = useSchedulerWindowData(weekStart)
+    useOperationalScreenReady('Scheduling', !schedulerData.isLoading)
+    const scopedSchedulerData = useMemo(() => ({
+        jobs: schedulerData.jobs,
+        equipment: EMPTY_SCOPED_EQUIPMENT,
+        sites: EMPTY_SCOPED_SITES,
+        servicePlans: EMPTY_SCOPED_SERVICE_PLANS,
+        scheduleOptions: schedulerData.scheduleOptions,
+        officeUpdates: schedulerData.officeUpdates,
+    }), [schedulerData.jobs, schedulerData.officeUpdates, schedulerData.scheduleOptions])
     const {
         jobs,
         scheduleOptions,
-        jobQuotes,
-        jobAssignments,
         servicePlans,
         officeUpdates,
         mechanics,
@@ -180,13 +176,25 @@ export default function SchedulingScreen() {
         deleteScheduleOption,
         completionRequest, isCompletingJob, completionError, completeStandardJob, completeServiceJob, completeWofJob, cancelJobCompletion,
         setupEquipmentMaintenance,
-        isLoading,
-        loadError,
-        retryInitialLoad,
         prepareJobReferenceData,
+        loadJobQuotes,
+        loadJobAssignments,
+        searchEquipmentForEditor,
+        searchCustomersForEditor,
+        loadCustomerSitesForEditor,
+        loadSiteContactsForEditor,
+        loadEquipmentForEditor,
+        loadEquipmentServicePlansForEditor,
         fetchJobForDrawer,
-    } = useJobs()
-    const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
+        fetchJobCardDetails,
+        fetchJobPhotoBody,
+        referenceDataStatus,
+        referenceDataError,
+    } = useJobs({
+        loadGlobalOperationalData: false,
+        scopedData: scopedSchedulerData,
+        onScopedDataChanged: schedulerData.refetch,
+    })
     const [editingJob, setEditingJob] = useState<Job | null>(null)
     const [displayMode, setDisplayMode] = useState<SchedulingDisplayMode>(restoreSchedulingDisplayMode)
     const [selectedJobType, setSelectedJobType] = useState<SchedulingJobTypeFilter>(restoreSchedulingJobTypeFilter)
@@ -209,23 +217,16 @@ export default function SchedulingScreen() {
 
     const createQuoteForJob = (jobId: string) => {
         setEditingJob(null)
-        navigate(`/quotes?new=1&jobId=${encodeURIComponent(jobId)}`)
+        quoteEditor.createQuote(jobId)
     }
 
     const openQuote = (quoteId: string) => {
         setEditingJob(null)
-        navigate(`/quotes?quoteId=${encodeURIComponent(quoteId)}`)
+        quoteEditor.openQuote(quoteId)
     }
 
-    const openJob = async (job: Job) => {
-        await prepareJobReferenceData()
-        try {
-            const refreshedJob = await fetchJobForDrawer(job.gr_jobid)
-            setEditingJob(refreshedJob ?? job)
-        } catch {
-            // Reference data is ready, so retain the visible Job if only its focused refresh failed.
-            setEditingJob(job)
-        }
+    const openJob = (job: Job) => {
+        setEditingJob(job)
     }
 
     const weekDays = useMemo(
@@ -284,22 +285,22 @@ export default function SchedulingScreen() {
                 </div>
             </header>
 
-            {isLoading ? (
+            {schedulerData.isLoading ? (
                 <section className="scheduling-data-state" aria-live="polite">
                     <h2>Loading schedule</h2>
                     <p>Connecting to Dataverse and preparing the weekly planner.</p>
                 </section>
-            ) : loadError ? (
+            ) : schedulerData.error ? (
                 <section className="scheduling-data-state scheduling-data-state-error" role="alert">
                     <div>
                         <h2>Schedule could not be loaded</h2>
                         <p>Dataverse returned an error. Check the details or try again.</p>
                         <details>
                             <summary>Error details</summary>
-                            <pre>{loadError}</pre>
+                            <pre>{schedulerData.error}</pre>
                         </details>
                     </div>
-                    <button type="button" onClick={retryInitialLoad}>Try again</button>
+                    <button type="button" onClick={() => void schedulerData.refetch()}>Try again</button>
                 </section>
             ) : (
             <>
@@ -360,7 +361,7 @@ export default function SchedulingScreen() {
                                         key={option.gr_jobscheduleoptionid}
                                         option={option}
                                         job={jobsById.get(option._gr_job_value?.toLowerCase())}
-                                        onOpen={(job) => { void openJob(job).catch(() => undefined) }}
+                                        onOpen={(job) => openJob(job)}
                                         variant={getCardVariant(displayMode, option, todayKey)}
                                     />
                                 ))}
@@ -393,7 +394,7 @@ export default function SchedulingScreen() {
                                                 key={option.gr_jobscheduleoptionid}
                                                 option={option}
                                                 job={jobsById.get(option._gr_job_value?.toLowerCase())}
-                                                onOpen={(job) => { void openJob(job).catch(() => undefined) }}
+                                                onOpen={(job) => openJob(job)}
                                                 variant={getCardVariant(displayMode, option, todayKey)}
                                             />
                                         ))}
@@ -424,17 +425,17 @@ export default function SchedulingScreen() {
                     onCreateSite={createSite}
                     onCreateContact={createContactForSite}
                     onCreateEquipment={createEquipment}
+                    onSearchEquipment={searchEquipmentForEditor}
+                    onSearchCustomers={searchCustomersForEditor}
+                    onLoadCustomerSites={loadCustomerSitesForEditor}
+                    onLoadSiteContacts={loadSiteContactsForEditor}
+                    onLoadEquipment={loadEquipmentForEditor}
+                    onLoadEquipmentServicePlans={loadEquipmentServicePlansForEditor}
                     onSave={updateJob}
                     onDelete={deleteJob}
                     onCreateScheduleOption={createScheduleOption}
                     onUpdateScheduleOption={updateScheduleOption}
                     onDeleteScheduleOption={deleteScheduleOption}
-                    quotes={jobQuotes.filter((quote) =>
-                        quote._gr_job_value?.toLowerCase() === editingJob.gr_jobid.toLowerCase(),
-                    )}
-                    assignments={jobAssignments.filter((assignment) =>
-                        assignment._gr_job_value?.toLowerCase() === editingJob.gr_jobid.toLowerCase(),
-                    )}
                     onCreateQuote={createQuoteForJob}
                     onOpenQuote={openQuote}
                     onJobCardStatusChange={updateJobCardStatus}
@@ -447,6 +448,14 @@ export default function SchedulingScreen() {
                     )}
                     onCreateOfficeUpdate={createJobOfficeUpdate}
                     onSaveOfficeAttention={updateJobOfficeAttention}
+                    referenceDataStatus={referenceDataStatus}
+                    referenceDataError={referenceDataError}
+                    onPrepareReferenceData={prepareJobReferenceData}
+                    onLoadJobQuotes={loadJobQuotes}
+                    onLoadJobAssignments={loadJobAssignments}
+                    onRefreshJob={fetchJobForDrawer}
+                    onLoadJobCardDetails={fetchJobCardDetails}
+                    onLoadJobPhoto={fetchJobPhotoBody}
                     onClose={() => setEditingJob(null)}
                 />
             )}

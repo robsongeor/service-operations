@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Mechanic } from '../types/mechanic.types'
 import type { Equipment } from '../types/equipment.types'
 import type { Site } from '../types/site.types'
@@ -10,7 +10,7 @@ import type { JobSaveInput } from '../types/jobSave.types'
 import { useJobEditor } from '../hooks/useJobEditor'
 import JobDrawerShell from './JobDrawerShell'
 import JobCoreFields from './JobCoreFields'
-import JobRelationshipFields from './JobRelationshipFields'
+import JobRelationshipFields, { type JobRelationshipLookupProps } from './JobRelationshipFields'
 import JobScheduleFields from './JobScheduleFields'
 import type {
     JobScheduleOptionDraft,
@@ -38,8 +38,11 @@ export type JobCreateInitialValues = {
     description?: string
 }
 
-type Props = {
+type Props = JobRelationshipLookupProps & {
     mechanics: Mechanic[]
+    mechanicsLoading?: boolean
+    mechanicsError?: string
+    onRetryMechanics?: () => void
     equipmentList: Equipment[]
     sites: Site[]
     customers: Customer[]
@@ -60,10 +63,12 @@ type Props = {
 }
 
 export default function JobCreateDrawer({
-    mechanics, equipmentList, sites, customers, siteContacts, servicePlans,
+    mechanics, mechanicsLoading, mechanicsError, onRetryMechanics, equipmentList, sites, customers, siteContacts, servicePlans,
     onCreateCustomer, onCreateSite, onCreateContact, onCreateEquipment,
     onCreateJob, onCreated, onCreateScheduleOption, initialValues,
     jobTypeOptions = STANDARD_JOB_TYPE_OPTIONS, requireJobNumber = false, existingJobs = [], onClose,
+    onSearchEquipment, onSearchCustomers, onLoadCustomerSites, onLoadSiteContacts,
+    onLoadEquipment, onLoadEquipmentServicePlans,
 }: Props) {
     const initialCustomer = customers.find((customer) => customer.gr_customerid === initialValues?.customerId)
     const editor = useJobEditor({
@@ -89,6 +94,43 @@ export default function JobCreateDrawer({
     const [scheduleDrafts, setScheduleDrafts] = useState<JobScheduleOptionDraft[]>([])
     const [jobWasCreated, setJobWasCreated] = useState(false)
     const [jobTypeError, setJobTypeError] = useState('')
+    const [equipmentDependencyStatus, setEquipmentDependencyStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
+    const [equipmentDependencyError, setEquipmentDependencyError] = useState('')
+    const [equipmentDependencyAttempt, setEquipmentDependencyAttempt] = useState(0)
+
+    useEffect(() => {
+        const controller = new AbortController()
+        const timer = window.setTimeout(() => {
+            if (!draft.equipmentId) {
+                setEquipmentDependencyStatus('idle')
+                setEquipmentDependencyError('')
+                return
+            }
+            const requests: Promise<unknown>[] = []
+            if (onLoadEquipment) requests.push(onLoadEquipment(draft.equipmentId, controller.signal))
+            if (jobRequiresMaintenance(draft.jobType) && onLoadEquipmentServicePlans) {
+                requests.push(onLoadEquipmentServicePlans(draft.equipmentId, controller.signal))
+            }
+            if (!requests.length) {
+                setEquipmentDependencyStatus('ready')
+                setEquipmentDependencyError('')
+                return
+            }
+            setEquipmentDependencyStatus('loading')
+            setEquipmentDependencyError('')
+            void Promise.all(requests).then(() => {
+                if (!controller.signal.aborted) setEquipmentDependencyStatus('ready')
+            }).catch((error) => {
+                if (controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) return
+                setEquipmentDependencyStatus('error')
+                setEquipmentDependencyError(error instanceof Error ? error.message : 'Equipment details could not be loaded.')
+            })
+        }, 0)
+        return () => {
+            window.clearTimeout(timer)
+            controller.abort()
+        }
+    }, [draft.equipmentId, draft.jobType, equipmentDependencyAttempt, onLoadEquipment, onLoadEquipmentServicePlans])
 
     const createJob = async () => {
         if (!draft.jobType) {
@@ -175,19 +217,30 @@ export default function JobCreateDrawer({
             </>}
         >
             <div className="job-edit-grid">
-                <JobCoreFields draft={draft} setDraft={setDraft} mechanics={mechanics} equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)} allowEmptyJobType jobTypeError={jobTypeError} jobTypeOptions={jobTypeOptions} />
+                <JobCoreFields draft={draft} setDraft={setDraft} mechanics={mechanics} mechanicsLoading={mechanicsLoading} mechanicsError={mechanicsError} onRetryMechanics={onRetryMechanics} equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)} allowEmptyJobType jobTypeError={jobTypeError} jobTypeOptions={jobTypeOptions} />
                 {jobRequiresMaintenance(draft.jobType) && <JobMaintenanceSummary
                     equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)}
                     servicePlans={servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === draft.equipmentId.toLowerCase())}
+                    loadStatus={equipmentDependencyStatus}
+                    loadError={equipmentDependencyError}
+                    onRetry={() => setEquipmentDependencyAttempt((current) => current + 1)}
                 />}
                 <JobRelationshipFields
                     editor={editor}
                     equipmentList={equipmentList}
+                    customers={customers}
                     initialEquipmentDraft={initialValues?.equipmentDraft}
+                    equipmentDependencyStatus={equipmentDependencyStatus}
+                    equipmentDependencyError={equipmentDependencyError}
+                    onRetryEquipmentDependencies={() => setEquipmentDependencyAttempt((current) => current + 1)}
                     onCreateCustomer={onCreateCustomer}
                     onCreateSite={onCreateSite}
                     onCreateContact={onCreateContact}
                     onCreateEquipment={onCreateEquipment}
+                    onSearchEquipment={onSearchEquipment}
+                    onSearchCustomers={onSearchCustomers}
+                    onLoadCustomerSites={onLoadCustomerSites}
+                    onLoadSiteContacts={onLoadSiteContacts}
                 />
                 <JobScheduleFields
                     draftOptions={scheduleDrafts}

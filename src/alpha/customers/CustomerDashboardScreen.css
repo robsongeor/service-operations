@@ -212,15 +212,44 @@
 .customer-workspace-state { display: grid; min-height: 210px; place-items: center; padding: 26px; border: 1px solid #dfe5e1; border-radius: 12px; background: #fdfdfb; color: #68736d; font-size: .8rem; text-align: center; }
 .customer-workspace-state.error { border-color: #ebcaca; background: #fff8f8; color: #943b3b; }
 .customer-open-jobs-panel,
+.customer-jobs-panel,
 .customer-quotes-panel { display: grid; gap: 14px; padding: 18px; border: 1px solid #dfe5e1; border-radius: 12px; background: #fdfdfb; }
 .customer-open-jobs-panel > header,
+.customer-jobs-panel > header,
 .customer-quotes-panel > header { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .customer-open-jobs-panel > header span,
+.customer-jobs-panel > header span,
 .customer-quotes-panel > header span { color: #737a76; font-size: .67rem; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
 .customer-open-jobs-panel > header h3,
+.customer-jobs-panel > header h3,
 .customer-quotes-panel > header h3 { margin: 3px 0 0; color: #29322d; font-size: 1.15rem; }
 .customer-open-jobs-panel > header > strong,
+.customer-jobs-panel > header > strong,
 .customer-quotes-panel > header > strong { color: #637069; font-size: .72rem; }
+.customer-jobs-toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; padding: 12px; border: 1px solid #e1e7e3; border-radius: 10px; background: #f7f9f8; }
+.customer-jobs-toolbar label { display: grid; min-width: 135px; gap: 5px; color: #626e67; font-size: .66rem; font-weight: 750; }
+.customer-jobs-toolbar label.customer-jobs-search { flex: 1 1 230px; }
+.customer-jobs-toolbar input,
+.customer-jobs-toolbar select { min-height: 36px; padding: 0 9px; border: 1px solid #cfd7d2; border-radius: 8px; background: #fff; color: #313b35; font: inherit; }
+.customer-jobs-toolbar select { padding-right: 28px; }
+.customer-jobs-toolbar-actions { display: flex; flex: 1 1 100%; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+.customer-jobs-toolbar-actions button { min-height: 34px; padding: 0 11px; border: 1px solid #c9d4ce; border-radius: 8px; background: #fff; color: #365c4f; font-size: .69rem; font-weight: 750; cursor: pointer; }
+.customer-jobs-toolbar-actions button.primary { border-color: #176f66; background: #176f66; color: #fff; }
+.customer-jobs-toolbar-actions button:disabled { cursor: not-allowed; opacity: .55; }
+.customer-jobs-feedback { margin: 0; padding: 9px 11px; border-radius: 8px; background: #edf7f2; color: #176f66; font-size: .72rem; }
+.customer-jobs-table-wrap { overflow-x: auto; border: 1px solid #dfe5e1; border-radius: 11px; }
+.customer-jobs-table { width: 100%; min-width: 1260px; border-collapse: collapse; font-size: .72rem; }
+.customer-jobs-table th { padding: 9px 11px; border-bottom: 1px solid #dfe5e1; background: #f4f6f5; color: #69736d; font-size: .62rem; text-align: left; text-transform: uppercase; }
+.customer-jobs-table td { max-width: 230px; padding: 11px; border-bottom: 1px solid #e8ece9; color: #4b5650; vertical-align: top; }
+.customer-jobs-table tbody tr { cursor: pointer; }
+.customer-jobs-table tbody tr:hover { background: #f5f8f6; }
+.customer-jobs-table tbody tr:focus-visible { outline: 2px solid #315b4d; outline-offset: -2px; }
+.customer-jobs-table tbody tr:last-child td { border-bottom: 0; }
+.customer-jobs-table td strong,
+.customer-jobs-table td small { display: block; }
+.customer-jobs-table td small { overflow: hidden; margin-top: 3px; color: #7a847e; text-overflow: ellipsis; white-space: nowrap; }
+.customer-jobs-table td.description { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.customer-jobs-empty { display: grid; min-height: 180px; place-items: center; padding: 24px; border: 1px dashed #d2dad6; border-radius: 10px; background: #f8faf9; color: #707a74; font-size: .78rem; }
 .customer-job-groups { display: grid; gap: 13px; }
 .customer-job-group { overflow: hidden; border: 1px solid #dde4e0; border-radius: 11px; background: #fff; }
 .customer-job-group > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 13px 15px; border-bottom: 1px solid #e2e8e4; background: #f6f8f7; }

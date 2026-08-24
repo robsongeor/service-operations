@@ -21,6 +21,10 @@ export default function QuotesScreen() {
         ? searchParams.get('jobId') ?? undefined
         : undefined
     const requestedQuoteId = searchParams.get('quoteId')
+    const [editingQuote, setEditingQuote] = useState<Quote | null | undefined>(
+        () => requestedNewJobId ? null : undefined,
+    )
+    const [editorRequested, setEditorRequested] = useState(Boolean(requestedNewJobId || requestedQuoteId))
     const {
         quotes,
         jobs,
@@ -28,19 +32,27 @@ export default function QuotesScreen() {
         equipment,
         pricingItems,
         staff,
+        staffLoading,
+        staffError,
+        retryStaff,
         isLoading,
+        isEditorLoading,
         isSaving,
         loadError,
+        editorLoadError,
         saveError,
         reload,
         loadLines,
+        loadJob,
+        findJobs,
+        loadCustomer,
+        findCustomers,
+        loadEquipment,
+        findEquipment,
         save,
         deleteQuote,
         clearSaveError,
-    } = useQuotes()
-    const [editingQuote, setEditingQuote] = useState<Quote | null | undefined>(
-        () => requestedNewJobId ? null : undefined,
-    )
+    } = useQuotes({ loadEditorSupport: editorRequested })
     const [editingLines, setEditingLines] = useState<QuoteLine[]>([])
     const [isOpening, setIsOpening] = useState(false)
     const [openError, setOpenError] = useState('')
@@ -93,11 +105,13 @@ export default function QuotesScreen() {
     const openNew = () => {
         setSearchParams({})
         clearSaveError()
+        setEditorRequested(true)
         setEditingLines([])
         setEditingQuote(null)
     }
 
     const openExisting = async (quote: Quote) => {
+        setEditorRequested(true)
         setIsOpening(true)
         setOpenError('')
         clearSaveError()
@@ -157,6 +171,7 @@ export default function QuotesScreen() {
             await deleteQuote(editingQuote.gr_quoteid, editingLines)
             setEditingQuote(undefined)
             setEditingLines([])
+            setEditorRequested(false)
             setSearchParams({})
         } catch {
             // The hook exposes the Dataverse message in the confirmation.
@@ -233,7 +248,7 @@ export default function QuotesScreen() {
                                 const equipmentMakeModel = [linkedEquipment?.gr_make, linkedEquipment?.gr_model].filter(Boolean).join(' ')
                                 return <tr key={quote.gr_quoteid} onClick={() => void openExisting(quote)}>
                                     <td><strong>{quote.gr_Customer?.gr_name || quote.gr_Job?.gr_Site?.gr_Customer?.gr_name || quote.gr_Equipment?.gr_Site?.gr_Customer?.gr_name || '—'}</strong></td>
-                                    <td><strong>{quote.gr_Job?.gr_jobnumber || '—'}</strong></td>
+                                    <td><strong className="quotes-job-value" title={quote.gr_Job?.gr_jobnumber || undefined}>{quote.gr_Job?.gr_jobnumber || '—'}</strong></td>
                                     <td><strong>{linkedEquipment?.gr_fleet || '—'}</strong><small>{equipmentMakeModel || linkedEquipment?.gr_serial || ''}</small></td>
                                     <td><strong className="quote-title">{quote.gr_name || 'Untitled quote'}</strong><small>{quote.gr_quotenumber || 'Pending number'}</small></td>
                                     <td className="quotes-author-column"><strong>{quote.createdby?.fullname || 'Unknown'}</strong></td>
@@ -250,9 +265,14 @@ export default function QuotesScreen() {
                 </div>
             )}
 
-            {isOpening && <div className="quotes-opening" role="status">Loading quote lines…</div>}
+            {(isOpening || (editorRequested && isEditorLoading)) && (
+                <div className="quotes-opening" role="status">Loading quote editor…</div>
+            )}
+            {editorRequested && editorLoadError && (
+                <p className="quotes-page-error" role="alert">{editorLoadError}</p>
+            )}
 
-            {editingQuote !== undefined && (
+            {editingQuote !== undefined && !isEditorLoading && !editorLoadError && (
                 <QuoteEditorDialog
                     quote={editingQuote}
                     existingLines={editingLines}
@@ -261,18 +281,28 @@ export default function QuotesScreen() {
                     equipment={equipment}
                     pricingItems={pricingItems}
                     staff={staff}
+                    staffLoading={staffLoading}
+                    staffError={staffError}
+                    onRetryStaff={() => { void retryStaff().catch(() => undefined) }}
                     initialJobId={requestedNewJobId}
                     isSaving={isSaving}
                     error={saveError}
                     onClose={() => {
                         setEditingQuote(undefined)
                         setEditingLines([])
+                        setEditorRequested(false)
                         setSearchParams({})
                     }}
                     onSave={saveQuote}
                     onDelete={removeQuote}
                     authorName={editingQuote?.createdby?.fullname || signedInUser?.displayName || ''}
                     authorIdentityAvailable={Boolean(editingQuote?.createdby?.systemuserid || signedInUser?.entraObjectId)}
+                    onLoadJob={loadJob}
+                    onSearchJobs={findJobs}
+                    onLoadCustomer={loadCustomer}
+                    onSearchCustomers={findCustomers}
+                    onLoadEquipment={loadEquipment}
+                    onSearchEquipment={findEquipment}
                 />
             )}
         </div>

@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import {
     PRICING_CATEGORIES,
     PRICING_CATEGORY_LABELS,
@@ -58,6 +58,9 @@ type QuoteEditorDialogProps = {
     equipment: Equipment[]
     pricingItems: PricingItem[]
     staff: Mechanic[]
+    staffLoading?: boolean
+    staffError?: string
+    onRetryStaff?: () => void
     initialJobId?: string
     isSaving: boolean
     error: string
@@ -66,6 +69,12 @@ type QuoteEditorDialogProps = {
     onDelete: () => Promise<void>
     authorName: string
     authorIdentityAvailable: boolean
+    onLoadJob: (jobId: string, signal?: AbortSignal) => Promise<QuoteJob | undefined>
+    onSearchJobs: (query: string, signal?: AbortSignal) => Promise<QuoteJob[]>
+    onLoadCustomer: (customerId: string, signal?: AbortSignal) => Promise<Customer | undefined>
+    onSearchCustomers: (query: string, signal?: AbortSignal) => Promise<Customer[]>
+    onLoadEquipment: (equipmentId: string, signal?: AbortSignal) => Promise<Equipment | undefined>
+    onSearchEquipment: (query: string, signal?: AbortSignal) => Promise<Equipment[]>
 }
 
 const money = new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' })
@@ -128,6 +137,14 @@ function jobNumberDescriptionLabel(job: QuoteJob) {
     return [job.gr_jobnumber || 'Job without number', job.gr_description].filter(Boolean).join(' - ')
 }
 
+function mergeRecords<T>(current: T[], incoming: Array<T | undefined>, getId: (item: T) => string) {
+    const records = new Map(current.map((item) => [getId(item).toLowerCase(), item]))
+    incoming.forEach((item) => {
+        if (item) records.set(getId(item).toLowerCase(), item)
+    })
+    return [...records.values()]
+}
+
 export default function QuoteEditorDialog({
     quote,
     existingLines,
@@ -136,6 +153,9 @@ export default function QuoteEditorDialog({
     equipment,
     pricingItems,
     staff,
+    staffLoading = false,
+    staffError = '',
+    onRetryStaff,
     initialJobId,
     isSaving,
     error,
@@ -144,14 +164,27 @@ export default function QuoteEditorDialog({
     onDelete,
     authorName,
     authorIdentityAvailable,
+    onLoadJob,
+    onSearchJobs,
+    onLoadCustomer,
+    onSearchCustomers,
+    onLoadEquipment,
+    onSearchEquipment,
 }: QuoteEditorDialogProps) {
     const initialJobIdValue = quote?._gr_job_value ?? initialJobId ?? ''
-    const initialJob = jobs.find((job) => job.gr_jobid === initialJobIdValue)
+    const seededJobs = mergeRecords(jobs, [quote?.gr_Job], (job) => job.gr_jobid)
+    const initialJob = seededJobs.find((job) => job.gr_jobid === initialJobIdValue)
         ?? (quote?.gr_Job?.gr_jobid === initialJobIdValue ? quote.gr_Job : undefined)
     const initialJobDefaults = getQuoteJobDefaults(initialJob)
     const initialEquipmentIdValue = quote?._gr_equipment_value ?? initialJobDefaults.equipmentId
     const initialCustomerIdValue = quote?._gr_customer_value ?? initialJobDefaults.customerId
-    const initialEquipment = equipment.find((item) => item.gr_equipmentid === initialEquipmentIdValue)
+    const seededCustomers = mergeRecords(customers, [quote?.gr_Customer, initialJob?.gr_Site?.gr_Customer], (customer) => customer.gr_customerid)
+    const seededEquipment = mergeRecords<Equipment>(
+        equipment,
+        [quote?.gr_Equipment, initialJob?.gr_Equipment as Equipment | undefined],
+        (item) => item.gr_equipmentid,
+    )
+    const initialEquipment = seededEquipment.find((item) => item.gr_equipmentid === initialEquipmentIdValue)
         ?? (quote?.gr_Equipment?.gr_equipmentid === initialEquipmentIdValue ? quote.gr_Equipment : undefined)
         ?? initialJob?.gr_Equipment
     const initialProtectedTitle = buildProtectedQuoteTitle(initialJob, initialEquipment)
@@ -173,32 +206,138 @@ export default function QuoteEditorDialog({
     const [confirmDelete, setConfirmDelete] = useState(false)
     const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false)
     const [invoiceFeedback, setInvoiceFeedback] = useState('')
+    const [availableJobs, setAvailableJobs] = useState(seededJobs)
+    const [availableCustomers, setAvailableCustomers] = useState(seededCustomers)
+    const [availableEquipment, setAvailableEquipment] = useState(seededEquipment)
+    const [jobSearch, setJobSearch] = useState<string | null>(null)
+    const [customerSearch, setCustomerSearch] = useState<string | null>(null)
+    const [equipmentSearch, setEquipmentSearch] = useState<string | null>(null)
+    const [jobSearchState, setJobSearchState] = useState<'idle' | 'loading' | 'error'>('idle')
+    const [customerSearchState, setCustomerSearchState] = useState<'idle' | 'loading' | 'error'>('idle')
+    const [equipmentSearchState, setEquipmentSearchState] = useState<'idle' | 'loading' | 'error'>('idle')
     const { recipients: poRecipients, isLoading: poRecipientsLoading, error: poRecipientsError } = usePurchaseOrderRecipients(quote ? customerId : undefined)
 
-    const selectedJob = jobs.find((job) => job.gr_jobid === jobId)
+    const selectedJob = availableJobs.find((job) => job.gr_jobid === jobId)
         ?? (quote?.gr_Job?.gr_jobid === jobId ? quote.gr_Job : undefined)
-    const selectedEquipment = equipment.find((item) => item.gr_equipmentid === equipmentId)
+    const selectedEquipment = availableEquipment.find((item) => item.gr_equipmentid === equipmentId)
         ?? (quote?.gr_Equipment?.gr_equipmentid === equipmentId ? quote.gr_Equipment : undefined)
         ?? selectedJob?.gr_Equipment
     const protectedTitle = buildProtectedQuoteTitle(selectedJob, selectedEquipment)
     const name = buildQuoteTitle(protectedTitle, titleAddition)
 
-    const jobOptions = useMemo<SearchableSelectOption[]>(() => jobs.map((job) => ({
+    const jobOptions = useMemo<SearchableSelectOption[]>(() => availableJobs.map((job) => ({
         value: job.gr_jobid,
         label: jobNumberDescriptionLabel(job),
         secondary: [job.gr_Site?.gr_Customer?.gr_name, job.gr_Equipment?.gr_fleet, job.gr_description].filter(Boolean).join(' · '),
         searchText: jobLabel(job),
-    })), [jobs])
-    const customerOptions = useMemo<SearchableSelectOption[]>(() => customers.map((customer) => ({
+    })), [availableJobs])
+    const customerOptions = useMemo<SearchableSelectOption[]>(() => availableCustomers.map((customer) => ({
         value: customer.gr_customerid,
         label: customer.gr_name,
-    })), [customers])
-    const equipmentOptions = useMemo<SearchableSelectOption[]>(() => equipment.map((item) => ({
+    })), [availableCustomers])
+    const equipmentOptions = useMemo<SearchableSelectOption[]>(() => availableEquipment.map((item) => ({
         value: item.gr_equipmentid,
         label: item.gr_fleet || item.gr_serial || 'Equipment without fleet number',
         secondary: [item.gr_make, item.gr_model, item.gr_serial, item.gr_Site?.gr_Customer?.gr_name].filter(Boolean).join(' · '),
         searchText: parseAlternateFleetNumbers(item.gr_alternatefleetnumbers).join(' '),
-    })), [equipment])
+    })), [availableEquipment])
+
+    useEffect(() => {
+        if (!jobId || selectedJob) return
+        const controller = new AbortController()
+        void onLoadJob(jobId, controller.signal).then((job) => {
+            if (!job || controller.signal.aborted) return
+            setAvailableJobs((current) => mergeRecords(current, [job], (item) => item.gr_jobid))
+            if (!quote) {
+                const defaults = getQuoteJobDefaults(job)
+                setCustomerId(defaults.customerId)
+                setEquipmentId(defaults.equipmentId)
+                if (job.gr_Site?.gr_Customer) {
+                    setAvailableCustomers((current) => mergeRecords(current, [job.gr_Site?.gr_Customer], (item) => item.gr_customerid))
+                }
+                if (job.gr_Equipment) {
+                    setAvailableEquipment((current) => mergeRecords(current, [job.gr_Equipment], (item) => item.gr_equipmentid))
+                }
+            }
+        }).catch(() => {
+            if (!controller.signal.aborted) setFormError('The selected Job could not be loaded. Search for it again or choose another Job.')
+        })
+        return () => controller.abort()
+    }, [jobId, onLoadJob, quote, selectedJob])
+
+    useEffect(() => {
+        if (!customerId || availableCustomers.some((item) => item.gr_customerid === customerId)) return
+        const controller = new AbortController()
+        void onLoadCustomer(customerId, controller.signal).then((customer) => {
+            if (!controller.signal.aborted && customer) {
+                setAvailableCustomers((current) => mergeRecords(current, [customer], (item) => item.gr_customerid))
+            }
+        }).catch(() => {
+            if (!controller.signal.aborted) setFormError('The selected Customer could not be loaded. Search for it again or choose another Customer.')
+        })
+        return () => controller.abort()
+    }, [availableCustomers, customerId, onLoadCustomer])
+
+    useEffect(() => {
+        if (!equipmentId || availableEquipment.some((item) => item.gr_equipmentid === equipmentId)) return
+        const controller = new AbortController()
+        void onLoadEquipment(equipmentId, controller.signal).then((item) => {
+            if (!controller.signal.aborted && item) {
+                setAvailableEquipment((current) => mergeRecords(current, [item], (candidate) => candidate.gr_equipmentid))
+            }
+        }).catch(() => {
+            if (!controller.signal.aborted) setFormError('The selected Equipment could not be loaded. Search for it again or choose another Equipment item.')
+        })
+        return () => controller.abort()
+    }, [availableEquipment, equipmentId, onLoadEquipment])
+
+    useEffect(() => {
+        if (jobSearch === null) return
+        const controller = new AbortController()
+        const timer = window.setTimeout(() => {
+            setJobSearchState('loading')
+            void onSearchJobs(jobSearch, controller.signal).then((results) => {
+                if (controller.signal.aborted) return
+                setAvailableJobs((current) => mergeRecords(current, results, (item) => item.gr_jobid))
+                setJobSearchState('idle')
+            }).catch(() => {
+                if (!controller.signal.aborted) setJobSearchState('error')
+            })
+        }, 250)
+        return () => { window.clearTimeout(timer); controller.abort() }
+    }, [jobSearch, onSearchJobs])
+
+    useEffect(() => {
+        if (customerSearch === null) return
+        const controller = new AbortController()
+        const timer = window.setTimeout(() => {
+            setCustomerSearchState('loading')
+            void onSearchCustomers(customerSearch, controller.signal).then((results) => {
+                if (controller.signal.aborted) return
+                setAvailableCustomers((current) => mergeRecords(current, results, (item) => item.gr_customerid))
+                setCustomerSearchState('idle')
+            }).catch(() => {
+                if (!controller.signal.aborted) setCustomerSearchState('error')
+            })
+        }, 250)
+        return () => { window.clearTimeout(timer); controller.abort() }
+    }, [customerSearch, onSearchCustomers])
+
+    useEffect(() => {
+        if (equipmentSearch === null) return
+        const controller = new AbortController()
+        const timer = window.setTimeout(() => {
+            setEquipmentSearchState('loading')
+            void onSearchEquipment(equipmentSearch, controller.signal).then((results) => {
+                if (controller.signal.aborted) return
+                setAvailableEquipment((current) => mergeRecords(current, results, (item) => item.gr_equipmentid))
+                setEquipmentSearchState('idle')
+            }).catch(() => {
+                if (!controller.signal.aborted) setEquipmentSearchState('error')
+            })
+        }, 250)
+        return () => { window.clearTimeout(timer); controller.abort() }
+    }, [equipmentSearch, onSearchEquipment])
 
     const totals = useMemo(() => {
         const extended = lines.map((line) => roundMoney(line.quantity * line.unitPrice))
@@ -256,11 +395,17 @@ export default function QuoteEditorDialog({
 
     const selectJob = (nextJobId: string) => {
         setJobId(nextJobId)
-        const job = jobs.find((candidate) => candidate.gr_jobid === nextJobId)
+        const job = availableJobs.find((candidate) => candidate.gr_jobid === nextJobId)
         if (!job) return
         const defaults = getQuoteJobDefaults(job)
         setCustomerId(defaults.customerId)
         setEquipmentId(defaults.equipmentId)
+        if (job.gr_Site?.gr_Customer) {
+            setAvailableCustomers((current) => mergeRecords(current, [job.gr_Site?.gr_Customer], (item) => item.gr_customerid))
+        }
+        if (job.gr_Equipment) {
+            setAvailableEquipment((current) => mergeRecords(current, [job.gr_Equipment], (item) => item.gr_equipmentid))
+        }
     }
 
     const generatePoRequestInvoice = async () => {
@@ -276,9 +421,9 @@ export default function QuoteEditorDialog({
                 jobId,
                 customerId,
                 equipmentId,
-                jobs,
-                customers,
-                equipment,
+                jobs: availableJobs,
+                customers: availableCustomers,
+                equipment: availableEquipment,
                 lines,
                 extendedPrices: totals.extended,
                 subtotal: totals.subtotal,
@@ -348,7 +493,7 @@ export default function QuoteEditorDialog({
         const siteId = jobCustomerId.toLowerCase() === customerId.toLowerCase()
             ? selectedJob?.gr_Site?.gr_siteid
             : undefined
-        const customer = customers.find((item) => item.gr_customerid === customerId)
+        const customer = availableCustomers.find((item) => item.gr_customerid === customerId)
             ?? quote.gr_Customer
             ?? selectedJob?.gr_Site?.gr_Customer
         const equipmentLabel = [selectedEquipment?.gr_fleet, selectedEquipment?.gr_make, selectedEquipment?.gr_model]
@@ -374,8 +519,12 @@ export default function QuoteEditorDialog({
 
     const selectEquipment = (nextEquipmentId: string) => {
         setEquipmentId(nextEquipmentId)
-        const selectedEquipment = equipment.find((item) => item.gr_equipmentid === nextEquipmentId)
-        if (selectedEquipment) setCustomerId(selectedEquipment.gr_Site?.gr_Customer?.gr_customerid ?? '')
+        const selectedEquipment = availableEquipment.find((item) => item.gr_equipmentid === nextEquipmentId)
+        if (selectedEquipment) {
+            const customer = selectedEquipment.gr_Site?.gr_Customer
+            if (customer) setAvailableCustomers((current) => mergeRecords(current, [customer], (item) => item.gr_customerid))
+            setCustomerId(customer?.gr_customerid ?? '')
+        }
     }
 
     const submit = async (event: FormEvent) => {
@@ -447,7 +596,7 @@ export default function QuoteEditorDialog({
                             <span>Author</span>
                             <input readOnly value={quote?.createdby?.fullname || authorName} />
                         </label>
-                        <label className="quote-field quote-field-wide">
+                        <label className="quote-field quote-title-field">
                             <span>Quote title *</span>
                             <div className="quote-title-composer">
                                 {protectedTitle && <><strong>{protectedTitle}</strong><span aria-hidden="true"> - </span></>}
@@ -471,6 +620,10 @@ export default function QuoteEditorDialog({
                                 placeholder="Select a job"
                                 searchPlaceholder="Search job number, customer, fleet or description"
                                 emptyLabel="No matching jobs"
+                                resultLimit={8}
+                                onSearchChange={setJobSearch}
+                                isSearching={jobSearchState === 'loading'}
+                                searchError={jobSearchState === 'error' ? 'Job search is temporarily unavailable.' : ''}
                                 error={formError && !jobId && !customerId && !equipmentId ? formError : ''}
                             />
                         </div>
@@ -484,6 +637,10 @@ export default function QuoteEditorDialog({
                                 placeholder="Select a customer"
                                 searchPlaceholder="Search customers"
                                 emptyLabel="No matching customers"
+                                resultLimit={8}
+                                onSearchChange={setCustomerSearch}
+                                isSearching={customerSearchState === 'loading'}
+                                searchError={customerSearchState === 'error' ? 'Customer search is temporarily unavailable.' : ''}
                                 error={formError && !jobId && !customerId && !equipmentId ? formError : ''}
                             />
                         </div>
@@ -497,6 +654,10 @@ export default function QuoteEditorDialog({
                                 placeholder="Select equipment"
                                 searchPlaceholder="Search fleet, serial, make or customer"
                                 emptyLabel="No matching equipment"
+                                resultLimit={8}
+                                onSearchChange={setEquipmentSearch}
+                                isSearching={equipmentSearchState === 'loading'}
+                                searchError={equipmentSearchState === 'error' ? 'Equipment search is temporarily unavailable.' : ''}
                                 error={formError && !jobId && !customerId && !equipmentId ? formError : ''}
                             />
                         </div>
@@ -635,11 +796,15 @@ export default function QuoteEditorDialog({
                             <button
                                 type="button"
                                 className="quote-secondary-button"
-                                disabled={isSaving || poRecipientsLoading || Boolean(poRecipientsError)}
-                                title={poRecipientsError || 'Open an editable purchase-order request email'}
+                                disabled={isSaving || poRecipientsLoading || staffLoading || Boolean(poRecipientsError) || Boolean(staffError)}
+                                title={staffError || poRecipientsError || 'Open an editable purchase-order request email'}
                                 onClick={openPoRequestEmail}
-                            >{poRecipientsLoading ? 'Loading contacts...' : 'Open PO request email'}</button>
+                            >{poRecipientsLoading || staffLoading ? 'Loading recipients...' : 'Open PO request email'}</button>
                         </div>
+                    </div>}
+                    {quote && staffError && <div className="quote-form-error" role="alert">
+                        <span>Internal email recipients could not be loaded. The Quote remains editable.</span>
+                        {onRetryStaff && <button type="button" className="quote-secondary-button" onClick={onRetryStaff}>Retry Staff</button>}
                     </div>}
                     {quote && poRecipientsError && <p className="quote-form-error" role="alert">{poRecipientsError}</p>}
                     {invoiceFeedback && <p className="quote-po-request-feedback" role="status">{invoiceFeedback}</p>}

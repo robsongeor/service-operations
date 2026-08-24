@@ -46,6 +46,17 @@ The Equipment Manager and Customer Dashboard open the Equipment drawer immediate
 that Equipment's linked Jobs in the background. History exposes distinct loading, failed/retry,
 empty, and populated states. Closing the drawer clears those focused rows and invalidates the active
 request so a late Dataverse response cannot appear against a subsequently opened Equipment record.
+The Equipment Manager register does not wait for complete Customer, Site, or Equipment Service Plan
+directories. Customer and Site filters are derived from the Site/Customer relationships already
+expanded on the shared Equipment projection. Maintenance summaries use a shared query for only the
+visible page; choosing Data Status sorting intentionally expands that query to the filtered result so
+the sort remains authoritative. A failed maintenance-summary query is labelled Unavailable rather
+than being mistaken for Not Configured. Create/edit drawers use abortable, eight-result Customer
+search and selected-Customer Site loading. The administrative CSV workflow is the deliberate
+exception: it loads the complete Site and Service Plan references only after an authorised user
+selects a file, because import validation and maintenance synchronisation require authoritative IDs.
+Equipment Map remains another explicit exception because it needs every addressed Site for its
+location projection, but it skips the global Service Plan collection.
 The operational Job Status badge reuses the established status palette while Job Type and Job Card
 status remain neutral, keeping the primary workflow state visually distinct.
 The Equipment Manager table derives a linked-Job count from the already loaded Jobs projection,
@@ -87,7 +98,7 @@ occupying the drawer footer with persistent warning text.
   Imports match only by Equipment Dataverse ID, ignore blank cells by default, validate
   stable Site IDs and typed values, and require review plus confirmation before updating
   current master fields. They never create or delete Equipment or rewrite operational
-  history.
+  history. Full Site and Service Plan references are loaded only when this workflow starts.
 - The Equipment Maintenance tab derives average usage from completed Jobs of every type. It
   shows a confidence score and identifies estimates, isolated suspect readings, and reset
   sequences. Suspect readings are ignored; a confirmed reset begins a new calculation segment.

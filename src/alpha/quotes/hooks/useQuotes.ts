@@ -1,37 +1,63 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { useActiveMsalAccount } from '../../../auth/useActiveMsalAccount'
-import { fetchCustomers } from '../../jobs/services/customersApi'
-import { fetchEquipment } from '../../jobs/services/equipmentApi'
-import type { Customer } from '../../jobs/types/customer.types'
-import type { Equipment } from '../../jobs/types/equipment.types'
 import type { Mechanic } from '../../jobs/types/mechanic.types'
 import { fetchMechanics } from '../../mechanics/services/mechanicsApi'
-import { subscribeToStaffChanges } from '../../mechanics/services/staffRealtime'
+import { useOperationalDataClient } from '../../shared/data/OperationalDataClientContext'
+import { useOperationalQuery } from '../../shared/data/useOperationalQuery'
+import { publishLocalOperationalInvalidation } from '../../shared/realtime/operationalCrossTabInvalidation'
+import {
+    focusedQuoteQueryKey,
+    PRICING_CATALOGUE_QUERY_KEY,
+    QUOTES_REGISTER_QUERY_KEY,
+    STAFF_DIRECTORY_QUERY_KEY,
+} from '../../shared/data/operationalCollectionKeys'
 import { fetchPricingItems } from '../services/pricingApi'
 import {
     createQuote as createQuoteApi,
     deleteQuote as deleteQuoteApi,
-    fetchQuoteJobs,
+    fetchQuoteById,
+    fetchQuoteCustomerById,
+    fetchQuoteEquipmentById,
+    fetchQuoteJobById,
     fetchQuoteLines,
     fetchQuotes,
+    searchQuoteCustomers,
+    searchQuoteEquipment,
+    searchQuoteJobs,
     updateQuote as updateQuoteApi,
 } from '../services/quotesApi'
 import type { PricingItem } from '../types/pricing.types'
 import type { Quote, QuoteInput, QuoteJob, QuoteLine } from '../types/quote.types'
 import { acquireDataverseAccessToken } from '../../../auth/dataverseAuthentication'
 
-export function useQuotes() {
+type UseQuotesOptions = {
+    loadRegister?: boolean
+    loadEditorSupport?: boolean
+    quoteId?: string
+}
+
+const DISABLED_QUOTE_QUERY_KEY = ['quote', 'disabled', 'core-v1'] as const
+const QUERY_STALE_TIME_MS = 20_000
+const QUERY_CACHE_TIME_MS = 5 * 60_000
+
+function isInitialLoad(status: string, hasData: boolean) {
+    return !hasData && (status === 'initial' || status === 'loading')
+}
+
+function mergeQuote(register: Quote[] | undefined, quote: Quote) {
+    const next = [quote, ...(register ?? []).filter((candidate) => candidate.gr_quoteid !== quote.gr_quoteid)]
+    return next.sort((left, right) => right.createdon.localeCompare(left.createdon))
+}
+
+export function useQuotes({
+    loadRegister = true,
+    loadEditorSupport = true,
+    quoteId,
+}: UseQuotesOptions = {}) {
     const { instance } = useMsal()
     const account = useActiveMsalAccount()
-    const [quotes, setQuotes] = useState<Quote[]>([])
-    const [jobs, setJobs] = useState<QuoteJob[]>([])
-    const [customers, setCustomers] = useState<Customer[]>([])
-    const [equipment, setEquipment] = useState<Equipment[]>([])
-    const [pricingItems, setPricingItems] = useState<PricingItem[]>([])
-    const [staff, setStaff] = useState<Mechanic[]>([])
-    const [isLoading, setIsLoading] = useState(true)
-    const [loadError, setLoadError] = useState('')
+    const client = useOperationalDataClient()
     const [isSaving, setIsSaving] = useState(false)
     const [saveError, setSaveError] = useState('')
 
@@ -39,112 +65,88 @@ export function useQuotes() {
         return acquireDataverseAccessToken(instance, account)
     }, [account, instance])
 
-    const load = useCallback(async () => {
-        if (!account) return
-        setIsLoading(true)
-        setLoadError('')
-        try {
-            const token = await getAccessToken()
-            const [nextQuotes, nextJobs, nextPricingItems, nextCustomers, nextEquipment, nextStaff] = await Promise.all([
-                fetchQuotes(token),
-                fetchQuoteJobs(token),
-                fetchPricingItems(token),
-                fetchCustomers(token),
-                fetchEquipment(token),
-                fetchMechanics(token),
-            ])
-            setQuotes(nextQuotes)
-            setJobs(nextJobs)
-            setPricingItems(nextPricingItems.filter((item) => item.statecode === 0))
-            setCustomers(nextCustomers)
-            setEquipment(nextEquipment.filter((item) => item.statecode !== 1))
-            setStaff(nextStaff)
-        } catch (error) {
-            setLoadError(error instanceof Error ? error.message : 'Quotes could not be loaded.')
-        } finally {
-            setIsLoading(false)
-        }
-    }, [account, getAccessToken])
+    const registerQuery = useOperationalQuery<Quote[]>({
+        key: QUOTES_REGISTER_QUERY_KEY,
+        enabled: Boolean(account) && loadRegister,
+        staleTimeMs: QUERY_STALE_TIME_MS,
+        cacheTimeMs: QUERY_CACHE_TIME_MS,
+        queryFn: async ({ signal }) => fetchQuotes(await getAccessToken(), signal),
+    })
 
-    useEffect(() => {
-        if (!account) return
-        let cancelled = false
-        const loadInitialData = async () => {
-            setIsLoading(true)
-            setLoadError('')
-            try {
-                const token = await getAccessToken()
-                const [nextQuotes, nextJobs, nextPricingItems, nextCustomers, nextEquipment, nextStaff] = await Promise.all([
-                    fetchQuotes(token),
-                    fetchQuoteJobs(token),
-                    fetchPricingItems(token),
-                    fetchCustomers(token),
-                    fetchEquipment(token),
-                    fetchMechanics(token),
-                ])
-                if (cancelled) return
-                setQuotes(nextQuotes)
-                setJobs(nextJobs)
-                setPricingItems(nextPricingItems.filter((item) => item.statecode === 0))
-                setCustomers(nextCustomers)
-                setEquipment(nextEquipment.filter((item) => item.statecode !== 1))
-                setStaff(nextStaff)
-            } catch (error) {
-                if (!cancelled) {
-                    setLoadError(error instanceof Error ? error.message : 'Quotes could not be loaded.')
-                }
-            } finally {
-                if (!cancelled) setIsLoading(false)
-            }
-        }
-        void loadInitialData()
-        return () => { cancelled = true }
-    }, [account, getAccessToken])
+    const pricingQuery = useOperationalQuery<PricingItem[]>({
+        key: PRICING_CATALOGUE_QUERY_KEY,
+        enabled: Boolean(account) && loadEditorSupport,
+        staleTimeMs: QUERY_STALE_TIME_MS,
+        cacheTimeMs: QUERY_CACHE_TIME_MS,
+        queryFn: async ({ signal }) => fetchPricingItems(await getAccessToken(), signal),
+    })
+    const staffQuery = useOperationalQuery<Mechanic[]>({
+        key: STAFF_DIRECTORY_QUERY_KEY,
+        enabled: Boolean(account) && loadEditorSupport,
+        staleTimeMs: QUERY_STALE_TIME_MS,
+        cacheTimeMs: QUERY_CACHE_TIME_MS,
+        queryFn: async ({ signal }) => fetchMechanics(await getAccessToken(), signal),
+    })
 
-    useEffect(() => {
-        if (!account) return
-        let cancelled = false
-        let refreshTimer: number | undefined
-        const unsubscribe = subscribeToStaffChanges(() => {
-            if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
-            refreshTimer = window.setTimeout(async () => {
-                try {
-                    const rows = await fetchMechanics(await getAccessToken())
-                    if (!cancelled) setStaff(rows)
-                } catch { /* Keep the current Staff choices until the next refresh. */ }
-            }, 750)
-        })
-        return () => {
-            cancelled = true
-            if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
-            unsubscribe()
-        }
-    }, [account, getAccessToken])
+    const normalizedQuoteId = quoteId?.trim().toLowerCase() ?? ''
+    const focusedKey = useMemo(
+        () => normalizedQuoteId ? focusedQuoteQueryKey(normalizedQuoteId) : DISABLED_QUOTE_QUERY_KEY,
+        [normalizedQuoteId],
+    )
+    const focusedQuoteQuery = useOperationalQuery<Quote | undefined>({
+        key: focusedKey,
+        enabled: Boolean(account) && Boolean(normalizedQuoteId),
+        staleTimeMs: QUERY_STALE_TIME_MS,
+        cacheTimeMs: QUERY_CACHE_TIME_MS,
+        queryFn: async ({ signal }) => fetchQuoteById(await getAccessToken(), normalizedQuoteId, signal),
+    })
 
-    const loadLines = async (quoteId: string) => {
+    const loadLines = useCallback(async (targetQuoteId: string, signal?: AbortSignal) => {
         const token = await getAccessToken()
-        return fetchQuoteLines(token, quoteId)
-    }
+        return fetchQuoteLines(token, targetQuoteId, signal)
+    }, [getAccessToken])
+
+    const loadJob = useCallback(async (jobId: string, signal?: AbortSignal) =>
+        fetchQuoteJobById(await getAccessToken(), jobId, signal), [getAccessToken])
+    const findJobs = useCallback(async (query: string, signal?: AbortSignal) =>
+        searchQuoteJobs(await getAccessToken(), query, signal), [getAccessToken])
+    const loadCustomer = useCallback(async (customerId: string, signal?: AbortSignal) =>
+        fetchQuoteCustomerById(await getAccessToken(), customerId, signal), [getAccessToken])
+    const findCustomers = useCallback(async (query: string, signal?: AbortSignal) =>
+        searchQuoteCustomers(await getAccessToken(), query, signal), [getAccessToken])
+    const loadEquipment = useCallback(async (equipmentId: string, signal?: AbortSignal) =>
+        fetchQuoteEquipmentById(await getAccessToken(), equipmentId, signal), [getAccessToken])
+    const findEquipment = useCallback(async (query: string, signal?: AbortSignal) =>
+        searchQuoteEquipment(await getAccessToken(), query, signal), [getAccessToken])
 
     const save = async (quote: QuoteInput, existing?: Quote, previousLines: QuoteLine[] = []) => {
         setIsSaving(true)
         setSaveError('')
         try {
             const token = await getAccessToken()
-            let quoteId = existing?.gr_quoteid
+            let savedQuoteId = existing?.gr_quoteid
             if (existing) {
                 await updateQuoteApi(token, existing.gr_quoteid, previousLines, quote)
             } else {
-                quoteId = await createQuoteApi(token, quote)
+                savedQuoteId = await createQuoteApi(token, quote)
             }
-            if (!quoteId) throw new Error('The saved Quote identity was not returned by Dataverse.')
-            const [nextQuotes, nextLines] = await Promise.all([
-                fetchQuotes(token),
-                fetchQuoteLines(token, quoteId),
+            if (!savedQuoteId) throw new Error('The saved Quote identity was not returned by Dataverse.')
+            const [savedQuote, nextLines] = await Promise.all([
+                fetchQuoteById(token, savedQuoteId),
+                fetchQuoteLines(token, savedQuoteId),
             ])
-            const savedQuote = nextQuotes.find((candidate) => candidate.gr_quoteid === quoteId)
             if (!savedQuote) throw new Error('The Quote was saved but could not be refreshed. Reload Quotes and try again.')
-            setQuotes(nextQuotes)
+            if (client.getState<Quote[]>(QUOTES_REGISTER_QUERY_KEY).data) {
+                client.updateQueryData<Quote[]>(QUOTES_REGISTER_QUERY_KEY, (current) => mergeQuote(current, savedQuote), {
+                    staleTimeMs: QUERY_STALE_TIME_MS,
+                    cacheTimeMs: QUERY_CACHE_TIME_MS,
+                })
+            }
+            client.setQueryData(focusedQuoteQueryKey(savedQuoteId), savedQuote, {
+                staleTimeMs: QUERY_STALE_TIME_MS,
+                cacheTimeMs: QUERY_CACHE_TIME_MS,
+            })
+            publishLocalOperationalInvalidation('quotes')
             return { quote: savedQuote, lines: nextLines }
         } catch (error) {
             const message = error instanceof Error ? error.message : 'The quote could not be saved.'
@@ -155,13 +157,21 @@ export function useQuotes() {
         }
     }
 
-    const deleteQuote = async (quoteId: string, lines: QuoteLine[]) => {
+    const deleteQuote = async (targetQuoteId: string, lines: QuoteLine[]) => {
         setIsSaving(true)
         setSaveError('')
         try {
             const token = await getAccessToken()
-            await deleteQuoteApi(token, quoteId, lines.map((line) => line.gr_quotelineid))
-            setQuotes((current) => current.filter((quote) => quote.gr_quoteid !== quoteId))
+            await deleteQuoteApi(token, targetQuoteId, lines.map((line) => line.gr_quotelineid))
+            if (client.getState<Quote[]>(QUOTES_REGISTER_QUERY_KEY).data) {
+                client.updateQueryData<Quote[]>(QUOTES_REGISTER_QUERY_KEY, (current) =>
+                    (current ?? []).filter((quote) => quote.gr_quoteid !== targetQuoteId), {
+                    staleTimeMs: QUERY_STALE_TIME_MS,
+                    cacheTimeMs: QUERY_CACHE_TIME_MS,
+                })
+            }
+            client.remove(focusedQuoteQueryKey(targetQuoteId))
+            publishLocalOperationalInvalidation('quotes')
         } catch (error) {
             const message = error instanceof Error ? error.message : 'The quote could not be deleted.'
             setSaveError(message)
@@ -171,19 +181,40 @@ export function useQuotes() {
         }
     }
 
+    const registerHasData = registerQuery.data !== undefined
+    const pricingHasData = pricingQuery.data !== undefined
+    const focusedHasResolved = focusedQuoteQuery.data !== undefined || focusedQuoteQuery.status === 'fresh'
+    const isLoading = loadRegister
+        ? isInitialLoad(registerQuery.status, registerHasData)
+        : Boolean(normalizedQuoteId) && isInitialLoad(focusedQuoteQuery.status, focusedHasResolved)
+    const isEditorLoading = (loadEditorSupport && isInitialLoad(pricingQuery.status, pricingHasData))
+        || (Boolean(normalizedQuoteId) && isInitialLoad(focusedQuoteQuery.status, focusedHasResolved))
+
     return {
-        quotes,
-        jobs,
-        customers,
-        equipment,
-        pricingItems,
-        staff,
+        quotes: registerQuery.data ?? [],
+        focusedQuote: focusedQuoteQuery.data,
+        jobs: [] as QuoteJob[],
+        customers: [],
+        equipment: [],
+        pricingItems: (pricingQuery.data ?? []).filter((item) => item.statecode === 0),
+        staff: staffQuery.data ?? [],
+        staffLoading: loadEditorSupport && isInitialLoad(staffQuery.status, staffQuery.data !== undefined),
+        staffError: staffQuery.data === undefined ? staffQuery.error?.message ?? '' : '',
+        retryStaff: staffQuery.refetch,
         isLoading,
+        isEditorLoading,
         isSaving,
-        loadError,
+        loadError: registerQuery.error?.message ?? focusedQuoteQuery.error?.message ?? '',
+        editorLoadError: pricingQuery.error?.message ?? focusedQuoteQuery.error?.message ?? '',
         saveError,
-        reload: load,
+        reload: loadRegister ? registerQuery.refetch : focusedQuoteQuery.refetch,
         loadLines,
+        loadJob,
+        findJobs,
+        loadCustomer,
+        findCustomers,
+        loadEquipment,
+        findEquipment,
         save,
         deleteQuote,
         clearSaveError: () => setSaveError(''),

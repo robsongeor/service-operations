@@ -1,5 +1,6 @@
-import { useEffect } from 'react'
+import { useMemo } from 'react'
 import type { Equipment } from '../../jobs/types/equipment.types'
+import type { Site } from '../../jobs/types/site.types'
 import JobCreateDrawer, { type JobCreateInitialValues } from '../../jobs/components/JobCreateDrawer'
 import { useJobs } from '../../jobs/hooks/useJobs'
 
@@ -10,9 +11,22 @@ type Props = {
 }
 
 export default function EquipmentJobCreateDrawer({ equipment, onClose, onCreated }: Props) {
+    const scopedData = useMemo(() => ({
+        jobs: [],
+        equipment: [equipment],
+        sites: equipment.gr_Site ? [{
+            ...equipment.gr_Site,
+            gr_address: equipment.gr_Site.gr_address ?? '',
+        } satisfies Site] : [],
+        servicePlans: [],
+    }), [equipment])
+    const equipmentSite = scopedData.sites[0]
     const {
         equipmentList,
         mechanics,
+        mechanicsLoading,
+        mechanicsError,
+        retryMechanics,
         sites,
         customers,
         siteContacts,
@@ -23,36 +37,16 @@ export default function EquipmentJobCreateDrawer({ equipment, onClose, onCreated
         createContactForSite,
         createEquipment,
         createScheduleOption,
-        isLoading,
-        loadError,
-        retryInitialLoad,
-        referenceDataStatus,
-        referenceDataError,
-        prepareJobReferenceData,
-    } = useJobs()
-
-    useEffect(() => {
-        void prepareJobReferenceData().catch(() => undefined)
-    }, [prepareJobReferenceData])
-
-    const preparationError = loadError || referenceDataError
-    const isPreparing = isLoading || referenceDataStatus !== 'ready'
-
-    if (isPreparing || preparationError) {
-        return <div className="equipment-job-load-overlay" role={preparationError ? 'alert' : 'status'}>
-            <section>
-                <strong>{preparationError ? 'Job form could not be loaded' : 'Loading job form…'}</strong>
-                <p>{preparationError || 'Loading the additional Jobs data only when it is needed.'}</p>
-                <div>
-                    {preparationError && <button type="button" onClick={() => {
-                        retryInitialLoad()
-                        void prepareJobReferenceData().catch(() => undefined)
-                    }}>Try again</button>}
-                    <button type="button" onClick={onClose}>Cancel</button>
-                </div>
-            </section>
-        </div>
-    }
+        searchEquipmentForEditor,
+        searchCustomersForEditor,
+        loadCustomerSitesForEditor,
+        loadSiteContactsForEditor,
+        loadEquipmentForEditor,
+        loadEquipmentServicePlansForEditor,
+    } = useJobs({
+        loadGlobalOperationalData: false,
+        scopedData,
+    })
 
     const siteId = equipment.gr_Site?.gr_siteid ?? ''
     const contactsForSite = siteId
@@ -64,12 +58,25 @@ export default function EquipmentJobCreateDrawer({ equipment, onClose, onCreated
         customerId: equipment.gr_Site?.gr_Customer?.gr_customerid ?? '',
         contactId: contactsForSite.length === 1 ? contactsForSite[0].gr_Contact?.gr_contactid ?? '' : '',
     }
+    const drawerEquipment = equipmentList.some((item) => item.gr_equipmentid === equipment.gr_equipmentid)
+        ? equipmentList
+        : [equipment, ...equipmentList]
+    const drawerSites = equipmentSite && !sites.some((site) => site.gr_siteid === equipmentSite.gr_siteid)
+        ? [equipmentSite, ...sites]
+        : sites
+    const equipmentCustomer = equipment.gr_Site?.gr_Customer
+    const drawerCustomers = equipmentCustomer && !customers.some((customer) => customer.gr_customerid === equipmentCustomer.gr_customerid)
+        ? [equipmentCustomer, ...customers]
+        : customers
 
     return <JobCreateDrawer
         mechanics={mechanics}
-        equipmentList={equipmentList}
-        sites={sites}
-        customers={customers}
+        mechanicsLoading={mechanicsLoading}
+        mechanicsError={mechanicsError}
+        onRetryMechanics={() => { void retryMechanics().catch(() => undefined) }}
+        equipmentList={drawerEquipment}
+        sites={drawerSites}
+        customers={drawerCustomers}
         siteContacts={siteContacts}
         servicePlans={servicePlans}
         initialValues={initialValues}
@@ -77,6 +84,12 @@ export default function EquipmentJobCreateDrawer({ equipment, onClose, onCreated
         onCreateSite={createSite}
         onCreateContact={createContactForSite}
         onCreateEquipment={createEquipment}
+        onSearchEquipment={searchEquipmentForEditor}
+        onSearchCustomers={searchCustomersForEditor}
+        onLoadCustomerSites={loadCustomerSitesForEditor}
+        onLoadSiteContacts={loadSiteContactsForEditor}
+        onLoadEquipment={loadEquipmentForEditor}
+        onLoadEquipmentServicePlans={loadEquipmentServicePlansForEditor}
         onCreateJob={async (input) => {
             const jobId = await createJob(input)
             await onCreated()

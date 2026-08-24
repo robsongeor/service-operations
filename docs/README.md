@@ -14,6 +14,7 @@ by scanning the repository.
 | Prioritised product and technical backlog | [`../TODO.md`](../TODO.md) |
 | System boundaries and document map | [`architecture/README.md`](architecture/README.md) |
 | Dataverse conventions and relationships | [`architecture/dataverse.md`](architecture/dataverse.md) |
+| Loading, caching, realtime, and multi-user synchronization | [`architecture/data-loading-and-synchronization.md`](architecture/data-loading-and-synchronization.md) |
 | Reusable UI and business-rule owners | [`architecture/reusable-components.md`](architecture/reusable-components.md) |
 | Local development and validation | [`architecture/development-workflow.md`](architecture/development-workflow.md) |
 | Deployment and environment configuration | [`architecture/deployment.md`](architecture/deployment.md) |
@@ -43,6 +44,7 @@ by scanning the repository.
 - [`architecture/routing.md`](architecture/routing.md)
 - [`architecture/shared-components.md`](architecture/shared-components.md)
 - [`architecture/shared-services.md`](architecture/shared-services.md)
+- [`architecture/data-loading-and-synchronization.md`](architecture/data-loading-and-synchronization.md)
 - [`architecture/public-portal.md`](architecture/public-portal.md)
 - [`architecture/security.md`](architecture/security.md)
 - [`architecture/deployment.md`](architecture/deployment.md)

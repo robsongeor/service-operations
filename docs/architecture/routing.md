@@ -17,6 +17,7 @@ management shell and a public portal shell.
 | `/equipment-map` | Equipment assigned-Site map |
 | `/job-map` | Allocated, Unallocated, and Waiting for parts Jobs grouped by recorded Site |
 | `/jobs` | Jobs |
+| `/equipment-photos` | Mobile office Equipment Photo upload |
 | `/site-checks` | Cross-customer Site Checks workspace |
 | `/scheduling` | Scheduler |
 | `/quotes` | Quotes |

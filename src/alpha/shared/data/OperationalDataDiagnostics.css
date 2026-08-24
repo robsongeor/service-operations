@@ -1,0 +1,79 @@
+.operational-diagnostics-trigger {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    padding: 3px 0;
+    border: 0;
+    background: transparent;
+    color: #65736c;
+    cursor: pointer;
+    font: inherit;
+    font-size: .66rem;
+    font-weight: 700;
+}
+
+.operational-diagnostics-trigger:hover { color: #0f6f62; }
+
+.operational-diagnostics-backdrop {
+    position: fixed;
+    z-index: 2000;
+    inset: 0;
+    display: grid;
+    padding: 24px;
+    background: rgba(18, 27, 23, .52);
+    place-items: center;
+}
+
+.operational-diagnostics-dialog {
+    width: min(100%, 980px);
+    max-height: min(88vh, 760px);
+    overflow: auto;
+    box-sizing: border-box;
+    padding: 22px;
+    border: 1px solid #d4ded9;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 24px 70px rgba(12, 25, 19, .24);
+    color: #233029;
+}
+
+.operational-diagnostics-dialog > header,
+.operational-diagnostics-dialog > footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.operational-diagnostics-dialog h2 { margin: 3px 0 0; font-size: 1.25rem; }
+.operational-diagnostics-eyebrow { color: #9b514d; font-size: .66rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.operational-diagnostics-close { width: 32px; height: 32px; border: 0; border-radius: 50%; background: #eef2f0; color: #52615a; cursor: pointer; font-size: 1.25rem; }
+.operational-diagnostics-help { margin: 16px 0; color: #65736c; font-size: .78rem; line-height: 1.5; }
+.operational-diagnostics-table-wrap { overflow-x: auto; border: 1px solid #dce4e0; border-radius: 10px; }
+.operational-diagnostics-dialog table { width: 100%; border-collapse: collapse; font-size: .74rem; }
+.operational-diagnostics-dialog th,
+.operational-diagnostics-dialog td { padding: 10px; border-bottom: 1px solid #e4ebe7; text-align: left; white-space: nowrap; }
+.operational-diagnostics-dialog thead th { background: #f2f6f4; color: #65736c; font-size: .65rem; letter-spacing: .04em; text-transform: uppercase; }
+.operational-diagnostics-dialog tbody tr:last-child > * { border-bottom: 0; }
+.operational-diagnostics-dialog tbody th { min-width: 140px; }
+.operational-diagnostics-dialog small { display: block; margin-top: 3px; color: #77847e; font-weight: 500; }
+.operational-diagnostics-dialog details { margin-top: 14px; padding: 12px; border: 1px solid #dce4e0; border-radius: 10px; font-size: .76rem; }
+.operational-diagnostics-dialog summary { cursor: pointer; font-weight: 750; }
+.operational-diagnostics-dialog details ul { display: grid; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
+.operational-diagnostics-dialog details li { display: flex; justify-content: space-between; gap: 16px; color: #65736c; }
+.operational-diagnostics-dialog details code { color: #275c50; }
+.operational-diagnostics-dialog > footer { justify-content: flex-end; margin-top: 16px; }
+.operational-diagnostics-primary,
+.operational-diagnostics-secondary { padding: 9px 14px; border-radius: 8px; cursor: pointer; font: inherit; font-size: .75rem; font-weight: 750; }
+.operational-diagnostics-primary { border: 1px solid #0f7466; background: #0f7466; color: #fff; }
+.operational-diagnostics-secondary { border: 1px solid #cbd6d1; background: #fff; color: #34453d; }
+.sidebar.collapsed .operational-diagnostics-trigger-label { display: none; }
+.sidebar.collapsed .operational-diagnostics-trigger { justify-content: center; }
+
+@media (max-width: 720px) {
+    .operational-diagnostics-backdrop { padding: 10px; }
+    .operational-diagnostics-dialog { padding: 16px; }
+    .operational-diagnostics-dialog details li { display: grid; gap: 3px; }
+}

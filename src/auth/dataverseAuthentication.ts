@@ -7,10 +7,11 @@ import {
 } from '@azure/msal-browser'
 
 export const DATAVERSE_SCOPES = [
-    `${import.meta.env.VITE_DATAVERSE_URL}/user_impersonation`,
+    `${import.meta.env?.VITE_DATAVERSE_URL ?? ''}/user_impersonation`,
 ]
-export const SILENT_AUTH_REDIRECT_URI = import.meta.env.VITE_MSAL_SILENT_REDIRECT_URI
-    || window.location.origin
+export const SILENT_AUTH_REDIRECT_URI = import.meta.env?.VITE_MSAL_SILENT_REDIRECT_URI
+    || globalThis.location?.origin
+    || ''
 export const DATAVERSE_AUTH_REQUIRED_EVENT = 'dataverse-auth-required'
 
 type PendingRecovery = {
@@ -19,6 +20,7 @@ type PendingRecovery = {
 }
 
 let pendingRecovery: PendingRecovery | null = null
+const pendingSilentRequests = new WeakMap<IPublicClientApplication, Map<string, Promise<string>>>()
 
 function authenticationNeedsInteraction(error: unknown) {
     return error instanceof InteractionRequiredAuthError
@@ -36,9 +38,37 @@ function waitForSessionRecovery() {
             resolve = complete
         })
         pendingRecovery = { promise, resolve }
-        window.dispatchEvent(new Event(DATAVERSE_AUTH_REQUIRED_EVENT))
+        globalThis.dispatchEvent?.(new Event(DATAVERSE_AUTH_REQUIRED_EVENT))
     }
     return pendingRecovery.promise
+}
+
+function acquireSilentToken(
+    instance: IPublicClientApplication,
+    account: AccountInfo,
+    forceRefresh: boolean,
+) {
+    let requests = pendingSilentRequests.get(instance)
+    if (!requests) {
+        requests = new Map()
+        pendingSilentRequests.set(instance, requests)
+    }
+    const accountKey = account.homeAccountId || account.localAccountId || account.username
+    const requestKey = `${accountKey}:${forceRefresh ? 'force' : 'cached'}`
+    const pending = requests.get(requestKey)
+    if (pending) return pending
+
+    const request = instance.acquireTokenSilent({
+        scopes: DATAVERSE_SCOPES,
+        account,
+        forceRefresh,
+        redirectUri: SILENT_AUTH_REDIRECT_URI,
+    }).then((response) => response.accessToken)
+        .finally(() => {
+            if (requests?.get(requestKey) === request) requests.delete(requestKey)
+        })
+    requests.set(requestKey, request)
+    return request
 }
 
 export async function acquireDataverseAccessToken(
@@ -48,13 +78,7 @@ export async function acquireDataverseAccessToken(
 ) {
     if (!account) throw new Error('No active Microsoft account is available. Sign in again and retry.')
     try {
-        const response = await instance.acquireTokenSilent({
-            scopes: DATAVERSE_SCOPES,
-            account,
-            forceRefresh,
-            redirectUri: SILENT_AUTH_REDIRECT_URI,
-        })
-        return response.accessToken
+        return await acquireSilentToken(instance, account, forceRefresh)
     } catch (error) {
         if (!authenticationNeedsInteraction(error)) throw error
         return (await waitForSessionRecovery()).accessToken

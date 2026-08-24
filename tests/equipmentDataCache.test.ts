@@ -60,6 +60,19 @@ test('force refresh bypasses a fresh cached value', async () => {
     assert.deepEqual(await cache.read('account-a', loader, { forceRefresh: true }), ['load-2'])
 })
 
+test('equipment invalidation prevents an old request from restoring stale cache data', async () => {
+    const cache = new EquipmentDataCache<string[]>()
+    let resolveOld!: (value: string[]) => void
+    const oldRead = cache.read('account-a', () => new Promise((resolve) => { resolveOld = resolve }))
+    cache.invalidate('account-a')
+
+    const authoritative = cache.read('account-a', async () => ['authoritative'], { forceRefresh: true })
+    assert.deepEqual(await authoritative, ['authoritative'])
+    resolveOld(['stale-network'])
+    assert.deepEqual(await oldRead, ['authoritative'])
+    assert.deepEqual(await cache.read('account-a', async () => ['unexpected']), ['authoritative'])
+})
+
 test('derives a stable cache scope without retaining the access token', () => {
     const first = jwt({ aud: 'org-a', tid: 'tenant-1', oid: 'user-1', nonce: 'one' })
     const refreshed = jwt({ aud: 'org-a', tid: 'tenant-1', oid: 'user-1', nonce: 'two' })

@@ -13,6 +13,7 @@ const runDrawerSource = readFileSync(new URL('../src/alpha/site-checks/component
 const siteCheckDetailsSource = readFileSync(new URL('../src/alpha/site-checks/components/SiteCheckDetailsDrawer.tsx', import.meta.url), 'utf8')
 const scheduleSettingsSource = readFileSync(new URL('../src/alpha/site-checks/components/SiteCheckScheduleSettings.tsx', import.meta.url), 'utf8')
 const searchableSelectSource = readFileSync(new URL('../src/alpha/shared/searchable-select/SearchableSelect.tsx', import.meta.url), 'utf8')
+const customerDataSource = readFileSync(new URL('../src/alpha/customers/useCustomerDashboardData.ts', import.meta.url), 'utf8')
 
 function createStorage() {
     const values = new Map<string, string>()
@@ -137,10 +138,31 @@ test('every Site uses one consistent Site Check entry point', () => {
     assert.doesNotMatch(dashboardSource, /View Current Site Check|Site Check History|>\s*Run Site Check\s*<\/button>/)
 })
 
-test('Site Check history reloads the complete Job before opening its drawer', () => {
+test('Site Check history opens from cached data and retains an exact-Job fallback', () => {
     assert.match(dashboardSource, /fetchJobForDrawer,/)
     assert.match(
         dashboardSource,
-        /onOpenJob=\{\(jobId, trigger\) => \{[\s\S]*?fetchJobForDrawer\(jobId\)\.then\(\(job\) => \{[\s\S]*?setEditingJob\(job\)/,
+        /onOpenJob=\{\(jobId, trigger\) => \{[\s\S]*?if \(job\) \{[\s\S]*?setEditingJob\(job\)[\s\S]*?fetchJobForDrawer\(jobId\)\.then\(\(refreshedJob\)/,
     )
+})
+
+test('Customer Dashboard loads selected-customer collections without starting global Jobs or Equipment reads', () => {
+    assert.match(dashboardSource, /useCustomerDashboardData\(selectedCustomerId, activeTab === 'quotes'\)/)
+    assert.match(dashboardSource, /useEquipmentManager\(\{[\s\S]*?loadGlobalOperationalData: false/)
+    assert.match(dashboardSource, /useJobs\(\{[\s\S]*?loadGlobalOperationalData: false/)
+    assert.match(customerDataSource, /fetchCustomerSites/)
+    assert.match(customerDataSource, /fetchEquipmentForSites/)
+    assert.match(customerDataSource, /fetchJobsForSites/)
+    assert.match(customerDataSource, /fetchEquipmentServicePlansForEquipment/)
+})
+
+test('Customer Dashboard scoped reads retain bounded cache and explicit mutation reconciliation', () => {
+    assert.match(customerDataSource, /cacheTimeMs: 2 \* 60_000/)
+    assert.match(customerDataSource, /staleTimeMs: 20_000/)
+    assert.match(customerDataSource, /const scheduleOptionsKey = useMemo\(/)
+    assert.match(customerDataSource, /const officeUpdatesKey = useMemo\(/)
+    assert.match(customerDataSource, /key: scheduleOptionsKey/)
+    assert.match(customerDataSource, /key: officeUpdatesKey/)
+    assert.match(dashboardSource, /onScopedDataChanged: customerData\.refetch/)
+    assert.match(dashboardSource, /await customerData\.refetch\(\)/)
 })

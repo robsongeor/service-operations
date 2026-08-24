@@ -69,19 +69,32 @@ test('Jobs and Scheduler apply explicit Site Check integration contracts', () =>
     assert.match(jobsHook, /SITE_CHECK_SCHEDULER_MESSAGE/)
 })
 
-test('every Job completion refresh bypasses stale cached Jobs', () => {
+test('every Job completion reconciles bounded authoritative records', () => {
     const jobsHook = readFileSync(new URL('../src/alpha/jobs/hooks/useJobs.ts', import.meta.url), 'utf8')
     assert.match(jobsHook, /const refreshCompletionDataAndServiceDates = async/)
-    assert.match(jobsHook, /fetchJobsApi\(token, \{ forceRefresh: true \}\)/)
-    assert.equal(jobsHook.match(/await refreshCompletionDataAndServiceDates\(token, equipment\.gr_equipmentid\)/g)?.length, 3)
+    assert.match(jobsHook, /const recoverCompletionData = async/)
+    assert.match(jobsHook, /fetchEquipmentJobsApi\(token, equipmentId\)/)
+    assert.match(jobsHook, /fetchJobCoreApi\(token, jobId\)/)
+    assert.equal(jobsHook.match(/await refreshCompletionDataAndServiceDates\(token, equipment\.gr_equipmentid, request\.job\.gr_jobid\)/g)?.length, 3)
+    assert.doesNotMatch(jobsHook, /fetchEquipmentServicePlans\(token\)/)
     assert.match(jobsHook, /setCompletionRequest\(null\)/)
 })
 
-test('Scheduler opens the authoritative Job editor workflow with Office actions', () => {
+test('focused Job hydration appends an absent Job and loads only its office updates', () => {
+    const jobsHook = readFileSync(new URL('../src/alpha/jobs/hooks/useJobs.ts', import.meta.url), 'utf8')
+    assert.match(jobsHook, /const fetchJobForDrawer = useCallback/)
+    assert.match(jobsHook, /:\s*\[\.\.\.current, refreshed\]/)
+    assert.match(jobsHook, /fetchJobOfficeUpdatesForJobsApi\(await getAccessToken\(\), \[jobId\], signal\)/)
+    assert.match(jobsHook, /loadJobOfficeUpdatesForEditor/)
+})
+
+test('Scheduler opens the Job drawer immediately and progressively refreshes its data', () => {
     const scheduler = readFileSync(new URL('../src/alpha/scheduling/SchedulingScreen.tsx', import.meta.url), 'utf8')
-    assert.match(scheduler, /const openJob = async \(job: Job\)/)
-    assert.match(scheduler, /await prepareJobReferenceData\(\)/)
-    assert.match(scheduler, /await fetchJobForDrawer\(job\.gr_jobid\)/)
+    assert.match(scheduler, /const openJob = \(job: Job\)/)
+    assert.match(scheduler, /setEditingJob\(job\)/)
+    assert.match(scheduler, /onPrepareReferenceData=\{prepareJobReferenceData\}/)
+    assert.match(scheduler, /onRefreshJob=\{fetchJobForDrawer\}/)
+    assert.match(scheduler, /onLoadJobCardDetails=\{fetchJobCardDetails\}/)
     assert.match(scheduler, /officeUpdates=\{officeUpdates\.filter/)
     assert.match(scheduler, /onCreateOfficeUpdate=\{createJobOfficeUpdate\}/)
     assert.match(scheduler, /onSaveOfficeAttention=\{updateJobOfficeAttention\}/)

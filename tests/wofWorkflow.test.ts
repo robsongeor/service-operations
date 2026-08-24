@@ -144,14 +144,51 @@ test('fully administered WOF does not expose the expiry administration action', 
     assert.equal(wofNeedsAdministration('current'), false)
 })
 
-test('WOF workflow refresh reloads Equipment after completing the linked Job', () => {
+test('WOF workflow refresh reconciles the shared bounded register queries after linked mutations', () => {
     const source = readFileSync(
         new URL('../src/alpha/wof/hooks/useWof.ts', import.meta.url),
         'utf8',
     )
-    assert.match(source, /const \[equipmentRows, inspectionRows, jobRows, scheduleRows\] = await Promise\.all/)
-    assert.match(source, /fetchEquipment\(accessToken\)/)
+    assert.match(source, /useOperationalQuery<WofInspection\[\]>/)
+    assert.match(source, /key: WOF_INSPECTIONS_QUERY_KEY/)
+    assert.match(source, /staleTimeMs: WOF_REGISTER_STALE_TIME_MS/)
+    assert.match(source, /cacheTimeMs: WOF_REGISTER_CACHE_TIME_MS/)
+    assert.match(source, /const \[equipmentRows, inspectionRows\] = await Promise\.all/)
+    assert.match(source, /fetchEquipment\(accessToken, \{ forceRefresh: forceEquipmentRefresh \}\)/)
+    assert.match(source, /refetchInspections\(\)/)
+    assert.match(source, /client\.fetchQuery\(/)
+    assert.match(source, /wofScheduleOptionsQueryKey\(operationalIdFingerprint\(refreshedJobIds\)\)/)
     assert.match(source, /setEquipment\(equipmentRows\)/)
+    assert.doesNotMatch(source, /setInspections/)
+    assert.doesNotMatch(source, /setScheduleOptions/)
+    assert.doesNotMatch(source, /fetchJobs\(accessToken\)/)
+    assert.doesNotMatch(source, /fetchJobScheduleOptions\(accessToken\)/)
+})
+
+test('WOF inspection history is continuation-safe and abortable', () => {
+    const source = readFileSync(
+        new URL('../src/alpha/wof/services/wofApi.ts', import.meta.url),
+        'utf8',
+    )
+    assert.match(source, /fetchAllDataversePages<WofInspectionDataverseRow>/)
+    assert.match(source, /fetchWofInspections\(token: string, signal\?: AbortSignal\)/)
+    assert.match(source, /\{ cache: 'no-store'.*signal \}/)
+    assert.match(source, /\$orderby=createdon desc/)
+})
+
+test('WOF editor-only collections are progressively loaded instead of blocking route startup', () => {
+    const source = readFileSync(
+        new URL('../src/alpha/wof/hooks/useWof.ts', import.meta.url),
+        'utf8',
+    )
+    const initialLoad = source.slice(source.indexOf('const loadEquipmentRegister = useCallback'), source.indexOf('useEffect(() =>'))
+    assert.doesNotMatch(initialLoad, /fetchTechnicianQualifications/)
+    assert.doesNotMatch(initialLoad, /fetchWofProviders/)
+    assert.doesNotMatch(initialLoad, /fetchCustomers/)
+    assert.doesNotMatch(initialLoad, /fetchSites/)
+    assert.match(source, /const loadWofEditorSupport = useCallback/)
+    assert.match(source, /fetchEquipmentById\(await token\(\), equipmentId/)
+    assert.match(source, /fetchEquipmentServicePlansForEquipment\(accessToken, \[record\.gr_equipmentid\]\)/)
 })
 
 test('WOF Jobs can be created for due soon and expired Equipment', () => {
@@ -291,4 +328,14 @@ test('WOF expiry verification rejects a genuinely different saved date', async (
         ),
         /did not confirm/,
     )
+})
+
+test('WOF Job drawer loads one focused Job and its bounded supporting records', () => {
+    const drawer = readFileSync(new URL('../src/alpha/wof/components/WofJobDrawer.tsx', import.meta.url), 'utf8')
+    const screen = readFileSync(new URL('../src/alpha/wof/WofScreen.tsx', import.meta.url), 'utf8')
+    assert.match(drawer, /loadGlobalOperationalData:\s*false/)
+    assert.match(drawer, /fetchJobForDrawer\(jobId, controller\.signal\)/)
+    assert.match(drawer, /loadJobOfficeUpdatesForEditor\(jobId, controller\.signal\)/)
+    assert.match(screen, /scheduleOptions=\{scheduleOptions\.filter/)
+    assert.doesNotMatch(drawer, /const manager = useJobs\(\)/)
 })

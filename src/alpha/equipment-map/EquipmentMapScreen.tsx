@@ -22,7 +22,9 @@ export default function EquipmentMapScreen() {
     const { instance } = useMsal()
     const account = useActiveMsalAccount()
     const signedInUser = getSignedInUserInfo(account)
-    const { equipment, customers, sites, equipmentCacheStatus, isLoading, loadError, reload } = useEquipmentManager()
+    const { equipment, customers, sites, equipmentCacheStatus, isLoading, loadError, reload } = useEquipmentManager({
+        loadGlobalServicePlans: false,
+    })
     const storageId = signedInUser?.storageId || 'account-pending'
     const storageKey = equipmentMapCacheKey(storageId, import.meta.env.VITE_DATAVERSE_URL)
     const [coordinates, setCoordinates] = useState<Record<string, CachedCoordinate>>({})

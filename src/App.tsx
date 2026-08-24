@@ -7,7 +7,10 @@ import { getSignedInUserInfo } from './auth/signedInUser'
 import { useActiveMsalAccount } from './auth/useActiveMsalAccount'
 import { isServiceOperationsAdministrator } from './auth/adminAuthorization'
 import DataverseSessionRecovery from './auth/DataverseSessionRecovery'
-import StaffRealtimeBridge from './alpha/mechanics/StaffRealtimeBridge'
+import { OperationalDataClientProvider } from './alpha/shared/data/OperationalDataClientProvider'
+import { OperationalScreenPerformanceProvider } from './alpha/shared/data/OperationalScreenPerformance'
+import OperationalRealtimeProvider from './alpha/shared/realtime/OperationalRealtimeProvider'
+import { QuoteEditorOverlayProvider } from './alpha/quotes/QuoteEditorOverlayProvider'
 
 const JobsScreen = lazy(() => import('./alpha/jobs/JobsScreen'))
 const SchedulingScreen = lazy(() => import('./alpha/scheduling/SchedulingScreen'))
@@ -27,6 +30,7 @@ const JobMapScreen = lazy(() => import('./alpha/job-map/JobMapScreen'))
 const GreentreeEquipmentTestScreen = lazy(() => import('./alpha/equipment-test/GreentreeEquipmentTestScreen'))
 const JobBookPrototypeScreen = lazy(() => import('./alpha/job-book/JobBookPrototypeScreen'))
 const OverviewScreen = lazy(() => import('./alpha/overview/OverviewScreen'))
+const EquipmentPhotoUploadScreen = lazy(() => import('./alpha/equipment-photos/EquipmentPhotoUploadScreen'))
 
 function RouteLoadingFallback() {
   return <div role="status" aria-live="polite" style={{ padding: '24px', color: '#66736c', fontSize: '.8rem' }}>Loading page…</div>
@@ -60,10 +64,15 @@ function App() {
     return <LoginScreen />
   }
 
+  const operationalDataScope = `${import.meta.env.VITE_DATAVERSE_URL ?? 'dataverse'}:${activeAccount?.tenantId ?? 'tenant'}:${signedInUser?.storageId ?? activeAccount?.homeAccountId ?? 'account'}`
+
   return (
+    <OperationalDataClientProvider scope={operationalDataScope}>
+    <OperationalScreenPerformanceProvider>
+    <OperationalRealtimeProvider key={operationalDataScope}>
+    <QuoteEditorOverlayProvider>
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       <DataverseSessionRecovery />
-      <StaffRealtimeBridge />
       {/* Sidebar */}
       <Sidebar />
 
@@ -80,6 +89,7 @@ function App() {
             <Route path="/equipment-map" element={<EquipmentMapScreen key={signedInUser?.storageId || 'account-pending'} />} />
             <Route path="/job-map" element={<JobMapScreen key={signedInUser?.storageId || 'account-pending'} />} />
             <Route path="/jobs" element={<JobsScreen key={signedInUser?.storageId || 'account-pending'} />} />
+            <Route path="/equipment-photos" element={<EquipmentPhotoUploadScreen key={signedInUser?.storageId || 'account-pending'} />} />
             <Route path="/job-book" element={<JobBookPrototypeScreen key={signedInUser?.storageId || 'account-pending'} />} />
             <Route path="/site-checks" element={<SiteChecksScreen />} />
             <Route
@@ -97,6 +107,10 @@ function App() {
         </Suspense>
       </div>
     </div>
+    </QuoteEditorOverlayProvider>
+    </OperationalRealtimeProvider>
+    </OperationalScreenPerformanceProvider>
+    </OperationalDataClientProvider>
   )
 }
 

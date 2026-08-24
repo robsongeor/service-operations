@@ -1,5 +1,6 @@
 import type { QualificationType, TechnicianQualification, TechnicianQualificationInput } from '../types/wof.types'
 import { validateQualificationInput } from '../utils/wofRules'
+import { fetchAllDataversePages } from '../../shared/dataverse/fetchAllDataversePages.ts'
 
 const API_URL = `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2`
 const headers = (token: string, content = false) => ({ Authorization: `Bearer ${token}`, Accept: 'application/json', ...(content ? { 'Content-Type': 'application/json' } : {}) })
@@ -10,16 +11,20 @@ async function ensureSuccess(response: Response, action: string) {
     throw new Error(`${action}: ${detail || `${response.status} ${response.statusText}`}`)
 }
 
-export async function fetchQualificationTypes(token: string): Promise<QualificationType[]> {
-    const response = await fetch(`${API_URL}/gr_qualificationtypes?$select=gr_qualificationtypeid,gr_name,gr_code,gr_active&$orderby=gr_name asc`, { cache: 'no-store', headers: headers(token) })
-    await ensureSuccess(response, 'Failed to load qualification types')
-    return (await response.json()).value ?? []
+export async function fetchQualificationTypes(token: string, signal?: AbortSignal): Promise<QualificationType[]> {
+    return fetchAllDataversePages<QualificationType>(
+        `${API_URL}/gr_qualificationtypes?$select=gr_qualificationtypeid,gr_name,gr_code,gr_active&$orderby=gr_name asc`,
+        { cache: 'no-store', headers: headers(token), signal },
+        (response) => ensureSuccess(response, 'Failed to load qualification types'),
+    )
 }
 
-export async function fetchAllTechnicianQualifications(token: string): Promise<TechnicianQualification[]> {
-    const response = await fetch(`${API_URL}/gr_technicianqualifications?$select=gr_technicianqualificationid,gr_name,gr_certificatenumber,gr_validfrom,gr_expirydate,gr_active,gr_notes&$expand=gr_Technician($select=gr_mechanicid,gr_name,gr_email,statecode),gr_QualificationType($select=gr_qualificationtypeid,gr_name,gr_code,gr_active)&$orderby=gr_expirydate desc`, { cache: 'no-store', headers: headers(token) })
-    await ensureSuccess(response, 'Failed to load technician qualifications')
-    return (await response.json()).value ?? []
+export async function fetchAllTechnicianQualifications(token: string, signal?: AbortSignal): Promise<TechnicianQualification[]> {
+    return fetchAllDataversePages<TechnicianQualification>(
+        `${API_URL}/gr_technicianqualifications?$select=gr_technicianqualificationid,gr_name,gr_certificatenumber,gr_validfrom,gr_expirydate,gr_active,gr_notes&$expand=gr_Technician($select=gr_mechanicid,gr_name,gr_email,statecode),gr_QualificationType($select=gr_qualificationtypeid,gr_name,gr_code,gr_active)&$orderby=gr_expirydate desc`,
+        { cache: 'no-store', headers: headers(token), signal },
+        (response) => ensureSuccess(response, 'Failed to load technician qualifications'),
+    )
 }
 
 function payload(input: TechnicianQualificationInput) {

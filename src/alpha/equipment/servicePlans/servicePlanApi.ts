@@ -9,6 +9,9 @@ import { invalidateSharedEquipmentDataCache } from '../services/equipmentDataCac
 import { calculateNextDueDate, resolveMaintenanceConfiguration } from './maintenanceConfiguration'
 import { shouldAdvanceCurrentHourMeter } from './equipmentUsageForecast'
 import { cascadeServiceHistoryBaselines, recalculateServicePlanDueDates } from './servicePlanCalculations'
+import { fetchAllDataversePages } from '../../shared/dataverse/fetchAllDataversePages.ts'
+import { buildDataverseIdFilterBatches } from '../../shared/dataverse/boundedDataverseFilters.ts'
+import { invalidateOperationalQueries } from '../../shared/data/OperationalDataClient.ts'
 
 const API_URL = `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2`
 const PLAN_SELECT = 'gr_equipmentserviceplanid,gr_servicetype,gr_intervalhours,gr_lastcompleteddate,gr_lastcompletedhours,gr_nextduehours,gr_nextduedate,gr_active,_gr_equipment_value'
@@ -17,12 +20,38 @@ async function ensureSuccess(response: Response, action: string) {
     if (!response.ok) throw new Error(`${action}: ${await response.text() || `${response.status} ${response.statusText}`}`)
 }
 
+function invalidateMaintenanceQueries() {
+    invalidateOperationalQueries((key) =>
+        key[0] === 'customer-dashboard'
+        || (key[0] === 'equipment' && key[2] === 'service-plans-v1')
+        || key[0] === 'equipment-register'
+        || (key[0] === 'equipment' && key[1] === 'operational-list'))
+}
+
 export async function fetchEquipmentServicePlans(token: string): Promise<EquipmentServicePlan[]> {
-    const response = await fetch(`${API_URL}/gr_equipmentserviceplans?$select=${PLAN_SELECT}&$expand=gr_LastCompletedJob($select=gr_jobid,gr_jobnumber)`, {
-        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-    })
-    await ensureSuccess(response, 'Failed to fetch equipment service plans')
-    return (await response.json()).value ?? []
+    return fetchAllDataversePages<EquipmentServicePlan>(
+        `${API_URL}/gr_equipmentserviceplans?$select=${PLAN_SELECT}&$expand=gr_LastCompletedJob($select=gr_jobid,gr_jobnumber)`,
+        { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } },
+        (response) => ensureSuccess(response, 'Failed to fetch equipment service plans'),
+    )
+}
+
+export async function fetchEquipmentServicePlansForEquipment(
+    token: string,
+    equipmentIds: readonly string[],
+    signal?: AbortSignal,
+): Promise<EquipmentServicePlan[]> {
+    const filters = buildDataverseIdFilterBatches('_gr_equipment_value', equipmentIds)
+    if (!filters.length) return []
+    const rows: EquipmentServicePlan[] = []
+    for (const filter of filters) {
+        rows.push(...await fetchAllDataversePages<EquipmentServicePlan>(
+            `${API_URL}/gr_equipmentserviceplans?$select=${PLAN_SELECT}&$expand=gr_LastCompletedJob($select=gr_jobid,gr_jobnumber)&$filter=${encodeURIComponent(filter)}`,
+            { signal, headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } },
+            (response) => ensureSuccess(response, 'Failed to fetch Customer Equipment service plans'),
+        ))
+    }
+    return rows
 }
 
 export async function refreshEquipmentServicePlanDueDates(
@@ -45,6 +74,7 @@ export async function refreshEquipmentServicePlanDueDates(
         await ensureSuccess(response, 'Failed to update the estimated service due date')
     }))
     const recalculatedById = new Map(recalculated.map((plan) => [plan.gr_equipmentserviceplanid, plan]))
+    invalidateMaintenanceQueries()
     return existingPlans.map((plan) => recalculatedById.get(plan.gr_equipmentserviceplanid) ?? plan)
 }
 
@@ -141,6 +171,7 @@ export async function saveEquipmentMaintenanceHistory(
         }
     }))
 
+    invalidateMaintenanceQueries()
     return nextPlans
 }
 
@@ -192,6 +223,7 @@ export async function updateEquipmentCurrentHourMeter(
         if (response.status === 412 && attempt === 0) continue
         await ensureSuccess(response, 'Failed to update equipment current hour meter')
         invalidateSharedEquipmentDataCache(token)
+        invalidateMaintenanceQueries()
         return
     }
 
@@ -240,5 +272,7 @@ export async function syncEquipmentServiceProgramme(
             }
         })())
     }
-    return Promise.all(updates)
+    const plans = await Promise.all(updates)
+    invalidateMaintenanceQueries()
+    return plans
 }

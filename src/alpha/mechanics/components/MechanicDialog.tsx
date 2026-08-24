@@ -13,12 +13,18 @@ type Props = {
     onSave: (input: MechanicInput) => Promise<void>
     qualifications: TechnicianQualification[]
     qualificationTypes: QualificationType[]
+    qualificationsLoading: boolean
+    qualificationTypesLoading: boolean
+    qualificationsError: string
+    qualificationTypesError: string
+    onRetryQualifications: () => void
+    onRetryQualificationTypes: () => void
     onCreateQualification: (input: TechnicianQualificationInput) => Promise<void>
     onUpdateQualification: (id: string, input: TechnicianQualificationInput) => Promise<void>
     onDeactivateQualification: (id: string) => Promise<void>
 }
 
-export default function MechanicDialog({ mechanic, isSaving, error, onClose, onSave, qualifications, qualificationTypes, onCreateQualification, onUpdateQualification, onDeactivateQualification }: Props) {
+export default function MechanicDialog({ mechanic, isSaving, error, onClose, onSave, qualifications, qualificationTypes, qualificationsLoading, qualificationTypesLoading, qualificationsError, qualificationTypesError, onRetryQualifications, onRetryQualificationTypes, onCreateQualification, onUpdateQualification, onDeactivateQualification }: Props) {
     const [name, setName] = useState(mechanic?.gr_name ?? '')
     const [phone, setPhone] = useState(mechanic?.gr_phone ?? '')
     const [email, setEmail] = useState(mechanic?.gr_email ?? '')
@@ -101,7 +107,7 @@ export default function MechanicDialog({ mechanic, isSaving, error, onClose, onS
                             <input value={region} placeholder="Enter region..." onChange={(event) => setRegion(event.target.value)} />
                         </label>
                     </div>
-                    <QualificationManager mechanic={mechanic} qualifications={qualifications} qualificationTypes={qualificationTypes} busy={isSaving} onCreate={onCreateQualification} onUpdate={onUpdateQualification} onDeactivate={onDeactivateQualification} /></>}
+                    <QualificationManager mechanic={mechanic} qualifications={qualifications} qualificationTypes={qualificationTypes} qualificationsLoading={qualificationsLoading} qualificationTypesLoading={qualificationTypesLoading} qualificationsError={qualificationsError} qualificationTypesError={qualificationTypesError} busy={isSaving} onRetryQualifications={onRetryQualifications} onRetryQualificationTypes={onRetryQualificationTypes} onCreate={onCreateQualification} onUpdate={onUpdateQualification} onDeactivate={onDeactivateQualification} /></>}
                     {(validationError || error) && <p className="mechanic-form-error" role="alert">{validationError || error}</p>}
                     <footer>
                         <button type="button" className="mechanic-secondary-button" onClick={onClose}>Cancel</button>

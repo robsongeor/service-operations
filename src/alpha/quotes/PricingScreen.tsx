@@ -7,6 +7,8 @@ import {
     type PricingItemInput,
 } from './types/pricing.types'
 import './PricingScreen.css'
+import EditDrawerConfirmation from '../shared/drawer/EditDrawerConfirmation'
+import '../shared/drawer/EditDrawer.css'
 
 const currencyFormatter = new Intl.NumberFormat('en-NZ', {
     style: 'currency',
@@ -25,10 +27,12 @@ export default function PricingScreen() {
         createItem,
         updateItem,
         setItemActive,
+        deleteItem,
     } = usePricingItems()
     const [editingItem, setEditingItem] = useState<PricingItem | null | undefined>(undefined)
     const [search, setSearch] = useState('')
     const [showInactive, setShowInactive] = useState(false)
+    const [deletingItem, setDeletingItem] = useState<PricingItem | null>(null)
 
     const visibleItems = useMemo(() => {
         const query = search.trim().toLowerCase()
@@ -63,6 +67,16 @@ export default function PricingScreen() {
             await setItemActive(item.gr_pricingitemid, item.statecode !== 0)
         } catch {
             // The hook exposes the Dataverse message in the page-level alert.
+        }
+    }
+
+    const removeItem = async () => {
+        if (!deletingItem) return
+        try {
+            await deleteItem(deletingItem.gr_pricingitemid)
+            setDeletingItem(null)
+        } catch {
+            // The confirmation displays the Dataverse dependency or permission error.
         }
     }
 
@@ -164,6 +178,14 @@ export default function PricingScreen() {
                                         >
                                             {item.statecode === 0 ? 'Deactivate' : 'Activate'}
                                         </button>
+                                        <button
+                                            type="button"
+                                            className="pricing-delete-action"
+                                            disabled={isSaving}
+                                            onClick={() => { clearSaveError(); setDeletingItem(item) }}
+                                        >
+                                            Delete
+                                        </button>
                                     </td>
                                 </tr>
                             ))}
@@ -190,6 +212,16 @@ export default function PricingScreen() {
                     onSave={saveItem}
                 />
             )}
+            {deletingItem && <EditDrawerConfirmation
+                eyebrow="Pricing catalogue"
+                title={`Delete ${deletingItem.gr_name}?`}
+                message="This permanently removes the catalogue item. Existing Quote lines keep their copied description and price, but Dataverse may prevent deletion when a relationship still depends on this item."
+                error={saveError}
+                isBusy={isSaving}
+                confirmLabel={isSaving ? 'Deleting…' : 'Delete item'}
+                onCancel={() => { clearSaveError(); setDeletingItem(null) }}
+                onConfirm={() => void removeItem()}
+            />}
         </div>
     )
 }
