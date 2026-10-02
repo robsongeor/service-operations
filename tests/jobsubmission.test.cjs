@@ -170,7 +170,8 @@ test('successful submission creates a pending review and replay is rejected', as
 })
 
 test('review details and photos require office authentication and can be marked reviewed', async () => {
-    const created = await generate()
+    const pdfSnapshot = { equipmentMake: 'Still', equipmentModel: 'RX60', equipmentSerial: 'SER-TEST', orderNumber: 'PO-TEST', siteAddress: '1 Example Road' }
+    const created = await generate({ snapshot: snapshot(pdfSnapshot) })
     const submitted = await invoke({ method: 'POST', headers: {}, body: {
         token: created.body.token, story: 'Completed', hourMeter: 2500,
         timeEntries: [{ date: '2026-07-25', hours: 1, kilometres: 0 }], parts: [], furtherWorkRequired: false, safetyIssueIdentified: false, photos: [],
@@ -181,6 +182,10 @@ test('review details and photos require office authentication and can be marked 
     const list = JSON.parse((await service.handleReviewRequest({ method: 'GET', headers: { authorization: 'Bearer office' }, query: {} })).body)
     const reviewId = list.items[0].reviewId
     const detail = JSON.parse((await service.handleReviewRequest({ method: 'GET', headers: { authorization: 'Bearer office' }, query: { reviewId } })).body)
+    for (const [key, value] of Object.entries(pdfSnapshot)) assert.equal(detail[key], value)
+    assert.equal(detail.workRequired, 'Service forklift')
+    assert.equal(detail.technicianEmail, undefined)
+    assert.equal(detail.tokenHash, undefined)
     const reviewed = await service.handleReviewRequest({
         method: 'POST', headers: { authorization: 'Bearer office' }, query: { reviewId }, body: { action: 'markReviewed', etag: detail.etag },
     })
@@ -271,6 +276,7 @@ test('review authorisation rejects a valid office identity outside the reviewer 
         ? Response.json({ UserId: '00000000-0000-4000-8000-000000000020' })
         : Response.json({ internalemailaddress: 'unapproved@example.com' })
     assert.equal((await service.handleReviewRequest({ method: 'GET', headers: { 'x-dataverse-authorization': 'Bearer office' }, query: {} })).status, 403)
+    assert.equal((await service.handleReviewRequest({ method: 'GET', headers: { 'x-dataverse-authorization': 'Bearer office' }, query: { jobId: '00000000-0000-4000-8000-000000000001' } })).status, 403)
 })
 
 test('Table serialization splits maximum-size parts and removes null metadata', () => {
@@ -292,4 +298,49 @@ test('creating a replacement link invalidates the previous active token', async 
     assert.equal(oldLookup.status, 404)
     const newLookup = await invoke({ method: 'GET', headers: {}, query: { token: replacement.body.token } })
     assert.equal(newLookup.status, 200)
+})
+
+test('authenticated per-Job history includes Azure lifecycle states without exposing tokens or evidence', async () => {
+    const jobId = '00000000-0000-4000-8000-000000000001'
+    const headers = { authorization: 'Bearer office' }
+    const first = await generate()
+    const second = await generate({ replaceActive: true })
+    await invoke({ method: 'POST', body: { ...validBody(), token: second.body.token } })
+    const store = require('../api/services/jobCardStorage').getJobCardStore()
+    const submitted = await store.getByTokenHash(service.test.hashToken(second.body.token))
+    await service.handleReviewRequest({ method: 'POST', headers, query: { reviewId: submitted.reviewId }, body: { action: 'markReviewed', etag: submitted.etag } })
+    const expired = await generate()
+    const record = await store.getByTokenHash(service.test.hashToken(expired.body.token))
+    await store.replace({ ...record, expiresOn: '2000-01-01T00:00:00Z' }, record.etag)
+    await generate({ assignmentId: '00000000-0000-4000-8000-000000000010' })
+    const pending = await generate({ assignmentId: '00000000-0000-4000-8000-000000000011' })
+    await invoke({ method: 'POST', body: { ...validBody(), token: pending.body.token } })
+    await generate({ jobId: '00000000-0000-4000-8000-000000000099' })
+    global.fetch = async () => { throw new Error('Local history must only read Azure storage.') }
+    const response = await service.handleReviewRequest({ method: 'GET', headers, query: { jobId } })
+    assert.equal(response.status, 200)
+    const body = JSON.parse(response.body)
+    assert.equal(body.truncated, false)
+    assert.deepEqual(body.items.map((item) => item.status).sort(), ['active', 'expired', 'pendingReview', 'reviewed', 'superseded'])
+    assert.ok(body.items.every((item, index) => !index || body.items[index - 1].createdOn >= item.createdOn))
+    assert.doesNotMatch(response.body, /tokenHash|technicianEmail|sourceJobId|blobName|story|partsJson/)
+    assert.equal(response.body.includes(first.body.token), false)
+    assert.equal((await service.handleReviewRequest({ method: 'GET', headers: {}, query: { jobId } })).status, 401)
+    for (const query of [{ jobId: '' }, { jobId: "' or true" }, { jobId, reviewId: submitted.reviewId }]) {
+        assert.equal((await service.handleReviewRequest({ method: 'GET', headers, query })).status, 400)
+    }
+    assert.equal((await service.handleReviewRequest({ method: 'POST', headers, query: { jobId } })).status, 400)
+})
+
+test('Job history is bounded and explicitly reports truncation', async () => {
+    const store = require('../api/services/jobCardStorage').getJobCardStore()
+    const sourceJobId = '00000000-0000-4000-8000-000000000001'
+    for (let index = 0; index < 501; index++) await store.create({
+        tokenHash: `test-only-${index}`, sourceJobId, reviewId: String(index), status: 'active',
+        createdOn: '2026-10-02T00:00:00Z', expiresOn: '2099-01-01T00:00:00Z', technicianName: 'Test',
+    })
+    const response = await service.handleReviewRequest({ method: 'GET', headers: { authorization: 'Bearer office' }, query: { jobId: sourceJobId } })
+    const body = JSON.parse(response.body)
+    assert.equal(body.items.length, 500)
+    assert.equal(body.truncated, true)
 })

@@ -49,9 +49,44 @@ authenticated, private/no-store, attachment-only and nosniff; no credentials or 
 
 Azure submission/review does not change Dataverse Job Card Status, complete a Job, change Completed
 Date, Equipment hours, maintenance or assignments, or create follow-up work/Quotes.
-The existing licensed-office dispatch can still set Sent. Legacy evidence remains in the Job drawer;
-new evidence is in **Job Card reviews**. Future Dataverse import requires a separate explicit
-licensed-office action.
+Ordinary Job dispatch records delivery through Email Dispatch and does not write legacy Job or
+assignment Card Status. Site Check dispatch retains its existing Sent updates. Future Dataverse
+import requires a separate explicit licensed-office action.
+
+## Office screens after legacy-control retirement
+
+The ordinary Job drawer's Job Card tab uses one authenticated, reviewer-authorized
+`GET /api/jobcardreviews?jobId=<guid>` request to show Azure link/submission history. The response
+contains lifecycle metadata and review IDs only, never raw tokens, token hashes, photo paths or
+submission contents. It is bounded to 500 entries with an explicit truncation flag. A created link
+is not labelled as confirmed email delivery. Submitted/reviewed entries open **Job Card reviews**.
+Errors remain visible and are not treated as an empty history; refresh and completed sends reload
+the affected Job's history. Account/Job changes discard the previous result and ignore late responses.
+
+Ordinary Jobs no longer use the old manual Card Status selector, legacy progress count, Submitted
+table badge or email lockout. Their neutral **Job cards** action opens the canonical drawer, and
+Azure's active-link conflict owns replacement confirmation. Existing Dataverse evidence, including
+closed cards, remains in an explicitly historical, read-only section with its photos and legacy PDF
+downloads. This evidence never controls the current Azure lifecycle. Ordinary drawer refresh loads
+only the Job; old time/parts/submissions/photos load when **Historical submissions** is opened.
+The account/Job-scoped archive hook ignores late responses and offers retry. Strict loads follow
+verified Dataverse next links and fail visibly on incomplete evidence rather than reporting empty
+history. Site Check eager evidence loading and technician post-submission PDF remain unchanged.
+
+The authenticated review detail includes snapshotted make/model/serial, order number and address.
+Its **Download saved submission PDF** action uses only that loaded Azure record, with no current
+Job reread or public-token request. A browser-local paginated report retains all structured evidence,
+individual time dates (including multiple weeks), quantities, observations and a photo filename
+manifest. Photos are not embedded or fetched by export; private photos remain separate actions.
+Missing snapshot values are labelled as unrecorded, not filled from mutable operational data.
+The existing one-page interactive technician/legacy Job sheet is unchanged. Unsupported PDF-font
+characters appear as explicit Unicode code points rather than disappearing. Review content is
+remounted on account/review changes so exports and photo URLs cannot follow the previous review.
+
+Site Check Type or occurrence-linked Jobs retain their existing office controls and service path.
+No old tables, columns, identities or historical evidence are deleted. Additional assignments with
+known Azure requests or legacy evidence cannot be removed from the ordinary Job Card tab; removal
+is also unavailable if Azure history is unknown/truncated or the archive has not loaded successfully.
 
 See [Azure Job Card Storage](../azure-job-card-storage.md) for infrastructure, settings, cutover,
 retention and verification. Local shortcuts fail closed in hosted processes.

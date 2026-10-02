@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added a paginated PDF export of saved Azure Job Card evidence and deferred historical Dataverse
+  evidence/photo loading until explicitly opened. Archive errors stay visible and block assignment
+  removal; Site Check loading and historical records remain intact.
+
+- Retired legacy Job Card status controls and email lockouts for ordinary Jobs, added private
+  per-Job Azure history/review links, and kept old evidence in a labelled read-only history section.
+  Ordinary dispatch no longer updates legacy Card Status; Site Check behaviour is retained.
+
 - Moved job-level technician links and submitted evidence to private Azure Table/Blob
   storage, with immutable Job snapshots, replay-safe submission, bounded photo uploads,
   and no anonymous Dataverse access or operational Job updates.

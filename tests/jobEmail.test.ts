@@ -160,7 +160,7 @@ test('submitted technician cards can start a confirmed new submission cycle', ()
     assert.match(fields, /allowSend=\{false\}/)
 })
 
-test('active link detection requires an unused, unexpired stored hash', () => {
+test('legacy active link detection is restricted to Site Checks', () => {
     const active = {
         ...job,
         gr_techniciansubmissiontokenhash: 'a'.repeat(64),
@@ -168,7 +168,9 @@ test('active link detection requires an unused, unexpired stored hash', () => {
         gr_techniciansubmissiontokenexpireson: '2026-07-25T12:00:00.000Z',
     }
     const now = Date.parse('2026-07-25T11:00:00.000Z')
-    assert.equal(jobHasActiveSubmissionLink(active, now), true)
-    assert.equal(jobHasActiveSubmissionLink({ ...active, gr_techniciansubmissiontokenused: true }, now), false)
-    assert.equal(jobHasActiveSubmissionLink({ ...active, gr_techniciansubmissiontokenexpireson: '2026-07-25T10:00:00.000Z' }, now), false)
+    assert.equal(jobHasActiveSubmissionLink(active, now), false)
+    const siteCheck = { ...active, _gr_sitecheck_value: 'site-check-1' }
+    assert.equal(jobHasActiveSubmissionLink(siteCheck, now), true)
+    assert.equal(jobHasActiveSubmissionLink({ ...siteCheck, gr_techniciansubmissiontokenused: true }, now), false)
+    assert.equal(jobHasActiveSubmissionLink({ ...siteCheck, gr_techniciansubmissiontokenexpireson: '2026-07-25T10:00:00.000Z' }, now), false)
 })

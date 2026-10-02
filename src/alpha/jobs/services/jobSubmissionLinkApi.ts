@@ -1,4 +1,5 @@
 import type { Job } from '../types/job.types'
+import { usesAzureJobCards } from '../types/jobCardWorkflow.ts'
 
 type SubmissionLinkResponse = {
     path: string
@@ -6,6 +7,8 @@ type SubmissionLinkResponse = {
 }
 
 export function jobHasActiveSubmissionLink(job: Job, now = Date.now()) {
+    // Retained only for the separate Site Check UI. Azure checks active links on the server.
+    if (usesAzureJobCards(job)) return false
     const expiresOn = Date.parse(job.gr_techniciansubmissiontokenexpireson ?? '')
     return Boolean(
         job.gr_techniciansubmissiontokenhash
@@ -54,7 +57,8 @@ export async function generateJobSubmissionLink(accessToken: string, recipient: 
     })
     if (response.status === 409 && !replaceActive) {
         const problem = await response.json().catch(() => ({})) as { code?: string }
-        if (problem.code === 'active-link' && window.confirm('This technician already has an unused Job Card link. Replace it? The previous link will stop working.')) {
+        if (problem.code !== 'active-link') throw new Error('The Job Card changed. Please try again. No email was sent.')
+        if (window.confirm('This technician already has an unused Job Card link. Replace it? The previous link will stop working.')) {
             return generateJobSubmissionLink(accessToken, recipient, true)
         }
         throw new Error('The existing Job Card link was not replaced. No email was sent.')

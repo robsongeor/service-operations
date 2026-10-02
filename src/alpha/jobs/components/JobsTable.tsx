@@ -20,6 +20,7 @@ import JobsTableSortIcon from './JobsTableSortIcon'
 import { isValidTechnicianEmail } from '../utils/technicianMailto'
 import { getJobsTableColumnWidths, JOBS_TABLE_ACTIONS_WIDTH, JOBS_TABLE_COLUMNS, JOBS_TABLE_WIDTH, jobsStickyColumnStyle, type JobsStickyThroughColumnId, type JobsTableColumnId } from '../types/jobsTableColumns'
 import { hasTechnicianSubmission } from '../types/technicianSubmission'
+import { usesAzureJobCards } from '../types/jobCardWorkflow'
 import { formatFleetNumbers, parseAlternateFleetNumbers } from '../../equipment/identifiers/alternateFleetNumbers'
 import { JOB_DESCRIPTION_MAX_LENGTH } from '../domain/jobDescription'
 import JobEmailComposer from './JobEmailComposer'
@@ -743,16 +744,16 @@ export default function JobsTable({
                                             onClick={(event) => event.stopPropagation()}
                                             onChange={() => toggleSelectedJob(job.gr_jobid)}
                                         />
-                                        {hasTechnicianSubmission(job) && (
+                                        {(usesAzureJobCards(job) || hasTechnicianSubmission(job)) && (
                                             <button
-                                                className="jobs-submission-indicator"
+                                                className={usesAzureJobCards(job) ? 'jobs-table-action' : 'jobs-submission-indicator'}
                                                 type="button"
                                                 onClick={(event) => {
                                                     event.stopPropagation()
                                                     onOpenJobCard(job)
                                                 }}
                                             >
-                                                Submitted
+                                                {usesAzureJobCards(job) ? 'Job cards' : 'Submitted'}
                                             </button>
                                         )}
                                         <button

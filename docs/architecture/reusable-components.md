@@ -31,6 +31,7 @@ business workflow and should be embedded through thin feature adapters when need
 | `JobEditDrawer` | `src/alpha/jobs/components/JobEditDrawer.tsx` | Manager-facing Job details and editing. Do not build a feature-specific Job editor. |
 | `JobCreateDrawer` | `src/alpha/jobs/components/JobCreateDrawer.tsx` | Standard Job creation, including pre-populated Job and proposed Equipment values, constrained Job Type options, and the shared searchable relationship/create workflow. Proposed Equipment identifiers search existing records first and require confirmation before inline creation. |
 | `JobEmailComposer` | `src/alpha/jobs/components/JobEmailComposer.tsx` | Jobs-table technician email review and send workflow, including recipient/subject editing, formatted Job Card preview, and active-link replacement confirmation. |
+| `JobCardHistoryPanel` | `src/alpha/job-card-reviews/JobCardHistoryPanel.tsx` | Read-only Azure link/submission history in the canonical Job drawer; reviewer authorization and loading are owned by the feature hook/API. |
 | `JobDrawerShell` | `src/alpha/jobs/components/JobDrawerShell.tsx` | Job-specific composition of the shared drawer shell. |
 | `EquipmentDrawer` | `src/alpha/equipment/components/EquipmentDrawer.tsx` | Primary Equipment create/edit workflow and related operational information, including the shared searchable Customer/Site selection and inline creation flow in both modes. |
 | `EquipmentDataQualityIndicator` | `src/alpha/equipment/components/EquipmentDataQualityIndicator.tsx` | Keyboard-accessible Critical/Warning Equipment data-quality disclosure used by Equipment lists. |
@@ -57,6 +58,8 @@ Business rules must have one owner even when several screens display the result.
 | Service-plan calculations | `src/alpha/equipment/servicePlans/servicePlanCalculations.ts` | Service-plan calculations. |
 | Service-plan status | `src/alpha/equipment/servicePlans/servicePlanStatus.ts` | Maintenance/service-plan status derivation. |
 | Job completion | `src/alpha/jobs/completion/` and `src/alpha/site-checks/services/siteCheckCompletionApi.ts` | Job-type-owned completion orchestration and atomic completion-side effects, reached through `useJobs`. |
+| Job Card workflow boundary | `src/alpha/jobs/types/jobCardWorkflow.ts` | Distinguishes ordinary Azure Job Cards from the retained Site Check workflow and protects assignment removal when history is unavailable or referenced. |
+| Saved Azure Job Card PDF | `src/alpha/job-card-reviews/jobCardReviewPdf.ts` | Browser-local paginated export of the authorized saved review only; no mutable Job lookup or private-photo fetch. |
 | Editable email drafts | `src/alpha/jobs/utils/technicianMailto.ts` | Shared recipient-email validation and encoded `mailto:` construction. Feature services own subject/body rules and preparation audit. |
 | Staff eligibility | `src/alpha/mechanics/staffDirectory.ts` | Department labels, backward-compatible Job-assignment eligibility, and active internal-email-recipient eligibility across Staff, Jobs, Site Checks, and Chargeable Invoice Review. |
 | Staff realtime invalidation | `src/alpha/mechanics/StaffRealtimeBridge.tsx` and `src/alpha/mechanics/services/staffRealtime.ts` | One authenticated app-wide Staff change listener and a browser-local subscription boundary; active features own their bounded Staff-only refresh. |

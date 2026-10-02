@@ -97,8 +97,8 @@ class MemoryJobCardStore {
         return clone([...this.entities.values()].find((item) => item.reviewId === reviewId) ?? null)
     }
 
-    async listByJobId(jobId) {
-        return [...this.entities.values()].filter((item) => item.sourceJobId === jobId).map(clone)
+    async listByJobId(jobId, limit = 100) {
+        return [...this.entities.values()].filter((item) => item.sourceJobId === jobId).slice(0, limit).map(clone)
     }
 
     async listPending(limit = 100) {
@@ -198,9 +198,9 @@ class AzureJobCardStore {
         return (await this.collect(`PartitionKey eq '${PARTITION_KEY}' and reviewId eq '${escaped}'`, 2))[0] ?? null
     }
 
-    async listByJobId(jobId) {
+    async listByJobId(jobId, limit = 100) {
         const escaped = String(jobId).replaceAll("'", "''")
-        return this.collect(`PartitionKey eq '${PARTITION_KEY}' and sourceJobId eq '${escaped}'`, 100)
+        return this.collect(`PartitionKey eq '${PARTITION_KEY}' and sourceJobId eq '${escaped}'`, limit)
     }
 
     async listPending(limit = 100) {

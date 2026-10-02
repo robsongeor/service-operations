@@ -4,6 +4,7 @@ import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
 import { acquireDataverseAccessToken } from '../../auth/dataverseAuthentication'
 import { fetchJobCardPhoto, fetchJobCardReview, fetchPendingJobCardReviews, markJobCardReviewed, retryJobCardNotification } from './jobCardReviewApi'
 import type { JobCardReview, JobCardReviewSummary } from './jobCardReview.types'
+import { downloadJobCardReviewPdf } from './jobCardReviewPdf'
 
 export function useJobCardReviews(reviewId?: string) {
     const { instance } = useMsal()
@@ -14,6 +15,7 @@ export function useJobCardReviews(reviewId?: string) {
     const [error, setError] = useState('')
     const [busy, setBusy] = useState(true)
     const [revision, setRevision] = useState(0)
+    const [pdfBusy, setPdfBusy] = useState(false)
     const mounted = useRef(false)
     const urls = useRef<string[]>([])
     const accessToken = useCallback(() => acquireDataverseAccessToken(instance, account), [account, instance])
@@ -65,5 +67,12 @@ export function useJobCardReviews(reviewId?: string) {
         catch { setError('The notification could not be retried. The evidence is still saved.') }
         finally { setBusy(false) }
     }
-    return { items, review, photoUrls, error, busy, refresh, markReviewed, loadPhoto, retryNotification }
+    const downloadPdf = async () => {
+        if (!review || pdfBusy) return
+        setPdfBusy(true)
+        try { await downloadJobCardReviewPdf(review) }
+        catch { if (mounted.current) setError('The saved submission PDF could not be created. Please try again.') }
+        finally { if (mounted.current) setPdfBusy(false) }
+    }
+    return { items, review, photoUrls, error, busy, refresh, markReviewed, loadPhoto, retryNotification, pdfBusy, downloadPdf }
 }

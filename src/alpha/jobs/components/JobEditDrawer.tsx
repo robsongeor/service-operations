@@ -33,6 +33,8 @@ import { JOB_NUMBER_REQUIRED_EMAIL_MESSAGE, jobHasEmailableJobNumber } from '../
 import { OFFICE_ACTIONS, type JobOfficeUpdate } from '../types/officeAction.types'
 import JobOfficeFields from './JobOfficeFields'
 import { jobHasActiveSubmissionLink } from '../services/jobSubmissionLinkApi'
+import { usesAzureJobCards } from '../types/jobCardWorkflow'
+import { jobEmailSendingAllowedForHostname, LOCAL_JOB_EMAIL_DISABLED_MESSAGE } from '../services/jobEmail'
 
 type Props = {
     job: Job
@@ -154,22 +156,24 @@ export default function JobEditDrawer({
         (option) => option._gr_job_value?.toLowerCase() === job.gr_jobid.toLowerCase(),
     ).length
     const jobCardStatus = getJobCardStatus(job.gr_jobcardstatus)
+    const azureJobCards = usesAzureJobCards(job)
+    const localSendingDisabled = !jobEmailSendingAllowedForHostname(window.location.hostname)
     const hasJobNumber = jobHasEmailableJobNumber(job)
-    const emailLabel = jobCardStatus === JOB_CARD_STATUSES.NOT_SENT
+    const emailLabel = azureJobCards ? isEmailing ? 'Sending...' : 'Email Job Card' : jobCardStatus === JOB_CARD_STATUSES.NOT_SENT
         ? isEmailing ? 'Sending...' : 'Email'
         : jobCardStatus === JOB_CARD_STATUSES.SENT
             ? '✓ Sent'
             : jobCardStatus === JOB_CARD_STATUSES.SUBMITTED
                 ? 'Submitted'
                 : 'Closed'
-    const emailTitle = !hasJobNumber
+    const emailTitle = localSendingDisabled ? LOCAL_JOB_EMAIL_DISABLED_MESSAGE : !hasJobNumber
         ? JOB_NUMBER_REQUIRED_EMAIL_MESSAGE
         : !job.gr_Mechanic
             ? 'Assign a technician before emailing this job.'
-            : jobCardStatus === JOB_CARD_STATUSES.NOT_SENT
+            : azureJobCards || jobCardStatus === JOB_CARD_STATUSES.NOT_SENT
                 ? `Email job to ${job.gr_Mechanic.gr_name}`
                 : 'Job card has already been emailed.'
-    const canEmailJob = hasJobNumber && Boolean(job.gr_Mechanic) && jobCardStatus === JOB_CARD_STATUSES.NOT_SENT
+    const canEmailJob = !localSendingDisabled && hasJobNumber && Boolean(job.gr_Mechanic) && (azureJobCards || jobCardStatus === JOB_CARD_STATUSES.NOT_SENT)
 
     const saveChanges = async () => {
         if (!draft.jobType) {
@@ -249,7 +253,7 @@ export default function JobEditDrawer({
             setSaveError('Assign a technician before emailing this job.')
             return
         }
-        if (!confirmedReplacement && jobHasActiveSubmissionLink(job)) {
+        if (!azureJobCards && !confirmedReplacement && jobHasActiveSubmissionLink(job)) {
             setShowEmailLinkConfirm(true)
             return
         }
@@ -276,7 +280,7 @@ export default function JobEditDrawer({
             headerAction={
                 <button
                     type="button"
-                    className={`job-drawer-email-action status-${jobCardStatus}`}
+                    className={`job-drawer-email-action${azureJobCards ? '' : ` status-${jobCardStatus}`}`}
                     title={emailTitle}
                     onClick={() => void emailJob()}
                     disabled={isSaving || isDeleting || isEmailing || !canEmailJob}

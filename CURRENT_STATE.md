@@ -2,6 +2,31 @@
 
 Branch: `codex/azure-job-card-deployment`
 
+## Old Job Card office controls — cleanup (local, not deployed)
+
+- Ordinary Jobs now open Azure request/submission history from the Job Card tab. The same approved
+  reviewer boundary protects the new bounded per-Job history read; no new schema or settings are needed.
+- Removed the legacy manual status selector, legacy submission-count/progress display, old Submitted
+  table badge, and status-based email lockout for ordinary Jobs. The table uses a neutral Job cards action.
+- Replacement confirmation uses the Azure server's current state. Successful ordinary Job dispatch no
+  longer writes legacy Job/assignment Card Status; Email Dispatch remains the delivery audit source.
+- Old submitted/closed evidence, photos and PDFs remain in a labelled read-only historical section.
+  Site Check status controls, submission service and dispatch status updates retain their existing path.
+- Azure link history distinguishes link creation from email delivery, exposes saved review links,
+  refreshes after sends, and does not disguise errors as an empty history. Assignment removal stays
+  unavailable when history is unknown, truncated, or contains references to that assignment.
+- Full tests, lint and build passed; synthetic component-render tests verify both workflow branches.
+  No live writes, real emails, commits, pushes, cloud changes or deployments were performed in this pass.
+- Azure review details now offer a browser-local paginated saved-submission PDF. The export uses
+  the saved snapshot and all structured evidence; photos are listed and stay separately authenticated.
+  A synthetic six-page export was rendered and visually checked, with end markers and totals verified.
+- Ordinary Job drawer reads defer old Dataverse time, parts, submissions and photo files until the
+  historical section is opened. Strict archival loads follow verified Dataverse paging, expose failures
+  and retry, and keep assignment removal unavailable until both histories are complete. Site Check
+  loading retains its existing path. Account/Job changes do not expose the preceding archive or PDF.
+- Next: authorize deployment and signed-in UI verification of both cleanup passes. No new schema,
+  settings or infrastructure are needed.
+
 ## Azure Job Card cutover (deployed and verified, 2 October 2026)
 
 - Integrated onto production baseline `9c5be8e`, preserving current pilot, validation, parts

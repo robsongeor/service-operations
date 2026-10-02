@@ -33,8 +33,8 @@ The Jobs table restores an account- and Dataverse-environment-scoped IndexedDB s
 first render, while Dataverse remains authoritative. It refreshes every paged Job row in the
 background and replaces the saved snapshot after success. SignalR carries bounded invalidation
 events only; clients debounce those events and refresh from Dataverse. Technician time, materials,
-and photos are drawer-only details and are fetched for the selected Job rather than for the entire
-table.
+and photos are selected-Job details rather than table-wide reads. Ordinary Jobs defer old evidence
+until Historical submissions is opened; Site Check drawers retain eager evidence loading.
 
 The authenticated app shell also listens for bounded Staff invalidation events. An active Jobs
 screen re-reads only `gr_mechanics` after a short debounce, so technician names and assignment
@@ -83,7 +83,9 @@ phone, and email when those values exist, or state that no Site Contact is assig
 request and return immediately; Power Automate performs delivery asynchronously and the table shows
 Sending, Sent, or Failed. Existing unused links for non-pilot recipients remain unchanged while
 broader online Job Card access is paused.
-Job Card status changes only after confirmed delivery.
+Email Dispatch owns confirmed delivery. Ordinary Job dispatch no longer writes legacy Job Card
+Status; Site Check dispatch retains its existing status updates. Azure link creation alone is not
+evidence of successful delivery.
 Jobs action feedback is announced as a bottom-right toast, can be dismissed explicitly, and clears
 automatically after five seconds. A new message replaces the previous timer safely.
 Every transition into Complete requires linked Equipment and a whole-number hour-meter reading.
@@ -242,23 +244,18 @@ lists are not part of the initial Job Book load; they load only when the add-mac
 - Primary technician Job Card email uses the Email Dispatch/Power Automate delivery path from both
   the Jobs table and Job drawer. The table uses a non-blocking in-app composer and formatted HTML;
   assignment sends reuse the same formatted card. Generating a link does not change operational Job
-  Status or Job Card Status. Sent is recorded only after dispatch confirmation succeeds.
-- Technician Job Card submission stores pending story/hour-meter information and moves the
-  Job Card Status to `Submitted`. It does not change operational Job Status, Completed Date,
-  Equipment hour meter, maintenance state, or assignments.
-- Managers review the immutable original submission timestamp, hour meter, and job story in
-  the existing Job drawer's Job Card tab. Opening the drawer refreshes Jobs from Dataverse;
-  viewing the submission performs no writes. A compact Submitted table action opens that
-  same drawer directly on Job Card, while Jobs without authoritative submission evidence
-  show a clear not-yet-submitted state.
-- Expanded Job Card submissions keep time/travel and parts as append-only Job child records.
-  Further-work and safety flags/details remain immutable submission metadata. The public
-  service writes all child rows and the final token/status transition atomically and never
-  turns those observations into Jobs, Quotes, tasks, notifications, or operational changes.
-- Photos use the generic Job Photo child table and Dataverse File storage. Public submission
-  tokens permit server-mediated upload only; authenticated office users download photos
-  through Dataverse for read-only manager review. Do not create feature-specific photo
-  tables for WOF, Quote, delivery, office, or customer upload extensions.
+  Status. Azure owns ordinary Job Card lifecycle; legacy Sent updates are retained only for Site Checks.
+- Ordinary technician submissions retain story, hour meter, time/travel, parts and observations in
+  Azure Table with private Blob photos. Submission creates pending-review evidence without changing
+  Dataverse Job Status, legacy Card Status, Completed Date, Equipment hours, maintenance or assignments.
+- The neutral Job cards table action opens the canonical Job drawer. Its ordinary Job Card tab shows
+  authenticated Azure link/submission history and links to the office review screen, without a legacy
+  status selector, legacy submission counter or status-based email lockout. Old Dataverse submissions,
+  photos and PDFs remain explicitly historical and read-only. See
+  [Technician Job Card Submission](technician-job-submission.md) for the API and lifecycle contract.
+- Site Check occurrence submissions retain their separate Dataverse child records, File photos and
+  existing office controls. Their service identity and schema are not retired by the ordinary Job Card
+  cleanup. No historical evidence or generic Job Photo capability is deleted.
 - Historical Jobs and their relationships are preserved.
 
 ## Extension Points

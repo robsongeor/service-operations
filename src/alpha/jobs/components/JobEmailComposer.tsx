@@ -4,6 +4,7 @@ import { jobEmailSendingAllowedForHostname, LOCAL_JOB_EMAIL_DISABLED_MESSAGE, on
 import { buildTechnicianEmailSubject } from '../utils/technicianMailto'
 import { isValidTechnicianEmail } from '../utils/technicianMailto'
 import { jobHasActiveSubmissionLink } from '../services/jobSubmissionLinkApi'
+import { usesAzureJobCards } from '../types/jobCardWorkflow'
 import EditDrawerFormDialog from '../../shared/drawer/EditDrawerFormDialog'
 import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation'
 import { formatFleetNumbers } from '../../equipment/identifiers/alternateFleetNumbers'
@@ -52,7 +53,7 @@ export default function JobEmailComposer({ job, onCancel, onSend }: Props) {
 
     const requestSend = () => {
         if (!canSend) return
-        if (onlineJobCardEnabled && jobHasActiveSubmissionLink(job)) {
+        if (!usesAzureJobCards(job) && onlineJobCardEnabled && jobHasActiveSubmissionLink(job)) {
             setConfirmReplacement(true)
             return
         }

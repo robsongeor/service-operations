@@ -6,9 +6,13 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
 
 ## Priority 0 — Production readiness
 
+- [ ] Deploy and verify the local Job Card office-control cleanup: Azure history in the Job drawer,
+  retirement of legacy status controls for ordinary Jobs, saved Azure PDF export, on-demand historical
+  evidence, and unchanged Site Check behaviour. Deployment and live verification require explicit approval.
+
 - [ ] Configure and verify the production server-only `DATAVERSE_URL`,
   `DATAVERSE_TENANT_ID`, `DATAVERSE_CLIENT_ID`, and `DATAVERSE_CLIENT_SECRET` settings.
-- [ ] Run a production-safe Technician Job Card submission smoke test covering link
+- [x] Run a production-safe Azure Technician Job Card submission smoke test covering link
   generation, public lookup, submission, manager review, photo download, and replay
   rejection.
 
@@ -28,6 +32,9 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
   repeated temporary errors without logging secrets or submission content.
 
 ## Priority 2 — Product improvements
+
+- [x] Add office PDF export for Azure Job Card evidence and load historical Dataverse evidence only
+  on demand. Do not remove Site Check dependencies or historical service records during cleanup.
 
 - [ ] Make Equipment usage forecasting Site-aware. Use each historical Job's recorded Site to start
   a new forecast segment when Equipment moves, so usage from a previous operating environment does

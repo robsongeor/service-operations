@@ -1,3 +1,17 @@
+export type JobCardRequestSummary = {
+    reviewId: string
+    assignmentId?: string
+    technicianName: string
+    createdOn: string
+    expiresOn: string
+    submittedOn?: string
+    reviewedOn?: string
+    status: 'active' | 'expired' | 'superseded' | 'pendingReview' | 'reviewed'
+    photoCount: number
+}
+
+export type JobCardHistory = { items: JobCardRequestSummary[]; truncated: boolean }
+
 export type JobCardReviewSummary = {
     reviewId: string
     jobNumber: string
@@ -18,6 +32,11 @@ export type JobCardReview = JobCardReviewSummary & {
     assignmentId?: string
     workRequired?: string
     equipmentDisplayName?: string
+    equipmentMake?: string
+    equipmentModel?: string
+    equipmentSerial?: string
+    orderNumber?: string
+    siteAddress?: string
     fleetNumber?: string
     currentHourMeter?: number
     hourMeter?: number

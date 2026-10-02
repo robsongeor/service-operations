@@ -66,6 +66,11 @@ function snapshotFromLocalBody(body) {
         workRequired: String(source.workRequired || '').trim(),
         equipmentId: String(source.equipmentId || '').trim(),
         equipmentDisplayName: String(source.equipmentDisplayName || '').trim(),
+        equipmentMake: String(source.equipmentMake || '').trim(),
+        equipmentModel: String(source.equipmentModel || '').trim(),
+        equipmentSerial: String(source.equipmentSerial || '').trim(),
+        orderNumber: String(source.orderNumber || '').trim(),
+        siteAddress: String(source.siteAddress || '').trim(),
         fleetNumber: String(source.fleetNumber || '').trim(),
         currentHourMeter: Number.isSafeInteger(source.currentHourMeter) ? source.currentHourMeter : null,
         customerName: String(source.customerName || '').trim(),
@@ -345,6 +350,9 @@ function reviewDetails(record) {
     return {
         ...reviewSummary(record), etag: record.etag, status: record.status, sourceJobId: record.sourceJobId, assignmentId: record.assignmentId || undefined,
         workRequired: record.workRequired || undefined, equipmentDisplayName: record.equipmentDisplayName || undefined,
+        equipmentMake: record.equipmentMake || undefined, equipmentModel: record.equipmentModel || undefined,
+        equipmentSerial: record.equipmentSerial || undefined, orderNumber: record.orderNumber || undefined,
+        siteAddress: record.siteAddress || undefined,
         fleetNumber: record.fleetNumber || undefined, currentHourMeter: record.currentHourMeter ?? undefined, hourMeter: record.hourMeter ?? undefined,
         story: record.story, timeEntries: safeJson(record.timeEntriesJson, []), parts: safeJson(record.partsJson, []),
         furtherWorkDetails: record.furtherWorkDetails || undefined, safetyIssueDetails: record.safetyIssueDetails || undefined,
@@ -367,6 +375,19 @@ async function handleReviewRequest(request) {
     }
     const reviewId = typeof request.query?.reviewId === 'string' ? request.query.reviewId.trim() : ''
     const photoId = typeof request.query?.photoId === 'string' ? request.query.photoId.trim() : ''
+    const jobId = typeof request.query?.jobId === 'string' ? request.query.jobId.trim() : ''
+    if (request.query?.jobId !== undefined) {
+        if (request.method !== 'GET' || reviewId || photoId || !GUID_PATTERN.test(jobId)) return jsonResponse(400, { error: 'A valid Job history request is required.' })
+        const records = await getJobCardStore().listByJobId(jobId, 501)
+        const items = records.slice(0, 500).map((record) => ({
+            reviewId: record.reviewId, assignmentId: record.assignmentId || undefined,
+            technicianName: record.technicianName, createdOn: record.createdOn, expiresOn: record.expiresOn,
+            submittedOn: record.submittedOn || undefined, reviewedOn: record.reviewedOn || undefined,
+            status: record.status === 'active' && Date.parse(record.expiresOn) <= Date.now() ? 'expired' : record.status,
+            photoCount: record.photoCount || 0,
+        })).sort((left, right) => right.createdOn.localeCompare(left.createdOn))
+        return jsonResponse(200, { items, truncated: records.length > 500 })
+    }
     if (!reviewId) return request.method === 'GET' ? jsonResponse(200, { items: (await getJobCardStore().listPending(100)).map(reviewSummary) }) : jsonResponse(400, { error: 'A review item is required.' })
     if (!GUID_PATTERN.test(reviewId)) return jsonResponse(404, { error: 'The review item was not found.' })
     const record = await getJobCardStore().getByReviewId(reviewId)
