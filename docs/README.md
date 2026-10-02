@@ -14,6 +14,7 @@ by scanning the repository.
 | Prioritised product and technical backlog | [`../TODO.md`](../TODO.md) |
 | System boundaries and document map | [`architecture/README.md`](architecture/README.md) |
 | Dataverse conventions and relationships | [`architecture/dataverse.md`](architecture/dataverse.md) |
+| Core Dataverse table and lookup map | [`dataverse-core-schema.md`](dataverse-core-schema.md) |
 | Loading, caching, realtime, and multi-user synchronization | [`architecture/data-loading-and-synchronization.md`](architecture/data-loading-and-synchronization.md) |
 | Reusable UI and business-rule owners | [`architecture/reusable-components.md`](architecture/reusable-components.md) |
 | Local development and validation | [`architecture/development-workflow.md`](architecture/development-workflow.md) |
@@ -26,6 +27,7 @@ by scanning the repository.
 | --- | --- | --- |
 | Site Checks (release validation) | [`features/SITE_CHECKS_IMPLEMENTATION_PLAN.md`](features/SITE_CHECKS_IMPLEMENTATION_PLAN.md) | [`features/SITE_CHECK_CHECKLIST_CONTENT_PROPOSAL.md`](features/SITE_CHECK_CHECKLIST_CONTENT_PROPOSAL.md) — unprovisioned checklist content proposal; [`site-checks-dataverse-schema.md`](site-checks-dataverse-schema.md) — provisioned and verified; [`site-checks-operations.md`](site-checks-operations.md) — release/smoke/rollback checklist |
 | Jobs | [`architecture/jobs.md`](architecture/jobs.md) | [`job-description-schema.md`](job-description-schema.md), [`job-card-dataverse-schema.md`](job-card-dataverse-schema.md), [`job-assignment-dataverse-schema.md`](job-assignment-dataverse-schema.md), [`email-dispatch-flow.md`](email-dispatch-flow.md) |
+| Regional Job Books (build complete; migration pending) | [`features/JOB_BOOK_INTAKE_DESIGN.md`](features/JOB_BOOK_INTAKE_DESIGN.md) | [`features/REGIONAL_JOB_BOOKS.md`](features/REGIONAL_JOB_BOOKS.md) — separate tables, release gates, migration, and cutover seeding |
 | Staff | [`architecture/staff-directory.md`](architecture/staff-directory.md) | [`staff-directory-dataverse-schema.md`](staff-directory-dataverse-schema.md) — columns provisioned and verified; application changes remain local |
 | Technician submission | [`architecture/technician-job-submission.md`](architecture/technician-job-submission.md) | [`technician-job-submission-schema.md`](technician-job-submission-schema.md), [`public-portal-service-identity.md`](public-portal-service-identity.md) |
 | Equipment | [`architecture/equipment.md`](architecture/equipment.md) | [`equipment-alternate-fleet-number-schema.md`](equipment-alternate-fleet-number-schema.md), [`hour-meter-recorded-date-schema.md`](hour-meter-recorded-date-schema.md), [`hour-meter-reading-classification-schema.md`](hour-meter-reading-classification-schema.md) — hour-meter classification columns provisioned and locally enabled; completion smoke pending |

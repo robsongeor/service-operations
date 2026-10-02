@@ -4,6 +4,7 @@ import EditDrawerShell from '../../shared/drawer/EditDrawerShell'
 type Props = {
     eyebrow: string
     title: string
+    className?: string
     busy?: boolean
     children: ReactNode
     footer: ReactNode

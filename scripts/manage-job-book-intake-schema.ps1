@@ -1,8 +1,12 @@
 param(
-    [ValidateSet('Inspect', 'Provision', 'Verify')]
+    [ValidateSet('Inspect', 'Provision', 'Verify', 'Cutover')]
     [string]$Mode = 'Inspect',
+    [ValidateSet('Auckland', 'Waikato', 'Hastings', 'Christchurch')]
+    [string]$Book = 'Auckland',
     [string]$EnvironmentUrl = 'https://org0d4246d7.crm6.dynamics.com',
     [string]$SolutionUniqueName = 'ServiceOperationsNew',
+    [string]$UserName = '',
+    [string]$RestrictedRoleName = 'Service Operations - Job Book Only',
     [ValidateSet('Never', 'Auto')]
     [string]$LoginPrompt = 'Never'
 )
@@ -10,11 +14,19 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$table = 'gr_jobbookentry'
-$tableSet = 'gr_jobbookentries'
-$jobNumberKey = 'gr_jobbookentry_jobnumber_key'
+$bookDefinitions = @{
+    Auckland = @{ Table='gr_jobbookentry'; TableSet='gr_jobbookentries'; Schema='gr_JobBookEntry'; Display='Auckland Job Book Entry'; Collection='Auckland Job Book Entries'; Format='{SEQNUM:6}'; Key='gr_JobBookEntry_JobNumber_Key'; Prefix=''; Privilege='gr_JobBookEntry' }
+    Waikato = @{ Table='gr_waikatojobbookentry'; TableSet='gr_waikatojobbookentries'; Schema='gr_WaikatoJobBookEntry'; Display='Waikato Job Book Entry'; Collection='Waikato Job Book Entries'; Format='WJ{SEQNUM:4}'; Key='gr_WaikatoJobBookEntry_JobNumber_Key'; Prefix='WJ'; Privilege='gr_WaikatoJobBookEntry' }
+    Hastings = @{ Table='gr_hastingsjobbookentry'; TableSet='gr_hastingsjobbookentries'; Schema='gr_HastingsJobBookEntry'; Display='Hastings Job Book Entry'; Collection='Hastings Job Book Entries'; Format='HJ{SEQNUM:5}'; Key='gr_HastingsJobBookEntry_JobNumber_Key'; Prefix='HJ'; Privilege='gr_HastingsJobBookEntry' }
+    Christchurch = @{ Table='gr_christchurchjobbookentry'; TableSet='gr_christchurchjobbookentries'; Schema='gr_ChristchurchJobBookEntry'; Display='Christchurch Job Book Entry'; Collection='Christchurch Job Book Entries'; Format='CJ{SEQNUM:5}'; Key='gr_ChristchurchJobBookEntry_JobNumber_Key'; Prefix='CJ'; Privilege='gr_ChristchurchJobBookEntry' }
+}
+$bookDefinition = $bookDefinitions[$Book]
+$table = $bookDefinition.Table
+$tableSet = $bookDefinition.TableSet
+$jobNumberKey = $bookDefinition.Key.ToLowerInvariant()
 $jobTableKey = 'gr_job_jobnumber_key'
-$autoNumberFormat = '{SEQNUM:6}'
+$autoNumberFormat = $bookDefinition.Format
+$isRegionalBook = $Book -ne 'Auckland'
 $choiceBase = 122830000
 
 function New-Label([string]$Text) { [Microsoft.Xrm.Sdk.Label]::new($Text, 1033) }
@@ -36,6 +48,7 @@ function Import-Sdk {
 }
 function Connect-Dataverse {
     $connection = "AuthType=OAuth;Url=$($EnvironmentUrl.TrimEnd('/'));AppId=51f81489-12ee-4a9e-aaae-a2591f45987d;RedirectUri=app://58145B91-0C36-4500-8554-080854F2AC97;LoginPrompt=$LoginPrompt"
+    if (-not [string]::IsNullOrWhiteSpace($UserName)) { $connection += ";UserName=$($UserName.Trim())" }
     $client = [Microsoft.Xrm.Tooling.Connector.CrmServiceClient]::new($connection)
     if (-not $client.IsReady) { throw "Dataverse sign-in failed: $($client.LastCrmError)" }
     $client
@@ -65,6 +78,13 @@ function Get-AllNumericJobNumbers($Service) {
     $numbers = [Collections.Generic.List[long]]::new()
     $seen = @{}
     $duplicates = [Collections.Generic.List[string]]::new()
+    $seriesNumbers = @{
+        Auckland = [Collections.Generic.List[long]]::new()
+        Waikato = [Collections.Generic.List[long]]::new()
+        Hastings = [Collections.Generic.List[long]]::new()
+        Christchurch = [Collections.Generic.List[long]]::new()
+    }
+    $unclassified = [Collections.Generic.List[string]]::new()
     do {
         $page = $Service.RetrieveMultiple($query)
         foreach ($record in $page.Entities) {
@@ -73,12 +93,31 @@ function Get-AllNumericJobNumbers($Service) {
             $normalized = $raw.Trim().ToUpperInvariant()
             if ($seen.ContainsKey($normalized)) { $duplicates.Add($raw.Trim()) } else { $seen[$normalized] = $true }
             $parsed = 0L
-            if ([long]::TryParse($raw.Trim(), [ref]$parsed) -and $parsed -gt 0) { $numbers.Add($parsed) }
+            if ([long]::TryParse($raw.Trim(), [ref]$parsed) -and $parsed -gt 0) {
+                $numbers.Add($parsed)
+                $seriesNumbers.Auckland.Add($parsed)
+            } elseif ($normalized -match '^(WJ|HJ|CJ)([0-9]+)$') {
+                $suffix = 0L
+                if ([long]::TryParse($Matches[2], [ref]$suffix) -and $suffix -gt 0) {
+                    $seriesName = @{ WJ='Waikato'; HJ='Hastings'; CJ='Christchurch' }[$Matches[1]]
+                    $seriesNumbers[$seriesName].Add($suffix)
+                }
+            } else {
+                $unclassified.Add($raw.Trim())
+            }
         }
         if ($page.MoreRecords) { $query.PageInfo.PageNumber++; $query.PageInfo.PagingCookie = $page.PagingCookie }
     } while ($page.MoreRecords)
     $maximum = if ($numbers.Count) { ($numbers | Measure-Object -Maximum).Maximum } else { 130499L }
-    @{ Maximum = [long]$maximum; Next = [long]$maximum + 1L; Count = $seen.Count; Duplicates = @($duplicates | Sort-Object -Unique) }
+    $series = @{}
+    foreach ($seriesName in $seriesNumbers.Keys) {
+        $values = $seriesNumbers[$seriesName]
+        $series[$seriesName] = @{
+            Count = $values.Count
+            Maximum = if ($values.Count) { [long](($values | Measure-Object -Maximum).Maximum) } else { 0L }
+        }
+    }
+    @{ Maximum = [long]$maximum; Next = [long]$maximum + 1L; Count = $seen.Count; Duplicates = @($duplicates | Sort-Object -Unique); Series = $series; Unclassified = @($unclassified | Sort-Object -Unique) }
 }
 function Ensure-Table($Service, [bool]$Provision) {
     $existing = Get-Entity $Service $table
@@ -91,10 +130,10 @@ function Ensure-Table($Service, [bool]$Provision) {
     }
     if (-not $Provision) { Write-Output "Missing table: $table (ready to provision)."; return $false }
     $entity = [Microsoft.Xrm.Sdk.Metadata.EntityMetadata]::new()
-    $entity.SchemaName = 'gr_JobBookEntry'
-    $entity.DisplayName = New-Label 'Job Book Entry'
-    $entity.DisplayCollectionName = New-Label 'Job Book Entries'
-    $entity.Description = New-Label 'Job number allocation ledger and reviewed intake boundary before managed Job creation.'
+    $entity.SchemaName = $bookDefinition.Schema
+    $entity.DisplayName = New-Label $bookDefinition.Display
+    $entity.DisplayCollectionName = New-Label $bookDefinition.Collection
+    $entity.Description = New-Label "$Book Job number allocation ledger and reviewed intake boundary before managed Job creation."
     $entity.OwnershipType = [Microsoft.Xrm.Sdk.Metadata.OwnershipTypes]::OrganizationOwned
     $entity.IsActivity = $false
     $primary = [Microsoft.Xrm.Sdk.Metadata.StringAttributeMetadata]::new()
@@ -230,6 +269,7 @@ $lookups = @(
     @{ Schema='gr_Equipment'; Logical='gr_equipment'; Display='Equipment'; Target='gr_equipment'; Relationship='gr_jobbookentry_Equipment_gr_equipment' },
     @{ Schema='gr_Customer'; Logical='gr_customer'; Display='Customer'; Target='gr_customer'; Relationship='gr_jobbookentry_Customer_gr_customer' },
     @{ Schema='gr_Site'; Logical='gr_site'; Display='Site'; Target='gr_site'; Relationship='gr_jobbookentry_Site_gr_site' },
+    @{ Schema='gr_Contact'; Logical='gr_contact'; Display='Contact'; Target='gr_contact'; Relationship='gr_jobbookentry_Contact_gr_contact' },
     @{ Schema='gr_PromotedJob'; Logical='gr_promotedjob'; Display='Promoted Job'; Target='gr_job'; Relationship='gr_jobbookentry_PromotedJob_gr_job' }
 )
 function Ensure-Lookup($Service, $Def, [bool]$Provision) {
@@ -237,7 +277,8 @@ function Ensure-Lookup($Service, $Def, [bool]$Provision) {
     if ($existing) { if ([string]$existing.AttributeType -ne 'Lookup' -or @($existing.Targets) -notcontains $Def.Target) { throw "Conflict: $table.$($Def.Logical) lookup." }; Write-Output "Verified lookup $table.$($Def.Logical)."; return }
     if (-not $Provision) { throw "Missing lookup: $table.$($Def.Logical)" }
     $lookup = [Microsoft.Xrm.Sdk.Metadata.LookupAttributeMetadata]::new(); $lookup.SchemaName=$Def.Schema; $lookup.DisplayName=New-Label $Def.Display; $lookup.RequiredLevel=New-Required $false
-    $relationship = [Microsoft.Xrm.Sdk.Metadata.OneToManyRelationshipMetadata]::new(); $relationship.SchemaName=$Def.Relationship; $relationship.ReferencedEntity=$Def.Target; $relationship.ReferencingEntity=$table; $relationship.ReferencingEntityNavigationPropertyName=$Def.Schema; $relationship.ReferencedEntityNavigationPropertyName="$($Def.Target)_${table}_$($Def.Logical)"; $relationship.CascadeConfiguration=New-Cascade
+    $relationshipSchema = if ($Book -eq 'Auckland') { $Def.Relationship } else { $Def.Relationship.Replace('gr_jobbookentry_', "$($bookDefinition.Table)_") }
+    $relationship = [Microsoft.Xrm.Sdk.Metadata.OneToManyRelationshipMetadata]::new(); $relationship.SchemaName=$relationshipSchema; $relationship.ReferencedEntity=$Def.Target; $relationship.ReferencingEntity=$table; $relationship.ReferencingEntityNavigationPropertyName=$Def.Schema; $relationship.ReferencedEntityNavigationPropertyName="$($Def.Target)_${table}_$($Def.Logical)"; $relationship.CascadeConfiguration=New-Cascade
     $request = [Microsoft.Xrm.Sdk.Messages.CreateOneToManyRequest]::new(); $request.Lookup=$lookup; $request.OneToManyRelationship=$relationship; $request.SolutionUniqueName=$SolutionUniqueName; $Service.Execute($request)|Out-Null
     Write-Output "Created lookup $table.$($Def.Logical)."
 }
@@ -261,15 +302,41 @@ function Publish-Metadata($Service) {
     $request=[Microsoft.Crm.Sdk.Messages.PublishXmlRequest]::new(); $request.ParameterXml="<importexportxml><entities><entity>$table</entity><entity>gr_job</entity></entities></importexportxml>"; $Service.Execute($request)|Out-Null
     Write-Output 'Published Job Book Intake metadata.'
 }
-function Ensure-ServiceOperationsPrivileges($Service, [bool]$Provision) {
-    $query=[Microsoft.Xrm.Sdk.Query.QueryExpression]::new('role'); $query.ColumnSet=[Microsoft.Xrm.Sdk.Query.ColumnSet]::new('roleid','name','ismanaged'); $query.Criteria.AddCondition('name',[Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,'Service Operations'); $roles=@($Service.RetrieveMultiple($query).Entities)
-    if ($roles.Count -ne 1 -or [bool]$roles[0]['ismanaged']) { throw 'Expected exactly one unmanaged Service Operations role.' }
-    $names=@('Create','Read','Write','Append','AppendTo') | ForEach-Object { "prv$($_)gr_JobBookEntry" }
+function Ensure-RolePrivileges($Service, [string]$RoleName, [string[]]$Names, [bool]$Provision) {
+    $query=[Microsoft.Xrm.Sdk.Query.QueryExpression]::new('role'); $query.ColumnSet=[Microsoft.Xrm.Sdk.Query.ColumnSet]::new('roleid','name','ismanaged'); $query.Criteria.AddCondition('name',[Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,$RoleName); $roles=@($Service.RetrieveMultiple($query).Entities)
+    if ($roles.Count -ne 1 -or [bool]$roles[0]['ismanaged']) { throw "Expected exactly one unmanaged $RoleName role." }
     $privilegeQuery=[Microsoft.Xrm.Sdk.Query.QueryExpression]::new('privilege'); $privilegeQuery.ColumnSet=[Microsoft.Xrm.Sdk.Query.ColumnSet]::new('name'); $privilegeQuery.PageInfo=[Microsoft.Xrm.Sdk.Query.PagingInfo]::new(); $privilegeQuery.PageInfo.Count=5000; $privilegeQuery.PageInfo.PageNumber=1
     $all=[Collections.Generic.List[Microsoft.Xrm.Sdk.Entity]]::new(); do { $page=$Service.RetrieveMultiple($privilegeQuery); foreach($item in $page.Entities){$all.Add($item)}; if($page.MoreRecords){$privilegeQuery.PageInfo.PageNumber++;$privilegeQuery.PageInfo.PagingCookie=$page.PagingCookie} } while($page.MoreRecords)
     $roleRequest=[Microsoft.Crm.Sdk.Messages.RetrieveRolePrivilegesRoleRequest]::new(); $roleRequest.RoleId=$roles[0].Id; $current=@($Service.Execute($roleRequest).RolePrivileges); $add=[Collections.Generic.List[Microsoft.Crm.Sdk.Messages.RolePrivilege]]::new()
-    foreach($name in $names){$privilege=$all|Where-Object{[string]$_['name']-ieq$name}|Select-Object -First 1;if(-not $privilege){throw "Generated privilege missing: $name"};$have=$current|Where-Object PrivilegeId -eq $privilege.Id|Select-Object -First 1;if($have){if([string]$have.Depth-ne 'Global'){throw "Privilege $name has incompatible depth."}}elseif($Provision){$grant=[Microsoft.Crm.Sdk.Messages.RolePrivilege]::new();$grant.PrivilegeId=$privilege.Id;$grant.Depth='Global';$add.Add($grant)}else{throw "Missing Service Operations privilege: $name"}}
-    if($add.Count){$request=[Microsoft.Crm.Sdk.Messages.AddPrivilegesRoleRequest]::new();$request.RoleId=$roles[0].Id;$request.Privileges=$add.ToArray();$Service.Execute($request)|Out-Null;Write-Output "Granted $($add.Count) Job Book Intake privileges to Service Operations."}
+    foreach($name in $Names){$privilege=$all|Where-Object{[string]$_['name']-ieq$name}|Select-Object -First 1;if(-not $privilege){throw "Generated privilege missing: $name"};$have=$current|Where-Object PrivilegeId -eq $privilege.Id|Select-Object -First 1;if($have){if([string]$have.Depth-ne 'Global'){throw "$RoleName privilege $name has incompatible depth."}}elseif($Provision){$grant=[Microsoft.Crm.Sdk.Messages.RolePrivilege]::new();$grant.PrivilegeId=$privilege.Id;$grant.Depth='Global';$add.Add($grant)}else{throw "Missing $RoleName privilege: $name"}}
+    if($add.Count){$request=[Microsoft.Crm.Sdk.Messages.AddPrivilegesRoleRequest]::new();$request.RoleId=$roles[0].Id;$request.Privileges=$add.ToArray();$Service.Execute($request)|Out-Null;Write-Output "Granted $($add.Count) required privileges to $RoleName."}
+    Write-Output "Verified $($Names.Count) required privileges for $RoleName."
+}
+function Get-ImportedSeriesMaximum($Service) {
+    $query=[Microsoft.Xrm.Sdk.Query.QueryExpression]::new($table);$query.ColumnSet=[Microsoft.Xrm.Sdk.Query.ColumnSet]::new('gr_jobnumber');$query.PageInfo=[Microsoft.Xrm.Sdk.Query.PagingInfo]::new();$query.PageInfo.Count=5000;$query.PageInfo.PageNumber=1
+    $maximum=0L;$count=0
+    do {
+        $page=$Service.RetrieveMultiple($query)
+        foreach($record in $page.Entities){
+            $raw=if($record.Attributes.ContainsKey('gr_jobnumber')){[string]$record['gr_jobnumber']}else{''}
+            $pattern=if($bookDefinition.Prefix){"^$([regex]::Escape($bookDefinition.Prefix))([0-9]+)$"}else{'^([0-9]+)$'}
+            if($raw.Trim().ToUpperInvariant()-match$pattern){$value=0L;if([long]::TryParse($Matches[1],[ref]$value)-and$value-gt$maximum){$maximum=$value};$count++}
+        }
+        if($page.MoreRecords){$query.PageInfo.PageNumber++;$query.PageInfo.PagingCookie=$page.PagingCookie}
+    }while($page.MoreRecords)
+    @{Count=$count;Maximum=$maximum}
+}
+function Ensure-ServiceOperationsPrivileges($Service, [bool]$Provision) {
+    $names=@('Create','Read','Write','Append','AppendTo') | ForEach-Object { "prv$($_)$($bookDefinition.Privilege)" }
+    Ensure-RolePrivileges $Service 'Service Operations' $names $Provision
+}
+function Ensure-RestrictedBookPrivileges($Service, [bool]$Provision) {
+    $names=@('Create','Read','Write','Append','AppendTo') | ForEach-Object { "prv$($_)$($bookDefinition.Privilege)" }
+    Ensure-RolePrivileges $Service $RestrictedRoleName $names $Provision
+}
+function Ensure-RestrictedContactPrivileges($Service, [bool]$Provision) {
+    $names=@('prvReadgr_SiteContact','prvReadgr_Contact','prvAppendTogr_Contact')
+    Ensure-RolePrivileges $Service $RestrictedRoleName $names $Provision
 }
 
 Import-Sdk
@@ -279,18 +346,33 @@ try {
     Write-Output "Connected to $EnvironmentUrl as $($who.UserId)."
     $numbers=Get-AllNumericJobNumbers $service
     Write-Output "Existing Jobs: $($numbers.Count) numbered; maximum numeric Job Number: $($numbers.Maximum); proposed first Intake number: $($numbers.Next)."
+    foreach ($seriesName in @('Auckland','Waikato','Hastings','Christchurch')) {
+        $series = $numbers.Series[$seriesName]
+        Write-Output "Job Book series $seriesName`: $($series.Count) Jobs; maximum sequence: $($series.Maximum)."
+    }
+    if ($numbers.Unclassified.Count) { Write-Output "Unclassified Job Number formats: $($numbers.Unclassified.Count)." }
     if($numbers.Duplicates.Count){Write-Warning "Existing duplicate Job Numbers defer the gr_job uniqueness key: $($numbers.Duplicates -join ', '). No existing Job will be changed."}
-    $provision=$Mode -eq 'Provision'
+    $provision=$Mode -in @('Provision','Cutover')
     $created=Ensure-Table $service $provision
     if ($Mode -eq 'Inspect' -and -not (Get-Entity $service $table)) { Write-Output 'Inspect completed: schema names are available and preflight passed.'; return }
     foreach($column in $columns){Ensure-Column $service $column $provision}
     foreach($column in $jobMarkerColumns){Ensure-JobMarkerColumn $service $column $provision}
     foreach($lookup in $lookups){Ensure-Lookup $service $lookup $provision}
-    Ensure-Key $service $table 'gr_JobBookEntry_JobNumber_Key' @('gr_jobnumber') $provision
+    Ensure-Key $service $table $bookDefinition.Key @('gr_jobnumber') $provision
     if(-not $numbers.Duplicates.Count){Ensure-Key $service 'gr_job' 'gr_Job_JobNumber_Key' @('gr_jobnumber') $provision}
-    if($provision -and ($created -or (Test-TableEmpty $service))){Set-InitialSeed $service $numbers.Next}
-    if($provision){Publish-Metadata $service; Ensure-ServiceOperationsPrivileges $service $true}
+    if($Mode -eq 'Provision' -and -not $isRegionalBook -and ($created -or (Test-TableEmpty $service))){Set-InitialSeed $service $numbers.Next}
+    if($Mode -eq 'Cutover'){
+        $imported=Get-ImportedSeriesMaximum $service
+        if($isRegionalBook -and -not $imported.Count){throw "$Book cutover is blocked: import its legacy Job Book rows before setting the live sequence."}
+        $managedMaximum=[long]$numbers.Series[$Book].Maximum
+        $next=[Math]::Max($managedMaximum,[long]$imported.Maximum)+1L
+        Set-InitialSeed $service $next
+        Write-Output "$Book cutover seed verified from $($imported.Count) imported entries and managed Jobs; next allocation is $($bookDefinition.Prefix)$next."
+    }
+    if($provision){Publish-Metadata $service; Ensure-ServiceOperationsPrivileges $service $true; Ensure-RestrictedContactPrivileges $service $true; if($isRegionalBook){Ensure-RestrictedBookPrivileges $service $true}}
     Ensure-ServiceOperationsPrivileges $service $false
+    Ensure-RestrictedContactPrivileges $service $false
+    if($isRegionalBook){Ensure-RestrictedBookPrivileges $service $false}
     if($Mode -eq 'Verify'){
         $keysToVerify=@(@{Entity=$table;Name=$jobNumberKey});if(-not $numbers.Duplicates.Count){$keysToVerify+=@{Entity='gr_job';Name=$jobTableKey}}
         foreach($key in $keysToVerify){$metadata=Get-Entity $service $key.Entity;$found=@($metadata.Keys|Where-Object LogicalName -eq $key.Name);if($found.Count-ne 1-or[string]$found[0].EntityKeyIndexStatus-ne'Active'){throw "Key $($key.Name) is not Active."}}

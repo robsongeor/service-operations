@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+- Reused the Job Book intake drawer for editing existing Intake entries, with read-only Job Number,
+  entry date, and regional ownership plus ETag-protected Dataverse updates. Job Book-only users keep
+  a locked `Managed Job` status after promotion, while Full Access users retain `Open Job` routing
+  into the canonical operational Job editor.
+- Added an explicit **Equipment not known yet** choice to Legacy Job Book intake. It permits an
+  entry to be allocated while flagging Equipment review, preserves manually selected Customer/Site
+  context, and is cleared automatically when known Equipment is selected.
+- Fixed the Legacy Job Book Customer control so selecting Equipment with a known linked Customer
+  immediately displays that Customer as well as populating its Site and address.
+- Fixed the Auckland Legacy Job Book returning zero rows after regional-book support was added.
+  Auckland now uses a reliable bounded numbered-Job query and applies its exact numeric series
+  classification client-side; WJ, HJ, CJ, and unclassified values remain excluded from Auckland.
+- Added separate, independently paged Auckland, Waikato, Hastings, and Christchurch Job Book
+  registers backed by configurable Dataverse tables and independent AutoNumber formats. Regional
+  views and allocation have separate disabled-by-default release gates, and the reusable schema
+  utility now separates safe provisioning from migration-derived cutover seeding. Provisioned and
+  published the three regional production schemas and granted both application roles their required
+  table privileges; all three alternate keys verify Active, while the tables remain empty, unseeded,
+  and hidden pending source spreadsheet migration.
+- Enabled Legacy Job Book Contact selection using the same shared Customer, Site, and Site Contact
+  controls as Create Job. Provisioned and published `gr_jobbookentry.gr_Contact`, granted the Job
+  Book Only role the three required Contact-related privileges, and enabled local and Azure builds.
+- Allowed saved Quotes to generate provisional quotation PDFs without a numbered linked Job. The
+  persisted Quote number becomes the document number and Our Ref remains blank, avoiding placeholder
+  Job numbers while preserving the existing numbered-Job output when authoritative Job context exists.
 - Stabilized Customer Dashboard Job-child query identities so unchanged renders no longer repeat
   Schedule Option and Office Update cache/deduplication work, and routed full Equipment register
   loading through the shared operational request while retaining its existing IndexedDB

@@ -17,6 +17,7 @@ management shell and a public portal shell.
 | `/equipment-map` | Equipment assigned-Site map |
 | `/job-map` | Allocated, Unallocated, and Waiting for parts Jobs grouped by recorded Site |
 | `/jobs` | Jobs |
+| `/job-import` | Spreadsheet Job paste, validation, matching, and atomic import |
 | `/equipment-photos` | Mobile office Equipment Photo upload |
 | `/site-checks` | Cross-customer Site Checks workspace |
 | `/scheduling` | Scheduler |
@@ -36,6 +37,14 @@ shell, authentication boundary, Sidebar, and small route-loading fallback remain
 bundle; a feature's JavaScript and CSS load only when that route is opened. Public portal routes
 retain their pre-authentication routing checks and their own Suspense boundary, so code splitting
 does not move them into the management shell or expose office navigation.
+
+When application-role enforcement is enabled, `ServiceOperations.FullAccess` retains the complete
+management route set. `ServiceOperations.JobBookOnly` redirects `/` to `/job-book`, renders only the
+Legacy Job Book navigation item, blocks every other management path through the catch-all access-
+denied route, and suppresses the Job Book's cross-navigation into a managed Job. Hiding navigation
+is a usability boundary only; the matching Dataverse role must independently restrict reads and
+writes. Accounts with no supported application role receive Access Denied before the management
+shell is mounted.
 
 ## Navigation rules
 

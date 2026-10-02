@@ -150,11 +150,19 @@ test('Equipment Map keeps Geoapify credentials out of client code and uses canon
     assert.match(app, /path="\/equipment-map"/)
 })
 
-test('Equipment edit reuses searchable Customer and Site creation workflow', () => {
+test('Equipment and Job drawers reuse the same searchable Customer creation workflow', () => {
     const drawer = readFileSync(new URL('../src/alpha/equipment/components/EquipmentDrawer.tsx', import.meta.url), 'utf8')
+    const jobRelationships = readFileSync(new URL('../src/alpha/jobs/components/JobRelationshipFields.tsx', import.meta.url), 'utf8')
+    const customerPicker = readFileSync(new URL('../src/alpha/shared/customer-relationship/CustomerRelationshipPicker.tsx', import.meta.url), 'utf8')
     const screen = readFileSync(new URL('../src/alpha/equipment/EquipmentScreen.tsx', import.meta.url), 'utf8')
     assert.doesNotMatch(drawer, /Customer \(site filter\)/)
     assert.match(drawer, /id="equipment-customer"/)
-    assert.match(drawer, /\+ Add new customer/)
+    assert.match(drawer, /<CustomerRelationshipPicker/)
+    assert.match(jobRelationships, /<CustomerRelationshipPicker/)
+    assert.match(customerPicker, /\+ Add new customer/)
+    assert.match(customerPicker, /New customer and site/)
+    assert.match(customerPicker, /<VerifiedAddressField/)
+    assert.match(drawer, /siteMode === 'new'[\s\S]*<VerifiedAddressField value=\{newSite\.address\}/)
+    assert.match(drawer, /Select a verified address from the Geoapify suggestions/)
     assert.match(screen, /mode="edit"[\s\S]*onCreateCustomer=\{createCustomer\}[\s\S]*onCreateSite=\{createSite\}/)
 })

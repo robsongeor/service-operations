@@ -17,16 +17,17 @@ token validation, minimal public Job lookup, validation, and submission persiste
 a dedicated least-privilege Dataverse Application User; the public browser never receives
 Dataverse access or server credentials.
 
-The durable relationship chain is Customer → Site → Contact/Equipment → Job, with schedules,
-assignments, Job Cards, Quotes, WOF inspections, and service plans attached to their owning
-records.
+The durable relationship chain is Customer → Site → Site Contact → Contact. Equipment belongs to
+Site, and Jobs directly reference their selected Site, Contact, Equipment, and Mechanic. Schedules,
+assignments, Job Cards, Quotes, WOF inspections, and service plans attach to their owning records.
 
 ## Major Relationships
 
 - Site belongs to Customer.
-- Contacts associate with Sites.
+- Contacts associate with Sites through `gr_sitecontact`, which links one `gr_Site` to one
+  `gr_Contact`.
 - Equipment belongs to Site and derives Customer through Site.
-- Jobs reference Customer, Site, and optionally Equipment.
+- Jobs reference Site, optionally Contact and Equipment, and derive Customer through Site.
 - Job Assignments, schedule options, and Office Updates belong to Jobs.
 - Service Plans and WOF inspections belong to Equipment.
 - Quotes may reference Customer, Equipment, and Job.
@@ -86,6 +87,7 @@ step.
 ## Related Files and Documents
 
 - [Knowledge base schema map](../README.md#feature-architecture)
+- [Core Dataverse schema map](../dataverse-core-schema.md)
 - [Shared services](shared-services.md)
 - [Security](security.md)
 - [`../../scripts`](../../scripts)

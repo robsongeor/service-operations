@@ -59,6 +59,7 @@ type Props = JobRelationshipLookupProps & {
     initialValues?: JobCreateInitialValues
     jobTypeOptions?: { label: string; value: JobType }[]
     requireJobNumber?: boolean
+    closeAfterCreate?: boolean
     onClose: () => void
 }
 
@@ -66,7 +67,7 @@ export default function JobCreateDrawer({
     mechanics, mechanicsLoading, mechanicsError, onRetryMechanics, equipmentList, sites, customers, siteContacts, servicePlans,
     onCreateCustomer, onCreateSite, onCreateContact, onCreateEquipment,
     onCreateJob, onCreated, onCreateScheduleOption, initialValues,
-    jobTypeOptions = STANDARD_JOB_TYPE_OPTIONS, requireJobNumber = false, existingJobs = [], onClose,
+    jobTypeOptions = STANDARD_JOB_TYPE_OPTIONS, requireJobNumber = false, closeAfterCreate = true, existingJobs = [], onClose,
     onSearchEquipment, onSearchCustomers, onLoadCustomerSites, onLoadSiteContacts,
     onLoadEquipment, onLoadEquipmentServicePlans,
 }: Props) {
@@ -184,7 +185,7 @@ export default function JobCreateDrawer({
 
             await onCreated?.(jobId, jobInput)
 
-            onClose()
+            if (closeAfterCreate) onClose()
         } catch (error) {
             console.error(error)
             setSaveError(createdJob

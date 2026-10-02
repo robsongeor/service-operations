@@ -560,6 +560,7 @@ export default function JobEditDrawer({
                                 setDraft={setDraft}
                                 mechanics={mechanics}
                                 equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)}
+                                jobBookJob={job}
                             />
                         </fieldset>
 

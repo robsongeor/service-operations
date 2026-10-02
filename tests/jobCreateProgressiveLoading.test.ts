@@ -8,6 +8,7 @@ const jobsScreenSource = readSource('../src/alpha/jobs/JobsScreen.tsx')
 const useJobsSource = readSource('../src/alpha/jobs/hooks/useJobs.ts')
 const jobCreateDrawerSource = readSource('../src/alpha/jobs/components/JobCreateDrawer.tsx')
 const relationshipFieldsSource = readSource('../src/alpha/jobs/components/JobRelationshipFields.tsx')
+const siteContactFieldsSource = readSource('../src/alpha/jobs/components/JobSiteContactFields.tsx')
 const equipmentCreateSource = readSource('../src/alpha/equipment/components/EquipmentJobCreateDrawer.tsx')
 
 test('Job creation opens immediately without the legacy broad reference-data gate', () => {
@@ -28,8 +29,9 @@ test('Job creation loads exact dependencies progressively with local retry state
     assert.match(jobCreateDrawerSource, /onLoadEquipmentServicePlans\(draft\.equipmentId, controller\.signal\)/)
     assert.match(relationshipFieldsSource, /siteLoadStatus/)
     assert.match(relationshipFieldsSource, /contactLoadStatus/)
-    assert.match(relationshipFieldsSource, /Loading Sites for this Customer/)
-    assert.match(relationshipFieldsSource, /Loading Contacts for this Site/)
+    assert.match(relationshipFieldsSource, /<JobSiteContactFields/)
+    assert.match(siteContactFieldsSource, /Loading Sites for this Customer/)
+    assert.match(siteContactFieldsSource, /Loading Contacts for this Site/)
 })
 
 test('Job consumers share the cached Staff directory instead of fetching it in initial Job loading', () => {

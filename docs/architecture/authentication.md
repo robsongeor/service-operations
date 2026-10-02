@@ -21,6 +21,28 @@ VITE_MSAL_TENANT_ID
 VITE_DATAVERSE_URL
 ```
 
+### Management application roles
+
+Optional Entra application-role enforcement supports two role values:
+
+- `ServiceOperations.FullAccess` grants the normal management application.
+- `ServiceOperations.JobBookOnly` grants only `/job-book`; FullAccess takes precedence if both
+  claims are present.
+
+Keep `VITE_APPLICATION_ACCESS_CONTROL_ENABLED=false` until the Entra application roles, assignments,
+and matching least-privilege Dataverse roles have been configured and tested. When enforcement is
+enabled, a signed-in account with neither application role receives Access Denied. Role claims own
+navigation and feature visibility; Dataverse roles remain the authoritative data and mutation
+boundary.
+
+Development can simulate `full`, `job-book-only`, or `denied` through
+`VITE_SIMULATED_ACCESS_MODE`. The override is ignored by production builds and displays a persistent
+warning because it validates application behaviour, not Dataverse security.
+
+The Job Book-only route can create and edit staging Intake entries but never exposes the managed Job
+editor. Once an entry is promoted, the row becomes a locked `Managed Job` summary for that access
+mode. Only FullAccess renders `Open Job` and routes into the operational Jobs screen.
+
 `VITE_DATAVERSE_URL` is the organisation origin without `/api/data/v9.2` or a trailing
 slash. User preferences use the resolved account storage ID.
 

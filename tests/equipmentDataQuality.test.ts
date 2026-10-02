@@ -369,12 +369,15 @@ test('Equipment Create Job applies exact defaults immediately and hydrates bound
     assert.doesNotMatch(drawer, /referenceDataStatus !== 'ready'/)
     assert.match(drawer, /loadGlobalOperationalData: false/)
     assert.match(drawer, /equipment: \[equipment\]/)
-    assert.match(drawer, /onSearchEquipment=\{searchEquipmentForEditor\}/)
-    assert.match(drawer, /onLoadEquipment=\{loadEquipmentForEditor\}/)
-    assert.match(drawer, /mechanicsLoading=\{mechanicsLoading\}/)
+    assert.match(drawer, /onSearchEquipment: searchEquipmentForEditor/)
+    assert.match(drawer, /onLoadEquipment: loadEquipmentForEditor/)
+    assert.match(drawer, /mechanicsLoading,/)
     assert.match(drawer, /equipmentId: equipment\.gr_equipmentid/)
     assert.match(drawer, /siteId,/)
     assert.match(drawer, /customerId: equipment\.gr_Site\?\.gr_Customer\?\.gr_customerid/)
+    assert.match(drawer, /closeAfterCreate=\{false\}/)
+    assert.match(drawer, /setCreatedJob\(refreshed\)/)
+    assert.match(drawer, /if \(createdJob\) return <JobEditDrawer/)
 })
 
 test('Equipment Maintenance separates usage insight from legacy service baseline setup', () => {

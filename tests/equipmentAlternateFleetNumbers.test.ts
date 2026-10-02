@@ -54,13 +54,13 @@ test('Equipment projections and canonical editor include the alternate Fleet Num
 })
 
 test('inline Job Equipment creation accepts and persists an alternate Fleet Number', () => {
-    const relationshipFields = readFileSync(new URL('../src/alpha/jobs/components/JobRelationshipFields.tsx', import.meta.url), 'utf8')
+    const equipmentField = readFileSync(new URL('../src/alpha/jobs/components/JobEquipmentField.tsx', import.meta.url), 'utf8')
     const equipmentApi = readFileSync(new URL('../src/alpha/jobs/services/equipmentApi.ts', import.meta.url), 'utf8')
     const jobsHook = readFileSync(new URL('../src/alpha/jobs/hooks/useJobs.ts', import.meta.url), 'utf8')
 
-    assert.match(relationshipFields, /Alternate fleet number/)
-    assert.match(relationshipFields, /!equipment\.alternateFleet\.trim\(\)/)
-    assert.match(relationshipFields, /alternateFleet: equipment\.alternateFleet\.trim\(\) \|\| undefined/)
+    assert.match(equipmentField, /Alternate fleet number/)
+    assert.match(equipmentField, /!equipment\.alternateFleet\.trim\(\)/)
+    assert.match(equipmentField, /alternateFleet: equipment\.alternateFleet\.trim\(\) \|\| undefined/)
     assert.match(jobsHook, /alternateFleet\?: string/)
     assert.match(equipmentApi, /normalizeAlternateFleetNumbers\(equipment\.alternateFleet, equipment\.fleet\)/)
     assert.match(equipmentApi, /gr_alternatefleetnumbers: alternateFleetNumbers \|\| null/)

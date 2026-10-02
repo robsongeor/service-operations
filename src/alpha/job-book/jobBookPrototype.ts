@@ -1,4 +1,5 @@
 import type { Equipment } from '../jobs/types/equipment.types'
+import type { JobBookKey } from './jobBookConfig'
 
 export type PrototypeEquipment = {
     id: string
@@ -33,6 +34,7 @@ export const MANAGED_JOB_ENTRY_MARKER_COLUMNS = {
 } as const
 
 export type JobBookRow = {
+    jobBookKey: JobBookKey
     id: string
     jobNumber: string
     date: string
@@ -48,6 +50,8 @@ export type JobBookRow = {
     description: string
     site: string
     siteId: string
+    contactId: string
+    contactName: string
     address: string
     addressVerified: boolean
     addressNotFoundConfirmed: boolean
@@ -93,8 +97,9 @@ export function splitSiteAddress(value: string) {
     return { street, locality: rest.join(', ') }
 }
 
-export function createBlankJobBookRow(jobNumber: number): JobBookRow {
+export function createBlankJobBookRow(jobNumber: number, jobBookKey: JobBookKey = 'auckland'): JobBookRow {
     return {
+        jobBookKey,
         id: crypto.randomUUID(),
         jobNumber: String(jobNumber),
         date: new Date().toLocaleDateString('en-CA'),
@@ -110,6 +115,8 @@ export function createBlankJobBookRow(jobNumber: number): JobBookRow {
         description: '',
         site: '',
         siteId: '',
+        contactId: '',
+        contactName: '',
         address: '',
         addressVerified: false,
         addressNotFoundConfirmed: false,
@@ -129,7 +136,8 @@ export function createBlankJobBookRow(jobNumber: number): JobBookRow {
 export function getPromotionReadiness(row: JobBookRow) {
     const reasons: string[] = []
     if (row.entryStage !== JOB_BOOK_ENTRY_STAGES.INTAKE) reasons.push('Only Intake entries can be promoted.')
-    if (!Number.isFinite(Number(row.jobNumber)) || Number(row.jobNumber) <= 0) reasons.push('A Job Number must be allocated first.')
+    const jobNumberMatch = row.jobNumber.trim().match(/^(?:WJ|HJ|CJ)?([0-9]+)$/i)
+    if (!jobNumberMatch || Number.parseInt(jobNumberMatch[1], 10) <= 0) reasons.push('A Job Number must be allocated first.')
     if (!row.description.trim()) reasons.push('A Job description is required.')
     if (!row.equipmentConfigured && !row.equipmentReviewRequired) reasons.push('Equipment must be selected or marked unconfigured.')
     if (row.address.trim() && !row.addressVerified && !row.addressNotFoundConfirmed) reasons.push('The address must be verified or marked not found.')
@@ -148,11 +156,27 @@ export function applyEquipmentToRow(row: JobBookRow, equipment: PrototypeEquipme
         customerId: equipment.customerId,
         site: equipment.site,
         siteId: equipment.siteId,
+        contactId: '',
+        contactName: '',
         address: equipment.address,
         addressVerified: equipment.addressVerified,
         addressNotFoundConfirmed: equipment.addressNotFoundConfirmed,
         equipmentConfigured: isEquipmentConfigured(equipment),
         equipmentReviewRequired: false,
+    }
+}
+
+export function setEquipmentReviewRequired(row: JobBookRow, required: boolean): JobBookRow {
+    if (!required) return { ...row, equipmentReviewRequired: false }
+    return {
+        ...row,
+        equipmentId: '',
+        fleet: '',
+        serial: '',
+        make: '',
+        model: '',
+        equipmentConfigured: false,
+        equipmentReviewRequired: true,
     }
 }
 

@@ -23,6 +23,29 @@ server payloads, safe errors, and explicit confirmation for consequential operat
 - Do not weaken roles to work around development failures.
 - Preserve historical records and require confirmation before destructive changes.
 
+## Management application access modes
+
+Entra application-role claims control which management routes and navigation the client renders.
+They never replace Dataverse authorization. The Job Book-only mode permits `/job-book`, redirects
+the application root there, denies all other management routes, and removes managed-Job navigation
+from the Legacy Job Book. The paired Dataverse role must be separately approved and tested with the
+exact Job Book projection.
+
+Within the Legacy Job Book, Intake entries remain editable through the shared Job Book drawer until
+promotion. Their Job Number, entry date, and regional register are immutable. After promotion, a
+Job Book-only user sees a locked `Managed Job` status and cannot open the operational editor; a Full
+Access user sees `Open Job` and is routed to the canonical Job drawer. GT and Timecloud entry markers
+remain the only managed-Job controls exposed in the restricted Job Book workflow.
+
+The current Legacy Job Book directly reads Job Book Entry plus bounded Job, Equipment, Customer,
+Site, and Staff reference data and writes approved entry markers. A dedicated role must grant only
+the minimum required table operations, with no Delete, Assign, or Share. If underlying reference-
+table visibility must also be prohibited, move the feature behind a fixed server-side projection
+rather than broadening the restricted user's Dataverse role.
+
+`VITE_SIMULATED_ACCESS_MODE` is a development-only navigation test. It does not change the signed-in
+user's Dataverse privileges and must never be represented as an authorization test.
+
 ## Public Portal Service
 
 The dedicated Application User has read access to the minimal Job, Equipment, Site, and

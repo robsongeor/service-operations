@@ -4,6 +4,7 @@ import SidebarFooter from './SidebarFooter'
 import { getSignedInUserInfo } from './auth/signedInUser'
 import { useActiveMsalAccount } from './auth/useActiveMsalAccount'
 import { isServiceOperationsAdministrator } from './auth/adminAuthorization'
+import type { ApplicationAccess } from './auth/applicationAccess'
 import './Sidebar.css'
 
 const menuItems = [
@@ -11,10 +12,12 @@ const menuItems = [
     { label: 'Customers', shortLabel: 'C', path: '/customers' },
     { label: 'Staff', shortLabel: 'S', path: '/staff' },
     { label: 'Equipment', shortLabel: 'E', path: '/equipment' },
+    { label: 'Maintenance Booking', shortLabel: 'MB', path: '/maintenance-booking' },
     { label: 'Greentree Review', shortLabel: 'GT', path: '/equipment/greentree-test' },
     { label: 'Equipment Map', shortLabel: 'M', path: '/equipment-map' },
     { label: 'WOF / REGO', shortLabel: 'W', path: '/wof' },
     { label: 'Jobs', shortLabel: 'J', path: '/jobs' },
+    { label: 'Job Import', shortLabel: 'JI', path: '/job-import' },
     { label: 'Equipment Photos', shortLabel: 'P', path: '/equipment-photos' },
     { label: 'Job Map', shortLabel: 'JM', path: '/job-map' },
     { label: 'Job Book Legacy', shortLabel: 'JB', path: '/job-book' },
@@ -25,16 +28,19 @@ const menuItems = [
     { label: 'Pricing', shortLabel: '$', path: '/pricing' },
 ]
 
-export default function Sidebar() {
+export default function Sidebar({ access }: { access: ApplicationAccess }) {
     const [isOpen, setIsOpen] = useState(() => globalThis.innerWidth > 760)
     const activeAccount = useActiveMsalAccount()
     const isAdmin = isServiceOperationsAdministrator(getSignedInUserInfo(activeAccount))
-    const visibleMenuItems = isAdmin
+    const allowedMenuItems = access.canUseFullApplication
+        ? menuItems
+        : menuItems.filter((item) => item.path === '/job-book')
+    const visibleMenuItems = isAdmin && access.canUseFullApplication
         ? [
-            ...menuItems,
+            ...allowedMenuItems,
             { label: 'Checklist Admin', shortLabel: 'A', path: '/site-checks/checklists' },
         ]
-        : menuItems
+        : allowedMenuItems
 
     return (
         <aside className={isOpen ? 'sidebar open' : 'sidebar collapsed'}>

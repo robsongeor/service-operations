@@ -187,13 +187,21 @@ test('Quote PO request invoice requires a saved quote number', () => {
     }), /save the quote/i)
 })
 
-test('Provisional quotation requires a numbered linked Job', () => {
-    assert.throws(() => buildQuotePoRequestInvoiceSnapshot({
+test('Provisional quotation uses the Quote number when there is no numbered linked Job', () => {
+    const snapshot = buildQuotePoRequestInvoiceSnapshot({
         quote: { ...quote, gr_Job: undefined }, title: 'Draft', quoteDate: '2026-08-13', notes: '',
-        jobId: '', customerId: '', equipmentId: '', jobs: [], customers: [], equipment: [],
+        jobId: '', customerId: 'customer-id', equipmentId: 'equipment-id', jobs: [],
+        customers: [{ gr_customerid: 'customer-id', gr_name: 'Example Customer Ltd' }],
+        equipment: [{ gr_equipmentid: 'equipment-id', gr_fleet: 'FLT-22', gr_serial: 'SER-9', gr_make: 'Komatsu', gr_model: 'FG25' }],
         lines: [{ pricingItemId: null, category: PRICING_CATEGORIES.OTHER, description: 'Item', quantity: 1, unitLabel: 'each', unitPrice: 10, taxable: true, sortOrder: 0 }],
         extendedPrices: [10], subtotal: 10, gstRatePercent: 15, gst: 1.5, total: 11.5,
-    }), /numbered Job/i)
+    })
+
+    assert.equal(snapshot.documentNumber, 'Q-00123')
+    assert.equal(snapshot.jobNumber, '')
+    assert.equal(snapshot.customer, 'Example Customer Ltd')
+    assert.equal(snapshot.fleet, 'FLT-22')
+    assert.equal(buildQuoteProvisionalFilename(snapshot), 'FLT-22 - Q-00123.pdf')
 })
 
 test('Invoice typography keeps GreenTree sizing and makes totals follow the lines', () => {

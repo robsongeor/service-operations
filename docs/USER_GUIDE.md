@@ -182,7 +182,9 @@ The table brings together equipment, registration number, customer, site, WOF ex
 4. When complete, update the inspection and new WOF expiry date.
 5. Complete the job, entering the hour-meter reading if requested.
 
-Use the page **Settings** button to choose how many days before expiry count as "due soon".
+Use the page **Settings** button to choose how many days before expiry count as "due soon". The same
+dialog can copy all Due Soon and Expired WOFs as a formatted table for an email. The copied list is
+not limited by the active tab or search and includes any linked Job Number.
 
 ## Jobs
 
@@ -497,7 +499,7 @@ WOF / REGO is a work queue, not just a list of dates. It shows what is due and l
 | Action | The context-sensitive next action, such as creating/opening work or updating inspection/expiry. |
 | Tabs | Focus the queue by WOF condition. |
 | Search | Search equipment, REGO, customer or job. |
-| Settings | Change the due-soon day threshold for your view. |
+| Settings | Change the due-soon day threshold or copy all Due Soon and Expired WOFs as an email-ready table. |
 
 When the inspection is complete, use the WOF action to update both the inspection history and current expiry. Do not only edit a date on an unrelated job, because the WOF queue needs the compliance update to be recorded through its proper workflow.
 
@@ -671,7 +673,9 @@ The Notes area is for customer-facing or internal quote notes. Keep notes clear 
 
 After a quote is saved, additional actions can be available:
 
-- **Generate and save PDF:** creates a provisional quotation PDF. It is not a tax invoice.
+- **Generate and save PDF:** creates a provisional quotation PDF. A linked Job number is used as the
+  document reference when available; otherwise the saved Quote number is used and Our Ref remains
+  blank. It is not a tax invoice.
 - **Open PO request email:** prepares an editable email draft for the configured customer/site PO contacts.
 - **Copy Table:** copies formatted quote lines and totals for pasting into another document.
 - **Delete quote:** removes the quote after confirmation.

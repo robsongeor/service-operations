@@ -2,6 +2,66 @@
 
 Branch: `codex/data-loading-architecture-review`
 
+## WOF due-list email copy (implemented locally)
+
+- WOF Table Settings now copies every Due Soon and Expired road-registered Equipment row as a rich
+  email-ready table with a tab-separated plain-text fallback. The copy is independent of the active
+  tab and search and includes Equipment, REGO, Customer, Site, expiry, due status, and the linked Job
+  Number when one exists.
+- The export reuses the already-loaded WOF register projection and current table sort, performs no
+  Dataverse read or mutation, and reports clipboard success or failure inside the settings dialog.
+
+## Unlinked Quote provisional PDFs (implemented locally)
+
+- A saved Quote can now generate its provisional quotation without a numbered linked Job. Numbered
+  Jobs retain the existing Invoice No and Our Ref output; otherwise the persisted Quote number is
+  used as Invoice No, Our Ref is blank, and the filename falls back to the Quote number.
+- This removes the incentive to enter placeholder Job numbers and does not create or change a Job,
+  Dataverse schema, Quote persistence contract, cloud configuration, or business data.
+
+## Legacy Job Book restricted access (implemented locally)
+
+- A central Entra application-role access profile now supports full application,
+  Job Book-only, and denied modes. Enforcement remains disabled by default so deploying the code
+  cannot lock out existing users before roles are assigned.
+- `ServiceOperations.JobBookOnly` lands on `/job-book`, renders only that navigation item, blocks
+  direct access to every other management route, and removes the Legacy table's managed-Job link.
+  `ServiceOperations.FullAccess` takes precedence when both claims exist.
+- Development builds can simulate `full`, `job-book-only`, or `denied` access with a persistent
+  warning. Production ignores the simulation setting.
+- No Entra application role, user/group assignment, Dataverse role, privilege, configuration,
+  deployment, or business-data change has been made. The dedicated least-privilege Job Book role
+  and target-user security smoke remain separately approved work.
+- The Legacy page now uses one compact top header. Row/Equipment/loading status and the Legacy View
+  badge sit beside the page title, and the duplicated inner Operations/Job Book header has been
+  removed to return that vertical space to the intake and register workflows.
+
+## Customer Site Equipment export (implemented locally)
+
+- Every Customer Dashboard Site card has a direct Export CSV action for all Equipment currently
+  assigned to that Site, including inactive records. Empty Sites keep the action disabled.
+- The Excel-compatible UTF-8 CSV is Fleet-sorted and contains Fleet Number, Serial Number, Make,
+  Model, Operational Status, Customer, Site, Address, Last Known Hours, and Reading Recorded Date.
+  Relationship fields come from Equipment → Site → Customer and missing meter values remain blank.
+- Export uses the dashboard's already-loaded bounded Equipment projection and performs no extra
+  Dataverse read or business-data mutation.
+
+## Spreadsheet Job import (implemented locally)
+
+- `/job-import` accepts the seven supplied Excel clipboard columns, converts New Zealand Date Only
+  values, and stages every source row for review without accepting a spreadsheet file upload.
+- Review matches primary/alternate Fleet Numbers and Staff against existing app records, derives
+  Customer only through Equipment → Site → Customer, and ignores spreadsheet Model and Customer
+  because Equipment is authoritative. Equipment without a Site or Customer remains blocked. Review
+  allows row corrections plus an issues-only filter covering errors and warnings. Existing Job
+  Numbers are blocked during review and rechecked directly before creation. Multi-Fleet and
+  missing-Equipment rows remain blocked because one managed Job owns at most one Equipment lookup.
+- Selected ready rows create historical Complete Breakdown or Workshop Jobs through one Dataverse
+  changeset after a batched duplicate preflight. The operation is atomic and does not synthesize
+  hour-meter evidence or run current Equipment maintenance completion effects.
+- No Dataverse schema, role, cloud configuration, deployment, credential, or live business-data
+  change has been made. Signed-in review and import smoke testing remains outstanding.
+
 ## Data loading and multi-user synchronization foundation (implemented locally)
 
 - The current React hooks, Dataverse services, Jobs/Equipment IndexedDB caches, focused drawer
@@ -467,7 +527,16 @@ Branch: `codex/data-loading-architecture-review`
   management payload; Customer and Site suggestions load only when the add-machine dialog opens.
   On 16 August 2026, the latest preflight found 399 numbered Jobs with no
   duplicate Job Numbers, and `gr_job_jobnumber_key` was provisioned and verified Active without
-  changing an existing Job. Promotion remains disabled until its atomic server operation exists.
+  changing an existing Job. The optional `gr_jobbookentry.gr_Contact` lookup is now provisioned,
+  published, and enabled in local and Azure builds. The shared Customer → Site → Site Contact control
+  stores the underlying Contact exactly as Create Job does. The `Service Operations - Job Book Only`
+  role has verified Site Contact Read plus Contact Read/Append To privileges. Promotion remains
+  disabled until its atomic server operation exists. Separate Waikato, Hastings, and Christchurch
+  table configurations, independently paged views, and reusable schema/cutover tooling are complete
+  locally. On 14 September 2026, all three regional production tables, columns, six relationship
+  lookups, active Job Number keys, and Full Access / Job Book Only role privileges were provisioned,
+  published, and independently verified. Their view and allocation gates remain false; the tables
+  contain no migration rows and no regional production sequence has been seeded or consumed.
 
 - All management and public portal feature screens are now route-level lazy imports. The measured
   local production entry bundle fell from approximately 1.79 MB minified / 540 KB gzip to 465 KB /

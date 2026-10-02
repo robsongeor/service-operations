@@ -20,6 +20,7 @@ import './WofScreen.css'
 import { equipmentIdentifierSearchValues } from '../equipment/identifiers/alternateFleetNumbers'
 import { useEquipmentJobHistory } from '../equipment/hooks/useEquipmentJobHistory'
 import { useOperationalScreenReady } from '../shared/data/OperationalScreenPerformanceContext'
+import { buildWofTableClipboard, copyWofTable } from './utils/wofTableClipboard'
 
 const tabs: { value: WofTab; label: string }[] = [
     { value: 'all', label: 'All' }, { value: 'due-soon', label: 'Due Soon' }, { value: 'expired', label: 'Expired' },
@@ -53,6 +54,7 @@ export default function WofScreen({ accountId }: { accountId: string }) {
     const [preferences, setPreferences] = useState(() => accountId === 'account-pending' ? DEFAULT_WOF_PREFERENCES : loadWofPreferences(accountId))
     const [dueSoonDraft, setDueSoonDraft] = useState(String(preferences.dueSoonDays))
     const [settingsError, setSettingsError] = useState('')
+    const [copyStatus, setCopyStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
     const [deleteMessage, setDeleteMessage] = useState('')
     const equipmentJobHistory = useEquipmentJobHistory(editingEquipment?.gr_equipmentid)
 
@@ -77,12 +79,7 @@ export default function WofScreen({ accountId }: { accountId: string }) {
         ready: baseRows.filter((row) => ['inspection-complete', 'ready-to-issue'].includes(row.workflow)).length,
     }), [baseRows])
 
-    const rows = useMemo(() => baseRows.filter((row) => {
-        if (tab === 'due-soon' || tab === 'expired') return row.due === tab
-        if (tab === 'in-progress') return ['job-created', 'scheduled'].includes(row.workflow)
-        if (tab === 'ready') return ['inspection-complete', 'ready-to-issue'].includes(row.workflow)
-        return true
-    }).filter((row) => !search.trim() || [...equipmentIdentifierSearchValues(row.equipment), row.equipment.gr_registrationnumber, row.equipment.gr_regoexpiry, row.equipment.gr_Site?.gr_name, row.customer, row.inspection?.gr_Job?.gr_jobnumber].some((value) => value?.toLowerCase().includes(search.trim().toLowerCase()))).sort((a, b) => {
+    const sortedRows = useMemo(() => [...baseRows].sort((a, b) => {
         const sortValue = (row: typeof a) => {
             if (preferences.sort.key === 'customer') return row.customer
             if (preferences.sort.key === 'rego-expiry') return row.equipment.gr_regoexpiry || ''
@@ -94,7 +91,16 @@ export default function WofScreen({ accountId }: { accountId: string }) {
         if (!left) return 1
         if (!right) return -1
         return left.localeCompare(right, undefined, { sensitivity: 'base' }) * (preferences.sort.direction === 'ascending' ? 1 : -1)
-    }), [baseRows, preferences.sort, search, tab])
+    }), [baseRows, preferences.sort])
+
+    const rows = useMemo(() => sortedRows.filter((row) => {
+        if (tab === 'due-soon' || tab === 'expired') return row.due === tab
+        if (tab === 'in-progress') return ['job-created', 'scheduled'].includes(row.workflow)
+        if (tab === 'ready') return ['inspection-complete', 'ready-to-issue'].includes(row.workflow)
+        return true
+    }).filter((row) => !search.trim() || [...equipmentIdentifierSearchValues(row.equipment), row.equipment.gr_registrationnumber, row.equipment.gr_regoexpiry, row.equipment.gr_Site?.gr_name, row.customer, row.inspection?.gr_Job?.gr_jobnumber].some((value) => value?.toLowerCase().includes(search.trim().toLowerCase()))), [search, sortedRows, tab])
+
+    const copyableRows = useMemo(() => sortedRows.filter((row) => row.due === 'due-soon' || row.due === 'expired'), [sortedRows])
 
     const changeSort = (key: WofSortKey) => {
         const next = { ...preferences, sort: { key, direction: preferences.sort.key === key && preferences.sort.direction === 'ascending' ? 'descending' as const : 'ascending' as const } }
@@ -107,6 +113,29 @@ export default function WofScreen({ accountId }: { accountId: string }) {
         const next = { ...preferences, dueSoonDays: days }
         setPreferences(next); if (accountId !== 'account-pending') saveWofPreferences(accountId, next)
         setSettingsError(''); setSettingsOpen(false)
+    }
+    const copyDueWofs = async () => {
+        setCopyStatus(null)
+        const clipboardRows = copyableRows.map((row) => {
+            const item = row.equipment
+            const primaryEquipment = item.gr_fleet || item.gr_serial || 'Unnamed equipment'
+            const equipmentDetails = [item.gr_make, item.gr_model, item.gr_fleet && item.gr_serial ? `S/N ${item.gr_serial}` : ''].filter(Boolean).join(' ')
+            return {
+                status: row.due === 'expired' ? 'Expired' as const : 'Due Soon' as const,
+                expiry: formatWofDateOnly(item.gr_currentwofexpiry) || 'Not recorded',
+                equipment: equipmentDetails ? `${primaryEquipment} · ${equipmentDetails}` : primaryEquipment,
+                rego: item.gr_registrationnumber || 'Not recorded',
+                customer: row.customer || 'Not recorded',
+                site: row.site || 'Not recorded',
+                jobNumber: row.inspection?.gr_Job?.gr_jobnumber || 'No active Job',
+            }
+        })
+        try {
+            await copyWofTable(buildWofTableClipboard(clipboardRows))
+            setCopyStatus({ type: 'success', message: `Copied ${clipboardRows.length} due or expired WOF${clipboardRows.length === 1 ? '' : 's'} for email.` })
+        } catch {
+            setCopyStatus({ type: 'error', message: 'The WOF table could not be copied. Check clipboard permission and try again.' })
+        }
     }
 
     const openInspection = async (inspection: WofInspection) => {
@@ -160,7 +189,7 @@ export default function WofScreen({ accountId }: { accountId: string }) {
             eyebrow="Compliance Operations"
             title="WOF Management"
             subtitle="Monitor expiry, create WOF Jobs, and complete compliance administration from one queue."
-            actions={<PageSettingsButton active={settingsOpen} visibleLabel="Settings" title="WOF Table Settings" onClick={() => { setDueSoonDraft(String(preferences.dueSoonDays)); setSettingsError(''); setSettingsOpen(true) }} />}
+            actions={<PageSettingsButton active={settingsOpen} visibleLabel="Settings" title="WOF Table Settings" onClick={() => { setDueSoonDraft(String(preferences.dueSoonDays)); setSettingsError(''); setCopyStatus(null); setSettingsOpen(true) }} />}
         />
         {deleteMessage && <div className="wof-success" role="status">{deleteMessage}</div>}
         {detailLoadError && <div className="wof-state error" role="alert"><p>{detailLoadError}</p><button type="button" onClick={() => setDetailLoadError('')}>Dismiss</button></div>}
@@ -194,6 +223,14 @@ export default function WofScreen({ accountId }: { accountId: string }) {
         />}
         {editingInspection && <WofEditorDrawer inspection={editingInspection} schedule={scheduleOptions.find((option) => option._gr_job_value?.toLowerCase() === editingInspection.linkedJobId?.toLowerCase() && option.gr_confirmed) ?? scheduleOptions.find((option) => option._gr_job_value?.toLowerCase() === editingInspection.linkedJobId?.toLowerCase())} equipment={equipment} customers={customers} sites={sites} qualifications={qualifications} providers={providers} onCreate={createWof} onUpdate={updateWof} onDelete={async (inspection) => { await deleteWof(inspection); setDeleteMessage('WOF deleted.') }} onCreateCustomer={createCustomer} onCreateSite={createSite} onCreateEquipment={createEquipment} onClose={() => setEditingInspection(null)} />}
         {editingEquipment && <EquipmentDrawer mode="edit" equipment={editingEquipment} equipmentList={equipment} onLoadServicePlans={loadEquipmentServicePlans} customers={customers} sites={sites} jobs={equipmentJobHistory.jobs} isSaving={isEquipmentSaving} saveError={equipmentSaveError} isJobHistoryLoading={equipmentJobHistory.isLoading} jobHistoryError={equipmentJobHistory.error} onRetryJobHistory={() => { void equipmentJobHistory.refetch().catch(() => undefined) }} onClose={() => setEditingEquipment(null)} onSave={async (input) => { const updated = await updateEquipment(editingEquipment, input); setEditingEquipment(updated) }} onSaveMaintenanceHistory={async (plans, input) => { const updated = await saveEquipmentMaintenanceHistory(editingEquipment, plans, input); setEditingEquipment(updated) }} onDelete={async () => { await deleteEquipment(editingEquipment.gr_equipmentid); setEditingEquipment(null) }} />}
-        <PageSettingsDialog open={settingsOpen} title="WOF Table Settings" description="Configure your WOF table preferences." onCancel={() => { setSettingsOpen(false); setSettingsError('') }} onApply={applySettings} applyLabel="Save"><label className="wof-setting-field"><span>Due soon threshold</span><input type="number" min="1" max="365" step="1" value={dueSoonDraft} onChange={(event) => { setDueSoonDraft(event.target.value); setSettingsError('') }} /><small>Mark WOFs as due soon this many days before their expiry date.</small>{settingsError && <strong role="alert">{settingsError}</strong>}</label></PageSettingsDialog>
+        <PageSettingsDialog open={settingsOpen} title="WOF Table Settings" description="Configure your WOF table preferences and copy the current due list." onCancel={() => { setSettingsOpen(false); setSettingsError(''); setCopyStatus(null) }} onApply={applySettings} applyLabel="Save">
+            <label className="wof-setting-field"><span>Due soon threshold</span><input type="number" min="1" max="365" step="1" value={dueSoonDraft} onChange={(event) => { setDueSoonDraft(event.target.value); setSettingsError('') }} /><small>Mark WOFs as due soon this many days before their expiry date.</small>{settingsError && <strong role="alert">{settingsError}</strong>}</label>
+            <section className="wof-copy-setting" aria-labelledby="wof-copy-setting-title">
+                <h3 id="wof-copy-setting-title">Email due WOFs</h3>
+                <p>Copy all Due Soon and Expired WOFs as an email-ready table. The copy includes Equipment, REGO, Customer, Site, expiry, due status, and any linked Job Number.</p>
+                <button type="button" disabled={loading || copyableRows.length === 0} onClick={() => void copyDueWofs()}>Copy Due &amp; Expired WOFs ({copyableRows.length})</button>
+                {copyStatus && <small className={copyStatus.type} role={copyStatus.type === 'error' ? 'alert' : 'status'}>{copyStatus.message}</small>}
+            </section>
+        </PageSettingsDialog>
     </main>
 }

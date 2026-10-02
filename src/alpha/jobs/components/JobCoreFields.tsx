@@ -9,6 +9,8 @@ import SearchableMechanicSelect from './SearchableMechanicSelect'
 import type { Equipment } from '../types/equipment.types'
 import { isServiceTypeEnabled, resolveMaintenanceConfiguration } from '../../equipment/servicePlans/maintenanceConfiguration'
 import { JOB_DESCRIPTION_MAX_LENGTH } from '../domain/jobDescription'
+import type { Job } from '../types/job.types'
+import { copyJobBookSpreadsheetRow } from '../utils/jobBookClipboard'
 
 type Props = {
     draft: JobEditorDraft
@@ -21,10 +23,23 @@ type Props = {
     jobTypeError?: string
     jobTypeOptions?: typeof JOB_TYPE_OPTIONS
     equipment?: Equipment
+    jobBookJob?: Job
 }
 
-export default function JobCoreFields({ draft, setDraft, mechanics, mechanicsLoading = false, mechanicsError = '', onRetryMechanics, equipment, allowEmptyJobType = false, jobTypeError = '', jobTypeOptions = JOB_TYPE_OPTIONS }: Props) {
+export default function JobCoreFields({ draft, setDraft, mechanics, mechanicsLoading = false, mechanicsError = '', onRetryMechanics, equipment, jobBookJob, allowEmptyJobType = false, jobTypeError = '', jobTypeOptions = JOB_TYPE_OPTIONS }: Props) {
     const [mechanicSelectOpen, setMechanicSelectOpen] = useState(false)
+    const [copyFeedback, setCopyFeedback] = useState('')
+
+    const copyForJobBook = async () => {
+        if (!jobBookJob) return
+        try {
+            await copyJobBookSpreadsheetRow(jobBookJob)
+            setCopyFeedback('Copied for Job Book')
+        } catch (error) {
+            console.error(error)
+            setCopyFeedback('Unable to copy Job')
+        }
+    }
 
     return (
         <>
@@ -65,7 +80,7 @@ export default function JobCoreFields({ draft, setDraft, mechanics, mechanicsLoa
             </label>
 
             <label className="job-edit-field">
-                <span>Job number</span>
+                <span className="job-edit-field-heading"><span>Job number</span>{jobBookJob && <button type="button" title="Copy Job details to paste into the Job Book and allocate its next number" onClick={() => void copyForJobBook()}>Copy for Job Book</button>}</span>
                 <input
                     value={draft.jobNumber}
                     onChange={(event) => setDraft((current) => ({
@@ -73,6 +88,7 @@ export default function JobCoreFields({ draft, setDraft, mechanics, mechanicsLoa
                         jobNumber: event.target.value,
                     }))}
                 />
+                {copyFeedback && <small className="job-edit-copy-feedback" role="status">{copyFeedback}</small>}
             </label>
 
             <label className="job-edit-field">

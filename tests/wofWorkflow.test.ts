@@ -32,6 +32,7 @@ import {
     wofCanCreateJob,
     wofNeedsAdministration,
 } from '../src/alpha/wof/utils/wofRules.ts'
+import { buildWofTableClipboard } from '../src/alpha/wof/utils/wofTableClipboard.ts'
 
 const equipment = {
     gr_equipmentid: 'equipment-1',
@@ -196,6 +197,36 @@ test('WOF Jobs can be created for due soon and expired Equipment', () => {
     assert.equal(wofCanCreateJob('expired'), true)
     assert.equal(wofCanCreateJob('current'), false)
     assert.equal(wofCanCreateJob('job-created'), false)
+})
+
+test('due and expired WOFs build an email-ready rich and plain-text table', () => {
+    const content = buildWofTableClipboard([
+        {
+            status: 'Expired',
+            expiry: '12/09/2026',
+            equipment: 'FN2337 · Still RCE25 · S/N C35442M00460',
+            rego: 'RPJ430',
+            customer: 'Godfrey & Hirst',
+            site: '52 Ash Road',
+            jobNumber: '146830',
+        },
+        {
+            status: 'Due Soon',
+            expiry: '30/09/2026',
+            equipment: 'FN2400',
+            rego: 'ABC123',
+            customer: 'Example Customer',
+            site: 'Workshop',
+            jobNumber: 'No active Job',
+        },
+    ])
+
+    assert.match(content.html, /<table/)
+    assert.match(content.html, /Godfrey &amp; Hirst/)
+    assert.match(content.html, /146830/)
+    assert.match(content.plainText, /^Status\tWOF Expiry\tEquipment\tREGO\tCustomer\tSite\tJob Number/m)
+    assert.match(content.plainText, /Expired\t12\/09\/2026.*\t146830/)
+    assert.match(content.plainText, /Due Soon\t30\/09\/2026.*\tNo active Job/)
 })
 
 test('WOF Job retries repair only the missing Inspection link', () => {

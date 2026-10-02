@@ -395,6 +395,14 @@ export default function JobsScreen() {
                     existingJobs={jobs}
                     onCreateJob={createJob}
                     onCreateScheduleOption={createScheduleOption}
+                    closeAfterCreate={false}
+                    onCreated={async (jobId) => {
+                        const createdJob = await fetchJobForDrawer(jobId)
+                        if (!createdJob) throw new Error('The Job was created, but its edit view could not be loaded.')
+                        setIsCreatingJob(false)
+                        setEditingInitialTab('details')
+                        setEditingJob(createdJob)
+                    }}
                     onClose={() => setIsCreatingJob(false)}
                 />
             )}

@@ -20,10 +20,11 @@ import JobsTableSortIcon from './JobsTableSortIcon'
 import { isValidTechnicianEmail } from '../utils/technicianMailto'
 import { getJobsTableColumnWidths, JOBS_TABLE_ACTIONS_WIDTH, JOBS_TABLE_COLUMNS, JOBS_TABLE_WIDTH, jobsStickyColumnStyle, type JobsStickyThroughColumnId, type JobsTableColumnId } from '../types/jobsTableColumns'
 import { hasTechnicianSubmission } from '../types/technicianSubmission'
-import { formatFleetNumbers, parseAlternateFleetNumbers } from '../../equipment/identifiers/alternateFleetNumbers'
+import { parseAlternateFleetNumbers } from '../../equipment/identifiers/alternateFleetNumbers'
 import { JOB_DESCRIPTION_MAX_LENGTH } from '../domain/jobDescription'
 import JobEmailComposer from './JobEmailComposer'
 import type { JobEmailDeliveryState, JobEmailDraft } from '../services/jobEmail'
+import { buildJobBookSpreadsheetRow, buildNumberedJobBookSpreadsheetRow } from '../utils/jobBookClipboard'
 
 type Props = {
     jobs: Job[]
@@ -235,35 +236,6 @@ export default function JobsTable({
         onViewStateChange({ ...viewState, sort: nextSort })
     }
 
-    const spreadsheetCell = (value?: string | null) =>
-        (value ?? '').replace(/[\t\r\n]+/g, ' ').trim()
-
-    const jobBookFleetCell = (job: Job) => spreadsheetCell(formatFleetNumbers(
-        job.gr_Equipment?.gr_fleet,
-        job.gr_Equipment?.gr_alternatefleetnumbers,
-    ))
-
-    const buildJobBookSpreadsheetRow = (job: Job) => {
-        const addressParts = spreadsheetCell(job.gr_Site?.gr_address)
-            .split(',')
-            .map((part) => part.trim())
-            .filter(Boolean)
-        const siteAddress = addressParts[0] ?? ''
-        const siteSuburb = addressParts[1] ?? ''
-        const siteCity = addressParts.slice(2).join(', ')
-        return [
-            job.gr_Mechanic?.gr_name,
-            job.gr_Equipment?.gr_model,
-            jobBookFleetCell(job),
-            job.gr_Site?.gr_Customer?.gr_name,
-            job.gr_description,
-            siteAddress,
-            siteSuburb,
-            siteCity,
-            job.gr_ordernumber,
-        ].map(spreadsheetCell).join('\t')
-    }
-
     const copyJobRow = async (job: Job) => {
         const spreadsheetRow = buildJobBookSpreadsheetRow(job)
         try {
@@ -353,18 +325,8 @@ export default function JobsTable({
     }
 
     const copyJobForSpreadsheet = async (job: Job) => {
-        const jobNumber = spreadsheetCell(job.gr_jobnumber)
-        if (!jobNumber) return
-
-        const mechanic = spreadsheetCell(job.gr_Mechanic?.gr_name)
-        const spreadsheetRow = [
-            mechanic,
-            jobNumber,
-            jobBookFleetCell(job) || 'W/S',
-            spreadsheetCell(job.gr_Site?.gr_Customer?.gr_name),
-            '',
-            mechanic,
-        ].join('\t') + '\n'
+        const spreadsheetRow = buildNumberedJobBookSpreadsheetRow(job)
+        if (!spreadsheetRow) return
 
         try {
             await navigator.clipboard.writeText(spreadsheetRow)

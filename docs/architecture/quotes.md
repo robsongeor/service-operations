@@ -47,8 +47,9 @@ reuses the approved GreenTree-style invoice template and the same Liftrucks logo
 Chargeable Invoice Review. Generation reads the current editor draft, maps Quote Notes verbatim
 to the Quote-only `Work Required` section, maps the current Quote lines and recalculated totals to the invoice body,
 and downloads a PDF without changing Quote, Job, or invoice-review state. The document is clearly
-marked `Provisional Quotation`, uses the linked Job number for both `Invoice No` and `Our Ref`,
-and is not a tax invoice. Direct Quote Customer and Equipment
+marked `Provisional Quotation` and is not a tax invoice. When a numbered Job is linked, its number
+identifies both `Invoice No` and `Our Ref`. Without a numbered linked Job, the persisted Quote number
+identifies `Invoice No` and `Our Ref` remains blank. Direct Quote Customer and Equipment
 selections take precedence; the linked Job supplies fallback Customer, Site, Equipment, Job number,
 and repair-description context.
 The sanitized source PDF is tracked at
@@ -60,8 +61,9 @@ The PDF party box stacks Customer, linked Job Site name, and linked Job Site add
 Site identity for this document comes from the Job rather than an independently selected Equipment Site.
 Completed GreenTree and Chargeable Invoice documents retain their existing `Work Completed` wording.
 Supported browsers use the native Save File dialog so the user can choose the PDF filename and local
-folder. The suggested filename is `Equipment - Job number.pdf`, using Fleet first and then Serial or
-Make/Model when Fleet is unavailable; invalid Windows filename characters are replaced safely.
+folder. The suggested filename is `Equipment - Job number.pdf` when a numbered Job is linked and
+`Equipment - Quote number.pdf` otherwise, using Fleet first and then Serial or Make/Model when Fleet
+is unavailable; invalid Windows filename characters are replaced safely.
 Browsers without the File System Access capability fall back to the normal browser download.
 The saved Quote editor also opens an editable customer PO request email. Recipient routing reuses the
 effective Purchase Order Recipient rules: a linked Job Site override takes precedence, otherwise the
@@ -128,7 +130,9 @@ review state is preserved in place.
 - Author identity is the persisted creator, never a display-name inference.
 - Revisions and historical Quotes are preserved.
 - Provisional quotation generation is available only after the Quote has a persisted Quote number.
-- A numbered linked Job is required because its Job number identifies both `Invoice No` and `Our Ref`.
+- A linked Job is optional for provisional quotation generation. A valid Job number remains the
+  preferred document/reference number; the persisted Quote number is the fallback document number
+  and the unverified `Our Ref` field stays blank.
 - The generated PDF reflects unsaved values currently visible in the editor. The user remains
   responsible for saving the Quote separately when those edits should persist to Dataverse.
 - Saving refreshes the persisted Quote and Quote Line identities while leaving the editor open.

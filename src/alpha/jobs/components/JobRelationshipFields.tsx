@@ -9,7 +9,9 @@ import type { useJobEditor } from '../hooks/useJobEditor'
 import { deriveSiteNameFromAddress } from '../../shared/siteName'
 import VerifiedAddressField from './VerifiedAddressField'
 import type { VerifiedAddressSuggestion } from '../services/addressSearchApi'
-import { equipmentIdentifierSearchValues, parseAlternateFleetNumbers } from '../../equipment/identifiers/alternateFleetNumbers'
+import CustomerRelationshipPicker from '../../shared/customer-relationship/CustomerRelationshipPicker'
+import JobEquipmentField from './JobEquipmentField'
+import JobSiteContactFields from './JobSiteContactFields'
 
 export type JobRelationshipLookupProps = {
     onSearchEquipment?: (query: string, context: { customerId?: string; siteId?: string }, signal?: AbortSignal) => Promise<Equipment[]>
@@ -34,16 +36,7 @@ type Props = JobRelationshipLookupProps & {
     onCreateEquipment: (equipment: { fleet: string; alternateFleet?: string; serial: string; make?: string; model?: string }) => Promise<string>
 }
 
-type Panel = '' | 'equipment' | 'customer' | 'site' | 'contact'
-
-const normalizeSearch = (value?: string | null) => value?.trim().replace(/\s+/g, ' ').toLocaleLowerCase() ?? ''
-const equipmentLabel = (item: Equipment) => ({
-    identifier: item.gr_fleet || (item.gr_serial ? `Serial ${item.gr_serial}` : 'Equipment'),
-    model: [item.gr_make, item.gr_model, parseAlternateFleetNumbers(item.gr_alternatefleetnumbers).length
-        ? `Also ${parseAlternateFleetNumbers(item.gr_alternatefleetnumbers).join(' · ')}`
-        : ''].filter(Boolean).join(' · '),
-    location: [item.gr_Site?.gr_Customer?.gr_name, item.gr_Site?.gr_name].filter(Boolean).join(' · '),
-})
+type Panel = '' | 'site' | 'contact'
 
 export default function JobRelationshipFields({
     editor,
@@ -67,43 +60,14 @@ export default function JobRelationshipFields({
         customerSearchOpen, setCustomerSearchOpen, filteredCustomers,
         filteredSites, filteredContacts, selectCustomer, selectSite,
     } = editor
-    const initialEquipment = {
-        fleet: initialEquipmentDraft?.fleet?.trim() ?? '',
-        alternateFleet: initialEquipmentDraft?.alternateFleet?.trim() ?? '',
-        serial: initialEquipmentDraft?.serial?.trim() ?? '',
-        make: initialEquipmentDraft?.make?.trim() ?? '',
-        model: initialEquipmentDraft?.model?.trim() ?? '',
-    }
-    const hasExactInitialFleetMatch = Boolean(initialEquipment.fleet) && equipmentList.some((item) =>
-        normalizeSearch(item.gr_fleet) === normalizeSearch(initialEquipment.fleet))
-    const hasExactInitialSerialMatch = Boolean(initialEquipment.serial) && equipmentList.some((item) =>
-        normalizeSearch(item.gr_serial) === normalizeSearch(initialEquipment.serial))
-    const initialEquipmentSearch = hasExactInitialFleetMatch
-        ? initialEquipment.fleet
-        : hasExactInitialSerialMatch ? initialEquipment.serial : initialEquipment.fleet || initialEquipment.serial
-    const hasExactInitialEquipmentMatch = hasExactInitialFleetMatch || hasExactInitialSerialMatch
-    const shouldOpenInitialEquipmentCreate = !draft.equipmentId
-        && Boolean(initialEquipmentSearch)
-        && !hasExactInitialEquipmentMatch
-    const [panel, setPanel] = useState<Panel>(shouldOpenInitialEquipmentCreate ? 'equipment' : '')
+    const [panel, setPanel] = useState<Panel>('')
     const [isCreating, setIsCreating] = useState(false)
     const [createError, setCreateError] = useState('')
-    const [createdCustomerId, setCreatedCustomerId] = useState('')
-    const [equipment, setEquipment] = useState(initialEquipment)
-    const [customer, setCustomer] = useState({ name: '', siteName: '', address: '' })
     const [site, setSite] = useState({ name: '', address: '' })
-    const [customerAddressSelection, setCustomerAddressSelection] = useState<VerifiedAddressSuggestion | null>(null)
     const [siteAddressSelection, setSiteAddressSelection] = useState<VerifiedAddressSuggestion | null>(null)
     const [contact, setContact] = useState({ name: '', phone: '', email: '' })
     const selectedEquipment = equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)
-    const [equipmentSearch, setEquipmentSearch] = useState(() => selectedEquipment
-        ? equipmentLabel(selectedEquipment).identifier
-        : initialEquipmentSearch)
-    const [equipmentSearchOpen, setEquipmentSearchOpen] = useState(false)
-    const [equipmentActiveIndex, setEquipmentActiveIndex] = useState(0)
-    const [remoteEquipmentResults, setRemoteEquipmentResults] = useState<Equipment[]>([])
     const [remoteCustomerResults, setRemoteCustomerResults] = useState<Customer[]>([])
-    const [equipmentSearchStatus, setEquipmentSearchStatus] = useState<'idle' | 'loading' | 'error'>('idle')
     const [customerSearchStatus, setCustomerSearchStatus] = useState<'idle' | 'loading' | 'error'>('idle')
     const [siteLoadStatus, setSiteLoadStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
     const [siteLoadError, setSiteLoadError] = useState('')
@@ -111,11 +75,8 @@ export default function JobRelationshipFields({
     const [contactLoadStatus, setContactLoadStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
     const [contactLoadError, setContactLoadError] = useState('')
     const [contactLoadAttempt, setContactLoadAttempt] = useState(0)
-    const equipmentRemoteQueryActive = equipmentSearch.trim().length >= 2
     const customerRemoteQueryActive = customerSearch.trim().length >= 2
-    const visibleEquipmentSearchStatus = equipmentRemoteQueryActive ? equipmentSearchStatus : 'idle'
     const visibleCustomerSearchStatus = customerRemoteQueryActive ? customerSearchStatus : 'idle'
-    const [showLegacyEquipmentSelect] = useState(false)
     const equipmentConflictsWithCustomer = (customerId: string) => {
         const equipmentCustomerId = selectedEquipment?.gr_Site?.gr_Customer?.gr_customerid
         return Boolean(equipmentCustomerId && equipmentCustomerId !== customerId)
@@ -124,50 +85,11 @@ export default function JobRelationshipFields({
         const equipmentSiteId = selectedEquipment?.gr_Site?.gr_siteid
         return Boolean(equipmentSiteId && equipmentSiteId !== siteId)
     }
-    const equipmentResults = useMemo(() => {
-        const query = normalizeSearch(equipmentSearch)
-        const records = new Map(equipmentList.map((item) => [item.gr_equipmentid.toLowerCase(), item]))
-        if (equipmentRemoteQueryActive) remoteEquipmentResults.forEach((item) => records.set(item.gr_equipmentid.toLowerCase(), item))
-        return [...records.values()].map((item) => {
-            const identifiers = equipmentIdentifierSearchValues(item).map(normalizeSearch)
-            const details = [item.gr_make, item.gr_model, item.gr_Site?.gr_Customer?.gr_name, item.gr_Site?.gr_name, item.gr_Site?.gr_address].map(normalizeSearch)
-            if (!query) {
-                const score = item.gr_Site?.gr_siteid === draft.siteId ? 0 : item.gr_Site?.gr_Customer?.gr_customerid === draft.customerId ? 1 : 2
-                return { item, score }
-            }
-            return { item, score: identifiers.some((value) => value.includes(query)) ? 0 : details.some((value) => value.includes(query)) ? 1 : 2 }
-        }).filter(({ score }) => !query || score < 2).sort((a, b) => a.score - b.score || equipmentLabel(a.item).identifier.localeCompare(equipmentLabel(b.item).identifier)).slice(0, 5).map(({ item }) => item)
-    }, [draft.customerId, draft.siteId, equipmentList, equipmentRemoteQueryActive, equipmentSearch, remoteEquipmentResults])
-
     const customerResults = useMemo(() => {
         const records = new Map(filteredCustomers.map((item) => [item.gr_customerid.toLowerCase(), item]))
         if (customerRemoteQueryActive) remoteCustomerResults.forEach((item) => records.set(item.gr_customerid.toLowerCase(), item))
         return [...records.values()].slice(0, 8)
     }, [customerRemoteQueryActive, filteredCustomers, remoteCustomerResults])
-
-    useEffect(() => {
-        if (!equipmentSearchOpen || !onSearchEquipment) return
-        const query = equipmentSearch.trim()
-        if (query.length < 2) return
-        const controller = new AbortController()
-        const timer = window.setTimeout(() => {
-            setEquipmentSearchStatus('loading')
-            void onSearchEquipment(query, { customerId: draft.customerId || undefined, siteId: draft.siteId || undefined }, controller.signal)
-                .then((rows) => {
-                    if (!controller.signal.aborted) {
-                        setRemoteEquipmentResults(rows)
-                        setEquipmentSearchStatus('idle')
-                    }
-                })
-                .catch((error) => {
-                    if (!controller.signal.aborted && !(error instanceof DOMException && error.name === 'AbortError')) setEquipmentSearchStatus('error')
-                })
-        }, 250)
-        return () => {
-            window.clearTimeout(timer)
-            controller.abort()
-        }
-    }, [draft.customerId, draft.siteId, equipmentSearch, equipmentSearchOpen, onSearchEquipment])
 
     useEffect(() => {
         if (!customerSearchOpen || !onSearchCustomers) return
@@ -196,7 +118,6 @@ export default function JobRelationshipFields({
     useEffect(() => {
         if (!selectedEquipment || selectedEquipment.gr_equipmentid !== draft.equipmentId) return
         const timer = window.setTimeout(() => {
-            setEquipmentSearch(equipmentLabel(selectedEquipment).identifier)
             const selectedCustomer = selectedEquipment.gr_Site?.gr_Customer
             if (selectedCustomer && selectedCustomer.gr_customerid === draft.customerId) {
                 setCustomerSearch(selectedCustomer.gr_name)
@@ -285,8 +206,6 @@ export default function JobRelationshipFields({
             equipmentId: item.gr_equipmentid,
             serviceType: isServiceTypeEnabled(item, current.serviceType) ? current.serviceType : SERVICE_TYPES.NONE,
         }))
-        setEquipmentSearch(equipmentLabel(item).identifier)
-        setEquipmentSearchOpen(false)
         const site = item.gr_Site
         const customer = site?.gr_Customer
         if (site && customer) {
@@ -299,68 +218,20 @@ export default function JobRelationshipFields({
 
     const clearEquipment = () => {
         setDraft((current) => ({ ...current, equipmentId: '' }))
-        setEquipmentSearch('')
-        setEquipmentSearchOpen(false)
     }
 
-    const openNewEquipmentPanel = () => {
-        setEquipment((current) => ({ ...current, fleet: equipmentSearch.trim() }))
-        setEquipmentSearchOpen(false)
-        openPanel('equipment')
-    }
-
-    const createEquipment = async () => {
-        if (!equipment.fleet.trim() && !equipment.alternateFleet.trim() && !equipment.serial.trim()) {
-            setCreateError('Enter a primary fleet, alternate fleet, or serial number.')
-            return
+    const createCustomerAndSite = async (input: { customerName: string; siteName: string; address: string }) => {
+        const customerId = await onCreateCustomer({ name: input.customerName })
+        let siteId = ''
+        try {
+            siteId = await onCreateSite({ customerId, name: input.siteName, address: input.address })
+        } catch (error) {
+            console.error(error)
+            throw new Error('The customer was created, but the site could not be created. Add the site or try again.', { cause: error })
         }
-        try {
-            setIsCreating(true)
-            setCreateError('')
-            const equipmentId = await onCreateEquipment({
-                fleet: equipment.fleet.trim(),
-                alternateFleet: equipment.alternateFleet.trim() || undefined,
-                serial: equipment.serial.trim(),
-                make: equipment.make.trim() || undefined,
-                model: equipment.model.trim() || undefined,
-            })
-            setDraft((current) => ({ ...current, equipmentId }))
-            setEquipmentSearch(equipment.fleet.trim() || equipment.alternateFleet.trim() || (equipment.serial.trim() ? `Serial ${equipment.serial.trim()}` : 'Equipment'))
-            setEquipment({ fleet: '', alternateFleet: '', serial: '', make: '', model: '' })
-            setPanel('')
-        } catch (error) {
-            console.error(error)
-            setCreateError('Equipment could not be created.')
-        } finally { setIsCreating(false) }
-    }
-
-    const createCustomerAndSite = async () => {
-        if (!customer.name.trim()) return setCreateError('Enter a customer name.')
-        if (!customerAddressSelection || customerAddressSelection.formattedAddress !== customer.address) return setCreateError('Select a verified address from the Geoapify suggestions.')
-        const siteName = customer.siteName.trim() || deriveSiteNameFromAddress(customer.address)
-        if (!siteName) return setCreateError('Enter a Site Name, or an Address that can be used to generate one.')
-        try {
-            setIsCreating(true)
-            setCreateError('')
-            const customerId = createdCustomerId || await onCreateCustomer({ name: customer.name.trim() })
-            if (!createdCustomerId) setCreatedCustomerId(customerId)
-            const siteId = await onCreateSite({
-                customerId, name: siteName,
-                address: customer.address.trim() || undefined,
-            })
-            if (equipmentConflictsWithCustomer(customerId) || equipmentConflictsWithSite(siteId)) clearEquipment()
-            setDraft((current) => ({ ...current, customerId, siteId, contactId: '' }))
-            setCustomerSearch(customer.name.trim())
-            setCustomer({ name: '', siteName: '', address: '' })
-            setCustomerAddressSelection(null)
-            setCreatedCustomerId('')
-            setPanel('')
-        } catch (error) {
-            console.error(error)
-            setCreateError(createdCustomerId
-                ? 'The customer exists, but the site could not be created. Try again.'
-                : 'The customer or site could not be created.')
-        } finally { setIsCreating(false) }
+        if (equipmentConflictsWithCustomer(customerId) || equipmentConflictsWithSite(siteId)) clearEquipment()
+        setDraft((current) => ({ ...current, customerId, siteId, contactId: '' }))
+        setCustomerSearch(input.customerName)
     }
 
     const createSite = async () => {
@@ -421,100 +292,61 @@ export default function JobRelationshipFields({
             <p>Change which records this job references.</p>
         </div>
 
-        <label className="job-edit-field job-edit-field-wide job-edit-combobox">
-            <span>Equipment</span>
-            {selectedEquipment ? <div className="job-equipment-selected"><div><strong>{equipmentLabel(selectedEquipment).identifier}</strong>{equipmentLabel(selectedEquipment).model && <small>{equipmentLabel(selectedEquipment).model}</small>}{equipmentLabel(selectedEquipment).location && <small>{equipmentLabel(selectedEquipment).location}</small>}</div><button type="button" aria-label="Change selected equipment" onClick={clearEquipment}>Change</button></div> : <><input role="combobox" aria-expanded={equipmentSearchOpen} aria-controls="job-editor-equipment-results" autoComplete="off" placeholder="Search primary or alternate fleet, serial, make or model..." value={equipmentSearch} onFocus={() => setEquipmentSearchOpen(true)} onChange={(event) => { setEquipmentSearch(event.target.value); setEquipmentSearchOpen(true); setEquipmentActiveIndex(0) }} onKeyDown={(event) => { if (event.key === 'ArrowDown') { event.preventDefault(); setEquipmentActiveIndex((current) => Math.min(current + 1, equipmentResults.length - 1)) } if (event.key === 'ArrowUp') { event.preventDefault(); setEquipmentActiveIndex((current) => Math.max(current - 1, 0)) } if (event.key === 'Enter' && equipmentResults[equipmentActiveIndex]) { event.preventDefault(); selectEquipment(equipmentResults[equipmentActiveIndex]) } if (event.key === 'Escape') setEquipmentSearchOpen(false) }} />{equipmentSearchOpen && <div className="job-edit-results job-equipment-results" id="job-editor-equipment-results" role="listbox"><button type="button" className="job-edit-add-result" onClick={clearEquipment}>No Equipment</button><button type="button" className="job-edit-add-result" onClick={openNewEquipmentPanel}>+ Add new equipment</button>{equipmentResults.map((item, index) => { const label = equipmentLabel(item); return <button key={item.gr_equipmentid} type="button" role="option" aria-selected={index === equipmentActiveIndex} className={index === equipmentActiveIndex ? 'active' : ''} onMouseEnter={() => setEquipmentActiveIndex(index)} onClick={() => selectEquipment(item)}><strong>{label.identifier}</strong>{label.model && <small>{label.model}</small>}{label.location && <small>{label.location}</small>}</button> })}{visibleEquipmentSearchStatus === 'loading' && <span>Searching Equipment…</span>}{visibleEquipmentSearchStatus === 'error' && <span>Equipment search is temporarily unavailable.</span>}{visibleEquipmentSearchStatus !== 'loading' && equipmentSearch.trim() && equipmentResults.length === 0 && <span>No Equipment found for &quot;{equipmentSearch.trim()}&quot;</span>}</div>}</>}
-            {showLegacyEquipmentSelect && <select value={draft.equipmentId} onChange={(event) => {
-                if (event.target.value === '__new__') return openPanel('equipment')
+        <JobEquipmentField
+            value={draft.equipmentId}
+            equipmentList={equipmentList}
+            customerId={draft.customerId}
+            siteId={draft.siteId}
+            initialEquipmentDraft={initialEquipmentDraft}
+            dependencyStatus={equipmentDependencyStatus}
+            dependencyError={equipmentDependencyError}
+            onRetryDependencies={onRetryEquipmentDependencies}
+            onCreateEquipment={onCreateEquipment}
+            onSearchEquipment={onSearchEquipment}
+            onChange={(item) => item ? selectEquipment(item) : clearEquipment()}
+        />
 
-                const equipmentId = event.target.value
-                const selectedEquipment = equipmentList.find(
-                    (item) => item.gr_equipmentid === equipmentId,
-                )
-                setDraft((current) => ({ ...current, equipmentId }))
+        <div className="job-edit-field-wide">
+            <CustomerRelationshipPicker
+                id="job-editor-customer"
+                query={customerSearch}
+                selectedId={draft.customerId}
+                options={customerResults.map((item) => ({ id: item.gr_customerid, label: item.gr_name }))}
+                onQueryChange={setCustomerSearch}
+                onOpenChange={setCustomerSearchOpen}
+                onClearSelection={() => setDraft((current) => ({ ...current, customerId: '', siteId: '', contactId: '' }))}
+                onSelect={(customerId) => {
+                    const selected = customerResults.find((item) => item.gr_customerid === customerId)
+                    if (!selected) return
+                    setCustomerSearch(selected.gr_name)
+                    if (equipmentConflictsWithCustomer(customerId)) clearEquipment()
+                    selectCustomer(customerId)
+                }}
+                onCreateCustomerAndSite={createCustomerAndSite}
+                searchStatus={visibleCustomerSearchStatus}
+            />
+        </div>
 
-                const equipmentSite = selectedEquipment?.gr_Site
-                const equipmentCustomer = equipmentSite?.gr_Customer
-
-                if (equipmentSite && equipmentCustomer) {
-                    setCustomerSearch(equipmentCustomer.gr_name)
-                    setCustomerSearchOpen(false)
-                    selectCustomer(equipmentCustomer.gr_customerid)
-                    selectSite(equipmentSite.gr_siteid)
-                }
-            }}>
-                <option value="">No equipment</option>
-                <option value="__new__">+ Add new equipment</option>
-                {equipmentList.map((item) => <option key={item.gr_equipmentid} value={item.gr_equipmentid}>
-                    {item.gr_fleet || 'No fleet'} — {item.gr_make} {item.gr_model} — {item.gr_serial}
-                </option>)}
-            </select>}
-            {draft.equipmentId && equipmentDependencyStatus === 'loading' && <small role="status">Refreshing selected Equipment details…</small>}
-            {draft.equipmentId && equipmentDependencyStatus === 'error' && <small className="job-edit-field-error" role="alert">
-                Selected Equipment details are temporarily unavailable. {equipmentDependencyError} {onRetryEquipmentDependencies && <button type="button" onClick={onRetryEquipmentDependencies}>Try again</button>}
-            </small>}
-        </label>
-        {panel === 'equipment' && <div className="job-edit-create-panel job-edit-field-wide">
-            <div><h4>New equipment</h4><p>{initialEquipmentSearch ? 'Prefilled from the invoice. Confirm the details before creating and selecting this equipment.' : 'Create and select equipment for this job.'}</p></div>
-            <label className="job-edit-field"><span>Fleet number</span><input autoFocus value={equipment.fleet} onChange={(e) => setEquipment({ ...equipment, fleet: e.target.value })} /></label>
-            <label className="job-edit-field"><span>Alternate fleet number</span><input value={equipment.alternateFleet} onChange={(e) => setEquipment({ ...equipment, alternateFleet: e.target.value })} /></label>
-            <label className="job-edit-field"><span>Serial number</span><input value={equipment.serial} onChange={(e) => setEquipment({ ...equipment, serial: e.target.value })} /></label>
-            <label className="job-edit-field"><span>Make</span><input value={equipment.make} onChange={(e) => setEquipment({ ...equipment, make: e.target.value })} /></label>
-            <label className="job-edit-field"><span>Model</span><input value={equipment.model} onChange={(e) => setEquipment({ ...equipment, model: e.target.value })} /></label>
-            {createError && <p className="job-edit-error" role="alert">{createError}</p>}
-            {actions(createEquipment, 'Create equipment')}
-        </div>}
-
-        <label className="job-edit-field job-edit-field-wide job-edit-combobox">
-            <span>Customer</span>
-            <input role="combobox" aria-expanded={customerSearchOpen} aria-controls="job-editor-customer-results" autoComplete="off" placeholder="Search customers" value={customerSearch}
-                onFocus={() => setCustomerSearchOpen(true)} onChange={(event) => {
-                    setCustomerSearch(event.target.value)
-                    setCustomerSearchOpen(true)
-                    setDraft((current) => ({ ...current, customerId: '', siteId: '', contactId: '' }))
-                }} />
-            {customerSearchOpen && <div className="job-edit-results" id="job-editor-customer-results" role="listbox">
-                <button type="button" className="job-edit-add-result" onClick={() => {
-                    setCustomer({ ...customer, name: customerSearch })
-                    setCustomerSearchOpen(false)
-                    openPanel('customer')
-                }}>+ Add new customer</button>
-                {customerResults.map((item) => <button key={item.gr_customerid} type="button" role="option" aria-selected={item.gr_customerid === draft.customerId} onClick={() => {
-                    setCustomerSearch(item.gr_name)
-                    setCustomerSearchOpen(false)
-                    if (equipmentConflictsWithCustomer(item.gr_customerid)) clearEquipment()
-                    selectCustomer(item.gr_customerid)
-                }}>{item.gr_name}</button>)}
-                {visibleCustomerSearchStatus === 'loading' && <span>Searching customers…</span>}
-                {visibleCustomerSearchStatus === 'error' && <span>Customer search is temporarily unavailable.</span>}
-                {visibleCustomerSearchStatus !== 'loading' && customerResults.length === 0 && <span>No customers found</span>}
-            </div>}
-        </label>
-        {panel === 'customer' && <div className="job-edit-create-panel job-edit-field-wide">
-            <div><h4>New customer and site</h4><p>Create both records together and select them for this job.</p></div>
-            <label className="job-edit-field"><span>Customer name</span><input autoFocus value={customer.name} onChange={(e) => { setCustomer({ ...customer, name: e.target.value }); setCreatedCustomerId('') }} /></label>
-            <label className="job-edit-field"><span>Site name</span><input value={customer.siteName} onChange={(e) => setCustomer({ ...customer, siteName: e.target.value })} /></label>
-            <VerifiedAddressField value={customer.address} onChange={(address, selection) => { const previousDerived = deriveSiteNameFromAddress(customer.address); const nextDerived = selection?.siteName || deriveSiteNameFromAddress(address); setCustomerAddressSelection(selection); setCreateError(''); setCustomer({ ...customer, address, siteName: !customer.siteName.trim() || customer.siteName === previousDerived ? nextDerived : customer.siteName }) }} />
-            {customer.siteName && customer.siteName === deriveSiteNameFromAddress(customer.address) && <p>Site Name generated from address.</p>}
-            {createError && <p className="job-edit-error" role="alert">{createError}</p>}
-            {actions(createCustomerAndSite, 'Create customer and site', !customerAddressSelection || customerAddressSelection.formattedAddress !== customer.address)}
-        </div>}
-
-        <label className="job-edit-field job-edit-field-wide"><span>Site</span>
-            <select value={draft.siteId} disabled={!draft.customerId} onChange={(event) => {
-                if (event.target.value === '__new__') return openPanel('site')
-                if (equipmentConflictsWithSite(event.target.value)) clearEquipment()
-                selectSite(event.target.value)
-            }}>
-                <option value="">{draft.customerId ? 'Select site' : 'Select a customer first'}</option>
-                {draft.customerId && <option value="__new__">+ Add new site</option>}
-                {filteredSites.map((item) => <option key={item.gr_siteid} value={item.gr_siteid}>{item.gr_name} — {item.gr_address}</option>)}
-            </select>
-            {draft.customerId && siteLoadStatus === 'loading' && <small role="status">Loading Sites for this Customer…</small>}
-            {draft.customerId && siteLoadStatus === 'error' && <small className="job-edit-field-error" role="alert">
-                Sites are temporarily unavailable. {siteLoadError} <button type="button" onClick={() => setSiteLoadAttempt((current) => current + 1)}>Try again</button>
-            </small>}
-        </label>
+        <JobSiteContactFields
+            customerId={draft.customerId}
+            siteId={draft.siteId}
+            contactId={draft.contactId}
+            sites={filteredSites}
+            contacts={filteredContacts}
+            siteLoadStatus={siteLoadStatus}
+            siteLoadError={siteLoadError}
+            contactLoadStatus={contactLoadStatus}
+            contactLoadError={contactLoadError}
+            onSiteChange={(siteId) => {
+                if (equipmentConflictsWithSite(siteId)) clearEquipment()
+                selectSite(siteId)
+            }}
+            onContactChange={(contactId) => setDraft((current) => ({ ...current, contactId }))}
+            onAddSite={() => openPanel('site')}
+            onAddContact={() => openPanel('contact')}
+            onRetrySites={() => setSiteLoadAttempt((current) => current + 1)}
+            onRetryContacts={() => setContactLoadAttempt((current) => current + 1)}
+        />
         {panel === 'site' && <div className="job-edit-create-panel job-edit-field-wide">
             <div><h4>New site</h4><p>Create a site for {customerSearch} and select it for this job.</p></div>
             <label className="job-edit-field"><span>Site name</span><input autoFocus value={site.name} onChange={(e) => setSite({ ...site, name: e.target.value })} /></label>
@@ -524,22 +356,6 @@ export default function JobRelationshipFields({
             {actions(createSite, 'Create site', !siteAddressSelection || siteAddressSelection.formattedAddress !== site.address)}
         </div>}
 
-        <label className="job-edit-field job-edit-field-wide"><span>Contact</span>
-            <select value={draft.contactId} disabled={!draft.siteId} onChange={(event) => {
-                if (event.target.value === '__new__') return openPanel('contact')
-                setDraft((current) => ({ ...current, contactId: event.target.value }))
-            }}>
-                <option value="">{draft.siteId ? 'No contact' : 'Select a site first'}</option>
-                {draft.siteId && <option value="__new__">+ Add new contact</option>}
-                {filteredContacts.map((item) => <option key={item.gr_sitecontactid} value={item.gr_Contact?.gr_contactid ?? ''}>
-                    {item.gr_Contact?.gr_name}{item.gr_Contact?.gr_phone ? ` — ${item.gr_Contact.gr_phone}` : ''}
-                </option>)}
-            </select>
-            {draft.siteId && contactLoadStatus === 'loading' && <small role="status">Loading Contacts for this Site…</small>}
-            {draft.siteId && contactLoadStatus === 'error' && <small className="job-edit-field-error" role="alert">
-                Site Contacts are temporarily unavailable. {contactLoadError} <button type="button" onClick={() => setContactLoadAttempt((current) => current + 1)}>Try again</button>
-            </small>}
-        </label>
         {panel === 'contact' && <div className="job-edit-create-panel job-edit-field-wide">
             <div><h4>New contact</h4><p>Create and select a contact for the chosen site.</p></div>
             <label className="job-edit-field"><span>Contact name</span><input autoFocus value={contact.name} onChange={(e) => setContact({ ...contact, name: e.target.value })} /></label>

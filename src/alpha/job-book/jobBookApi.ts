@@ -1,4 +1,5 @@
 import { JOB_BOOK_ENTRY_STAGES, MANAGED_JOB_ENTRY_MARKER_COLUMNS, type JobBookRow } from './jobBookPrototype'
+import { JOB_BOOKS, jobNumberBelongsToBook, managedJobNumberFilter, type JobBookConfig } from './jobBookConfig'
 
 const DATAVERSE_URL = import.meta.env.VITE_DATAVERSE_URL
 
@@ -26,6 +27,7 @@ type JobBookApiRow = {
         gr_model: string | null
     }
     gr_Mechanic?: { gr_mechanicid: string; gr_name: string }
+    gr_Contact?: { gr_contactid: string; gr_name: string }
     gr_Site?: {
         gr_siteid: string
         gr_name: string
@@ -36,7 +38,10 @@ type JobBookApiRow = {
 
 type IntakeApiRow = {
     '@odata.etag'?: string
-    gr_jobbookentryid: string
+    gr_jobbookentryid?: string
+    gr_waikatojobbookentryid?: string
+    gr_hastingsjobbookentryid?: string
+    gr_christchurchjobbookentryid?: string
     createdon: string
     gr_jobnumber: string
     gr_stage: number
@@ -59,6 +64,7 @@ type IntakeApiRow = {
     gr_Equipment?: { gr_equipmentid: string }
     gr_Customer?: { gr_customerid: string }
     gr_Site?: { gr_siteid: string }
+    gr_Contact?: { gr_contactid: string; gr_name: string }
     gr_PromotedJob?: { gr_jobid: string }
 }
 
@@ -73,23 +79,29 @@ function localDate(isoDate: string) {
     return new Date(isoDate).toLocaleDateString('en-CA', { timeZone: 'Pacific/Auckland' })
 }
 
-export async function fetchRecentJobBookRows(accessToken: string): Promise<JobBookRow[]> {
+export const JOB_BOOK_PAGE_SIZE = 100
+
+export type JobBookPage = {
+    records: JobBookRow[]
+    nextLink?: string
+}
+
+export async function fetchRecentJobBookRows(accessToken: string, book: JobBookConfig = JOB_BOOKS.auckland, continuationLink?: string): Promise<JobBookPage> {
     const select = 'gr_jobid,createdon,gr_jobnumber,gr_ordernumber,gr_description,gr_gtentered,gr_timecloudentered'
-    const expand = 'gr_Equipment($select=gr_equipmentid,gr_fleet,gr_serial,gr_make,gr_model),gr_Mechanic($select=gr_mechanicid,gr_name),gr_Site($select=gr_name,gr_address;$expand=gr_Customer($select=gr_name))'
-    const jobs: JobBookApiRow[] = []
-    let nextUrl: string | undefined = `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=${select}&$expand=${expand}&$filter=gr_jobnumber ne null&$orderby=createdon desc`
-    while (nextUrl) {
-        const response = await fetch(nextUrl, {
-            cache: 'no-store',
-            headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json', Prefer: 'odata.maxpagesize=1000' },
-        })
-        if (!response.ok) throw new Error('Managed Job Book entries could not be loaded.')
-        const data = await response.json() as { value?: JobBookApiRow[]; '@odata.nextLink'?: string }
-        jobs.push(...(data.value ?? []))
-        nextUrl = trustedNextLink(data['@odata.nextLink'])
-    }
-    return jobs.map((job) => ({
-        id: `dataverse-${job.gr_jobid}`,
+    const expand = 'gr_Equipment($select=gr_equipmentid,gr_fleet,gr_serial,gr_make,gr_model),gr_Mechanic($select=gr_mechanicid,gr_name),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name)'
+    const nextUrl = continuationLink
+        ? trustedNextLink(continuationLink)
+        : `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=${select}&$expand=${expand}&$filter=${managedJobNumberFilter(book)}&$orderby=createdon desc`
+    if (!nextUrl) return { records: [] }
+    const response = await fetch(nextUrl, {
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json', Prefer: `odata.maxpagesize=${JOB_BOOK_PAGE_SIZE}` },
+    })
+    if (!response.ok) throw new Error('Managed Job Book entries could not be loaded.')
+    const data = await response.json() as { value?: JobBookApiRow[]; '@odata.nextLink'?: string }
+    return { records: (data.value ?? []).filter((job) => job.gr_jobnumber && jobNumberBelongsToBook(job.gr_jobnumber, book)).map((job) => ({
+        jobBookKey: book.key,
+        id: `dataverse-${book.key}-${job.gr_jobid}`,
         jobNumber: job.gr_jobnumber?.trim() ?? '',
         date: localDate(job.createdon),
         mechanicId: job.gr_Mechanic?.gr_mechanicid ?? '',
@@ -104,6 +116,8 @@ export async function fetchRecentJobBookRows(accessToken: string): Promise<JobBo
         description: job.gr_description?.trim() ?? '',
         site: job.gr_Site?.gr_name?.trim() ?? '',
         siteId: job.gr_Site?.gr_siteid ?? '',
+        contactId: job.gr_Contact?.gr_contactid ?? '',
+        contactName: job.gr_Contact?.gr_name?.trim() ?? '',
         address: job.gr_Site?.gr_address?.trim() ?? '',
         addressVerified: Boolean(job.gr_Site?.gr_address?.trim()),
         addressNotFoundConfirmed: false,
@@ -117,7 +131,7 @@ export async function fetchRecentJobBookRows(accessToken: string): Promise<JobBo
         linkedJobId: job.gr_jobid,
         intakeRecordId: '',
         etag: job['@odata.etag'] ?? '',
-    }))
+    })), nextLink: trustedNextLink(data['@odata.nextLink']) }
 }
 
 export async function updateManagedJobBookMarker(
@@ -149,9 +163,11 @@ export async function updateManagedJobBookMarker(
     }
 }
 
-function mapIntakeRow(row: IntakeApiRow): JobBookRow {
+function mapIntakeRow(row: IntakeApiRow, book: JobBookConfig): JobBookRow {
+    const intakeRecordId = String(row[book.idField as keyof IntakeApiRow] ?? '')
     return {
-        id: `intake-${row.gr_jobbookentryid}`,
+        jobBookKey: book.key,
+        id: `intake-${book.key}-${intakeRecordId}`,
         jobNumber: row.gr_jobnumber,
         date: localDate(row.createdon),
         mechanicId: row.gr_Mechanic?.gr_mechanicid ?? '',
@@ -166,6 +182,8 @@ function mapIntakeRow(row: IntakeApiRow): JobBookRow {
         description: row.gr_description,
         site: row.gr_sitesnapshot ?? '',
         siteId: row.gr_Site?.gr_siteid ?? '',
+        contactId: row.gr_Contact?.gr_contactid ?? '',
+        contactName: row.gr_Contact?.gr_name?.trim() ?? '',
         address: row.gr_addresssnapshot ?? '',
         addressVerified: row.gr_addressverified,
         addressNotFoundConfirmed: row.gr_addressnotfoundconfirmed,
@@ -177,28 +195,40 @@ function mapIntakeRow(row: IntakeApiRow): JobBookRow {
         entryStage: INTAKE_STAGE_TO_NAME[row.gr_stage as keyof typeof INTAKE_STAGE_TO_NAME] ?? JOB_BOOK_ENTRY_STAGES.INTAKE,
         entrySource: 'dataverse-intake',
         linkedJobId: row.gr_PromotedJob?.gr_jobid ?? '',
-        intakeRecordId: row.gr_jobbookentryid,
+        intakeRecordId,
         etag: row['@odata.etag'] ?? '',
     }
 }
 
-const INTAKE_SELECT = 'gr_jobbookentryid,createdon,gr_jobnumber,gr_stage,gr_mechanictext,gr_fleetsnapshot,gr_serialsnapshot,gr_makesnapshot,gr_modelsnapshot,gr_customersnapshot,gr_sitesnapshot,gr_addresssnapshot,gr_addressverified,gr_addressnotfoundconfirmed,gr_description,gr_customerpo,gr_entered,gr_timecloudentered,gr_equipmentreviewrequired'
-const INTAKE_EXPAND = 'gr_Mechanic($select=gr_mechanicid,gr_name),gr_Equipment($select=gr_equipmentid),gr_Customer($select=gr_customerid),gr_Site($select=gr_siteid),gr_PromotedJob($select=gr_jobid)'
+const INTAKE_SELECT = 'createdon,gr_jobnumber,gr_stage,gr_mechanictext,gr_fleetsnapshot,gr_serialsnapshot,gr_makesnapshot,gr_modelsnapshot,gr_customersnapshot,gr_sitesnapshot,gr_addresssnapshot,gr_addressverified,gr_addressnotfoundconfirmed,gr_description,gr_customerpo,gr_entered,gr_timecloudentered,gr_equipmentreviewrequired'
+const INTAKE_EXPAND_WITHOUT_CONTACT = 'gr_Mechanic($select=gr_mechanicid,gr_name),gr_Equipment($select=gr_equipmentid),gr_Customer($select=gr_customerid),gr_Site($select=gr_siteid),gr_PromotedJob($select=gr_jobid)'
+const INTAKE_EXPAND = `${INTAKE_EXPAND_WITHOUT_CONTACT},gr_Contact($select=gr_contactid,gr_name)`
+const INTAKE_CONTACT_LOOKUP_ENABLED = import.meta.env.VITE_JOB_BOOK_CONTACT_LOOKUP_ENABLED === 'true'
 
-export async function fetchJobBookIntakeRows(accessToken: string): Promise<JobBookRow[]> {
-    const rows: IntakeApiRow[] = []
-    let nextUrl: string | undefined = `${DATAVERSE_URL}/api/data/v9.2/gr_jobbookentries?$select=${INTAKE_SELECT}&$expand=${INTAKE_EXPAND}&$orderby=createdon desc`
-    while (nextUrl) {
-        const response = await fetch(nextUrl, {
-            cache: 'no-store',
-            headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json', Prefer: 'odata.maxpagesize=1000' },
-        })
-        if (!response.ok) throw new Error('Job Book Intake entries could not be loaded.')
-        const data = await response.json() as { value?: IntakeApiRow[]; '@odata.nextLink'?: string }
-        rows.push(...(data.value ?? []))
-        nextUrl = trustedNextLink(data['@odata.nextLink'])
+export function jobBookIntakeContactLookupIsAvailable() {
+    return INTAKE_CONTACT_LOOKUP_ENABLED
+}
+
+function intakeExpand() {
+    return INTAKE_CONTACT_LOOKUP_ENABLED ? INTAKE_EXPAND : INTAKE_EXPAND_WITHOUT_CONTACT
+}
+
+export async function fetchJobBookIntakeRows(accessToken: string, book: JobBookConfig = JOB_BOOKS.auckland, continuationLink?: string): Promise<JobBookPage> {
+    const select = `${book.idField},${INTAKE_SELECT}`
+    const nextUrl = continuationLink
+        ? trustedNextLink(continuationLink)
+        : `${DATAVERSE_URL}/api/data/v9.2/${book.tableSetName}?$select=${select}&$expand=${intakeExpand()}&$orderby=createdon desc`
+    if (!nextUrl) return { records: [] }
+    const response = await fetch(nextUrl, {
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json', Prefer: `odata.maxpagesize=${JOB_BOOK_PAGE_SIZE}` },
+    })
+    if (!response.ok) throw new Error('Job Book Intake entries could not be loaded.')
+    const data = await response.json() as { value?: IntakeApiRow[]; '@odata.nextLink'?: string }
+    return {
+        records: (data.value ?? []).map((row) => mapIntakeRow(row, book)),
+        nextLink: trustedNextLink(data['@odata.nextLink']),
     }
-    return rows.map(mapIntakeRow)
 }
 
 function intakePayload(row: JobBookRow) {
@@ -221,13 +251,16 @@ function intakePayload(row: JobBookRow) {
         gr_equipmentreviewrequired: row.equipmentReviewRequired,
         ...(row.mechanicId ? { 'gr_Mechanic@odata.bind': `/gr_mechanics(${row.mechanicId})` } : {}),
         ...(row.equipmentId && !row.equipmentId.startsWith('prototype-') ? { 'gr_Equipment@odata.bind': `/gr_equipments(${row.equipmentId})` } : {}),
-        ...(row.customerId ? { 'gr_Customer@odata.bind': `/gr_customers(${row.customerId})` } : {}),
-        ...(row.siteId ? { 'gr_Site@odata.bind': `/gr_sites(${row.siteId})` } : {}),
+        ...(row.customerId && !row.customerId.startsWith('prototype-') ? { 'gr_Customer@odata.bind': `/gr_customers(${row.customerId})` } : {}),
+        ...(row.siteId && !row.siteId.startsWith('prototype-') ? { 'gr_Site@odata.bind': `/gr_sites(${row.siteId})` } : {}),
+        ...(INTAKE_CONTACT_LOOKUP_ENABLED && row.contactId ? { 'gr_Contact@odata.bind': `/gr_contacts(${row.contactId})` } : {}),
     }
 }
 
 export async function createJobBookIntakeRow(accessToken: string, row: JobBookRow): Promise<JobBookRow> {
-    const response = await fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobbookentries?$select=${INTAKE_SELECT}&$expand=${INTAKE_EXPAND}`, {
+    const book = JOB_BOOKS[row.jobBookKey]
+    const select = `${book.idField},${INTAKE_SELECT}`
+    const response = await fetch(`${DATAVERSE_URL}/api/data/v9.2/${book.tableSetName}?$select=${select}&$expand=${intakeExpand()}`, {
         method: 'POST',
         headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -238,12 +271,14 @@ export async function createJobBookIntakeRow(accessToken: string, row: JobBookRo
         body: JSON.stringify(intakePayload(row)),
     })
     if (!response.ok) throw new Error('The Intake entry was not saved. No Job Number was allocated.')
-    return mapIntakeRow(await response.json() as IntakeApiRow)
+    return mapIntakeRow(await response.json() as IntakeApiRow, book)
 }
 
 export async function updateJobBookIntakeRow(accessToken: string, row: JobBookRow): Promise<JobBookRow> {
     if (!row.intakeRecordId || !row.etag) throw new Error('Reload this Intake entry before saving changes.')
-    const response = await fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobbookentries(${row.intakeRecordId})?$select=${INTAKE_SELECT}&$expand=${INTAKE_EXPAND}`, {
+    const book = JOB_BOOKS[row.jobBookKey]
+    const select = `${book.idField},${INTAKE_SELECT}`
+    const response = await fetch(`${DATAVERSE_URL}/api/data/v9.2/${book.tableSetName}(${row.intakeRecordId})?$select=${select}&$expand=${intakeExpand()}`, {
         method: 'PATCH',
         headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -256,5 +291,5 @@ export async function updateJobBookIntakeRow(accessToken: string, row: JobBookRo
     })
     if (response.status === 412) throw new Error('Someone else changed this Intake entry. Reload the page before trying again.')
     if (!response.ok) throw new Error('The Intake changes were not saved.')
-    return mapIntakeRow(await response.json() as IntakeApiRow)
+    return mapIntakeRow(await response.json() as IntakeApiRow, book)
 }

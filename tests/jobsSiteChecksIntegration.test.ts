@@ -102,13 +102,24 @@ test('Scheduler opens the Job drawer immediately and progressively refreshes its
 
 test('Jobs table supports copying selected visible Job Book rows in sorted order', () => {
     const jobsTable = readFileSync(new URL('../src/alpha/jobs/components/JobsTable.tsx', import.meta.url), 'utf8')
-    assert.match(jobsTable, /jobBookFleetCell[\s\S]*formatFleetNumbers/)
-    assert.match(jobsTable, /jobBookFleetCell\(job\)/)
+    const clipboard = readFileSync(new URL('../src/alpha/jobs/utils/jobBookClipboard.ts', import.meta.url), 'utf8')
+    assert.match(jobsTable, /from '\.\.\/utils\/jobBookClipboard'/)
+    assert.match(clipboard, /jobBookFleetCell[\s\S]*formatFleetNumbers/)
+    assert.match(clipboard, /jobBookFleetCell\(job\)/)
     assert.match(jobsTable, /JOBS_FEEDBACK_TIMEOUT_MS = 5000/)
     assert.match(jobsTable, /aria-label="Dismiss notification"/)
     assert.match(jobsTable, /selectedShownJobs\.map\(buildJobBookSpreadsheetRow\)\.join\('\\n'\)/)
     assert.match(jobsTable, /Select all shown/)
     assert.match(jobsTable, /Select Job \$\{job\.gr_jobnumber \|\| 'row'\} for job book export/)
+})
+
+test('Job drawer reuses the Job Book row clipboard format', () => {
+    const coreFields = readFileSync(new URL('../src/alpha/jobs/components/JobCoreFields.tsx', import.meta.url), 'utf8')
+    const editDrawer = readFileSync(new URL('../src/alpha/jobs/components/JobEditDrawer.tsx', import.meta.url), 'utf8')
+    assert.match(coreFields, /copyJobBookSpreadsheetRow\(jobBookJob\)/)
+    assert.match(coreFields, />Copy for Job Book</)
+    assert.doesNotMatch(coreFields, /disabled=\{!jobBookJob\.gr_jobnumber/)
+    assert.match(editDrawer, /jobBookJob=\{job\}/)
 })
 
 test('Job number paste uses one atomic change set in selected-row order', async () => {

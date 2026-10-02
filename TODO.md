@@ -6,6 +6,12 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
 
 ## Priority 0 — Production readiness
 
+- [ ] Complete regional Job Book migration and cutover using
+  [`docs/features/REGIONAL_JOB_BOOKS.md`](docs/features/REGIONAL_JOB_BOOKS.md): obtain, retain, import,
+  and reconcile each regional spreadsheet; derive and verify each production seed; target-smoke
+  allocation; then enable the two regional release gates. All three regional schemas, active keys,
+  and application-role privileges are provisioned and verified; both production gates remain disabled.
+
 - [ ] Configure and verify the production server-only `DATAVERSE_URL`,
   `DATAVERSE_TENANT_ID`, `DATAVERSE_CLIENT_ID`, and `DATAVERSE_CLIENT_SECRET` settings.
 - [ ] Run a production-safe Technician Job Card submission smoke test covering link
@@ -13,6 +19,14 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
   rejection.
 
 ## Priority 1 — Security and reliability
+
+- [ ] Complete restricted Legacy Job Book rollout: create the Entra application roles
+  `ServiceOperations.FullAccess` and `ServiceOperations.JobBookOnly`, approve the named user/group
+  assignments, target-smoke the existing least-privilege `Service Operations - Job Book Only`
+  Dataverse role across the exact Job Book Entry/Job/Equipment/Customer/Site/Contact/Staff reads and
+  permitted writes, then enable `VITE_APPLICATION_ACCESS_CONTROL_ENABLED`. The Contact lookup and
+  its Site Contact Read plus Contact Read/Append To grants are provisioned and verified; the client
+  route boundary and development simulator are also complete.
 
 - [ ] Implement the phased shared data-loading and multi-user synchronization architecture in
   [`docs/architecture/data-loading-and-synchronization.md`](docs/architecture/data-loading-and-synchronization.md).

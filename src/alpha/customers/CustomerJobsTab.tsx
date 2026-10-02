@@ -7,9 +7,11 @@ import {
     customerJobsCsv,
     DEFAULT_CUSTOMER_JOB_FILTERS,
     filterCustomerJobs,
+    parseFleetCostCentresCsv,
     previousCalendarMonth,
     type CustomerJobDateField,
     type CustomerJobStatusFilter,
+    type FleetCostCentres,
 } from './customerJobs'
 
 type Props = {
@@ -37,6 +39,9 @@ function safeFilePart(value: string) {
 export default function CustomerJobsTab({ customerName, jobs, isLoading, error, onOpenJob }: Props) {
     const [filters, setFilters] = useState(DEFAULT_CUSTOMER_JOB_FILTERS)
     const [feedback, setFeedback] = useState('')
+    const [costCentres, setCostCentres] = useState<FleetCostCentres>({})
+    const [costCentreFileName, setCostCentreFileName] = useState('')
+    const [costCentreError, setCostCentreError] = useState('')
     const filteredJobs = useMemo(() => filterCustomerJobs(jobs, filters), [filters, jobs])
 
     const updateFilter = (field: 'status' | 'dateField' | 'from' | 'to' | 'search', value: string) => {
@@ -52,7 +57,7 @@ export default function CustomerJobsTab({ customerName, jobs, isLoading, error, 
 
     const exportCsv = () => {
         if (!filteredJobs.length) return
-        const blob = new Blob([customerJobsCsv(filteredJobs)], { type: 'text/csv;charset=utf-8' })
+        const blob = new Blob([customerJobsCsv(filteredJobs, costCentres)], { type: 'text/csv;charset=utf-8' })
         const url = URL.createObjectURL(blob)
         const link = document.createElement('a')
         link.href = url
@@ -61,6 +66,30 @@ export default function CustomerJobsTab({ customerName, jobs, isLoading, error, 
         link.click()
         URL.revokeObjectURL(url)
         setFeedback(`${filteredJobs.length} filtered ${filteredJobs.length === 1 ? 'Job was' : 'Jobs were'} sent to your browser downloads.`)
+    }
+
+    const loadCostCentres = async (file?: File) => {
+        if (!file) return
+        if (!file.name.toLocaleLowerCase('en-NZ').endsWith('.csv')) {
+            setCostCentreError('Choose the Fleet Cost Centre CSV file.')
+            return
+        }
+        try {
+            const mappings = parseFleetCostCentresCsv(await file.text())
+            const matchedJobs = jobs.filter((job) => {
+                const fleet = job.gr_Equipment?.gr_fleet?.trim().toLocaleUpperCase('en-NZ') ?? ''
+                return Boolean(fleet && mappings[fleet])
+            }).length
+            setCostCentres(mappings)
+            setCostCentreFileName(file.name)
+            setCostCentreError('')
+            setFeedback(`${Object.keys(mappings).length} Fleet Cost Centre mappings loaded; ${matchedJobs} Customer ${matchedJobs === 1 ? 'Job matches' : 'Jobs match'}.`)
+        } catch (loadError) {
+            setCostCentres({})
+            setCostCentreFileName('')
+            setFeedback('')
+            setCostCentreError(loadError instanceof Error ? loadError.message : 'The Cost Centre CSV could not be read.')
+        }
     }
 
     return <section className="customer-jobs-panel" role="tabpanel">
@@ -98,12 +127,26 @@ export default function CustomerJobsTab({ customerName, jobs, isLoading, error, 
                 <input type="date" value={filters.to} min={filters.from || undefined} onChange={(event) => updateFilter('to', event.target.value)} />
             </label>
             <div className="customer-jobs-toolbar-actions">
+                <label className="customer-jobs-cost-centre-file">
+                    <span>Cost Centre reference</span>
+                    <input
+                        type="file"
+                        accept=".csv,text/csv"
+                        aria-describedby={costCentreError ? 'customer-cost-centre-error' : undefined}
+                        onChange={(event) => {
+                            void loadCostCentres(event.currentTarget.files?.[0])
+                            event.currentTarget.value = ''
+                        }}
+                    />
+                </label>
+                {costCentreFileName && <span className="customer-jobs-cost-centre-loaded">Using {costCentreFileName}</span>}
                 <button type="button" onClick={showClosedLastMonth}>Closed last month</button>
                 <button type="button" onClick={() => { setFilters(DEFAULT_CUSTOMER_JOB_FILTERS); setFeedback('') }}>Clear filters</button>
                 <button type="button" className="primary" disabled={!filteredJobs.length} onClick={exportCsv}>Export filtered CSV</button>
             </div>
         </div>
 
+        {costCentreError && <p id="customer-cost-centre-error" className="customer-jobs-feedback error" role="alert">{costCentreError}</p>}
         {feedback && <p className="customer-jobs-feedback" role="status">{feedback}</p>}
         {isLoading ? <div className="customer-workspace-state">Loading Customer Jobs...</div>
             : error ? <div className="customer-workspace-state error" role="alert">Jobs could not be loaded. {error}</div>

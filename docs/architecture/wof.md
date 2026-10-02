@@ -20,6 +20,10 @@ shared Job edit drawer in place on the WOF screen; the WOF feature does not impl
 second Job editor. Successful Job mutations refresh only the WOF workflow datasets needed
 by the affected row. Opening that shared drawer fetches the exact linked Job and office updates
 filtered to its ID, while the WOF register supplies only that Job's already-bounded Schedule Options.
+The table settings dialog can copy every Due Soon and Expired row, independent of the active tab or
+search, as a rich HTML table with a tab-separated fallback for email clients. It uses the register's
+already-loaded projection and includes the linked Job Number when one exists; copying performs no
+additional Dataverse read or mutation.
 
 ### Progressive data-loading contract
 

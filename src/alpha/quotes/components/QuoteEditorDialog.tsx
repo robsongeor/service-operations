@@ -781,7 +781,7 @@ export default function QuoteEditorDialog({
                     {quote && <div className="quote-po-request-action">
                         <div>
                             <strong>Provisional quotation</strong>
-                            <span>Uses the Liftrucks invoice layout, the Job number for Invoice No and Our Ref, and copies Notes into Work Required. This is not a tax invoice.</span>
+                            <span>Uses the Liftrucks invoice layout and copies Notes into Work Required. A linked Job number is used for Invoice No and Our Ref; otherwise the Quote number is used and Our Ref is left blank. This is not a tax invoice.</span>
                         </div>
                         <div className="quote-po-request-buttons">
                             <button

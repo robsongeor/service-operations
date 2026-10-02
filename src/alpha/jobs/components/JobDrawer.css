@@ -120,6 +120,13 @@
     gap: 16px;
 }
 
+.job-equipment-field {
+    display: grid;
+    grid-column: span 2;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
 .job-progressive-fieldset {
     display: contents;
 }
@@ -217,6 +224,11 @@
 }
 
 .job-edit-field-error { color: #9b3636; font-size: .68rem; font-weight: 600; }
+.job-edit-field-heading { display: flex; min-height: 18px; align-items: center; justify-content: space-between; gap: 8px; }
+.job-edit-field-heading button { padding: 0; border: 0; background: transparent; color: #176f66; font: inherit; font-size: .68rem; font-weight: 750; cursor: pointer; }
+.job-edit-field-heading button:hover { text-decoration: underline; }
+.job-edit-field-heading button:disabled { cursor: not-allowed; opacity: .45; text-decoration: none; }
+.job-edit-copy-feedback { color: #176f66; font-size: .68rem; font-weight: 650; }
 
 .job-edit-divider {
     margin-top: 6px;
@@ -288,7 +300,11 @@
 .job-equipment-results button:not(.job-edit-add-result) { display: grid; gap: 2px; min-height: 54px; padding: 8px 11px; }
 .job-equipment-results button strong { color: #28342d; font-size: .78rem; }
 .job-equipment-results button small { color: #707a74; font-size: .68rem; font-weight: 450; }
+.job-equipment-results .job-equipment-unknown-option { display: grid; gap: 2px; padding: 9px 11px; border-bottom-color: #ead9b7; background: #fffaf0; text-align: left; }
+.job-equipment-results .job-equipment-unknown-option strong { color: #6f4c13; }
 .job-equipment-selected { display: flex; min-height: 40px; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 10px; border: 1px solid #bed8cf; border-radius: 8px; background: #f1f8f5; }.job-equipment-selected > div { display: grid; gap: 1px; min-width: 0; }.job-equipment-selected strong { color: #263a32; font-size: .8rem; }.job-equipment-selected small { overflow: hidden; color: #66746c; font-size: .67rem; text-overflow: ellipsis; white-space: nowrap; }.job-equipment-selected button { flex: 0 0 auto; padding: 0; border: 0; background: transparent; color: #176f66; font: inherit; font-size: .72rem; font-weight: 750; cursor: pointer; }
+.job-equipment-selected.unknown { border-color: #e4bc73; background: #fffaf0; }
+.job-equipment-selected.unknown strong { color: #6f4c13; }
 
 .job-edit-create-panel {
     display: grid;

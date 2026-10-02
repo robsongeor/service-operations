@@ -164,6 +164,20 @@ canonical Job drawer for editing. It filters by open/closed state, text, and inc
 Completed Date Only ranges. A Closed last month shortcut selects completed Jobs from the previous
 calendar month. Spreadsheet export downloads the currently filtered rows as an Excel-compatible
 UTF-8 CSV; it performs no additional Dataverse read and does not export hidden Job Card details.
+An optional Fleet Cost Centre CSV can be loaded in the Jobs tab before export. Its `Fleet` and
+`Cost Centre` columns are matched case-insensitively to the Job Equipment's primary Fleet Number,
+and the export writes the result to a Cost Centre column. A blank final Subtotal (excl GST) column
+supports subsequent dollar-entry tracking. The export deliberately excludes Status, Created Date, Completed Date, Site,
+and Site Address. Identical duplicate mappings are accepted, conflicting duplicates block the
+reference import, and Jobs without a match retain a blank value.
+The reference file remains browser-local and does not create or update Dataverse records.
+
+Each Site card exposes a direct CSV export for every Equipment record currently assigned to that
+Site, including inactive records. It uses the already-loaded bounded Customer Equipment projection
+and performs no additional Dataverse read. Rows are ordered by Fleet Number and contain Fleet Number,
+Serial Number, Make, Model, Operational Status, Customer, Site, Address, Last Known Hours, and Reading
+Recorded Date. Customer, Site, and Address come from the Equipment's authoritative Site relationship;
+missing meter values remain blank.
 
 The selected-Customer collections are owned by the account-scoped Operational Data Client.
 Concurrent consumers share a request, invalidation aborts or supersedes older work, and unobserved

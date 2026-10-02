@@ -40,8 +40,7 @@ export function buildQuotePoRequestInvoiceSnapshot(input: QuotePoRequestInvoiceI
     }
 
     const job = input.jobs.find((candidate) => candidate.gr_jobid === input.jobId) ?? input.quote.gr_Job
-    const jobNumber = job?.gr_jobnumber?.trim()
-    if (!jobNumber) throw new Error('Link the quote to a numbered Job before generating the provisional quotation.')
+    const jobNumber = job?.gr_jobnumber?.trim() ?? ''
     const directEquipment = input.equipment.find((candidate) => candidate.gr_equipmentid === input.equipmentId)
         ?? input.quote.gr_Equipment
     const selectedEquipment = directEquipment ?? job?.gr_Equipment
@@ -52,7 +51,7 @@ export function buildQuotePoRequestInvoiceSnapshot(input: QuotePoRequestInvoiceI
     const site = job?.gr_Site
 
     return {
-        documentNumber: jobNumber,
+        documentNumber: jobNumber || quoteNumber,
         documentDate: input.quoteDate,
         jobNumber,
         orderNumber: '',

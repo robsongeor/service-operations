@@ -49,6 +49,10 @@ import {
     restoreCustomerDashboardSelection,
     saveCustomerDashboardSelection,
 } from './customerDashboardViewState'
+import {
+    customerSiteEquipmentCsvFilename,
+    customerSiteEquipmentCsvText,
+} from './customerSiteEquipmentCsv'
 import './CustomerDashboardScreen.css'
 import { useQuoteEditorOverlay } from '../quotes/QuoteEditorOverlayContext'
 import { useOperationalScreenReady } from '../shared/data/OperationalScreenPerformanceContext'
@@ -555,6 +559,18 @@ export default function CustomerDashboardScreen() {
         })
     }
 
+    const exportSiteEquipmentCsv = (site: Site, siteEquipment: readonly Equipment[]) => {
+        if (!selectedCustomer) return
+        const blob = new Blob([customerSiteEquipmentCsvText(siteEquipment)], { type: 'text/csv;charset=utf-8' })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = customerSiteEquipmentCsvFilename(selectedCustomer.gr_name, site.gr_name, today)
+        link.click()
+        URL.revokeObjectURL(url)
+        setSiteSuccess(`${siteEquipment.length} Equipment record${siteEquipment.length === 1 ? '' : 's'} exported for ${site.gr_name}.`)
+    }
+
     const initialJobValuesForCustomer = (customer: Customer): JobCreateInitialValues => {
         const onlySite = customerSites.length === 1 ? customerSites[0] : undefined
         return { customerId: customer.gr_customerid, siteId: onlySite?.gr_siteid ?? '' }
@@ -815,6 +831,14 @@ export default function CustomerDashboardScreen() {
                                 </span>
                             </button>
                             <div className="customer-site-meta" onClick={(event) => event.stopPropagation()}>
+                                <button
+                                    type="button"
+                                    disabled={rows.length === 0}
+                                    title={rows.length ? `Export all Equipment assigned to ${site.gr_name}` : 'No Equipment to export at this Site'}
+                                    onClick={() => exportSiteEquipmentCsv(site, rows)}
+                                >
+                                    Export CSV
+                                </button>
                                 <button
                                     type="button"
                                     onClick={(event) => {

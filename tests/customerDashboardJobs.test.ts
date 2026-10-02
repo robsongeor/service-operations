@@ -3,6 +3,7 @@ import test from 'node:test'
 import {
     customerJobsCsv,
     filterCustomerJobs,
+    parseFleetCostCentresCsv,
     previousCalendarMonth,
     type CustomerJobFilters,
 } from '../src/alpha/customers/customerJobs.ts'
@@ -51,11 +52,31 @@ test('Customer Job search and open filter use the visible Job fields', () => {
     )
 })
 
-test('Customer Job CSV is Excel-friendly, includes completed dates, and neutralises formulas', () => {
-    const csv = customerJobsCsv([jobs[0]])
+test('Customer Job CSV has the chargeable-work columns and neutralises formulas', () => {
+    const job = {
+        ...jobs[0],
+        gr_Equipment: {
+            gr_equipmentid: 'equipment-1', gr_fleet: 'fn2433', gr_serial: 'serial-1', gr_make: 'Toyota', gr_model: '8FG',
+        },
+    }
+    const csv = customerJobsCsv([job], { FN2433: 'Vault' })
     assert.ok(csv.startsWith('\uFEFF'))
-    assert.match(csv, /"Completed Date"/)
-    assert.match(csv, /"2026-02-14"/)
+    assert.match(csv, /"Fleet Number","Cost Centre","Make"/)
+    assert.match(csv, /"Hour Meter","Subtotal \(excl GST\)"\r\n/)
+    assert.match(csv, /"fn2433","Vault","Toyota"/)
+    assert.match(csv, /,""\r\n$/)
+    assert.doesNotMatch(csv, /"Status"|"Created Date"|"Completed Date"|"Site"|"Site Address"/)
     assert.match(csv, /"'=unsafe"/)
     assert.match(csv, /"Replace hose"/)
+})
+
+test('Fleet Cost Centre CSV accepts identical duplicates and normalizes Fleet values', () => {
+    const mappings = parseFleetCostCentresCsv('Fleet,Cost Centre\r\n fn2433 ,Vault\r\nFN2433,Vault\r\nFN2692,Export\r\n')
+    assert.deepEqual(mappings, { FN2433: 'Vault', FN2692: 'Export' })
+})
+
+test('Fleet Cost Centre CSV rejects missing columns, incomplete rows, and conflicting duplicates', () => {
+    assert.throws(() => parseFleetCostCentresCsv('Machine,Area\r\nFN2433,Vault\r\n'), /Fleet and Cost Centre/)
+    assert.throws(() => parseFleetCostCentresCsv('Fleet,Cost Centre\r\nFN2433,\r\n'), /row 2/)
+    assert.throws(() => parseFleetCostCentresCsv('Fleet,Cost Centre\r\nFN2433,Vault\r\nFN2433,Export\r\n'), /conflicting/)
 })

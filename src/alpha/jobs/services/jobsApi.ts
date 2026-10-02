@@ -403,6 +403,96 @@ export async function createJob(
     return createdJob.gr_jobid
 }
 
+export function buildJobCreateChangeSet(
+    jobs: readonly JobSaveInput[],
+    requestId: string = crypto.randomUUID(),
+) {
+    if (!jobs.length) throw new Error('Select at least one ready Job to import.')
+    if (jobs.length > 500) throw new Error('Import no more than 500 Jobs at once.')
+    const numbers = jobs.map((job) => job.jobNumber.trim())
+    if (numbers.some((jobNumber) => !/^\d+$/.test(jobNumber))) {
+        throw new Error('Every imported Job Number must contain digits only.')
+    }
+    if (new Set(numbers).size !== numbers.length) {
+        throw new Error('Every imported Job Number must be unique.')
+    }
+
+    const suffix = requestId.replaceAll('-', '')
+    const batchBoundary = `batch_job_import_${suffix}`
+    const changeBoundary = `changeset_job_import_${suffix}`
+    const lines = [
+        `--${batchBoundary}`,
+        `Content-Type: multipart/mixed; boundary=${changeBoundary}`,
+        '',
+    ]
+    jobs.forEach((job, index) => lines.push(
+        `--${changeBoundary}`,
+        'Content-Type: application/http',
+        'Content-Transfer-Encoding: binary',
+        `Content-ID: ${index + 1}`,
+        '',
+        'POST /api/data/v9.2/gr_jobs HTTP/1.1',
+        'Accept: application/json',
+        'Content-Type: application/json; type=entry',
+        'Prefer: return=minimal',
+        '',
+        JSON.stringify(buildJobCreatePayload(job)),
+        '',
+    ))
+    lines.push(`--${changeBoundary}--`, `--${batchBoundary}--`, '')
+    return {
+        body: lines.join('\r\n'),
+        contentType: `multipart/mixed; boundary=${batchBoundary}`,
+        operationCount: jobs.length,
+    }
+}
+
+async function findExistingJobNumbers(accessToken: string, jobNumbers: readonly string[]) {
+    const existing = new Set<string>()
+    for (let start = 0; start < jobNumbers.length; start += 50) {
+        const values = jobNumbers.slice(start, start + 50)
+        const filter = values.map((value) => `gr_jobnumber eq '${escapeODataString(value.trim())}'`).join(' or ')
+        const query = new URLSearchParams({ '$select': 'gr_jobnumber', '$filter': filter, '$top': String(values.length) })
+        const response = await fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobs?${query}`, {
+            cache: 'no-store',
+            headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+        })
+        if (!response.ok) throw new Error('The imported Job Numbers could not be checked. No Jobs were created.')
+        const result = await response.json() as { value?: Array<{ gr_jobnumber?: string | null }> }
+        result.value?.forEach((job) => { if (job.gr_jobnumber) existing.add(job.gr_jobnumber.trim()) })
+    }
+    return existing
+}
+
+export async function createJobsAtomically(accessToken: string, jobs: readonly JobSaveInput[]) {
+    const batch = buildJobCreateChangeSet(jobs)
+    const existing = await findExistingJobNumbers(accessToken, jobs.map((job) => job.jobNumber))
+    if (existing.size) {
+        throw new Error(`Job Number${existing.size === 1 ? '' : 's'} ${[...existing].sort().join(', ')} already exist${existing.size === 1 ? 's' : ''}. No Jobs were created.`)
+    }
+    const response = await fetch(`${DATAVERSE_URL}/api/data/v9.2/$batch`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: 'application/json',
+            'Content-Type': batch.contentType,
+            'OData-MaxVersion': '4.0',
+            'OData-Version': '4.0',
+        },
+        body: batch.body,
+    })
+    const responseBody = await response.text()
+    const statuses = [...responseBody.matchAll(/HTTP\/1\.1\s+(\d{3})/g)].map((match) => Number(match[1]))
+    const failed = statuses.find((status) => status >= 400)
+    if (!response.ok || failed) {
+        throw new Error('Dataverse rejected the atomic Job import. No Jobs were created.')
+    }
+    if (statuses.filter((status) => status >= 200 && status < 300).length !== batch.operationCount) {
+        throw new Error('Dataverse did not confirm every imported Job. Refresh Jobs before retrying.')
+    }
+    invalidateJobsCache(accessToken)
+}
+
 function escapeODataString(value: string) {
     return value.replaceAll("'", "''")
 }

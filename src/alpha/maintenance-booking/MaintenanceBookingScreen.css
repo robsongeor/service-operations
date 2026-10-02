@@ -1,0 +1,160 @@
+.maintenance-booking-screen { display: grid; gap: 18px; min-width: 0; color: #243029; }
+.maintenance-import-button, .maintenance-empty button { min-height: 38px; padding: 0 15px; border: 1px solid #1f6a58; border-radius: 9px; background: #1f6a58; color: #fff; font-weight: 750; cursor: pointer; }
+.maintenance-metrics { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+.maintenance-metrics button, .maintenance-metrics > div { display: flex; min-height: 72px; align-items: center; justify-content: space-between; padding: 12px 15px; border: 1px solid #dbe4df; border-radius: 12px; background: #fff; color: #647169; text-align: left; }
+.maintenance-metrics button { cursor: pointer; }
+.maintenance-metrics button:hover, .maintenance-metrics button.active { border-color: #7caa9d; background: #f0f8f5; color: #245e4f; }
+.maintenance-metrics span { font-size: .72rem; font-weight: 700; }
+.maintenance-metrics strong { color: #243029; font-size: 1.45rem; }
+.maintenance-import-panel { display: grid; grid-template-columns: minmax(220px, .75fr) minmax(300px, 1.25fr); gap: 16px 24px; padding: 22px; border: 1px solid #a9cabc; border-radius: 14px; background: #f1f8f5; box-shadow: 0 12px 28px rgba(31, 75, 59, .07); }
+.maintenance-import-panel h2, .maintenance-empty h2 { margin: 5px 0 7px; font-size: 1.05rem; }
+.maintenance-import-panel p, .maintenance-empty p { margin: 0; color: #66736c; font-size: .75rem; line-height: 1.5; }
+.maintenance-step { color: #28715e; font-size: .64rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.maintenance-import-panel textarea { width: 100%; min-height: 112px; box-sizing: border-box; resize: vertical; padding: 11px; border: 1px solid #bfd0c8; border-radius: 9px; background: #fff; font: .7rem/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.maintenance-import-actions { grid-column: 2; display: flex; flex-wrap: wrap; gap: 8px; }
+.maintenance-import-actions button { min-height: 36px; padding: 0 12px; border: 1px solid #aebeb6; border-radius: 8px; background: #fff; color: #34423b; font-size: .72rem; font-weight: 750; cursor: pointer; }
+.maintenance-import-actions button.primary { border-color: #1f6a58; background: #1f6a58; color: #fff; }
+.maintenance-import-actions button.quiet { border-color: transparent; background: transparent; }
+.maintenance-import-result { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 13px; border: 1px solid #b8d5ca; border-radius: 9px; background: #edf7f3; color: #315e50; font-size: .7rem; }
+.maintenance-import-result button { border: 0; background: transparent; color: #315e50; font-size: .65rem; font-weight: 750; cursor: pointer; }
+.maintenance-exclusion-list { grid-column: 1 / -1; display: grid; gap: 8px; padding-top: 14px; border-top: 1px solid #c8dcd3; }
+.maintenance-exclusion-list > div:first-child { display: grid; gap: 2px; }
+.maintenance-exclusion-list > div:first-child strong { font-size: .73rem; }
+.maintenance-exclusion-list > div:first-child span { color: #6d7c74; font-size: .64rem; }
+.maintenance-exclusion-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 11px; border: 1px solid #d2ddd8; border-radius: 8px; background: #fff; }
+.maintenance-exclusion-row > span { display: grid; gap: 2px; }
+.maintenance-exclusion-row strong { font-size: .69rem; }
+.maintenance-exclusion-row small { color: #7a8780; font-size: .61rem; }
+.maintenance-exclusion-row button { min-height: 29px; padding: 0 8px; border: 1px solid #b8c6bf; border-radius: 6px; background: #fff; color: #4f6158; font-size: .62rem; font-weight: 750; cursor: pointer; }
+.maintenance-error { margin: 0; color: #a33d3d !important; font-size: .72rem; }
+.maintenance-empty { display: grid; justify-items: start; gap: 12px; padding: 40px; border: 1px dashed #bac7c0; border-radius: 14px; background: #fafcfb; }
+.maintenance-workspace { display: grid; grid-template-columns: minmax(340px, .82fr) minmax(520px, 1.18fr); min-height: 680px; overflow: hidden; border: 1px solid #d9e2dd; border-radius: 14px; background: #fff; box-shadow: 0 16px 36px rgba(31, 48, 39, .07); }
+.maintenance-queue { min-width: 0; border-right: 1px solid #dfe6e2; background: #f7f9f8; }
+.maintenance-queue-toolbar { position: sticky; z-index: 2; top: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 13px; border-bottom: 1px solid #dfe6e2; background: rgba(247, 249, 248, .96); }
+.maintenance-queue-toolbar input, .maintenance-queue-toolbar select { width: 100%; min-height: 38px; box-sizing: border-box; padding: 0 10px; border: 1px solid #cbd6d0; border-radius: 8px; background: #fff; color: #334039; font-size: .72rem; }
+.maintenance-review-select-all { min-height: 38px; padding: 0 11px; border: 1px solid #bdcbc4; border-radius: 8px; background: #fff; color: #405047; font-size: .68rem; font-weight: 750; cursor: pointer; }
+.maintenance-review-intro { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 13px; border-bottom: 1px solid #dbe5e0; background: #edf6f2; }
+.maintenance-review-intro > div { display: grid; gap: 2px; }
+.maintenance-review-intro strong { color: #285a4b; font-size: .72rem; }
+.maintenance-review-intro span { color: #68776f; font-size: .62rem; }
+.maintenance-review-intro button { min-height: 32px; flex: 0 0 auto; padding: 0 10px; border: 1px solid #28715e; border-radius: 7px; background: #28715e; color: #fff; font-size: .64rem; font-weight: 800; cursor: pointer; }
+.maintenance-review-intro button:disabled { border-color: #aebbb5; background: #aebbb5; cursor: not-allowed; }
+.maintenance-record-list { display: grid; max-height: 930px; overflow-y: auto; }
+.maintenance-record { display: grid; grid-template-columns: auto 10px minmax(0, 1fr) auto; gap: 10px; align-items: center; width: 100%; min-width: 0; box-sizing: border-box; padding: 13px; border: 0; border-bottom: 1px solid #e2e8e5; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.maintenance-record:not(:has(.maintenance-review-checkbox)) { grid-template-columns: 10px minmax(0, 1fr) auto; }
+.maintenance-review-checkbox { display: grid; place-items: center; cursor: pointer; }
+.maintenance-review-checkbox input { width: 16px; height: 16px; margin: 0; accent-color: #28715e; }
+.maintenance-record:hover { background: #fff; }
+.maintenance-record.active { box-shadow: inset 3px 0 #28715e; background: #fff; }
+.maintenance-due-dot { width: 7px; height: 7px; border-radius: 50%; background: #d6a341; }
+.maintenance-due-dot.overdue { background: #c94a4a; box-shadow: 0 0 0 3px #fbe5e5; }
+.maintenance-record-copy { display: grid; min-width: 0; gap: 2px; }
+.maintenance-record-copy strong { overflow: hidden; color: #243029; font-size: .76rem; text-overflow: ellipsis; }
+.maintenance-record-copy span { overflow: hidden; color: #4f5d55; font-size: .7rem; text-overflow: ellipsis; white-space: nowrap; }
+.maintenance-record-copy small { overflow: hidden; color: #87928c; font-size: .64rem; text-overflow: ellipsis; white-space: nowrap; }
+.maintenance-record-meta { display: grid; justify-items: end; gap: 4px; }
+.maintenance-record-meta small { color: #7d8982; font-size: .62rem; }
+.maintenance-record-meta em { color: #a15d30; font-size: .6rem; font-style: normal; font-weight: 750; }
+.maintenance-status-pill { display: inline-flex; padding: 3px 7px; border-radius: 999px; background: #e9eeeb; color: #59675f; font-size: .58rem; font-weight: 800; white-space: nowrap; }
+.status-contact { background: #fff1ce; color: #835b0c; }
+.status-awaiting-reply { background: #e4effa; color: #315f82; }
+.status-booked { background: #dff3e8; color: #276548; }
+.status-not-due, .status-no-longer-on-site { background: #eeeaf3; color: #665574; }
+.status-unable-to-contact { background: #fae6e4; color: #93453f; }
+.maintenance-list-state { display: flex; gap: 10px; align-items: center; justify-content: center; padding: 28px 14px; color: #718078; font-size: .72rem; text-align: center; }
+.maintenance-list-state.error { color: #a33d3d; }
+.maintenance-list-state button { border: 1px solid currentColor; border-radius: 7px; background: #fff; color: inherit; cursor: pointer; }
+.maintenance-detail { min-width: 0; background: #fff; }
+.maintenance-detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 22px 24px 16px; }
+.maintenance-detail-header > div > span { color: #28715e; font-size: .67rem; font-weight: 850; letter-spacing: .04em; }
+.maintenance-detail-header h2 { margin: 4px 0; color: #202b25; font-size: 1.2rem; line-height: 1.25; }
+.maintenance-detail-header p { margin: 0; color: #66736c; font-size: .75rem; }
+.maintenance-detail-header-actions { display: grid; flex: 0 0 auto; justify-items: end; gap: 8px; }
+.maintenance-match-badge { flex: 0 0 auto; padding: 5px 8px; border-radius: 999px; background: #f3e4dc; color: #8d4d2d; font-size: .62rem; font-weight: 800; }
+.maintenance-match-badge.exact { background: #def1e8; color: #276548; }
+.maintenance-match-badge.likely { background: #fff0cf; color: #815e17; }
+.maintenance-prejob-edit { min-height: 32px; padding: 0 10px; border: 1px solid #86a99e; border-radius: 7px; background: #fff; color: #24634f; font-size: .66rem; font-weight: 800; cursor: pointer; }
+.maintenance-add-one { min-height: 32px; padding: 0 10px; border: 1px solid #28715e; border-radius: 7px; background: #28715e; color: #fff; font-size: .66rem; font-weight: 800; cursor: pointer; }
+.maintenance-return-review { border: 0; background: transparent; color: #718078; font-size: .63rem; font-weight: 750; cursor: pointer; }
+.maintenance-due-card { display: grid; grid-template-columns: 1fr 1.35fr; gap: 1px; margin: 0 24px 4px; overflow: hidden; border: 1px solid #dbe4df; border-radius: 10px; background: #dbe4df; }
+.maintenance-due-card > div { display: grid; gap: 4px; padding: 13px; background: #f7faf8; }
+.maintenance-due-card span, .maintenance-history-grid span, .maintenance-action-grid label > span { color: #7b8881; font-size: .62rem; font-weight: 750; text-transform: uppercase; }
+.maintenance-due-card strong, .maintenance-history-grid strong { font-size: .76rem; }
+.maintenance-due-card small, .maintenance-history-grid small { color: #728078; font-size: .64rem; }
+.maintenance-review-decision { display: grid; gap: 16px; margin: 20px 24px 24px; }
+.maintenance-review-decision-heading { display: grid; gap: 4px; }
+.maintenance-review-decision-heading h3 { margin: 0; font-size: .9rem; }
+.maintenance-review-decision-heading p { margin: 0; color: #708078; font-size: .69rem; line-height: 1.45; }
+.maintenance-review-options { display: grid; gap: 9px; }
+.maintenance-review-options article { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 11px; align-items: center; padding: 13px; border: 1px solid #dbe5e0; border-radius: 10px; background: #fafcfb; }
+.maintenance-review-options article.exclude { border-color: #ead5d2; background: #fffafa; }
+.maintenance-review-option-number { display: grid; width: 26px; height: 26px; place-items: center; border-radius: 8px; background: #e3f0eb; color: #28715e; font-size: .68rem; font-weight: 850; }
+.maintenance-review-options article.exclude .maintenance-review-option-number { background: #f7e6e4; color: #93453f; }
+.maintenance-review-options article > div { display: grid; gap: 3px; }
+.maintenance-review-options strong { font-size: .73rem; }
+.maintenance-review-options p { margin: 0; color: #728078; font-size: .64rem; line-height: 1.4; }
+.maintenance-review-options button, .maintenance-review-options a { min-height: 33px; box-sizing: border-box; padding: 7px 10px; border: 1px solid #8eaaa0; border-radius: 7px; background: #fff; color: #285e4e; font-size: .64rem; font-weight: 800; text-align: center; text-decoration: none; cursor: pointer; }
+.maintenance-review-options button.primary { border-color: #28715e; background: #28715e; color: #fff; }
+.maintenance-review-options article.exclude button { border-color: #d2a39e; color: #93453f; }
+.maintenance-review-exclusion-controls { display: grid !important; min-width: 168px; gap: 5px !important; }
+.maintenance-review-exclusion-controls select { width: 100%; min-height: 31px; box-sizing: border-box; padding: 0 7px; border: 1px solid #d8c1be; border-radius: 6px; background: #fff; color: #704c48; font-size: .62rem; }
+.maintenance-review-exclusion-controls button { width: 100%; min-height: 31px; padding: 0 8px; background: #fff7f6; }
+.maintenance-detail-section { display: grid; gap: 12px; margin: 0 24px; padding: 18px 0; border-bottom: 1px solid #e4e9e6; }
+.maintenance-linked-job { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 14px 24px 0; padding: 12px 13px; border: 1px solid #9fc8b8; border-radius: 9px; background: #edf7f3; }
+.maintenance-linked-job > div:first-child { display: grid; gap: 2px; }
+.maintenance-linked-job span { color: #2f725c; font-size: .6rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.maintenance-linked-job strong { font-size: .76rem; }
+.maintenance-linked-job small { color: #61736a; font-size: .63rem; }
+.maintenance-linked-job > div:last-child { display: flex; gap: 7px; }
+.maintenance-linked-job a, .maintenance-linked-job button { min-height: 30px; box-sizing: border-box; padding: 6px 8px; border: 1px solid #78a996; border-radius: 6px; background: #fff; color: #28634f; font-size: .62rem; font-weight: 800; text-decoration: none; cursor: pointer; }
+.maintenance-linked-job button { border-color: transparent; background: transparent; color: #68776f; }
+.maintenance-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.maintenance-detail-section h3 { margin: 3px 0 0; font-size: .84rem; }
+.maintenance-section-heading a, .maintenance-section-heading .text-button { border: 0; background: transparent; color: #28715e; font-size: .68rem; font-weight: 750; text-decoration: none; cursor: pointer; }
+.maintenance-section-heading .text-button:disabled { color: #a1aaa5; cursor: not-allowed; }
+.maintenance-section-actions { display: flex; gap: 8px; }
+.maintenance-history-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.maintenance-history-grid > div { display: grid; gap: 4px; padding: 12px; border: 1px solid #dfe6e2; border-radius: 9px; background: #fafcfb; }
+.maintenance-open-jobs { display: grid; gap: 7px; margin-top: 2px; padding-top: 12px; border-top: 1px solid #e3e9e6; }
+.maintenance-open-jobs-heading { display: grid; gap: 2px; }
+.maintenance-open-jobs-heading strong { font-size: .72rem; }
+.maintenance-open-jobs-heading span, .maintenance-open-jobs > p { margin: 0; color: #748179; font-size: .63rem; }
+.maintenance-open-jobs article { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 11px; border: 1px solid #d6e2dc; border-radius: 8px; background: #f8fbf9; }
+.maintenance-open-jobs article > div:first-child { display: grid; min-width: 0; gap: 2px; }
+.maintenance-open-jobs article strong { font-size: .7rem; }
+.maintenance-open-jobs article span { color: #557067; font-size: .62rem; font-weight: 700; }
+.maintenance-open-jobs article small { overflow: hidden; color: #7b8781; font-size: .61rem; text-overflow: ellipsis; white-space: nowrap; }
+.maintenance-open-jobs article > div:last-child { display: flex; flex: 0 0 auto; gap: 6px; }
+.maintenance-open-jobs article a, .maintenance-open-jobs article button { min-height: 30px; box-sizing: border-box; padding: 6px 8px; border: 1px solid #a8bbb2; border-radius: 6px; background: #fff; color: #4d6258; font-size: .62rem; font-weight: 750; text-decoration: none; cursor: pointer; }
+.maintenance-open-jobs article button { border-color: #28715e; background: #28715e; color: #fff; }
+.maintenance-help { margin: 0; padding: 11px 12px; border-radius: 8px; background: #f7f9f8; color: #65736b; font-size: .7rem; line-height: 1.5; }
+.maintenance-contacts { display: grid; gap: 8px; }
+.maintenance-contacts > div, .maintenance-contact-fallback { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 12px; align-items: center; padding: 10px 12px; border: 1px solid #dfe6e2; border-radius: 9px; }
+.maintenance-contacts > div.selected { border-color: #75aa99; background: #f0f8f5; box-shadow: inset 3px 0 #28715e; }
+.maintenance-contacts strong, .maintenance-contact-fallback strong { font-size: .73rem; }
+.maintenance-contacts span, .maintenance-contact-fallback span { grid-column: 1; color: #6e7b74; font-size: .66rem; }
+.maintenance-contacts > div > div { grid-column: 2; grid-row: 1 / 3; display: flex; gap: 6px; }
+.maintenance-contacts a, .maintenance-contact-fallback a { padding: 5px 8px; border: 1px solid #9ab8ad; border-radius: 7px; color: #24634f; font-size: .65rem; font-weight: 750; text-decoration: none; }
+.maintenance-contact-choice { min-height: 28px; padding: 0 8px; border: 1px solid #28715e; border-radius: 7px; background: #fff; color: #28715e; font-size: .63rem; font-weight: 800; cursor: pointer; }
+.maintenance-contacts > div.selected .maintenance-contact-choice { background: #28715e; color: #fff; }
+.maintenance-contact-fallback a { grid-column: 2; grid-row: 1 / 3; }
+.maintenance-action-section { border-bottom: 0; }
+.maintenance-action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.maintenance-action-grid label { display: grid; gap: 5px; }
+.maintenance-action-grid select, .maintenance-action-grid input, .maintenance-action-grid textarea { width: 100%; min-height: 38px; box-sizing: border-box; padding: 8px 9px; border: 1px solid #cbd6d0; border-radius: 8px; background: #fff; color: #2f3d35; font-size: .71rem; }
+.maintenance-action-grid textarea { min-height: 70px; resize: vertical; }
+.maintenance-note-field { grid-column: 1 / -1; }
+.maintenance-quick-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.maintenance-quick-actions button { min-height: 31px; padding: 0 9px; border: 1px solid #c6d2cc; border-radius: 7px; background: #f8faf9; color: #4a5a51; font-size: .65rem; font-weight: 700; cursor: pointer; }
+.edit-form-dialog-fields select { min-height: 40px; box-sizing: border-box; padding: 0 11px; border: 1px solid #d0d7d2; border-radius: 8px; background: #fff; color: #202421; font: inherit; font-size: .85rem; }
+.maintenance-save-note { margin: -2px 0 0; color: #87928c; font-size: .62rem; }
+.maintenance-booking-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 17px 24px; border-top: 1px solid #d8e3dd; background: #edf6f2; }
+.maintenance-booking-footer > div { display: grid; gap: 2px; }
+.maintenance-booking-footer strong { font-size: .76rem; }
+.maintenance-booking-footer span { color: #69776f; font-size: .65rem; }
+.maintenance-booking-footer button { min-height: 38px; padding: 0 14px; border: 1px solid #1f6a58; border-radius: 8px; background: #1f6a58; color: #fff; font-size: .72rem; font-weight: 800; cursor: pointer; }
+.maintenance-booking-footer button:disabled { border-color: #aab8b1; background: #aab8b1; cursor: not-allowed; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+@media (max-width: 1100px) { .maintenance-workspace { grid-template-columns: minmax(300px, .72fr) minmax(450px, 1.28fr); } .maintenance-metrics { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 860px) { .maintenance-import-panel { grid-template-columns: 1fr; } .maintenance-import-actions { grid-column: 1; } .maintenance-workspace { grid-template-columns: 1fr; } .maintenance-queue { border-right: 0; border-bottom: 1px solid #dfe6e2; } .maintenance-record-list { max-height: 440px; } }
+@media (max-width: 560px) { .maintenance-metrics { grid-template-columns: repeat(2, 1fr); } .maintenance-due-card, .maintenance-history-grid, .maintenance-action-grid { grid-template-columns: 1fr; } .maintenance-note-field { grid-column: 1; } .maintenance-detail-header, .maintenance-booking-footer { align-items: stretch; flex-direction: column; } .maintenance-detail-header, .maintenance-detail-section, .maintenance-booking-footer, .maintenance-review-decision { margin-right: 14px; margin-left: 14px; } .maintenance-due-card { margin-right: 14px; margin-left: 14px; } .maintenance-review-options article { grid-template-columns: 30px 1fr; } .maintenance-review-options article > button, .maintenance-review-options article > a, .maintenance-review-exclusion-controls { grid-column: 2; justify-self: start; } }

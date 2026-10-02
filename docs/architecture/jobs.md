@@ -182,6 +182,27 @@ historical invoice-recovery entry point defaults Job Status to Complete and copi
 extracted GreenTree Order No into the editable Job Order Number; standard Job creation retains its
 existing Unallocated default. The invoice entry point awaits a bounded Equipment identifier lookup
 before resolving a match or rendering the editor; it does not load the global Equipment register.
+
+Spreadsheet Job Import is a separate authenticated management screen at `/job-import` for controlled
+historical migration. It accepts the seven-column Excel clipboard contract Job Number, Date,
+Mechanic, Model, Fleet, Customer, and Description. The browser parses Date Only values without a
+timezone conversion and reviews every row against the authoritative Jobs, Equipment, and Staff
+collections before any write. Fleet matching covers primary and alternate Fleet Numbers. Customer
+is always derived from the matched Equipment's Site; spreadsheet Customer and Model values are
+ignored because the matched Equipment record is authoritative. Equipment without a Site or Customer,
+plus missing, ambiguous, or duplicate relationships, block a row. Review can
+be filtered to every non-imported row containing either an error or warning. Row-level correction
+remains available for Job Number, Date, Fleet, Mechanic, and Description.
+
+Selected ready rows are created as historical Complete Breakdown or Workshop Jobs in one Dataverse
+changeset after a batched duplicate-number preflight. All selected creates succeed or none do, and the
+active Job Number alternate key remains the final simultaneous-write guard. Existing Job Numbers are
+also blocked during review against the loaded Jobs table. Spreadsheet Date becomes
+Completed Date. This controlled migration does not synthesize hour-meter evidence or run current
+Equipment maintenance completion effects; it therefore must not be used in place of the normal
+Job-completion workflow. A source row containing several Fleet Numbers remains blocked because one
+managed Job can reference only one Equipment and the importer never invents Job-number suffixes.
+
 The feature-owned Jobs table also owns Job Book clipboard exchange. A row click copies one
 job-book row; its explicit multi-select controls copy selected, currently shown Jobs in the
 visible sorted order as tab-separated rows. The existing Fleet Number cell contains the primary
@@ -233,7 +254,9 @@ intake, but Site suggestions require a linked Customer.
   office/scheduled filters, reset behavior, and sticky-column preferences.
 - Job Status and Job Card Status are never interchangeable.
 - Completion Review is not completion.
-- Every newly completed Job must have linked Equipment and must capture its completion hour meter.
+- Every Job completed through an operational completion workflow must have linked Equipment and
+  capture its completion hour meter. Controlled historical spreadsheet migration may create a
+  completed record without meter evidence, but never updates Equipment meter or maintenance state.
 - Completed Job readings are accepted by default. Sequence analysis may display an isolated value
   as Potentially incorrect, an unresolved drop as Possible reset, or a sustained lower increasing
   sequence as Confirmed reset; these assessments are derived and do not rewrite history.

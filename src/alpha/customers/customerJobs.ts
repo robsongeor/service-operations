@@ -1,6 +1,6 @@
 import { newZealandDateOnly } from '../shared/dates/dateOnly.ts'
 import type { Job } from '../jobs/types/job.types.ts'
-import { JOB_STATUS_OPTIONS, JOB_STATUSES } from '../jobs/types/jobStatus.types.ts'
+import { JOB_STATUSES } from '../jobs/types/jobStatus.types.ts'
 import { getJobTypeLabel } from '../jobs/types/jobType.types.ts'
 
 export type CustomerJobStatusFilter = 'all' | 'open' | 'closed'
@@ -13,6 +13,8 @@ export type CustomerJobFilters = {
     to: string
     search: string
 }
+
+export type FleetCostCentres = Readonly<Record<string, string>>
 
 export const DEFAULT_CUSTOMER_JOB_FILTERS: CustomerJobFilters = {
     status: 'all',
@@ -76,16 +78,78 @@ function csvCell(value: unknown) {
     return `"${safe.replaceAll('"', '""')}"`
 }
 
-export function customerJobsCsv(jobs: readonly Job[]) {
+function normalizedFleet(value: string | null | undefined) {
+    return value?.trim().toLocaleUpperCase('en-NZ') ?? ''
+}
+
+function parseCsvRows(source: string) {
+    const rows: string[][] = []
+    let row: string[] = []
+    let cell = ''
+    let quoted = false
+    const text = source.replace(/^\uFEFF/, '')
+
+    for (let index = 0; index < text.length; index += 1) {
+        const character = text[index]
+        if (quoted) {
+            if (character === '"' && text[index + 1] === '"') {
+                cell += '"'
+                index += 1
+            } else if (character === '"') quoted = false
+            else cell += character
+        } else if (character === '"') quoted = true
+        else if (character === ',') {
+            row.push(cell)
+            cell = ''
+        } else if (character === '\n') {
+            row.push(cell.replace(/\r$/, ''))
+            if (row.some((value) => value.trim())) rows.push(row)
+            row = []
+            cell = ''
+        } else cell += character
+    }
+
+    if (quoted) throw new Error('The Cost Centre CSV contains an unterminated quoted value.')
+    row.push(cell.replace(/\r$/, ''))
+    if (row.some((value) => value.trim())) rows.push(row)
+    return rows
+}
+
+export function parseFleetCostCentresCsv(source: string): FleetCostCentres {
+    const rows = parseCsvRows(source)
+    if (!rows.length) throw new Error('The Cost Centre CSV is empty.')
+
+    const headers = rows[0].map((value) => value.trim().toLocaleLowerCase('en-NZ'))
+    const fleetIndex = headers.indexOf('fleet')
+    const costCentreIndex = headers.indexOf('cost centre')
+    if (fleetIndex < 0 || costCentreIndex < 0) {
+        throw new Error('The Cost Centre CSV must contain Fleet and Cost Centre columns.')
+    }
+
+    const costCentres: Record<string, string> = {}
+    rows.slice(1).forEach((values, rowIndex) => {
+        const fleet = normalizedFleet(values[fleetIndex])
+        const costCentre = values[costCentreIndex]?.trim() ?? ''
+        if (!fleet || !costCentre) {
+            throw new Error(`Cost Centre CSV row ${rowIndex + 2} must contain both Fleet and Cost Centre.`)
+        }
+        const existing = costCentres[fleet]
+        if (existing && existing.toLocaleLowerCase('en-NZ') !== costCentre.toLocaleLowerCase('en-NZ')) {
+            throw new Error(`Fleet ${fleet} has conflicting Cost Centre values.`)
+        }
+        costCentres[fleet] = existing ?? costCentre
+    })
+
+    if (!Object.keys(costCentres).length) throw new Error('The Cost Centre CSV contains no Fleet mappings.')
+    return costCentres
+}
+
+export function customerJobsCsv(jobs: readonly Job[], costCentres: FleetCostCentres = {}) {
     const headers = [
         'Job Number',
-        'Status',
         'Job Type',
-        'Created Date',
-        'Completed Date',
-        'Site',
-        'Site Address',
         'Fleet Number',
+        'Cost Centre',
         'Make',
         'Model',
         'Serial Number',
@@ -93,16 +157,13 @@ export function customerJobsCsv(jobs: readonly Job[]) {
         'Technician',
         'Order Number',
         'Hour Meter',
+        'Subtotal (excl GST)',
     ]
     const rows = jobs.map((job) => [
         job.gr_jobnumber,
-        JOB_STATUS_OPTIONS.find((status) => status.value === job.gr_status)?.label ?? 'Unknown',
         getJobTypeLabel(job.gr_jobtype),
-        newZealandDateOnly(job.createdon),
-        job.gr_completeddate?.slice(0, 10) ?? '',
-        job.gr_Site?.gr_name,
-        job.gr_Site?.gr_address,
         job.gr_Equipment?.gr_fleet,
+        costCentres[normalizedFleet(job.gr_Equipment?.gr_fleet)] ?? '',
         job.gr_Equipment?.gr_make,
         job.gr_Equipment?.gr_model,
         job.gr_Equipment?.gr_serial,
@@ -110,6 +171,7 @@ export function customerJobsCsv(jobs: readonly Job[]) {
         job.gr_Mechanic?.gr_name,
         job.gr_ordernumber,
         job.gr_hourmeter,
+        '',
     ].map(csvCell).join(','))
     return `\uFEFF${headers.map(csvCell).join(',')}\r\n${rows.join('\r\n')}${rows.length ? '\r\n' : ''}`
 }

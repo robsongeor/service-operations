@@ -6,6 +6,8 @@ import Sidebar from './Sidebar'
 import { getSignedInUserInfo } from './auth/signedInUser'
 import { useActiveMsalAccount } from './auth/useActiveMsalAccount'
 import { isServiceOperationsAdministrator } from './auth/adminAuthorization'
+import AccessDeniedScreen from './auth/AccessDeniedScreen'
+import { applicationAccessFromEnvironment } from './auth/applicationAccess'
 import DataverseSessionRecovery from './auth/DataverseSessionRecovery'
 import { OperationalDataClientProvider } from './alpha/shared/data/OperationalDataClientProvider'
 import { OperationalScreenPerformanceProvider } from './alpha/shared/data/OperationalScreenPerformance'
@@ -31,6 +33,8 @@ const GreentreeEquipmentTestScreen = lazy(() => import('./alpha/equipment-test/G
 const JobBookPrototypeScreen = lazy(() => import('./alpha/job-book/JobBookPrototypeScreen'))
 const OverviewScreen = lazy(() => import('./alpha/overview/OverviewScreen'))
 const EquipmentPhotoUploadScreen = lazy(() => import('./alpha/equipment-photos/EquipmentPhotoUploadScreen'))
+const MaintenanceBookingScreen = lazy(() => import('./alpha/maintenance-booking/MaintenanceBookingScreen'))
+const JobSpreadsheetImportScreen = lazy(() => import('./alpha/job-import/JobSpreadsheetImportScreen'))
 
 function RouteLoadingFallback() {
   return <div role="status" aria-live="polite" style={{ padding: '24px', color: '#66736c', fontSize: '.8rem' }}>Loading page…</div>
@@ -41,6 +45,7 @@ function App() {
   const location = useLocation()
   const activeAccount = useActiveMsalAccount()
   const signedInUser = getSignedInUserInfo(activeAccount)
+  const access = applicationAccessFromEnvironment(activeAccount)
 
   if (location.pathname === '/portal/job' || location.pathname.startsWith('/portal/job/')) {
     return <Suspense fallback={<RouteLoadingFallback />}>
@@ -64,6 +69,10 @@ function App() {
     return <LoginScreen />
   }
 
+  if (access.mode === 'denied') {
+    return <AccessDeniedScreen access={access} user={signedInUser} />
+  }
+
   const operationalDataScope = `${import.meta.env.VITE_DATAVERSE_URL ?? 'dataverse'}:${activeAccount?.tenantId ?? 'tenant'}:${signedInUser?.storageId ?? activeAccount?.homeAccountId ?? 'account'}`
 
   return (
@@ -74,21 +83,30 @@ function App() {
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       <DataverseSessionRecovery />
       {/* Sidebar */}
-      <Sidebar />
+      <Sidebar access={access} />
 
       {/* Main Content */}
       <div style={{ flex: 1, minWidth: 0, padding: '24px' }}>
         <Suspense fallback={<RouteLoadingFallback />}>
-          <Routes>
+          {access.isSimulated && <div className="access-simulation-banner" role="status">
+            Simulating {access.mode} access — this is a navigation test, not a security test.
+          </div>}
+          {access.mode === 'job-book-only' ? <Routes>
+            <Route path="/" element={<Navigate to="/job-book" replace />} />
+            <Route path="/job-book" element={<JobBookPrototypeScreen key={signedInUser?.storageId || 'account-pending'} allowManagedJobNavigation={false} />} />
+            <Route path="*" element={<AccessDeniedScreen access={access} user={signedInUser} restrictedRoute />} />
+          </Routes> : <Routes>
             <Route path="/" element={<OverviewScreen />} />
             <Route path="/customers" element={<CustomerDashboardScreen />} />
             <Route path="/staff" element={<MechanicsScreen />} />
             <Route path="/mechanics" element={<Navigate to="/staff" replace />} />
             <Route path="/equipment" element={<EquipmentScreen />} />
+            <Route path="/maintenance-booking" element={<MaintenanceBookingScreen />} />
             <Route path="/equipment/greentree-test" element={<GreentreeEquipmentTestScreen />} />
             <Route path="/equipment-map" element={<EquipmentMapScreen key={signedInUser?.storageId || 'account-pending'} />} />
             <Route path="/job-map" element={<JobMapScreen key={signedInUser?.storageId || 'account-pending'} />} />
             <Route path="/jobs" element={<JobsScreen key={signedInUser?.storageId || 'account-pending'} />} />
+            <Route path="/job-import" element={<JobSpreadsheetImportScreen key={signedInUser?.storageId || 'account-pending'} />} />
             <Route path="/equipment-photos" element={<EquipmentPhotoUploadScreen key={signedInUser?.storageId || 'account-pending'} />} />
             <Route path="/job-book" element={<JobBookPrototypeScreen key={signedInUser?.storageId || 'account-pending'} />} />
             <Route path="/site-checks" element={<SiteChecksScreen />} />
@@ -103,7 +121,8 @@ function App() {
             <Route path="/chargeable-invoices" element={<ChargeableInvoiceReviewScreen />} />
             <Route path="/pricing" element={<PricingScreen />} />
             <Route path="/wof" element={<WofScreen key={signedInUser?.storageId || 'account-pending'} accountId={signedInUser?.storageId || 'account-pending'} />} />
-          </Routes>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>}
         </Suspense>
       </div>
     </div>

@@ -935,7 +935,7 @@ test('known supporting photo upload failure retains a safe Failed staging docume
 })
 
 test('Chargeable Invoice route uses shared page primitives and delegates intake and queue workflows', async () => {
-    const [app, sidebar, screen, intakeHook, intakeService, queue, workspace, workspaceStyles, reviewApi, approvalService, quoteApi, jobCreateDrawer, jobRelationshipFields] = await Promise.all([
+    const [app, sidebar, screen, intakeHook, intakeService, queue, workspace, workspaceStyles, reviewApi, approvalService, quoteApi, jobCreateDrawer, jobEquipmentField] = await Promise.all([
         readFile(new URL('../src/App.tsx', import.meta.url), 'utf8'),
         readFile(new URL('../src/Sidebar.tsx', import.meta.url), 'utf8'),
         readFile(new URL('../src/alpha/chargeable-invoices/ChargeableInvoiceReviewScreen.tsx', import.meta.url), 'utf8'),
@@ -948,7 +948,7 @@ test('Chargeable Invoice route uses shared page primitives and delegates intake 
         readFile(new URL('../api/services/chargeableInvoiceApprovalService.js', import.meta.url), 'utf8'),
         readFile(new URL('../src/alpha/quotes/services/quotesApi.ts', import.meta.url), 'utf8'),
         readFile(new URL('../src/alpha/jobs/components/JobCreateDrawer.tsx', import.meta.url), 'utf8'),
-        readFile(new URL('../src/alpha/jobs/components/JobRelationshipFields.tsx', import.meta.url), 'utf8'),
+        readFile(new URL('../src/alpha/jobs/components/JobEquipmentField.tsx', import.meta.url), 'utf8'),
     ])
     assert.match(app, /path="\/chargeable-invoices"/)
     assert.match(sidebar, /Chargeable Invoices/)
@@ -992,10 +992,10 @@ test('Chargeable Invoice route uses shared page primitives and delegates intake 
     assert.match(intakeHook, /match\.job\.gr_jobid\.toLowerCase\(\) !== expectedJobId\.toLowerCase\(\)/)
     assert.match(jobCreateDrawer, /onCreated\?\.\(jobId, jobInput\)/)
     assert.match(jobCreateDrawer, /initialEquipmentDraft=\{initialValues\?\.equipmentDraft\}/)
-    assert.match(jobRelationshipFields, /hasExactInitialFleetMatch/)
-    assert.match(jobRelationshipFields, /hasExactInitialSerialMatch/)
-    assert.match(jobRelationshipFields, /shouldOpenInitialEquipmentCreate/)
-    assert.match(jobRelationshipFields, /Prefilled from the invoice\. Confirm the details before creating/)
+    assert.match(jobEquipmentField, /hasExactInitialFleetMatch/)
+    assert.match(jobEquipmentField, /hasExactInitialSerialMatch/)
+    assert.match(jobEquipmentField, /shouldOpenInitialEquipmentCreate/)
+    assert.match(jobEquipmentField, /Prefilled from the invoice\. Confirm the details before creating/)
     assert.match(screen, /<ChargeableInvoiceQueue/)
     assert.match(queue, /deriveChargeableInvoicePrimaryQueue/)
     assert.match(queue, /className="chargeable-queue-summary"/)

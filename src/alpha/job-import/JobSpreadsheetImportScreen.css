@@ -1,0 +1,40 @@
+.job-import-screen { display: grid; gap: 18px; color: #29352f; }
+.job-import-paste, .job-import-controls, .job-import-review-table { display: grid; gap: 14px; padding: 18px; border: 1px solid #dce5e0; border-radius: 13px; background: #fff; box-shadow: 0 8px 24px rgba(32,55,44,.05); }
+.job-import-paste > div:first-child > span, .job-import-controls > div:first-child > span { color: #167368; font-size: .67rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.job-import-paste h2, .job-import-controls h2 { margin: 4px 0; font-size: 1.08rem; }
+.job-import-paste p, .job-import-controls p { margin: 0; color: #69756e; font-size: .75rem; line-height: 1.5; }
+.job-import-paste textarea { width: 100%; min-height: 170px; box-sizing: border-box; resize: vertical; padding: 12px; border: 1px solid #cbd7d1; border-radius: 9px; font: .75rem/1.5 Consolas, monospace; }
+.job-import-paste-actions, .job-import-table-toolbar { display: flex; justify-content: flex-end; gap: 8px; }
+.job-import-table-toolbar > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.job-import-paste-actions button, .job-import-table-toolbar button, .job-import-error button { min-height: 36px; padding: 0 13px; border: 1px solid #c8d3ce; border-radius: 8px; background: #fff; color: #315c50; font-weight: 750; cursor: pointer; }
+.job-import-paste-actions button.primary, .job-import-table-toolbar button.primary { border-color: #176f66; background: #176f66; color: #fff; }
+.job-import-paste-actions button:disabled, .job-import-table-toolbar button:disabled { cursor: not-allowed; opacity: .5; }
+.job-import-result, .job-import-loading, .job-import-error { margin: 0; padding: 10px 12px; border-radius: 9px; background: #edf7f2; color: #176f66; font-size: .75rem; }
+.job-import-error { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #fff0f0; color: #903d3d; }
+.job-import-summary { display: grid; grid-template-columns: repeat(6, minmax(110px, 1fr)); gap: 9px; }
+.job-import-summary div { display: grid; gap: 4px; padding: 12px; border: 1px solid #dce5e0; border-radius: 10px; background: #f8faf9; }
+.job-import-summary span { color: #6e7973; font-size: .65rem; font-weight: 750; text-transform: uppercase; }
+.job-import-summary strong { font-size: 1.25rem; }
+.job-import-summary .danger { border-color: #e7bcbc; background: #fff4f4; color: #923f3f; }
+.job-import-summary .warning { border-color: #ead3a6; background: #fff9eb; color: #8a641c; }
+.job-import-global-fields { display: grid; grid-template-columns: minmax(180px, 260px); gap: 12px; align-items: end; }
+.job-import-global-fields > label { display: grid; gap: 6px; color: #526059; font-size: .68rem; font-weight: 750; }
+.job-import-global-fields select { min-height: 39px; padding: 0 9px; border: 1px solid #ced7d2; border-radius: 8px; background: #fff; }
+.job-import-table-toolbar { justify-content: space-between; }
+.job-import-table-wrap { overflow: auto; border: 1px solid #dce5e0; border-radius: 10px; }
+.job-import-review-table table { width: 100%; min-width: 1420px; border-collapse: collapse; font-size: .72rem; }
+.job-import-review-table th { position: sticky; top: 0; z-index: 1; padding: 9px 10px; border-bottom: 1px solid #dce5e0; background: #f3f6f4; color: #66736c; font-size: .63rem; text-align: left; text-transform: uppercase; }
+.job-import-review-table td { max-width: 260px; padding: 10px; border-bottom: 1px solid #e7ece9; vertical-align: top; }
+.job-import-review-table tr.blocked { background: #fff9f9; }
+.job-import-review-table tr.imported { background: #f1f7f3; color: #657169; }
+.job-import-review-table td input:not([type="checkbox"]), .job-import-review-table td textarea { width: 100%; min-width: 130px; min-height: 34px; box-sizing: border-box; padding: 6px 8px; border: 1px solid #ccd6d1; border-radius: 7px; background: #fff; font: inherit; }
+.job-import-review-table td textarea { min-width: 220px; min-height: 58px; resize: vertical; }
+.job-import-review-table td > strong, .job-import-review-table td > small { display: block; }
+.job-import-review-table td > small { margin-top: 4px; color: #758079; line-height: 1.35; }
+.job-import-review-table td > small.error { color: #963f3f; }
+.job-import-review-table td > small.warning { color: #8a641c; }
+.job-import-review-table td.job-import-empty { max-width: none; padding: 24px; color: #6e7973; text-align: center; }
+.job-import-state { display: inline-block; margin-bottom: 4px; padding: 4px 7px; border-radius: 999px; font-size: .63rem; font-weight: 800; }
+.job-import-state.ready, .job-import-state.imported { background: #dff1e7; color: #176a55; }
+.job-import-state.blocked { background: #f7dddd; color: #913c3c; }
+@media (max-width: 900px) { .job-import-summary { grid-template-columns: repeat(3, 1fr); } .job-import-global-fields { grid-template-columns: 1fr; } }

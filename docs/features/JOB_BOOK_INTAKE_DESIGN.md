@@ -6,6 +6,10 @@ Job Book entries are not Jobs. They are intake/number-ledger records that may la
 
 This prevents incomplete daily Job Book entries from appearing in Breakdown, Service, Workshop, WOF, or Site Check workflows. There is no `Unset` Job Type. A Job Type is selected deliberately during promotion.
 
+Regional allocation is described in [`REGIONAL_JOB_BOOKS.md`](REGIONAL_JOB_BOOKS.md). Auckland,
+Waikato, Hastings, and Christchurch use separate Intake tables and AutoNumber sequences while
+sharing this screen and data contract.
+
 ## Record lifecycle
 
 1. **Intake** — a number has been allocated and the incoming work is recorded. It can be corrected by admins but is excluded from managed Job workflows.
@@ -14,6 +18,12 @@ This prevents incomplete daily Job Book entries from appearing in Breakdown, Ser
 4. **Void** — an allocated number that must not be reused. The record and reason remain auditable.
 
 The Job Book Legacy view now reads Intake and managed Job rows from Dataverse. New Intake entries and subsequent row edits are saved directly to Dataverse; obsolete browser-only draft rows and overrides are no longer loaded or written.
+
+The register loads managed Jobs and Intake entries in independent 100-record pages ordered by Job
+Number. It follows only trusted Dataverse continuation links and requests the next pages when the
+user nears the bottom of the loaded register. Active client filters pause automatic paging so an
+empty filtered result cannot pull the entire history into memory; the user can explicitly load more
+history to continue searching.
 
 ## Provisioned Dataverse table
 
@@ -42,6 +52,12 @@ The Service Operations role has organization-depth Create, Read, Write, Append, 
 
 The `gr_job_jobnumber_key` alternate key was provisioned and verified Active after the latest preflight found no duplicate values among 399 numbered Jobs. No existing Job was changed.
 
+Contact selection uses the provisioned optional `gr_jobbookentry.gr_Contact` lookup. Contacts are discovered through the existing
+`gr_sitecontact` junction for the selected Site, while managed Jobs store the underlying Contact in
+their direct `gr_Contact` lookup. Job Book Entry therefore requires its own optional `gr_Contact`
+lookup to retain the same selection before promotion. The lookup is published and
+`VITE_JOB_BOOK_CONTACT_LOOKUP_ENABLED=true` enables the Intake projection and Contact selector.
+
 Snapshots preserve what was known when the number was allocated; lookups support later reconciliation.
 
 Managed `gr_job` records carry the same two independent administrative markers in `gr_gtentered` and `gr_timecloudentered`. They are not derived from Job status and neither marker implies that the other task is complete.
@@ -64,6 +80,23 @@ Use the Intake ID as an idempotency key and enforce unique Job Number values so 
 - The Jobs header provides a direct route to Job Book Intake.
 - Promoted rows can open their linked managed Job.
 - A future combined “All work” view may display both record kinds, but it must label the source and never treat Intake as a Job.
+
+## Restricted Job Book operators
+
+The client supports the Entra application role `ServiceOperations.JobBookOnly`. When application-
+role enforcement is enabled, that role sees only the Legacy Job Book, lands on `/job-book`, cannot
+navigate to a managed Job, and receives Access Denied for every other management path. Full users
+use `ServiceOperations.FullAccess`.
+
+This route boundary is not Dataverse authorization. The existing `Service Operations - Job Book
+Only` Dataverse role owns the restricted permissions. Contact enablement added organization-depth
+Read on Site Contact, plus Read and Append To on Contact; the schema utility verifies these grants.
+The full role still needs a target-user smoke test across the complete Job Book read/write contract.
+
+The Legacy Job Book and standard Create Job drawers share the Equipment, Customer, Site, and
+Contact relationship controls. Selecting Equipment pre-fills Customer and Site; changing Customer
+clears the dependent Site and Contact, and changing Site clears Contact. Site and Contact choices are
+loaded only for the selected parent record.
 
 ## Next production step
 
