@@ -10,6 +10,7 @@ import DataverseSessionRecovery from './auth/DataverseSessionRecovery'
 import StaffRealtimeBridge from './alpha/mechanics/StaffRealtimeBridge'
 
 const JobsScreen = lazy(() => import('./alpha/jobs/JobsScreen'))
+const JobCardReviewsScreen = lazy(() => import('./alpha/job-card-reviews/JobCardReviewsScreen'))
 const SchedulingScreen = lazy(() => import('./alpha/scheduling/SchedulingScreen'))
 const PricingScreen = lazy(() => import('./alpha/quotes/PricingScreen'))
 const QuotesScreen = lazy(() => import('./alpha/quotes/QuotesScreen'))
@@ -80,6 +81,8 @@ function App() {
             <Route path="/equipment-map" element={<EquipmentMapScreen key={signedInUser?.storageId || 'account-pending'} />} />
             <Route path="/job-map" element={<JobMapScreen key={signedInUser?.storageId || 'account-pending'} />} />
             <Route path="/jobs" element={<JobsScreen key={signedInUser?.storageId || 'account-pending'} />} />
+            <Route path="/job-card-reviews" element={<JobCardReviewsScreen key={`${signedInUser?.storageId}-queue`} />} />
+            <Route path="/job-card-reviews/:reviewId" element={<JobCardReviewsScreen key={`${signedInUser?.storageId}-${location.pathname}`} />} />
             <Route path="/job-book" element={<JobBookPrototypeScreen key={signedInUser?.storageId || 'account-pending'} />} />
             <Route path="/site-checks" element={<SiteChecksScreen />} />
             <Route

@@ -2,9 +2,9 @@
 
 ## Overview
 
-Service Operations has two deliberately separate identity paths: delegated office-user
-authentication for the management app and confidential application authentication for the
-anonymous technician portal.
+Service Operations separates delegated office-user authentication from anonymous bearer-link
+workflows. Job-level technician links access private Azure snapshots/evidence without calling
+Dataverse. Site Check links retain confidential application authentication to Dataverse.
 
 ## Management application
 
@@ -60,7 +60,14 @@ These rules reduce both sign-in prompts and token/Dataverse traffic. They do not
 sharing tokens between users, persisting bearer tokens outside MSAL, or bypassing expiry and
 consent checks.
 
-## Public portal service
+## Job-level Azure portal
+
+Office generation reads a snapshot with the delegated bearer. Anonymous Job lookup, upload
+and submission use Azure Table/Blob only. Review validates WhoAmI, then requires the authoritative
+user email/domain name to match `JOB_CARD_REVIEWER_EMAILS`; missing configuration denies access.
+`X-Dataverse-Authorization` carries delegated tokens through the Static Web Apps proxy.
+
+## Site Check portal service
 
 Anonymous browsers never receive Dataverse credentials. Server endpoints acquire a
 client-credential token using:
@@ -125,8 +132,8 @@ automatically retried.
 
 ## Extension points
 
-Additional anonymous portals should reuse the confidential server boundary and receive
-their own minimal service methods and privilege review. Do not reuse the SPA registration
+Additional anonymous portals need their own minimal server methods and privilege review;
+prefer scoped snapshots where operational access is unnecessary. Do not reuse the SPA registration
 for server credentials or introduce browser-accessible secrets.
 
 ## Related files

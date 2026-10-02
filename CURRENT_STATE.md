@@ -1,6 +1,17 @@
 # Current State
 
-Branch: `v1-deployment`
+Branch: `codex/azure-job-card-deployment`
+
+## Azure Job Card cutover (in progress, 2 October 2026)
+
+- Integrated onto production baseline `9c5be8e`, preserving current pilot, validation, parts
+  quantities, PDF, resend and localhost email behaviour. New evidence is in `/job-card-reviews`.
+- The owner approved storage/email creation, backend configuration, and replacing unused links.
+  Notifications and reviewer access target `georger@liftrucks.co.nz`.
+- Resource deployment `CustomDeployment-20261002192950` completed successfully in ServiceOperations.
+  Backend settings, client/API deployment and signed-in end-to-end verification remain in progress.
+- Site Check assignment links, their photo service and confidential credentials remain unchanged.
+- Local tests, lint and build passed; live workflow verification is not yet claimed.
 
 ## Local Job Card email guard (deployed)
 

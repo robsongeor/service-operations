@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Moved job-level technician links and submitted evidence to private Azure Table/Blob
+  storage, with immutable Job snapshots, replay-safe submission, bounded photo uploads,
+  and no anonymous Dataverse access or operational Job updates.
+- Added authenticated Job Card Reviews, private photo access, explicit office review,
+  and Azure email notifications with retry. Existing Site Check storage remains unchanged.
+- Added reproducible Azure resource/configuration templates, deployment documentation,
+  concurrency/security tests, and an opt-in local Azurite adapter contract test.
+
 ## v1.7.0 — 15 August 2026
 
 - Added an Equipment Map that groups Equipment at their assigned Site address, clusters dense

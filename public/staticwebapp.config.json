@@ -2,6 +2,9 @@
   "platform": {
     "apiRuntime": "node:20"
   },
+  "routes": [
+    { "route": "/portal/job/*", "headers": { "Referrer-Policy": "no-referrer", "Cache-Control": "no-store" } }
+  ],
   "navigationFallback": {
     "rewrite": "/index.html",
     "exclude": ["/api/*"]

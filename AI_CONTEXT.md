@@ -25,6 +25,11 @@ Dataverse requests. Domain helpers own reusable business calculations and valida
   are preserved when current configuration changes.
 - Job Status and Job Card Status are separate workflows.
 - Technician submission never automatically completes the operational Job.
+- Job-level technician links use Azure Table snapshots and private Blob evidence only. Their
+  anonymous requests must never acquire a Dataverse token or call Dataverse. Office generation
+  reads the snapshot with the licensed user's delegated token; review is a separate office action.
+- Site Check assignment links retain their separate existing service; do not remove its credentials
+  or change that workflow as part of Job Card deployment.
 - Anonymous portal browsers never call Dataverse directly or receive server credentials.
 - Date Only values use shared date-only helpers and must not be shifted through timezone
   conversion.
@@ -67,8 +72,9 @@ writes.
   interactive sign-in; interaction-required errors expose one explicit user action.
 - Batch and deduplicate Dataverse reads, reuse one authenticated connection for administrative
   workflows, and avoid repeated metadata or `WhoAmI` requests within the same operation.
-- Public portal workflows use a separate confidential Entra registration and least-
-  privilege Dataverse Application User.
+- Site Check public workflows use a separate confidential Entra registration and least-
+  privilege Dataverse Application User. Job-level technician links use private Azure
+  snapshots/evidence instead; anonymous Job Card requests never call Dataverse.
 - Validate authenticated server actions with Dataverse `WhoAmI`.
 - Never expose or commit `.env`, Function settings, tokens, credentials, secrets, or
   customer debugging data.

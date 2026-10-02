@@ -1,5 +1,5 @@
 const { createHash, randomBytes } = require('node:crypto')
-const { persistPhotos } = require('./jobSubmissionService')
+const { persistPhotos } = require('./siteCheckPhotoStorage')
 
 const IN_PROGRESS = 122830000
 const JOB_CARD_SUBMITTED = 122830002

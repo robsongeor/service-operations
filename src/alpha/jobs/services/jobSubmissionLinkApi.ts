@@ -41,7 +41,7 @@ export type JobSubmissionRecipient = {
     recipientEmail: string
 }
 
-export async function generateJobSubmissionLink(accessToken: string, recipient: JobSubmissionRecipient) {
+export async function generateJobSubmissionLink(accessToken: string, recipient: JobSubmissionRecipient, replaceActive = false): Promise<{ url: string; expiresOn: string }> {
     const response = await fetch('/api/jobsubmission', {
         method: 'POST',
         cache: 'no-store',
@@ -50,8 +50,15 @@ export async function generateJobSubmissionLink(accessToken: string, recipient: 
             Accept: 'application/json',
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ action: 'generate', ...recipient }),
+        body: JSON.stringify({ action: 'generate', ...recipient, replaceActive }),
     })
+    if (response.status === 409 && !replaceActive) {
+        const problem = await response.json().catch(() => ({})) as { code?: string }
+        if (problem.code === 'active-link' && window.confirm('This technician already has an unused Job Card link. Replace it? The previous link will stop working.')) {
+            return generateJobSubmissionLink(accessToken, recipient, true)
+        }
+        throw new Error('The existing Job Card link was not replaced. No email was sent.')
+    }
     if (!response.ok) {
         throw new Error('The secure Job Card link could not be created. Please try again.')
     }

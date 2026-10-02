@@ -1,0 +1,80 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "storageAccountName": { "type": "string", "defaultValue": "serviceopsjobcardsbbd3f9", "minLength": 3, "maxLength": 24 },
+    "location": { "type": "string", "defaultValue": "eastasia" },
+    "emailServiceName": { "type": "string", "defaultValue": "serviceops-jobcard-email" },
+    "communicationServiceName": { "type": "string", "defaultValue": "serviceops-jobcard-notifications" },
+    "emailDataLocation": { "type": "string", "defaultValue": "Australia" }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-05-01",
+      "name": "[parameters('storageAccountName')]",
+      "location": "[parameters('location')]",
+      "kind": "StorageV2",
+      "sku": { "name": "Standard_LRS" },
+      "tags": { "application": "ServiceOperations", "purpose": "JobCardEvidence" },
+      "properties": {
+        "allowBlobPublicAccess": false,
+        "supportsHttpsTrafficOnly": true,
+        "minimumTlsVersion": "TLS1_2",
+        "accessTier": "Hot",
+        "encryption": { "keySource": "Microsoft.Storage", "services": { "blob": { "enabled": true }, "table": { "enabled": true } } }
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices",
+      "apiVersion": "2023-05-01",
+      "name": "[concat(parameters('storageAccountName'), '/default')]",
+      "dependsOn": ["[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"],
+      "properties": { "deleteRetentionPolicy": { "enabled": true, "days": 30 }, "containerDeleteRetentionPolicy": { "enabled": true, "days": 30 } }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2023-05-01",
+      "name": "[concat(parameters('storageAccountName'), '/default/job-card-evidence')]",
+      "dependsOn": ["[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageAccountName'), 'default')]"],
+      "properties": { "publicAccess": "None" }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/tableServices/tables",
+      "apiVersion": "2023-05-01",
+      "name": "[concat(parameters('storageAccountName'), '/default/JobCardRequests')]",
+      "dependsOn": ["[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"],
+      "properties": {}
+    },
+    {
+      "type": "Microsoft.Communication/emailServices",
+      "apiVersion": "2023-03-31",
+      "name": "[parameters('emailServiceName')]",
+      "location": "global",
+      "properties": { "dataLocation": "[parameters('emailDataLocation')]" }
+    },
+    {
+      "type": "Microsoft.Communication/emailServices/domains",
+      "apiVersion": "2023-03-31",
+      "name": "[concat(parameters('emailServiceName'), '/AzureManagedDomain')]",
+      "location": "global",
+      "dependsOn": ["[resourceId('Microsoft.Communication/emailServices', parameters('emailServiceName'))]"],
+      "properties": { "domainManagement": "AzureManaged", "userEngagementTracking": "Disabled" }
+    },
+    {
+      "type": "Microsoft.Communication/communicationServices",
+      "apiVersion": "2023-03-31",
+      "name": "[parameters('communicationServiceName')]",
+      "location": "global",
+      "dependsOn": ["[resourceId('Microsoft.Communication/emailServices/domains', parameters('emailServiceName'), 'AzureManagedDomain')]"],
+      "properties": {
+        "dataLocation": "[parameters('emailDataLocation')]",
+        "linkedDomains": ["[resourceId('Microsoft.Communication/emailServices/domains', parameters('emailServiceName'), 'AzureManagedDomain')]"]
+      }
+    }
+  ],
+  "outputs": {
+    "storageAccountName": { "type": "string", "value": "[parameters('storageAccountName')]" },
+    "emailDomainResourceId": { "type": "string", "value": "[resourceId('Microsoft.Communication/emailServices/domains', parameters('emailServiceName'), 'AzureManagedDomain')]" }
+  }
+}
