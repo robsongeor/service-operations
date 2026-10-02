@@ -2,9 +2,9 @@
 
 ## Overview
 
-Service Operations has two deliberately separate identity paths: delegated office-user
-authentication for the management app and confidential application authentication for the
-anonymous technician portal.
+Service Operations uses delegated office-user authentication for management and office-only
+server actions. Anonymous technician requests are authorised only by a hashed, expiring
+capability token and have no Dataverse identity.
 
 ## Management application
 
@@ -24,27 +24,17 @@ VITE_DATAVERSE_URL
 `VITE_DATAVERSE_URL` is the organisation origin without `/api/data/v9.2` or a trailing
 slash. User preferences use the resolved account storage ID.
 
-## Public portal service
+## Technician portal
 
-Anonymous browsers never receive Dataverse credentials. Server endpoints acquire a
-client-credential token using:
-
-```text
-DATAVERSE_URL
-DATAVERSE_TENANT_ID
-DATAVERSE_CLIENT_ID
-DATAVERSE_CLIENT_SECRET
-```
-
-These values are server-only and must never use the `VITE_` prefix. The confidential Entra
-registration and Dataverse Application User are documented in
-[Public Portal Service Identity](../public-portal-service-identity.md).
+Anonymous browser requests use only the opaque technician token. The server resolves its
+hash in Azure Table Storage and stores photos in a private Blob container. It does not use
+`DATAVERSE_TENANT_ID`, `DATAVERSE_CLIENT_ID`, or `DATAVERSE_CLIENT_SECRET`.
 
 ## Authenticated server actions
 
-Office-only API actions, such as secure technician-link generation and Job lookup, require
-the caller's Dataverse bearer token and validate it with `WhoAmI` before acting. An
-anonymous Function trigger is not authorization by itself.
+Office-only API actions, including snapshot generation and review, require the caller's
+Dataverse bearer token and validate it with `WhoAmI`. Snapshot generation reads Dataverse
+with that same delegated token. An anonymous Function trigger is not authorization.
 
 ## Extension points
 

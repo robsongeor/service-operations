@@ -48,8 +48,8 @@ through the completion framework rather than screen-specific writes.
 - Technician submission does not close the operational Job; office completion is
   authoritative.
 - The public technician Job Card route is `/portal/job/:token`. It validates a random token
-  through the server API and returns a deliberately minimal Job projection. The browser
-  never receives Dataverse credentials or direct anonymous Dataverse access.
+  against Azure Table Storage and returns the minimum office-generated snapshot. Public
+  technician requests never read or write Dataverse.
 - Existing technician email actions generate a fresh secure submission link before
   preparing or dispatching the email. The primary technician's existing email address is
   required before token generation. Replacing an active unused link requires confirmation
@@ -58,22 +58,16 @@ through the completion framework rather than screen-specific writes.
   `mailto:`, while the Job drawer retains its Email Dispatch/Power Automate workflow.
   Generating a link does not change operational Job Status or Job Card Status. The automated
   drawer workflow records Sent only after its existing dispatch confirmation succeeds.
-- Technician Job Card submission stores pending story/hour-meter information and moves the
-  Job Card Status to `Submitted`. It does not change operational Job Status, Completed Date,
+- Technician Job Card submission creates a pending Azure office-review item. This first
+  version does not update Dataverse Job Card Status, operational Job Status, Completed Date,
   Equipment hour meter, maintenance state, or assignments.
-- Managers review the immutable original submission timestamp, hour meter, and job story in
-  the existing Job drawer's Job Card tab. Opening the drawer refreshes Jobs from Dataverse;
-  viewing the submission performs no writes. A compact Submitted table action opens that
-  same drawer directly on Job Card, while Jobs without authoritative submission evidence
-  show a clear not-yet-submitted state.
-- Expanded Job Card submissions keep time/travel and parts as append-only Job child records.
-  Further-work and safety flags/details remain immutable submission metadata. The public
-  service writes all child rows and the final token/status transition atomically and never
-  turns those observations into Jobs, Quotes, tasks, notifications, or operational changes.
-- Photos use the generic Job Photo child table and Dataverse File storage. Public submission
-  tokens permit server-mediated upload only; authenticated office users download photos
-  through Dataverse for read-only manager review. Do not create feature-specific photo
-  tables for WOF, Quote, delivery, office, or customer upload extensions.
+- Managers review Azure evidence at `/job-card-reviews/:reviewId` and mark it reviewed. The
+  existing Job drawer continues to show legacy Dataverse submission evidence only.
+- Time/travel, parts, Further Work, Safety Issue, and photo references remain structured
+  Azure evidence. The service never turns observations into Jobs, Quotes, tasks, or other
+  operational changes.
+- Photos use private Azure Blob Storage and are streamed only through an authenticated
+  office endpoint. The container is never public.
 - Historical Jobs and their relationships are preserved.
 
 ## Extension Points

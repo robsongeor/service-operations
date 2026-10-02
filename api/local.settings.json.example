@@ -4,9 +4,14 @@
     "AzureWebJobsStorage": "",
     "FUNCTIONS_WORKER_RUNTIME": "node",
     "DATAVERSE_URL": "https://your-environment.crm.dynamics.com",
-    "DATAVERSE_TENANT_ID": "your-tenant-id",
-    "DATAVERSE_CLIENT_ID": "your-application-client-id",
-    "DATAVERSE_CLIENT_SECRET": "your-application-client-secret",
+    "AZURE_STORAGE_CONNECTION_STRING": "your-dedicated-storage-connection-string",
+    "JOB_CARD_TABLE_NAME": "JobCardRequests",
+    "JOB_CARD_PHOTO_CONTAINER": "job-card-evidence",
+    "JOB_CARD_NOTIFICATION_MODE": "acs",
+    "APP_PUBLIC_URL": "https://your-app.example",
+    "ACS_EMAIL_CONNECTION_STRING": "your-communication-services-connection-string",
+    "ACS_EMAIL_SENDER": "DoNotReply@your-verified-domain.example",
+    "JOB_CARD_REVIEW_EMAIL_TO": "service-office@example.com",
     "LIFTTRUCKS_API_USERNAME": "your-lifttrucks-api-username",
     "LIFTTRUCKS_API_PASSWORD": "your-lifttrucks-api-password"
   }

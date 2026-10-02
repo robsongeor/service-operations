@@ -22,7 +22,7 @@ by scanning the repository.
 | Subsystem | Architecture | Detailed schema or workflow |
 | --- | --- | --- |
 | Jobs | [`architecture/jobs.md`](architecture/jobs.md) | [`job-card-dataverse-schema.md`](job-card-dataverse-schema.md), [`job-assignment-dataverse-schema.md`](job-assignment-dataverse-schema.md), [`email-dispatch-flow.md`](email-dispatch-flow.md) |
-| Technician submission | [`architecture/technician-job-submission.md`](architecture/technician-job-submission.md) | [`technician-job-submission-schema.md`](technician-job-submission-schema.md), [`public-portal-service-identity.md`](public-portal-service-identity.md) |
+| Technician submission | [`architecture/technician-job-submission.md`](architecture/technician-job-submission.md) | [`azure-job-card-storage.md`](azure-job-card-storage.md), [`technician-job-submission-schema.md`](technician-job-submission-schema.md) (legacy Dataverse model) |
 | Equipment | [`architecture/equipment.md`](architecture/equipment.md) | [`hour-meter-recorded-date-schema.md`](hour-meter-recorded-date-schema.md) |
 | Maintenance | [`architecture/maintenance.md`](architecture/maintenance.md) | [`maintenance-programmes-dataverse.md`](maintenance-programmes-dataverse.md), [`site-maintenance-settings-schema.md`](site-maintenance-settings-schema.md) |
 | Customers | [`architecture/customer-dashboard.md`](architecture/customer-dashboard.md) | Site and Equipment schemas linked from their owning documents |

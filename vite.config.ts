@@ -9,6 +9,7 @@ const jobSubmissionService = require('./api/services/jobSubmissionService') as {
   generate: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
   handlePublicGet: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
   handlePublicPost: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
+  handleReviewRequest: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
   jsonResponse: (status: number, body: object, headers?: Record<string, string>) => LocalFunctionResponse
 }
 
@@ -32,7 +33,7 @@ type LocalFunctionRequest = {
 type LocalFunctionResponse = {
   status: number
   headers?: Record<string, string>
-  body?: string
+  body?: string | Buffer
 }
 
 async function readJsonBody(request: IncomingMessage) {
@@ -57,7 +58,9 @@ function jobSubmissionProxy(): Plugin {
     middlewares.use((request, response, next) => {
       if (!request.url) return next()
       const requestUrl = new URL(request.url, 'http://localhost')
-      if (requestUrl.pathname !== '/api/jobsubmission') return next()
+      const isSubmission = requestUrl.pathname === '/api/jobsubmission'
+      const reviewMatch = requestUrl.pathname.match(/^\/api\/jobcardreviews(?:\/([^/]+))?(?:\/([^/]+))?$/)
+      if (!isSubmission && !reviewMatch) return next()
 
       void (async () => {
         try {
@@ -72,7 +75,10 @@ function jobSubmissionProxy(): Plugin {
             body,
           }
           let result: LocalFunctionResponse
-          if (request.method === 'GET') result = await jobSubmissionService.handlePublicGet(localRequest)
+          if (reviewMatch) {
+            localRequest.query = { ...localRequest.query, reviewId: reviewMatch[1] ? decodeURIComponent(reviewMatch[1]) : '', photoId: reviewMatch[2] ? decodeURIComponent(reviewMatch[2]) : '' }
+            result = await jobSubmissionService.handleReviewRequest(localRequest)
+          } else if (request.method === 'GET') result = await jobSubmissionService.handlePublicGet(localRequest)
           else if (request.method === 'POST' && body.action === 'generate') result = await jobSubmissionService.generate(localRequest)
           else if (request.method === 'POST') result = await jobSubmissionService.handlePublicPost(localRequest)
           else result = jobSubmissionService.jsonResponse(405, { error: 'Method not allowed.' }, { Allow: 'GET, POST' })
@@ -249,6 +255,12 @@ function liftTrucksProxy(env: Record<string, string | undefined>): Plugin {
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = { ...loadEnv(mode, import.meta.dirname, ''), ...process.env }
+  ;[
+    'DATAVERSE_URL', 'JOB_CARD_STORAGE_MODE', 'JOB_CARD_LOCAL_DEVELOPMENT',
+    'AZURE_STORAGE_CONNECTION_STRING', 'JOB_CARD_TABLE_NAME', 'JOB_CARD_PHOTO_CONTAINER',
+    'JOB_CARD_NOTIFICATION_MODE', 'APP_PUBLIC_URL', 'ACS_EMAIL_CONNECTION_STRING',
+    'ACS_EMAIL_SENDER', 'JOB_CARD_REVIEW_EMAIL_TO',
+  ].forEach((key) => { if (env[key] !== undefined) process.env[key] = env[key] })
 
   return {
     root: import.meta.dirname,

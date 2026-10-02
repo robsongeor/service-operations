@@ -25,7 +25,9 @@ Dataverse requests. Domain helpers own reusable business calculations and valida
   are preserved when current configuration changes.
 - Job Status and Job Card Status are separate workflows.
 - Technician submission never automatically completes the operational Job.
-- Anonymous portal browsers never call Dataverse directly or receive server credentials.
+- Technician portal requests read and write only Azure Table/Blob storage. Dataverse is
+  read only during licensed office-user link generation to create a minimum snapshot.
+- Anonymous portal browsers never call Dataverse or receive server credentials.
 - Date Only values use shared date-only helpers and must not be shifted through timezone
   conversion.
 - Multi-record transitions use the existing workflow service and an atomic change set when
@@ -62,8 +64,8 @@ writes.
 
 - Office users use MSAL delegated Dataverse access.
 - Resolve the active account through shared auth helpers; never select by cached-array order.
-- Public portal workflows use a separate confidential Entra registration and least-
-  privilege Dataverse Application User.
+- Public technician workflows have no Dataverse identity. Office-only server actions
+  validate the delegated office bearer and may read the dispatch snapshot from Dataverse.
 - Validate authenticated server actions with Dataverse `WhoAmI`.
 - Never expose or commit `.env`, Function settings, tokens, credentials, secrets, or
   customer debugging data.

@@ -1,4 +1,9 @@
-# Public Portal Service Identity
+# Public Portal Service Identity (legacy)
+
+> The Azure-backed technician workflow does not use this Application User. Retain this
+> document as historical deployment evidence and retire the credential/role only after an
+> approved dependency check confirms no other workflow uses them. Do not configure these
+> client credentials for the new public endpoints.
 
 ## Confirmed environment
 

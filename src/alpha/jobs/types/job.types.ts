@@ -56,6 +56,7 @@ export type Job = {
         gr_serial: string | null
         gr_make: string | null
         gr_model: string | null
+        gr_currenthourmeter?: number | null
     }
     gr_Mechanic?: {
         gr_mechanicid: string

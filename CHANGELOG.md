@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Replaced technician-triggered Dataverse access with Azure Table snapshot/submission
+  storage and private Azure Blob photo evidence.
+- Added authenticated pending Job Card review pages, one-time ETag submission, and an Azure
+  Communication Services email abstraction with local no-send mode.
+- Added deployment, retention, cost, and legacy Application User migration guidance.
+- Updated React Router to the patched compatible release identified by the production
+  dependency audit.
+
 ## v1.3.0 — 25 July 2026
 
 ### Major Features

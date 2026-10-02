@@ -9,8 +9,6 @@ import {
     type JobCardStatus,
 } from '../types/jobCardStatus.types'
 import { JOB_NUMBER_REQUIRED_EMAIL_MESSAGE, jobHasEmailableJobNumber } from '../services/jobEmailRules'
-import { jobHasActiveSubmissionLink } from '../services/jobSubmissionLinkApi'
-import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation'
 import {
     formatTechnicianSubmissionHourMeter,
     formatTechnicianSubmissionTimestamp,
@@ -135,7 +133,6 @@ export default function JobCardFields({
     const [showAssignmentForm, setShowAssignmentForm] = useState(false)
     const [mechanicId, setMechanicId] = useState('')
     const [error, setError] = useState('')
-    const [pendingEmail, setPendingEmail] = useState<'primary' | JobAssignment | null>(null)
     const [previewPhotoId, setPreviewPhotoId] = useState('')
     const hasJobNumber = jobHasEmailableJobNumber(job)
 
@@ -184,7 +181,7 @@ export default function JobCardFields({
         }
     }
 
-    const sendAssignment = async (assignment: JobAssignment, confirmedReplacement = false) => {
+    const sendAssignment = async (assignment: JobAssignment) => {
         if (!hasJobNumber) {
             setError(JOB_NUMBER_REQUIRED_EMAIL_MESSAGE)
             return
@@ -194,14 +191,8 @@ export default function JobCardFields({
             setError('This technician needs an email address before the job can be sent.')
             return
         }
-        if (!confirmedReplacement && jobHasActiveSubmissionLink(job)) {
-            setPendingEmail(assignment)
-            return
-        }
-
         setUpdatingAssignmentId(assignment.gr_jobassignmentid)
         setError('')
-        setPendingEmail(null)
         try {
             await onSendAssignment(job, assignment)
         } catch (sendError) {
@@ -213,7 +204,7 @@ export default function JobCardFields({
         }
     }
 
-    const sendPrimaryTechnician = async (confirmedReplacement = false) => {
+    const sendPrimaryTechnician = async () => {
         if (!hasJobNumber) {
             setError(JOB_NUMBER_REQUIRED_EMAIL_MESSAGE)
             return
@@ -223,14 +214,8 @@ export default function JobCardFields({
             setError('The primary technician needs an email address before the job can be sent.')
             return
         }
-        if (!confirmedReplacement && jobHasActiveSubmissionLink(job)) {
-            setPendingEmail('primary')
-            return
-        }
-
         setIsUpdating(true)
         setError('')
-        setPendingEmail(null)
         try {
             await onSendPrimary(job)
             setStatus(JOB_CARD_STATUSES.SENT)
@@ -457,18 +442,6 @@ export default function JobCardFields({
 
             {error && <p className="job-card-error" role="alert">{error}</p>}
         </div>
-        {pendingEmail && <EditDrawerConfirmation
-            eyebrow="Replace secure link"
-            title="Generate a new technician submission link?"
-            message="Generating a new link will invalidate the previous technician submission link for this Job."
-            isBusy={isUpdating || Boolean(updatingAssignmentId)}
-            confirmLabel={isUpdating || updatingAssignmentId ? 'Generating...' : 'Generate and email'}
-            onCancel={() => setPendingEmail(null)}
-            onConfirm={() => {
-                if (pendingEmail === 'primary') void sendPrimaryTechnician(true)
-                else void sendAssignment(pendingEmail, true)
-            }}
-        />}
         {previewPhotoId && (() => {
             const photo = job.jobPhotos?.find((item) => item.id === previewPhotoId)
             return photo ? <div className="job-photo-preview" role="dialog" aria-modal="true" aria-label={photo.fileName} onClick={() => setPreviewPhotoId('')}>

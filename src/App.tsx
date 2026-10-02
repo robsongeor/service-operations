@@ -13,6 +13,7 @@ import WofScreen from './alpha/wof/WofScreen'
 import { getSignedInUserInfo } from './auth/signedInUser'
 import { useActiveMsalAccount } from './auth/useActiveMsalAccount'
 import TechnicianJobSubmissionPage from './alpha/portal/TechnicianJobSubmissionPage'
+import JobCardReviewsScreen from './alpha/job-card-reviews/JobCardReviewsScreen'
 
 function App() {
   const { accounts } = useMsal()
@@ -44,6 +45,8 @@ function App() {
           <Route path="/mechanics" element={<MechanicsScreen />} />
           <Route path="/equipment" element={<EquipmentScreen />} />
           <Route path="/jobs" element={<JobsScreen key={signedInUser?.storageId || 'account-pending'} />} />
+          <Route path="/job-card-reviews" element={<JobCardReviewsScreen />} />
+          <Route path="/job-card-reviews/:reviewId" element={<JobCardReviewsScreen />} />
           <Route path="/scheduling" element={<SchedulingScreen />} />
           <Route path="/quotes" element={<QuotesScreen key={signedInUser?.storageId || 'account-pending'} />} />
           <Route path="/pricing" element={<PricingScreen />} />

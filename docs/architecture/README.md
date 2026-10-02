@@ -14,7 +14,8 @@ Authenticated office browser
 Anonymous technician browser
     └── /portal/job/:token
           └── server JobSubmissionService
-                └── least-privilege Dataverse Application User
+                ├── Azure Table snapshot and evidence
+                └── private Azure Blob photographs
 ```
 
 Feature components render state and raise actions. Feature hooks coordinate workflows.

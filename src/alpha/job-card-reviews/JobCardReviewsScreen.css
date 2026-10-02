@@ -1,0 +1,31 @@
+.job-card-reviews { max-width: 1180px; margin: 0 auto; color: #17212b; }
+.job-card-reviews > header { display: flex; justify-content: space-between; align-items: center; gap: 24px; margin-bottom: 24px; }
+.job-card-reviews header span { color: #64748b; font-size: .78rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.job-card-reviews h1 { margin: 4px 0; }
+.job-card-reviews header > strong { border-radius: 999px; background: #e2e8f0; padding: 8px 13px; }
+.review-list { display: grid; gap: 10px; }
+.review-list > a { display: grid; grid-template-columns: 1.2fr 1fr auto; gap: 20px; align-items: center; padding: 16px 18px; border: 1px solid #dbe3ea; border-radius: 10px; background: white; color: inherit; text-decoration: none; }
+.review-list > a:hover { border-color: #3478b9; box-shadow: 0 3px 14px #1e3a5f14; }
+.review-list a div { display: flex; flex-direction: column; gap: 4px; }
+.review-list time, .review-list span { color: #64748b; font-size: .88rem; }
+.review-flags { flex-direction: row !important; align-items: center; flex-wrap: wrap; }
+.review-flags b { padding: 4px 8px; border-radius: 999px; background: #fff1d6; color: #8a4b08; font-size: .76rem; }
+.review-empty, .review-error { padding: 24px; border-radius: 10px; background: white; border: 1px solid #dbe3ea; }
+.review-error { color: #9b1c1c; }
+.review-back { display: inline-block; margin-bottom: 16px; color: #245f93; }
+.review-detail header button { border: 0; border-radius: 8px; padding: 11px 16px; background: #216e46; color: white; font-weight: 700; }
+.review-detail header button:disabled { background: #94a3b8; }
+.review-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.review-grid article, .review-photos { padding: 20px; border: 1px solid #dbe3ea; border-radius: 10px; background: white; }
+.review-grid h2, .review-photos h2 { margin-top: 0; font-size: 1rem; }
+.review-grid dl { display: grid; gap: 14px; margin: 0; }
+.review-grid dl div { display: grid; gap: 3px; }
+.review-grid dt { color: #64748b; font-size: .78rem; font-weight: 700; text-transform: uppercase; }
+.review-grid dd { margin: 0; }
+.review-story { white-space: pre-wrap; }
+.review-photos { margin-top: 16px; }
+.review-photos > div { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; }
+.review-photos figure { margin: 0; }
+.review-photos img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; background: #e2e8f0; }
+.review-photos figcaption { overflow-wrap: anywhere; font-size: .82rem; color: #64748b; }
+@media (max-width: 760px) { .review-list > a, .review-grid { grid-template-columns: 1fr; } }

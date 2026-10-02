@@ -15,8 +15,8 @@ Customer → Site → Equipment → Job
 ```
 
 The authenticated management application uses Microsoft Entra ID and delegated Dataverse
-access. Anonymous technician links use a server API and a separate least-privilege
-Dataverse Application User.
+access. Anonymous technician links use Azure Table Storage and private Blob Storage through
+the server API; technician requests have no Dataverse identity or access.
 
 ## Documentation
 
@@ -56,10 +56,11 @@ npm run dev
 
 Open `http://localhost:5173`.
 
-The public Technician Job Card route is `/portal/job/:token`. Its local server process also
-requires the confidential `DATAVERSE_*` settings described in
-[Authentication](docs/architecture/authentication.md). Never expose those values through
-`VITE_` variables or commit secrets.
+The public Technician Job Card route is `/portal/job/:token`. `.env.example` enables the
+in-memory/no-email local adapter so portal API tests do not require live Azure or Dataverse.
+Production Azure resources, settings, retention, and cost controls are documented in
+[Azure Job Card Storage](docs/azure-job-card-storage.md). Never enable
+`JOB_CARD_LOCAL_DEVELOPMENT` in Azure or expose server settings through `VITE_` variables.
 
 ## Validation
 

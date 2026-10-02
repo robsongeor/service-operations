@@ -9,7 +9,7 @@ server payloads, safe errors, and explicit confirmation for consequential operat
 
 - Office users authenticate with delegated MSAL access.
 - Anonymous portal users possess only a bounded, one-time opaque token.
-- Confidential Dataverse credentials exist only in the server process.
+- Storage and email credentials exist only in the server process.
 - Dataverse remains authoritative for business records and relationship permissions.
 
 ## Core rules
@@ -23,21 +23,18 @@ server payloads, safe errors, and explicit confirmation for consequential operat
 - Do not weaken roles to work around development failures.
 - Preserve historical records and require confirmation before destructive changes.
 
-## Public Portal Service
+## Technician portal
 
-The dedicated Application User has read access to the minimal Job, Equipment, Site, and
-Customer projection; Job Write for the fixed submission fields; and the child-table
-privileges required for time, materials, and photos. Dataverse permissions are table-scoped,
-so `JobSubmissionService` is the application-level column allowlist.
-
-Exact identifiers and privileges are documented in
-[Public Portal Service Identity](../public-portal-service-identity.md).
+The technician workflow has no Dataverse Application User. Only link generation reads the
+minimum Dataverse projection through the licensed office user's delegated token. Public
+requests operate on the stored Azure snapshot and fixed evidence schema.
 
 ## File handling
 
-Job Photos use a Dataverse File column. The public browser sends validated supported image
-data to the server; it receives no Dataverse file URL. Authenticated managers download
-submitted photos through their delegated Dataverse access.
+Photographs use a private Azure Blob container. Uploads are server-mediated, validated
+before and after storage, and associated with the token hash. Authenticated managers stream
+accepted evidence through an office-authenticated endpoint and receive no reusable public
+Blob URL.
 
 ## Security review triggers
 

@@ -5,5 +5,10 @@
   "type": "commonjs",
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "@azure/communication-email": "^1.1.0",
+    "@azure/data-tables": "^13.3.1",
+    "@azure/storage-blob": "^12.29.1"
   }
 }

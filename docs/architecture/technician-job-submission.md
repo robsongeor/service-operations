@@ -1,110 +1,50 @@
 # Technician Job Card Submission Architecture
 
-## Purpose
+## Purpose and workflow
 
-Technician Job Card Submission lets an office user send a secure, expiring link so a
-technician can submit work evidence without entering the management application.
+An office user sends a secure, expiring Job Card link to a technician who does not enter
+the management application and does not require a Power Apps Premium licence.
 
-## User workflow
+1. The licensed office user's delegated token is validated through Dataverse `WhoAmI`.
+2. The server reads the minimum Job, Equipment, Customer, Site, and selected technician or
+   assignment fields with that office token and writes an immutable dispatch snapshot to
+   Azure Table Storage.
+3. A random token is returned once; only its SHA-256 hash is retained.
+4. The anonymous React page loads the snapshot from Azure, uploads validated photographs
+   through the server into private Blob Storage, and submits structured evidence to Azure.
+5. An optimistic Table ETag consumes the token once and creates a `pendingReview` item.
+6. The notification abstraction emails an authenticated `/job-card-reviews/:reviewId` link.
+7. An office user reviews evidence and marks it reviewed. This first version performs no
+   automatic Dataverse import or operational Job change.
 
-1. An office user selects the existing Email Technician action.
-2. The authenticated server action creates a fresh secure link.
-3. The technician opens `/portal/job/:token`.
-4. The portal shows only the minimum Job, Equipment, Customer, Site, and work-required data.
-5. The technician records story, time/travel, Parts, conditional observations, and photos.
-6. The server validates and persists the submission.
-7. Job Card Status becomes Submitted; office staff review it in the existing Job drawer.
+## UI and API
 
-## UI
+`TechnicianJobSubmissionPage` remains the mobile public UI. `JobCardReviewsScreen` is the
+authenticated pending queue and read-only evidence page. It streams photographs through
+the authenticated `/api/jobcardreviews` endpoint; the Blob container is never public.
 
-The public mobile-first page is
-`src/alpha/portal/TechnicianJobSubmissionPage.tsx`. Pending photos remain removable before
-submission. The manager review is read-only in the existing Job Card tab of
-`JobEditDrawer`; no separate review drawer exists. The Jobs table Submitted action opens
-that same drawer and tab.
+`JobSubmissionService` owns token lifecycle, snapshot validation, payload limits, Blob
+ownership checks, ETag replay protection, review projection, and safe errors. Storage and
+email are injected through server-side abstractions with in-memory/console local modes.
 
-## Dataverse model
+## Invariants
 
-The Job stores token lifecycle, submitted-on, story, submitted hour meter, Further Work, and
-Safety Issue values. Append-only children store:
+- Anonymous GET, photo upload, and submission do not acquire a Dataverse token and do not
+  read or write Dataverse.
+- Link generation is an office-triggered Dataverse read; it makes no Job write.
+- Replacing an active link requires office confirmation and supersedes the previous hash.
+- Technician submission never changes Job Status, Job Card Status, Equipment, maintenance,
+  assignments, Quotes, or any other Dataverse record.
+- Photos are limited to JPG, PNG, HEIC, or HEIF; 20 files; 10 MB each.
+- Story, hour meter, time/travel, parts, conditional details, and photo references receive
+  independent server validation.
+- Notification failure is audited but does not discard accepted evidence or its queue item.
 
-- Job Card Submission Time Entry;
-- Job Material, labelled **Parts** in the technician UI;
-- generic Job Photo with a Dataverse File column.
+## Extension point
 
-Exact logical names, types, ownership, and provisioning status are in
-[Technician Job Submission Schema](../technician-job-submission-schema.md).
+A future licensed office import may read accepted Azure evidence and write Dataverse only
+after an explicit office action. It needs a separate service, mapping, idempotency key,
+confirmation, and audit fields. It must not be called by the public endpoint.
 
-## Services and persistence
-
-`api/services/jobSubmissionService.js` is the server-side boundary. It:
-
-- authenticates office link generation;
-- creates cryptographically secure tokens and stores only SHA-256 hashes;
-- obtains the Application User token;
-- validates expiry, used state, and ETag;
-- returns a minimal public projection;
-- validates field, child-row, and photo limits;
-- stages retry-safe File uploads;
-- creates time/material children and updates final Job submission state in one Dataverse
-  change set.
-
-Each change-set operation includes a unique `Content-ID`, as required by Dataverse.
-
-## Security model
-
-The browser has no Dataverse credentials. The Public Portal Service Application User is the
-only server identity and has a dedicated least-privilege role. Job table writes cannot be
-restricted to individual fields by the role, so the fixed server payload is the
-column-level boundary. See [Security](security.md) and
-[Public Portal Service Identity](../public-portal-service-identity.md).
-
-## Lifecycle and invariants
-
-- Default token lifetime is seven days.
-- A replacement link invalidates the previous unused link.
-- A successful submission consumes the token.
-- Concurrent or repeated submission is rejected.
-- Technician submission does not complete the operational Job.
-- It does not set Completed Date, update Equipment hour meter, run maintenance completion,
-  change assignments, create follow-up work, or create Quotes.
-- Further Work and Safety Issue values are evidence for office review, not automation.
-
-## Retry behaviour
-
-Photo metadata and File content are uploaded before the atomic final change set. A failed
-File upload or final commit leaves the token usable. The deterministic non-secret upload
-key lets the same token retry reuse its staged photo rows. Submitted manager review loads
-only the Job's authoritative evidence.
-
-## Email integration
-
-The Jobs table retains `mailto:` composition. The Job drawer retains its established Email
-Dispatch/Power Automate workflow. Both generate the secure portal link before preparing the
-message. Missing recipient email blocks generation; replacing an active unused link
-requires confirmation.
-
-## Current limitations
-
-- No offline submission.
-- No signature, customer sign-off, checklist, inventory quantity, or stock integration.
-- Photos are JPG, PNG, HEIC, or HEIF, with at most 20 files and 10 MB per file.
-- Further Work and Safety observations do not automatically create operational records.
-
-## Extension points
-
-Add checklist, assignment grouping, technician relationship, signature, inspection,
-delivery, WOF, or customer sign-off records as explicit child models. Extend generic Job
-Photo rather than creating feature-specific photo tables. Keep the public projection and
-role privileges minimal.
-
-## Related files
-
-- [`../../api/services/jobSubmissionService.js`](../../api/services/jobSubmissionService.js)
-- [`../../src/alpha/portal/TechnicianJobSubmissionPage.tsx`](../../src/alpha/portal/TechnicianJobSubmissionPage.tsx)
-- [`../../src/alpha/jobs/components/JobCardFields.tsx`](../../src/alpha/jobs/components/JobCardFields.tsx)
-- [`../../src/alpha/jobs/services/jobsApi.ts`](../../src/alpha/jobs/services/jobsApi.ts)
-- [`../../src/alpha/jobs/services/jobSubmissionLinkApi.ts`](../../src/alpha/jobs/services/jobSubmissionLinkApi.ts)
-- [Public portal](public-portal.md)
-- [Jobs](jobs.md)
-- [Dataverse](dataverse.md)
+See [Azure Job Card Storage](../azure-job-card-storage.md), [Public portal](public-portal.md),
+[Security](security.md), and [Jobs](jobs.md).

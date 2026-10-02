@@ -29,17 +29,20 @@ VITE_MSAL_TENANT_ID
 VITE_DATAVERSE_URL
 ```
 
-Server-only portal variables:
+Server-only Job Card variables are listed in
+[`../azure-job-card-storage.md`](../azure-job-card-storage.md). The workflow requires a
+pre-created Table, private Blob container, and optional Azure Communication Services Email.
+
+Required core server-only settings include:
 
 ```text
 DATAVERSE_URL
-DATAVERSE_TENANT_ID
-DATAVERSE_CLIENT_ID
-DATAVERSE_CLIENT_SECRET
+AZURE_STORAGE_CONNECTION_STRING
+JOB_CARD_NOTIFICATION_MODE
 ```
 
-Do not place the client secret in repository variables, source files, documentation, or
-browser configuration.
+Do not place Storage or email connection strings in repository variables, source files, or
+browser configuration. `JOB_CARD_LOCAL_DEVELOPMENT` must never be enabled in Azure.
 
 ## Dataverse provisioning
 

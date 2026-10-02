@@ -1,6 +1,6 @@
 # Current State
 
-Branch: `tech-job-cards-submission`
+Branch: `codex/azure-job-card-review`
 
 ## Deployment status
 
@@ -14,11 +14,19 @@ Branch: `tech-job-cards-submission`
 
 ## Unfinished work
 
-- Confirm the four server-only `DATAVERSE_*` settings are present in the production
-  Static Web App / Function environment.
-- Run a production-safe Technician Job Card smoke test.
+- Provision the documented Azure Table, private Blob container, retention automation, and
+  optional Azure Communication Services Email configuration.
+- Configure server-only settings and run a production-safe Technician Job Card smoke test.
+- Retire the legacy portal Application User only after confirming no other workflow uses it.
 
-## Recent milestone
+## Current implementation milestone
+
+Technician public requests now use Azure Table/Blob storage only. Licensed office link
+generation creates a minimum Dataverse snapshot with the office user's delegated token.
+Submissions create an authenticated pending-review item and optional ACS email; no
+technician action writes Dataverse. Local tests use memory storage and no real email.
+
+## Previous production milestone
 
 The local expanded smoke test passed against Dataverse on Job 145408 with two Time & Travel
 entries, three Job Materials, two downloadable Job Photos, Further Work, Safety Issue, and
@@ -28,5 +36,5 @@ and fixed the required Dataverse change-set `Content-ID` headers.
 
 ## Next task
 
-Verify the production server settings and run the production-safe smoke test. Do not expose
-the client secret through Vite or browser configuration.
+Review infrastructure configuration, deploy through the approved release process, and run
+the storage/replay/review smoke test. Do not expose Storage or ACS secrets through Vite.

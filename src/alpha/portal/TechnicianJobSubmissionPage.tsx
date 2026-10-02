@@ -102,6 +102,7 @@ export default function TechnicianJobSubmissionPage() {
     return <main className="technician-portal">
         <section className="technician-portal-card">
             <header><p>Service Operations</p><h1>Job {job.jobNumber}</h1></header>
+            {job.technicianName && <p className="technician-portal-technician">For {job.technicianName}</p>}
             <dl>
                 {job.equipmentDisplayName && <div><dt>Equipment</dt><dd>{job.equipmentDisplayName}</dd></div>}
                 {job.fleetNumber && <div><dt>Fleet number</dt><dd>{job.fleetNumber}</dd></div>}

@@ -19,6 +19,8 @@ management shell and a public portal shell.
 | `/pricing` | Pricing |
 | `/wof` | WOF Management |
 | `/portal/job/:token` | Anonymous Technician Job Card Submission |
+| `/job-card-reviews` | Authenticated pending office-review queue |
+| `/job-card-reviews/:reviewId` | Authenticated Azure evidence review |
 
 Management routes require an MSAL account and render with the shared navigation shell.
 `/portal/job` and `/portal/job/:token` are evaluated before the management authentication

@@ -28,7 +28,7 @@ import type { JobAssignment } from '../types/jobAssignment.types'
 import { createEmailDispatch, waitForEmailDispatch } from '../services/emailDispatchApi'
 import { buildAssignmentJobEmail, buildPrimaryJobEmail } from '../services/jobEmail'
 import { assertJobHasEmailableJobNumber } from '../services/jobEmailRules'
-import { generateJobSubmissionLink } from '../services/jobSubmissionLinkApi'
+import { ActiveSubmissionLinkError, generateJobSubmissionLink } from '../services/jobSubmissionLinkApi'
 import {
     buildMailtoUrl,
     buildTechnicianEmailBody,
@@ -404,13 +404,24 @@ export function useJobs() {
         await fetchJobAssignments()
     }
 
+    const createSubmissionLink = async (token: string, job: Job, assignment?: JobAssignment) => {
+        try {
+            return await generateJobSubmissionLink(token, job, assignment)
+        } catch (error) {
+            if (!(error instanceof ActiveSubmissionLinkError)) throw error
+            const confirmed = window.confirm('An active technician submission link already exists for this Job. Generate a new link and invalidate the previous link?')
+            if (!confirmed) throw new Error('The existing technician submission link was kept.', { cause: error })
+            return generateJobSubmissionLink(token, job, assignment, true)
+        }
+    }
+
     const sendPrimaryJobEmail = async (job: Job) => {
         assertJobHasEmailableJobNumber(job)
         if (!isValidTechnicianEmail(job.gr_Mechanic?.gr_email)) {
             throw new Error('The primary technician needs an email address before the job can be sent.')
         }
         const token = await getAccessToken()
-        const submissionLink = await generateJobSubmissionLink(token, job.gr_jobid)
+        const submissionLink = await createSubmissionLink(token, job)
         const email = buildPrimaryJobEmail(job, submissionLink.url)
         const dispatchId = await createEmailDispatch(token, {
             jobId: job.gr_jobid,
@@ -427,7 +438,7 @@ export function useJobs() {
             throw new Error('This technician needs an email address before the job can be sent.')
         }
         const token = await getAccessToken()
-        const submissionLink = await generateJobSubmissionLink(token, job.gr_jobid)
+        const submissionLink = await createSubmissionLink(token, job, assignment)
         const email = buildAssignmentJobEmail(job, assignment, submissionLink.url)
         const dispatchId = await createEmailDispatch(token, {
             jobId: job.gr_jobid,
@@ -450,7 +461,7 @@ export function useJobs() {
             throw new Error('The allocated technician does not have an email address.')
         }
         const token = await getAccessToken()
-        const submissionLink = await generateJobSubmissionLink(token, job.gr_jobid)
+        const submissionLink = await createSubmissionLink(token, job)
         return buildMailtoUrl({
             recipient: mechanic.gr_email,
             subject: buildTechnicianEmailSubject(job),

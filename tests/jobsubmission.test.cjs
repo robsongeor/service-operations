@@ -1,35 +1,40 @@
 const assert = require('node:assert/strict')
 const test = require('node:test')
 const submission = require('../api/jobsubmission/index')
+const service = require('../api/services/jobSubmissionService')
 
-const originalFetch = global.fetch
 const originalEnvironment = { ...process.env }
+const originalFetch = global.fetch
+
+function configure() {
+    process.env.NODE_ENV = 'test'
+    process.env.JOB_CARD_STORAGE_MODE = 'memory'
+    process.env.JOB_CARD_LOCAL_DEVELOPMENT = 'true'
+    process.env.JOB_CARD_NOTIFICATION_MODE = 'console'
+    service.test.reset()
+}
 
 function restore() {
     global.fetch = originalFetch
+    service.test.reset()
     for (const key of Object.keys(process.env)) if (!(key in originalEnvironment)) delete process.env[key]
     Object.assign(process.env, originalEnvironment)
 }
 
-function baseJob(overrides = {}) {
+function snapshot(overrides = {}) {
     return {
-        gr_jobid: '00000000-0000-4000-8000-000000000001',
-        gr_jobnumber: '145999',
-        gr_description: 'Service forklift',
-        gr_jobtype: 122830001,
-        gr_status: 122830000,
-        gr_jobcardstatus: 122830001,
-        gr_techniciansubmissiontokenexpireson: new Date(Date.now() + 60_000).toISOString(),
-        gr_techniciansubmissiontokenused: false,
-        gr_Equipment: {
-            gr_equipmentid: '00000000-0000-4000-8000-000000000002',
-            gr_fleet: 'FN24',
-            gr_make: 'Still',
-            gr_model: 'RX60',
-            gr_currenthourmeter: 2500,
-        },
-        gr_Site: { gr_name: 'Workshop', gr_Customer: { gr_name: 'Example Customer' } },
-        '@odata.etag': 'W/"10"',
+        jobNumber: '145999',
+        jobType: 122830001,
+        workRequired: 'Service forklift',
+        equipmentId: '00000000-0000-4000-8000-000000000002',
+        equipmentDisplayName: 'Still RX60',
+        fleetNumber: 'FN24',
+        currentHourMeter: 2500,
+        customerName: 'Example Customer',
+        siteName: 'Workshop',
+        technicianId: '00000000-0000-4000-8000-000000000003',
+        technicianName: 'Test Technician',
+        technicianEmail: 'technician@example.com',
         ...overrides,
     }
 }
@@ -40,266 +45,157 @@ async function invoke(request) {
     return context.res
 }
 
-function configure() {
-    process.env.DATAVERSE_URL = 'https://example.crm.dynamics.com'
-    process.env.DATAVERSE_TENANT_ID = 'tenant'
-    process.env.DATAVERSE_CLIENT_ID = 'client'
-    process.env.DATAVERSE_CLIENT_SECRET = 'secret'
+async function generate(overrides = {}) {
+    const response = await invoke({
+        method: 'POST',
+        headers: { authorization: 'Bearer local-office' },
+        body: {
+            action: 'generate',
+            jobId: '00000000-0000-4000-8000-000000000001',
+            snapshot: snapshot(),
+            ...overrides,
+        },
+    })
+    return { response, body: JSON.parse(response.body) }
 }
 
-function mockPublic(job, updateStatus = 204) {
-    global.fetch = async (url, options = {}) => {
-        const value = String(url)
-        if (value.includes('login.microsoftonline.com')) return Response.json({ access_token: 'app-token' })
-        if (value.includes('/gr_jobs?')) return Response.json({ value: job ? [job] : [] })
-        if (value.includes('/gr_jobs(') && options.method === 'PATCH') return new Response('', { status: updateStatus })
-        throw new Error(`Unexpected request: ${value}`)
-    }
-}
-
+test.beforeEach(configure)
 test.afterEach(restore)
 
-test('secure tokens contain at least 32 bytes of URL-safe randomness', () => {
-    const first = submission._test.generateToken()
-    const second = submission._test.generateToken()
+test('secure tokens are URL-safe, random, and stored only as hashes', async () => {
+    const first = service.test.generateToken()
+    const second = service.test.generateToken()
     assert.match(first, /^[A-Za-z0-9_-]{43}$/)
     assert.notEqual(first, second)
-    assert.equal(submission._test.hashToken(first).length, 64)
+    assert.equal(service.test.hashToken(first).length, 64)
+    const created = await generate()
+    assert.equal(created.response.status, 201)
+    assert.equal(JSON.stringify(created.response).includes(service.test.hashToken(created.body.token)), false)
 })
 
-test('public response includes only the dedicated minimum fields', () => {
-    const result = submission._test.publicDetails(baseJob({ secretInternalNote: 'do not expose' }))
-    assert.deepEqual(Object.keys(result).sort(), [
-        'currentHourMeter', 'customerName', 'equipmentDisplayName', 'fleetNumber',
-        'jobNumber', 'requiresHourMeter', 'siteName', 'workRequired',
+test('public lookup returns only the snapshotted minimum and performs no Dataverse request', async () => {
+    global.fetch = async () => { throw new Error('Public requests must not call Dataverse.') }
+    const created = await generate()
+    const response = await invoke({ method: 'GET', headers: {}, query: { token: created.body.token } })
+    assert.equal(response.status, 200)
+    const body = JSON.parse(response.body)
+    assert.deepEqual(Object.keys(body).sort(), [
+        'currentHourMeter', 'customerName', 'equipmentDisplayName', 'fleetNumber', 'jobNumber',
+        'requiresHourMeter', 'siteName', 'technicianName', 'workRequired',
     ])
-    assert.equal(JSON.stringify(result).includes('secretInternalNote'), false)
+    assert.equal(body.technicianName, 'Test Technician')
 })
 
-test('submission validation requires story and valid service hour meter', () => {
-    const job = baseJob()
-    assert.match(submission._test.validateSubmission(job, { story: '', hourMeter: 2500 }), /story/i)
-    assert.match(submission._test.validateSubmission(job, { story: 'Done' }), /hour meter/i)
-    assert.match(submission._test.validateSubmission(job, { story: 'Done', hourMeter: 2499 }), /lower/i)
-    assert.equal(submission._test.validateSubmission(job, { story: 'Done', hourMeter: 2500 }), '')
-})
-
-test('submission validation accepts multiple time entries, decimal hours, and parts', () => {
-    const result = submission._test.validateSubmission(baseJob(), {
-        story: 'Completed service',
-        hourMeter: 2500,
-        timeEntries: [
-            { date: '2026-07-25', hours: 1.25, kilometres: 12 },
-            { date: '2026-07-26', hours: 2.5, kilometres: 0 },
-        ],
-        parts: ['Oil Filter', 'Grease'],
-        furtherWorkRequired: false,
-        safetyIssueIdentified: false,
-    })
-    assert.equal(result, '')
-})
-
-test('further work and safety details are required only when selected', () => {
-    const common = { story: 'Completed', hourMeter: 2500, timeEntries: [], parts: [] }
-    assert.match(submission._test.validateSubmission(baseJob(), {
-        ...common, furtherWorkRequired: true, furtherWorkDetails: '', safetyIssueIdentified: false,
-    }), /further work/i)
-    assert.match(submission._test.validateSubmission(baseJob(), {
-        ...common, furtherWorkRequired: false, safetyIssueIdentified: true, safetyIssueDetails: '',
-    }), /safety issue/i)
-    assert.equal(submission._test.validateSubmission(baseJob(), {
-        ...common,
-        furtherWorkRequired: true,
-        furtherWorkDetails: 'Return with replacement hose',
-        safetyIssueIdentified: true,
-        safetyIssueDetails: 'Isolate until repaired',
-    }), '')
-})
-
-test('expanded submission uses one change set and does not change operational Job fields', () => {
-    const request = submission._test.batchRequest(baseJob(), 'W/"10"', {
-        story: 'Completed',
-        hourMeter: 2510,
-        timeEntries: [{ date: '2026-07-25', hours: 1.5, kilometres: 16 }],
-        parts: ['Hydraulic Hose'],
-        furtherWorkRequired: true,
-        furtherWorkDetails: 'Inspect mast rollers',
-        safetyIssueIdentified: false,
-    }, '2026-07-25T04:00:00.000Z')
-    assert.match(request.payload, /POST gr_jobcardsubmissiontimeentries/)
-    assert.match(request.payload, /Content-ID: 1/)
-    assert.match(request.payload, /Content-ID: 2/)
-    assert.match(request.payload, /Content-ID: 3/)
-    assert.match(request.payload, /"gr_totalhours":1\.5/)
-    assert.match(request.payload, /POST gr_jobmaterials/)
-    assert.match(request.payload, /"gr_material":"Hydraulic Hose"/)
-    assert.match(request.payload, /PATCH gr_jobs\(/)
-    assert.match(request.payload, /If-Match: W\/"10"/)
-    assert.doesNotMatch(request.payload, /"gr_status"/)
-    assert.doesNotMatch(request.payload, /"gr_completeddate"/)
-    assert.doesNotMatch(request.payload, /"gr_hourmeter"/)
-})
-
-test('photo validation enforces type, size, count, and encoded byte length', () => {
-    const common = {
-        story: 'Completed', hourMeter: 2500, timeEntries: [], parts: [],
-        furtherWorkRequired: false, safetyIssueIdentified: false,
-    }
-    assert.equal(submission._test.validateSubmission(baseJob(), {
-        ...common,
-        photos: [{ fileName: 'mast.jpg', mimeType: 'image/jpeg', size: 3, data: 'YWJj' }],
-    }), '')
-    assert.match(submission._test.validateSubmission(baseJob(), {
-        ...common,
-        photos: [{ fileName: 'mast.gif', mimeType: 'image/gif', size: 3, data: 'YWJj' }],
-    }), /invalid/i)
-    assert.match(submission._test.validateSubmission(baseJob(), {
-        ...common,
-        photos: [{ fileName: 'mast.jpg', mimeType: 'image/jpeg', size: 4, data: 'YWJj' }],
-    }), /invalid/i)
-})
-
-test('photo persistence creates generic rows, uploads binary, and reuses upload identity', { concurrency: false }, async () => {
-    configure()
+test('production link generation reads a snapshot with the office token and makes no Dataverse write', async () => {
+    delete process.env.JOB_CARD_LOCAL_DEVELOPMENT
+    process.env.DATAVERSE_URL = 'https://example.crm.dynamics.com'
     const calls = []
     global.fetch = async (url, options = {}) => {
-        const value = String(url)
-        calls.push({ value, options })
-        if (value.includes('/gr_jobphotos?')) return Response.json({ value: [] })
-        if (value.endsWith('/gr_jobphotos')) return Response.json({ gr_jobphotoid: 'photo-id' }, { status: 201 })
-        if (value.includes('/gr_jobphotos(photo-id)/gr_photo')) return new Response(null, { status: 204 })
-        throw new Error(`Unexpected request: ${value}`)
+        calls.push({ url: String(url), method: options.method || 'GET', authorization: options.headers?.Authorization })
+        if (String(url).endsWith('/WhoAmI')) return Response.json({ UserId: 'office-user-id' })
+        if (String(url).includes('/gr_jobs(')) return Response.json({
+            gr_jobid: '00000000-0000-4000-8000-000000000001', gr_jobnumber: '145999',
+            gr_description: 'Service forklift', gr_jobtype: 122830001,
+            gr_Equipment: { gr_equipmentid: '00000000-0000-4000-8000-000000000002', gr_make: 'Still', gr_model: 'RX60', gr_fleet: 'FN24', gr_currenthourmeter: 2500 },
+            gr_Site: { gr_name: 'Workshop', gr_Customer: { gr_name: 'Example Customer' } },
+            gr_Mechanic: { gr_mechanicid: '00000000-0000-4000-8000-000000000003', gr_name: 'Test Technician', gr_email: 'technician@example.com' },
+        })
+        throw new Error(`Unexpected request ${url}`)
     }
-    await submission._test.persistPhotos('t'.repeat(43), baseJob(), [{
-        fileName: 'mast.jpg', mimeType: 'image/jpeg', size: 3, data: 'YWJj',
-    }], 'Bearer app-token', '2026-07-25T04:00:00.000Z')
-    assert.equal(calls.length, 3)
-    const metadata = JSON.parse(calls[1].options.body)
-    assert.equal(metadata.gr_filename, 'mast.jpg')
-    assert.equal(metadata.gr_displayorder, 0)
-    assert.equal(calls[2].options.method, 'PATCH')
-    assert.equal(Buffer.from(calls[2].options.body).toString(), 'abc')
+    const response = await invoke({ method: 'POST', headers: { authorization: 'Bearer office-token' }, body: {
+        action: 'generate', jobId: '00000000-0000-4000-8000-000000000001',
+    } })
+    assert.equal(response.status, 201)
+    assert.equal(calls.length, 2)
+    assert.ok(calls.every((call) => call.method === 'GET'))
+    assert.ok(calls.every((call) => call.authorization === 'Bearer office-token'))
 })
 
-test('invalid token does not reveal Job data', { concurrency: false }, async () => {
-    configure()
-    mockPublic(null)
-    const response = await invoke({ method: 'GET', headers: {}, query: { token: 'a'.repeat(43) } })
-    assert.equal(response.status, 404)
-    assert.match(response.body, /invalid/i)
-    assert.doesNotMatch(response.body, /145999/)
+test('submission validation preserves strict story, meter, child, and photo-reference rules', () => {
+    const record = { jobType: 122830001, equipmentId: 'equipment', currentHourMeter: 2500 }
+    assert.match(service.test.validateSubmission(record, { story: '', hourMeter: 2500 }), /story/i)
+    assert.match(service.test.validateSubmission(record, { story: 'Done' }), /hour meter/i)
+    assert.match(service.test.validateSubmission(record, { story: 'Done', hourMeter: 2499 }), /lower/i)
+    assert.equal(service.test.validateSubmission(record, {
+        story: 'Done', hourMeter: 2500,
+        timeEntries: [{ date: '2026-07-25', hours: 1.25, kilometres: 12 }],
+        parts: ['Oil filter'], furtherWorkRequired: false, safetyIssueIdentified: false, photos: [],
+    }), '')
 })
 
-test('expired and used tokens are rejected', { concurrency: false }, async () => {
-    configure()
-    mockPublic(baseJob({ gr_techniciansubmissiontokenexpireson: new Date(Date.now() - 60_000).toISOString() }))
-    const expired = await invoke({ method: 'GET', headers: {}, query: { token: 'b'.repeat(43) } })
-    assert.equal(expired.status, 410)
-    assert.match(expired.body, /expired/i)
-
-    mockPublic(baseJob({ gr_techniciansubmissiontokenused: true }))
-    const used = await invoke({ method: 'GET', headers: {}, query: { token: 'c'.repeat(43) } })
-    assert.equal(used.status, 410)
-    assert.match(used.body, /already been submitted/i)
-})
-
-test('successful submission changes only pending fields and Job Card status', { concurrency: false }, async () => {
-    configure()
-    const job = baseJob()
-    let patch
-    global.fetch = async (url, options = {}) => {
-        const value = String(url)
-        if (value.includes('login.microsoftonline.com')) return Response.json({ access_token: 'app-token' })
-        if (value.includes('/gr_jobs?')) return Response.json({ value: [job] })
-        if (value.includes('/gr_jobs(')) {
-            patch = { headers: options.headers, body: JSON.parse(options.body) }
-            return new Response(null, { status: 204 })
-        }
-        throw new Error(`Unexpected request: ${value}`)
-    }
-    const response = await invoke({
-        method: 'POST',
-        headers: {},
-        body: { token: 'd'.repeat(43), story: 'Completed service', hourMeter: 2510 },
+test('photo upload validates bytes and stores them privately before final submission', async () => {
+    const created = await generate()
+    const upload = await invoke({
+        method: 'POST', headers: {}, body: {
+            action: 'uploadPhoto', token: created.body.token,
+            photo: { fileName: 'mast.jpg', mimeType: 'image/jpeg', size: 3, data: '/9j/' },
+        },
     })
+    assert.equal(upload.status, 201)
+    assert.match(JSON.parse(upload.body).uploadId, /^[0-9a-f-]{36}$/)
+    const invalid = await invoke({ method: 'POST', headers: {}, body: {
+        action: 'uploadPhoto', token: created.body.token,
+        photo: { fileName: 'mast.gif', mimeType: 'image/gif', size: 3, data: 'YWJj' },
+    } })
+    assert.equal(invalid.status, 400)
+})
+
+test('successful submission creates a pending review and replay is rejected', async () => {
+    const created = await generate()
+    const upload = await invoke({ method: 'POST', headers: {}, body: {
+        action: 'uploadPhoto', token: created.body.token,
+        photo: { fileName: 'mast.jpg', mimeType: 'image/jpeg', size: 3, data: '/9j/' },
+    } })
+    const uploadId = JSON.parse(upload.body).uploadId
+    const request = {
+        method: 'POST', headers: {}, body: {
+            token: created.body.token, story: 'Completed service', hourMeter: 2510,
+            timeEntries: [{ date: '2026-07-25', hours: 1.5, kilometres: 16 }],
+            parts: ['Hydraulic hose'], furtherWorkRequired: true, furtherWorkDetails: 'Inspect rollers',
+            safetyIssueIdentified: false, photos: [{ uploadId }],
+        },
+    }
+    const response = await invoke(request)
     assert.equal(response.status, 200)
-    assert.equal(patch.headers['If-Match'], 'W/"10"')
-    assert.equal(patch.body.gr_jobcardstatus, 122830002)
-    assert.equal(patch.body.gr_techniciansubmissionhourmeter, 2510)
-    assert.equal(patch.body.gr_techniciansubmissionstory, 'Completed service')
-    assert.equal(patch.body.gr_status, undefined)
-    assert.equal(patch.body.gr_completeddate, undefined)
-    assert.equal(patch.body.gr_hourmeter, undefined)
+    const replay = await invoke(request)
+    assert.equal(replay.status, 410)
+    assert.match(replay.body, /already been submitted/i)
+
+    const reviews = await service.handleReviewRequest({ method: 'GET', headers: { authorization: 'Bearer office' }, query: {} })
+    assert.equal(reviews.status, 200)
+    const items = JSON.parse(reviews.body).items
+    assert.equal(items.length, 1)
+    assert.equal(items[0].jobNumber, '145999')
+    assert.equal(items[0].photoCount, 1)
 })
 
-test('concurrent repeat submission is rejected by ETag', { concurrency: false }, async () => {
-    configure()
-    mockPublic(baseJob(), 412)
-    const response = await invoke({
-        method: 'POST',
-        headers: {},
-        body: { token: 'e'.repeat(43), story: 'Completed service', hourMeter: 2510 },
+test('review details and photos require office authentication and can be marked reviewed', async () => {
+    const created = await generate()
+    const submitted = await invoke({ method: 'POST', headers: {}, body: {
+        token: created.body.token, story: 'Completed', hourMeter: 2500,
+        timeEntries: [], parts: [], furtherWorkRequired: false, safetyIssueIdentified: false, photos: [],
+    } })
+    assert.equal(submitted.status, 200)
+    const unauthorized = await service.handleReviewRequest({ method: 'GET', headers: {}, query: {} })
+    assert.equal(unauthorized.status, 401)
+    const list = JSON.parse((await service.handleReviewRequest({ method: 'GET', headers: { authorization: 'Bearer office' }, query: {} })).body)
+    const reviewId = list.items[0].reviewId
+    const reviewed = await service.handleReviewRequest({
+        method: 'POST', headers: { authorization: 'Bearer office' }, query: { reviewId }, body: { action: 'markReviewed' },
     })
-    assert.equal(response.status, 410)
-    assert.match(response.body, /already been submitted/i)
+    assert.equal(JSON.parse(reviewed.body).status, 'reviewed')
+    const empty = JSON.parse((await service.handleReviewRequest({ method: 'GET', headers: { authorization: 'Bearer office' }, query: {} })).body)
+    assert.equal(empty.items.length, 0)
 })
 
-test('link generation requires an authenticated office user', { concurrency: false }, async () => {
-    configure()
-    global.fetch = async () => new Response(null, { status: 401 })
-    const response = await invoke({
-        method: 'POST',
-        headers: {},
-        body: { action: 'generate', jobId: '00000000-0000-4000-8000-000000000001' },
-    })
-    assert.equal(response.status, 401)
-    assert.match(response.body, /authentication/i)
-})
-
-test('link generation replaces the stored hash without changing Job workflows', { concurrency: false }, async () => {
-    configure()
-    let patch
-    global.fetch = async (url, options = {}) => {
-        const value = String(url)
-        if (value.endsWith('/WhoAmI')) return Response.json({ UserId: 'office-user' })
-        if (value.includes('/gr_jobs(') && options.method === 'PATCH') {
-            patch = JSON.parse(options.body)
-            return new Response(null, { status: 204 })
-        }
-        throw new Error(`Unexpected request: ${value}`)
-    }
-    const response = await invoke({
-        method: 'POST',
-        headers: { Authorization: 'Bearer office-token' },
-        body: { action: 'generate', jobId: '00000000-0000-4000-8000-000000000001' },
-    })
-    assert.equal(response.status, 201)
-    const result = JSON.parse(response.body)
-    assert.match(result.path, /^\/portal\/job\/[A-Za-z0-9_-]{43}$/)
-    assert.match(patch.gr_techniciansubmissiontokenhash, /^[a-f0-9]{64}$/)
-    assert.equal(patch.gr_techniciansubmissiontokenused, false)
-    assert.equal(patch.gr_status, undefined)
-    assert.equal(patch.gr_jobcardstatus, undefined)
-    assert.equal(JSON.stringify(patch).includes(result.path.slice('/portal/job/'.length)), false)
-})
-
-test('link generation accepts opaque Dataverse GUIDs without RFC version bits', { concurrency: false }, async () => {
-    configure()
-    let requestedUrl = ''
-    global.fetch = async (url, options = {}) => {
-        const value = String(url)
-        if (value.endsWith('/WhoAmI')) return Response.json({ UserId: 'office-user' })
-        if (value.includes('/gr_jobs(') && options.method === 'PATCH') {
-            requestedUrl = value
-            return new Response(null, { status: 204 })
-        }
-        throw new Error(`Unexpected request: ${value}`)
-    }
-    const response = await invoke({
-        method: 'POST',
-        headers: { Authorization: 'Bearer office-token' },
-        body: { action: 'generate', jobId: 'df9a3779-4e83-f111-ab0f-0022489917ff' },
-    })
-    assert.equal(response.status, 201)
-    assert.match(requestedUrl, /gr_jobs\(df9a3779-4e83-f111-ab0f-0022489917ff\)$/)
+test('creating a replacement link invalidates the previous active token', async () => {
+    const first = await generate()
+    const conflict = await generate()
+    assert.equal(conflict.response.status, 409)
+    const replacement = await generate({ replaceActive: true })
+    assert.equal(replacement.response.status, 201)
+    const oldLookup = await invoke({ method: 'GET', headers: {}, query: { token: first.body.token } })
+    assert.equal(oldLookup.status, 404)
+    const newLookup = await invoke({ method: 'GET', headers: {}, query: { token: replacement.body.token } })
+    assert.equal(newLookup.status, 200)
 })

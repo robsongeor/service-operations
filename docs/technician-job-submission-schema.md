@@ -1,4 +1,8 @@
-# Technician Job Card Submission
+# Technician Job Card Submission (legacy Dataverse model)
+
+> Superseded for new submissions by [Azure Job Card Storage](azure-job-card-storage.md).
+> These fields and tables may contain historical evidence and must not be deleted as part
+> of the Azure migration. The public technician endpoint no longer reads or writes them.
 
 Phase 1 exposes `/portal/job/:token` without exposing the authenticated management application.
 An authenticated office request generates a 32-byte random token. Dataverse stores only its
