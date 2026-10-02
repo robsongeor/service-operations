@@ -2,16 +2,29 @@
 
 Branch: `codex/azure-job-card-deployment`
 
-## Azure Job Card cutover (in progress, 2 October 2026)
+## Azure Job Card cutover (deployed and verified, 2 October 2026)
 
 - Integrated onto production baseline `9c5be8e`, preserving current pilot, validation, parts
   quantities, PDF, resend and localhost email behaviour. New evidence is in `/job-card-reviews`.
 - The owner approved storage/email creation, backend configuration, and replacing unused links.
   Notifications and reviewer access target `georger@liftrucks.co.nz`.
 - Resource deployment `CustomDeployment-20261002192950` completed successfully in ServiceOperations.
-  Backend settings, client/API deployment and signed-in end-to-end verification remain in progress.
+  Backend settings deployment `CustomDeployment-20261002194447` completed with existing settings
+  preserved. Credentials were resolved inside Azure, with no secret outputs.
+- Production code `c8d325a` deployed successfully in GitHub Actions run `36975098954`.
+- Live smoke test on owner-approved older Job 142314 passed: the test-only dispatch arrived at
+  George's inbox, the technician form saved explicitly synthetic story/time/parts and one harmless
+  company-logo photo, the authenticated office queue displayed the evidence, and the Azure-managed
+  review notification arrived in George's inbox with the correct authenticated review link.
+- The office photo loaded successfully. Invalid links returned 404; anonymous review/photo requests
+  returned 401; anonymous Blob listing returned 409; the used technician link rejected reuse.
+- The synthetic review was marked Reviewed and retained for audit. Operational Job 142314 remained
+  Complete with its original description; no operational completion or evidence import was performed.
 - Site Check assignment links, their photo service and confidential credentials remain unchanged.
-- Local tests, lint and build passed; live workflow verification is not yet claimed.
+- Full local tests, lint, build, focused security tests and the local Azurite adapter contract passed.
+- The existing two-recipient online Job Card pilot remains. New evidence is reviewed in the separate
+  Job Card reviews screen; unused legacy links must be regenerated. No retention deletion or
+  automatic Dataverse import is enabled.
 
 ## Local Job Card email guard (deployed)
 

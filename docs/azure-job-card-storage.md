@@ -117,3 +117,14 @@ Local adapter verification: start in-memory Azurite, then run
 `JOB_CARD_AZURITE_TEST=true node --test tests/jobCardStorage.integration.cjs` (set the
 environment variable with the shell's syntax). This test is restricted to the standard
 loopback emulator connection and never loads production credentials.
+
+## Verified production cutover — 2 October 2026
+
+- Resources: `CustomDeployment-20261002192950`; backend settings:
+  `CustomDeployment-20261002194447`, both successful in ServiceOperations.
+- Code `c8d325a`: [successful production workflow](https://github.com/robsongeor/service-operations/actions/runs/36975098954).
+- Approved older Job 142314 was used for one clearly labelled synthetic submission, with
+  email sent only to George. Both the dispatch and Azure-managed review notice were received.
+- Private photo retrieval, authenticated review, persisted Reviewed state, used-link rejection,
+  anonymous API denial and private-container denial were checked. The operational Job remained
+  Complete and its description unchanged. The test review is retained; no evidence was deleted.
