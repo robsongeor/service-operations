@@ -121,6 +121,14 @@ matched Job when the review opens (maximum 50 Quotes), then loads at most 200 Qu
 the manager expands a Quote. Opening the full editor uses the app-shell overlay so the invoice
 review state is preserved in place.
 
+Job Card review uses `JobQuotesDrawer` within the existing review screen, composed with the shared
+`EditDrawerShell`. `useJobQuotes` loads the same bounded headers only when opened, then selected
+Quote lines on expansion. It displays persisted number/title, status/revision, author/dates, notes,
+lines and subtotal/GST/total without exposing editing or navigating to a new tab. Loading, empty,
+header failure and line failure states stay distinct, with retry. The caller mounts it under the
+account/review key and discards it on close, preventing context/cache reuse across accounts or Jobs.
+This is current office-only commercial context, not an immutable technician submission snapshot.
+
 ## Important Business Rules
 
 - A Job may be linked to a Quote but does not require one.

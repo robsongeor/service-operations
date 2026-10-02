@@ -38,6 +38,7 @@ import { createEmailDispatch, waitForEmailDispatch } from '../services/emailDisp
 import { assertJobEmailSendingAllowed, buildAssignmentJobEmail, buildPrimaryJobEmail, onlineJobCardPilotEnabled, type JobEmailDeliveryState, type JobEmailDraft } from '../services/jobEmail'
 import { assertJobHasEmailableJobNumber } from '../services/jobEmailRules'
 import { generateJobSubmissionLink } from '../services/jobSubmissionLinkApi'
+import { usesAzureJobCards } from '../types/jobCardWorkflow'
 import { isValidTechnicianEmail } from '../utils/technicianMailto'
 import type {
     JobScheduleOption,
@@ -939,7 +940,7 @@ export function useJobs(options: UseJobsOptions = {}) {
             ...email,
         })
         await waitForEmailDispatch(token, dispatchId)
-        await updateJobCardStatusApi(token, job.gr_jobid, JOB_CARD_STATUSES.SENT)
+        if (!usesAzureJobCards(job)) await updateJobCardStatusApi(token, job.gr_jobid, JOB_CARD_STATUSES.SENT)
         await fetchJobs()
     }
 
@@ -969,7 +970,7 @@ export function useJobs(options: UseJobsOptions = {}) {
             void (async () => {
                 try {
                     await waitForEmailDispatch(token, dispatchId)
-                    await updateJobCardStatusApi(token, job.gr_jobid, JOB_CARD_STATUSES.SENT)
+                    if (!usesAzureJobCards(job)) await updateJobCardStatusApi(token, job.gr_jobid, JOB_CARD_STATUSES.SENT)
                     setEmailDeliveryStates((current) => ({
                         ...current,
                         [job.gr_jobid]: { status: 'sent', message: 'Job Card email sent.' },
@@ -1020,7 +1021,7 @@ export function useJobs(options: UseJobsOptions = {}) {
             ...email,
         })
         await waitForEmailDispatch(token, dispatchId)
-        await updateJobAssignmentStatusApi(
+        if (!usesAzureJobCards(job)) await updateJobAssignmentStatusApi(
             token,
             assignment.gr_jobassignmentid,
             JOB_CARD_STATUSES.SENT,

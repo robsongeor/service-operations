@@ -1,0 +1,22 @@
+.operations-table-panel { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; container-type: inline-size; overflow: visible; border: 1px solid #dfe4e1; border-radius: 14px; background: #fdfdfb; box-shadow: 0 8px 24px rgba(22,30,26,.06); color: #181b19; }
+.operations-table-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px 12px; }
+.operations-table-toolbar h2, .operations-table-toolbar p { margin: 0; }
+.operations-table-toolbar h2 { margin-top: 2px; font-size: 1.25rem; letter-spacing: -.02em; }
+.operations-table-eyebrow { color: #717773; font-size: .68rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.operations-table-count { padding: 5px 9px; border-radius: 999px; background: #eff1ee; color: #59605c; font-size: .72rem; font-weight: 650; white-space: nowrap; }
+.operations-table-toolbar-actions { display: flex; align-items: center; gap: 10px; }
+.operations-table-search input { width: min(320px,28vw); height: 34px; box-sizing: border-box; padding: 0 12px; border: 1px solid #dfe3df; border-radius: 999px; background: #f1f2f0; color: #202421; font: inherit; font-size: .75rem; outline: none; transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease; }
+.operations-table-search input:focus { border-color: #777f7a; background: white; box-shadow: 0 0 0 3px rgba(80,90,84,.1); }
+.operations-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.operations-filter-pills { display: flex; align-items: center; gap: 5px; }
+.operations-filter-pills button { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 10px; border: 1px solid #d4dad6; border-radius: 999px; background: #fff; color: #626b66; font: inherit; font-size: .7rem; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.operations-filter-pills button.active { border-color: #d39143; background: #fff0db; color: #9a5c17; }
+.operations-filter-pills button > span { padding: 1px 5px; border-radius: 4px; background: #00000008; font-size: .65rem; }
+.operations-filter-pills button:focus-visible { outline: 2px solid #55796d; outline-offset: 2px; }
+.operations-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: .75rem; }
+.operations-table th { position: static; z-index: 3; box-sizing: border-box; padding: 9px 10px; border-bottom: 1px solid #dfe4e1; background: #f4f5f2; box-shadow: 0 1px 0 #dfe4e1; color: #6b726e; font-size: .66rem; font-weight: 700; letter-spacing: .02em; text-align: left; text-transform: uppercase; white-space: nowrap; }
+.operations-table td { height: 58px; box-sizing: border-box; padding: 7px 10px; border-bottom: 2px solid #d5dbd7; color: #202421; vertical-align: middle; }
+.operations-table-sort { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
+.operations-table-sort:hover { color: #1c211e; }
+.operations-table-sort:focus-visible { border-radius: 3px; outline: 2px solid #55796d; outline-offset: 2px; }
+.operations-table-sort-icon { width: 14px; height: 14px; flex: 0 0 14px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; }

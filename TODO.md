@@ -11,10 +11,28 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
   and reconcile each regional spreadsheet; derive and verify each production seed; target-smoke
   allocation; then enable the two regional release gates. All three regional schemas, active keys,
   and application-role privileges are provisioned and verified; both production gates remain disabled.
+- [x] Review and approve the full-width desktop Job Card detail draft for commit/push.
+- [ ] Deploy the full-width review and local-development safeguards only after separate owner
+  deployment approval. Production is unchanged by the feature-branch commit/push.
+
+- [x] Deploy the owner-approved pending Job Card table. Release `024685e` published successfully;
+  live bundle and anonymous-access protection verified on 2 October 2026.
+- [ ] Complete the read-only signed-in review-queue check after the owner signs in. Populated
+  filters/shared controls are validated locally; mobile work is intentionally deferred.
+- [ ] Confirm the authorized queue display after refreshing the owner's signed-in localhost
+  browser. The approved live read-only connection, authentication boundary and write block pass
+  local checks; no Azure keys or production changes were needed.
+
+- [x] Publish and verify the Job Card review layout, all-photo ZIP save and same-screen associated
+  quotes. Owner-approved deployment and read-only live verification completed on 2 October 2026.
+
+- [x] Deploy and verify the Job Card office-control cleanup: Azure history in the Job drawer,
+  retirement of legacy status controls for ordinary Jobs, saved Azure PDF export, on-demand historical
+  evidence, and unchanged Site Check behaviour. Published with owner approval on 2 October 2026.
 
 - [ ] Configure and verify the production server-only `DATAVERSE_URL`,
   `DATAVERSE_TENANT_ID`, `DATAVERSE_CLIENT_ID`, and `DATAVERSE_CLIENT_SECRET` settings.
-- [ ] Run a production-safe Technician Job Card submission smoke test covering link
+- [x] Run a production-safe Azure Technician Job Card submission smoke test covering link
   generation, public lookup, submission, manager review, photo download, and replay
   rejection.
 
@@ -89,6 +107,9 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
   repeated temporary errors without logging secrets or submission content.
 
 ## Priority 2 — Product improvements
+
+- [x] Add office PDF export for Azure Job Card evidence and load historical Dataverse evidence only
+  on demand. Do not remove Site Check dependencies or historical service records during cleanup.
 
 - [ ] Make Equipment usage forecasting Site-aware. Use each historical Job's recorded Site to start
   a new forecast segment when Equipment moves, so usage from a previous operating environment does

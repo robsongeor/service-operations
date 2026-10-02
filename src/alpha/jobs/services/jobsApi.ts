@@ -15,6 +15,7 @@ import type { JobCardSubmission } from '../types/jobCardSubmission.types.ts'
 import { invalidateOperationalQueries } from '../../shared/data/OperationalDataClient.ts'
 import { fetchAllDataversePages } from '../../shared/dataverse/fetchAllDataversePages.ts'
 import { buildDataverseIdFilterBatches } from '../../shared/dataverse/boundedDataverseFilters.ts'
+import { usesAzureJobCards } from '../types/jobCardWorkflow.ts'
 
 const DATAVERSE_URL = import.meta.env?.VITE_DATAVERSE_URL ?? ''
 const HOUR_METER_READING_SELECT = HOUR_METER_CLASSIFICATION_ENABLED ? ',gr_hourmeterreadingtype,gr_hourmeterrecordeddate' : ''
@@ -61,6 +62,27 @@ function blobDataUrl(blob: Blob) {
     })
 }
 
+async function evidenceRows(response: Response, accessToken: string, strict: boolean, signal?: AbortSignal): Promise<Record<string, unknown>[]> {
+    if (!response.ok) {
+        if (strict) throw new Error('Historical Job Card evidence could not be loaded completely.')
+        return []
+    }
+    const data = await response.json() as { value?: Record<string, unknown>[]; '@odata.nextLink'?: string }
+    const rows = data.value ?? []
+    let next = data['@odata.nextLink']
+    const seen = new Set<string>()
+    while (strict && next) {
+        if (seen.has(next) || !DATAVERSE_URL || !next.startsWith(`${DATAVERSE_URL.replace(/\/$/, '')}/api/data/`)) throw new Error('Historical evidence paging could not be verified.')
+        seen.add(next)
+        const page = await fetch(next, { cache: 'no-store', signal, headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' } })
+        if (!page.ok) throw new Error('Historical Job Card evidence could not be loaded completely.')
+        const body = await page.json() as typeof data
+        rows.push(...(body.value ?? []))
+        next = body['@odata.nextLink']
+    }
+    return rows
+}
+
 export async function fetchJobPhotoMetadata(accessToken: string, jobId: string, signal?: AbortSignal): Promise<NonNullable<Job['jobPhotos']>> {
     const headers = { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' }
     const metadata = await fetch(
@@ -68,7 +90,7 @@ export async function fetchJobPhotoMetadata(accessToken: string, jobId: string, 
         { cache: 'no-store', headers, signal },
     )
     if (!metadata.ok) return []
-    const rows = ((await metadata.json()).value ?? []) as Record<string, unknown>[]
+    const rows = await evidenceRows(metadata, accessToken, false, signal)
     return rows.map((row) => ({
         id: String(row.gr_jobphotoid),
         fileName: String(row.gr_filename || 'Job photo'),
@@ -87,16 +109,48 @@ export async function fetchJobPhotoBody(accessToken: string, photoId: string, si
     return blobDataUrl(await response.blob())
 }
 
-async function fetchJobCardSubmissions(accessToken: string, jobId: string, signal?: AbortSignal): Promise<JobCardSubmission[]> {
+export async function fetchJobPhotos(accessToken: string, jobId: string, strict = false, signal?: AbortSignal): Promise<NonNullable<Job['jobPhotos']>> {
+    const headers = { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' }
+    const metadata = await fetch(
+        `${DATAVERSE_URL}/api/data/v9.2/gr_jobphotos?$select=gr_jobphotoid,gr_filename,gr_uploadedon,gr_displayorder,_gr_job_value&$filter=_gr_job_value eq ${jobId}&$orderby=gr_displayorder asc`,
+        { cache: 'no-store', headers, signal },
+    )
+    if (!metadata.ok) {
+        if (strict) throw new Error('Historical Job photos could not be loaded.')
+        return []
+    }
+    const rows = await evidenceRows(metadata, accessToken, strict, signal)
+    return Promise.all(rows.map(async (row: Record<string, unknown>) => {
+        const id = String(row.gr_jobphotoid)
+        const response = await fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobphotos(${id})/gr_photo/$value`, { cache: 'no-store', headers, signal })
+        if (!response.ok) throw new Error('A Job photo could not be loaded.')
+        return {
+            id,
+            fileName: String(row.gr_filename || 'Job photo'),
+            uploadedOn: String(row.gr_uploadedon || ''),
+            displayOrder: Number(row.gr_displayorder || 0),
+            previewUrl: await blobDataUrl(await response.blob()),
+        }
+    }))
+}
+
+type JobCardSubmissionLoadOptions = {
+    strict?: boolean
+    signal?: AbortSignal
+    includePhotoBodies?: boolean
+}
+
+async function fetchJobCardSubmissions(accessToken: string, jobId: string, options: JobCardSubmissionLoadOptions = {}): Promise<JobCardSubmission[]> {
+    const { strict = false, signal, includePhotoBodies = false } = options
     const headers = { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' }
     const submissionResult = await fetch(
         `${DATAVERSE_URL}/api/data/v9.2/gr_jobcardsubmissions?$select=gr_jobcardsubmissionid,gr_name,gr_recipientname,gr_recipientemail,gr_role,gr_status,gr_required,gr_emailsenton,gr_submittedon,gr_closedon,gr_hourmeter,gr_story,gr_furtherworkrequired,gr_furtherworkdetails,gr_safetyissueidentified,gr_safetyissuedetails,gr_islegacy,_gr_job_value,_gr_mechanic_value,_gr_jobassignment_value&$filter=_gr_job_value eq ${jobId}&$orderby=createdon asc`,
         { cache: 'no-store', headers, signal },
     )
     // The fallback keeps the app usable during the schema-first rollout.
-    if (submissionResult.status === 404) return []
+    if (submissionResult.status === 404 && !strict) return []
     if (!submissionResult.ok) throw new Error('The Job Card submissions could not be loaded.')
-    const submissions = ((await submissionResult.json()).value ?? []) as Record<string, unknown>[]
+    const submissions = await evidenceRows(submissionResult, accessToken, strict, signal)
     if (!submissions.length) return []
 
     const ids = submissions.map((item) => String(item.gr_jobcardsubmissionid))
@@ -106,15 +160,19 @@ async function fetchJobCardSubmissions(accessToken: string, jobId: string, signa
         fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobmaterials?$select=gr_jobmaterialid,gr_material,gr_quantity,_gr_jobcardsubmission_value&$filter=${encodeURIComponent(submissionFilter)}&$orderby=gr_displayorder asc`, { cache: 'no-store', headers, signal }),
         fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobphotos?$select=gr_jobphotoid,gr_filename,gr_uploadedon,gr_displayorder,_gr_jobcardsubmission_value&$filter=${encodeURIComponent(submissionFilter)}&$orderby=gr_displayorder asc`, { cache: 'no-store', headers, signal }),
     ])
-    const timeRows = timeResult.ok ? ((await timeResult.json()).value ?? []) as Record<string, unknown>[] : []
-    const partRows = partsResult.ok ? ((await partsResult.json()).value ?? []) as Record<string, unknown>[] : []
-    const photoRows = photoResult.ok ? ((await photoResult.json()).value ?? []) as Record<string, unknown>[] : []
-    const photos = photoRows.map((row) => ({
-        submissionId: String(row._gr_jobcardsubmission_value),
-        id: String(row.gr_jobphotoid),
-        fileName: String(row.gr_filename || 'Job photo'),
-        uploadedOn: String(row.gr_uploadedon || ''),
-        displayOrder: Number(row.gr_displayorder || 0),
+    if (strict && [timeResult, partsResult, photoResult].some((result) => !result.ok)) throw new Error('Historical Job Card evidence could not be loaded completely.')
+    const [timeRows, partRows, photoRows] = await Promise.all([timeResult, partsResult, photoResult].map((result) => evidenceRows(result, accessToken, strict, signal)))
+    const photos = await Promise.all(photoRows.map(async (row) => {
+        const id = String(row.gr_jobphotoid)
+        const previewUrl = includePhotoBodies ? await fetchJobPhotoBody(accessToken, id, signal) : undefined
+        return {
+            submissionId: String(row._gr_jobcardsubmission_value),
+            id,
+            fileName: String(row.gr_filename || 'Job photo'),
+            uploadedOn: String(row.gr_uploadedon || ''),
+            displayOrder: Number(row.gr_displayorder || 0),
+            previewUrl,
+        }
     }))
 
     return submissions.map((item) => {
@@ -142,6 +200,7 @@ async function fetchJobCardSubmissions(accessToken: string, jobId: string, signa
                 fileName: photo.fileName,
                 uploadedOn: photo.uploadedOn,
                 displayOrder: photo.displayOrder,
+                previewUrl: photo.previewUrl,
             })),
         } as JobCardSubmission
     })
@@ -259,10 +318,36 @@ export async function fetchJobCardDetails(accessToken: string, jobId: string, si
         fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobcardsubmissiontimeentries?$select=gr_jobcardsubmissiontimeentryid,gr_entrydate,gr_totalhours,gr_kilometres,_gr_job_value&$filter=_gr_job_value eq ${jobId}&$orderby=gr_entrydate asc`, { cache: 'no-store', headers, signal }),
         fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobmaterials?$select=gr_jobmaterialid,gr_material,gr_quantity,_gr_job_value&$filter=_gr_job_value eq ${jobId}&$orderby=gr_displayorder asc`, { cache: 'no-store', headers, signal }),
         fetchJobPhotoMetadata(accessToken, jobId, signal),
-        fetchJobCardSubmissions(accessToken, jobId, signal),
+        fetchJobCardSubmissions(accessToken, jobId, { signal }),
     ])
-    const timeEntries = timeResult.ok ? ((await timeResult.json()).value ?? []) as Record<string, unknown>[] : []
-    const parts = partsResult.ok ? ((await partsResult.json()).value ?? []) as Record<string, unknown>[] : []
+    const [timeEntries, parts] = await Promise.all([
+        evidenceRows(timeResult, accessToken, false, signal),
+        evidenceRows(partsResult, accessToken, false, signal),
+    ])
+    return mapJobCardEvidence(timeEntries, parts, photos, submissions)
+}
+
+export type HistoricalJobCardEvidence = Pick<Job, 'technicianSubmissionTimeEntries' | 'technicianSubmissionParts' | 'jobPhotos' | 'jobCardSubmissions'>
+
+export async function fetchHistoricalJobCardEvidence(accessToken: string, jobId: string, strict = true): Promise<HistoricalJobCardEvidence> {
+    const headers = { Authorization: `Bearer ${accessToken}`, Accept: 'application/json', 'Cache-Control': 'no-cache' }
+    const [timeResult, partsResult, photos, submissions] = await Promise.all([
+        fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobcardsubmissiontimeentries?$select=gr_jobcardsubmissiontimeentryid,gr_entrydate,gr_totalhours,gr_kilometres,_gr_job_value&$filter=_gr_job_value eq ${jobId}&$orderby=gr_entrydate asc`, { cache: 'no-store', headers }),
+        fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobmaterials?$select=gr_jobmaterialid,gr_material,gr_quantity,_gr_job_value&$filter=_gr_job_value eq ${jobId}&$orderby=gr_displayorder asc`, { cache: 'no-store', headers }),
+        fetchJobPhotos(accessToken, jobId, strict),
+        fetchJobCardSubmissions(accessToken, jobId, { strict, includePhotoBodies: true }),
+    ])
+    if (strict && (!timeResult.ok || !partsResult.ok)) throw new Error('Historical Job Card evidence could not be loaded completely.')
+    const [timeEntries, parts] = await Promise.all([timeResult, partsResult].map((result) => evidenceRows(result, accessToken, strict)))
+    return mapJobCardEvidence(timeEntries, parts, photos, submissions)
+}
+
+function mapJobCardEvidence(
+    timeEntries: Record<string, unknown>[],
+    parts: Record<string, unknown>[],
+    photos: NonNullable<Job['jobPhotos']>,
+    submissions: JobCardSubmission[],
+): HistoricalJobCardEvidence {
     return {
         technicianSubmissionTimeEntries: timeEntries.map((item) => ({
             id: String(item.gr_jobcardsubmissiontimeentryid),
@@ -286,11 +371,9 @@ export async function fetchJobCardDetails(accessToken: string, jobId: string, si
  * when the Job Card tab is opened.
  */
 export async function fetchJobForDrawer(accessToken: string, jobId: string, signal?: AbortSignal): Promise<Job | undefined> {
-    const [job, details] = await Promise.all([
-        fetchJobCore(accessToken, jobId, signal),
-        fetchJobCardDetails(accessToken, jobId, signal),
-    ])
-    return job ? { ...job, ...details } : undefined
+    const job = await fetchJobCore(accessToken, jobId, signal)
+    if (!job || usesAzureJobCards(job)) return job
+    return { ...job, ...await fetchJobCardDetails(accessToken, jobId, signal) }
 }
 
 export function invalidateJobsCache(accessToken?: string) {

@@ -47,7 +47,11 @@ development may set `VITE_HOUR_METER_CLASSIFICATION_ENABLED=true`; keep deployed
 until manager read/write and Actual/Estimated completion smoke testing passes. A build with the flag
 disabled continues to omit both columns.
 
-Server-only portal variables:
+New job-level Job Cards use the resources/settings templates documented in
+[Azure Job Card Storage](../azure-job-card-storage.md). Deploy resources and backend
+configuration before the API/client cutover. Keep existing settings for Site Checks.
+
+Server-only Site Check / legacy portal variables:
 
 ```text
 DATAVERSE_URL

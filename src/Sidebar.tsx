@@ -19,6 +19,7 @@ const menuItems = [
     { label: 'Jobs', shortLabel: 'J', path: '/jobs' },
     { label: 'Job Import', shortLabel: 'JI', path: '/job-import' },
     { label: 'Equipment Photos', shortLabel: 'P', path: '/equipment-photos' },
+    { label: 'Job Card reviews', shortLabel: 'JR', path: '/job-card-reviews' },
     { label: 'Job Map', shortLabel: 'JM', path: '/job-map' },
     { label: 'Job Book Legacy', shortLabel: 'JB', path: '/job-book' },
     { label: 'Site Checks', shortLabel: 'S', path: '/site-checks' },

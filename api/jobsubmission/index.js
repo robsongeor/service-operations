@@ -15,15 +15,11 @@ module.exports = async function jobSubmission(context, request) {
                 { Allow: 'GET, POST' },
             )
         }
-    } catch (error) {
-        context.log?.error('Job submission request failed.', error)
-        const diagnostic = error instanceof Error
-            && /^Job submission update failed \([45]\d\d(?:, [A-Za-z0-9_.-]+)?\)\.(?: The portal service is missing [A-Za-z0-9_]+ on the [A-Za-z0-9_]+ table\.)?$/.test(error.message)
-            ? ` ${error.message}`
-            : ''
+    } catch {
+        context.log?.error('Job submission request failed.')
         context.res = jobSubmissionService.jsonResponse(503, {
             code: 'temporary',
-            error: `The job card service is temporarily unavailable.${diagnostic}`,
+            error: 'The job card service is temporarily unavailable.',
         })
     }
 }

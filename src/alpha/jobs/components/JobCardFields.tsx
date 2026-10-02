@@ -13,6 +13,11 @@ import { downloadSubmittedJobSheet } from '../services/submittedJobSheetPdf'
 import { jobEmailSendingAllowedForHostname, LOCAL_JOB_EMAIL_DISABLED_MESSAGE } from '../services/jobEmail'
 import { useOperationalQuery } from '../../shared/data/useOperationalQuery'
 import { jobPhotoBodyQueryKey } from '../../shared/data/operationalCollectionKeys'
+import { canRemoveAzureAssignment, usesAzureJobCards } from '../types/jobCardWorkflow'
+import { useJobCardHistory } from '../../job-card-reviews/useJobCardHistory'
+import JobCardHistoryPanel from '../../job-card-reviews/JobCardHistoryPanel'
+import { useHistoricalJobCards } from '../hooks/useHistoricalJobCards'
+import { useActiveMsalAccount } from '../../../auth/useActiveMsalAccount'
 
 type Props = {
     job: Job
@@ -61,7 +66,7 @@ type CardProps = {
     name: string
     email?: string | null
     label: string
-    status: JobCardStatus
+    status?: JobCardStatus
     submission?: JobCardSubmission
     isBusy: boolean
     canSend: boolean
@@ -84,7 +89,7 @@ function TechnicianCard({ name, email, label, status, submission, isBusy, canSen
                 <span className="job-card-person-avatar" aria-hidden="true">{name.slice(0, 1).toUpperCase() || '?'}</span>
                 <span><strong>{name}</strong><small>{label}{email ? ` · ${email}` : ''}</small></span>
             </button>
-            <span className={`job-card-current status-${status}`}>{statusLabel}</span>
+            {status !== undefined && <span className={`job-card-current status-${status}`}>{statusLabel}</span>}
             <div className="job-card-person-actions">
                 {submitted && submission && onDownload && <button type="button" disabled={isPdfBusy} onClick={onDownload}>{isPdfBusy ? 'Preparing...' : 'Download PDF'}</button>}
                 {submission && <button type="button" onClick={onToggle}>{expanded ? 'Hide' : 'View'}</button>}
@@ -96,8 +101,8 @@ function TechnicianCard({ name, email, label, status, submission, isBusy, canSen
     </article>
 }
 
-function legacySubmission(job: Job): JobCardSubmission | undefined {
-    if (!hasTechnicianSubmission(job)) return undefined
+function legacySubmission(job: Job, archiveOnly = false): JobCardSubmission | undefined {
+    if (archiveOnly ? !job.gr_techniciansubmissionsubmittedon : !hasTechnicianSubmission(job)) return undefined
     return {
         gr_jobcardsubmissionid: 'legacy', gr_name: 'Original technician submission',
         gr_recipientname: job.gr_Mechanic?.gr_name, gr_recipientemail: job.gr_Mechanic?.gr_email,
@@ -112,7 +117,55 @@ function legacySubmission(job: Job): JobCardSubmission | undefined {
     }
 }
 
-export default function JobCardFields({ job, mechanics, assignments, onStatusChange, onCreateAssignment, onSendPrimary, onSendAssignment, onDeleteAssignment, onLoadPhoto }: Props) {
+function JobPhotoPreview({
+    photo,
+    onLoadPhoto,
+    onClose,
+}: {
+    photo: NonNullable<Job['jobPhotos']>[number]
+    onLoadPhoto?: (photoId: string, signal?: AbortSignal) => Promise<string>
+    onClose: () => void
+}) {
+    const existingPreviewPhotoUrl = photo.previewUrl
+    const previewPhotoKey = useMemo(() => jobPhotoBodyQueryKey(photo.id), [photo.id])
+    const previewPhotoLoader = useCallback(async ({ signal }: { signal: AbortSignal }) => {
+        if (existingPreviewPhotoUrl) return existingPreviewPhotoUrl
+        if (!onLoadPhoto) throw new Error('The Job Card photo loader is unavailable.')
+        return onLoadPhoto(photo.id, signal)
+    }, [existingPreviewPhotoUrl, onLoadPhoto, photo.id])
+    const previewPhotoQuery = useOperationalQuery<string>({
+        key: previewPhotoKey,
+        enabled: Boolean(!existingPreviewPhotoUrl && onLoadPhoto),
+        queryFn: previewPhotoLoader,
+        staleTimeMs: 5 * 60_000,
+        cacheTimeMs: 30_000,
+    })
+    const previewPhotoUrl = existingPreviewPhotoUrl ?? previewPhotoQuery.data
+
+    return <div className="job-photo-preview" role="dialog" aria-modal="true" aria-label={photo.fileName} onClick={onClose}>
+        <button type="button" aria-label="Close photo preview" onClick={onClose}>×</button>
+        {previewPhotoUrl
+            ? <img src={previewPhotoUrl} alt={photo.fileName} onClick={(event) => event.stopPropagation()} />
+            : previewPhotoQuery.status === 'error' || previewPhotoQuery.status === 'stale'
+                ? <div className="job-photo-preview-state error" onClick={(event) => event.stopPropagation()}>
+                    <strong>Photo unavailable</strong>
+                    <span>{previewPhotoQuery.error?.message ?? 'The photo could not be loaded.'}</span>
+                    <button type="button" onClick={() => { void previewPhotoQuery.refetch().catch(() => undefined) }}>Try again</button>
+                </div>
+                : <div className="job-photo-preview-state" role="status" onClick={(event) => event.stopPropagation()}>Loading photo…</div>}
+        <span>{photo.fileName}</span>
+    </div>
+}
+
+export default function JobCardFields(props: Props) {
+    const account = useActiveMsalAccount()
+    return <JobCardContent key={`${account?.homeAccountId || ''}:${props.job.gr_jobid}`} {...props} />
+}
+
+function JobCardContent({ job, mechanics, assignments, onStatusChange, onCreateAssignment, onSendPrimary, onSendAssignment, onDeleteAssignment, onLoadPhoto }: Props) {
+    const azure = usesAzureJobCards(job)
+    const history = useJobCardHistory(azure ? job.gr_jobid : undefined)
+    const archive = useHistoricalJobCards(azure ? job.gr_jobid : undefined)
     const [isUpdating, setIsUpdating] = useState(false)
     const [busyId, setBusyId] = useState('')
     const [showAssignmentForm, setShowAssignmentForm] = useState(false)
@@ -123,29 +176,15 @@ export default function JobCardFields({ job, mechanics, assignments, onStatusCha
     const [preview, setPreview] = useState<{ submission: JobCardSubmission; photoId: string } | null>(null)
     const [pdfBusyId, setPdfBusyId] = useState('')
     const previewPhoto = preview?.submission.photos.find((item) => item.id === preview.photoId)
-    const previewPhotoId = previewPhoto?.id ?? ''
-    const existingPreviewPhotoUrl = previewPhoto?.previewUrl
-    const previewPhotoKey = useMemo(() => jobPhotoBodyQueryKey(previewPhotoId || 'none'), [previewPhotoId])
-    const previewPhotoLoader = useCallback(async ({ signal }: { signal: AbortSignal }) => {
-        if (existingPreviewPhotoUrl) return existingPreviewPhotoUrl
-        if (!onLoadPhoto || !previewPhotoId) throw new Error('The Job Card photo loader is unavailable.')
-        return onLoadPhoto(previewPhotoId, signal)
-    }, [existingPreviewPhotoUrl, onLoadPhoto, previewPhotoId])
-    const previewPhotoQuery = useOperationalQuery<string>({
-        key: previewPhotoKey,
-        enabled: Boolean(previewPhotoId && !existingPreviewPhotoUrl && onLoadPhoto),
-        queryFn: previewPhotoLoader,
-        staleTimeMs: 5 * 60_000,
-        cacheTimeMs: 30_000,
-    })
-    const previewPhotoUrl = existingPreviewPhotoUrl ?? previewPhotoQuery.data
     const hasJobNumber = jobHasEmailableJobNumber(job)
     const localSendingDisabled = !jobEmailSendingAllowedForHostname(window.location.hostname)
     const submissions = useMemo(() => {
-        const normalized = job.jobCardSubmissions ?? []
-        const old = legacySubmission(job)
+        if (azure && !archive.data) return []
+        const evidenceJob = azure ? { ...job, ...archive.data } : job
+        const normalized = evidenceJob.jobCardSubmissions ?? []
+        const old = legacySubmission(evidenceJob, azure)
         return old && !normalized.some((item) => item.gr_islegacy) ? [...normalized, old] : normalized
-    }, [job])
+    }, [job, azure, archive.data])
     const primarySubmission = [...submissions].reverse().find((item) => item.gr_role === JOB_CARD_SUBMISSION_ROLES.PRIMARY)
     const legacy = submissions.find((item) => item.gr_role === JOB_CARD_SUBMISSION_ROLES.LEGACY)
     const latestSubmissionIds = new Set([
@@ -155,7 +194,7 @@ export default function JobCardFields({ job, mechanics, assignments, onStatusCha
         )?.gr_jobcardsubmissionid),
     ].filter((id): id is string => Boolean(id)))
     const previousSubmissions = submissions.filter((item) =>
-        !latestSubmissionIds.has(item.gr_jobcardsubmissionid)
+        (azure || !latestSubmissionIds.has(item.gr_jobcardsubmissionid))
         && (item.gr_status === JOB_CARD_STATUSES.SUBMITTED || item.gr_status === JOB_CARD_STATUSES.CLOSED || Boolean(item.gr_submittedon)),
     )
     const requiredCount = 1 + assignments.length
@@ -182,10 +221,11 @@ export default function JobCardFields({ job, mechanics, assignments, onStatusCha
             else await onSendAssignment(job, target)
         }
         catch (caught) { setError(caught instanceof Error ? caught.message : 'The Job Card could not be sent.') }
-        finally { setIsUpdating(false); setBusyId(''); setPendingEmail(null) }
+        finally { setIsUpdating(false); setBusyId(''); setPendingEmail(null); if (azure) history.refresh() }
     }
     const requestSend = (target: 'primary' | JobAssignment, status: JobCardStatus) => {
-        if (status !== JOB_CARD_STATUSES.NOT_SENT) setPendingEmail(target)
+        // Azure confirms replacement against the authoritative server state, not legacy fields.
+        if (!azure && status !== JOB_CARD_STATUSES.NOT_SENT) setPendingEmail(target)
         else void performSend(target)
     }
     const addAssignment = async () => {
@@ -215,19 +255,22 @@ export default function JobCardFields({ job, mechanics, assignments, onStatusCha
     return <>
         <div className="job-card-layout">
             <header className="job-card-overview">
-                <div><span>Job Card progress</span><strong>{submittedCount} of {requiredCount} submitted</strong><small>{progressLabel}</small></div>
-                <label><span>Office status</span><select value={getJobCardStatus(job.gr_jobcardstatus)} disabled={isUpdating} onChange={(event) => void onStatusChange(job.gr_jobid, Number(event.target.value) as JobCardStatus)}>{JOB_CARD_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+                {azure ? <div><span>Job Cards</span><strong>Azure submissions</strong><small>Old Job Card status fields no longer control this workflow.</small></div> : <>
+                    <div><span>Job Card progress</span><strong>{submittedCount} of {requiredCount} submitted</strong><small>{progressLabel}</small></div>
+                    <label><span>Office status</span><select value={getJobCardStatus(job.gr_jobcardstatus)} disabled={isUpdating} onChange={(event) => void onStatusChange(job.gr_jobid, Number(event.target.value) as JobCardStatus)}>{JOB_CARD_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+                </>}
             </header>
+            {azure && <JobCardHistoryPanel {...history} />}
             {localSendingDisabled && <p className="job-card-local-send-warning" role="status">{LOCAL_JOB_EMAIL_DISABLED_MESSAGE}</p>}
 
             <section className="job-card-people" aria-label="Technician Job Cards">
                 <TechnicianCard
                     name={job.gr_Mechanic?.gr_name ?? 'No primary technician'} email={job.gr_Mechanic?.gr_email} label="Primary technician"
-                    status={primarySubmission?.gr_status ?? (legacy ? JOB_CARD_STATUSES.SUBMITTED : getJobCardStatus(job.gr_jobcardstatus))}
-                    submission={primarySubmission ?? legacy} isBusy={isUpdating} canSend={!localSendingDisabled && hasJobNumber && Boolean(job.gr_Mechanic?.gr_email)}
-                    expanded={expandedId === (primarySubmission ?? legacy)?.gr_jobcardsubmissionid}
+                    status={azure ? undefined : primarySubmission?.gr_status ?? (legacy ? JOB_CARD_STATUSES.SUBMITTED : getJobCardStatus(job.gr_jobcardstatus))}
+                    submission={azure ? undefined : primarySubmission ?? legacy} isBusy={isUpdating} canSend={!localSendingDisabled && hasJobNumber && Boolean(job.gr_Mechanic?.gr_email)}
+                    expanded={!azure && expandedId === (primarySubmission ?? legacy)?.gr_jobcardsubmissionid}
                     onToggle={() => setExpandedId((current) => current ? '' : (primarySubmission ?? legacy)?.gr_jobcardsubmissionid ?? '')}
-                    onSend={() => requestSend('primary', primarySubmission?.gr_status ?? getJobCardStatus(job.gr_jobcardstatus))}
+                    onSend={() => requestSend('primary', azure ? JOB_CARD_STATUSES.NOT_SENT : primarySubmission?.gr_status ?? getJobCardStatus(job.gr_jobcardstatus))}
                     onPhoto={(id) => (primarySubmission ?? legacy) && showPhoto((primarySubmission ?? legacy)!, id)}
                     onDownload={(primarySubmission ?? legacy) ? () => void downloadPdf((primarySubmission ?? legacy)!) : undefined}
                     isPdfBusy={pdfBusyId === (primarySubmission ?? legacy)?.gr_jobcardsubmissionid}
@@ -235,16 +278,28 @@ export default function JobCardFields({ job, mechanics, assignments, onStatusCha
                 {assignments.map((assignment) => {
                     const submission = [...submissions].reverse().find((item) => item._gr_jobassignment_value === assignment.gr_jobassignmentid)
                     const status = submission?.gr_status ?? getJobCardStatus(assignment.gr_jobcardstatus)
+                    // Do not delete assignments with Azure requests or historical evidence, or while history is unknown.
+                    const canRemove = !azure || Boolean(archive.data && canRemoveAzureAssignment(assignment.gr_jobassignmentid, history.data, submissions))
                     return <TechnicianCard key={assignment.gr_jobassignmentid} name={assignment.gr_Mechanic?.gr_name ?? 'Unknown technician'} email={assignment.gr_Mechanic?.gr_email} label="Additional technician"
-                        status={status} submission={submission} isBusy={busyId === assignment.gr_jobassignmentid} canSend={!localSendingDisabled && hasJobNumber && Boolean(assignment.gr_Mechanic?.gr_email)}
-                        expanded={expandedId === submission?.gr_jobcardsubmissionid} onToggle={() => setExpandedId((current) => current ? '' : submission?.gr_jobcardsubmissionid ?? '')}
-                        onSend={() => requestSend(assignment, status)} onRemove={() => void removeAssignment(assignment)} onPhoto={(id) => submission && showPhoto(submission, id)}
+                        status={azure ? undefined : status} submission={azure ? undefined : submission} isBusy={busyId === assignment.gr_jobassignmentid} canSend={!localSendingDisabled && hasJobNumber && Boolean(assignment.gr_Mechanic?.gr_email)}
+                        expanded={!azure && expandedId === submission?.gr_jobcardsubmissionid} onToggle={() => setExpandedId((current) => current ? '' : submission?.gr_jobcardsubmissionid ?? '')}
+                        onSend={() => requestSend(assignment, azure ? JOB_CARD_STATUSES.NOT_SENT : status)} onRemove={canRemove ? () => void removeAssignment(assignment) : undefined} onPhoto={(id) => submission && showPhoto(submission, id)}
                         onDownload={submission ? () => void downloadPdf(submission) : undefined} isPdfBusy={pdfBusyId === submission?.gr_jobcardsubmissionid} />
                 })}
             </section>
 
-            {previousSubmissions.length > 0 && <section className="job-card-people" aria-label="Previous technician Job Cards">
-                <h4>Previous submissions</h4>
+            {azure && <section className="job-card-people" aria-label="Historical submissions">
+                <button type="button" aria-expanded={archive.open} onClick={archive.toggle}>{archive.open ? 'Hide historical submissions' : 'Historical submissions · old system'}</button>
+                {archive.open && <>
+                    <p>Read-only Dataverse archive. Loading history also checks whether additional technician assignments can be safely removed.</p>
+                    {archive.busy && <p role="status">Loading historical submissions…</p>}
+                    {archive.error && <p role="alert">{archive.error} <button type="button" onClick={archive.retry}>Retry</button></p>}
+                    {archive.data && previousSubmissions.length === 0 && <p>No historical submissions recorded.</p>}
+                </>}
+            </section>}
+            {(!azure || archive.open) && previousSubmissions.length > 0 && <section className="job-card-people" aria-label="Previous technician Job Cards">
+                <h4>{azure ? 'Historical submissions · old system' : 'Previous submissions'}</h4>
+                {azure && <p>Read-only evidence retained from Dataverse. These records do not represent the current Azure link or review status.</p>}
                 {[...previousSubmissions].reverse().map((submission) => <TechnicianCard
                     key={submission.gr_jobcardsubmissionid}
                     name={submission.gr_recipientname || 'Technician'} email={submission.gr_recipientemail} label="Previous submission"
@@ -262,18 +317,6 @@ export default function JobCardFields({ job, mechanics, assignments, onStatusCha
         </div>
 
         {pendingEmail && <EditDrawerConfirmation eyebrow="Confirm Job Card email" title="Send a new Job Card link?" message="An unused link will be replaced. If this technician has already submitted, their evidence will be preserved and a new submission cycle will start." isBusy={isUpdating || Boolean(busyId)} confirmLabel="Generate and email" onCancel={() => setPendingEmail(null)} onConfirm={() => void performSend(pendingEmail)} />}
-        {previewPhoto && <div className="job-photo-preview" role="dialog" aria-modal="true" aria-label={previewPhoto.fileName} onClick={() => setPreview(null)}>
-            <button type="button" aria-label="Close photo preview" onClick={() => setPreview(null)}>×</button>
-            {previewPhotoUrl
-                ? <img src={previewPhotoUrl} alt={previewPhoto.fileName} onClick={(event) => event.stopPropagation()} />
-                : previewPhotoQuery.status === 'error' || previewPhotoQuery.status === 'stale'
-                    ? <div className="job-photo-preview-state error" onClick={(event) => event.stopPropagation()}>
-                        <strong>Photo unavailable</strong>
-                        <span>{previewPhotoQuery.error?.message ?? 'The photo could not be loaded.'}</span>
-                        <button type="button" onClick={() => { void previewPhotoQuery.refetch().catch(() => undefined) }}>Try again</button>
-                    </div>
-                    : <div className="job-photo-preview-state" role="status" onClick={(event) => event.stopPropagation()}>Loading photo…</div>}
-            <span>{previewPhoto.fileName}</span>
-        </div>}
+        {previewPhoto && <JobPhotoPreview photo={previewPhoto} onLoadPhoto={onLoadPhoto} onClose={() => setPreview(null)} />}
     </>
 }

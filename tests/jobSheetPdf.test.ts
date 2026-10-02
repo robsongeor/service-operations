@@ -6,6 +6,9 @@ import { buildJobSheetValues, renderJobSheetPdf } from '../src/alpha/portal/jobS
 import { buildSubmittedJobSheet } from '../src/alpha/jobs/services/submittedJobSheetPdf.ts'
 import type { Job } from '../src/alpha/jobs/types/job.types.ts'
 import type { JobCardSubmission } from '../src/alpha/jobs/types/jobCardSubmission.types.ts'
+import { renderJobCardReviewPdf } from '../src/alpha/job-card-reviews/jobCardReviewPdf.ts'
+import type { JobCardReview } from '../src/alpha/job-card-reviews/jobCardReview.types.ts'
+import { mkdir, writeFile } from 'node:fs/promises'
 
 const job = {
     jobNumber: '145995',
@@ -35,6 +38,34 @@ const draft = {
     furtherWorkDetails: 'Inspect the damaged wiring at the next service.',
     safetyIssueDetails: 'Machine was isolated while testing.',
 }
+
+test('Azure PDF renders long saved evidence across pages without network requests or mutation', async () => {
+    const review: JobCardReview = {
+        ...job, reviewId: 'synthetic-review-only', etag: 'test', status: 'pendingReview', sourceJobId: 'test-job',
+        submittedOn: '2026-10-02T00:00:00Z', hourMeter: 3642, photoCount: 1,
+        story: `${'Checked hydraulic connections and tested the machine under load. '.repeat(90)}STORY-END`,
+        timeEntries: Array.from({ length: 50 }, (_, index) => ({ date: `2026-09-${String(index % 28 + 1).padStart(2, '0')}`, hours: 0.25, kilometres: index })),
+        parts: Array.from({ length: 100 }, (_, index) => ({ description: `TEST-PART-${index + 1} ${'long-item-description-'.repeat(index === 99 ? 20 : 1)}`, quantity: index + 1 })),
+        furtherWorkRequired: true, furtherWorkDetails: 'Further work remains recorded. FURTHER-END',
+        safetyIssueIdentified: true, safetyIssueDetails: 'Safety observation retained. SAFETY-END',
+        photos: [{ id: 'test-photo', fileName: 'synthetic-evidence.png', mimeType: 'image/png', size: 100 }],
+    }
+    const before = JSON.stringify(review)
+    const original = globalThis.fetch
+    globalThis.fetch = async () => { throw new Error('Saved PDF must not access network or current Job data.') }
+    try {
+        const blob = await renderJobCardReviewPdf(review)
+        const bytes = new Uint8Array(await blob.arrayBuffer())
+        const pdf = await PDFDocument.load(bytes)
+        assert.ok(pdf.getPageCount() >= 5)
+        assert.match(pdf.getTitle() || '', /145995.*saved technician submission/)
+        assert.equal(JSON.stringify(review), before)
+        if (process.env.JOB_CARD_PDF_QA === 'true') {
+            await mkdir('output/pdf', { recursive: true })
+            await writeFile('output/pdf/job-card-synthetic-qa.pdf', bytes)
+        }
+    } finally { globalThis.fetch = original }
+})
 
 test('Job sheet values combine Job details and current technician form entries', () => {
     const values = buildJobSheetValues(job, draft)

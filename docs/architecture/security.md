@@ -46,7 +46,14 @@ rather than broadening the restricted user's Dataverse role.
 `VITE_SIMULATED_ACCESS_MODE` is a development-only navigation test. It does not change the signed-in
 user's Dataverse privileges and must never be represented as an authorization test.
 
-## Public Portal Service
+## Job-level Azure portal
+
+Job-level public requests never use Dataverse. Tokens authorize only one immutable dispatch
+snapshot and bounded evidence uploads in Azure. Office review additionally requires a configured
+reviewer allowlist after delegated identity validation. Photos are private and downloaded only
+through authenticated endpoints. See [Technician Job Card Submission](technician-job-submission.md).
+
+## Legacy and Site Check Public Portal Service
 
 The dedicated Application User has read access to the minimal Job, Equipment, Site, and
 Customer projection; Job Write for the fixed submission fields; and the child-table
@@ -58,7 +65,8 @@ Exact identifiers and privileges are documented in
 
 ## File handling
 
-Job Photos use a Dataverse File column. The public browser sends validated supported image
+Legacy and Site Check Job Photos use a Dataverse File column. New job-level photos use a
+dedicated private Azure Blob container; existing evidence is retained. The public browser sends validated supported image
 data to the server; it receives no Dataverse file URL. Authenticated managers download
 submitted photos through their delegated Dataverse access.
 

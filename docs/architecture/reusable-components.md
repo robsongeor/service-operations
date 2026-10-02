@@ -17,6 +17,9 @@ because a similar visual pattern appears in more than one feature.
 | `FormSwitch` | `src/alpha/shared/form-switch/FormSwitch.tsx` | Compact accessible boolean switch with visible state text, keyboard behavior, disabled state, and focus styling. |
 | `MetricStrip` | `src/alpha/shared/metric-strip/MetricStrip.tsx` | Compact, wrapping dashboard summary of semantic label/value pairs with optional warning/danger emphasis and optional keyboard-accessible value activation for feature-owned filtering. |
 | `PageHeader` | `src/alpha/shared/page-header/PageHeader.tsx` | Standard sticky management-page header with optional eyebrow, subtitle, and responsive action area. |
+| `TablePanel`, `TableToolbar` | `src/alpha/shared/table/` | Shared Jobs/Job Card review table shell, heading, labelled search and live result count. Feature owns search state and data. |
+| `FilterPills` | `src/alpha/shared/table/FilterPills.tsx` | Single-choice pill group with pressed state; Jobs office attention and review reported-attention filters keep separate business meanings. |
+| `TableSortButton`, `TableSortIcon` | `src/alpha/shared/table/` | Shared sort button, focus state and direction icon. Feature owns sorting and header `aria-sort`. The old Jobs icon import remains compatible for WOF/Quotes. |
 
 Use the shared drawer CSS and interaction patterns with these components. Feature state,
 validation, permissions, and Dataverse writes remain in the owning feature.
@@ -33,6 +36,8 @@ business workflow and should be embedded through thin feature adapters when need
 | `JobEquipmentField` | `src/alpha/jobs/components/JobEquipmentField.tsx` | Canonical searchable Equipment selector and inline Equipment-details panel shared by standard Job creation and Legacy Job Book intake. Feature adapters own whether an inline record is persisted to Dataverse or retained as an Intake snapshot. |
 | `JobSiteContactFields` | `src/alpha/jobs/components/JobSiteContactFields.tsx` | Canonical dependent Site and Contact selectors, including loading, retry, empty, and optional inline-create actions. Use after the shared Customer selector in all Job relationship forms. |
 | `JobEmailComposer` | `src/alpha/jobs/components/JobEmailComposer.tsx` | Jobs-table technician email review and send workflow, including recipient/subject editing, formatted Job Card preview, and active-link replacement confirmation. |
+| `JobCardHistoryPanel` | `src/alpha/job-card-reviews/JobCardHistoryPanel.tsx` | Read-only Azure link/submission history in the canonical Job drawer; reviewer authorization and loading are owned by the feature hook/API. |
+| `JobQuotesDrawer` | `src/alpha/quotes/components/JobQuotesDrawer.tsx` | Read-only same-screen Quote context for a Job. Uses the shared drawer and bounded existing Quote readers; mount only while open under an account/Job-scoped parent key. No editor or mutations. |
 | `JobDrawerShell` | `src/alpha/jobs/components/JobDrawerShell.tsx` | Job-specific composition of the shared drawer shell. |
 | `EquipmentDrawer` | `src/alpha/equipment/components/EquipmentDrawer.tsx` | Primary Equipment create/edit workflow and related operational information. It renders the supplied editable Equipment core immediately, loads focused Service Plans only on Maintenance, and consumes the shared focused Job history for usage evidence and History. Optional abortable Customer-search and selected-Customer Site callbacks are the canonical bounded relationship contract; returned and inline-created records merge into the open drawer. Keep Customer/Site selection and inline creation here. |
 | `EquipmentDataQualityIndicator` | `src/alpha/equipment/components/EquipmentDataQualityIndicator.tsx` | Keyboard-accessible Critical/Warning Equipment data-quality disclosure used by Equipment lists. |
@@ -43,9 +48,11 @@ business workflow and should be embedded through thin feature adapters when need
 | `BulkEquipmentImportDrawer` | `src/alpha/equipment/components/BulkEquipmentImportDrawer.tsx` | Existing bulk Equipment import workflow. |
 | `EquipmentTransferDrawer` | `src/alpha/customers/EquipmentTransferDrawer.tsx` | Existing multi-equipment Customer/Site transfer workflow. |
 
-Tables are currently feature-owned (`JobsTable` and `EquipmentTable`). Reuse their established
-compact styling and interaction patterns where appropriate, but do not treat them as a
-generic `DataTable`.
+Tables and columns remain feature-owned (`JobsTable`, `EquipmentTable`, `JobCardReviewQueue`).
+Jobs and reviews share the primitives above and the opt-in `.operations-table` compact cell/header
+styles; this is not a generic data-loading/editing `DataTable`. Reuse `JobTypeTabs`/`JobTypeBadge`
+for Job types and `SearchableSelect` for review Customer/Technician filters. Do not couple the
+review queue to the editable operational Jobs table or its mutation handlers.
 
 ## Shared Business and Domain Logic
 
@@ -60,6 +67,9 @@ Business rules must have one owner even when several screens display the result.
 | Service-plan calculations | `src/alpha/equipment/servicePlans/servicePlanCalculations.ts` | Service-plan calculations. |
 | Service-plan status | `src/alpha/equipment/servicePlans/servicePlanStatus.ts` | Maintenance/service-plan status derivation. |
 | Job completion | `src/alpha/jobs/completion/` and `src/alpha/site-checks/services/siteCheckCompletionApi.ts` | Job-type-owned completion orchestration and atomic completion-side effects, reached through `useJobs`. |
+| Job Card workflow boundary | `src/alpha/jobs/types/jobCardWorkflow.ts` | Distinguishes ordinary Azure Job Cards from the retained Site Check workflow and protects assignment removal when history is unavailable or referenced. |
+| Saved Azure Job Card PDF | `src/alpha/job-card-reviews/jobCardReviewPdf.ts` | Browser-local paginated export of the authorized saved review only; no mutable Job lookup or private-photo fetch. |
+| Azure Job Card photo ZIP | `src/alpha/job-card-reviews/jobCardPhotoDownload.ts` | NZ submission-date filename, safe numbered original-photo ZIP entries, bounded all-or-nothing archive construction and native/fallback save. Hook/API own token acquisition and private reads. |
 | Editable email drafts | `src/alpha/jobs/utils/technicianMailto.ts` | Shared recipient-email validation and encoded `mailto:` construction. Feature services own subject/body rules and preparation audit. |
 | Staff eligibility | `src/alpha/mechanics/staffDirectory.ts` | Department labels, backward-compatible Job-assignment eligibility, and active internal-email-recipient eligibility across Staff, Jobs, Site Checks, and Chargeable Invoice Review. |
 | Operational realtime dispatch | `src/alpha/shared/realtime/` plus the feature event validators in `jobsRealtime.ts`, `equipmentRealtime.ts`, and `staffRealtime.ts` | One authenticated app-shell connection validates Job, Equipment, and Staff events, publishes browser-local notifications, coalesces dependent query invalidation, owns reconnect/visibility recovery, and shares resource-only local Job/Equipment invalidations across account/environment-scoped tabs. |

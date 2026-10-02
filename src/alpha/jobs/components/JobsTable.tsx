@@ -16,10 +16,14 @@ import type { JobsViewState } from '../types/jobsViewState.types'
 import type { JobScheduleOption } from '../types/jobSchedule.types'
 import { jobMatchesScheduledVisibility } from '../utils/scheduledJobsVisibility'
 import SearchableMechanicSelect from './SearchableMechanicSelect'
-import JobsTableSortIcon from './JobsTableSortIcon'
+import TablePanel from '../../shared/table/TablePanel'
+import TableToolbar from '../../shared/table/TableToolbar'
+import FilterPills from '../../shared/table/FilterPills'
+import TableSortButton from '../../shared/table/TableSortButton'
 import { isValidTechnicianEmail } from '../utils/technicianMailto'
 import { getJobsTableColumnWidths, JOBS_TABLE_ACTIONS_WIDTH, JOBS_TABLE_COLUMNS, JOBS_TABLE_WIDTH, jobsStickyColumnStyle, type JobsStickyThroughColumnId, type JobsTableColumnId } from '../types/jobsTableColumns'
 import { hasTechnicianSubmission } from '../types/technicianSubmission'
+import { usesAzureJobCards } from '../types/jobCardWorkflow'
 import { parseAlternateFleetNumbers } from '../../equipment/identifiers/alternateFleetNumbers'
 import { JOB_DESCRIPTION_MAX_LENGTH } from '../domain/jobDescription'
 import JobEmailComposer from './JobEmailComposer'
@@ -350,29 +354,10 @@ export default function JobsTable({
         )
 
     return (<>
-        <section className="jobs-list-card">
-            <div className="jobs-list-header">
-                <div>
-                    <p className="jobs-list-eyebrow">Operations</p>
-                    <h2>Jobs</h2>
-                </div>
-                <div className="jobs-list-header-actions">
-                    <label className="jobs-list-search">
-                        <span className="jobs-visually-hidden">Search jobs</span>
-                        <input
-                            type="search"
-                            placeholder="Search jobs..."
-                            value={searchText}
-                            onChange={(event) => onViewStateChange({ ...viewState, searchText: event.target.value })}
-                        />
-                    </label>
-                    <span className="jobs-list-count">
-                        {searchText.trim()
-                            ? `${matchingJobs.length} of ${jobsForSelectedType.length}`
-                            : `${jobsForSelectedType.length} shown`}
-                    </span>
-                </div>
-            </div>
+        <TablePanel className="jobs-list-card">
+            <TableToolbar eyebrow="Operations" title="Jobs" searchLabel="Search jobs" placeholder="Search jobs..."
+                search={searchText} onSearch={(value) => onViewStateChange({ ...viewState, searchText: value })}
+                count={searchText.trim() ? `${matchingJobs.length} of ${jobsForSelectedType.length}` : `${jobsForSelectedType.length} shown`} />
 
             <div className="jobs-filter-bar">
                 <JobTypeTabs
@@ -404,11 +389,9 @@ export default function JobsTable({
                         )
                     })}
                 </div>
-                <div className="jobs-office-filter" aria-label="Filter jobs by office attention">
-                    <button type="button" className={officeAttentionFilter === 'all' ? 'active' : ''} onClick={() => onViewStateChange({ ...viewState, officeAttentionFilter: 'all' })}>All</button>
-                    <button type="button" className={officeAttentionFilter === 'required' ? 'active' : ''} onClick={() => onViewStateChange({ ...viewState, officeAttentionFilter: 'required' })}>Needs Attention</button>
-                    <button type="button" className={officeAttentionFilter === 'none' ? 'active' : ''} onClick={() => onViewStateChange({ ...viewState, officeAttentionFilter: 'none' })}>No Attention Required</button>
-                </div>
+                <FilterPills label="Filter jobs by office attention" value={officeAttentionFilter}
+                    options={[{ value: 'all', label: 'All' }, { value: 'required', label: 'Needs Attention' }, { value: 'none', label: 'No Attention Required' }]}
+                    onChange={(value) => onViewStateChange({ ...viewState, officeAttentionFilter: value })} />
                 <button
                     type="button"
                     className="jobs-reset-default"
@@ -444,7 +427,7 @@ export default function JobsTable({
 
             <div className="jobs-table-header-scroll" ref={tableHeaderScrollRef}>
                 <table
-                    className="jobs-table jobs-table-header"
+                    className="operations-table jobs-table jobs-table-header"
                     style={{
                         width: tableWidth,
                         minWidth: JOBS_TABLE_WIDTH,
@@ -461,34 +444,16 @@ export default function JobsTable({
                             <th {...stickyProps('attention')} className={`${stickyProps('attention').className ?? ''} jobs-attention-column`.trim()}><span className="jobs-visually-hidden">Office attention</span></th>
                             <th {...stickyProps('job')}>Job</th>
                             <th {...stickyProps('created')} aria-sort={sort.column === 'created' ? sort.direction : 'none'}>
-                                <button
-                                    type="button"
-                                    className="jobs-table-sort"
-                                    onClick={() => toggleSort('created')}
-                                    title="Sort by created date"
-                                    aria-label="Sort by created date"
-                                >
-                                    Created
-                                    <JobsTableSortIcon active={sort.column === 'created'} direction={sort.direction} />
-                                </button>
+                                <TableSortButton label="Sort by created date" active={sort.column === 'created'} direction={sort.direction} onClick={() => toggleSort('created')}>Created</TableSortButton>
                             </th>
                             <th {...stickyProps('type')}>Type</th>
                             <th {...stickyProps('equipment')}>Equipment</th>
-                            <th {...stickyProps('customer')} aria-sort={sort.column === 'customer' ? sort.direction : 'none'}><button type="button" className="jobs-table-sort" onClick={() => toggleSort('customer')} title="Sort by customer" aria-label="Sort by customer">Customer / site <JobsTableSortIcon active={sort.column === 'customer'} direction={sort.direction} /></button></th>
+                            <th {...stickyProps('customer')} aria-sort={sort.column === 'customer' ? sort.direction : 'none'}><TableSortButton label="Sort by customer" active={sort.column === 'customer'} direction={sort.direction} onClick={() => toggleSort('customer')}>Customer / site</TableSortButton></th>
                             <th {...stickyProps('description')}>Description</th>
                             <th {...stickyProps('contact')}>Contact</th>
-                            <th {...stickyProps('mechanic')} aria-sort={sort.column === 'mechanic' ? sort.direction : 'none'}><button type="button" className="jobs-table-sort" onClick={() => toggleSort('mechanic')} title="Sort by mechanic" aria-label="Sort by mechanic">Mechanic <JobsTableSortIcon active={sort.column === 'mechanic'} direction={sort.direction} /></button></th>
+                            <th {...stickyProps('mechanic')} aria-sort={sort.column === 'mechanic' ? sort.direction : 'none'}><TableSortButton label="Sort by mechanic" active={sort.column === 'mechanic'} direction={sort.direction} onClick={() => toggleSort('mechanic')}>Mechanic</TableSortButton></th>
                             <th {...stickyProps('status')} aria-sort={sort.column === 'status' ? sort.direction : 'none'}>
-                                <button
-                                    type="button"
-                                    className="jobs-table-sort"
-                                    onClick={() => toggleSort('status')}
-                                    title="Sort by status priority"
-                                    aria-label="Sort by status priority"
-                                >
-                                    Status
-                                    <JobsTableSortIcon active={sort.column === 'status'} direction={sort.direction} />
-                                </button>
+                                <TableSortButton label="Sort by status priority" active={sort.column === 'status'} direction={sort.direction} onClick={() => toggleSort('status')}>Status</TableSortButton>
                             </th>
                             <th {...stickyProps('order')}>Order</th>
                             <th {...stickyProps('latestUpdate')}>Latest Update</th>
@@ -511,7 +476,7 @@ export default function JobsTable({
                 }}
             >
                 <table
-                    className="jobs-table jobs-table-body"
+                    className="operations-table jobs-table jobs-table-body"
                     style={{
                         width: tableWidth,
                         minWidth: JOBS_TABLE_WIDTH,
@@ -705,16 +670,16 @@ export default function JobsTable({
                                             onClick={(event) => event.stopPropagation()}
                                             onChange={() => toggleSelectedJob(job.gr_jobid)}
                                         />
-                                        {hasTechnicianSubmission(job) && (
+                                        {(usesAzureJobCards(job) || hasTechnicianSubmission(job)) && (
                                             <button
-                                                className="jobs-submission-indicator"
+                                                className={usesAzureJobCards(job) ? 'jobs-table-action' : 'jobs-submission-indicator'}
                                                 type="button"
                                                 onClick={(event) => {
                                                     event.stopPropagation()
                                                     onOpenJobCard(job)
                                                 }}
                                             >
-                                                Submitted
+                                                {usesAzureJobCards(job) ? 'Job cards' : 'Submitted'}
                                             </button>
                                         )}
                                         <button
@@ -778,7 +743,7 @@ export default function JobsTable({
                 </div>
             )}
 
-        </section>
+        </TablePanel>
         {emailComposerJob && <JobEmailComposer
             job={emailComposerJob}
             onCancel={() => setEmailComposerJob(null)}

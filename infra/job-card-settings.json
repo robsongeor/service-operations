@@ -1,0 +1,87 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "staticSiteName": {
+      "type": "string",
+      "defaultValue": "ServiceOps"
+    },
+    "storageAccountName": {
+      "type": "string",
+      "defaultValue": "serviceopsjobcardsbbd3f9"
+    },
+    "emailServiceName": {
+      "type": "string",
+      "defaultValue": "serviceops-jobcard-email"
+    },
+    "communicationServiceName": {
+      "type": "string",
+      "defaultValue": "serviceops-jobcard-notifications"
+    },
+    "reviewEmail": {
+      "type": "string",
+      "defaultValue": "georger@liftrucks.co.nz"
+    },
+    "reviewerEmails": {
+      "type": "string",
+      "defaultValue": "georger@liftrucks.co.nz"
+    },
+    "publicAppUrl": {
+      "type": "string",
+      "defaultValue": "https://yellow-cliff-068680700.7.azurestaticapps.net"
+    }
+  },
+  "variables": {
+    "jobCardSettings": {
+      "JOB_CARD_TABLE_NAME": "JobCardRequests",
+      "JOB_CARD_PHOTO_CONTAINER": "job-card-evidence",
+      "JOB_CARD_STORAGE_MODE": "azure",
+      "JOB_CARD_LOCAL_DEVELOPMENT": "false",
+      "JOB_CARD_NOTIFICATION_MODE": "acs",
+      "JOB_CARD_REVIEW_EMAIL_TO": "[parameters('reviewEmail')]",
+      "JOB_CARD_REVIEWER_EMAILS": "[parameters('reviewerEmails')]",
+      "APP_PUBLIC_URL": "[parameters('publicAppUrl')]"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "job-card-backend-settings",
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "parameters": {
+          "staticSiteName": {
+            "value": "[parameters('staticSiteName')]"
+          },
+          "appSettings": {
+            "value": "[union(listAppSettings(resourceId('Microsoft.Web/staticSites', parameters('staticSiteName')), '2022-03-01').properties, variables('jobCardSettings'), createObject('AZURE_STORAGE_CONNECTION_STRING', concat('DefaultEndpointsProtocol=https;AccountName=', parameters('storageAccountName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2023-05-01').keys[0].value, ';EndpointSuffix=', environment().suffixes.storage), 'ACS_EMAIL_CONNECTION_STRING', listKeys(resourceId('Microsoft.Communication/communicationServices', parameters('communicationServiceName')), '2023-03-31').primaryConnectionString, 'ACS_EMAIL_SENDER', concat('DoNotReply@', reference(resourceId('Microsoft.Communication/emailServices/domains', parameters('emailServiceName'), 'AzureManagedDomain'), '2023-03-31').mailFromSenderDomain)))]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "staticSiteName": {
+              "type": "string"
+            },
+            "appSettings": {
+              "type": "secureObject"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Web/staticSites/config",
+              "apiVersion": "2022-03-01",
+              "name": "[concat(parameters('staticSiteName'), '/appsettings')]",
+              "properties": "[parameters('appSettings')]"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

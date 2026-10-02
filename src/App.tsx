@@ -15,6 +15,7 @@ import OperationalRealtimeProvider from './alpha/shared/realtime/OperationalReal
 import { QuoteEditorOverlayProvider } from './alpha/quotes/QuoteEditorOverlayProvider'
 
 const JobsScreen = lazy(() => import('./alpha/jobs/JobsScreen'))
+const JobCardReviewsScreen = lazy(() => import('./alpha/job-card-reviews/JobCardReviewsScreen'))
 const SchedulingScreen = lazy(() => import('./alpha/scheduling/SchedulingScreen'))
 const PricingScreen = lazy(() => import('./alpha/quotes/PricingScreen'))
 const QuotesScreen = lazy(() => import('./alpha/quotes/QuotesScreen'))
@@ -108,6 +109,8 @@ function App() {
             <Route path="/jobs" element={<JobsScreen key={signedInUser?.storageId || 'account-pending'} />} />
             <Route path="/job-import" element={<JobSpreadsheetImportScreen key={signedInUser?.storageId || 'account-pending'} />} />
             <Route path="/equipment-photos" element={<EquipmentPhotoUploadScreen key={signedInUser?.storageId || 'account-pending'} />} />
+            <Route path="/job-card-reviews" element={<JobCardReviewsScreen key={`${signedInUser?.storageId}-queue`} />} />
+            <Route path="/job-card-reviews/:reviewId" element={<JobCardReviewsScreen key={`${signedInUser?.storageId}-${location.pathname}`} />} />
             <Route path="/job-book" element={<JobBookPrototypeScreen key={signedInUser?.storageId || 'account-pending'} />} />
             <Route path="/site-checks" element={<SiteChecksScreen />} />
             <Route

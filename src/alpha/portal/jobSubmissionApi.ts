@@ -26,10 +26,19 @@ export async function fetchPublicJobSubmission(token: string): Promise<PublicJob
 }
 
 export async function submitPublicJobCard(token: string, submission: JobCardSubmissionInput): Promise<void> {
+    const photos: { uploadId: string }[] = []
+    for (const photo of submission.photos) {
+        const response = await fetch('/api/jobsubmission', {
+            method: 'POST',
+            headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'uploadPhoto', token, photo }),
+        })
+        photos.push(await readResponse<{ uploadId: string }>(response))
+    }
     const response = await fetch('/api/jobsubmission', {
         method: 'POST',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, ...submission }),
+        body: JSON.stringify({ token, ...submission, photos }),
     })
     await readResponse<{ submitted: true }>(response)
 }

@@ -47,7 +47,7 @@ type LocalFunctionRequest = {
 type LocalFunctionResponse = {
   status: number
   headers?: Record<string, string>
-  body?: string
+  body?: string | Buffer
 }
 
 async function readJsonBody(request: IncomingMessage) {
@@ -88,6 +88,9 @@ function sendFunctionResponse(response: ServerResponse, result: LocalFunctionRes
 }
 
 function jobSubmissionProxy(env: Record<string, string | undefined>): Plugin {
+  for (const name of ['JOB_CARD_STORAGE_MODE', 'JOB_CARD_LOCAL_DEVELOPMENT', 'JOB_CARD_NOTIFICATION_MODE', 'AZURE_STORAGE_CONNECTION_STRING', 'JOB_CARD_TABLE_NAME', 'JOB_CARD_PHOTO_CONTAINER', 'ACS_EMAIL_CONNECTION_STRING', 'ACS_EMAIL_SENDER', 'JOB_CARD_REVIEW_EMAIL_TO', 'JOB_CARD_REVIEWER_EMAILS', 'APP_PUBLIC_URL']) {
+    if (env[name]) process.env[name] ||= env[name]
+  }
   process.env.DATAVERSE_URL ||= env.DATAVERSE_URL || env.VITE_DATAVERSE_URL
   process.env.DATAVERSE_TENANT_ID ||= env.DATAVERSE_TENANT_ID || env.VITE_MSAL_TENANT_ID
   process.env.DATAVERSE_CLIENT_ID ||= env.DATAVERSE_CLIENT_ID
@@ -103,6 +106,7 @@ function jobSubmissionProxy(env: Record<string, string | undefined>): Plugin {
       generate: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
       handlePublicGet: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
       handlePublicPost: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
+      handleReviewRequest: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
       jsonResponse: (status: number, body: object, headers?: Record<string, string>) => LocalFunctionResponse
     }
   }
@@ -111,23 +115,27 @@ function jobSubmissionProxy(env: Record<string, string | undefined>): Plugin {
     middlewares.use((request, response, next) => {
       if (!request.url) return next()
       const requestUrl = new URL(request.url, 'http://localhost')
-      if (requestUrl.pathname !== '/api/jobsubmission') return next()
+      const reviewRoute = requestUrl.pathname.match(/^\/api\/jobcardreviews(?:\/([^/]+))?(?:\/([^/]+))?$/)
+      if (requestUrl.pathname !== '/api/jobsubmission' && !reviewRoute) return next()
 
       void (async () => {
         try {
           const jobSubmissionService = loadService()
-          const body = request.method === 'POST' ? await readJsonBody(request) : {}
+          const parsed = request.method === 'POST' ? await readLimitedJsonBody(request, 15 * 1024 * 1024) : { body: {}, tooLarge: false }
+          if (parsed.tooLarge) return sendFunctionResponse(response, jobSubmissionService.jsonResponse(413, { error: 'The request is too large.' }))
+          const body: Record<string, unknown> | null = parsed.body
           if (body === null) {
             return sendFunctionResponse(response, jobSubmissionService.jsonResponse(400, { error: 'The request body is invalid.' }))
           }
           const localRequest: LocalFunctionRequest = {
             method: request.method,
             headers: request.headers,
-            query: Object.fromEntries(requestUrl.searchParams),
+            query: { ...Object.fromEntries(requestUrl.searchParams), ...(reviewRoute ? { reviewId: reviewRoute[1] || '', photoId: reviewRoute[2] || '' } : {}) },
             body,
           }
           let result: LocalFunctionResponse
-          if (request.method === 'GET') result = await jobSubmissionService.handlePublicGet(localRequest)
+          if (reviewRoute) result = await jobSubmissionService.handleReviewRequest(localRequest)
+          else if (request.method === 'GET') result = await jobSubmissionService.handlePublicGet(localRequest)
           else if (request.method === 'POST' && body.action === 'generate') result = await jobSubmissionService.generate(localRequest)
           else if (request.method === 'POST') result = await jobSubmissionService.handlePublicPost(localRequest)
           else result = jobSubmissionService.jsonResponse(405, { error: 'Method not allowed.' }, { Allow: 'GET, POST' })

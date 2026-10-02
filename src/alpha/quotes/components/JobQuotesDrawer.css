@@ -1,0 +1,18 @@
+.job-quotes-drawer { width: min(820px, 96vw); }
+.job-quotes-drawer .edit-drawer-footer span { font-size: .8rem; color: #626e67; }
+.job-quote-card { margin-top: 18px; border: 1px solid #dbe3df; border-radius: 12px; overflow: hidden; }
+.job-quote-heading { display: flex; justify-content: space-between; gap: 20px; width: 100%; padding: 18px; border: 0; background: #f1f5f2; text-align: left; color: #243d31; cursor: pointer; }
+.job-quote-heading span { display: grid; gap: 7px; min-width: 0; overflow-wrap: anywhere; }
+.job-quote-heading small { font-size: .85rem; color: #627166; }
+.job-quote-detail { padding: 18px; background: white; }
+.job-quote-detail dl { display: flex; gap: 22px; flex-wrap: wrap; }
+.job-quote-detail dt { font-size: .75rem; color: #69776e; }
+.job-quote-detail dd { margin: 5px 0 0; color: #26392e; }
+.job-quote-detail h3 { font-size: .9rem; }
+.job-quote-notes { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
+.job-quote-table { overflow-x: auto; }
+.job-quote-table table { border-collapse: collapse; width: 100%; text-align: left; }
+.job-quote-table caption { text-align: left; font-weight: 700; padding: 12px 0; }
+.job-quote-table td, .job-quote-table th { padding: 10px 8px; border-bottom: 1px solid #e7ece8; }
+.job-quote-table td:first-child { min-width: 160px; overflow-wrap: anywhere; }
+.job-quote-totals { justify-content: flex-end; }

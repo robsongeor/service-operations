@@ -128,6 +128,38 @@
   Equipment mutations now mark matching queries and disposable list snapshots stale in other open
   tabs without sharing record IDs, business content, access tokens, or creating an offline write
   queue; received invalidations are coalesced and never rebroadcast.
+- Made Job Card review details full-width on desktop, with a three-column context summary,
+  horizontal actions and side-by-side story/evidence panels. Compact photo thumbnails retain the
+  complete image; long submissions remain fully readable without nested scrolling or truncation.
+
+- Added an opt-in localhost read-only Job Card proxy using existing delegated authentication,
+  explicit live-data notice, blocked review/email writes and private bounded evidence downloads.
+  Azure credentials and production configuration remain unchanged.
+
+- Added a desktop Jobs-style pending Job Card review table with shared toolbar/filter/sort
+  components used by both screens, saved Equipment/Customer/work details, searchable Customer/
+  Technician filters, Job types and reported-attention filters. Review navigation preserves filters;
+  bounded queue results and failures are explicit.
+
+- Redesigned Job Card review details around Job number, Equipment/Customer/contact/address, and a
+  clearer story section with a prominent submitted hour meter, further work and safety issues.
+  Added an all-original-photos ZIP save prompt and read-only associated Quotes within the same screen.
+
+- Added a paginated PDF export of saved Azure Job Card evidence and deferred historical Dataverse
+  evidence/photo loading until explicitly opened. Archive errors stay visible and block assignment
+  removal; Site Check loading and historical records remain intact.
+
+- Retired legacy Job Card status controls and email lockouts for ordinary Jobs, added private
+  per-Job Azure history/review links, and kept old evidence in a labelled read-only history section.
+  Ordinary dispatch no longer updates legacy Card Status; Site Check behaviour is retained.
+
+- Moved job-level technician links and submitted evidence to private Azure Table/Blob
+  storage, with immutable Job snapshots, replay-safe submission, bounded photo uploads,
+  and no anonymous Dataverse access or operational Job updates.
+- Added authenticated Job Card Reviews, private photo access, explicit office review,
+  and Azure email notifications with retry. Existing Site Check storage remains unchanged.
+- Added reproducible Azure resource/configuration templates, deployment documentation,
+  concurrency/security tests, and an opt-in local Azurite adapter contract test.
 
 ## v1.7.0 — 15 August 2026
 

@@ -1,6 +1,6 @@
 # Current State
 
-Branch: `codex/data-loading-architecture-review`
+Branch: `codex/legacy-job-book-job-cards-integration`
 
 ## WOF due-list email copy (implemented locally)
 
@@ -233,6 +233,177 @@ Branch: `codex/data-loading-architecture-review`
   change has been made. Capturing the signed-in cold/warm baseline, server watermark/delta recovery, exported
   instrumentation, and replacement of the deliberate primary-register full-list adapters remain
   phased backlog work.
+## Full-width Job Card review detail (approved for commit/push, 2 October 2026)
+
+- Replaced the narrow stacked detail with a full-workspace desktop layout: compact horizontal
+  actions, a three-column saved Equipment / saved Customer-Site / current Contact summary, then
+  Story alongside private Photos and compact time/travel/parts tables. The hour meter and both
+  reported attention sections stay visible and prominent; nothing is truncated or collapsed.
+- The existing quote and photo-save drawers, delegated reads, immutable snapshot, PDF export and
+  local read-only safeguards are retained. No API, schema, cloud, email or operational writes.
+- Local browser checks use the real sidebar with synthetic evidence. The normal fixture fits a
+  1920 × 920 desktop workspace; a smaller desktop retains all sections with natural page scrolling
+  when needed. Long-story / 20-photo / 12-part and empty states have no horizontal overflow or
+  nested vertical clipping. Same-screen quote expansion and filename prompt/focus restoration pass.
+- Full `npm test`, lint, build and diff checks pass, including regression coverage for full long
+  stories, all photos/parts, semantic evidence tables, missing data and disabled local write controls.
+- The full application on `http://localhost:5173/` receives the draft through HMR. The isolated
+  sample remains at `http://127.0.0.1:5181/output/job-card-review-preview.html`. The owner approved
+  the design and requested commit/push to the feature branch. Production deployment remains separate
+  and is not authorized by that request; do not update `v1-deployment`.
+
+## Return to Legacy Job Book work
+
+- The newer Legacy Job Book work is intact and uncommitted in the original checkout,
+  `C:/Users/George Robson/Documents/Github/service-operations`, on
+  `codex/data-loading-architecture-review`, not this separate Job Card worktree.
+- The existing task **Review app docs and roadmap** (`01a09d47-14e3-7d83-83d3-39af0566e43c`)
+  contains the latest creation/editing drawer and Full Access / Job Book-only boundary work.
+  Regional books and their gated migration/cutover are documented in that checkout.
+- Preserve its unrelated uncommitted changes. Do not merge, reset, commit that checkout wholesale,
+  enable regional allocation, or provision roles as part of the Job Card commit/push.
+- Port 5173 currently serves this worktree via `output/start-local-app.mjs`. Returning its preview
+  to the original checkout requires stopping this specific server before starting the original app
+  on the same port with its existing local settings. No environment files should be copied.
+
+## Local development setup (2 October 2026)
+
+- The full application preview runs at `http://localhost:5173/` with the normal `vite.config.ts`.
+  The ignored machine-local launcher `node output/start-local-app.mjs` reads the existing primary
+  checkout's development settings in memory; no credentials are copied or committed. Restart this
+  launcher after changing those settings. No interactive sign-in is initiated automatically.
+- The isolated synthetic preview uses `127.0.0.1:5181`, not the full application's sign-in port.
+  The earlier `undefined` Microsoft authority/client/scope error came from opening the full app
+  through that synthetic server in a worktree without its own local environment settings.
+- The owner approved read-only access to live Job Cards from localhost. The launcher now installs
+  `scripts/dev/jobCardReadOnlyProxy.mjs` ahead of the ordinary API handler and runs with network
+  access. The prior sandbox network restriction caused the local identity check to fail with 503;
+  the local settings also lacked Azure storage/reviewer configuration.
+- Only authenticated `GET /api/jobcardreviews` reads (queue, history, detail and photos) go to the
+  fixed existing live Azure API. All other review methods are rejected locally with 405. Tokens
+  remain request-scoped; no Azure keys, cookies or arbitrary headers are forwarded or stored.
+  The development-only UI notice identifies live data, disables Mark reviewed/email retries and
+  leaves view/download controls available. Other application areas retain normal permissions.
+- Existing local settings remain unchanged. No production credentials, authentication bypasses,
+  production deployment, review mutation or email were introduced. Restart with
+  `node output/start-local-app.mjs`; the server needs outbound HTTPS access.
+- Full tests, lint, build and diff checks pass. Actual localhost checks confirmed unsigned 401,
+  locally blocked write 405, live API rejection of a deliberately invalid token (401, not a network
+  error), no-store responses and the enabled read-only client flag. The owner's signed-in browser
+  needs a refresh for the final authorized queue display check; no private tokens were extracted.
+
+## Pending Job Card review table (deployed, 2 October 2026)
+
+- Replaced the pending card list with a desktop Jobs-style table using shared table panel, toolbar,
+  filter pills and sort controls extracted into `src/alpha/shared/table/` and reused by Jobs.
+  Existing Job-type tabs/badges and searchable selectors are reused; operational Jobs logic is unchanged.
+- Review filters cover Job type, search, Customer, Technician and technician-reported attention.
+  Sortable saved details include Job, submission, Customer, Technician and photo count. Job/Review
+  columns stay visible during horizontal scrolling; returning from detail restores queue filters.
+- The authorized queue adds saved snapshot fields only, with no per-row Dataverse lookup. The
+  existing 100-record bound now explicitly warns when more pending rows exist. Search/filter/sort
+  apply to the loaded subset. Empty/loading/failure/no-match states remain distinct.
+- The ignored read-only synthetic preview is available while Vite runs at
+  `http://127.0.0.1:5181/output/job-card-queue-preview.html`, including a Jobs reference and state
+  selector. It blocks real network requests and writes. Mobile-specific review work is deferred.
+- Full `npm test`, lint, build and diff checks pass. Added queue filter/sort/query-state tests,
+  shared-control Jobs/review rendering checks, safe return-link coverage and bounded private API
+  assertions. Local browser checks cover combined selectors, type/search/sort, retained filters,
+  sticky actions and loading/empty/error/limited states, plus the shared Jobs reference controls.
+- The owner approved commit, push and production deployment after reviewing the localhost draft.
+  Release `024685e` was pushed to the feature and `v1-deployment` branches. Azure deployment
+  [run 36984892511](https://github.com/robsongeor/service-operations/actions/runs/36984892511)
+  completed successfully. The live page returns 200, its entry bundle contains `024685e`, and an
+  anonymous `/api/jobcardreviews` request returns 401. No email, operational mutation or Azure
+  configuration change was made.
+- The live review-queue tab is open but currently requires Microsoft sign-in. The owner has been
+  asked to sign in for the remaining read-only queue verification. Do not create submissions or
+  mark evidence reviewed just to populate this smoke test; synthetic populated states passed locally.
+
+## Job Card review presentation and downloads (deployed and verified, 2 October 2026)
+
+- The review now leads with Job number/description, saved Equipment and Customer/Site details,
+  address, and separately labelled current Job contact. The story section emphasises the submitted
+  hour meter and groups Job story, further work and safety issues; time/parts and private photos follow.
+- **Download all photos** opens an editable filename prompt and builds one original-photo ZIP named
+  `JobNumber - Job description - dd-mm-yyyy.zip`, using the submission date in Pacific/Auckland.
+  Supporting browsers offer native Save As; others use the configured browser Downloads location.
+  Failed/incomplete photo reads do not produce a partial archive. Account/review changes abort downloads.
+- **Associated quotes** opens a read-only same-screen drawer using the existing bounded Job quote
+  and quote-line readers. It does not open the editor, navigate away, or mutate Job/Quote state.
+- Full tests, lint, build and diff checks passed. New synthetic coverage checks layout, zero/missing
+  meter readings, contact/photo/quote read contracts, ZIP bytes/names/bounds, cancellation and failures.
+  Local browser checks covered desktop/390px layout, quote expansion/empty/error/retry, focus restoration,
+  and the photo filename prompt. Native writes were simulated locally; live save verification follows.
+- The owner approved deployment. Production code `6e18efb` deployed successfully through GitHub
+  Actions run `36982115515`; both the live bundle and signed-in application displayed this version.
+  The site returned 200 and an anonymous private-review request returned 401.
+- Signed-in verification of the existing reviewed test card for Job 142314 confirmed the redesigned
+  detail, saved address/equipment/customer and current contact. Associated quotes opened within the
+  screen and correctly reported no linked Quotes for this Job; populated lines were covered locally.
+- The native save completed as `142314 - Hydraulic slow - 02-10-2026.zip`. The downloaded archive
+  contains the exact unchanged 8,568-byte original company-logo test photo with a numbered JPEG name.
+  No email, Job/Quote edits, review-state mutation, schema, settings or credential changes were made.
+  The verified live review is left open; no deployment work remains for this change.
+- An ignored synthetic preview is available while the local Vite process runs at
+  `http://127.0.0.1:5181/output/job-card-review-preview.html`. It replaces authentication and all
+  backend reads with fixtures and rejects mutations; it is not a deployed application or real evidence.
+
+## Old Job Card office controls — cleanup (deployed, 2 October 2026)
+
+- Ordinary Jobs now open Azure request/submission history from the Job Card tab. The same approved
+  reviewer boundary protects the new bounded per-Job history read; no new schema or settings are needed.
+- Removed the legacy manual status selector, legacy submission-count/progress display, old Submitted
+  table badge, and status-based email lockout for ordinary Jobs. The table uses a neutral Job cards action.
+- Replacement confirmation uses the Azure server's current state. Successful ordinary Job dispatch no
+  longer writes legacy Job/assignment Card Status; Email Dispatch remains the delivery audit source.
+- Old submitted/closed evidence, photos and PDFs remain in a labelled read-only historical section.
+  Site Check status controls, submission service and dispatch status updates retain their existing path.
+- Azure link history distinguishes link creation from email delivery, exposes saved review links,
+  refreshes after sends, and does not disguise errors as an empty history. Assignment removal stays
+  unavailable when history is unknown, truncated, or contains references to that assignment.
+- Full tests, lint, build and diff checks passed; synthetic component-render tests verify both workflow
+  branches. The owner approved publication and signed-in, read-only verification.
+- Azure review details now offer a browser-local paginated saved-submission PDF. The export uses
+  the saved snapshot and all structured evidence; photos are listed and stay separately authenticated.
+  A synthetic six-page export was rendered and visually checked, with end markers and totals verified.
+- Ordinary Job drawer reads defer old Dataverse time, parts, submissions and photo files until the
+  historical section is opened. Strict archival loads follow verified Dataverse paging, expose failures
+  and retry, and keep assignment removal unavailable until both histories are complete. Site Check
+  loading retains its existing path. Account/Job changes do not expose the preceding archive or PDF.
+- Production code `5d309a2` deployed successfully in GitHub Actions run `36978875188`. The signed-in
+  application displayed this version. Job 142314 showed Azure Reviewed history, no old office-status
+  controls, and its archive loaded on demand with no historical submissions recorded for that Job.
+- The saved Azure review PDF downloaded successfully to the browser's Downloads location. Its rendered
+  page and extracted content verified the snapshot, synthetic story, time/travel, parts and photo manifest.
+  Anonymous history and review requests returned 401. No test emails, Job edits, review mutations,
+  schema changes or settings changes were performed during this verification.
+- Site Check Job 145496 retained its old progress and office-status controls. Ordinary Job 142314
+  remained Complete with its original description; the verification did not alter operational records.
+
+## Azure Job Card cutover (deployed and verified, 2 October 2026)
+
+- Integrated onto production baseline `9c5be8e`, preserving current pilot, validation, parts
+  quantities, PDF, resend and localhost email behaviour. New evidence is in `/job-card-reviews`.
+- The owner approved storage/email creation, backend configuration, and replacing unused links.
+  Notifications and reviewer access target `georger@liftrucks.co.nz`.
+- Resource deployment `CustomDeployment-20261002192950` completed successfully in ServiceOperations.
+  Backend settings deployment `CustomDeployment-20261002194447` completed with existing settings
+  preserved. Credentials were resolved inside Azure, with no secret outputs.
+- Production code `c8d325a` deployed successfully in GitHub Actions run `36975098954`.
+- Live smoke test on owner-approved older Job 142314 passed: the test-only dispatch arrived at
+  George's inbox, the technician form saved explicitly synthetic story/time/parts and one harmless
+  company-logo photo, the authenticated office queue displayed the evidence, and the Azure-managed
+  review notification arrived in George's inbox with the correct authenticated review link.
+- The office photo loaded successfully. Invalid links returned 404; anonymous review/photo requests
+  returned 401; anonymous Blob listing returned 409; the used technician link rejected reuse.
+- The synthetic review was marked Reviewed and retained for audit. Operational Job 142314 remained
+  Complete with its original description; no operational completion or evidence import was performed.
+- Site Check assignment links, their photo service and confidential credentials remain unchanged.
+- Full local tests, lint, build, focused security tests and the local Azurite adapter contract passed.
+- The existing two-recipient online Job Card pilot remains. New evidence is reviewed in the separate
+  Job Card reviews screen; unused legacy links must be regenerated. No retention deletion or
+  automatic Dataverse import is enabled.
 
 ## Local Job Card email guard (deployed)
 

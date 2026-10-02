@@ -3,12 +3,48 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { fetchJobCardDetails, fetchJobCore, fetchJobs } from '../src/alpha/jobs/services/jobsApi.ts'
 import { fetchJobAssignmentsForJob } from '../src/alpha/jobs/services/jobAssignmentsApi.ts'
+import { fetchJobForDrawer, fetchHistoricalJobCardEvidence } from '../src/alpha/jobs/services/jobsApi.ts'
 
 const useJobsSource = readFileSync(new URL('../src/alpha/jobs/hooks/useJobs.ts', import.meta.url), 'utf8')
 const jobDrawerSource = readFileSync(new URL('../src/alpha/jobs/components/JobEditDrawer.tsx', import.meta.url), 'utf8')
 const jobCardSource = readFileSync(new URL('../src/alpha/jobs/components/JobCardFields.tsx', import.meta.url), 'utf8')
 
 const token = `header.${Buffer.from(JSON.stringify({ aud: 'org-jobs-pagination', tid: 'tenant', oid: 'user' })).toString('base64url')}.signature`
+
+test('ordinary drawer defers historical tables while Site Checks retain eager evidence', async () => {
+    const original = globalThis.fetch
+    const requests: string[] = []
+    let siteCheck = false
+    globalThis.fetch = (async (input) => {
+        const url = String(input)
+        requests.push(url)
+        return Response.json({ value: url.includes('/gr_jobs?') ? [{ gr_jobid: 'job-1', gr_jobtype: siteCheck ? 122830004 : 122830000 }] : [] })
+    }) as typeof fetch
+    try {
+        const job = await fetchJobForDrawer(token, 'job-1')
+        assert.equal(requests.length, 1)
+        assert.equal(job?.jobCardSubmissions, undefined)
+        const archive = await fetchHistoricalJobCardEvidence(token, 'job-1')
+        assert.deepEqual(archive.jobCardSubmissions, [])
+        assert.ok(requests.some((url) => url.includes('/gr_jobphotos?')))
+        requests.length = 0
+        siteCheck = true
+        assert.deepEqual((await fetchJobForDrawer(token, 'job-1'))?.jobCardSubmissions, [])
+        assert.equal(requests.length, 5)
+    } finally { globalThis.fetch = original }
+})
+
+test('historical evidence errors and unverified paging are not silently treated as empty', async () => {
+    const original = globalThis.fetch
+    try {
+        for (const failingTable of ['gr_jobmaterials', 'gr_jobphotos', 'gr_jobcardsubmissions', 'gr_jobcardsubmissiontimeentries']) {
+            globalThis.fetch = (async (input) => String(input).includes(`/${failingTable}?`) ? new Response('', { status: 403 }) : Response.json({ value: [] })) as typeof fetch
+            await assert.rejects(fetchHistoricalJobCardEvidence(token, 'job-1'))
+        }
+        globalThis.fetch = (async () => Response.json({ value: [], '@odata.nextLink': 'https://untrusted.invalid/page' })) as typeof fetch
+        await assert.rejects(fetchHistoricalJobCardEvidence(token, 'job-1'), /paging/)
+    } finally { globalThis.fetch = original }
+})
 
 test('Jobs list follows every Dataverse page without loading drawer-only child tables', async () => {
     const originalFetch = globalThis.fetch
@@ -88,7 +124,9 @@ test('Jobs startup defers drawer-only reference tables and focused records', () 
     assert.match(jobDrawerSource, /focusedJobCardMetadataQueryKey\(normalizedJobId\)/)
     assert.match(jobDrawerSource, /focusedJobQuotesQueryKey\(normalizedJobId\)/)
     assert.match(jobDrawerSource, /focusedJobAssignmentsQueryKey\(normalizedJobId\)/)
-    assert.match(jobCardSource, /jobPhotoBodyQueryKey\(previewPhotoId \|\| 'none'\)/)
+    assert.match(jobCardSource, /function JobPhotoPreview/)
+    assert.match(jobCardSource, /jobPhotoBodyQueryKey\(photo\.id\)/)
+    assert.match(jobCardSource, /previewPhoto && <JobPhotoPreview/)
 })
 
 test('focused Job assignments request is bounded to the opened Job', async () => {
