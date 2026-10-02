@@ -2,6 +2,65 @@
 
 Branch: `codex/azure-job-card-deployment`
 
+## Full-width Job Card review detail (approved for commit/push, 2 October 2026)
+
+- Replaced the narrow stacked detail with a full-workspace desktop layout: compact horizontal
+  actions, a three-column saved Equipment / saved Customer-Site / current Contact summary, then
+  Story alongside private Photos and compact time/travel/parts tables. The hour meter and both
+  reported attention sections stay visible and prominent; nothing is truncated or collapsed.
+- The existing quote and photo-save drawers, delegated reads, immutable snapshot, PDF export and
+  local read-only safeguards are retained. No API, schema, cloud, email or operational writes.
+- Local browser checks use the real sidebar with synthetic evidence. The normal fixture fits a
+  1920 × 920 desktop workspace; a smaller desktop retains all sections with natural page scrolling
+  when needed. Long-story / 20-photo / 12-part and empty states have no horizontal overflow or
+  nested vertical clipping. Same-screen quote expansion and filename prompt/focus restoration pass.
+- Full `npm test`, lint, build and diff checks pass, including regression coverage for full long
+  stories, all photos/parts, semantic evidence tables, missing data and disabled local write controls.
+- The full application on `http://localhost:5173/` receives the draft through HMR. The isolated
+  sample remains at `http://127.0.0.1:5181/output/job-card-review-preview.html`. The owner approved
+  the design and requested commit/push to the feature branch. Production deployment remains separate
+  and is not authorized by that request; do not update `v1-deployment`.
+
+## Return to Legacy Job Book work
+
+- The newer Legacy Job Book work is intact and uncommitted in the original checkout,
+  `C:/Users/George Robson/Documents/Github/service-operations`, on
+  `codex/data-loading-architecture-review`, not this separate Job Card worktree.
+- The existing task **Review app docs and roadmap** (`01a09d47-14e3-7d83-83d3-39af0566e43c`)
+  contains the latest creation/editing drawer and Full Access / Job Book-only boundary work.
+  Regional books and their gated migration/cutover are documented in that checkout.
+- Preserve its unrelated uncommitted changes. Do not merge, reset, commit that checkout wholesale,
+  enable regional allocation, or provision roles as part of the Job Card commit/push.
+- Port 5173 currently serves this worktree via `output/start-local-app.mjs`. Returning its preview
+  to the original checkout requires stopping this specific server before starting the original app
+  on the same port with its existing local settings. No environment files should be copied.
+
+## Local development setup (2 October 2026)
+
+- The full application preview runs at `http://localhost:5173/` with the normal `vite.config.ts`.
+  The ignored machine-local launcher `node output/start-local-app.mjs` reads the existing primary
+  checkout's development settings in memory; no credentials are copied or committed. Restart this
+  launcher after changing those settings. No interactive sign-in is initiated automatically.
+- The isolated synthetic preview uses `127.0.0.1:5181`, not the full application's sign-in port.
+  The earlier `undefined` Microsoft authority/client/scope error came from opening the full app
+  through that synthetic server in a worktree without its own local environment settings.
+- The owner approved read-only access to live Job Cards from localhost. The launcher now installs
+  `scripts/dev/jobCardReadOnlyProxy.mjs` ahead of the ordinary API handler and runs with network
+  access. The prior sandbox network restriction caused the local identity check to fail with 503;
+  the local settings also lacked Azure storage/reviewer configuration.
+- Only authenticated `GET /api/jobcardreviews` reads (queue, history, detail and photos) go to the
+  fixed existing live Azure API. All other review methods are rejected locally with 405. Tokens
+  remain request-scoped; no Azure keys, cookies or arbitrary headers are forwarded or stored.
+  The development-only UI notice identifies live data, disables Mark reviewed/email retries and
+  leaves view/download controls available. Other application areas retain normal permissions.
+- Existing local settings remain unchanged. No production credentials, authentication bypasses,
+  production deployment, review mutation or email were introduced. Restart with
+  `node output/start-local-app.mjs`; the server needs outbound HTTPS access.
+- Full tests, lint, build and diff checks pass. Actual localhost checks confirmed unsigned 401,
+  locally blocked write 405, live API rejection of a deliberately invalid token (401, not a network
+  error), no-store responses and the enabled read-only client flag. The owner's signed-in browser
+  needs a refresh for the final authorized queue display check; no private tokens were extracted.
+
 ## Pending Job Card review table (deployed, 2 October 2026)
 
 - Replaced the pending card list with a desktop Jobs-style table using shared table panel, toolbar,
@@ -14,7 +73,7 @@ Branch: `codex/azure-job-card-deployment`
   existing 100-record bound now explicitly warns when more pending rows exist. Search/filter/sort
   apply to the loaded subset. Empty/loading/failure/no-match states remain distinct.
 - The ignored read-only synthetic preview is available while Vite runs at
-  `http://127.0.0.1:5173/output/job-card-queue-preview.html`, including a Jobs reference and state
+  `http://127.0.0.1:5181/output/job-card-queue-preview.html`, including a Jobs reference and state
   selector. It blocks real network requests and writes. Mobile-specific review work is deferred.
 - Full `npm test`, lint, build and diff checks pass. Added queue filter/sort/query-state tests,
   shared-control Jobs/review rendering checks, safe return-link coverage and bounded private API
@@ -56,7 +115,7 @@ Branch: `codex/azure-job-card-deployment`
   No email, Job/Quote edits, review-state mutation, schema, settings or credential changes were made.
   The verified live review is left open; no deployment work remains for this change.
 - An ignored synthetic preview is available while the local Vite process runs at
-  `http://127.0.0.1:5173/output/job-card-review-preview.html`. It replaces authentication and all
+  `http://127.0.0.1:5181/output/job-card-review-preview.html`. It replaces authentication and all
   backend reads with fixtures and rejects mutations; it is not a deployed application or real evidence.
 
 ## Old Job Card office controls — cleanup (deployed, 2 October 2026)

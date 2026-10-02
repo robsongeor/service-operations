@@ -6,10 +6,17 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
 
 ## Priority 0 — Production readiness
 
+- [x] Review and approve the full-width desktop Job Card detail draft for commit/push.
+- [ ] Deploy the full-width review and local-development safeguards only after separate owner
+  deployment approval. Production is unchanged by the feature-branch commit/push.
+
 - [x] Deploy the owner-approved pending Job Card table. Release `024685e` published successfully;
   live bundle and anonymous-access protection verified on 2 October 2026.
 - [ ] Complete the read-only signed-in review-queue check after the owner signs in. Populated
   filters/shared controls are validated locally; mobile work is intentionally deferred.
+- [ ] Confirm the authorized queue display after refreshing the owner's signed-in localhost
+  browser. The approved live read-only connection, authentication boundary and write block pass
+  local checks; no Azure keys or production changes were needed.
 
 - [x] Publish and verify the Job Card review layout, all-photo ZIP save and same-screen associated
   quotes. Owner-approved deployment and read-only live verification completed on 2 October 2026.

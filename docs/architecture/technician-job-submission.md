@@ -94,7 +94,13 @@ Site details including make/model/serial, order number and address. A separate, 
 **Current Job contact** uses one minimal delegated Job read expanding `gr_Contact` name/phone/email;
 it is not added to the immutable snapshot, public portal, or saved PDF. Missing contact and failed
 contact reads remain distinct. Story groups a prominent submitted hour meter (zero is valid), Job
-story, further work and safety issues; structured time/travel, parts and private photos follow.
+story, further work and safety issues. On desktop the detail fills the available workspace, with
+horizontal actions and a three-column context summary above the story and evidence columns.
+Private photos and compact time/travel/parts tables sit beside the story, not below a long sequence
+of full-width cards. Container-size fallbacks use the actual available width (including the sidebar).
+There is no fixed-height content clipping, line clamp, hidden evidence or nested vertical scrolling;
+long submissions retain natural page scrolling. Photo thumbnails contain the full image and retain
+the original download action. Existing shared drawers and feature hooks still own all interactions.
 
 **Download all photos** opens an editable filename prompt using the shared drawer. The suggested
 ZIP name is `JobNumber - Job description - dd-mm-yyyy.zip`, using the saved submission timestamp in

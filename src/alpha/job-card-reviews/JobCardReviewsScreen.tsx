@@ -4,11 +4,15 @@ import './JobCardReviewsScreen.css'
 import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
 import JobCardReviewDetail from './JobCardReviewDetail'
 import JobCardReviewQueue from './JobCardReviewQueue'
+import { JOB_CARD_READ_ONLY } from './jobCardReviewMode'
 
 export default function JobCardReviewsScreen() {
     const { reviewId } = useParams()
     const account = useActiveMsalAccount()
-    return <ReviewContent key={`${account?.homeAccountId || ''}:${reviewId || ''}`} reviewId={reviewId} />
+    return <>
+        {JOB_CARD_READ_ONLY && <aside className="review-read-only-notice" role="note"><strong>Live Job Cards · read-only local preview</strong> View reviews and download evidence. Mark reviewed and email retries are disabled here. Other application areas keep their normal permissions.</aside>}
+        <ReviewContent key={`${account?.homeAccountId || ''}:${reviewId || ''}`} reviewId={reviewId} />
+    </>
 }
 
 function ReviewContent({ reviewId }: { reviewId?: string }) {

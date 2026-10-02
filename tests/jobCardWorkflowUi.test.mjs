@@ -192,6 +192,30 @@ test('review handles missing photos, hour reading and failed current contact wit
     assert.doesNotMatch(markup, /Fixture contact|No contact assigned/)
 })
 
+test('review groups the story beside evidence and retains every long submission entry', () => {
+    const story = Array.from({ length: 30 }, (_, index) => `Inspection step ${index + 1}: retained original evidence.`).join('\n')
+    const photos = Array.from({ length: 20 }, (_, index) => ({ id: `photo-${index}`, fileName: `Original ${index + 1}.jpg`, mimeType: 'image/jpeg', size: 1024 }))
+    const parts = Array.from({ length: 12 }, (_, index) => ({ description: `Part ${index + 1}`, quantity: index + 1 }))
+    const markup = renderReview({ story, photos, parts })
+    assert.ok(markup.indexOf('class="review-workspace"') < markup.indexOf('id="review-story-heading"'))
+    assert.ok(markup.indexOf('class="review-evidence-rail"') < markup.indexOf('id="review-photos-heading"'))
+    assert.match(markup, /class="review-summary review-card"/)
+    assert.ok(markup.includes(story), 'Full story including line breaks is retained')
+    for (const photo of photos) assert.ok(markup.includes(photo.fileName))
+    for (const part of parts) assert.ok(markup.includes(`<td>${part.description}</td>`))
+    assert.match(markup, /table aria-labelledby="review-time-heading"/)
+    assert.match(markup, /table aria-labelledby="review-parts-heading"/)
+    assert.equal((markup.match(/<figure>/g) || []).length, 20)
+})
+
+test('read-only local reviews disable review updates and email retries but retain read/download controls', () => {
+    const markup = renderReview({ notificationStatus: 'failed' }, { readOnly: true })
+    assert.match(markup, /disabled="">Mark reviewed<\/button>/)
+    assert.match(markup, /disabled="">Retry notification<\/button>/)
+    assert.match(markup, /<button type="button">Associated quotes<\/button>/)
+    assert.match(markup, /<button type="button">Download submission PDF<\/button>/)
+})
+
 test('photo downloads stay on the authenticated private API and pass cancellation', async (t) => {
     const controller = new AbortController()
     t.mock.method(globalThis, 'fetch', async (url, options) => {

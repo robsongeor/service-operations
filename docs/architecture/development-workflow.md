@@ -34,6 +34,29 @@ pre-existing failures separately.
 
 ## Administrative actions
 
+### Read-only local Job Card preview
+
+After explicit approval to read live Job Cards, a local launcher can add the opt-in Vite plugin
+`scripts/dev/jobCardReadOnlyProxy.mjs` while keeping the normal application configuration. It is not
+installed by default and does not participate in production builds. Use existing ignored local
+Microsoft settings and a loopback-only server with outbound HTTPS access; never copy Azure storage
+keys or bypass office authentication to populate a preview.
+
+The plugin runs before the ordinary local Job Card handler and sends only authenticated review GETs
+to the fixed production origin. The live API still validates the delegated identity and reviewer
+allowlist. Queue/history/detail/photo reads are supported; non-GET review methods are rejected locally
+with 405. It forwards only the delegated header and Accept, rejects redirects, bounds response size
+and duration, and returns private/no-store responses. It does not cache/log tokens, forward cookies,
+or proxy other API routes. UI writes are also disabled and a live/read-only notice is shown through
+the development-only `VITE_JOB_CARD_READ_ONLY` flag supplied by the plugin. Other application areas
+retain their normal permissions. The server-side method gate, not the flag, is the write boundary.
+
+Synthetic proxy tests cover authentication, method/route restrictions, header isolation, private photo
+bytes, error/redirect/size failure handling and plugin ordering. Do not use real mutations for a
+read-only smoke check. Current machine-local launch details belong in `CURRENT_STATE.md`.
+
+### Other administrative actions
+
 Code changes do not imply permission to provision Dataverse, deploy, commit, push, create
 credentials, or change cloud configuration. Perform those actions only when explicitly
 requested, using read-only preflight and post-action verification.

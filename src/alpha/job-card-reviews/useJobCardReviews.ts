@@ -7,6 +7,7 @@ import type { JobCardReview, JobCardReviewSummary } from './jobCardReview.types'
 import { downloadJobCardReviewPdf } from './jobCardReviewPdf'
 import { fetchJobCardContact, type JobCardContact } from './jobCardOfficeContextApi'
 import { buildJobCardPhotoArchive, saveJobCardPhotos } from './jobCardPhotoDownload'
+import { JOB_CARD_READ_ONLY, JOB_CARD_READ_ONLY_MESSAGE } from './jobCardReviewMode'
 
 export function useJobCardReviews(reviewId?: string) {
     const { instance } = useMsal()
@@ -64,6 +65,7 @@ export function useJobCardReviews(reviewId?: string) {
 
     const refresh = () => { setBusy(true); setError(''); setRevision((value) => value + 1) }
     const markReviewed = async () => {
+        if (JOB_CARD_READ_ONLY) { setError(JOB_CARD_READ_ONLY_MESSAGE); return }
         if (!reviewId || !review) return
         setBusy(true)
         setError('')
@@ -84,6 +86,7 @@ export function useJobCardReviews(reviewId?: string) {
         finally { photoPending.current.delete(photoId); if (mounted.current) setPhotoLoading((current) => ({ ...current, [photoId]: false })) }
     }
     const retryNotification = async () => {
+        if (JOB_CARD_READ_ONLY) { setError(JOB_CARD_READ_ONLY_MESSAGE); return }
         if (!reviewId) return
         setBusy(true)
         try { setReview(await retryJobCardNotification(await accessToken(), reviewId)) }
@@ -116,5 +119,5 @@ export function useJobCardReviews(reviewId?: string) {
             return false
         } finally { photoDownload.current = null; if (mounted.current) setPhotoSaving(false) }
     }
-    return { items, truncated, review, photoUrls, photoLoading, error, busy, refresh, markReviewed, loadPhoto, retryNotification, pdfBusy, downloadPdf, contact, photoSaving, photoProgress, photoFeedback, downloadPhotos }
+    return { items, truncated, review, photoUrls, photoLoading, error, busy, refresh, markReviewed, loadPhoto, retryNotification, pdfBusy, downloadPdf, contact, photoSaving, photoProgress, photoFeedback, downloadPhotos, readOnly: JOB_CARD_READ_ONLY }
 }

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Made Job Card review details full-width on desktop, with a three-column context summary,
+  horizontal actions and side-by-side story/evidence panels. Compact photo thumbnails retain the
+  complete image; long submissions remain fully readable without nested scrolling or truncation.
+
+- Added an opt-in localhost read-only Job Card proxy using existing delegated authentication,
+  explicit live-data notice, blocked review/email writes and private bounded evidence downloads.
+  Azure credentials and production configuration remain unchanged.
+
 - Added a desktop Jobs-style pending Job Card review table with shared toolbar/filter/sort
   components used by both screens, saved Equipment/Customer/work details, searchable Customer/
   Technician filters, Job types and reported-attention filters. Review navigation preserves filters;
