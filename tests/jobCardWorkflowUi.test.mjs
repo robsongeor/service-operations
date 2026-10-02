@@ -9,6 +9,9 @@ let server
 let JobCardFields
 let HistoryPanel
 let ReviewDetail
+let ReviewQueue
+let JobsTable
+let defaultJobsView
 let reviewApi
 let contactApi
 let quotesApi
@@ -23,6 +26,9 @@ test.before(async () => {
     JobCardFields = (await server.ssrLoadModule('/src/alpha/jobs/components/JobCardFields.tsx')).default
     HistoryPanel = (await server.ssrLoadModule('/src/alpha/job-card-reviews/JobCardHistoryPanel.tsx')).default
     ReviewDetail = (await server.ssrLoadModule('/src/alpha/job-card-reviews/JobCardReviewDetail.tsx')).default
+    ReviewQueue = (await server.ssrLoadModule('/src/alpha/job-card-reviews/JobCardReviewQueue.tsx')).default
+    JobsTable = (await server.ssrLoadModule('/src/alpha/jobs/components/JobsTable.tsx')).default
+    defaultJobsView = (await server.ssrLoadModule('/src/alpha/jobs/types/jobsViewState.types.ts')).DEFAULT_JOBS_VIEW_STATE
     reviewApi = await server.ssrLoadModule('/src/alpha/job-card-reviews/jobCardReviewApi.ts')
     contactApi = await server.ssrLoadModule('/src/alpha/job-card-reviews/jobCardOfficeContextApi.ts')
     quotesApi = await server.ssrLoadModule('/src/alpha/quotes/services/quotesApi.ts')
@@ -102,6 +108,64 @@ const renderReview = (overrides = {}, state = {}) => renderToStaticMarkup(create
         refresh: noAction, markReviewed: noAction, downloadPdf: noAction, retryNotification: noAction,
         loadPhoto: noAction, downloadPhotos: noAction, ...state },
 })))
+
+const renderQueue = (props = {}, path = '/job-card-reviews') => renderToStaticMarkup(createElement(MemoryRouter, { initialEntries: [path] }, createElement(ReviewQueue, {
+    items: [reviewFixture({ jobType: 122830001, photoCount: 1, technicianName: 'Fixture technician' })], busy: false, error: '', truncated: false, refresh: noAction, ...props,
+})))
+
+test('queue reuses shared table controls and exposes only review navigation, not operational actions', () => {
+    const markup = renderQueue()
+    for (const value of ['operations-table-panel', 'operations-table-toolbar', 'operations-filter-pills', 'operations-table-sort', 'searchable-select', 'job-type-tabs', 'Sort by photos', 'Reported attention', 'Repair hydraulics', '1 of 1 shown']) assert.ok(markup.includes(value), value)
+    assert.match(markup, /aria-sort="descending"/)
+    assert.match(markup, /aria-label="Review Job 142314 submitted by Fixture technician"/)
+    assert.doesNotMatch(markup, /Mark reviewed|Send email|Office status|Schedule|Site Check|Operational jobs/)
+})
+
+test('queue loading, failure, empty, no matches and bounded results stay distinct', () => {
+    assert.match(renderQueue({ busy: true, items: [] }), /Loading pending Job Cards/)
+    const failure = renderQueue({ items: [], error: 'Access denied' })
+    assert.match(failure, /role="alert"/)
+    assert.match(failure, /does not mean the queue is empty/)
+    assert.doesNotMatch(failure, /No technician submissions are waiting/)
+    assert.match(renderQueue({ error: 'Offline' }), /Previously loaded rows remain below/)
+    assert.match(renderQueue({ items: [] }), /No technician submissions are waiting/)
+    assert.match(renderQueue({}, '/job-card-reviews?q=nonexistent'), /No submissions match these filters/)
+    assert.match(renderQueue({ truncated: true }), /not the entire queue/)
+})
+
+test('queue API preserves truncation metadata and delegated read-only authentication', async (t) => {
+    t.mock.method(globalThis, 'fetch', async (url, options) => {
+        assert.equal(url, '/api/jobcardreviews')
+        assert.equal(options.headers['X-Dataverse-Authorization'], 'Bearer fixture-token')
+        assert.equal(options.cache, 'no-store')
+        assert.equal(options.method, undefined)
+        return Response.json({ items: [], truncated: true })
+    })
+    assert.deepEqual(await reviewApi.fetchPendingJobCardReviews('fixture-token'), { items: [], truncated: true })
+})
+
+test('Jobs still renders operational filters, sort state and actions using the same table primitives', () => {
+    const markup = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(JobsTable, {
+        jobs: [fixture({ createdon: '2026-10-01T23:00:00Z' })], visibleStatuses: defaultJobsView.visibleStatuses, viewState: defaultJobsView,
+        onViewStateChange: noAction, onToggleStatus: noAction, onResetToDefault: noAction, resetToDefaultDisabled: true,
+        onStatusChange: noAction, onJobFieldsChange: noAction, onJobNumberAllocation: noAction, onEmailTechnician: noAction,
+        emailDeliveryStates: {}, onEditJob: noAction, onOpenJobCard: noAction, onOpenEquipment: noAction,
+        mechanics: [], officeUpdates: [], scheduleOptions: [], stickyThroughColumnId: null,
+    })))
+    for (const value of ['operations-table-panel', 'operations-table-toolbar', 'operations-filter-pills', 'operations-table-sort', 'Sort by status priority', 'Sort by created date', 'Filter jobs by office attention', 'Job cards']) assert.ok(markup.includes(value), value)
+    assert.match(markup, /aria-sort="ascending"/)
+    assert.match(markup, /TEST ONLY/)
+})
+
+test('review return link only accepts the review queue and preserves its filters', () => {
+    const renderReturn = (returnTo) => renderToStaticMarkup(createElement(MemoryRouter, { initialEntries: [{ pathname: '/job-card-reviews/review-1', state: { reviewQueueReturnTo: returnTo } }] }, createElement(ReviewDetail, {
+        review: reviewFixture(), state: { busy: false, error: '', photoUrls: {}, photoLoading: {}, contact: { data: null } },
+    })))
+    assert.match(renderReturn('/job-card-reviews?attention=safety'), /href="\/job-card-reviews\?attention=safety"/)
+    for (const unsafe of ['https://example.test', '//example.test', '/jobs', '/job-card-reviews/review-2']) {
+        assert.match(renderReturn(unsafe), /class="review-back" href="\/job-card-reviews"/)
+    }
+})
 
 test('review places Job, equipment/customer/contact/address, and prominent hour meter/story in order', () => {
     const markup = renderReview()

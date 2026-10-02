@@ -343,6 +343,9 @@ function reviewSummary(record) {
         siteName: record.siteName || undefined, technicianName: record.technicianName || undefined, submittedOn: record.submittedOn,
         safetyIssueIdentified: Boolean(record.safetyIssueIdentified), furtherWorkRequired: Boolean(record.furtherWorkRequired),
         photoCount: record.photoCount || 0, notificationStatus: record.notificationStatus,
+        jobType: Number.isInteger(record.jobType) ? record.jobType : undefined,
+        workRequired: record.workRequired || undefined, equipmentDisplayName: record.equipmentDisplayName || undefined,
+        fleetNumber: record.fleetNumber || undefined, equipmentSerial: record.equipmentSerial || undefined,
     }
 }
 
@@ -388,7 +391,11 @@ async function handleReviewRequest(request) {
         })).sort((left, right) => right.createdOn.localeCompare(left.createdOn))
         return jsonResponse(200, { items, truncated: records.length > 500 })
     }
-    if (!reviewId) return request.method === 'GET' ? jsonResponse(200, { items: (await getJobCardStore().listPending(100)).map(reviewSummary) }) : jsonResponse(400, { error: 'A review item is required.' })
+    if (!reviewId) {
+        if (request.method !== 'GET') return jsonResponse(400, { error: 'A review item is required.' })
+        const records = await getJobCardStore().listPending(101)
+        return jsonResponse(200, { items: records.slice(0, 100).map(reviewSummary), truncated: records.length > 100 })
+    }
     if (!GUID_PATTERN.test(reviewId)) return jsonResponse(404, { error: 'The review item was not found.' })
     const record = await getJobCardStore().getByReviewId(reviewId)
     if (!record || !['pendingReview', 'reviewed'].includes(record.status)) return jsonResponse(404, { error: 'The review item was not found.' })

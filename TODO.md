@@ -6,6 +6,9 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
 
 ## Priority 0 — Production readiness
 
+- [ ] Deploy the owner-approved pending Job Card table and verify the signed-in live queue.
+  Desktop filters/shared controls are validated locally; mobile work is intentionally deferred.
+
 - [x] Publish and verify the Job Card review layout, all-photo ZIP save and same-screen associated
   quotes. Owner-approved deployment and read-only live verification completed on 2 October 2026.
 

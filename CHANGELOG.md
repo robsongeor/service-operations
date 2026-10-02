@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added a desktop Jobs-style pending Job Card review table with shared toolbar/filter/sort
+  components used by both screens, saved Equipment/Customer/work details, searchable Customer/
+  Technician filters, Job types and reported-attention filters. Review navigation preserves filters;
+  bounded queue results and failures are explicit.
+
 - Redesigned Job Card review details around Job number, Equipment/Customer/contact/address, and a
   clearer story section with a prominent submitted hour meter, further work and safety issues.
   Added an all-original-photos ZIP save prompt and read-only associated Quotes within the same screen.

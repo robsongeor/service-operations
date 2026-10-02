@@ -16,7 +16,7 @@
     "test:equipment": "node --experimental-strip-types --test tests/equipmentAlternateFleetNumbers.test.ts tests/equipmentDataCache.test.ts tests/equipmentDataQuality.test.ts tests/equipmentMap.test.ts tests/equipmentPagination.test.ts tests/equipmentRealtime.test.ts tests/equipmentRealtimeApi.test.cjs tests/greentreeEquipmentReconciliation.test.ts",
     "test:job-book": "node --experimental-strip-types --test tests/jobBookIntake.test.ts",
     "test:job-email": "node --experimental-strip-types --test tests/jobEmail.test.ts",
-    "test:technician-submission": "node --experimental-strip-types --test tests/technicianSubmission.test.ts tests/jobCardWorkflowUi.test.mjs tests/jobCardPhotoDownload.test.mjs",
+    "test:technician-submission": "node --experimental-strip-types --test tests/technicianSubmission.test.ts tests/jobCardWorkflowUi.test.mjs tests/jobCardPhotoDownload.test.mjs tests/jobCardReviewQueue.test.ts",
     "test:job-sheet": "node --experimental-strip-types --test tests/jobSheetPdf.test.ts",
     "test:site-check-assignment": "node --experimental-strip-types --test tests/siteCheckAssignment.test.ts",
     "test:job-photo": "node --experimental-strip-types --test tests/jobPhoto.test.ts",

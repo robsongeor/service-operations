@@ -167,6 +167,32 @@ test('successful submission creates a pending review and replay is rejected', as
     assert.equal(items.length, 1)
     assert.equal(items[0].jobNumber, '145999')
     assert.equal(items[0].photoCount, 1)
+    assert.equal(items[0].jobType, 122830001)
+    assert.equal(items[0].workRequired, 'Service forklift')
+    assert.equal(items[0].equipmentDisplayName, 'Still RX60')
+    assert.equal(items[0].fleetNumber, 'FN24')
+    assert.equal(JSON.parse(reviews.body).truncated, false)
+    for (const key of ['tokenHash', 'technicianEmail', 'story', 'photos', 'equipmentId', 'technicianId']) assert.equal(items[0][key], undefined, key)
+})
+
+test('pending queue is bounded, reports overflow and only reads its saved snapshot', async () => {
+    const store = require('../api/services/jobCardStorage').getJobCardStore()
+    for (let index = 0; index < 101; index++) await store.create({
+        ...snapshot({ equipmentSerial: 'SN-123' }), tokenHash: `queue-test-${index}`, reviewId: String(index),
+        status: index === 100 ? 'active' : 'pendingReview', submittedOn: '2026-10-02T00:00:00Z', photos: [],
+    })
+    global.fetch = async () => { throw new Error('Queue must not hydrate individual Jobs from Dataverse.') }
+    const request = { method: 'GET', headers: { authorization: 'Bearer office' }, query: {} }
+    let body = JSON.parse((await service.handleReviewRequest(request)).body)
+    assert.equal(body.items.length, 100)
+    assert.equal(body.truncated, false)
+    assert.ok(body.items.every((item) => item.equipmentSerial === 'SN-123'))
+    await store.create({ ...snapshot(), tokenHash: 'queue-overflow', reviewId: 'overflow', status: 'pendingReview', submittedOn: '2026-10-03T00:00:00Z', photos: [] })
+    body = JSON.parse((await service.handleReviewRequest(request)).body)
+    assert.equal(body.items.length, 100)
+    assert.equal(body.truncated, true)
+    assert.ok(body.items.every((item) => item.reviewId !== '100'))
+    assert.doesNotMatch(JSON.stringify(body), /queue-test-|queue-overflow|technician@example.com/)
 })
 
 test('review details and photos require office authentication and can be marked reviewed', async () => {

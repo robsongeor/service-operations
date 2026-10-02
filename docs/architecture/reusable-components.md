@@ -17,6 +17,9 @@ because a similar visual pattern appears in more than one feature.
 | `FormSwitch` | `src/alpha/shared/form-switch/FormSwitch.tsx` | Compact accessible boolean switch with visible state text, keyboard behavior, disabled state, and focus styling. |
 | `MetricStrip` | `src/alpha/shared/metric-strip/MetricStrip.tsx` | Compact, wrapping dashboard summary of semantic label/value pairs with optional warning/danger emphasis and optional keyboard-accessible value activation for feature-owned filtering. |
 | `PageHeader` | `src/alpha/shared/page-header/PageHeader.tsx` | Standard sticky management-page header with optional eyebrow, subtitle, and responsive action area. |
+| `TablePanel`, `TableToolbar` | `src/alpha/shared/table/` | Shared Jobs/Job Card review table shell, heading, labelled search and live result count. Feature owns search state and data. |
+| `FilterPills` | `src/alpha/shared/table/FilterPills.tsx` | Single-choice pill group with pressed state; Jobs office attention and review reported-attention filters keep separate business meanings. |
+| `TableSortButton`, `TableSortIcon` | `src/alpha/shared/table/` | Shared sort button, focus state and direction icon. Feature owns sorting and header `aria-sort`. The old Jobs icon import remains compatible for WOF/Quotes. |
 
 Use the shared drawer CSS and interaction patterns with these components. Feature state,
 validation, permissions, and Dataverse writes remain in the owning feature.
@@ -42,9 +45,11 @@ business workflow and should be embedded through thin feature adapters when need
 | `BulkEquipmentImportDrawer` | `src/alpha/equipment/components/BulkEquipmentImportDrawer.tsx` | Existing bulk Equipment import workflow. |
 | `EquipmentTransferDrawer` | `src/alpha/customers/EquipmentTransferDrawer.tsx` | Existing multi-equipment Customer/Site transfer workflow. |
 
-Tables are currently feature-owned (`JobsTable` and `EquipmentTable`). Reuse their established
-compact styling and interaction patterns where appropriate, but do not treat them as a
-generic `DataTable`.
+Tables and columns remain feature-owned (`JobsTable`, `EquipmentTable`, `JobCardReviewQueue`).
+Jobs and reviews share the primitives above and the opt-in `.operations-table` compact cell/header
+styles; this is not a generic data-loading/editing `DataTable`. Reuse `JobTypeTabs`/`JobTypeBadge`
+for Job types and `SearchableSelect` for review Customer/Technician filters. Do not couple the
+review queue to the editable operational Jobs table or its mutation handlers.
 
 ## Shared Business and Domain Logic
 

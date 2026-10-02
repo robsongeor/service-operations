@@ -2,6 +2,28 @@
 
 Branch: `codex/azure-job-card-deployment`
 
+## Pending Job Card review table (deployment approved, 2 October 2026)
+
+- Replaced the pending card list with a desktop Jobs-style table using shared table panel, toolbar,
+  filter pills and sort controls extracted into `src/alpha/shared/table/` and reused by Jobs.
+  Existing Job-type tabs/badges and searchable selectors are reused; operational Jobs logic is unchanged.
+- Review filters cover Job type, search, Customer, Technician and technician-reported attention.
+  Sortable saved details include Job, submission, Customer, Technician and photo count. Job/Review
+  columns stay visible during horizontal scrolling; returning from detail restores queue filters.
+- The authorized queue adds saved snapshot fields only, with no per-row Dataverse lookup. The
+  existing 100-record bound now explicitly warns when more pending rows exist. Search/filter/sort
+  apply to the loaded subset. Empty/loading/failure/no-match states remain distinct.
+- The ignored read-only synthetic preview is available while Vite runs at
+  `http://127.0.0.1:5173/output/job-card-queue-preview.html`, including a Jobs reference and state
+  selector. It blocks real network requests and writes. Mobile-specific review work is deferred.
+- Full `npm test`, lint, build and diff checks pass. Added queue filter/sort/query-state tests,
+  shared-control Jobs/review rendering checks, safe return-link coverage and bounded private API
+  assertions. Local browser checks cover combined selectors, type/search/sort, retained filters,
+  sticky actions and loading/empty/error/limited states, plus the shared Jobs reference controls.
+- The owner approved commit, push and production deployment after reviewing the localhost draft.
+  Release uses the existing `v1-deployment` workflow; deployment and live read-only verification
+  are in progress. No email, operational mutation or Azure configuration change is required.
+
 ## Job Card review presentation and downloads (deployed and verified, 2 October 2026)
 
 - The review now leads with Job number/description, saved Equipment and Customer/Site details,
@@ -28,7 +50,7 @@ Branch: `codex/azure-job-card-deployment`
   No email, Job/Quote edits, review-state mutation, schema, settings or credential changes were made.
   The verified live review is left open; no deployment work remains for this change.
 - An ignored synthetic preview is available while the local Vite process runs at
-  `http://127.0.0.1:5181/output/job-card-review-preview.html`. It replaces authentication and all
+  `http://127.0.0.1:5173/output/job-card-review-preview.html`. It replaces authentication and all
   backend reads with fixtures and rejects mutations; it is not a deployed application or real evidence.
 
 ## Old Job Card office controls — cleanup (deployed, 2 October 2026)

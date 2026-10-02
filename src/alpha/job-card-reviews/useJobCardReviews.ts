@@ -12,6 +12,7 @@ export function useJobCardReviews(reviewId?: string) {
     const { instance } = useMsal()
     const account = useActiveMsalAccount()
     const [items, setItems] = useState<JobCardReviewSummary[]>([])
+    const [truncated, setTruncated] = useState(false)
     const [review, setReview] = useState<JobCardReview | null>(null)
     const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({})
     const [error, setError] = useState('')
@@ -42,7 +43,7 @@ export function useJobCardReviews(reviewId?: string) {
                 if (current) setReview(value)
             } else {
                 const value = await fetchPendingJobCardReviews(token)
-                if (current) setItems(value)
+                if (current) { setItems(value.items); setTruncated(value.truncated === true) }
             }
             if (current) setError('')
         }).catch((reason: unknown) => {
@@ -115,5 +116,5 @@ export function useJobCardReviews(reviewId?: string) {
             return false
         } finally { photoDownload.current = null; if (mounted.current) setPhotoSaving(false) }
     }
-    return { items, review, photoUrls, photoLoading, error, busy, refresh, markReviewed, loadPhoto, retryNotification, pdfBusy, downloadPdf, contact, photoSaving, photoProgress, photoFeedback, downloadPhotos }
+    return { items, truncated, review, photoUrls, photoLoading, error, busy, refresh, markReviewed, loadPhoto, retryNotification, pdfBusy, downloadPdf, contact, photoSaving, photoProgress, photoFeedback, downloadPhotos }
 }

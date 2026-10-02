@@ -1,4 +1,4 @@
-import type { JobCardHistory, JobCardReview, JobCardReviewSummary } from './jobCardReview.types'
+import type { JobCardHistory, JobCardReview, JobCardReviewQueue } from './jobCardReview.types'
 
 async function readJson<T>(response: Response): Promise<T> {
     const body = await response.json().catch(() => ({})) as T & { error?: string }
@@ -12,7 +12,7 @@ function headers(accessToken: string) {
 
 export async function fetchPendingJobCardReviews(accessToken: string) {
     const response = await fetch('/api/jobcardreviews', { cache: 'no-store', headers: headers(accessToken) })
-    return (await readJson<{ items: JobCardReviewSummary[] }>(response)).items
+    return readJson<JobCardReviewQueue>(response)
 }
 
 export async function fetchJobCardHistory(accessToken: string, jobId: string) {

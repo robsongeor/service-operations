@@ -56,6 +56,21 @@ import requires a separate explicit licensed-office action.
 
 ## Office screens after legacy-control retirement
 
+The pending review queue uses Jobs-style shared table/toolbar, type tabs, sort controls and attention
+pills, plus shared searchable Customer/Technician selectors. Columns display saved Job number,
+NZ submission date/time, type, Equipment, Customer/Site, work required, Technician, reported flags
+and photo count. Job and Review links open the saved review. Filters and sort are query-state;
+returning via **Pending reviews** restores them. No operational status/scheduling filters, edits,
+bulk actions or emails are exposed in the queue. Reported attention is not Job office status.
+
+`GET /api/jobcardreviews` reads up to 101 pending Azure records, returns at most 100 summaries and
+an explicit `truncated` flag. Type/description/Equipment identifiers come from the existing saved
+snapshot, not per-row Dataverse reads. No schema migration or public-portal response change is
+required. The Azure scan is bounded and is not a global newest-100 selection: search, filters and
+newest-first sorting apply only to the returned subset, and overflow is visibly labelled. Older
+snapshots with missing fields remain visible under All jobs with unrecorded-value fallbacks.
+Loading, empty, no matches, failed refresh and stale retained rows have separate visible states.
+
 The ordinary Job drawer's Job Card tab uses one authenticated, reviewer-authorized
 `GET /api/jobcardreviews?jobId=<guid>` request to show Azure link/submission history. The response
 contains lifecycle metadata and review IDs only, never raw tokens, token hashes, photo paths or

@@ -1,3 +1,5 @@
+import type { JobType } from '../jobs/types/jobType.types'
+
 export type JobCardRequestSummary = {
     reviewId: string
     assignmentId?: string
@@ -23,21 +25,24 @@ export type JobCardReviewSummary = {
     furtherWorkRequired: boolean
     photoCount: number
     notificationStatus?: string
+    jobType?: JobType
+    workRequired?: string
+    equipmentDisplayName?: string
+    fleetNumber?: string
+    equipmentSerial?: string
 }
+
+export type JobCardReviewQueue = { items: JobCardReviewSummary[]; truncated?: boolean }
 
 export type JobCardReview = JobCardReviewSummary & {
     etag: string
     status: 'pendingReview' | 'reviewed'
     sourceJobId: string
     assignmentId?: string
-    workRequired?: string
-    equipmentDisplayName?: string
     equipmentMake?: string
     equipmentModel?: string
-    equipmentSerial?: string
     orderNumber?: string
     siteAddress?: string
-    fleetNumber?: string
     currentHourMeter?: number
     hourMeter?: number
     story: string

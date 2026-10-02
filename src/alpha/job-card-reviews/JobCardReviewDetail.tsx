@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import EditDrawerShell from '../shared/drawer/EditDrawerShell'
 import JobQuotesDrawer from '../quotes/components/JobQuotesDrawer'
 import { jobCardPhotoFilename } from './jobCardPhotoDownload'
@@ -10,6 +10,9 @@ const dateTime = new Intl.DateTimeFormat('en-NZ', { dateStyle: 'medium', timeSty
 type Props = { review: JobCardReview; state: ReturnType<typeof useJobCardReviews> }
 
 export default function JobCardReviewDetail({ review, state }: Props) {
+    const location = useLocation()
+    const requestedReturn = location.state?.reviewQueueReturnTo
+    const returnTo = typeof requestedReturn === 'string' && /^\/job-card-reviews(?:\?|$)/.test(requestedReturn) ? requestedReturn : '/job-card-reviews'
     const [quotesOpen, setQuotesOpen] = useState(false)
     const [saveOpen, setSaveOpen] = useState(false)
     const [filename, setFilename] = useState(() => jobCardPhotoFilename(review))
@@ -19,7 +22,7 @@ export default function JobCardReviewDetail({ review, state }: Props) {
     const closeQuotes = () => { setQuotesOpen(false); quoteButton.current?.focus() }
     const closeSave = () => { setSaveOpen(false); photoButton.current?.focus() }
     return <main className="job-card-reviews review-detail">
-        <Link className="review-back" to="/job-card-reviews">← Pending reviews</Link>
+        <Link className="review-back" to={returnTo}>← Pending reviews</Link>
         <header className="review-hero">
             <div><span className={`review-status ${review.status}`}>{review.status === 'reviewed' ? 'Reviewed' : 'Pending office review'}</span><h1>Job {review.jobNumber}</h1><p>{review.workRequired || 'No Job description recorded'}</p><small>{review.technicianName || 'Technician not recorded'} · Submitted {dateTime.format(new Date(review.submittedOn))}</small></div>
             <div className="review-actions">
