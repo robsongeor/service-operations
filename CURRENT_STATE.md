@@ -2,7 +2,7 @@
 
 Branch: `codex/azure-job-card-deployment`
 
-## Pending Job Card review table (deployment approved, 2 October 2026)
+## Pending Job Card review table (deployed, 2 October 2026)
 
 - Replaced the pending card list with a desktop Jobs-style table using shared table panel, toolbar,
   filter pills and sort controls extracted into `src/alpha/shared/table/` and reused by Jobs.
@@ -21,8 +21,14 @@ Branch: `codex/azure-job-card-deployment`
   assertions. Local browser checks cover combined selectors, type/search/sort, retained filters,
   sticky actions and loading/empty/error/limited states, plus the shared Jobs reference controls.
 - The owner approved commit, push and production deployment after reviewing the localhost draft.
-  Release uses the existing `v1-deployment` workflow; deployment and live read-only verification
-  are in progress. No email, operational mutation or Azure configuration change is required.
+  Release `024685e` was pushed to the feature and `v1-deployment` branches. Azure deployment
+  [run 36984892511](https://github.com/robsongeor/service-operations/actions/runs/36984892511)
+  completed successfully. The live page returns 200, its entry bundle contains `024685e`, and an
+  anonymous `/api/jobcardreviews` request returns 401. No email, operational mutation or Azure
+  configuration change was made.
+- The live review-queue tab is open but currently requires Microsoft sign-in. The owner has been
+  asked to sign in for the remaining read-only queue verification. Do not create submissions or
+  mark evidence reviewed just to populate this smoke test; synthetic populated states passed locally.
 
 ## Job Card review presentation and downloads (deployed and verified, 2 October 2026)
 
