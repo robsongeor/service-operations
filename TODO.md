@@ -6,9 +6,9 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
 
 ## Priority 0 — Production readiness
 
-- [ ] Deploy and verify the local Job Card office-control cleanup: Azure history in the Job drawer,
+- [x] Deploy and verify the Job Card office-control cleanup: Azure history in the Job drawer,
   retirement of legacy status controls for ordinary Jobs, saved Azure PDF export, on-demand historical
-  evidence, and unchanged Site Check behaviour. Deployment and live verification require explicit approval.
+  evidence, and unchanged Site Check behaviour. Published with owner approval on 2 October 2026.
 
 - [ ] Configure and verify the production server-only `DATAVERSE_URL`,
   `DATAVERSE_TENANT_ID`, `DATAVERSE_CLIENT_ID`, and `DATAVERSE_CLIENT_SECRET` settings.

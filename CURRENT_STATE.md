@@ -2,7 +2,7 @@
 
 Branch: `codex/azure-job-card-deployment`
 
-## Old Job Card office controls — cleanup (local, not deployed)
+## Old Job Card office controls — cleanup (deployed, 2 October 2026)
 
 - Ordinary Jobs now open Azure request/submission history from the Job Card tab. The same approved
   reviewer boundary protects the new bounded per-Job history read; no new schema or settings are needed.
@@ -15,8 +15,8 @@ Branch: `codex/azure-job-card-deployment`
 - Azure link history distinguishes link creation from email delivery, exposes saved review links,
   refreshes after sends, and does not disguise errors as an empty history. Assignment removal stays
   unavailable when history is unknown, truncated, or contains references to that assignment.
-- Full tests, lint and build passed; synthetic component-render tests verify both workflow branches.
-  No live writes, real emails, commits, pushes, cloud changes or deployments were performed in this pass.
+- Full tests, lint, build and diff checks passed; synthetic component-render tests verify both workflow
+  branches. The owner approved publication and signed-in, read-only verification.
 - Azure review details now offer a browser-local paginated saved-submission PDF. The export uses
   the saved snapshot and all structured evidence; photos are listed and stay separately authenticated.
   A synthetic six-page export was rendered and visually checked, with end markers and totals verified.
@@ -24,8 +24,15 @@ Branch: `codex/azure-job-card-deployment`
   historical section is opened. Strict archival loads follow verified Dataverse paging, expose failures
   and retry, and keep assignment removal unavailable until both histories are complete. Site Check
   loading retains its existing path. Account/Job changes do not expose the preceding archive or PDF.
-- Next: authorize deployment and signed-in UI verification of both cleanup passes. No new schema,
-  settings or infrastructure are needed.
+- Production code `5d309a2` deployed successfully in GitHub Actions run `36978875188`. The signed-in
+  application displayed this version. Job 142314 showed Azure Reviewed history, no old office-status
+  controls, and its archive loaded on demand with no historical submissions recorded for that Job.
+- The saved Azure review PDF downloaded successfully to the browser's Downloads location. Its rendered
+  page and extracted content verified the snapshot, synthetic story, time/travel, parts and photo manifest.
+  Anonymous history and review requests returned 401. No test emails, Job edits, review mutations,
+  schema changes or settings changes were performed during this verification.
+- Site Check Job 145496 retained its old progress and office-status controls. Ordinary Job 142314
+  remained Complete with its original description; the verification did not alter operational records.
 
 ## Azure Job Card cutover (deployed and verified, 2 October 2026)
 
