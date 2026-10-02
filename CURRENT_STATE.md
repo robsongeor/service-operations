@@ -2,7 +2,7 @@
 
 Branch: `codex/azure-job-card-deployment`
 
-## Job Card review presentation and downloads (deployment approved, 2 October 2026)
+## Job Card review presentation and downloads (deployed and verified, 2 October 2026)
 
 - The review now leads with Job number/description, saved Equipment and Customer/Site details,
   address, and separately labelled current Job contact. The story section emphasises the submitted
@@ -16,10 +16,17 @@ Branch: `codex/azure-job-card-deployment`
 - Full tests, lint, build and diff checks passed. New synthetic coverage checks layout, zero/missing
   meter readings, contact/photo/quote read contracts, ZIP bytes/names/bounds, cancellation and failures.
   Local browser checks covered desktop/390px layout, quote expansion/empty/error/retry, focus restoration,
-  and the photo filename prompt. Native filesystem writes were simulated in tests, not manually exercised.
-- The owner approved deployment. Publish through the existing `v1-deployment` GitHub/Azure pipeline,
-  then verify an existing review without sending email or changing Jobs, Quotes or review state.
-  No schema, settings or credential change is required. Live rollout/verification is pending below.
+  and the photo filename prompt. Native writes were simulated locally; live save verification follows.
+- The owner approved deployment. Production code `6e18efb` deployed successfully through GitHub
+  Actions run `36982115515`; both the live bundle and signed-in application displayed this version.
+  The site returned 200 and an anonymous private-review request returned 401.
+- Signed-in verification of the existing reviewed test card for Job 142314 confirmed the redesigned
+  detail, saved address/equipment/customer and current contact. Associated quotes opened within the
+  screen and correctly reported no linked Quotes for this Job; populated lines were covered locally.
+- The native save completed as `142314 - Hydraulic slow - 02-10-2026.zip`. The downloaded archive
+  contains the exact unchanged 8,568-byte original company-logo test photo with a numbered JPEG name.
+  No email, Job/Quote edits, review-state mutation, schema, settings or credential changes were made.
+  The verified live review is left open; no deployment work remains for this change.
 - An ignored synthetic preview is available while the local Vite process runs at
   `http://127.0.0.1:5181/output/job-card-review-preview.html`. It replaces authentication and all
   backend reads with fixtures and rejects mutations; it is not a deployed application or real evidence.

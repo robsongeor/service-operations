@@ -6,8 +6,8 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
 
 ## Priority 0 — Production readiness
 
-- [ ] Publish and verify the owner-approved Job Card review layout, all-photo ZIP save and same-screen
-  associated quotes. See `CURRENT_STATE.md` for validation and rollout status.
+- [x] Publish and verify the Job Card review layout, all-photo ZIP save and same-screen associated
+  quotes. Owner-approved deployment and read-only live verification completed on 2 October 2026.
 
 - [x] Deploy and verify the Job Card office-control cleanup: Azure history in the Job drawer,
   retirement of legacy status controls for ordinary Jobs, saved Azure PDF export, on-demand historical
