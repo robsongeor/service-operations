@@ -2,6 +2,28 @@
 
 Branch: `codex/azure-job-card-deployment`
 
+## Job Card review presentation and downloads (deployment approved, 2 October 2026)
+
+- The review now leads with Job number/description, saved Equipment and Customer/Site details,
+  address, and separately labelled current Job contact. The story section emphasises the submitted
+  hour meter and groups Job story, further work and safety issues; time/parts and private photos follow.
+- **Download all photos** opens an editable filename prompt and builds one original-photo ZIP named
+  `JobNumber - Job description - dd-mm-yyyy.zip`, using the submission date in Pacific/Auckland.
+  Supporting browsers offer native Save As; others use the configured browser Downloads location.
+  Failed/incomplete photo reads do not produce a partial archive. Account/review changes abort downloads.
+- **Associated quotes** opens a read-only same-screen drawer using the existing bounded Job quote
+  and quote-line readers. It does not open the editor, navigate away, or mutate Job/Quote state.
+- Full tests, lint, build and diff checks passed. New synthetic coverage checks layout, zero/missing
+  meter readings, contact/photo/quote read contracts, ZIP bytes/names/bounds, cancellation and failures.
+  Local browser checks covered desktop/390px layout, quote expansion/empty/error/retry, focus restoration,
+  and the photo filename prompt. Native filesystem writes were simulated in tests, not manually exercised.
+- The owner approved deployment. Publish through the existing `v1-deployment` GitHub/Azure pipeline,
+  then verify an existing review without sending email or changing Jobs, Quotes or review state.
+  No schema, settings or credential change is required. Live rollout/verification is pending below.
+- An ignored synthetic preview is available while the local Vite process runs at
+  `http://127.0.0.1:5181/output/job-card-review-preview.html`. It replaces authentication and all
+  backend reads with fixtures and rejects mutations; it is not a deployed application or real evidence.
+
 ## Old Job Card office controls — cleanup (deployed, 2 October 2026)
 
 - Ordinary Jobs now open Azure request/submission history from the Job Card tab. The same approved

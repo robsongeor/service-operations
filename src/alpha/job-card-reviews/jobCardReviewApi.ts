@@ -33,9 +33,13 @@ export async function markJobCardReviewed(accessToken: string, reviewId: string,
 }
 
 export async function fetchJobCardPhoto(accessToken: string, reviewId: string, photoId: string) {
-    const response = await fetch(`/api/jobcardreviews/${encodeURIComponent(reviewId)}/${encodeURIComponent(photoId)}`, { cache: 'no-store', headers: headers(accessToken) })
+    return URL.createObjectURL(await fetchJobCardPhotoBlob(accessToken, reviewId, photoId))
+}
+
+export async function fetchJobCardPhotoBlob(accessToken: string, reviewId: string, photoId: string, signal?: AbortSignal) {
+    const response = await fetch(`/api/jobcardreviews/${encodeURIComponent(reviewId)}/${encodeURIComponent(photoId)}`, { cache: 'no-store', headers: headers(accessToken), signal })
     if (!response.ok) throw new Error('The photo could not be loaded.')
-    return URL.createObjectURL(await response.blob())
+    return response.blob()
 }
 
 export async function retryJobCardNotification(accessToken: string, reviewId: string) {

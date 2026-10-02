@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Redesigned Job Card review details around Job number, Equipment/Customer/contact/address, and a
+  clearer story section with a prominent submitted hour meter, further work and safety issues.
+  Added an all-original-photos ZIP save prompt and read-only associated Quotes within the same screen.
+
 - Added a paginated PDF export of saved Azure Job Card evidence and deferred historical Dataverse
   evidence/photo loading until explicitly opened. Archive errors stay visible and block assignment
   removal; Site Check loading and historical records remain intact.

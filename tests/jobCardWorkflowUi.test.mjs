@@ -8,6 +8,10 @@ import { createServer } from 'vite'
 let server
 let JobCardFields
 let HistoryPanel
+let ReviewDetail
+let reviewApi
+let contactApi
+let quotesApi
 const originalWindow = globalThis.window
 const originalFetch = globalThis.fetch
 
@@ -18,6 +22,10 @@ test.before(async () => {
     globalThis.window = { location: { hostname: 'localhost', origin: 'http://localhost' } }
     JobCardFields = (await server.ssrLoadModule('/src/alpha/jobs/components/JobCardFields.tsx')).default
     HistoryPanel = (await server.ssrLoadModule('/src/alpha/job-card-reviews/JobCardHistoryPanel.tsx')).default
+    ReviewDetail = (await server.ssrLoadModule('/src/alpha/job-card-reviews/JobCardReviewDetail.tsx')).default
+    reviewApi = await server.ssrLoadModule('/src/alpha/job-card-reviews/jobCardReviewApi.ts')
+    contactApi = await server.ssrLoadModule('/src/alpha/job-card-reviews/jobCardOfficeContextApi.ts')
+    quotesApi = await server.ssrLoadModule('/src/alpha/quotes/services/quotesApi.ts')
 })
 test.after(async () => {
     if (originalWindow === undefined) delete globalThis.window
@@ -74,4 +82,100 @@ test('history errors are never shown as an empty submission history', () => {
     assert.match(markup, /role="alert"/)
     assert.match(markup, /does not mean no cards exist/)
     assert.doesNotMatch(markup, /No Azure Job Cards/)
+})
+
+const reviewFixture = (overrides = {}) => ({
+    reviewId: 'review-1', sourceJobId: '00000000-0000-4000-8000-000000000001', etag: 'fixture',
+    jobNumber: '142314', status: 'pendingReview', submittedOn: '2026-10-01T23:00:00Z',
+    workRequired: 'Repair hydraulics', equipmentDisplayName: 'Forklift 123', fleetNumber: '123',
+    equipmentMake: 'Fixture make', equipmentModel: 'Fixture model', equipmentSerial: 'Fixture serial',
+    customerName: 'Fixture customer', siteName: 'Warehouse', siteAddress: '123 Example Road\nAuckland',
+    hourMeter: 0, story: 'Inspected pump\nReplaced hose', furtherWorkRequired: true,
+    furtherWorkDetails: 'Order seal kit', safetyIssueIdentified: true, safetyIssueDetails: 'Damaged guard',
+    timeEntries: [{ date: '2026-10-02', hours: 1.25, kilometres: 12 }], parts: [{ description: 'Hose', quantity: 1 }],
+    photos: [{ id: 'photo-1', fileName: 'Evidence.jpg', mimeType: 'image/jpeg', size: 3 }],
+    notificationStatus: 'sent', ...overrides,
+})
+const renderReview = (overrides = {}, state = {}) => renderToStaticMarkup(createElement(MemoryRouter, null, createElement(ReviewDetail, {
+    review: reviewFixture(overrides), state: { busy: false, error: '', photoUrls: {}, photoLoading: {},
+        contact: { data: { name: 'Fixture contact', phone: '021 000 000', email: 'contact@example.test' } },
+        refresh: noAction, markReviewed: noAction, downloadPdf: noAction, retryNotification: noAction,
+        loadPhoto: noAction, downloadPhotos: noAction, ...state },
+})))
+
+test('review places Job, equipment/customer/contact/address, and prominent hour meter/story in order', () => {
+    const markup = renderReview()
+    const jobIndex = markup.indexOf('<h1>Job 142314</h1>')
+    const equipmentIndex = markup.indexOf('Equipment and customer details')
+    const storyIndex = markup.indexOf('id="review-story-heading"')
+    assert.ok(jobIndex >= 0 && jobIndex < equipmentIndex && equipmentIndex < storyIndex)
+    for (const text of ['Fixture customer', '123 Example Road', 'Current Job contact', 'Fixture contact', '021 000 000', 'contact@example.test', 'Inspected pump', 'Order seal kit', 'Damaged guard']) assert.ok(markup.includes(text), text)
+    assert.match(markup, /Submitted hour meter<\/span><strong>0<\/strong>/)
+    assert.match(markup, /has-further-work/)
+    assert.match(markup, /has-safety-issue/)
+    assert.match(markup, />Associated quotes<\/button>/)
+    assert.match(markup, />Download all photos<\/button>/)
+    assert.doesNotMatch(markup, /target="_blank"/)
+})
+
+test('review handles missing photos, hour reading and failed current contact without invented evidence', () => {
+    const markup = renderReview({ photos: [], hourMeter: undefined, furtherWorkRequired: false, safetyIssueIdentified: false }, { contact: { error: 'Current contact unavailable.' } })
+    assert.match(markup, /disabled="">Download all photos/)
+    assert.match(markup, /Submitted hour meter<\/span><strong>Not supplied<\/strong>/)
+    assert.match(markup, /Current contact unavailable/)
+    assert.match(markup, /No further work reported/)
+    assert.match(markup, /No safety issues reported/)
+    assert.doesNotMatch(markup, /Fixture contact|No contact assigned/)
+})
+
+test('photo downloads stay on the authenticated private API and pass cancellation', async (t) => {
+    const controller = new AbortController()
+    t.mock.method(globalThis, 'fetch', async (url, options) => {
+        assert.equal(url, '/api/jobcardreviews/review%2F1/photo%2F1')
+        assert.equal(options.cache, 'no-store')
+        assert.equal(options.headers['X-Dataverse-Authorization'], 'Bearer fixture-token')
+        assert.equal(options.signal, controller.signal)
+        return new Response(new Uint8Array([1, 2, 3]))
+    })
+    assert.equal((await reviewApi.fetchJobCardPhotoBlob('fixture-token', 'review/1', 'photo/1', controller.signal)).size, 3)
+})
+
+test('current contact is one minimal delegated GET; missing and failed contacts remain distinct', async (t) => {
+    let status = 200
+    let body = { gr_Contact: { gr_name: 'Name', gr_phone: 'Phone', gr_email: 'Email' } }
+    t.mock.method(globalThis, 'fetch', async (value, options) => {
+        const url = new URL(value)
+        assert.match(url.pathname, /gr_jobs\(00000000-0000-4000-8000-000000000001\)$/)
+        assert.equal(url.searchParams.get('$select'), 'gr_jobid')
+        assert.equal(url.searchParams.get('$expand'), 'gr_Contact($select=gr_name,gr_phone,gr_email)')
+        assert.equal(options.method ?? 'GET', 'GET')
+        assert.equal(options.headers.Authorization, 'Bearer fixture-token')
+        assert.equal(options.cache, 'no-store')
+        return Response.json(body, { status })
+    })
+    const fetchContact = () => contactApi.fetchJobCardContact('fixture-token', reviewFixture().sourceJobId)
+    assert.deepEqual(await fetchContact(), { name: 'Name', phone: 'Phone', email: 'Email' })
+    body = { gr_Contact: null }
+    assert.equal(await fetchContact(), null)
+    status = 403
+    await assert.rejects(fetchContact(), /could not be loaded/)
+    await assert.rejects(contactApi.fetchJobCardContact('fixture-token', '../bad'), /valid Job/)
+})
+
+test('quote preview fetches only the associated Job and selected quote, failing on truncated results', async (t) => {
+    let truncated = false
+    t.mock.method(globalThis, 'fetch', async (value, options) => {
+        const url = new URL(value)
+        const headers = url.pathname.endsWith('/gr_quotes')
+        assert.equal(url.searchParams.get('$filter'), headers ? '_gr_job_value eq fixture-job' : '_gr_quote_value eq fixture-quote')
+        assert.equal(url.searchParams.get('$top'), headers ? '51' : '201')
+        assert.equal(options.method ?? 'GET', 'GET')
+        assert.equal(options.headers.Authorization, 'Bearer fixture-token')
+        return Response.json({ value: [], ...(truncated ? { '@odata.nextLink': 'Never followed' } : {}) })
+    })
+    assert.deepEqual(await quotesApi.fetchQuotesForJob('fixture-token', 'fixture-job'), [])
+    assert.deepEqual(await quotesApi.fetchQuoteLines('fixture-token', 'fixture-quote'), [])
+    truncated = true
+    await assert.rejects(quotesApi.fetchQuotesForJob('fixture-token', 'fixture-job'), /more than 50/)
+    await assert.rejects(quotesApi.fetchQuoteLines('fixture-token', 'fixture-quote'), /more than 200/)
 })

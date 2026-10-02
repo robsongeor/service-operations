@@ -3,9 +3,10 @@
 ## Boundary and workflow
 
 Job-level links at `/portal/job/:token` use Azure Table snapshots and private Blob evidence.
-Only licensed office generation reads Dataverse, using the caller's delegated token through
-`X-Dataverse-Authorization` and a `WhoAmI` check. Anonymous lookup, photo upload and final
-submission never acquire a Dataverse token or call Dataverse.
+Licensed office generation reads Dataverse using the caller's delegated token through
+`X-Dataverse-Authorization` and a `WhoAmI` check. Authenticated office review may separately read
+current contact/Quote context with the active account's delegated Dataverse token. Anonymous lookup,
+photo upload and final submission never acquire a Dataverse token or call Dataverse.
 
 Site Check occurrence links remain a separate existing workflow, using
 `siteCheckAssignmentService.js` and `siteCheckPhotoStorage.js`. Retain their credentials.
@@ -73,8 +74,33 @@ The account/Job-scoped archive hook ignores late responses and offers retry. Str
 verified Dataverse next links and fail visibly on incomplete evidence rather than reporting empty
 history. Site Check eager evidence loading and technician post-submission PDF remain unchanged.
 
-The authenticated review detail includes snapshotted make/model/serial, order number and address.
-Its **Download saved submission PDF** action uses only that loaded Azure record, with no current
+The authenticated review detail leads with Job number/description, then saved Equipment and Customer/
+Site details including make/model/serial, order number and address. A separate, explicitly labelled
+**Current Job contact** uses one minimal delegated Job read expanding `gr_Contact` name/phone/email;
+it is not added to the immutable snapshot, public portal, or saved PDF. Missing contact and failed
+contact reads remain distinct. Story groups a prominent submitted hour meter (zero is valid), Job
+story, further work and safety issues; structured time/travel, parts and private photos follow.
+
+**Download all photos** opens an editable filename prompt using the shared drawer. The suggested
+ZIP name is `JobNumber - Job description - dd-mm-yyyy.zip`, using the saved submission timestamp in
+`Pacific/Auckland`, not download time. Invalid Windows filename characters, reserved device names
+and trailing dots are handled. `jobCardPhotoDownload.ts` uses pinned `fflate` ZIP pass-through entries
+without image recompression. It loads up to 20 originals sequentially through the authenticated private
+photo endpoint, checks each non-empty file against its saved size and the 10 MiB limit, uses canonical
+image extensions/flat numbered names, and produces no archive if any photo fails. No SAS/Blob URLs
+or tokens enter filenames, downloads, or the DOM. Photo loading and all-photo saving have independent
+progress/duplicate-click guards. Leaving the account/review aborts an in-flight archive download.
+
+The native Save File picker, when supported, opens synchronously from the Save click before token/
+network work; cancellation performs no downloads. Writing starts only after a complete archive is
+built, and write failures abort the writable. Other browsers use their configured download location
+after the in-app filename prompt. HEIC/HEIF originals remain downloadable without inline support.
+
+**Associated quotes** mounts the feature-owned read-only `JobQuotesDrawer` in the same screen only
+when requested. It reuses existing bounded per-Job header/selected-Quote line reads and active-account
+authentication. No Quote editing or operational updates are available here; see [Quotes](quotes.md).
+
+The **Download submission PDF** action uses only the loaded Azure record, with no current
 Job reread or public-token request. A browser-local paginated report retains all structured evidence,
 individual time dates (including multiple weeks), quantities, observations and a photo filename
 manifest. Photos are not embedded or fetched by export; private photos remain separate actions.
