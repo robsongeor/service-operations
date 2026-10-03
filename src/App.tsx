@@ -94,7 +94,16 @@ function App() {
           </div>}
           {access.mode === 'job-book-only' ? <Routes>
             <Route path="/" element={<Navigate to="/job-book" replace />} />
-            <Route path="/job-book" element={<JobBookPrototypeScreen key={signedInUser?.storageId || 'account-pending'} allowManagedJobNavigation={false} />} />
+            <Route path="/job-book" element={<JobBookPrototypeScreen key={signedInUser?.storageId || 'account-pending'} allowManagedJobNavigation={false} allowManagedJobMarkerUpdates={false} />} />
+            <Route path="*" element={<AccessDeniedScreen access={access} user={signedInUser} restrictedRoute />} />
+          </Routes> : access.mode === 'job-card-admin' ? <Routes>
+            <Route path="/" element={<Navigate to="/job-card-reviews" replace />} />
+            <Route path="/job-card-reviews" element={<JobCardReviewsScreen key={`${signedInUser?.storageId}-queue`} />} />
+            <Route path="/job-card-reviews/:reviewId" element={<JobCardReviewsScreen key={`${signedInUser?.storageId}-${location.pathname}`} />} />
+            <Route path="/job-book" element={<JobBookPrototypeScreen key={signedInUser?.storageId || 'account-pending'} allowManagedJobNavigation={false} allowManagedJobMarkerUpdates={access.canCorrectJobDetails} />} />
+            <Route path="/quotes" element={<QuotesScreen key={signedInUser?.storageId || 'account-pending'} readOnly />} />
+            <Route path="/equipment" element={<EquipmentScreen readOnly />} />
+            <Route path="/customers" element={<CustomerDashboardScreen readOnly />} />
             <Route path="*" element={<AccessDeniedScreen access={access} user={signedInUser} restrictedRoute />} />
           </Routes> : <Routes>
             <Route path="/" element={<OverviewScreen />} />

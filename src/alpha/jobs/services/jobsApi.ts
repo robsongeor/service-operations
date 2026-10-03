@@ -11,15 +11,20 @@ import {
     type JobsCacheReadOptions,
 } from './jobsDataCache.ts'
 import { assertJobDescriptionLength } from '../domain/jobDescription.ts'
+import { assertJobCreationLocation } from '../domain/jobCreationLocation.ts'
+import { assertJobCanBeDeleted, assertJobCanReceiveNumber, requireJobNumberEtag, requireJobNumberRecordId, validateImportedJobNumber } from '../domain/jobNumberPolicy.ts'
+import { readJobNumberForDeletion, verifyUnnumberedJobs } from './jobNumberGuard.ts'
+import { fetchLocationSite } from './sitesApi.ts'
 import type { JobCardSubmission } from '../types/jobCardSubmission.types.ts'
 import { invalidateOperationalQueries } from '../../shared/data/OperationalDataClient.ts'
 import { fetchAllDataversePages } from '../../shared/dataverse/fetchAllDataversePages.ts'
 import { buildDataverseIdFilterBatches } from '../../shared/dataverse/boundedDataverseFilters.ts'
 import { usesAzureJobCards } from '../types/jobCardWorkflow.ts'
+import { UNIFIED_JOB_WALKTHROUGH, UNIFIED_JOB_SELECT } from '../domain/unifiedJobWorkflow.ts'
 
 const DATAVERSE_URL = import.meta.env?.VITE_DATAVERSE_URL ?? ''
 const HOUR_METER_READING_SELECT = HOUR_METER_CLASSIFICATION_ENABLED ? ',gr_hourmeterreadingtype,gr_hourmeterrecordeddate' : ''
-const JOB_SELECT = `gr_jobid,createdon,gr_jobnumber,gr_status,gr_ordernumber,gr_description,gr_jobtype,gr_jobcardstatus,gr_jobcardsenton,gr_jobcardsubmittedon,gr_jobcardclosedon,gr_hourmeter${HOUR_METER_READING_SELECT},gr_completeddate,gr_servicetype,gr_currentofficeaction,gr_officeactionowner,gr_officeattentionrequired,gr_techniciansubmissiontokenhash,gr_techniciansubmissiontokencreatedon,gr_techniciansubmissiontokenexpireson,gr_techniciansubmissiontokenused,gr_techniciansubmissionsubmittedon,gr_techniciansubmissionhourmeter,gr_techniciansubmissionstory,gr_techniciansubmissionfurtherworkrequired,gr_techniciansubmissionfurtherworkdetails,gr_techniciansubmissionsafetyissueidentified,gr_techniciansubmissionsafetyissuedetails,_gr_sitecheck_value`
+const JOB_SELECT = `gr_jobid,createdon,gr_jobnumber,gr_status,gr_ordernumber,gr_description,gr_jobtype,gr_jobcardstatus,gr_jobcardsenton,gr_jobcardsubmittedon,gr_jobcardclosedon,gr_hourmeter${HOUR_METER_READING_SELECT},gr_completeddate,gr_servicetype,gr_currentofficeaction,gr_officeactionowner,gr_officeattentionrequired,gr_techniciansubmissiontokenhash,gr_techniciansubmissiontokencreatedon,gr_techniciansubmissiontokenexpireson,gr_techniciansubmissiontokenused,gr_techniciansubmissionsubmittedon,gr_techniciansubmissionhourmeter,gr_techniciansubmissionstory,gr_techniciansubmissionfurtherworkrequired,gr_techniciansubmissionfurtherworkdetails,gr_techniciansubmissionsafetyissueidentified,gr_techniciansubmissionsafetyissuedetails,_gr_sitecheck_value${UNIFIED_JOB_WALKTHROUGH ? UNIFIED_JOB_SELECT : ''}`
 const JOB_EXPAND = 'gr_Equipment($select=gr_equipmentid,gr_fleet,gr_alternatefleetnumbers,gr_make,gr_model,gr_serial,gr_currenthourmeter,gr_currenthourmeterrecordeddate,gr_servicetrackingenabled),gr_Mechanic($select=gr_mechanicid,gr_name,gr_phone,gr_email),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name,gr_phone,gr_email)'
 
 type FetchJobsOptions = JobsCacheReadOptions & {
@@ -461,9 +466,18 @@ export async function createJob(
     source: JobCreationSource = 'standard',
 ): Promise<string> {
     const newJob = buildJobCreatePayload(job, source)
+    if (!job.equipmentId?.trim()) {
+        // Reuse the exact Site reader; a stale dropdown must not save an incomplete location.
+        const site = job.siteId?.trim() ? await fetchLocationSite(accessToken, job.siteId) : undefined
+        assertJobCreationLocation({
+            customerId: site?.gr_Customer?.gr_customerid,
+            siteId: site?.gr_siteid,
+            address: site?.gr_address,
+        })
+    }
     await assertJobNumberAvailable(accessToken, job.jobNumber)
     const result = await fetch(
-        `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2/gr_jobs`,
+        `${DATAVERSE_URL}/api/data/v9.2/gr_jobs`,
         {
             method: 'POST',
             headers: {
@@ -670,15 +684,17 @@ export async function updateJobFields(
     token: string,
     jobId: string,
     fields: {
-        gr_jobnumber?: string
         gr_description?: string
         gr_ordernumber?: string
         'gr_Mechanic@odata.bind'?: string | null
     }
 ) {
+    if (Object.hasOwn(fields, 'gr_jobnumber')) {
+        throw new Error('Job numbers must be allocated separately and cannot be changed by editing a Job.')
+    }
     if (fields.gr_description != null) assertJobDescriptionLength(fields.gr_description)
     const response = await fetch(
-        `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2/gr_jobs(${jobId})`,
+        `${DATAVERSE_URL}/api/data/v9.2/gr_jobs(${jobId})`,
         {
             method: 'PATCH',
             headers: {
@@ -701,17 +717,26 @@ export async function allocateJobNumbers(
     allocations: readonly { job: Job; jobNumber: string }[],
 ) {
     if (!allocations.length) throw new Error('Select one or more Jobs before pasting job numbers.')
+    if (allocations.length > 100) throw new Error('Allocate numbers to at most 100 Jobs at a time.')
+    // Keep the displayed version stable across preflight, even if the caller refreshes its rows.
+    const requested = allocations.map(({ job, jobNumber }) => ({
+        job: { gr_jobid: job.gr_jobid, gr_jobnumber: job.gr_jobnumber, '@odata.etag': job['@odata.etag'] },
+        jobNumber,
+    }))
     const seenJobIds = new Set<string>()
     const seenNumbers = new Set<string>()
-    allocations.forEach(({ job, jobNumber }) => {
-        const normalizedNumber = jobNumber.trim()
-        if (seenJobIds.has(job.gr_jobid)) throw new Error('A Job was selected more than once.')
-        if (!/^\d+$/.test(normalizedNumber)) throw new Error('Each pasted Job number must contain digits only.')
+    requested.forEach(({ job, jobNumber }) => {
+        const jobId = requireJobNumberRecordId(job.gr_jobid)
+        const normalizedNumber = validateImportedJobNumber(jobNumber)
+        assertJobCanReceiveNumber(job)
+        if (seenJobIds.has(jobId)) throw new Error('A Job was selected more than once.')
         if (seenNumbers.has(normalizedNumber)) throw new Error('Each pasted Job number must be unique.')
-        if (!job['@odata.etag']) throw new Error('Reload the Jobs table before pasting job numbers.')
-        seenJobIds.add(job.gr_jobid)
+        requireJobNumberEtag(job)
+        seenJobIds.add(jobId)
         seenNumbers.add(normalizedNumber)
     })
+
+    await verifyUnnumberedJobs(token, `${DATAVERSE_URL}/api/data/v9.2`, requested.map(({ job }) => job))
 
     const suffix = crypto.randomUUID().replaceAll('-', '')
     const batchBoundary = `batch_${suffix}`
@@ -721,7 +746,7 @@ export async function allocateJobNumbers(
         `Content-Type: multipart/mixed; boundary=${changeBoundary}`,
         '',
     ]
-    allocations.forEach(({ job, jobNumber }, index) => {
+    requested.forEach(({ job, jobNumber }, index) => {
         lines.push(
             `--${changeBoundary}`,
             'Content-Type: application/http',
@@ -759,7 +784,7 @@ export async function allocateJobNumbers(
         }
         throw new Error('Dataverse rejected the atomic Job number update.')
     }
-    if (statuses.filter((status) => status >= 200 && status < 300).length !== allocations.length) {
+    if (statuses.filter((status) => status >= 200 && status < 300).length !== requested.length) {
         throw new Error('Dataverse did not confirm every Job number update.')
     }
     invalidateJobsCache(token)
@@ -817,7 +842,6 @@ export async function updateJob(
 export function buildJobUpdateFields(job: JobSaveInput): Record<string, string | number | boolean | null> {
     assertJobDescriptionLength(job.description)
     const fields: Record<string, string | number | boolean | null> = {
-        gr_jobnumber: job.jobNumber,
         gr_ordernumber: job.orderNumber,
         gr_description: job.description,
         gr_jobtype: job.jobType,
@@ -847,6 +871,12 @@ export function buildJobUpdateFields(job: JobSaveInput): Record<string, string |
 }
 
 export async function deleteJob(token: string, jobId: string) {
+    const current = await readJobNumberForDeletion(token, `${DATAVERSE_URL}/api/data/v9.2`, jobId)
+    if (!current) {
+        invalidateJobsCache(token)
+        return
+    }
+    assertJobCanBeDeleted(current)
     const response = await fetch(
         `${DATAVERSE_URL}/api/data/v9.2/gr_jobs(${jobId})`,
         {
@@ -854,10 +884,14 @@ export async function deleteJob(token: string, jobId: string) {
             headers: {
                 Authorization: `Bearer ${token}`,
                 Accept: 'application/json',
+                'If-Match': requireJobNumberEtag(current),
             },
         },
     )
 
+    if (response.status === 412) {
+        throw new Error('The Job changed or received a number elsewhere. Reload before trying again. Nothing was deleted.')
+    }
     if (!response.ok && response.status !== 404) {
         const error = await response.text()
         throw new Error(`Failed to delete job: ${error}`)

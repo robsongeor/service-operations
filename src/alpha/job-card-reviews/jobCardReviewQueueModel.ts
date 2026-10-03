@@ -1,5 +1,17 @@
 import { JOB_TYPE_OPTIONS, JOB_TYPES, getJobTypeLabel, type JobType } from '../jobs/types/jobType.types.ts'
-import type { JobCardReviewSummary } from './jobCardReview.types.ts'
+import type { JobCardOfficeStatus, JobCardQueueItem, JobCardReviewQueueView } from './jobCardReview.types.ts'
+
+export const REVIEW_STAGE_TABS: { id: JobCardReviewQueueView; label: string }[] = [
+    { id: 'open', label: 'Open jobs' }, { id: 'submitted', label: 'Submitted' },
+    { id: 'review', label: 'Review' }, { id: 'completed', label: 'Completed' },
+]
+export function readReviewStage(params: URLSearchParams): JobCardReviewQueueView {
+    const value = params.get('view')
+    if (value === 'history') return 'completed'
+    return value === 'open' || value === 'review' || value === 'completed' ? value : 'submitted'
+}
+export const queueItemId = (item: JobCardQueueItem) => 'dispatchId' in item ? item.dispatchId : item.reviewId
+export const queueItemDate = (item: JobCardQueueItem) => 'sentOn' in item ? item.sentOn : item.submittedOn
 
 export type ReviewAttention = 'all' | 'required' | 'safety' | 'further' | 'none'
 export type ReviewSortColumn = 'job' | 'submitted' | 'customer' | 'technician' | 'photos'
@@ -9,9 +21,15 @@ export type ReviewQueueView = {
     attention: ReviewAttention
     customer: string
     technician: string
+    officeStatus: JobCardOfficeStatus | 'all'
+    administrator: string
     sort: { column: ReviewSortColumn; direction: 'ascending' | 'descending' }
 }
-export const DEFAULT_REVIEW_QUEUE_VIEW: ReviewQueueView = { search: '', jobType: 'all', attention: 'all', customer: '', technician: '', sort: { column: 'submitted', direction: 'descending' } }
+export const DEFAULT_REVIEW_QUEUE_VIEW: ReviewQueueView = { search: '', jobType: 'all', attention: 'all', customer: '', technician: '', officeStatus: 'all', administrator: '', sort: { column: 'submitted', direction: 'descending' } }
+export const OFFICE_STATUS_LABELS: Record<JobCardOfficeStatus, string> = {
+    pending: 'Pending', inReview: 'In review', needsClarification: 'Needs clarification', onHold: 'On hold',
+    processedInGreenTree: 'Processed in GreenTree', noInvoiceRequired: 'No invoice required (retired outcome)', legacyReviewed: 'Reviewed (legacy outcome not recorded)',
+}
 const collator = new Intl.Collator('en-NZ', { numeric: true, sensitivity: 'base' })
 const date = new Intl.DateTimeFormat('en-NZ', { timeZone: 'Pacific/Auckland', day: '2-digit', month: '2-digit', year: 'numeric' })
 const time = new Intl.DateTimeFormat('en-NZ', { timeZone: 'Pacific/Auckland', hour: '2-digit', minute: '2-digit' })
@@ -35,6 +53,8 @@ export function readReviewQueueView(params: URLSearchParams): ReviewQueueView {
         jobType: type !== JOB_TYPES.SITE_CHECK && JOB_TYPE_OPTIONS.some((option) => option.value === type) ? type as JobType : 'all',
         attention: ['all', 'required', 'safety', 'further', 'none'].includes(attention) ? attention : 'all',
         customer: (params.get('customer') || '').slice(0, 500), technician: (params.get('technician') || '').slice(0, 500),
+        officeStatus: ['pending', 'inReview', 'needsClarification', 'onHold', 'processedInGreenTree', 'noInvoiceRequired', 'legacyReviewed'].includes(params.get('officeStatus') || '') ? params.get('officeStatus') as JobCardOfficeStatus : 'all',
+        administrator: (params.get('administrator') || '').slice(0, 500),
         sort: { column: ['job', 'submitted', 'customer', 'technician', 'photos'].includes(column) ? column : 'submitted', direction: params.get('direction') === 'ascending' ? 'ascending' : 'descending' },
     }
 }
@@ -46,12 +66,14 @@ export function reviewQueueParams(view: ReviewQueueView) {
     if (view.attention !== 'all') params.set('attention', view.attention)
     if (view.customer) params.set('customer', view.customer)
     if (view.technician) params.set('technician', view.technician)
+    if (view.officeStatus !== 'all') params.set('officeStatus', view.officeStatus)
+    if (view.administrator) params.set('administrator', view.administrator)
     if (view.sort.column !== 'submitted') params.set('sort', view.sort.column)
     if (view.sort.direction !== 'descending') params.set('direction', view.sort.direction)
     return params
 }
 
-export function reviewMatchesAttention(item: JobCardReviewSummary, attention: ReviewAttention) {
+export function reviewMatchesAttention(item: JobCardQueueItem, attention: ReviewAttention) {
     if (attention === 'required') return item.safetyIssueIdentified || item.furtherWorkRequired
     if (attention === 'safety') return item.safetyIssueIdentified
     if (attention === 'further') return item.furtherWorkRequired
@@ -59,20 +81,23 @@ export function reviewMatchesAttention(item: JobCardReviewSummary, attention: Re
     return true
 }
 
-export function filterAndSortReviews(items: JobCardReviewSummary[], view: ReviewQueueView) {
+export function filterAndSortReviews(items: JobCardQueueItem[], view: ReviewQueueView) {
     const query = view.search.trim().toLocaleLowerCase('en-NZ')
     const rows = items.filter((item) => (view.jobType === 'all' || item.jobType === view.jobType)
         && (!view.customer || item.customerName === view.customer)
         && (!view.technician || item.technicianName === view.technician)
+        && (view.officeStatus === 'all' || item.officeStatus === view.officeStatus)
+        && (!view.administrator || (item.outcomeBy || item.officeActionBy)?.displayName === view.administrator)
         && reviewMatchesAttention(item, view.attention)
         && (!query || [item.jobNumber, item.workRequired, item.customerName, item.siteName, item.technicianName,
-            item.equipmentDisplayName, item.equipmentSerial, item.fleetNumber, getJobTypeLabel(item.jobType), formatReviewDate(item.submittedOn)]
+            item.equipmentDisplayName, item.equipmentSerial, item.fleetNumber, getJobTypeLabel(item.jobType), item.officeStatus ? OFFICE_STATUS_LABELS[item.officeStatus] : 'Awaiting submission',
+            item.officeActionBy?.displayName, item.outcomeBy?.displayName, item.greentreeReference, formatReviewDate(queueItemDate(item))]
             .filter(Boolean).join(' ').toLocaleLowerCase('en-NZ').includes(query)))
     const direction = view.sort.direction === 'ascending' ? 1 : -1
-    const textValue = (item: JobCardReviewSummary) => view.sort.column === 'job' ? item.jobNumber : view.sort.column === 'customer' ? item.customerName : item.technicianName
+    const textValue = (item: JobCardQueueItem) => view.sort.column === 'job' ? item.jobNumber : view.sort.column === 'customer' ? item.customerName : item.technicianName
     return rows.sort((left, right) => {
         let difference: number
-        if (view.sort.column === 'submitted') difference = (Date.parse(left.submittedOn) || 0) - (Date.parse(right.submittedOn) || 0)
+        if (view.sort.column === 'submitted') difference = (Date.parse(queueItemDate(left)) || 0) - (Date.parse(queueItemDate(right)) || 0)
         else if (view.sort.column === 'photos') difference = left.photoCount - right.photoCount
         else {
             const first = textValue(left)?.trim() || ''
@@ -80,11 +105,16 @@ export function filterAndSortReviews(items: JobCardReviewSummary[], view: Review
             if (!first !== !second) return !first ? 1 : -1
             difference = collator.compare(first, second)
         }
-        return difference * direction || collator.compare(left.reviewId, right.reviewId)
+        return difference * direction || collator.compare(queueItemId(left), queueItemId(right))
     })
 }
 
-export function reviewFilterOptions(items: JobCardReviewSummary[], field: 'customerName' | 'technicianName', selected: string) {
+export function reviewFilterOptions(items: JobCardQueueItem[], field: 'customerName' | 'technicianName', selected: string) {
     return [...new Set([...items.map((item) => item[field]).filter((value): value is string => Boolean(value)), ...(selected ? [selected] : [])])]
+        .sort(collator.compare).map((value) => ({ value, label: value }))
+}
+
+export function reviewAdministratorOptions(items: JobCardQueueItem[], selected: string) {
+    return [...new Set([...items.map((item) => (item.outcomeBy || item.officeActionBy)?.displayName).filter((value): value is string => Boolean(value)), ...(selected ? [selected] : [])])]
         .sort(collator.compare).map((value) => ({ value, label: value }))
 }

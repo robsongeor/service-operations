@@ -21,12 +21,22 @@ The current environment contains the active flow **Job Email Dispatch**
 3. On success, update that Email Dispatch row with Email Sent = Yes and Completed On = `utcNow()`.
 4. On failure or timeout, keep Email Sent = No and record Completed On plus the safe Error Message.
 
-The Jobs-table composer returns as soon as the dispatch row is accepted. Delivery confirmation is
-monitored in the background so the user can continue working; Job Card status changes to Sent only
-after the flow confirms success.
+The shared Jobs/Job Book composer returns as soon as the dispatch row is accepted. Delivery is
+monitored by `usePrimaryJobEmail` in the background. Ordinary Azure Job sends do not write legacy
+Job Card status or operational fields; only the retained legacy Site Check Job path updates its
+status after confirmed delivery.
+
+Legacy Job Book has a separate approved Admin email capability for already-numbered managed Jobs
+with an assigned technician. Admin recipient editing is disabled; allocation remains coordinator-
+only. Its adapter fetches the selected Job rather than an entire Job directory. The shared workflow
+rechecks version, allocation and message details before queueing; stale previews must be reopened.
+Intake and Void rows are not emailed. Copying for the order number book is independent of dispatch.
+See [Jobs architecture](architecture/jobs.md#job-book-quick-actions-3-october-2026-local-implementation).
+Live Admin Email Dispatch privileges and server-side recipient enforcement are approval-gated;
+this local implementation neither provisions them nor proves live authorization.
 
 Localhost and loopback builds are preview-only: the shared composer disables its send action and the
-Jobs workflow independently rejects primary and additional-technician dispatch attempts before
+shared workflow independently rejects primary and additional-technician dispatch attempts before
 creating a secure link or Email Dispatch row. Real delivery must be initiated from the deployed app.
 
 ## Site Checks

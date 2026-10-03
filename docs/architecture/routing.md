@@ -46,6 +46,14 @@ is a usability boundary only; the matching Dataverse role must independently res
 writes. Accounts with no supported application role receive Access Denied before the management
 shell is mounted.
 
+`ServiceOperations.JobCardAdmin` redirects `/` to `/job-card-reviews` and exposes only
+`/job-card-reviews`, `/job-book`, `/quotes`, `/equipment`, and `/customers`. Every other direct
+management route uses the restricted catch-all. Quotes, Equipment, Customers, their Sites and
+Contacts remain read-only. Job Book Intake retains its permitted operations. Job Card Admin now
+has `canCorrectJobDetails`: managed rows open the canonical Job drawer in corrections-only mode
+inside Job Book, without adding a `/jobs` route or enabling coordination. Factual managed-Job
+GT/Timecloud markers are permitted for this role; JobBookOnly still cannot edit managed records.
+
 ## Navigation rules
 
 - Reuse existing feature drawers when one management feature opens another record.

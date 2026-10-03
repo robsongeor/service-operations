@@ -14,9 +14,10 @@ type Props = {
     job: Job
     onCancel: () => void
     onSend: (draft: JobEmailDraft) => Promise<void>
+    assignedRecipientOnly?: boolean
 }
 
-export default function JobEmailComposer({ job, onCancel, onSend }: Props) {
+export default function JobEmailComposer({ job, onCancel, onSend, assignedRecipientOnly = false }: Props) {
     const mechanic = job.gr_Mechanic
     const [recipientEmail, setRecipientEmail] = useState(mechanic?.gr_email ?? '')
     const [subject, setSubject] = useState(() => buildTechnicianEmailSubject(job))
@@ -81,11 +82,13 @@ export default function JobEmailComposer({ job, onCancel, onSend }: Props) {
                 <span>To</span>
                 <input
                     type="email"
+                    readOnly={assignedRecipientOnly}
                     autoFocus
                     value={recipientEmail}
                     aria-invalid={recipientEmail.length > 0 && !recipientValid}
                     onChange={(event) => setRecipientEmail(event.currentTarget.value)}
                 />
+                {assignedRecipientOnly && <small className="job-email-field-help">Assigned technician: {mechanic?.gr_name}. A service coordinator must change the allocation.</small>}
                 {!recipientValid && recipientEmail.length > 0 && <small>Enter a valid email address.</small>}
             </label>
             <label>

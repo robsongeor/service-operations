@@ -205,6 +205,7 @@ export async function updateEquipmentSite(
     equipmentId: string,
     siteId: string,
     maintenanceProfile?: number | null,
+    ifMatch?: string,
 ) {
     const result = await fetch(
         `${DATAVERSE_URL}/api/data/v9.2/gr_equipments(${equipmentId})`,
@@ -214,6 +215,7 @@ export async function updateEquipmentSite(
                 Authorization: `Bearer ${accessToken}`,
                 'Content-Type': 'application/json',
                 Accept: 'application/json',
+                ...(ifMatch ? { 'If-Match': ifMatch } : {}),
             },
             body: JSON.stringify({
                 'gr_Site@odata.bind': `/gr_sites(${siteId})`,
@@ -223,8 +225,9 @@ export async function updateEquipmentSite(
     )
 
     if (!result.ok) {
-        const error = await result.text()
-        throw new Error(error)
+        if (result.status === 412) throw new Error('Equipment changed since you opened it. Refresh the location and review your move again.')
+        if (result.status === 403) throw new Error('Equipment moves are not permitted by your Dataverse role. Ask an administrator to check your access.')
+        throw new Error('Equipment location could not be saved. Refresh its location before trying again.')
     }
     invalidateEquipmentCache(accessToken)
 }

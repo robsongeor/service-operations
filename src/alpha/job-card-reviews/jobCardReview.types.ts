@@ -30,9 +30,44 @@ export type JobCardReviewSummary = {
     equipmentDisplayName?: string
     fleetNumber?: string
     equipmentSerial?: string
+    officeStatus: JobCardOfficeStatus
+    officeNote?: string
+    greentreeReference?: string
+    reviewStartedOn?: string
+    reviewStartedBy?: JobCardOfficeActor
+    officeActionOn?: string
+    officeActionBy?: JobCardOfficeActor
+    outcomeOn?: string
+    outcomeBy?: JobCardOfficeActor
+    officeActivities: JobCardOfficeActivity[]
+    isTerminal: boolean
 }
 
-export type JobCardReviewQueue = { items: JobCardReviewSummary[]; truncated?: boolean }
+export type JobCardOfficeStatus = 'pending' | 'inReview' | 'needsClarification' | 'onHold' | 'processedInGreenTree' | 'noInvoiceRequired' | 'legacyReviewed'
+export type JobCardOfficeActor = { userId: string; displayName: string; email?: string }
+export type JobCardOfficeAction = 'startReview' | 'setNeedsClarification' | 'setOnHold' | 'completeGreenTreeProcessing'
+export type JobCardOfficeActivity = {
+    // Retain previously recorded actions without allowing new submissions of retired actions.
+    action: JobCardOfficeAction | 'completeNoInvoiceRequired'
+    fromStatus: JobCardOfficeStatus
+    toStatus: JobCardOfficeStatus
+    occurredOn: string
+    actor: JobCardOfficeActor
+    note?: string
+    greentreeReference?: string
+}
+export type JobCardOpenJobSummary = Omit<JobCardReviewSummary, 'reviewId' | 'submittedOn' | 'officeStatus'> & {
+    dispatchId: string
+    sourceJobId: string
+    sentOn: string
+    reviewId?: never
+    submittedOn?: never
+    officeStatus?: never
+}
+export type JobCardQueueItem = JobCardReviewSummary | JobCardOpenJobSummary
+export type JobCardReviewQueueView = 'open' | 'submitted' | 'review' | 'completed'
+export type JobCardReviewApiView = JobCardReviewQueueView | 'active' | 'history'
+export type JobCardReviewQueue = { items: JobCardQueueItem[]; view: JobCardReviewApiView; hasMore: boolean; nextOffset?: number; truncated?: boolean; scanLimitReached?: boolean }
 
 export type JobCardReview = JobCardReviewSummary & {
     etag: string

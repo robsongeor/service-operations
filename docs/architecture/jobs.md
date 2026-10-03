@@ -16,7 +16,101 @@ Job Status, Office Action, technician assignment, scheduling, Job Card progress,
 linkage are separate concerns. A change in one must not implicitly rewrite another unless a
 documented workflow coordinates them.
 
+## Admin corrections (3 October 2026, local implementation)
+
+`canCorrectJobDetails` is separate from `canManageJobs`. `JobCorrectionsDrawer` adapts the canonical
+`JobEditDrawer` in corrections-only mode, hosted by Legacy Job Book without navigating to `/jobs`.
+`useJobCorrections` owns exact-record loading, bounded Customer/Equipment searches and scoped
+Site/Contact choices. It never loads schedules, assignments, Quotes or submission evidence.
+
+`jobCorrectionsApi` projects only changed description, order/PO, Equipment, Site and Contact
+bindings. Customer is represented through Site; its consistency is validated, not separately
+written. Address displays the selected Site's address, without editing a shared Site or moving
+Equipment. Historical unchanged Contact links are retained; changed links must belong to the Site.
+Opening does not auto-select a previously empty Contact or change Job state. The shared editor's
+job number/type/status/service type/mechanic/office values never reach the correction PATCH.
+
+Writes require the original exact ETag. A conflict blocks subsequent saves and offers explicit
+reload/discard confirmation; no automatic retry or wildcard overwrite. A successful write with
+failed readback is labelled saved and likewise requires reload. Successful saves invalidate shared
+Job queries and replace the matching managed Job Book row; promoted Intake snapshots stay historic.
+Technician snapshots/evidence, completion/maintenance history and operational children are untouched.
+The ordinary coordinator editor retains its existing controls and save path. Dataverse write
+authority and column-level enforcement remain separately approval-gated, not provided by UI roles.
+
+## Job Book quick actions (3 October 2026, local implementation)
+
+Jobs and Legacy Job Book share `JobQuickActions`, `JobEmailComposer`, `usePrimaryJobEmail` and
+`primaryJobEmailWorkflow`. The canonical numbered clipboard builder in `jobBookClipboard` copies
+six tab-separated columns: technician, Job number, Fleet/alternate Fleets (or W/S), Customer,
+blank, technician. Job Book adapts its existing row projection, including Intake snapshots;
+copying does not fetch a directory, allocate a number, promote Intake or write a record.
+
+Job Book presents one compact horizontal action row: **Edit entry** (including restricted managed-
+Job corrections), icon-only copy/email controls and a permission-gated Void icon with a confirmation
+dialog. Icons retain accessible labels and explanatory tooltips. Coordinator Open Job/Manage job
+actions retain their existing scope. The edit button styling is shared with Jobs. This label/layout
+change does not unify Intake and managed-Job persistence or grant additional editing authority.
+
+`canEmailAssignedTechnician` grants FullAccess and JobCardAdmin the separate Job Book row action.
+JobBookOnly cannot email. It requires a numbered managed Job, a linked technician with a valid
+email, and a non-Unconfirmed ordinary Job; Intake, Void and Site Check rows are not dispatched.
+Admins can edit the subject and email-only comments, not the recipient or technician allocation.
+The corrections drawer itself still has no dispatch controls. Coordinators retain their existing
+Jobs composer recipient controls.
+
+Opening a Job Book preview performs one focused current-Job read, with no link or dispatch writes.
+Sending rereads that Job and checks its ETag, assignment/email and rendered message data against
+the preview, rejecting stale details with a reopen instruction. This is a preflight check, not an
+atomic server-side allocation lock. The existing dispatch service queues delivery and the shared
+hook monitors it in the background; duplicate clicks are blocked while delivery is pending.
+Ordinary Job sends never modify Job status, assignment, GT/Timecloud markers or saved evidence.
+Existing pilot-recipient restrictions, secure-link replacement confirmation and localhost send
+blocking remain intact. No sending was tested against live services.
+
+Before live use, approval-gated role work must verify Email Dispatch Create/Read/relationship
+privileges and secure-link API authority, including server-side assigned-recipient validation for
+restricted Admins. Browser capabilities and the preflight check alone cannot enforce that boundary.
+See [email delivery](../email-dispatch-flow.md) for transport ownership.
+
+## Job number safety foundation (3 October 2026)
+
+The [unified Job Book decision](../features/JOB_BOOK_INTAKE_DESIGN.md#unified-workflow-decision-3-october-2026)
+separates registration, numbering and coordinator membership. Its first local implementation
+protects existing numbers without switching persistence or requiring unprovisioned columns.
+The next server/client slice now exists as local source and offline tests; see the authoritative
+[transactional registration contract](../features/JOB_BOOK_INTAKE_DESIGN.md#transactional-registration-implementation-local-only).
+It is not provisioned or wired into the ordinary runtime. Both screens now use it only in the
+[isolated unified walkthrough](../features/JOB_BOOK_INTAKE_DESIGN.md#unified-screen-walkthrough-3-october-2026-sample-data-only),
+with retained-request recovery and shared creation/correction controls. Sample Void/membership
+operations remain fixture-only. This is not a substitute for the remaining schema, privilege,
+migration and specialist-workflow rollout.
+
+`jobNumberPolicy` owns allocated-number detection, immutable editor checks, first-allocation
+eligibility, retained-number deletion protection and the transitional regional import format.
+`JobCoreFields` makes the number read-only for existing Jobs, and `JobsTable` no longer writes it
+on blur. `buildJobUpdateFields` deliberately omits it for ordinary and completion saves;
+`updateJobFields` rejects attempts to include it. Optimistic Job state never replaces the saved
+number from an editor draft. Creation/import still preserves its existing initial-number contract.
+
+`jobNumberGuard` reads only ID, number and ETag in batches of at most 40 selected IDs. Ordinary
+bulk allocation is limited to 100 rows and rejects already-numbered, missing or changed Jobs before
+the existing atomic changeset. Every PATCH still uses the displayed exact ETag, so a race after
+preflight returns a conflict with no automatic retry. Dataverse's existing unique number key is
+still required to reject a number already used by a different Job. Number strings retain leading
+zeros and allow regional sequences to grow beyond four/five digits, up to the schema's 30 characters.
+
+The canonical drawer hides ordinary Delete for numbered Jobs. The API rereads the exact record
+and rejects numbered deletion; an unnumbered deletion uses that current ETag, protecting a concurrent
+allocation. This is not a new cancellation action. Site Check occurrence deletion/clear-number and
+its allocation path remain specialist workflows to reconcile before releasing the unified contract.
+No new server-side immutable-column enforcement is claimed. `tests/jobNumberPolicy.test.ts` covers
+payload exclusions, permissions presentation, regional formats, bounded preflight, stale callers,
+allocation/deletion races and fail-closed responses; drawer rendering is also covered by the
+corrections UI tests.
+
 ## Major Dataverse Relationships
+
 
 - A Job references a Customer and Site.
 - Equipment is optional.
@@ -74,6 +168,21 @@ that window. A smaller scoped consumer that supplies neither receives empty supp
 instead of silently requesting every Schedule Option and Office Update in Dataverse.
 
 Job create/edit drawers use shared drawer presentation and shared searchable selectors.
+Creation additionally composes the shared Equipment location tile/editor: choosing a machine
+fills its current Customer/Site; explicit location edits update the asset before Job creation.
+See [Equipment location during Job creation](equipment.md#equipment-location-during-job-creation)
+for concurrency, immediate-save semantics, history preservation, and restricted-role boundaries.
+
+For new Jobs without Equipment, Customer, Site and the Site's non-empty address are required.
+`jobCreationLocationErrors` is the shared rule used by Create Job and new Job Book Intake.
+The existing Customer and Site components expose required labels and field errors; the address
+is shown read-only from the selected Site rather than collected as duplicate Job data. Changing
+Customer clears the dependent Site/address. Contact remains optional. Before a single managed
+Job is written, `createJob` reuses the exact Site reader to verify its Customer and address;
+failed verification prevents the POST. Equipment-linked creation adds no extra location read.
+Existing Job/Intake edits and batch historical imports are unchanged. These client service guards
+are not a Dataverse security boundary or a new table-level requirement.
+
 Their Equipment and Customer comboboxes debounce remote Dataverse search and cap results at eight;
 Customer Sites, Site Contacts, the exact selected Equipment, and its Service Plans load only after
 their parent is selected. Superseded requests abort, the source screen's exact Equipment/Customer/Site

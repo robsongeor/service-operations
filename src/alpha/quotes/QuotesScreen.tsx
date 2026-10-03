@@ -12,15 +12,15 @@ import './QuotesScreen.css'
 const money = new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' })
 const date = new Intl.DateTimeFormat('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })
 
-export default function QuotesScreen() {
+export default function QuotesScreen({ readOnly = false }: { readOnly?: boolean }) {
     const activeAccount = useActiveMsalAccount()
     const signedInUser = getSignedInUserInfo(activeAccount)
     const viewStorageKey = signedInUser ? getQuotesViewStateKey(signedInUser.storageId) : null
     const [searchParams, setSearchParams] = useSearchParams()
-    const requestedNewJobId = searchParams.get('new') === '1'
+    const requestedNewJobId = !readOnly && searchParams.get('new') === '1'
         ? searchParams.get('jobId') ?? undefined
         : undefined
-    const requestedQuoteId = searchParams.get('quoteId')
+    const requestedQuoteId = readOnly ? null : searchParams.get('quoteId')
     const [editingQuote, setEditingQuote] = useState<Quote | null | undefined>(
         () => requestedNewJobId ? null : undefined,
     )
@@ -185,9 +185,9 @@ export default function QuotesScreen() {
                     <span>Sales</span>
                     <h1>Quotes</h1>
                 </div>
-                <button className="quote-primary-button" type="button" onClick={openNew} disabled={isLoading || Boolean(loadError)}>
-                    + Create quote
-                </button>
+                {readOnly
+                    ? <span className="quote-read-only-badge">Read only</span>
+                    : <button className="quote-primary-button" type="button" onClick={openNew} disabled={isLoading || Boolean(loadError)}>+ Create quote</button>}
             </header>
 
             <section className="quotes-summary">
@@ -246,7 +246,7 @@ export default function QuotesScreen() {
                             {visibleQuotes.map((quote) => {
                                 const linkedEquipment = quote.gr_Equipment || quote.gr_Job?.gr_Equipment
                                 const equipmentMakeModel = [linkedEquipment?.gr_make, linkedEquipment?.gr_model].filter(Boolean).join(' ')
-                                return <tr key={quote.gr_quoteid} onClick={() => void openExisting(quote)}>
+                                return <tr key={quote.gr_quoteid} onClick={readOnly ? undefined : () => void openExisting(quote)}>
                                     <td><strong>{quote.gr_Customer?.gr_name || quote.gr_Job?.gr_Site?.gr_Customer?.gr_name || quote.gr_Equipment?.gr_Site?.gr_Customer?.gr_name || '—'}</strong></td>
                                     <td><strong className="quotes-job-value" title={quote.gr_Job?.gr_jobnumber || undefined}>{quote.gr_Job?.gr_jobnumber || '—'}</strong></td>
                                     <td><strong>{linkedEquipment?.gr_fleet || '—'}</strong><small>{equipmentMakeModel || linkedEquipment?.gr_serial || ''}</small></td>
@@ -265,14 +265,14 @@ export default function QuotesScreen() {
                 </div>
             )}
 
-            {(isOpening || (editorRequested && isEditorLoading)) && (
+            {!readOnly && (isOpening || (editorRequested && isEditorLoading)) && (
                 <div className="quotes-opening" role="status">Loading quote editor…</div>
             )}
-            {editorRequested && editorLoadError && (
+            {!readOnly && editorRequested && editorLoadError && (
                 <p className="quotes-page-error" role="alert">{editorLoadError}</p>
             )}
 
-            {editingQuote !== undefined && !isEditorLoading && !editorLoadError && (
+            {!readOnly && editingQuote !== undefined && !isEditorLoading && !editorLoadError && (
                 <QuoteEditorDialog
                     quote={editingQuote}
                     existingLines={editingLines}

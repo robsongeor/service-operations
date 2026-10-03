@@ -1,0 +1,18 @@
+.job-equipment-location { min-width: 0; }
+.job-create-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.job-equipment-location-tile { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 14px; border: 1px solid #c8ddd8; border-radius: 8px; background: #f3f8f6; }
+.job-equipment-location-tile > div { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.job-equipment-location-caption { font-size: 11px; color: #596c65; }
+.job-equipment-location-tile strong { font-size: 14px; }
+.job-equipment-location-tile small { color: #596c65; }
+.job-equipment-location-tile button { flex-shrink: 0; }
+.job-equipment-location-tile > button, .job-equipment-location-actions > button, .job-equipment-location > .job-edit-error > button { border: 1px solid #c5d3ce; border-radius: 6px; padding: 7px 10px; color: #1c4d46; background: white; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; }
+.job-equipment-location-actions > button.primary { background: #16796e; border-color: #16796e; color: white; }
+.job-equipment-location button:disabled { opacity: .5; cursor: default; }
+.job-equipment-location button:focus-visible { outline: 2px solid #16796e; outline-offset: 2px; }
+.job-equipment-location fieldset { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; margin: 0; padding: 14px; border: 1px solid #c8ddd8; border-radius: 8px; }
+.job-equipment-location fieldset > * { grid-column: 1 / -1; }
+.job-equipment-location legend { font-size: 13px; font-weight: 650; padding: 0 4px; }
+.job-equipment-location p { margin: 0; font-size: 12px; line-height: 1.5; color: #596c65; }
+.job-equipment-location-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.job-equipment-location > small { display: block; margin-top: 8px; }

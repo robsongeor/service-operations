@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { jobCreationLocationErrors } from '../domain/jobCreationLocation'
 import type { Mechanic } from '../types/mechanic.types'
 import type { Equipment } from '../types/equipment.types'
 import type { Site } from '../types/site.types'
@@ -61,6 +62,7 @@ type Props = JobRelationshipLookupProps & {
     requireJobNumber?: boolean
     closeAfterCreate?: boolean
     onClose: () => void
+    stagingOnly?: boolean
 }
 
 export default function JobCreateDrawer({
@@ -70,6 +72,7 @@ export default function JobCreateDrawer({
     jobTypeOptions = STANDARD_JOB_TYPE_OPTIONS, requireJobNumber = false, closeAfterCreate = true, existingJobs = [], onClose,
     onSearchEquipment, onSearchCustomers, onLoadCustomerSites, onLoadSiteContacts,
     onLoadEquipment, onLoadEquipmentServicePlans,
+    stagingOnly = false,
 }: Props) {
     const initialCustomer = customers.find((customer) => customer.gr_customerid === initialValues?.customerId)
     const editor = useJobEditor({
@@ -91,7 +94,14 @@ export default function JobCreateDrawer({
     })
     const { draft, setDraft } = editor
     const [isSaving, setIsSaving] = useState(false)
+    const [locationPending, setLocationPending] = useState(false)
+    const [locationSaving, setLocationSaving] = useState(false)
     const [saveError, setSaveError] = useState('')
+    const [locationValidationAttempted, setLocationValidationAttempted] = useState(false)
+    const locationErrors = jobCreationLocationErrors({
+        ...draft,
+        address: editor.filteredSites.find((site) => site.gr_siteid === draft.siteId)?.gr_address,
+    })
     const [scheduleDrafts, setScheduleDrafts] = useState<JobScheduleOptionDraft[]>([])
     const [jobWasCreated, setJobWasCreated] = useState(false)
     const [jobTypeError, setJobTypeError] = useState('')
@@ -134,6 +144,8 @@ export default function JobCreateDrawer({
     }, [draft.equipmentId, draft.jobType, equipmentDependencyAttempt, onLoadEquipment, onLoadEquipmentServicePlans])
 
     const createJob = async () => {
+        if (locationPending || locationSaving || isSaving) return
+        setLocationValidationAttempted(true)
         if (!draft.jobType) {
             setJobTypeError('Select a job type before creating the job.')
             return
@@ -142,6 +154,8 @@ export default function JobCreateDrawer({
         const duplicateJob = findDuplicateJobNumber(existingJobs, draft.jobNumber)
         if (duplicateJob) return setSaveError(`Job Number ${duplicateJob.gr_jobnumber?.trim()} already exists. Open the existing Job or enter a different number.`)
         if (!draft.description.trim()) return setSaveError('Enter a job description before creating the job.')
+        const locationError = locationErrors.customer || locationErrors.site || locationErrors.address
+        if (locationError) return setSaveError(locationError)
         if (draft.customerId && !draft.siteId) return setSaveError('Select a site for the chosen customer.')
         const selectedEquipment = equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)
         if (jobRequiresMaintenance(draft.jobType)) {
@@ -156,12 +170,13 @@ export default function JobCreateDrawer({
             setIsSaving(true)
             setSaveError('')
             const jobInput: JobSaveInput = {
-                jobNumber: draft.jobNumber.trim(),
+                jobNumber: stagingOnly ? '' : draft.jobNumber.trim(),
                 orderNumber: draft.orderNumber.trim(),
                 description: draft.description.trim(),
                 jobType: draft.jobType,
                 status: draft.status,
                 equipmentId: draft.equipmentId || undefined,
+                equipmentLocationHandled: true,
                 mechanicId: draft.mechanicId || undefined,
                 siteId: draft.siteId || undefined,
                 contactId: draft.contactId || undefined,
@@ -172,7 +187,7 @@ export default function JobCreateDrawer({
             createdJob = true
             setJobWasCreated(true)
 
-            const scheduleOptionsToCreate = draft.status === JOB_STATUSES.UNCONFIRMED ? [] : scheduleDrafts
+            const scheduleOptionsToCreate = stagingOnly || draft.status === JOB_STATUSES.UNCONFIRMED ? [] : scheduleDrafts
             await Promise.all(scheduleOptionsToCreate.map((option) =>
                 onCreateScheduleOption({
                     jobId,
@@ -198,27 +213,27 @@ export default function JobCreateDrawer({
         <JobDrawerShell
             eyebrow="Create job"
             title={draft.jobNumber.trim() || 'New job'}
-            busy={isSaving}
+            busy={isSaving || locationSaving}
             onClose={onClose}
             footer={<>
                 {saveError
                     ? <span className="job-edit-save-error" role="alert">{saveError}</span>
-                    : <span>Create this job in Dataverse.</span>}
+                    : <span>{locationPending ? 'Save or cancel the equipment location change before creating the job.' : stagingOnly ? 'Save to Staging. No number is allocated and no email is sent.' : 'Create this job in Dataverse.'}</span>}
                 <div className="job-edit-footer-actions">
-                    <button type="button" onClick={onClose} disabled={isSaving}>Cancel</button>
+                    <button type="button" onClick={onClose} disabled={isSaving || locationSaving}>Cancel</button>
                     <button
                         type="button"
                         className="primary"
                         onClick={jobWasCreated ? onClose : createJob}
-                        disabled={isSaving}
+                        disabled={isSaving || locationPending || locationSaving}
                     >
                         {isSaving ? 'Creating...' : jobWasCreated ? 'Close' : 'Create job'}
                     </button>
                 </div>
             </>}
         >
-            <div className="job-edit-grid">
-                <JobCoreFields draft={draft} setDraft={setDraft} mechanics={mechanics} mechanicsLoading={mechanicsLoading} mechanicsError={mechanicsError} onRetryMechanics={onRetryMechanics} equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)} allowEmptyJobType jobTypeError={jobTypeError} jobTypeOptions={jobTypeOptions} />
+            <fieldset className="job-edit-grid job-create-fields" disabled={isSaving || locationSaving}>
+                <JobCoreFields stagingOnly={stagingOnly} draft={draft} setDraft={setDraft} mechanics={mechanics} mechanicsLoading={mechanicsLoading} mechanicsError={mechanicsError} onRetryMechanics={onRetryMechanics} equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)} allowEmptyJobType jobTypeError={jobTypeError} jobTypeOptions={jobTypeOptions} />
                 {jobRequiresMaintenance(draft.jobType) && <JobMaintenanceSummary
                     equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)}
                     servicePlans={servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === draft.equipmentId.toLowerCase())}
@@ -227,6 +242,11 @@ export default function JobCreateDrawer({
                     onRetry={() => setEquipmentDependencyAttempt((current) => current + 1)}
                 />}
                 <JobRelationshipFields
+                    manageEquipmentLocation
+                    locationRequired={!draft.equipmentId}
+                    locationErrors={locationValidationAttempted ? locationErrors : undefined}
+                    onLocationPendingChange={setLocationPending}
+                    onLocationSavingChange={setLocationSaving}
                     editor={editor}
                     equipmentList={equipmentList}
                     customers={customers}
@@ -243,12 +263,12 @@ export default function JobCreateDrawer({
                     onLoadCustomerSites={onLoadCustomerSites}
                     onLoadSiteContacts={onLoadSiteContacts}
                 />
-                <JobScheduleFields
+                {!stagingOnly && <JobScheduleFields
                     draftOptions={scheduleDrafts}
                     onDraftOptionsChange={setScheduleDrafts}
                     disabledMessage={draft.status === JOB_STATUSES.UNCONFIRMED ? UNCONFIRMED_OPERATION_MESSAGE : undefined}
-                />
-            </div>
+                />}
+            </fieldset>
         </JobDrawerShell>
     )
 }

@@ -7,6 +7,7 @@ import EquipmentDataQualityIndicator from './EquipmentDataQualityIndicator'
 import { parseAlternateFleetNumbers } from '../identifiers/alternateFleetNumbers'
 
 type Props = {
+    readOnly?: boolean
     equipment: Equipment[]
     servicePlans: EquipmentServicePlan[]
     servicePlansLoading?: boolean
@@ -30,7 +31,7 @@ function valueOrDash(value?: string | null) {
     return value?.trim() || '—'
 }
 
-export default function EquipmentTable({ equipment, servicePlans, servicePlansLoading = false, servicePlansUnavailable = false, sortKey, sortDirection, onSort, onEdit }: Props) {
+export default function EquipmentTable({ readOnly = false, equipment, servicePlans, servicePlansLoading = false, servicePlansUnavailable = false, sortKey, sortDirection, onSort, onEdit }: Props) {
     return (
         <div className="equipment-table-scroll">
             <table className="equipment-table">
@@ -52,12 +53,12 @@ export default function EquipmentTable({ equipment, servicePlans, servicePlansLo
                                 <span aria-hidden="true">{sortKey === 'dataStatus' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕'}</span>
                             </button>
                         </th>
-                        <th><span className="equipment-visually-hidden">Actions</span></th>
+                        {!readOnly && <th><span className="equipment-visually-hidden">Actions</span></th>}
                     </tr>
                 </thead>
                 <tbody>
                     {equipment.length === 0 ? (
-                        <tr><td className="equipment-empty" colSpan={10}>No equipment matches the current search and filters.</td></tr>
+                        <tr><td className="equipment-empty" colSpan={readOnly ? 9 : 10}>No equipment matches the current search and filters.</td></tr>
                     ) : equipment.map((item) => {
                         const itemServicePlans = servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === item.gr_equipmentid.toLowerCase())
                         const primary = calculatePrimaryNextService(itemServicePlans, item)
@@ -66,9 +67,9 @@ export default function EquipmentTable({ equipment, servicePlans, servicePlansLo
                         return (
                         <tr
                             key={item.gr_equipmentid}
-                            tabIndex={0}
-                            onClick={() => onEdit(item)}
-                            onKeyDown={(event) => {
+                            tabIndex={readOnly ? undefined : 0}
+                            onClick={readOnly ? undefined : () => onEdit(item)}
+                            onKeyDown={readOnly ? undefined : (event) => {
                                 if (event.key === 'Enter' || event.key === ' ') {
                                     event.preventDefault()
                                     onEdit(item)
@@ -84,13 +85,13 @@ export default function EquipmentTable({ equipment, servicePlans, servicePlansLo
                             <td><span className={item.statecode === 0 ? 'equipment-state active' : 'equipment-state'}>{item.statecode === 0 ? 'Active' : 'Inactive'}</span></td>
                             <td>{servicePlansLoading ? <span className="equipment-maintenance-summary"><small>Loading…</small></span> : servicePlansUnavailable ? <span title="Maintenance summaries could not be loaded.">Unavailable</span> : primary ? <span className="equipment-maintenance-summary"><strong>{label} @ {primary.gr_nextduehours}</strong><small>{remaining != null ? `${Math.abs(remaining)} hrs ${remaining < 0 ? 'overdue' : 'remaining'}` : 'Due hours unavailable'}</small></span> : 'Not Configured'}</td>
                             <td className="equipment-data-quality-cell">{servicePlansLoading ? <span className="equipment-data-quality-loading" role="status">Loading…</span> : servicePlansUnavailable ? <span title="Maintenance data quality could not be calculated.">Unavailable</span> : <EquipmentDataQualityIndicator equipment={item} servicePlans={itemServicePlans} />}</td>
-                            <td>
+                            {!readOnly && <td>
                                 <button
                                     className="equipment-edit-action"
                                     type="button"
                                     onClick={(event) => { event.stopPropagation(); onEdit(item) }}
                                 >Edit</button>
-                            </td>
+                            </td>}
                         </tr>)
                     })}
                 </tbody>

@@ -15,10 +15,12 @@ export type NewJobEquipmentInput = {
 export type JobEquipmentFieldProps = {
     value: string
     equipmentList: Equipment[]
+    selectedEquipmentFallback?: Equipment
     customerId?: string
     siteId?: string
     initialEquipmentDraft?: Partial<NewJobEquipmentInput>
     required?: boolean
+    showSelectedLocation?: boolean
     error?: string
     createDescription?: string
     createActionLabel?: string
@@ -26,7 +28,7 @@ export type JobEquipmentFieldProps = {
     dependencyError?: string
     onRetryDependencies?: () => void
     onChange: (equipment: Equipment | undefined) => void
-    onCreateEquipment: (equipment: NewJobEquipmentInput) => Promise<string>
+    onCreateEquipment?: (equipment: NewJobEquipmentInput) => Promise<string>
     onSearchEquipment?: (query: string, context: { customerId?: string; siteId?: string }, signal?: AbortSignal) => Promise<Equipment[]>
     unknownEquipmentOption?: {
         selected: boolean
@@ -49,10 +51,12 @@ const jobEquipmentLabel = (item: Equipment) => ({
 export default function JobEquipmentField({
     value,
     equipmentList,
+    selectedEquipmentFallback,
     customerId,
     siteId,
     initialEquipmentDraft,
     required = false,
+    showSelectedLocation = true,
     error = '',
     createDescription,
     createActionLabel = 'Create equipment',
@@ -66,6 +70,9 @@ export default function JobEquipmentField({
 }: JobEquipmentFieldProps) {
     const resultsId = useId()
     const rootRef = useRef<HTMLDivElement>(null)
+    const searchInputRef = useRef<HTMLInputElement>(null)
+    const changeButtonRef = useRef<HTMLButtonElement>(null)
+    const restoreChangeFocusRef = useRef(false)
     const initialEquipment = {
         fleet: initialEquipmentDraft?.fleet?.trim() ?? '',
         alternateFleet: initialEquipmentDraft?.alternateFleet?.trim() ?? '',
@@ -75,7 +82,11 @@ export default function JobEquipmentField({
     }
     const selectedFromList = equipmentList.find((item) => item.gr_equipmentid === value)
     const [createdSelection, setCreatedSelection] = useState<Equipment | undefined>()
-    const selectedEquipment = selectedFromList ?? (createdSelection?.gr_equipmentid === value ? createdSelection : undefined)
+    // Display saved details when the selection is absent from the directory. Never add
+    // this fallback to search results or infer a master Equipment link from its label.
+    const selectedEquipment = selectedFromList
+        ?? (createdSelection?.gr_equipmentid === value ? createdSelection : undefined)
+        ?? (selectedEquipmentFallback?.gr_equipmentid === value ? selectedEquipmentFallback : undefined)
     const hasExactInitialFleetMatch = Boolean(initialEquipment.fleet) && equipmentList.some((item) => normalizeSearch(item.gr_fleet) === normalizeSearch(initialEquipment.fleet))
     const hasExactInitialSerialMatch = Boolean(initialEquipment.serial) && equipmentList.some((item) => normalizeSearch(item.gr_serial) === normalizeSearch(initialEquipment.serial))
     const initialSearch = hasExactInitialFleetMatch ? initialEquipment.fleet : hasExactInitialSerialMatch ? initialEquipment.serial : initialEquipment.fleet || initialEquipment.serial
@@ -147,9 +158,25 @@ export default function JobEquipmentField({
 
     useEffect(() => closeWhenAnotherDropdownOpens(resultsId, () => setSearchOpen(false)), [resultsId])
 
+    useEffect(() => {
+        if (searchOpen) searchInputRef.current?.focus()
+        else if (restoreChangeFocusRef.current) {
+            restoreChangeFocusRef.current = false
+            changeButtonRef.current?.focus()
+        }
+    }, [searchOpen])
+
     const openSearch = () => {
         announceExclusiveDropdownOpen(resultsId)
         setSearchOpen(true)
+    }
+
+    // Searching for a replacement is not a change to the Job's current relationships.
+    const changeEquipment = () => {
+        setEquipmentSearch('')
+        setActiveIndex(0)
+        setShowCreatePanel(false)
+        openSearch()
     }
 
     const select = (item: Equipment) => {
@@ -168,6 +195,7 @@ export default function JobEquipmentField({
     }
 
     const createEquipment = async () => {
+        if (!onCreateEquipment) return
         if (!equipment.fleet.trim() && !equipment.alternateFleet.trim() && !equipment.serial.trim()) {
             setCreateError('Enter a primary fleet, alternate fleet, or serial number.')
             return
@@ -192,10 +220,8 @@ export default function JobEquipmentField({
                 gr_model: input.model || null,
             }
             setCreatedSelection(created)
-            setEquipmentSearch(jobEquipmentLabel(created).identifier)
             setEquipment({ fleet: '', alternateFleet: '', serial: '', make: '', model: '' })
-            setShowCreatePanel(false)
-            onChange(created)
+            select(created)
         } catch (caught) {
             console.error(caught)
             setCreateError('Equipment could not be created.')
@@ -207,16 +233,16 @@ export default function JobEquipmentField({
     return <div className="job-equipment-field" ref={rootRef}>
         <label className={`job-edit-field job-edit-field-wide job-edit-combobox${error ? ' error' : ''}`}>
             <span>Equipment{required && <span aria-hidden="true"> *</span>}</span>
-            {selectedEquipment
-                ? <div className="job-equipment-selected"><div><strong>{jobEquipmentLabel(selectedEquipment).identifier}</strong>{jobEquipmentLabel(selectedEquipment).model && <small>{jobEquipmentLabel(selectedEquipment).model}</small>}{jobEquipmentLabel(selectedEquipment).location && <small>{jobEquipmentLabel(selectedEquipment).location}</small>}</div><button type="button" aria-label="Change selected equipment" onClick={clear}>Change</button></div>
-                : unknownEquipmentOption?.selected
-                    ? <div className="job-equipment-selected unknown"><div><strong>{unknownEquipmentOption.label}</strong><small>{unknownEquipmentOption.description}</small></div><button type="button" aria-label="Change unknown equipment selection" onClick={() => { unknownEquipmentOption.onChange(false); openSearch() }}>Change</button></div>
-                : <><input role="combobox" aria-expanded={searchOpen} aria-controls={resultsId} aria-invalid={Boolean(error)} autoComplete="off" placeholder="Search primary or alternate fleet, serial, make or model..." value={equipmentSearch} onFocus={openSearch} onChange={(event) => { setEquipmentSearch(event.target.value); openSearch(); setActiveIndex(0) }} onKeyDown={(event) => { if (event.key === 'ArrowDown') { event.preventDefault(); setActiveIndex((current) => Math.min(current + 1, results.length - 1)) } if (event.key === 'ArrowUp') { event.preventDefault(); setActiveIndex((current) => Math.max(current - 1, 0)) } if (event.key === 'Enter' && results[activeIndex]) { event.preventDefault(); select(results[activeIndex]) } if (event.key === 'Escape') setSearchOpen(false) }} />{searchOpen && <div className="job-edit-results job-equipment-results" id={resultsId} role="listbox">{unknownEquipmentOption ? <button type="button" role="option" aria-selected="false" className="job-edit-add-result job-equipment-unknown-option" onClick={() => { setEquipmentSearch(''); setSearchOpen(false); setShowCreatePanel(false); unknownEquipmentOption.onChange(true) }}><strong>{unknownEquipmentOption.label}</strong><small>{unknownEquipmentOption.description}</small></button> : <button type="button" className="job-edit-add-result" onClick={clear}>No Equipment</button>}<button type="button" className="job-edit-add-result" onClick={() => { setEquipment((current) => ({ ...current, fleet: equipmentSearch.trim() })); setSearchOpen(false); setCreateError(''); setShowCreatePanel(true) }}>+ Add new equipment</button>{results.map((item, index) => { const label = jobEquipmentLabel(item); return <button key={item.gr_equipmentid} type="button" role="option" aria-selected={index === activeIndex} className={index === activeIndex ? 'active' : ''} onMouseEnter={() => setActiveIndex(index)} onClick={() => select(item)}><strong>{label.identifier}</strong>{label.model && <small>{label.model}</small>}{label.location && <small>{label.location}</small>}</button> })}{remoteQueryActive && searchStatus === 'loading' && <span>Searching Equipment…</span>}{remoteQueryActive && searchStatus === 'error' && <span>Equipment search is temporarily unavailable.</span>}{searchStatus !== 'loading' && equipmentSearch.trim() && results.length === 0 && <span>No Equipment found for &quot;{equipmentSearch.trim()}&quot;</span>}</div>}</>}
+            {selectedEquipment && !searchOpen
+                ? <div className="job-equipment-selected"><div><strong>{jobEquipmentLabel(selectedEquipment).identifier}</strong>{jobEquipmentLabel(selectedEquipment).model && <small>{jobEquipmentLabel(selectedEquipment).model}</small>}{showSelectedLocation && jobEquipmentLabel(selectedEquipment).location && <small>{jobEquipmentLabel(selectedEquipment).location}</small>}</div><button ref={changeButtonRef} type="button" aria-label="Change selected equipment" onClick={changeEquipment}>Change</button></div>
+                : unknownEquipmentOption?.selected && !searchOpen
+                    ? <div className="job-equipment-selected unknown"><div><strong>{unknownEquipmentOption.label}</strong><small>{unknownEquipmentOption.description}</small></div><button ref={changeButtonRef} type="button" aria-label="Change unknown equipment selection" onClick={changeEquipment}>Change</button></div>
+                : <><input ref={searchInputRef} role="combobox" aria-expanded={searchOpen} aria-controls={resultsId} aria-invalid={Boolean(error)} autoComplete="off" placeholder="Search primary or alternate fleet, serial, make or model..." value={equipmentSearch} onFocus={openSearch} onChange={(event) => { setEquipmentSearch(event.target.value); openSearch(); setActiveIndex(0) }} onKeyDown={(event) => { if (event.key === 'ArrowDown') { event.preventDefault(); setActiveIndex((current) => Math.min(current + 1, results.length - 1)) } if (event.key === 'ArrowUp') { event.preventDefault(); setActiveIndex((current) => Math.max(current - 1, 0)) } if (event.key === 'Enter' && results[activeIndex]) { event.preventDefault(); select(results[activeIndex]) } if (event.key === 'Escape' && searchOpen) { event.preventDefault(); event.stopPropagation(); restoreChangeFocusRef.current = true; setSearchOpen(false) } }} />{searchOpen && <div className="job-edit-results job-equipment-results" id={resultsId} role="listbox">{unknownEquipmentOption ? <button type="button" role="option" aria-selected="false" className="job-edit-add-result job-equipment-unknown-option" onClick={() => { setEquipmentSearch(''); setSearchOpen(false); setShowCreatePanel(false); unknownEquipmentOption.onChange(true) }}><strong>{unknownEquipmentOption.label}</strong><small>{unknownEquipmentOption.description}</small></button> : <button type="button" className="job-edit-add-result" onClick={clear}>No Equipment</button>}{onCreateEquipment && <button type="button" className="job-edit-add-result" onClick={() => { setEquipment((current) => ({ ...current, fleet: equipmentSearch.trim() })); setSearchOpen(false); setCreateError(''); setShowCreatePanel(true) }}>+ Add new equipment</button>}{results.map((item, index) => { const label = jobEquipmentLabel(item); return <button key={item.gr_equipmentid} type="button" role="option" aria-selected={index === activeIndex} className={index === activeIndex ? 'active' : ''} onMouseEnter={() => setActiveIndex(index)} onClick={() => select(item)}><strong>{label.identifier}</strong>{label.model && <small>{label.model}</small>}{label.location && <small>{label.location}</small>}</button> })}{remoteQueryActive && searchStatus === 'loading' && <span>Searching Equipment…</span>}{remoteQueryActive && searchStatus === 'error' && <span>Equipment search is temporarily unavailable.</span>}{searchStatus !== 'loading' && equipmentSearch.trim() && results.length === 0 && <span>No Equipment found for &quot;{equipmentSearch.trim()}&quot;</span>}</div>}</>}
             {value && dependencyStatus === 'loading' && <small role="status">Refreshing selected Equipment details…</small>}
             {value && dependencyStatus === 'error' && <small className="job-edit-field-error" role="alert">Selected Equipment details are temporarily unavailable. {dependencyError} {onRetryDependencies && <button type="button" onClick={onRetryDependencies}>Try again</button>}</small>}
             {error && <small className="job-edit-field-error" role="alert">{error}</small>}
         </label>
-        {showCreatePanel && <div className="job-edit-create-panel job-edit-field-wide">
+        {onCreateEquipment && showCreatePanel && <div className="job-edit-create-panel job-edit-field-wide">
             <div><h4>New equipment</h4><p>{effectiveCreateDescription}</p></div>
             <label className="job-edit-field"><span>Fleet number</span><input autoFocus value={equipment.fleet} onChange={(event) => setEquipment({ ...equipment, fleet: event.target.value })} /></label>
             <label className="job-edit-field"><span>Alternate fleet number</span><input value={equipment.alternateFleet} onChange={(event) => setEquipment({ ...equipment, alternateFleet: event.target.value })} /></label>

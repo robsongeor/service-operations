@@ -10,9 +10,10 @@ type Props = {
     autoFocus?: boolean
     compact?: boolean
     verified?: boolean
+    disabled?: boolean
 }
 
-export default function VerifiedAddressField({ value, onChange, autoFocus, compact = false, verified = false }: Props) {
+export default function VerifiedAddressField({ value, onChange, autoFocus, compact = false, verified = false, disabled = false }: Props) {
     const { instance } = useMsal()
     const account = useActiveMsalAccount()
     const resultsId = useId()
@@ -24,7 +25,7 @@ export default function VerifiedAddressField({ value, onChange, autoFocus, compa
 
     useEffect(() => {
         const query = value.trim()
-        if (selection?.formattedAddress === value || (verified && query) || query.length < 3) return
+        if (disabled || selection?.formattedAddress === value || (verified && query) || query.length < 3) return
         const controller = new AbortController()
         const timer = window.setTimeout(() => {
             setLoading(true)
@@ -40,7 +41,7 @@ export default function VerifiedAddressField({ value, onChange, autoFocus, compa
                 .finally(() => { if (!controller.signal.aborted) setLoading(false) })
         }, 350)
         return () => { window.clearTimeout(timer); controller.abort() }
-    }, [account, instance, selection, value, verified])
+    }, [account, disabled, instance, selection, value, verified])
 
     const choose = (suggestion: VerifiedAddressSuggestion) => {
         setSelection(suggestion)
@@ -54,8 +55,9 @@ export default function VerifiedAddressField({ value, onChange, autoFocus, compa
         {!compact && <span>Site address</span>}
         <input
             autoFocus={autoFocus}
+            disabled={disabled}
             role="combobox"
-            aria-expanded={open && suggestions.length > 0}
+            aria-expanded={!disabled && open && suggestions.length > 0}
             aria-controls={resultsId}
             aria-autocomplete="list"
             autoComplete="off"
@@ -78,7 +80,7 @@ export default function VerifiedAddressField({ value, onChange, autoFocus, compa
         {(selection || verified && value.trim()) && <small className="job-address-status verified">Verified with Geoapify</small>}
         {!compact && !loading && !selection && !verified && !error && <small className="job-address-status">Select a suggested address to verify it. Free text cannot be saved.</small>}
         {error && <small className="job-address-status error" role="alert">{error}</small>}
-        {open && !loading && value.trim().length >= 3 && <div className="job-edit-results job-address-results" id={resultsId} role="listbox">
+        {!disabled && open && !loading && value.trim().length >= 3 && <div className="job-edit-results job-address-results" id={resultsId} role="listbox">
             {suggestions.map((suggestion) => <button key={suggestion.id} type="button" role="option" aria-selected="false" onMouseDown={(event) => event.preventDefault()} onClick={() => choose(suggestion)}>
                 <strong>{suggestion.addressLine1 || suggestion.formattedAddress}</strong>
                 {suggestion.addressLine1 && <small>{suggestion.addressLine2}</small>}

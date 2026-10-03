@@ -31,20 +31,11 @@ type Options = {
 export function useJobEditor({
     initialDraft,
     initialCustomerSearch = '',
-    customers,
     sites,
     siteContacts,
 }: Options) {
     const [draft, setDraft] = useState<JobEditorDraft>(initialDraft)
     const [customerSearch, setCustomerSearch] = useState(initialCustomerSearch)
-    const [customerSearchOpen, setCustomerSearchOpen] = useState(false)
-
-    const filteredCustomers = customers
-        .filter((customer) =>
-            customer.gr_name.toLowerCase().includes(customerSearch.trim().toLowerCase()),
-        )
-        .slice(0, 8)
-
     const filteredSites = sites.filter(
         (site) => site.gr_Customer?.gr_customerid === draft.customerId,
     )
@@ -90,7 +81,6 @@ export function useJobEditor({
     const resetDraft = useCallback((nextDraft: JobEditorDraft, nextCustomerSearch = '') => {
         setDraft(nextDraft)
         setCustomerSearch(nextCustomerSearch)
-        setCustomerSearchOpen(false)
     }, [])
 
     return {
@@ -98,9 +88,6 @@ export function useJobEditor({
         setDraft,
         customerSearch,
         setCustomerSearch,
-        customerSearchOpen,
-        setCustomerSearchOpen,
-        filteredCustomers,
         filteredSites,
         filteredContacts,
         selectCustomer,

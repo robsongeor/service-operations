@@ -1,23 +1,25 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Mechanic } from '../types/mechanic.types'
-import { canBeAssignedJobs } from '../../mechanics/staffDirectory.ts'
+import { mechanicSelectOptions, type MechanicSelectOption } from '../utils/mechanicSelectOptions'
+import { announceExclusiveDropdownOpen, closeWhenAnotherDropdownOpens } from '../../shared/dropdown/exclusiveDropdown'
 import './SearchableMechanicSelect.css'
 
 type Props = {
     mechanics: Mechanic[]
     selectedId: string
+    selectedName?: string
     isOpen: boolean
     isSaving: boolean
     onOpen: () => void
     onClose: () => void
     onSelect: (mechanicId: string) => void
+    onSelectCustom?: (name: string) => void
     variant?: 'table' | 'drawer'
 }
 
-const normalize = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase()
-
-export default function SearchableMechanicSelect({ mechanics, selectedId, isOpen, isSaving, onOpen, onClose, onSelect, variant = 'table' }: Props) {
+export default function SearchableMechanicSelect({ mechanics, selectedId, selectedName, isOpen, isSaving, onOpen, onClose, onSelect, onSelectCustom, variant = 'table' }: Props) {
+    const resultsId = useId()
     const rootRef = useRef<HTMLDivElement>(null)
     const menuRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLInputElement>(null)
@@ -26,14 +28,9 @@ export default function SearchableMechanicSelect({ mechanics, selectedId, isOpen
     const [activeIndex, setActiveIndex] = useState(0)
     const [position, setPosition] = useState({ top: 0, left: 0, width: 220, maxHeight: 320 })
     const selected = mechanics.find((mechanic) => mechanic.gr_mechanicid === selectedId)
-    const results = useMemo(() => {
-        const search = normalize(query)
-        return mechanics.filter(canBeAssignedJobs)
-            .filter((mechanic) => mechanic.statecode !== 1 && (!search || normalize(`${mechanic.gr_name} ${mechanic.gr_email ?? ''} ${mechanic.gr_phone ?? ''}`).includes(search)))
-            .sort((a, b) => a.gr_name.localeCompare(b.gr_name))
-            .slice(0, 8)
-    }, [mechanics, query])
-    const optionCount = results.length + 1
+    const allowCustom = Boolean(onSelectCustom)
+    const options = useMemo(() => mechanicSelectOptions(mechanics, query, allowCustom), [mechanics, query, allowCustom])
+    const activeOptionIndex = Math.min(activeIndex, options.length - 1)
 
     const updatePosition = useCallback(() => {
         const rect = rootRef.current?.getBoundingClientRect()
@@ -59,48 +56,69 @@ export default function SearchableMechanicSelect({ mechanics, selectedId, isOpen
 
     useEffect(() => {
         if (!isOpen) return
-        const closeOnOutsideClick = (event: MouseEvent) => {
+        return closeWhenAnotherDropdownOpens(resultsId, () => onCloseRef.current())
+    }, [isOpen, resultsId])
+
+    useEffect(() => {
+        if (!isOpen) return
+        announceExclusiveDropdownOpen(resultsId)
+        const closeOnOutsideClick = (event: MouseEvent | FocusEvent) => {
             const target = event.target as Node
             if (!rootRef.current?.contains(target) && !menuRef.current?.contains(target)) onCloseRef.current()
         }
         updatePosition()
-        requestAnimationFrame(() => inputRef.current?.focus())
-        document.addEventListener('mousedown', closeOnOutsideClick)
+        const frame = requestAnimationFrame(() => inputRef.current?.focus())
+        document.addEventListener('mousedown', closeOnOutsideClick, true)
+        document.addEventListener('focusin', closeOnOutsideClick, true)
         window.addEventListener('resize', updatePosition)
         window.addEventListener('scroll', updatePosition, true)
         return () => {
-            document.removeEventListener('mousedown', closeOnOutsideClick)
+            cancelAnimationFrame(frame)
+            document.removeEventListener('mousedown', closeOnOutsideClick, true)
+            document.removeEventListener('focusin', closeOnOutsideClick, true)
             window.removeEventListener('resize', updatePosition)
             window.removeEventListener('scroll', updatePosition, true)
         }
-    }, [isOpen, updatePosition])
+    }, [isOpen, resultsId, updatePosition])
 
     useLayoutEffect(() => {
         if (!isOpen) return
         const frame = requestAnimationFrame(updatePosition)
         return () => cancelAnimationFrame(frame)
-    }, [isOpen, results.length, updatePosition])
+    }, [isOpen, options.length, updatePosition])
 
-    const chooseActive = () => {
-        if (activeIndex === 0) onSelect('')
-        else if (results[activeIndex - 1]) onSelect(results[activeIndex - 1].gr_mechanicid)
+    const choose = (option: MechanicSelectOption) => {
+        rootRef.current?.querySelector('button')?.focus()
+        if (option.kind === 'custom') onSelectCustom?.(option.name)
+        else onSelect(option.id)
+        onClose()
     }
 
-    return <div className={`jobs-mechanic-combobox ${variant}`} ref={rootRef}>
+    return <div className={`jobs-mechanic-combobox ${variant}`} ref={rootRef} onKeyDown={(event) => {
+        if (!isOpen) return
+        if (event.key === 'Escape') {
+            event.preventDefault()
+            event.stopPropagation()
+            onClose()
+            rootRef.current?.querySelector('button')?.focus()
+        }
+        if (event.key === 'Tab') {
+            onClose()
+            rootRef.current?.querySelector('button')?.focus()
+        }
+    }}>
         <button type="button" className="jobs-mechanic-trigger" aria-label="Assigned mechanic" aria-haspopup="listbox" aria-expanded={isOpen} disabled={isSaving} onClick={() => { if (isOpen) onClose(); else { setQuery(''); setActiveIndex(0); onOpen() } }}>
-            <span>{isSaving ? 'Saving…' : selected?.gr_name || 'Unassigned'}</span><span aria-hidden="true">⌄</span>
+            <span>{isSaving ? 'Saving…' : selected?.gr_name || selectedName || 'Unassigned'}</span><span aria-hidden="true">⌄</span>
         </button>
         {isOpen && createPortal(<div className="jobs-mechanic-menu" ref={menuRef} style={{ top: position.top, left: position.left, width: position.width, maxHeight: position.maxHeight }}>
-            <input ref={inputRef} type="search" role="combobox" aria-expanded="true" aria-controls="jobs-mechanic-results" placeholder="Search technicians…" value={query} onChange={(event) => { setQuery(event.target.value); setActiveIndex(0) }} onKeyDown={(event) => {
-                if (event.key === 'ArrowDown') { event.preventDefault(); setActiveIndex((current) => Math.min(current + 1, optionCount - 1)) }
-                if (event.key === 'ArrowUp') { event.preventDefault(); setActiveIndex((current) => Math.max(current - 1, 0)) }
-                if (event.key === 'Enter') { event.preventDefault(); chooseActive() }
-                if (event.key === 'Escape') onClose()
+            <input ref={inputRef} type="search" role="combobox" aria-label="Search technicians" aria-expanded="true" aria-controls={resultsId} aria-activedescendant={`${resultsId}-${activeOptionIndex}`} placeholder="Search technicians…" value={query} onChange={(event) => { setQuery(event.target.value); setActiveIndex(0) }} onKeyDown={(event) => {
+                if (event.key === 'ArrowDown') { event.preventDefault(); setActiveIndex(Math.min(activeOptionIndex + 1, options.length - 1)) }
+                if (event.key === 'ArrowUp') { event.preventDefault(); setActiveIndex(Math.max(activeOptionIndex - 1, 0)) }
+                if (event.key === 'Enter') { event.preventDefault(); choose(options[activeOptionIndex]) }
             }} />
-            <div id="jobs-mechanic-results" className="jobs-mechanic-results" role="listbox">
-                <button type="button" role="option" aria-selected={activeIndex === 0} className={activeIndex === 0 ? 'active' : ''} onMouseEnter={() => setActiveIndex(0)} onClick={() => onSelect('')}><strong>Unassigned</strong><small>Clear technician</small></button>
-                {results.map((mechanic, index) => <button key={mechanic.gr_mechanicid} type="button" role="option" aria-selected={activeIndex === index + 1} className={activeIndex === index + 1 ? 'active' : ''} onMouseEnter={() => setActiveIndex(index + 1)} onClick={() => onSelect(mechanic.gr_mechanicid)}><strong>{mechanic.gr_name}</strong>{(mechanic.gr_email || mechanic.gr_phone) && <small>{mechanic.gr_email || mechanic.gr_phone}</small>}</button>)}
-                {results.length === 0 && <span>No technicians found</span>}
+            <div id={resultsId} className="jobs-mechanic-results" role="listbox" aria-label="Technicians">
+                {options.map((option, index) => <button key={`${option.kind}-${option.id}`} id={`${resultsId}-${index}`} type="button" role="option" aria-selected={activeOptionIndex === index} className={activeOptionIndex === index ? 'active' : ''} onMouseEnter={() => setActiveIndex(index)} onClick={() => choose(option)}><strong>{option.kind === 'custom' ? `Use “${option.name}”` : option.name}</strong>{option.secondary && <small>{option.secondary}</small>}</button>)}
+                {!options.some((option) => option.kind === 'mechanic') && <span>No technicians found</span>}
             </div>
         </div>, document.body)}
     </div>

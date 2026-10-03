@@ -38,6 +38,24 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
 
 ## Priority 1 — Security and reliability
 
+- [ ] Implement the agreed unified Job Book/staging/coordinator workflow in safe stages.
+  Ordinary Job number safety, transactional registration/allocation plugin source, server number
+  guards, disabled client adapter and offline SDK tests are implemented locally. A separate `--unified`
+  fake-data walkthrough now connects both screens with session request/replay recovery, saved-master
+  versus snapshot-only reconciliation, sample registered-entry Void, independent coordinator
+  membership and bounded pages. Next: production implementations/authorization for membership and
+  atomic Void, durable cross-device recovery, server-filtered queries and cache retention. Reconcile Site Check
+  number-clear/allocation/deletion paths and enforce the invariant server-side before release.
+  Existing Intake dispatch remains blocked; schema, migration and permission rollout stay
+  approval-gated. See the [implementation sequence](docs/features/JOB_BOOK_INTAKE_DESIGN.md#unified-workflow-decision-3-october-2026).
+
+- [ ] Deliver the restricted Job Card Admin review workflow for Nargiza and Jess using
+  [`docs/features/JOB_CARD_ADMIN_REVIEW_IMPLEMENTATION_PLAN.md`](docs/features/JOB_CARD_ADMIN_REVIEW_IMPLEMENTATION_PLAN.md):
+  immutable technician evidence, explicit office statuses/notes and audit, Active/History queues,
+  the `ServiceOperations.JobCardAdmin` route role, least-privilege Dataverse access, and the
+  server-side reviewer allowlist. Entra/Dataverse provisioning and assignments, environment-setting
+  changes, deployment, and production pilot remain separate approval gates.
+
 - [ ] Complete restricted Legacy Job Book rollout: create the Entra application roles
   `ServiceOperations.FullAccess` and `ServiceOperations.JobBookOnly`, approve the named user/group
   assignments, target-smoke the existing least-privilege `Service Operations - Job Book Only`

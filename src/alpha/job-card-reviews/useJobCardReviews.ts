@@ -2,23 +2,26 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
 import { acquireDataverseAccessToken } from '../../auth/dataverseAuthentication'
-import { fetchJobCardPhoto, fetchJobCardPhotoBlob, fetchJobCardReview, fetchPendingJobCardReviews, markJobCardReviewed, retryJobCardNotification } from './jobCardReviewApi'
-import type { JobCardReview, JobCardReviewSummary } from './jobCardReview.types'
+import { fetchJobCardPhoto, fetchJobCardPhotoBlob, fetchJobCardReview, fetchJobCardReviews, JobCardReviewApiError, retryJobCardNotification, updateJobCardOfficeReview } from './jobCardReviewApi'
+import type { JobCardOfficeAction, JobCardReview, JobCardReviewQueueView, JobCardQueueItem } from './jobCardReview.types'
+import { queueItemId } from './jobCardReviewQueueModel'
 import { downloadJobCardReviewPdf } from './jobCardReviewPdf'
 import { fetchJobCardContact, type JobCardContact } from './jobCardOfficeContextApi'
 import { buildJobCardPhotoArchive, saveJobCardPhotos } from './jobCardPhotoDownload'
 import { JOB_CARD_READ_ONLY, JOB_CARD_READ_ONLY_MESSAGE } from './jobCardReviewMode'
 
-export function useJobCardReviews(reviewId?: string) {
+export function useJobCardReviews(reviewId?: string, queueView: JobCardReviewQueueView = 'submitted') {
     const { instance } = useMsal()
     const account = useActiveMsalAccount()
-    const [items, setItems] = useState<JobCardReviewSummary[]>([])
+    const [items, setItems] = useState<JobCardQueueItem[]>([])
     const [truncated, setTruncated] = useState(false)
+    const [nextOffset, setNextOffset] = useState<number>()
     const [review, setReview] = useState<JobCardReview | null>(null)
     const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({})
     const [error, setError] = useState('')
     const [busy, setBusy] = useState(true)
     const [revision, setRevision] = useState(0)
+    const [conflict, setConflict] = useState(false)
     const [pdfBusy, setPdfBusy] = useState(false)
     const [contact, setContact] = useState<{ data?: JobCardContact | null; error?: string }>()
     const [photoSaving, setPhotoSaving] = useState(false)
@@ -41,17 +44,17 @@ export function useJobCardReviews(reviewId?: string) {
         void accessToken().then(async (token) => {
             if (reviewId) {
                 const value = await fetchJobCardReview(token, reviewId)
-                if (current) setReview(value)
+                if (current) { setReview(value); setConflict(false) }
             } else {
-                const value = await fetchPendingJobCardReviews(token)
-                if (current) { setItems(value.items); setTruncated(value.truncated === true) }
+                const value = await fetchJobCardReviews(token, queueView)
+                if (current) { setItems(value.items); setTruncated(Boolean(value.truncated || value.hasMore)); setNextOffset(value.nextOffset) }
             }
             if (current) setError('')
         }).catch((reason: unknown) => {
             if (current) setError(reason instanceof Error ? reason.message : 'The reviews could not be loaded.')
         }).finally(() => { if (current) setBusy(false) })
         return () => { current = false }
-    }, [accessToken, reviewId, revision])
+    }, [accessToken, queueView, reviewId, revision])
 
     const jobId = review?.sourceJobId
     useEffect(() => {
@@ -64,13 +67,30 @@ export function useJobCardReviews(reviewId?: string) {
     }, [accessToken, jobId, revision])
 
     const refresh = () => { setBusy(true); setError(''); setRevision((value) => value + 1) }
-    const markReviewed = async () => {
+    const transition = async (action: JobCardOfficeAction, values: { note?: string; greentreeReference?: string } = {}) => {
         if (JOB_CARD_READ_ONLY) { setError(JOB_CARD_READ_ONLY_MESSAGE); return }
         if (!reviewId || !review) return
+        if (conflict) throw new Error('Refresh the review and check the latest change before retrying.')
         setBusy(true)
         setError('')
-        try { setReview(await markJobCardReviewed(await accessToken(), reviewId, review.etag)) }
-        catch (reason) { setError(reason instanceof Error ? reason.message : 'The review could not be completed.') }
+        setConflict(false)
+        try { setReview(await updateJobCardOfficeReview(await accessToken(), reviewId, { action, etag: review.etag, ...values })) }
+        catch (reason) {
+            setConflict(reason instanceof JobCardReviewApiError && reason.status === 409)
+            setError(reason instanceof Error ? reason.message : 'The review could not be updated.')
+            throw reason
+        }
+        finally { setBusy(false) }
+    }
+    const loadMore = async () => {
+        if (reviewId || nextOffset == null || busy) return
+        setBusy(true); setError('')
+        try {
+            const value = await fetchJobCardReviews(await accessToken(), queueView, nextOffset)
+            if (!mounted.current) return
+            setItems((current) => [...current, ...value.items.filter((item) => !current.some((existing) => queueItemId(existing) === queueItemId(item)))])
+            setTruncated(Boolean(value.truncated || value.hasMore)); setNextOffset(value.nextOffset)
+        } catch (reason) { setError(reason instanceof Error ? reason.message : 'More reviews could not be loaded.') }
         finally { setBusy(false) }
     }
     const loadPhoto = async (photoId: string) => {
@@ -119,5 +139,5 @@ export function useJobCardReviews(reviewId?: string) {
             return false
         } finally { photoDownload.current = null; if (mounted.current) setPhotoSaving(false) }
     }
-    return { items, truncated, review, photoUrls, photoLoading, error, busy, refresh, markReviewed, loadPhoto, retryNotification, pdfBusy, downloadPdf, contact, photoSaving, photoProgress, photoFeedback, downloadPhotos, readOnly: JOB_CARD_READ_ONLY }
+    return { items, truncated, canLoadMore: nextOffset != null, review, photoUrls, photoLoading, error, busy, conflict, refresh, transition, loadMore, loadPhoto, retryNotification, pdfBusy, downloadPdf, contact, photoSaving, photoProgress, photoFeedback, downloadPhotos, readOnly: JOB_CARD_READ_ONLY }
 }

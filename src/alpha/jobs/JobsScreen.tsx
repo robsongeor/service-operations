@@ -1,4 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useUnifiedJobWorklist } from './hooks/useUnifiedJobWorklist'
+import { UNIFIED_JOB_WALKTHROUGH, isCoordinatorManaged, jobMatchesWorklist, type JobWorklist } from './domain/unifiedJobWorkflow'
+import JobRegistrationDialog from './components/JobRegistrationDialog'
+import JobCorrectionsDrawer from './components/JobCorrectionsDrawer'
+import { useJobRegistration } from './hooks/useJobRegistration'
+import { fetchJobForCorrection } from './services/jobCorrectionsApi'
 import { useJobs } from './hooks/useJobs'
 import JobsTable from './components/JobsTable'
 import JobEditDrawer from './components/JobEditDrawer'
@@ -29,6 +35,12 @@ export default function JobsScreen() {
     const signedInUser = getSignedInUserInfo(activeAccount)
     const storageKey = signedInUser ? getJobsViewStateKey(signedInUser.storageId) : null
     const defaultViewStorageKey = signedInUser ? getJobsDefaultViewKey(signedInUser.storageId) : null
+    const unifiedWorklist = useUnifiedJobWorklist()
+    const allocationRecovery = useJobRegistration(`${activeAccount?.homeAccountId}.allocation`, unifiedWorklist.getAccessToken, UNIFIED_JOB_WALKTHROUGH)
+    const [recoveryError, setRecoveryError] = useState('')
+    const scopedData = useMemo(() => ({ jobs: unifiedWorklist.jobs, equipment: [], sites: [], servicePlans: [], scheduleOptions: [], officeUpdates: [] }), [unifiedWorklist.jobs])
+    const [worklist, setWorklist] = useState<JobWorklist>('operational')
+    const [workflowJob, setWorkflowJob] = useState<{ job: Job; mode: 'allocate' | 'manage' } | null>(null)
     const {
         jobs, equipmentList, mechanics, mechanicsLoading, mechanicsError, retryMechanics, sites, customers, siteContacts,
         scheduleOptions,
@@ -51,7 +63,7 @@ export default function JobsScreen() {
         loadCustomerSitesForEditor, loadSiteContactsForEditor, loadEquipmentForEditor,
         loadEquipmentServicePlansForEditor,
         isLoading, loadError, retryInitialLoad, fetchJobForDrawer, fetchJobCardDetails, fetchJobPhotoBody,
-    } = useJobs()
+    } = useJobs(UNIFIED_JOB_WALKTHROUGH ? { loadGlobalOperationalData: false, scopedData, onScopedDataChanged: unifiedWorklist.reload } : {})
     useOperationalScreenReady('Jobs', !isLoading)
     const [editingJob, setEditingJob] = useState<Job | null>(null)
     const [editingInitialTab, setEditingInitialTab] = useState<'details' | 'jobcard'>('details')
@@ -60,7 +72,7 @@ export default function JobsScreen() {
     const [defaultView, setDefaultView] = useState<JobsDefaultView>(() => defaultViewStorageKey
         ? restoreJobsDefaultView(defaultViewStorageKey) ?? APPLICATION_DEFAULT_JOBS_VIEW
         : APPLICATION_DEFAULT_JOBS_VIEW)
-    const [viewState, setViewState] = useState<JobsViewState>(() => storageKey
+    const [viewState, setViewState] = useState<JobsViewState>(() => UNIFIED_JOB_WALKTHROUGH ? { ...DEFAULT_JOBS_VIEW_STATE, selectedJobType: 'all' } : storageKey
         ? restoreJobsViewState(storageKey, true) ?? applyJobsDefaultView(defaultView)
         : DEFAULT_JOBS_VIEW_STATE)
     const [settingsOpen, setSettingsOpen] = useState(false)
@@ -142,7 +154,7 @@ export default function JobsScreen() {
         }))
     }
 
-    const filteredJobs = jobs.filter((job) => visibleStatuses.includes(job.gr_status))
+    const filteredJobs = jobs.filter((job) => visibleStatuses.includes(job.gr_status) && (!UNIFIED_JOB_WALKTHROUGH || jobMatchesWorklist(job, worklist)))
     const scheduledSettingLabels: Record<ScheduledJobsVisibility, string> = {
         all: 'All scheduled Jobs',
         today: 'Scheduled today',
@@ -227,6 +239,19 @@ export default function JobsScreen() {
                     </button>
                 </div>
             </header>
+            {UNIFIED_JOB_WALKTHROUGH && <section className="jobs-filter-bar" aria-label="Job worklists">
+                <div className="job-type-tabs" role="tablist" aria-label="Job worklists">{(['operational', 'staging', 'all'] as const).map((value) => <button type="button" role="tab" key={value} className={`job-type-tab${worklist === value ? ' active' : ''}`} aria-selected={worklist === value} onClick={() => setWorklist(value)}>{value === 'all' ? 'All jobs' : value === 'staging' ? 'Staging' : 'Operational'}</button>)}</div>
+                <p>{worklist === 'staging' ? 'Unnumbered work, regardless of status. Allocate a number only when needed.' : worklist === 'operational' ? 'Jobs deliberately added to the coordinator worklist.' : 'Numbered Job Book work, staging and coordinator-managed Jobs. Older ledger-only history remains in Job Book.'}</p>
+                <button type="button" disabled={unifiedWorklist.busy} onClick={() => void unifiedWorklist.reload()}>Refresh Jobs</button>
+                {allocationRecovery.pending?.kind === 'allocate' && <p role="status">A number request needs confirmation. <button type="button" onClick={() => {
+                    const request = allocationRecovery.pending
+                    if (request?.kind !== 'allocate') return
+                    void unifiedWorklist.getAccessToken().then((token) => fetchJobForCorrection(token, request.jobId)).then((job) => setWorkflowJob({ job, mode: 'allocate' })).catch((cause) => setRecoveryError(cause instanceof Error ? cause.message : 'Could not recover this Job.'))
+                }}>Resume number request</button></p>}
+                {(recoveryError || allocationRecovery.error) && <p role="alert">{recoveryError || allocationRecovery.error}</p>}
+                {unifiedWorklist.error && <span role="alert">{unifiedWorklist.error}</span>}
+                {unifiedWorklist.next && <button type="button" disabled={unifiedWorklist.busy} onClick={() => void unifiedWorklist.reload(unifiedWorklist.next)}>Load more Jobs</button>}
+            </section>}
 
             {referenceDataStatus === 'error' && (
                 <div className="jobs-reference-data-state jobs-reference-data-error" role="alert">
@@ -264,6 +289,9 @@ export default function JobsScreen() {
                 </section>
             ) : (
                 <JobsTable
+                    unifiedWorklist={UNIFIED_JOB_WALKTHROUGH}
+                    onAllocateNumber={UNIFIED_JOB_WALKTHROUGH ? (job) => setWorkflowJob({ job, mode: 'allocate' }) : undefined}
+                    onManageJob={UNIFIED_JOB_WALKTHROUGH ? (job) => setWorkflowJob({ job, mode: 'manage' }) : undefined}
                     jobs={filteredJobs}
                     visibleStatuses={visibleStatuses}
                     viewState={viewState}
@@ -391,6 +419,7 @@ export default function JobsScreen() {
 
             {isCreatingJob && (
                 <JobCreateDrawer
+                    stagingOnly={UNIFIED_JOB_WALKTHROUGH}
                     {...sharedDrawerProps}
                     existingJobs={jobs}
                     onCreateJob={createJob}
@@ -407,7 +436,9 @@ export default function JobsScreen() {
                 />
             )}
 
-            {editingJob && (
+            {workflowJob && <JobRegistrationDialog {...workflowJob} getAccessToken={unifiedWorklist.getAccessToken} onSaved={async () => { await unifiedWorklist.reload('', true); setEditingJob(null) }} onClose={() => setWorkflowJob(null)} />}
+            {UNIFIED_JOB_WALKTHROUGH && editingJob && !isCoordinatorManaged(editingJob) && <JobCorrectionsDrawer jobId={editingJob.gr_jobid} getAccessToken={unifiedWorklist.getAccessToken} onClose={() => setEditingJob(null)} onSaved={() => { void unifiedWorklist.reload() }} />}
+            {editingJob && (!UNIFIED_JOB_WALKTHROUGH || isCoordinatorManaged(editingJob)) && (
                 <JobEditDrawer
                     {...sharedDrawerProps}
                     job={editingJob}

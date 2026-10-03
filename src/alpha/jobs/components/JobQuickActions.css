@@ -1,0 +1,25 @@
+.job-quick-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 29px;
+    min-height: 28px;
+    padding: 0 6px;
+    border: 1px solid #cfd4d0;
+    border-radius: 8px;
+    background: transparent;
+    color: #333936;
+    font-size: .67rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+.job-quick-action svg { width: 14px; height: 14px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+.job-quick-action.with-label { justify-content: flex-start; text-align: left; }
+.job-quick-action-edit { padding: 0 9px; border-radius: 999px; white-space: nowrap; }
+.job-quick-action:focus-visible { outline: 2px solid #176f66; outline-offset: 2px; }
+.job-quick-action:hover:not(:disabled) { border-color: #176f66; background: #eaf7f1; }
+.job-quick-action:disabled { cursor: not-allowed; opacity: .5; }
+.job-quick-action.sending { border-color: #d4a53c; background: #fff5d9; color: #72510a; }
+.job-quick-action.sent { border-color: #86bea9; background: #eaf7f1; color: #17634f; }
+.job-quick-action.failed { border-color: #d9a0a0; background: #fff0f0; color: #923d3d; }

@@ -11,6 +11,10 @@ export type Job = {
     '@odata.etag'?: string
     createdon: string
     gr_jobnumber: string | null
+    /** Proposed unified metadata. Only queried by the isolated local walkthrough. */
+    gr_coordinatormanaged?: boolean | null
+    gr_registrationvoid?: boolean
+    gr_registrationvoidreason?: string | null
     gr_status: JobStatus
     gr_ordernumber: string | null
     gr_description: string | null

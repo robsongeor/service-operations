@@ -22,6 +22,7 @@ export const JOB_BOOK_ENTRY_STAGES = {
     INTAKE: 'intake',
     PROMOTED: 'promoted',
     LEGACY: 'legacy',
+    REGISTERED: 'registered',
     VOID: 'void',
 } as const
 
@@ -42,6 +43,9 @@ export type JobBookRow = {
     mechanicName: string
     equipmentId: string
     fleet: string
+    /** Managed rows may display Serial as a fallback; export must retain the actual Fleet value. */
+    primaryFleet?: string
+    alternateFleetNumbers?: string
     serial: string
     make: string
     model: string
@@ -61,10 +65,16 @@ export type JobBookRow = {
     equipmentConfigured: boolean
     equipmentReviewRequired: boolean
     entryStage: JobBookEntryStage
+    voidReason: string
     entrySource: JobBookEntrySource
     linkedJobId: string
     intakeRecordId: string
     etag: string
+    registeredLedgerId?: string
+    ledgerEtag?: string
+    coordinatorManaged?: boolean
+    /** Immutable allocation snapshots stay distinct from the working Job display. */
+    allocationSnapshot?: { customer: string; site: string; address: string; description: string }
 }
 
 export function equipmentToPrototype(record: Equipment): PrototypeEquipment {
@@ -88,6 +98,21 @@ export function equipmentToPrototype(record: Equipment): PrototypeEquipment {
 
 export function isEquipmentConfigured(equipment: Pick<PrototypeEquipment, 'fleet' | 'serial'>) {
     return Boolean(equipment.fleet.trim() || equipment.serial.trim())
+}
+
+export function jobBookEquipmentFallback(
+    row: Pick<JobBookRow, 'equipmentId' | 'fleet' | 'serial' | 'make' | 'model' | 'equipmentReviewRequired'>,
+): Equipment | undefined {
+    if (row.equipmentReviewRequired || !(row.equipmentId || row.fleet.trim() || row.serial.trim())) return undefined
+    // Intake snapshots can be saved without a master Equipment lookup. Keep the
+    // original (possibly empty) ID and leave all relationships on the entry itself.
+    return {
+        gr_equipmentid: row.equipmentId,
+        gr_fleet: row.fleet || null,
+        gr_serial: row.serial || null,
+        gr_make: row.make || null,
+        gr_model: row.model || null,
+    }
 }
 
 export function splitSiteAddress(value: string) {
@@ -126,6 +151,7 @@ export function createBlankJobBookRow(jobNumber: number, jobBookKey: JobBookKey 
         equipmentConfigured: false,
         equipmentReviewRequired: false,
         entryStage: JOB_BOOK_ENTRY_STAGES.INTAKE,
+        voidReason: '',
         entrySource: 'local-intake',
         linkedJobId: '',
         intakeRecordId: '',
@@ -177,6 +203,33 @@ export function setEquipmentReviewRequired(row: JobBookRow, required: boolean): 
         model: '',
         equipmentConfigured: false,
         equipmentReviewRequired: true,
+    }
+}
+
+export function jobBookLocationFieldsVisible(
+    row: Pick<JobBookRow, 'equipmentId' | 'equipmentReviewRequired'>,
+    editingExistingEntry = false,
+) {
+    return editingExistingEntry || Boolean(row.equipmentId) || row.equipmentReviewRequired
+}
+
+export function jobBookLocationSummaryVisible(
+    row: Pick<JobBookRow, 'customerId' | 'customer' | 'siteId' | 'site'>,
+    locationConfirmed: boolean,
+    editingLocation = false,
+) {
+    // Saved or explicitly created locations belong to the entry, including snapshots.
+    // Incomplete locations and an explicit Edit still expose the relationship fields.
+    return Boolean(locationConfirmed && !editingLocation
+        && (row.customerId.trim() || row.customer.trim()) && (row.siteId.trim() || row.site.trim()))
+}
+
+// Customer changes must not undo an explicit unknown-equipment choice or a local machine snapshot.
+export function applyIntakeCustomerToRow(row: JobBookRow, customerId: string, customer: string): JobBookRow {
+    if (customerId === row.customerId && customer === row.customer) return row
+    return {
+        ...row, customerId, customer, siteId: '', site: '', contactId: '', contactName: '', address: '',
+        addressVerified: false, addressNotFoundConfirmed: false,
     }
 }
 

@@ -2,6 +2,43 @@
 
 Branch: `codex/legacy-job-book-job-cards-integration`
 
+## Job Card Admin Review Phases 1–3 (implemented locally)
+
+- The Azure-backed review service now owns explicit Pending, In review, Needs clarification, On
+  hold, and Processed in GreenTree states. GreenTree data entry is the sole final workflow stage.
+  No invoice required has been retired as an action; any existing outcome remains read-only in
+  Completed alongside legacy Reviewed records and is never relabelled as GreenTree processing. Notes,
+  optional GreenTree reference, authoritative administrator identity/timestamps, bounded activity,
+  immutable technician evidence, and ETag conflicts are enforced server-side.
+- The office screen has separately loaded Open jobs, Submitted, Review and Completed tabs, with
+  job type as a secondary filter. Open jobs requires a numbered Job and a recorded successful
+  technician dispatch, excludes accepted/legacy submitted cards, and never includes unsent staging.
+  Needs clarification remains status and notes only, without technician contact or another link.
+  Queries are bounded with explicit incremental-loading/scan-limit notices. Review detail exposes
+  explicit confirmation actions, workflow context/history, and
+  conflict recovery while retaining the immutable evidence and read-only associated Quote drawer.
+- The client recognizes `ServiceOperations.JobCardAdmin`, lands it on Job Card reviews, and exposes
+  only Job Card reviews, Legacy Job Book, Quotes, Equipment, and Customers. Quotes, Equipment,
+  Customers, Sites and Contacts remain read-only outside the approved Intake location exceptions.
+  Admin managed-Job corrections now use **Edit entry** within Job Book; Equipment,
+  Customer/Site, Contact, description and PO are editable, and address follows Site. Factual
+  managed-Job GT/Timecloud ticks are permitted. Coordinator controls, allocated number and original
+  submissions remain protected. `/jobs` and Intake **Manage job** remain coordinator-only.
+  The shared Job editor uses a narrow correction API with exact ETags and explicit conflict reload.
+  JobBookOnly cannot correct managed Jobs. Live column-level authorization remains approval-gated.
+- Development can simulate `job-card-admin`. Entra/Dataverse role provisioning and assignment,
+  production reviewer allowlist/settings, deployment, and named-user smoke testing remain the
+  approval-gated Phases 4–5 and have not been performed.
+- `npm run dev:job-card-walkthrough` starts an isolated, sample-only walkthrough on loopback port
+  5180, using the real app and review service with in-memory storage and synthetic identities.
+  It does not load normal Vite configuration or environment files. The walkthrough exposed and
+  fixed confirmation-dialog keyboard focus, in-dialog conflict refresh/draft preservation, and
+  long office-state badges overlapping adjacent queue cells. See the implementation plan for the
+  repeatable walkthrough steps and the remaining live-security verification boundary.
+- Open jobs adds a read-only dependency on Email Dispatch and Job Assignment. Verify these grants
+  during approval-gated role preflight; no live roles or settings were changed. Existing identifiers
+  and timestamps correlate sends/returns; unrecorded off-system returns cannot be inferred.
+
 ## WOF due-list email copy (implemented locally)
 
 - WOF Table Settings now copies every Due Soon and Expired road-registered Equipment row as a rich
@@ -20,6 +57,129 @@ Branch: `codex/legacy-job-book-job-cards-integration`
   Dataverse schema, Quote persistence contract, cloud configuration, or business data.
 
 ## Legacy Job Book restricted access (implemented locally)
+
+- Unified-workflow direction is agreed: one working Job linked to a regional number ledger,
+  independent coordinator-worklist membership, and Admin initial-technician selection/send with
+  later reassignment/scheduling reserved for coordinators. The first number-safety slice is local:
+  existing Job numbers are read-only in the canonical editor/table, generic/completion saves omit
+  them, ordinary bulk allocation rejects numbered/stale records and uses bounded preflight plus
+  exact ETags, and ordinary deletion retains numbered Jobs. Tests cover concurrent allocation and
+  deletion. Transactional registration/allocation now has local C# plugin source and an offline
+  SDK-backed test harness, plus a disabled typed client adapter and unprovisioned deployment
+  contract. The server number/ledger invariant plugin is also local and unregistered. Neither
+  screen is connected in the ordinary runtime. An isolated `--unified` walkthrough now connects
+  registration/allocation to both screens, preserves retained requests across refresh, distinguishes
+  Staging/Operational/All jobs, reconciles explicit links without converting old Intake, and models
+  same-Job management and registered-entry Void. Membership/Void endpoints and Job Void fields are
+  fixture-only; production implementations and general Admin server-field authorization remain unfinished. Site Check
+  specialist number-clear/allocation/deletion paths must be adapted before the guard can be installed.
+  Current creation/import and first-allocation spreadsheet paste remain transitional. No live
+  schema, seed, role, data, email or deployment changes were made. See the
+  [implementation sequence](docs/features/JOB_BOOK_INTAKE_DESIGN.md#unified-workflow-decision-3-october-2026).
+  Validation: all 730 tests pass, including 17 number-policy tests and shared drawer rendering;
+  build, changed-file lint and diff checks pass. Full lint retains the same three unrelated
+  EquipmentDrawer/MaintenanceBookingScreen errors; build retains the known large-chunk warning.
+  The subsequent registration slice adds 9 client tests (739 full-suite tests now pass) plus 32
+  separate compiled C# tests. Build and focused lint pass; the same three full-lint errors remain.
+  No live transaction, privilege or schema validation has been performed and no signed assembly,
+  API/step registration or deployment was produced. The ordinary sample walkthrough retains its old
+  contract. The opt-in unified walkthrough uses a separate port with an Admin/coordinator role switch;
+  no user sample rows were reset or migrated. See the detailed sample-only scope and QA steps in
+  the Job Book design. Live schema, seeds, permissions and rollout remain approval-gated.
+  Unified-walkthrough validation: 756 app tests and all 32 compiled plugin tests pass; focused lint,
+  production build and diff checks pass. Full lint still reports the same three unrelated existing
+  EquipmentDrawer/MaintenanceBooking errors; the known large-chunk build warning remains.
+  Browser QA also confirms regional identity, new saved master records, marker-blocked Void,
+  coordinator configuration, and same-request recovery after a simulated post-commit 503/refresh.
+
+- Job Book now shares the Jobs order-number-book copy and technician-email controls. It uses
+  a compact horizontal action row with Edit entry and icon-only copy/email/Void controls rather
+  than stacked text buttons. Existing permission/confirmation rules are unchanged. Copy supports
+  non-Void numbered Intake and managed rows. Admin email is restricted to the already-assigned
+  technician of a numbered managed Job, with editable subject/comments and current-version/detail
+  preflight; allocation stays coordinator-only. No Intake promotion, Job-state/marker mutation,
+  live sending or permission changes were added. Local sending remains blocked. See
+  [Jobs architecture](docs/architecture/jobs.md#job-book-quick-actions-3-october-2026-local-implementation)
+  for shared owners and the approval-gated server/Dataverse authorization requirements.
+  Validation: 712 full-suite tests pass; build, changed-file lint and diff checks pass. Full lint
+  retains only the three pre-existing EquipmentDrawer/MaintenanceBookingScreen errors. The build
+  retains the known large-chunk warning. Sample-only browser checks verified copy success,
+  assigned-recipient preview, Intake blocking and local send blocking; no real email was sent.
+
+- Mark as void now requires a reason and is limited to unpromoted Intake with neither GT Entry
+  nor Timecloud Entry ticked. It retains the number and evidence in a visible read-only VOID row.
+  Exact-record preflight and conditional saves prevent competing edits/ticks from being overwritten;
+  explicit conflict reload retains the reason. Ordinary edits no longer reset stage, and marker
+  saves are single-column updates. Shared confirmation and domain rules cover all four regional
+  tables. No live data, permissions or settings were changed; see the Intake design for boundaries.
+  Local checks: 115 focused Job Book tests and full suite pass; build/focused lint pass. Full lint
+  retains the same three unrelated errors below. Isolated browser checks verified each marker
+  blocks voiding, Cancel, required reason, concurrent tick/reload, and a retained read-only Void row.
+
+- The orange Equipment not configured shortcut now opens the existing Intake edit drawer, keeping
+  the full entry and Job number together with one Save changes/Cancel boundary. The old machine
+  popup and inline row editor were removed; managed-Job access remains unchanged. The sample-only
+  browser check verified equipment selection followed by Cancel/reopen preserves the saved entry.
+  Saved locations in that edit drawer now reuse New entry's read-only Customer/Site tile with
+  an explicit Edit action. Saved entry relationships stay authoritative; entry corrections do not
+  implicitly move Equipment. The tile also applies to unknown/unconfigured machines and snapshot-only
+  locations; entries missing Customer or Site retain their relationship controls.
+  Saved machine details now also populate the shared Equipment tile when the entry has no master
+  Equipment link or its linked machine is absent from the directory. This is display-only: it does
+  not infer a lookup, change saved relationships, or create Equipment. Change/dismissal still works.
+
+- Intake's Prepare promotion action is now **Manage job**, guarded by the shared `canManageJobs`
+  capability for FullAccess service coordinators only. Restricted Admin/Job Book users retain
+  Edit entry but cannot open the preparation dialog. Managed Job creation remains disabled;
+  no live role/permission changes were made. See the Job Book Intake design for the access mapping.
+
+- New Job/Intake creation now shares an Equipment Customer/Site tile and explicit location editor.
+  The linked Customer/Site is automatic; moving preserves the Equipment selection, updates only its
+  Site using ETag conflict protection, and leaves historical Jobs and maintenance unchanged. Pending
+  edits block Job creation. Unknown/local Equipment retains the previous flow. Both restricted roles
+  have `canMoveEquipment` without general Equipment editing. The live Site-only Dataverse security
+  boundary/privileges remain approval-gated; no provisioning or production moves were performed.
+  See Equipment architecture for save semantics, cache behavior, and release requirements.
+  New Job Book Intake hides Customer/Site/Contact until Equipment is selected or explicitly marked
+  unknown. Equipment Change now opens/focuses search without clearing the current selection or its
+  Customer/Site/Contact. Outside click/Escape restores the tile; only an explicit selection changes
+  the draft. The fix is in the shared picker used by both drawers. Existing-entry editing still
+  exposes its recorded relationships.
+  Both location editors reuse the inline Customer/first-Site create form. The narrow
+  `canCreateEquipmentDestination` capability permits this for restricted roles without enabling
+  existing Customer/Site editing. Creation persists independently of the explicit Equipment move;
+  duplicate checks and partial Site-failure recovery reuse confirmed records. Live Create privileges
+  remain separately approval-gated. See Equipment architecture for the sequential-save boundaries.
+  The tile action is now Edit. The Site selector also offers Add new site for the selected Customer,
+  reusing the Jobs inline Site form with verified addresses. Site creation selects the destination
+  without moving Equipment; cancel preserves the previous selection. Site-only creation shares the
+  destination permission, duplicate checks, pending-save guards, and existing Site API.
+  New jobs without Equipment (including Intake's Equipment not known yet) now require a Customer,
+  Site and non-empty Site address, displayed using the same shared fields and validation rule.
+  The address comes from the selected Site; Contact stays optional. Create services enforce the
+  rule before writes/number allocation, while old entries remain editable. A sample-only browser
+  check confirmed blocked incomplete submission and address autofill without saving test data.
+  Shared relationship controls now reveal Site/address only after Customer selection or creation,
+  and Contact after Site selection. Clearing Customer hides dependent fields again; existing
+  required-location checks and inline Customer/first-Site creation remain unchanged.
+  Successful inline Customer/Site creation for local/unknown Equipment now returns to the shared
+  read-only tile with Edit, including unsaved new Intake entries. Its button is Create customer;
+  snapshot-only persistence is unchanged and the confirmation state resets between entries.
+  Local verification: 643 tests pass, build and focused lint/diff checks pass; full lint retains the
+  three unrelated EquipmentDrawer/MaintenanceBooking errors. Sample browser walkthroughs cover both
+  creation drawers, linked/unlinked machines, a successful move, and stale-version rejection/recovery.
+
+- Job create/edit and Legacy Job Book Intake now use one canonical `JobCustomerField` and shared
+  Customer-search hook. Intake no longer expands the entire Equipment index into Customer options:
+  it seeds only the selected Customer, renders at most eight filtered matches, and starts bounded
+  remote searches after two characters with a 250ms debounce, cancellation, and retry. Both drawers
+  reuse the existing Customer picker styling and inline panel; Intake permissions and snapshot-only
+  creation remain unchanged. See the reusable-component inventory and Job Book Intake design.
+
+- Mechanic selection now reuses the existing Jobs `SearchableMechanicSelect` too: eight eligible
+  Staff matches, shared styling/keyboard/outside-click handling, and no per-keystroke reads.
+  Intake retains its custom/outwork text option and saved names without broadening managed-Job
+  assignment or changing persistence/permissions.
 
 - A central Entra application-role access profile now supports full application,
   Job Book-only, and denied modes. Enforcement remains disabled by default so deploying the code

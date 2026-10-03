@@ -1,10 +1,20 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { useNavigate } from 'react-router-dom'
 import { acquireDataverseAccessToken } from '../../auth/dataverseAuthentication'
 import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
-import { searchCustomers } from '../jobs/services/customersApi'
-import { fetchCustomerSites } from '../jobs/services/sitesApi'
+import { applicationAccessFromEnvironment } from '../../auth/applicationAccess'
+import { searchCustomers, createCustomer, findCustomersByName } from '../jobs/services/customersApi'
+import { fetchCustomerSites, createSite } from '../jobs/services/sitesApi'
+import { createEquipment } from '../jobs/services/equipmentApi'
+import { invalidateJobsCache } from '../jobs/services/jobsApi'
+import { createEquipmentDestination } from '../equipment/services/equipmentLocationWorkflow'
+import { UNIFIED_JOB_WALKTHROUGH } from '../jobs/domain/unifiedJobWorkflow'
+import { useJobRegistration } from '../jobs/hooks/useJobRegistration'
+import JobRegistrationDialog from '../jobs/components/JobRegistrationDialog'
+import { fetchJobForCorrection } from '../jobs/services/jobCorrectionsApi'
+import type { Job } from '../jobs/types/job.types'
+import { reconcileJobBookRows } from './reconcileJobBookRows'
 import { fetchMechanics as fetchStaffDirectory } from '../mechanics/services/mechanicsApi'
 import type { Customer } from '../jobs/types/customer.types'
 import type { Equipment } from '../jobs/types/equipment.types'
@@ -12,24 +22,37 @@ import type { Mechanic } from '../jobs/types/mechanic.types'
 import type { Site } from '../jobs/types/site.types'
 import type { SiteContact } from '../jobs/types/siteContact.types'
 import { fetchSiteContactsForSite } from '../jobs/services/siteContactsApi'
-import VerifiedAddressField from '../jobs/components/VerifiedAddressField'
 import JobDrawerShell from '../jobs/components/JobDrawerShell'
+import JobCorrectionsDrawer from '../jobs/components/JobCorrectionsDrawer'
+import JobEmailComposer from '../jobs/components/JobEmailComposer'
+import JobQuickActions from '../jobs/components/JobQuickActions'
+import { useJobBookActions } from './useJobBookActions'
+import { jobBookCopyBlockedReason, jobBookEmailBlockedReason } from './jobBookActions'
 import JobEquipmentField, { type NewJobEquipmentInput } from '../jobs/components/JobEquipmentField'
 import JobSiteContactFields from '../jobs/components/JobSiteContactFields'
-import SearchableSelect, { type SearchableSelectOption } from '../shared/searchable-select/SearchableSelect'
-import CustomerRelationshipPicker from '../shared/customer-relationship/CustomerRelationshipPicker'
-import { announceExclusiveDropdownOpen, closeWhenAnotherDropdownOpens } from '../shared/dropdown/exclusiveDropdown'
+import JobEquipmentLocation from '../jobs/components/JobEquipmentLocation'
+import JobLocationSummary from '../jobs/components/JobLocationSummary'
+import { isPersistedEquipmentId } from '../equipment/services/equipmentLocationWorkflow'
+import JobCustomerField from '../jobs/components/JobCustomerField'
+import SearchableMechanicSelect from '../jobs/components/SearchableMechanicSelect'
 import { useOperationalQuery } from '../shared/data/useOperationalQuery'
 import { STAFF_DIRECTORY_QUERY_KEY } from '../shared/data/operationalCollectionKeys'
 import { STANDARD_JOB_TYPE_OPTIONS, type JobType } from '../jobs/types/jobType.types'
 import { JOB_DESCRIPTION_MAX_LENGTH } from '../jobs/domain/jobDescription'
-import { createJobBookIntakeRow, fetchJobBookIntakeRows, fetchRecentJobBookRows, jobBookIntakeContactLookupIsAvailable, updateJobBookIntakeRow, updateManagedJobBookMarker } from './jobBookApi'
+import { jobCreationLocationErrors } from '../jobs/domain/jobCreationLocation'
+import { createJobBookIntakeRow, fetchJobBookIntakeRows, fetchJobBookIntakeRow, fetchRecentJobBookRows, jobBookIntakeContactLookupIsAvailable, updateJobBookIntakeRow, updateJobBookIntakeMarker, updateManagedJobBookMarker, mapManagedJobBookRow } from './jobBookApi'
+import { canUpdateJobBookMarkers, isEditableJobBookIntake, jobBookVoidBlockedReason } from './jobBookEntryWorkflow'
+import { useJobBookVoid } from './useJobBookVoid'
+import JobBookVoidDialog from './JobBookVoidDialog'
 import { availableJobBooks, JOB_BOOKS, jobNumberSequence, REGIONAL_JOB_BOOK_ALLOCATION_ENABLED, type JobBookKey } from './jobBookConfig'
 import { fetchJobBookEquipmentIndex } from './jobBookEquipmentIndexApi'
 import {
     applyEquipmentToRow,
+    applyIntakeCustomerToRow,
+    jobBookEquipmentFallback,
+    jobBookLocationFieldsVisible,
+    jobBookLocationSummaryVisible,
     createBlankJobBookRow,
-    isEquipmentConfigured,
     JOB_BOOK_ENTRY_STAGES,
     setEquipmentReviewRequired,
     splitSiteAddress,
@@ -55,11 +78,6 @@ function appendUniqueRows(current: JobBookRow[], incoming: JobBookRow[]) {
     return [...byId.values()]
 }
 
-type MachineDraft = Omit<PrototypeEquipment, 'id' | 'isLocal'>
-const emptyMachineDraft: MachineDraft = {
-    fleet: '', serial: '', make: '', model: '', customer: '', customerId: '', site: '', siteId: '', address: '', addressVerified: false, addressNotFoundConfirmed: false,
-}
-
 function displayDate(value: string) {
     if (!value) return '—'
     const [year, month, day] = value.split('-')
@@ -74,8 +92,6 @@ function equipmentIsAccepted(record: Pick<JobBookRow, 'equipmentConfigured' | 'e
     return record.equipmentConfigured || record.equipmentReviewRequired
 }
 
-const ADD_EQUIPMENT_VALUE = '__add-equipment-details__'
-
 function clearEquipmentContext(row: JobBookRow, customerId = '', customer = ''): JobBookRow {
     return {
         ...row,
@@ -87,229 +103,92 @@ function clearEquipmentContext(row: JobBookRow, customerId = '', customer = ''):
 }
 
 function applyCustomerSelection(row: JobBookRow, customerId: string, customer: string): JobBookRow {
-    if (customerId === row.customerId) return row
+    if (customerId === row.customerId && customer === row.customer) return row
+    if (row.equipmentReviewRequired || row.equipmentId.startsWith('prototype-')) return applyIntakeCustomerToRow(row, customerId, customer)
     return clearEquipmentContext(row, customerId, customer)
 }
 
-function EquipmentPicker({
-    id,
-    value,
-    customerId,
-    equipment,
-    error,
-    onSelect,
-    onClear,
-    onAdd,
-}: {
+function CustomerPicker({ id, value, customerName, required, error, onSearchCustomers, onChange, onCreateCustomerAndSite }: {
     id: string
-    value: string
-    customerId: string
-    equipment: PrototypeEquipment[]
+    required?: boolean
     error?: string
-    onSelect: (equipment: PrototypeEquipment) => void
-    onClear: () => void
-    onAdd: () => void
-}) {
-    const options = useMemo<SearchableSelectOption[]>(() => [
-        { value: ADD_EQUIPMENT_VALUE, label: '+ Add machine details', secondary: 'Record Equipment that is not in the picker', emphasized: true },
-        ...equipment
-            .filter((item) => !customerId || item.customerId === customerId)
-            .map((item) => ({
-                value: item.id,
-                label: item.fleet || item.serial || 'Equipment without an identifier',
-                secondary: [item.make, item.model, item.serial && `S/N ${item.serial}`].filter(Boolean).join(' · '),
-                searchText: [item.alternateFleetNumbers, item.customer, item.site].filter(Boolean).join(' '),
-            })),
-    ], [customerId, equipment])
-
-    return <SearchableSelect
-        id={id}
-        label="Equipment"
-        required
-        error={error}
-        value={value}
-        options={options}
-        placeholder="Select Equipment"
-        searchPlaceholder="Search fleet, alternate or serial"
-        emptyLabel="No matching Equipment"
-        resultLimit={50}
-        onChange={(nextValue) => {
-            if (nextValue === ADD_EQUIPMENT_VALUE) { onAdd(); return }
-            if (!nextValue) { onClear(); return }
-            const selected = equipment.find((item) => item.id === nextValue)
-            if (selected) onSelect(selected)
-        }}
-    />
-}
-
-function CustomerPicker({ id, value, customerName, equipment, site, onSearchCustomers, onChange, onCreateCustomerAndSite }: {
-    id: string
     value: string
     customerName: string
-    equipment: PrototypeEquipment[]
-    site: string
-    onSearchCustomers: (query: string, signal: AbortSignal) => Promise<Customer[]>
+    onSearchCustomers: (query: string, signal?: AbortSignal) => Promise<Customer[]>
     onChange: (customerId: string, customerName: string) => void
     onCreateCustomerAndSite?: (input: { customerName: string; siteName: string; address: string }) => Promise<void>
 }) {
-    const [remoteCustomers, setRemoteCustomers] = useState<Customer[]>([])
-    const [searchQuery, setSearchQuery] = useState(customerName)
-    const [searchAttempt, setSearchAttempt] = useState(0)
-    const [searchStatus, setSearchStatus] = useState<'idle' | 'loading' | 'error'>('idle')
-
-    useEffect(() => {
-        if (!value || !customerName) return
-        const timer = window.setTimeout(() => setSearchQuery(customerName), 0)
-        return () => window.clearTimeout(timer)
-    }, [customerName, value])
-
-    useEffect(() => {
-        if (searchAttempt === 0) return
-        const controller = new AbortController()
-        const timer = window.setTimeout(() => {
-            setSearchStatus('loading')
-            void onSearchCustomers(searchQuery, controller.signal)
-                .then((rows) => {
-                    if (controller.signal.aborted) return
-                    setRemoteCustomers(rows)
-                    setSearchStatus('idle')
-                })
-                .catch((error) => {
-                    if (controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) return
-                    setSearchStatus('error')
-                })
-        }, 250)
-        return () => {
-            window.clearTimeout(timer)
-            controller.abort()
-        }
-    }, [onSearchCustomers, searchAttempt, searchQuery])
-
-    const options = useMemo<SearchableSelectOption[]>(() => {
-        const byId = new Map<string, SearchableSelectOption>()
-        remoteCustomers.forEach((customer) => byId.set(customer.gr_customerid, {
-            value: customer.gr_customerid,
-            label: customer.gr_name,
-        }))
-        equipment.forEach((item) => {
-            if (item.customerId && item.customer && !byId.has(item.customerId)) byId.set(item.customerId, {
-                value: item.customerId,
-                label: item.customer,
-            })
-        })
-        if (customerName) byId.set(value || '__saved-customer-text__', {
-            value: value || '__saved-customer-text__',
-            label: customerName,
-            secondary: value ? 'Currently linked Customer' : 'Saved customer text; choose a Customer to link it',
-        })
-        return [...byId.values()].sort((a, b) => a.label.localeCompare(b.label))
-    }, [customerName, equipment, remoteCustomers, value])
-
-    return <div className="job-book-customer-editor">
-        <CustomerRelationshipPicker
-            id={id}
-            query={searchQuery}
-            selectedId={value}
-            options={options.map((option) => ({ id: option.value, label: option.label, secondary: option.secondary }))}
-            onQueryChange={(query) => {
-                setSearchQuery(query)
-                setSearchAttempt((current) => current + 1)
-            }}
-            onClearSelection={() => onChange('', '')}
-            onSelect={(nextValue) => {
-                const selected = options.find((option) => option.value === nextValue)
-                setSearchQuery(selected?.label ?? '')
-                onChange(nextValue === '__saved-customer-text__' ? '' : nextValue, selected?.label ?? '')
-            }}
-            onCreateCustomerAndSite={onCreateCustomerAndSite}
-            createDescription="Use this customer and site on the Job Book entry. This does not create master Dataverse records."
-            createActionLabel="Use customer and site"
-            searchStatus={searchStatus}
-            searchError="Customer search failed."
-            emptyLabel="No matching Customers"
-        />
-        {searchStatus === 'error' && <button type="button" className="job-book-inline-retry" onClick={() => setSearchAttempt((current) => current + 1)}>Retry Customer search</button>}
-        {site && <small>{site}</small>}
-    </div>
+    // Keep typing local; a newly selected Equipment/entry supplies its exact Customer immediately.
+    const [input, setInput] = useState({ customerId: value, customerName, text: customerName })
+    const searchQuery = input.customerId === value && input.customerName === customerName ? input.text : customerName
+    const customers = useMemo(() => value && customerName ? [{ gr_customerid: value, gr_name: customerName }] : [], [value, customerName])
+    return <JobCustomerField
+        id={id}
+        required={required}
+        error={error}
+        query={searchQuery}
+        selectedId={value}
+        customers={customers}
+        onSearchCustomers={onSearchCustomers}
+        onQueryChange={(text) => setInput({ customerId: '', customerName: '', text })}
+        onClearSelection={() => onChange('', '')}
+        onSelect={(selected) => {
+            setInput({ customerId: selected.gr_customerid, customerName: selected.gr_name, text: selected.gr_name })
+            onChange(selected.gr_customerid, selected.gr_name)
+        }}
+        onCreateCustomerAndSite={onCreateCustomerAndSite}
+        createDescription={UNIFIED_JOB_WALKTHROUGH ? 'Create a saved sample Customer and Site. These remain available if the entry is cancelled.' : 'Use this customer and site on the Job Book entry. This does not create master Dataverse records.'}
+        createActionLabel="Create customer"
+    />
 }
 
 function MechanicPicker({
+    selectedId,
     value,
     mechanics,
     onChange,
 }: {
+    selectedId: string
     value: string
     mechanics: Mechanic[]
     onChange: (mechanicId: string, mechanicName: string) => void
 }) {
-    const [query, setQuery] = useState(value)
     const [open, setOpen] = useState(false)
-    const dropdownId = useId()
-    const rootRef = useRef<HTMLDivElement>(null)
-    useEffect(() => {
-        const close = (event: MouseEvent) => {
-            if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
-        }
-        document.addEventListener('mousedown', close, true)
-        return () => document.removeEventListener('mousedown', close, true)
-    }, [])
-    useEffect(() => closeWhenAnotherDropdownOpens(dropdownId, () => setOpen(false)), [dropdownId])
-    const openDropdown = () => {
-        announceExclusiveDropdownOpen(dropdownId)
-        setOpen(true)
-    }
-    const search = query.trim().toLocaleLowerCase('en-NZ')
-    const results = mechanics
-        .filter((item) => !search || `${item.gr_name} ${item.gr_email ?? ''}`.toLocaleLowerCase('en-NZ').includes(search))
-        .sort((a, b) => a.gr_name.localeCompare(b.gr_name))
-        .slice(0, 20)
-    const choose = (id: string, name: string) => {
-        setQuery(name)
-        onChange(id, name)
-        setOpen(false)
-    }
-    const customName = query.trim()
-
-    return <div className="job-book-mechanic-picker" ref={rootRef}>
-        <input
-            type="search"
-            aria-label="Mechanic or custom entry"
-            placeholder="Search staff or type custom"
-            value={query}
-            onFocus={openDropdown}
-            onChange={(event) => { setQuery(event.target.value); openDropdown() }}
-            onKeyDown={(event) => {
-                if (event.key === 'Enter' && customName) {
-                    event.preventDefault()
-                    choose('', customName)
-                }
-                if (event.key === 'Escape') setOpen(false)
-            }}
-        />
-        {open && <div className="job-book-mechanic-menu">
-            {customName && <button type="button" className="job-book-custom-mechanic" onClick={() => choose('', customName)}>
-                <strong>Use “{customName}”</strong><small>Custom entry, for example outwork</small>
-            </button>}
-            {results.map((item) => <button type="button" key={item.gr_mechanicid} onClick={() => choose(item.gr_mechanicid, item.gr_name)}>
-                <strong>{item.gr_name}</strong><small>{item.gr_email || 'Staff member'}</small>
-            </button>)}
-            {!results.length && !customName && <p>Start typing to find staff</p>}
-        </div>}
-    </div>
+    return <SearchableMechanicSelect
+        mechanics={mechanics}
+        selectedId={selectedId}
+        selectedName={value}
+        isOpen={open}
+        isSaving={false}
+        variant="drawer"
+        onOpen={() => setOpen(true)}
+        onClose={() => setOpen(false)}
+        onSelect={(mechanicId) => onChange(mechanicId, mechanics.find((item) => item.gr_mechanicid === mechanicId)?.gr_name ?? '')}
+        onSelectCustom={UNIFIED_JOB_WALKTHROUGH ? undefined : (name) => onChange('', name)}
+    />
 }
 
-export default function JobBookPrototypeScreen({ allowManagedJobNavigation = true }: { allowManagedJobNavigation?: boolean }) {
+export default function JobBookPrototypeScreen({
+    allowManagedJobNavigation = true,
+    allowManagedJobMarkerUpdates = true,
+}: {
+    allowManagedJobNavigation?: boolean
+    allowManagedJobMarkerUpdates?: boolean
+}) {
     const navigate = useNavigate()
     const { instance } = useMsal()
     const account = useActiveMsalAccount()
+    const { canManageJobs, canCorrectJobDetails, canEmailAssignedTechnician } = applicationAccessFromEnvironment(account)
     const jobBooks = useMemo(() => availableJobBooks(), [])
     const [selectedJobBookKey, setSelectedJobBookKey] = useState<JobBookKey>('auckland')
+    const bookPageGeneration = useRef(0)
     const selectedJobBook = JOB_BOOKS[selectedJobBookKey]
     const regionalAllocationLocked = selectedJobBookKey !== 'auckland' && !REGIONAL_JOB_BOOK_ALLOCATION_ENABLED
     const getAccessToken = useCallback(
         () => acquireDataverseAccessToken(instance, account),
         [account, instance],
     )
+    const registration = useJobRegistration(`${account?.homeAccountId}.job-book`, getAccessToken, UNIFIED_JOB_WALKTHROUGH)
     const staffDirectoryQuery = useOperationalQuery<Mechanic[]>({
         key: STAFF_DIRECTORY_QUERY_KEY,
         enabled: Boolean(account),
@@ -319,6 +198,7 @@ export default function JobBookPrototypeScreen({ allowManagedJobNavigation = tru
     })
     const mechanics = staffDirectoryQuery.data ?? []
     const [recentRows, setRecentRows] = useState<JobBookRow[]>([])
+    const [correctingJobId, setCorrectingJobId] = useState('')
     const [intakeRows, setIntakeRows] = useState<JobBookRow[]>([])
     const [recentNextLink, setRecentNextLink] = useState<string>()
     const [intakeNextLink, setIntakeNextLink] = useState<string>()
@@ -332,27 +212,23 @@ export default function JobBookPrototypeScreen({ allowManagedJobNavigation = tru
     const [loadError, setLoadError] = useState('')
     const [intakeDrawerOpen, setIntakeDrawerOpen] = useState(false)
     const [editingIntakeRow, setEditingIntakeRow] = useState<JobBookRow | null>(null)
+    const [editingEntryLocation, setEditingEntryLocation] = useState(false)
+    const [createdEntryLocation, setCreatedEntryLocation] = useState(false)
+    const showEntryLocationSummary = jobBookLocationSummaryVisible(draft, Boolean(editingIntakeRow) || createdEntryLocation, editingEntryLocation)
+    const showIntakeLocationFields = jobBookLocationFieldsVisible(draft, Boolean(editingIntakeRow))
     const [intakeValidationAttempted, setIntakeValidationAttempted] = useState(false)
+    const requireIntakeLocation = !editingIntakeRow && draft.equipmentReviewRequired
+    const intakeLocationErrors = requireIntakeLocation ? jobCreationLocationErrors({ ...draft, equipmentId: '' }) : {}
     const [intakeError, setIntakeError] = useState('')
-    const [machineDialogOpen, setMachineDialogOpen] = useState(false)
-    const [machineTarget, setMachineTarget] = useState<'draft' | 'edit'>('draft')
-    const [editingRow, setEditingRow] = useState<JobBookRow | null>(null)
-    const [machineDraft, setMachineDraft] = useState<MachineDraft>(emptyMachineDraft)
-    const [machineWarning, setMachineWarning] = useState('')
-    const [keepEquipmentUnconfigured, setKeepEquipmentUnconfigured] = useState(false)
     const [filters, setFilters] = useState<JobBookFilters>(EMPTY_FILTERS)
     const [promotionRow, setPromotionRow] = useState<JobBookRow | null>(null)
+    const [managingJob, setManagingJob] = useState<Job | null>(null)
     const [promotionJobType, setPromotionJobType] = useState<JobType>(STANDARD_JOB_TYPE_OPTIONS[0].value)
     const [savingIntake, setSavingIntake] = useState(false)
+    const [locationPending, setLocationPending] = useState(false)
+    const [locationSaving, setLocationSaving] = useState(false)
     const [savingEntryMarkers, setSavingEntryMarkers] = useState<Set<string>>(() => new Set())
     const [saveError, setSaveError] = useState('')
-    const [machineCustomerResults, setMachineCustomerResults] = useState<Customer[]>([])
-    const [machineCustomerSearch, setMachineCustomerSearch] = useState('')
-    const [machineCustomerSearchAttempt, setMachineCustomerSearchAttempt] = useState(0)
-    const [machineCustomerSearchStatus, setMachineCustomerSearchStatus] = useState<'idle' | 'loading' | 'error'>('idle')
-    const [machineSites, setMachineSites] = useState<Site[]>([])
-    const [machineSiteLoadAttempt, setMachineSiteLoadAttempt] = useState(0)
-    const [machineSiteLoadStatus, setMachineSiteLoadStatus] = useState<'idle' | 'loading' | 'error'>('idle')
     const [intakeSites, setIntakeSites] = useState<Site[]>([])
     const [intakeContacts, setIntakeContacts] = useState<SiteContact[]>([])
     const [intakeSiteLoadStatus, setIntakeSiteLoadStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
@@ -362,17 +238,31 @@ export default function JobBookPrototypeScreen({ allowManagedJobNavigation = tru
     const [intakeContactLoadError, setIntakeContactLoadError] = useState('')
     const [intakeContactLoadAttempt, setIntakeContactLoadAttempt] = useState(0)
     const [intakeContactLookupAvailable, setIntakeContactLookupAvailable] = useState(() => jobBookIntakeContactLookupIsAvailable())
+    const reconcileIntakeRow = (saved: JobBookRow) => {
+        setIntakeRows((current) => appendUniqueRows(current, [saved]))
+        if (saved.linkedJobId) setRecentRows((current) => current.map((item) => item.linkedJobId === saved.linkedJobId ? saved : item))
+        if (UNIFIED_JOB_WALKTHROUGH) invalidateJobsCache()
+    }
+    const voidEntry = useJobBookVoid(getAccessToken, reconcileIntakeRow)
+    const rowActions = useJobBookActions(getAccessToken, canEmailAssignedTechnician, !canManageJobs)
 
     const switchJobBook = (jobBookKey: JobBookKey) => {
-        if (jobBookKey === selectedJobBookKey) return
+        if (jobBookKey === selectedJobBookKey || voidEntry.busy || registration.busy || savingIntake) return
+        bookPageGeneration.current++
+        pageLoadInProgressRef.current = false
+        setLoadingMoreRows(false)
+        voidEntry.close()
+        rowActions.close()
         setRecentRows([])
         setIntakeRows([])
         setRecentNextLink(undefined)
         setIntakeNextLink(undefined)
         setFilters(EMPTY_FILTERS)
         setDraft(createBlankJobBookRow(0, jobBookKey))
-        setEditingRow(null)
+        setEditingEntryLocation(false)
+        setCreatedEntryLocation(false)
         setPromotionRow(null)
+        setCorrectingJobId('')
         setIntakeDrawerOpen(false)
         setEditingIntakeRow(null)
         setSaveError('')
@@ -380,7 +270,7 @@ export default function JobBookPrototypeScreen({ allowManagedJobNavigation = tru
         setSelectedJobBookKey(jobBookKey)
     }
 
-    const searchJobBookCustomers = useCallback(async (query: string, signal: AbortSignal) => (
+    const searchJobBookCustomers = useCallback(async (query: string, signal?: AbortSignal) => (
         searchCustomers(await getAccessToken(), query, signal)
     ), [getAccessToken])
 
@@ -433,48 +323,10 @@ export default function JobBookPrototypeScreen({ allowManagedJobNavigation = tru
     }, [account, instance, selectedJobBook])
 
     useEffect(() => {
-        if (!machineDialogOpen || machineCustomerSearchAttempt === 0 || machineCustomerSearch.trim().length < 2) return
-        const controller = new AbortController()
-        const timer = window.setTimeout(() => {
-            setMachineCustomerSearchStatus('loading')
-            void searchJobBookCustomers(machineCustomerSearch, controller.signal)
-                .then((rows) => {
-                    if (controller.signal.aborted) return
-                    setMachineCustomerResults(rows)
-                    setMachineCustomerSearchStatus('idle')
-                })
-                .catch((error) => {
-                    if (controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) return
-                    setMachineCustomerSearchStatus('error')
-                })
-        }, 250)
-        return () => {
-            window.clearTimeout(timer)
-            controller.abort()
-        }
-    }, [machineCustomerSearch, machineCustomerSearchAttempt, machineDialogOpen, searchJobBookCustomers])
-
-    useEffect(() => {
-        if (!machineDialogOpen || !machineDraft.customerId) return
-        const customerId = machineDraft.customerId
-        const controller = new AbortController()
-        void getAccessToken()
-            .then((token) => fetchCustomerSites(token, customerId, controller.signal))
-            .then((rows) => {
-                if (controller.signal.aborted) return
-                setMachineSites(rows)
-                setMachineSiteLoadStatus('idle')
-            })
-            .catch((error) => {
-                if (controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) return
-                setMachineSiteLoadStatus('error')
-            })
-        return () => controller.abort()
-    }, [getAccessToken, machineDialogOpen, machineDraft.customerId, machineSiteLoadAttempt])
-
-    useEffect(() => {
         const customerId = draft.customerId
-        if (!intakeDrawerOpen || !customerId || customerId.startsWith('prototype-')) return
+        if (!intakeDrawerOpen || !showIntakeLocationFields || !customerId || customerId.startsWith('prototype-')) return
+        if (showEntryLocationSummary) return
+        if (!editingIntakeRow && isPersistedEquipmentId(draft.equipmentId)) return
         const controller = new AbortController()
         const timer = window.setTimeout(() => {
             setIntakeSiteLoadStatus('loading')
@@ -496,11 +348,11 @@ export default function JobBookPrototypeScreen({ allowManagedJobNavigation = tru
             window.clearTimeout(timer)
             controller.abort()
         }
-    }, [draft.customerId, getAccessToken, intakeDrawerOpen, intakeSiteLoadAttempt])
+    }, [draft.customerId, draft.equipmentId, editingIntakeRow, getAccessToken, intakeDrawerOpen, intakeSiteLoadAttempt, showIntakeLocationFields, showEntryLocationSummary])
 
     useEffect(() => {
         const siteId = draft.siteId
-        if (!intakeDrawerOpen || !intakeContactLookupAvailable || !siteId || siteId.startsWith('prototype-')) return
+        if (!intakeDrawerOpen || !showIntakeLocationFields || !intakeContactLookupAvailable || !siteId || siteId.startsWith('prototype-')) return
         const controller = new AbortController()
         const timer = window.setTimeout(() => {
             setIntakeContactLoadStatus('loading')
@@ -522,9 +374,9 @@ export default function JobBookPrototypeScreen({ allowManagedJobNavigation = tru
             window.clearTimeout(timer)
             controller.abort()
         }
-    }, [draft.siteId, getAccessToken, intakeContactLoadAttempt, intakeContactLookupAvailable, intakeDrawerOpen])
+    }, [draft.siteId, getAccessToken, intakeContactLoadAttempt, intakeContactLookupAvailable, intakeDrawerOpen, showIntakeLocationFields])
 
-    const allRows = useMemo(() => [...intakeRows, ...recentRows]
+    const allRows = useMemo(() => reconcileJobBookRows(intakeRows, recentRows)
         .map((row) => {
             const sourceEquipment = equipment.find((item) => item.id.toLowerCase() === row.equipmentId.toLowerCase())
             return {
@@ -544,7 +396,7 @@ export default function JobBookPrototypeScreen({ allowManagedJobNavigation = tru
             if (!includes([row.customer, row.site, row.address], filters.customerSite)) return false
             return includes([
                 row.jobNumber, displayDate(row.date), row.mechanicName, row.fleet, row.serial,
-                row.make, row.model, row.customer, row.site, row.address, row.description, row.customerPo,
+                row.make, row.model, row.customer, row.site, row.address, row.description, row.customerPo, row.entryStage, row.voidReason,
             ], filters.search)
         })
     }, [allRows, filters])
@@ -562,6 +414,8 @@ export default function JobBookPrototypeScreen({ allowManagedJobNavigation = tru
             gr_Customer: item.customerId || item.customer ? { gr_customerid: item.customerId, gr_name: item.customer } : undefined,
         } : undefined,
     })), [equipment])
+    const locationEquipment = !editingIntakeRow && isPersistedEquipmentId(draft.equipmentId)
+        ? sharedEquipmentList.find((item) => item.gr_equipmentid === draft.equipmentId) : undefined
     const intakeSiteOptions = useMemo<Site[]>(() => {
         if (!draft.siteId || intakeSites.some((site) => site.gr_siteid === draft.siteId)) return intakeSites
         return [{
@@ -584,6 +438,7 @@ export default function JobBookPrototypeScreen({ allowManagedJobNavigation = tru
     const hasMoreRows = Boolean(recentNextLink || intakeNextLink)
     const loadMoreRows = useCallback(async () => {
         if (!account || pageLoadInProgressRef.current || (!recentNextLink && !intakeNextLink)) return
+        const generation = bookPageGeneration.current
         pageLoadInProgressRef.current = true
         setLoadingMoreRows(true)
         setPageLoadError('')
@@ -593,6 +448,7 @@ export default function JobBookPrototypeScreen({ allowManagedJobNavigation = tru
                 recentNextLink ? fetchRecentJobBookRows(token, selectedJobBook, recentNextLink) : Promise.resolve(undefined),
                 intakeNextLink ? fetchJobBookIntakeRows(token, selectedJobBook, intakeNextLink) : Promise.resolve(undefined),
             ])
+            if (generation !== bookPageGeneration.current) return
             if (jobPage) {
                 setRecentRows((current) => appendUniqueRows(current, jobPage.records))
                 setRecentNextLink(jobPage.nextLink)
@@ -602,10 +458,12 @@ export default function JobBookPrototypeScreen({ allowManagedJobNavigation = tru
                 setIntakeNextLink(intakePage.nextLink)
             }
         } catch (error) {
-            setPageLoadError(error instanceof Error ? error.message : 'More Job Book entries could not be loaded.')
+            if (generation === bookPageGeneration.current) setPageLoadError(error instanceof Error ? error.message : 'More Job Book entries could not be loaded.')
         } finally {
-            pageLoadInProgressRef.current = false
-            setLoadingMoreRows(false)
+            if (generation === bookPageGeneration.current) {
+                pageLoadInProgressRef.current = false
+                setLoadingMoreRows(false)
+            }
         }
     }, [account, getAccessToken, intakeNextLink, recentNextLink, selectedJobBook])
 
@@ -618,52 +476,23 @@ export default function JobBookPrototypeScreen({ allowManagedJobNavigation = tru
         observer.observe(sentinel)
         return () => observer.disconnect()
     }, [filtersActive, hasMoreRows, loadMoreRows])
-    const openMachineDialog = (target: 'draft' | 'edit' = 'draft', sourceOverride?: JobBookRow) => {
-        const source = sourceOverride ?? (target === 'edit' && editingRow ? editingRow : draft)
-        setMachineTarget(target)
-        setMachineDialogOpen(true)
-        setMachineDraft({
-            fleet: source.fleet, serial: source.serial, make: source.make, model: source.model,
-            customer: source.customer, customerId: source.customerId, site: source.site, siteId: source.siteId, address: source.address, addressVerified: source.addressVerified,
-            addressNotFoundConfirmed: source.addressNotFoundConfirmed,
-        })
-        setMachineWarning('')
-        setKeepEquipmentUnconfigured(source.equipmentReviewRequired)
-        setMachineCustomerSearch(source.customer)
-        setMachineCustomerResults(source.customerId && source.customer ? [{ gr_customerid: source.customerId, gr_name: source.customer }] : [])
-        setMachineCustomerSearchStatus('idle')
-        setMachineCustomerSearchAttempt(source.customer.trim().length >= 2 ? 1 : 0)
-        setMachineSites([])
-        setMachineSiteLoadStatus(source.customerId ? 'loading' : 'idle')
+    const finishRegistration = async (result: { book: JobBookKey; ledgerId: string; jobNumber: string }) => {
+        const saved = await fetchJobBookIntakeRow(await getAccessToken(), { jobBookKey: result.book, intakeRecordId: result.ledgerId })
+        if (result.book === selectedJobBookKey) reconcileIntakeRow(saved)
+        registration.complete()
+        setIntakeDrawerOpen(false)
+        setSaveError('')
+        setIntakeError('')
     }
-    const saveMachine = () => {
-        const configured = isEquipmentConfigured(machineDraft)
-        if (!configured && !keepEquipmentUnconfigured) {
-            setMachineWarning('Enter a fleet number or serial number before saving.')
-            return
+    const resumeRegistration = async () => {
+        const result = await registration.submit()
+        if (result) {
+            try { await finishRegistration(result) }
+            catch { setSaveError(`Job ${result.jobNumber} was saved, but its details could not be loaded. Resume the same request to recover it.`) }
         }
-        if (!addressIsAccepted(machineDraft)) {
-            setMachineWarning('Select a verified address or confirm that the address was not found.')
-            return
-        }
-        const record: PrototypeEquipment = {
-            ...machineDraft,
-            id: `prototype-${crypto.randomUUID()}`,
-            isLocal: true,
-        }
-        if (configured) setEquipment((current) => [record, ...current])
-        const applyRecord = (row: JobBookRow) => ({
-            ...applyEquipmentToRow(row, record),
-            equipmentReviewRequired: !configured && keepEquipmentUnconfigured,
-        })
-        if (machineTarget === 'edit') setEditingRow((current) => current ? applyRecord(current) : current)
-        else setDraft((current) => applyRecord(current))
-        setMachineDialogOpen(false)
-        setMachineDraft(emptyMachineDraft)
-        setMachineWarning('')
-        setKeepEquipmentUnconfigured(false)
     }
     const submitPrototypeJob = async () => {
+        if (savingIntake || registration.busy || registration.pending) return
         setIntakeValidationAttempted(true)
         if (!equipmentIsAccepted(draft)) {
             setIntakeError('Select Equipment or add the machine details before saving.')
@@ -671,6 +500,11 @@ export default function JobBookPrototypeScreen({ allowManagedJobNavigation = tru
         }
         if (!draft.description.trim()) {
             setIntakeError('Enter a description of the job before saving.')
+            return
+        }
+        const locationError = intakeLocationErrors.customer || intakeLocationErrors.site || intakeLocationErrors.address
+        if (locationError) {
+            setIntakeError(locationError)
             return
         }
         if (draft.customerId && !draft.siteId) {
@@ -689,6 +523,14 @@ export default function JobBookPrototypeScreen({ allowManagedJobNavigation = tru
             if (editingIntakeRow) {
                 const saved = await updateJobBookIntakeRow(token, draft)
                 setIntakeRows((current) => current.map((item) => item.intakeRecordId === saved.intakeRecordId ? saved : item))
+            } else if (UNIFIED_JOB_WALKTHROUGH) {
+                if (!isPersistedEquipmentId(draft.siteId) || (!draft.equipmentReviewRequired && !isPersistedEquipmentId(draft.equipmentId))) throw new Error('Select saved Equipment and Site records. Snapshot-only entries need reconciliation, not another number.')
+                const result = await registration.submit({ kind: 'register', requestId: crypto.randomUUID(), book: selectedJobBookKey,
+                    description: draft.description, orderNumber: draft.customerPo, siteId: draft.siteId,
+                    equipmentId: draft.equipmentId || undefined, equipmentUnknown: draft.equipmentReviewRequired,
+                    contactId: draft.contactId || undefined, mechanicId: draft.mechanicId || undefined })
+                if (!result) return
+                await finishRegistration(result)
             } else {
                 const created = await createJobBookIntakeRow(token, draft)
                 setIntakeRows((current) => [created, ...current])
@@ -711,22 +553,35 @@ export default function JobBookPrototypeScreen({ allowManagedJobNavigation = tru
         setIntakeError('')
     }
     const openNewIntakeEntry = () => {
+        setEditingEntryLocation(false)
+        setCreatedEntryLocation(false)
         setEditingIntakeRow(null)
         setIntakeError('')
         setIntakeValidationAttempted(false)
         setDraft(createBlankJobBookRow(0, selectedJobBookKey))
         setIntakeDrawerOpen(true)
     }
+    const openManageJob = (row: JobBookRow) => {
+        if (!canManageJobs || (!isEditableJobBookIntake(row) && !row.registeredLedgerId)) return
+        if (UNIFIED_JOB_WALKTHROUGH && row.registeredLedgerId) {
+            void getAccessToken().then((token) => fetchJobForCorrection(token, row.linkedJobId)).then(setManagingJob).catch((cause) => setSaveError(cause instanceof Error ? cause.message : 'Job could not be loaded.'))
+            return
+        }
+        setPromotionRow(row)
+    }
     const openIntakeEntryEditor = (row: JobBookRow) => {
-        if (row.entryStage !== JOB_BOOK_ENTRY_STAGES.INTAKE || !row.intakeRecordId) return
+        if (!isEditableJobBookIntake(row)) return
+        setEditingEntryLocation(false)
         setEditingIntakeRow(row)
+        setCreatedEntryLocation(false)
         setIntakeError('')
         setIntakeValidationAttempted(false)
         setDraft({ ...row })
         setIntakeDrawerOpen(true)
     }
     const createLocalIntakeEquipment = async (input: NewJobEquipmentInput) => {
-        const id = `prototype-${crypto.randomUUID()}`
+        const persist = UNIFIED_JOB_WALKTHROUGH && !editingIntakeRow
+        const id = persist ? await createEquipment(await getAccessToken(), input) : `prototype-${crypto.randomUUID()}`
         const record: PrototypeEquipment = {
             id,
             fleet: input.fleet,
@@ -741,12 +596,13 @@ export default function JobBookPrototypeScreen({ allowManagedJobNavigation = tru
             address: draft.address,
             addressVerified: draft.addressVerified,
             addressNotFoundConfirmed: draft.addressNotFoundConfirmed,
-            isLocal: true,
+            isLocal: !persist,
         }
         setEquipment((current) => [record, ...current])
         return id
     }
     const selectIntakeEquipment = (item: Equipment | undefined) => {
+        setEditingEntryLocation(false)
         setIntakeError('')
         setIntakeSites([])
         setIntakeContacts([])
@@ -797,22 +653,15 @@ export default function JobBookPrototypeScreen({ allowManagedJobNavigation = tru
             contactName: selected?.gr_Contact?.gr_name ?? '',
         }))
     }
-    const persistIntakeRow = async (row: JobBookRow) => {
-        if (!account) throw new Error('Sign in before saving Intake changes.')
-        const token = await acquireDataverseAccessToken(instance, account)
-        const saved = await updateJobBookIntakeRow(token, row)
-        setIntakeRows((current) => current.map((item) => item.intakeRecordId === saved.intakeRecordId ? saved : item))
-        return saved
-    }
-    const updateRowField = async <K extends 'entered' | 'timecloudEntered' | 'customerPo'>(row: JobBookRow, field: K, value: JobBookRow[K]) => {
-        const updated = { ...row, [field]: value }
+    const updateRowField = async (row: JobBookRow, field: 'entered' | 'timecloudEntered', value: boolean) => {
+        if (!canUpdateJobBookMarkers(row, allowManagedJobMarkerUpdates) || voidEntry.row?.id === row.id) return
         const isEntryMarker = field === 'entered' || field === 'timecloudEntered'
         if (isEntryMarker && savingEntryMarkers.has(row.id)) return
         if (isEntryMarker) setSavingEntryMarkers((current) => new Set(current).add(row.id))
         try {
-            if (row.intakeRecordId) {
+            if (row.intakeRecordId && !row.registeredLedgerId) {
                 setSaveError('')
-                try { await persistIntakeRow(updated) }
+                try { reconcileIntakeRow(await updateJobBookIntakeMarker(await getAccessToken(), row, field, value)) }
                 catch (error) { setSaveError(error instanceof Error ? error.message : 'The Intake changes were not saved.') }
                 return
             }
@@ -823,6 +672,7 @@ export default function JobBookPrototypeScreen({ allowManagedJobNavigation = tru
                     const token = await acquireDataverseAccessToken(instance, account)
                     const saved = await updateManagedJobBookMarker(token, row, field, value as boolean)
                     setRecentRows((current) => current.map((item) => item.linkedJobId === row.linkedJobId ? { ...item, ...saved } : item))
+                    setIntakeRows((current) => current.map((item) => item.linkedJobId === row.linkedJobId ? { ...item, ...saved } : item))
                 } catch (error) {
                     setSaveError(error instanceof Error ? error.message : 'The Job entry marker was not saved.')
                 }
@@ -836,29 +686,6 @@ export default function JobBookPrototypeScreen({ allowManagedJobNavigation = tru
                 return next
             })
         }
-    }
-    const saveEditedRow = async () => {
-        if (!editingRow || !editingRow.description.trim() || !addressIsAccepted(editingRow) || !equipmentIsAccepted(editingRow)) return
-        if (editingRow.intakeRecordId) {
-            setSaveError('')
-            try { await persistIntakeRow(editingRow); setEditingRow(null) }
-            catch (error) { setSaveError(error instanceof Error ? error.message : 'The Intake changes were not saved.') }
-            return
-        }
-        setSaveError('This row is no longer backed by Dataverse. Reload the page before editing it.')
-    }
-    const chooseSite = (siteName: string) => {
-        const site = machineSites.find((item) => item.gr_name === siteName)
-        setMachineDraft((current) => ({
-            ...current,
-            site: siteName,
-            customer: site?.gr_Customer?.gr_name ?? current.customer,
-            customerId: site?.gr_Customer?.gr_customerid ?? current.customerId,
-            siteId: site?.gr_siteid ?? '',
-            address: site?.gr_address ?? current.address,
-            addressVerified: Boolean(site?.gr_address ?? current.address),
-            addressNotFoundConfirmed: false,
-        }))
     }
     const promotionReadiness = promotionRow ? getPromotionReadiness(promotionRow) : null
 
@@ -877,7 +704,7 @@ export default function JobBookPrototypeScreen({ allowManagedJobNavigation = tru
                 {staffDirectoryQuery.data === undefined && (staffDirectoryQuery.status === 'initial' || staffDirectoryQuery.status === 'loading') && <span>Loading Staff…</span>}
                 {staffDirectoryQuery.data === undefined && staffDirectoryQuery.error && <button type="button" className="job-book-inline-retry" title={staffDirectoryQuery.error.message} onClick={() => void staffDirectoryQuery.refetch().catch(() => undefined)}>Retry Staff</button>}
                 <span className="job-book-local-badge">LEGACY VIEW</span>
-                <button type="button" className="job-book-new-entry-button" disabled={regionalAllocationLocked} title={regionalAllocationLocked ? 'Available after this regional Job Book is migrated and seeded.' : undefined} onClick={openNewIntakeEntry}>+ New entry</button>
+                <button type="button" className="job-book-new-entry-button" disabled={regionalAllocationLocked || Boolean(registration.pending)} title={regionalAllocationLocked ? 'Available after this regional Job Book is migrated and seeded.' : undefined} onClick={openNewIntakeEntry}>+ New entry</button>
             </div>
         </header>
 
@@ -889,6 +716,9 @@ export default function JobBookPrototypeScreen({ allowManagedJobNavigation = tru
         </nav>}
         {regionalAllocationLocked && <p className="job-book-cutover-notice" role="status"><strong>{selectedJobBook.label} allocation is protected.</strong> Existing entries can be reviewed after migration; new numbers remain disabled until the final seed is verified.</p>}
         {saveError && <p className="job-book-save-error" role="alert">{saveError}</p>}
+        {UNIFIED_JOB_WALKTHROUGH && registration.pending && <div className="job-book-cutover-notice" role="status">An entry save needs confirmation. Its original request is retained; do not create another entry. <button type="button" disabled={registration.busy} onClick={() => void resumeRegistration()}>Resume saved request</button></div>}
+        {registration.error && <p className="job-book-save-error" role="alert">{registration.error}</p>}
+        {voidEntry.notice && <p className="job-book-action-notice" role="status">{voidEntry.notice}</p>}
 
         <details className="job-book-filter-panel">
             <summary><span>Filters</span>{activeFilterCount > 0 && <strong>{activeFilterCount} active</strong>}</summary>
@@ -912,56 +742,59 @@ export default function JobBookPrototypeScreen({ allowManagedJobNavigation = tru
                     <th className="address-column">Site Address</th><th>Customer PO #</th><th className="gt-entry-column">GT Entry</th><th className="timecloud-entry-column">Timecloud Entry</th><th>Actions</th>
                 </tr></thead>
                 <tbody>{displayedRows.map((row) => {
-                    const isEditing = editingRow?.id === row.id
-                    const shown = isEditing ? editingRow : row
-                    const canSaveEdit = Boolean(shown.description.trim()) && addressIsAccepted(shown) && equipmentIsAccepted(shown)
-                    const isIntake = shown.entryStage === JOB_BOOK_ENTRY_STAGES.INTAKE
-                    const canUpdateEntryMarkers = Boolean(row.intakeRecordId) || row.entrySource === 'dataverse-job'
-                    return <tr key={row.id} className={`${shown.equipmentReviewRequired ? 'equipment-unconfigured ' : ''}${isEditing ? 'job-book-row-editing' : ''}`.trim() || undefined}>
-                        <td className="job-number-column"><span className="job-book-number-value"><strong>{shown.jobNumber}</strong>{shown.entryStage === JOB_BOOK_ENTRY_STAGES.PROMOTED && <span className="job-book-managed-indicator" title="Managed Job" aria-label="Managed Job">✓</span>}</span></td>
-                        <td className="date-column"><span className="job-book-readonly-date" aria-label="Job creation date">{displayDate(shown.date)}</span></td>
-                        <td className="mechanic-column">{isEditing
-                            ? <MechanicPicker key={`${shown.id}-${shown.mechanicId}-${shown.mechanicName}`} value={shown.mechanicName} mechanics={mechanics}
-                                onChange={(mechanicId, mechanicName) => setEditingRow((current) => current ? { ...current, mechanicId, mechanicName } : current)} />
-                            : <span className="job-book-table-value">{shown.mechanicName || '—'}</span>}</td>
-                        <td className={isEditing ? `fleet-cell${!equipmentIsAccepted(shown) ? ' job-book-required-missing' : ''}` : undefined}>{isEditing
-                            ? shown.equipmentReviewRequired
-                                ? <button type="button" className="job-book-unconfigured-link" onClick={() => openMachineDialog('edit')}><strong>Equipment not configured</strong><small>Click to add Fleet or Serial</small></button>
-                                : <EquipmentPicker id={`job-book-edit-equipment-${shown.id}`} key={`${shown.id}-${shown.equipmentId}`} value={shown.equipmentId} customerId={shown.customerId} equipment={equipment}
-                                    onSelect={(item) => setEditingRow((current) => current ? applyEquipmentToRow(current, item) : current)} onClear={() => setEditingRow((current) => current ? clearEquipmentContext(current, current.customerId, current.customer) : current)} onAdd={() => openMachineDialog('edit')} />
-                            : shown.equipmentReviewRequired
-                                ? <button type="button" className="job-book-unconfigured-link" onClick={() => { setEditingRow(row); openMachineDialog('edit', row) }}><strong>Equipment not configured</strong><small>Click to add Fleet or Serial</small></button>
-                                : <span className="job-book-table-value job-book-equipment-value"><strong>{shown.fleet || shown.serial || '—'}</strong>{(shown.make || shown.model) && <small>{[shown.make, shown.model].filter(Boolean).join(' ')}</small>}</span>}</td>
-                        <td>{isEditing
-                            ? <CustomerPicker id={`job-book-edit-customer-${shown.id}`} value={shown.customerId} customerName={shown.customer} equipment={equipment} site={shown.site}
-                                onSearchCustomers={searchJobBookCustomers} onChange={(customerId, customerName) => setEditingRow((current) => current ? applyCustomerSelection(current, customerId, customerName) : current)} />
-                            : <span className="job-book-table-value job-book-customer-value"><strong>{shown.customer || '—'}</strong>{shown.site && <small>{shown.site}</small>}</span>}</td>
-                        <td className={isEditing && !shown.description.trim() ? 'job-book-required-missing' : undefined}>{isEditing
-                            ? <textarea required maxLength={JOB_DESCRIPTION_MAX_LENGTH} aria-label={`Description for Job ${shown.jobNumber} (required)`} placeholder="Required" rows={2} value={shown.description} onChange={(event) => setEditingRow((current) => current ? { ...current, description: event.target.value } : current)} />
-                            : <span className="job-book-table-value description">{shown.description || '—'}</span>}</td>
-                        <td className={isEditing ? 'job-book-address-cell' : undefined}>{isEditing
-                            ? <div className="job-book-address-editor"><VerifiedAddressField compact verified={shown.addressVerified} value={shown.address}
-                                onChange={(address, selection) => setEditingRow((current) => current ? { ...current, address, addressVerified: Boolean(selection), addressNotFoundConfirmed: false } : current)} />
-                                {shown.address.trim() && !shown.addressVerified && <label className="job-book-address-confirm"><input type="checkbox" checked={shown.addressNotFoundConfirmed} onChange={(event) => setEditingRow((current) => current ? { ...current, addressNotFoundConfirmed: event.target.checked } : current)} /><span>Address<br />not found</span></label>}</div>
-                            : shown.address
-                                ? <span className="job-book-table-value job-book-address-value"><strong>{splitSiteAddress(shown.address).street}</strong>{splitSiteAddress(shown.address).locality && <small>{splitSiteAddress(shown.address).locality}</small>}</span>
-                                : <span className="job-book-table-value">—</span>}</td>
-                        <td>{isIntake && isEditing
-                            ? <input className="job-book-table-edit" aria-label={`Customer PO for Job ${shown.jobNumber}`} value={shown.customerPo} placeholder="Add PO number" onChange={(event) => setEditingRow((current) => current ? { ...current, customerPo: event.target.value } : current)} />
-                            : <span className="job-book-table-value">{row.customerPo || '—'}</span>}</td>
-                        <td className="gt-entry-column">{canUpdateEntryMarkers ? <label className={`job-book-table-check ${row.entered ? 'complete' : ''}`}><input type="checkbox" aria-label={`GT Entry completed for Job ${row.jobNumber}`} disabled={savingEntryMarkers.has(row.id)} checked={row.entered} onChange={(event) => void updateRowField(row, 'entered', event.target.checked)} />{savingEntryMarkers.has(row.id) ? <span>Saving</span> : row.entered ? <span>Done</span> : null}</label> : <span className="job-book-status-pill">Unavailable</span>}</td>
-                        <td className="timecloud-entry-column">{canUpdateEntryMarkers ? <label className={`job-book-table-check ${row.timecloudEntered ? 'complete' : ''}`}><input type="checkbox" aria-label={`Timecloud Entry completed for Job ${row.jobNumber}`} disabled={savingEntryMarkers.has(row.id)} checked={row.timecloudEntered} onChange={(event) => void updateRowField(row, 'timecloudEntered', event.target.checked)} />{savingEntryMarkers.has(row.id) ? <span>Saving</span> : row.timecloudEntered ? <span>Done</span> : null}</label> : <span className="job-book-status-pill">Unavailable</span>}</td>
-                        <td>{isEditing
-                            ? <div className="job-book-row-actions"><button type="button" className="save" disabled={!canSaveEdit} title={!equipmentIsAccepted(shown) ? 'Select Equipment or explicitly keep it as unconfigured.' : !shown.description.trim() ? 'Enter a Job description before saving.' : !addressIsAccepted(shown) ? 'Select a verified address or confirm it was not found.' : undefined} onClick={() => void saveEditedRow()}>Save changes</button><button type="button" onClick={() => setEditingRow(null)}>Cancel</button></div>
-                            : isIntake
-                                ? <div className="job-book-row-actions"><button type="button" className="save" onClick={() => setPromotionRow(row)}>Prepare promotion</button><button type="button" onClick={() => openIntakeEntryEditor(row)}>Edit entry</button></div>
-                                : allowManagedJobNavigation
-                                    ? <button type="button" className="job-book-edit-row" onClick={() => navigate(`/jobs?jobId=${encodeURIComponent(shown.linkedJobId)}`)}>Open Job</button>
-                                    : <span className="job-book-status-pill">Managed Job</span>}</td>
+                    const canEditIntake = isEditableJobBookIntake(row)
+                    const canUpdateEntryMarkers = canUpdateJobBookMarkers(row, allowManagedJobMarkerUpdates)
+                    const isVoid = row.entryStage === JOB_BOOK_ENTRY_STAGES.VOID
+                    const voidBlocked = jobBookVoidBlockedReason(row)
+                    const markerBusy = savingEntryMarkers.has(row.id) || voidEntry.row?.id === row.id
+                    return <tr key={row.id} className={isVoid ? 'job-book-void-row' : row.equipmentReviewRequired ? 'equipment-unconfigured' : undefined}>
+                        <td className="job-number-column"><span className="job-book-number-value"><strong>{row.jobNumber}</strong>{isVoid && <span className="job-book-void-badge">VOID</span>}{row.entryStage === JOB_BOOK_ENTRY_STAGES.PROMOTED && <span className="job-book-managed-indicator" title="Managed Job" aria-label="Managed Job">✓</span>}</span></td>
+                        <td className="date-column"><span className="job-book-readonly-date" aria-label="Job creation date">{displayDate(row.date)}</span></td>
+                        <td className="mechanic-column"><span className="job-book-table-value">{row.mechanicName || '—'}</span></td>
+                        <td>{row.equipmentReviewRequired
+                            ? canEditIntake
+                                ? <button type="button" className="job-book-unconfigured-link" aria-label={`Edit equipment for Job Book ${row.jobNumber}`} onClick={() => openIntakeEntryEditor(row)}><strong>Equipment not configured</strong><small>Edit entry to set equipment</small></button>
+                                : <span className="job-book-table-value"><strong>Equipment not configured</strong></span>
+                            : <span className="job-book-table-value job-book-equipment-value"><strong>{row.fleet || row.serial || '—'}</strong>{(row.make || row.model) && <small>{[row.make, row.model].filter(Boolean).join(' ')}</small>}</span>}</td>
+                        <td><span className="job-book-table-value job-book-customer-value"><strong>{row.customer || '—'}</strong>{row.site && <small>{row.site}</small>}</span></td>
+                        <td><span className="job-book-table-value description">{row.description || '—'}</span>{isVoid && <span className="job-book-void-reason"><strong>Void reason:</strong> {row.voidReason || 'No reason recorded on this historical entry.'}</span>}</td>
+                        <td>{row.address
+                            ? <span className="job-book-table-value job-book-address-value"><strong>{splitSiteAddress(row.address).street}</strong>{splitSiteAddress(row.address).locality && <small>{splitSiteAddress(row.address).locality}</small>}</span>
+                            : <span className="job-book-table-value">—</span>}</td>
+                        <td><span className="job-book-table-value">{row.customerPo || '—'}</span></td>
+                        <td className="gt-entry-column">{canUpdateEntryMarkers || isVoid ? <label className={`job-book-table-check ${row.entered ? 'complete' : ''}`}><input type="checkbox" aria-label={`GT Entry completed for Job ${row.jobNumber}`} disabled={isVoid || markerBusy} checked={row.entered} onChange={(event) => void updateRowField(row, 'entered', event.target.checked)} />{savingEntryMarkers.has(row.id) ? <span>Saving</span> : row.entered ? <span>Done</span> : null}</label> : <span className="job-book-status-pill">Unavailable</span>}</td>
+                        <td className="timecloud-entry-column">{canUpdateEntryMarkers || isVoid ? <label className={`job-book-table-check ${row.timecloudEntered ? 'complete' : ''}`}><input type="checkbox" aria-label={`Timecloud Entry completed for Job ${row.jobNumber}`} disabled={isVoid || markerBusy} checked={row.timecloudEntered} onChange={(event) => void updateRowField(row, 'timecloudEntered', event.target.checked)} />{savingEntryMarkers.has(row.id) ? <span>Saving</span> : row.timecloudEntered ? <span>Done</span> : null}</label> : <span className="job-book-status-pill">Unavailable</span>}</td>
+                        <td><div className="job-book-row-actions">{canEditIntake
+                            ? <button type="button" className="job-quick-action job-quick-action-edit" onClick={() => openIntakeEntryEditor(row)}>Edit entry</button>
+                            : isVoid
+                                ? <span className="job-book-status-pill">Read-only</span>
+                            : allowManagedJobNavigation && row.linkedJobId && !UNIFIED_JOB_WALKTHROUGH
+                                ? <button type="button" className="job-quick-action job-quick-action-edit" onClick={() => navigate(`/jobs?jobId=${encodeURIComponent(row.linkedJobId)}`)}>Open Job</button>
+                                : canCorrectJobDetails && row.linkedJobId
+                                    ? <button type="button" className="job-quick-action job-quick-action-edit" onClick={() => setCorrectingJobId(row.linkedJobId)} disabled={markerBusy}>Edit entry</button>
+                                    : <span className="job-book-status-pill">{row.linkedJobId ? 'Managed Job' : 'Read-only'}</span>}
+                        {!isVoid && <JobQuickActions
+                            onCopy={() => void rowActions.copy(row)} copyBlockedReason={jobBookCopyBlockedReason(row)}
+                            onEmail={canEmailAssignedTechnician ? () => { void rowActions.openEmail(row) } : undefined}
+                            emailBlockedReason={jobBookEmailBlockedReason(row, canEmailAssignedTechnician)}
+                            emailDelivery={rowActions.emailDeliveryStates[row.linkedJobId]}
+                            emailBusy={Boolean(rowActions.loadingJobId)}
+                        />}
+                        {(canEditIntake || (row.registeredLedgerId && !isVoid)) && <>
+                            {canManageJobs && row.coordinatorManaged !== true && <button type="button" className="job-quick-action job-quick-action-edit" onClick={() => openManageJob(row)}>Manage job</button>}
+                            <button type="button" className="job-quick-action job-book-void-action" aria-label="Mark as void" disabled={Boolean(voidBlocked) || markerBusy || loading} title={voidBlocked || 'Mark as void — keep this allocated number with a required reason.'} onClick={() => voidEntry.open(row)}>
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="m6.5 6.5 11 11" /></svg>
+                            </button>
+                        </>}</div></td>
                     </tr>
                 })}</tbody>
             </table>
         </section>
+        {(rowActions.feedback || rowActions.loadingJobId) && <div className="job-book-action-feedback" role={rowActions.feedback?.error ? 'alert' : 'status'}>
+            <span>{rowActions.loadingJobId ? 'Loading the latest Job and assigned technician…' : rowActions.feedback?.message}</span>
+            {rowActions.feedback && <button type="button" aria-label="Dismiss action message" onClick={rowActions.dismissFeedback}>×</button>}
+        </div>}
+        {canEmailAssignedTechnician && rowActions.emailJob && <JobEmailComposer key={rowActions.emailJob.gr_jobid} job={rowActions.emailJob} assignedRecipientOnly={!canManageJobs} onCancel={rowActions.close} onSend={rowActions.send} />}
         <div ref={infiniteScrollSentinelRef} className="job-book-page-loader" aria-live="polite">
             {pageLoadError && <span className="job-book-page-error" role="alert">{pageLoadError}</span>}
             {hasMoreRows
@@ -972,42 +805,75 @@ export default function JobBookPrototypeScreen({ allowManagedJobNavigation = tru
         </div>
         </section>
 
+        {voidEntry.row && <JobBookVoidDialog key={voidEntry.row.id} row={voidEntry.row} busy={voidEntry.busy} error={voidEntry.error} needsReload={voidEntry.needsReload} onCancel={voidEntry.close} onSubmit={(reason) => void voidEntry.submit(reason)} onReload={() => void voidEntry.reload()} />}
+        {canManageJobs && managingJob && <JobRegistrationDialog job={managingJob} mode="manage" getAccessToken={getAccessToken} onClose={() => setManagingJob(null)} onSaved={async () => {
+            const ledger = intakeRows.find((row) => row.linkedJobId === managingJob.gr_jobid)
+            if (ledger) reconcileIntakeRow(await fetchJobBookIntakeRow(await getAccessToken(), ledger))
+        }} />}
+
         {intakeDrawerOpen && <JobDrawerShell
             eyebrow={`${selectedJobBook.label} Job Book`}
             title={`${editingIntakeRow ? 'Edit' : 'Add'} ${selectedJobBook.label} Job Book entry`}
             className="job-book-intake-drawer"
-            busy={savingIntake}
+            busy={savingIntake || locationSaving}
             onClose={closeIntakeDrawer}
             footer={<>
-                <span className={intakeError ? 'job-book-intake-save-error' : undefined} role={intakeError ? 'alert' : undefined}>{intakeError || (editingIntakeRow ? `Editing Job Book ${draft.jobNumber}.` : 'A Job number will be assigned after saving.')}</span>
+                <span className={intakeError ? 'job-book-intake-save-error' : undefined} role={intakeError ? 'alert' : undefined}>{intakeError || (locationPending ? 'Save or cancel the equipment location change first.' : editingIntakeRow ? `Editing Job Book ${draft.jobNumber}.` : 'A Job number will be assigned after saving.')}</span>
                 <div className="job-book-intake-footer-actions">
-                    <button type="button" onClick={closeIntakeDrawer} disabled={savingIntake}>Cancel</button>
-                    <button type="button" className="primary" onClick={() => void submitPrototypeJob()} disabled={savingIntake}>{savingIntake ? 'Saving…' : editingIntakeRow ? 'Save changes' : 'Add to Job Book'}</button>
+                    <button type="button" onClick={closeIntakeDrawer} disabled={savingIntake || locationSaving}>Cancel</button>
+                    <button type="button" className="primary" onClick={() => void (registration.pending ? resumeRegistration() : submitPrototypeJob())} disabled={savingIntake || registration.busy || locationPending || locationSaving}>{savingIntake || registration.busy ? 'Saving…' : registration.pending ? 'Resume saved request' : editingIntakeRow ? 'Save changes' : 'Add to Job Book'}</button>
                 </div>
             </>}
         >
             <div className="job-book-intake-meta"><div><span>Job number</span><strong>{editingIntakeRow ? draft.jobNumber : 'Assigned after saving'}</strong></div><div><span>Entry date</span><strong>{displayDate(draft.date)}</strong></div></div>
-            <section className="job-book-intake-section">
+            <fieldset className="job-book-intake-section job-create-fields" disabled={savingIntake || locationSaving || Boolean(registration.pending)}>
                 <div className="job-book-intake-section-heading"><h3>Equipment and location</h3><p>Selecting Equipment fills its Customer, Site and address.</p></div>
                 <JobEquipmentField
+                    showSelectedLocation={!locationEquipment && !editingIntakeRow}
                     value={draft.equipmentId}
                     equipmentList={sharedEquipmentList}
+                    selectedEquipmentFallback={jobBookEquipmentFallback(draft)}
                     customerId={draft.customerId}
                     siteId={draft.siteId}
                     required
                     error={intakeValidationAttempted && !equipmentIsAccepted(draft) ? 'Select Equipment or add new equipment.' : undefined}
-                    createDescription="Add the machine details to this Job Book entry. This does not create Equipment in Dataverse."
-                    createActionLabel="Use equipment details"
+                    createDescription={UNIFIED_JOB_WALKTHROUGH && !editingIntakeRow ? 'Create saved sample Equipment. Its location can then be linked below.' : 'Add the machine details to this Job Book entry. This does not create Equipment in Dataverse.'}
+                    createActionLabel={UNIFIED_JOB_WALKTHROUGH && !editingIntakeRow ? 'Create equipment' : 'Use equipment details'}
                     onCreateEquipment={createLocalIntakeEquipment}
                     onChange={selectIntakeEquipment}
                     unknownEquipmentOption={{
                         selected: draft.equipmentReviewRequired,
                         label: 'Equipment not known yet',
                         description: 'Save now and match or add the Equipment later.',
-                        onChange: (selected) => setDraft((current) => setEquipmentReviewRequired(current, selected)),
+                        onChange: (selected) => { setEditingEntryLocation(false); setDraft((current) => setEquipmentReviewRequired(current, selected)) },
                     }}
                 />
-                <div className="job-book-intake-field"><CustomerPicker id="job-book-drawer-customer" value={draft.customerId} customerName={draft.customer} equipment={equipment} site={draft.site}
+                {showIntakeLocationFields && <>
+                {locationEquipment ? <JobEquipmentLocation key={locationEquipment.gr_equipmentid}
+                    equipment={locationEquipment} onPendingChange={setLocationPending} onSavingChange={setLocationSaving}
+                    onLocationChange={(row) => {
+                        const site = row.gr_Site
+                        const customer = site?.gr_Customer
+                        setEquipment((current) => current.map((item) => item.id !== row.gr_equipmentid ? item : {
+                            ...item, customerId: customer?.gr_customerid ?? '', customer: customer?.gr_name ?? '',
+                            siteId: site?.gr_siteid ?? '', site: site?.gr_name ?? '', address: site?.gr_address ?? '',
+                            addressVerified: Boolean(site?.gr_address), addressNotFoundConfirmed: false,
+                        }))
+                        setDraft((current) => current.equipmentId !== row.gr_equipmentid ? current : {
+                            ...current, customerId: customer?.gr_customerid ?? '', customer: customer?.gr_name ?? '',
+                            siteId: site?.gr_siteid ?? '', site: site?.gr_name ?? '', address: site?.gr_address ?? '',
+                            addressVerified: Boolean(site?.gr_address), addressNotFoundConfirmed: false,
+                            contactId: current.siteId === site?.gr_siteid ? current.contactId : '',
+                            contactName: current.siteId === site?.gr_siteid ? current.contactName : '',
+                        })
+                    }} /> : showEntryLocationSummary ? <section className="job-equipment-location job-edit-field-wide" aria-label="Entry location">
+                    <JobLocationSummary customer={draft.customer} site={draft.site} address={draft.address}
+                        onEdit={() => setEditingEntryLocation(true)} />
+                </section> : <div className="job-edit-field-wide">
+                {editingEntryLocation && <p className="job-book-entry-location-note">Changes here are saved with this entry. The equipment’s current location is unchanged.</p>}
+                <CustomerPicker id="job-book-drawer-customer" value={draft.customerId} customerName={draft.customer}
+                    required={requireIntakeLocation}
+                    error={intakeValidationAttempted ? intakeLocationErrors.customer : undefined}
                     onSearchCustomers={searchJobBookCustomers}
                     onChange={(customerId, customerName) => {
                         setIntakeSites([])
@@ -1015,19 +881,36 @@ export default function JobBookPrototypeScreen({ allowManagedJobNavigation = tru
                         setDraft((current) => applyCustomerSelection(current, customerId, customerName))
                     }}
                     onCreateCustomerAndSite={async ({ customerName, siteName, address }) => {
+                        if (UNIFIED_JOB_WALKTHROUGH && !editingIntakeRow) {
+                            const token = await getAccessToken()
+                            const { customer, site } = await createEquipmentDestination({ customerName, siteName, address }, true, {
+                                findCustomers: (name) => findCustomersByName(token, name), createCustomer: (input) => createCustomer(token, input),
+                                rememberCustomer: (customer) => setDraft((current) => applyIntakeCustomerToRow(current, customer.gr_customerid, customer.gr_name)),
+                                readSites: (id) => fetchCustomerSites(token, id), createSite: (input) => createSite(token, input),
+                            })
+                            setDraft((current) => ({ ...current, customerId: customer.gr_customerid, customer: customer.gr_name, siteId: site.gr_siteid, site: site.gr_name, address: site.gr_address, addressVerified: true }))
+                            setCreatedEntryLocation(true); setEditingEntryLocation(false)
+                            return
+                        }
                         setIntakeError('')
                         setIntakeSites([])
                         setIntakeContacts([])
                         setDraft((current) => ({
-                            ...clearEquipmentContext(current, `prototype-customer-${crypto.randomUUID()}`, customerName),
+                            ...applyCustomerSelection(current, `prototype-customer-${crypto.randomUUID()}`, customerName),
                             siteId: `prototype-site-${crypto.randomUUID()}`,
                             site: siteName,
                             address,
                             addressVerified: true,
                             addressNotFoundConfirmed: false,
                         }))
-                    }} /></div>
+                        setCreatedEntryLocation(true)
+                        setEditingEntryLocation(false)
+                    }} /></div>}
                 <JobSiteContactFields
+                    showSite={!locationEquipment && !showEntryLocationSummary}
+                    locationRequired={requireIntakeLocation}
+                    address={draft.address}
+                    addressError={intakeValidationAttempted ? intakeLocationErrors.address : undefined}
                     customerId={draft.customerId}
                     siteId={draft.siteId}
                     contactId={draft.contactId}
@@ -1038,78 +921,49 @@ export default function JobBookPrototypeScreen({ allowManagedJobNavigation = tru
                     contactLoadStatus={intakeContactLoadStatus}
                     contactLoadError={intakeContactLoadError}
                     contactDisabledReason={!intakeContactLookupAvailable ? 'Contact setup is pending in Dataverse' : undefined}
-                    siteError={intakeValidationAttempted && Boolean(draft.customerId) && !draft.siteId ? 'Select a Site for this Customer.' : undefined}
+                    siteError={intakeValidationAttempted ? intakeLocationErrors.site || (draft.customerId && !draft.siteId ? 'Select a Site for this Customer.' : undefined) : undefined}
                     onSiteChange={selectIntakeSite}
                     onContactChange={selectIntakeContact}
                     onRetrySites={() => setIntakeSiteLoadAttempt((current) => current + 1)}
                     onRetryContacts={() => setIntakeContactLoadAttempt((current) => current + 1)}
                 />
-            </section>
-            <section className="job-book-intake-section">
+                </>}
+            </fieldset>
+            <fieldset className="job-book-intake-section" disabled={savingIntake || Boolean(registration.pending)}>
                 <div className="job-book-intake-section-heading"><h3>Job details</h3><p>Record what is required and who should attend.</p></div>
                 <label className={`job-book-intake-field${intakeValidationAttempted && !draft.description.trim() ? ' error' : ''}`}><span>Description of the job <span className="job-book-required-mark">*</span></span><textarea required maxLength={JOB_DESCRIPTION_MAX_LENGTH} aria-label="Job description (required)" placeholder="Describe the fault or work required" rows={4} value={draft.description} onChange={(event) => { setIntakeError(''); setDraft((current) => ({ ...current, description: event.target.value })) }} />
                     {intakeValidationAttempted && !draft.description.trim() && <small className="job-book-intake-field-error">Enter a description of the job.</small>}</label>
-                <div className="job-book-intake-field"><span className="job-book-field-label">Mechanic</span><MechanicPicker key={`${draft.id}-${draft.mechanicId}-${draft.mechanicName}`} value={draft.mechanicName} mechanics={mechanics}
+                <div className="job-edit-field job-edit-field-wide"><span>Mechanic</span><MechanicPicker key={draft.id} selectedId={draft.mechanicId} value={draft.mechanicName} mechanics={mechanics}
                     onChange={(mechanicId, mechanicName) => setDraft((current) => ({ ...current, mechanicId, mechanicName }))} /></div>
                 <label className="job-book-intake-field"><span>Customer PO <small>(optional)</small></span><input aria-label="Customer purchase order" placeholder="Enter a PO number if supplied" value={draft.customerPo} onChange={(event) => setDraft((current) => ({ ...current, customerPo: event.target.value }))} /></label>
-            </section>
+            </fieldset>
         </JobDrawerShell>}
 
-        {promotionRow && promotionReadiness && <div className="job-book-dialog-backdrop" role="presentation" onMouseDown={(event) => {
+        {canCorrectJobDetails && correctingJobId && <JobCorrectionsDrawer key={correctingJobId} jobId={correctingJobId} getAccessToken={getAccessToken} onClose={() => setCorrectingJobId('')} onSaved={(job) => {
+            const saved = mapManagedJobBookRow(job, selectedJobBook)
+            setRecentRows((current) => current.map((row) => row.linkedJobId === job.gr_jobid ? { ...row, ...saved } : row))
+            setIntakeRows((current) => current.map((row) => row.linkedJobId === job.gr_jobid ? { ...row, ...saved, intakeRecordId: row.intakeRecordId } : row))
+        }} />}
+        {canManageJobs && promotionRow && promotionReadiness && <div className="job-book-dialog-backdrop" role="presentation" onMouseDown={(event) => {
             if (event.target === event.currentTarget) setPromotionRow(null)
         }}>
             <section className="job-book-dialog job-book-promotion-dialog" role="dialog" aria-modal="true" aria-labelledby="promotion-dialog-title">
-                <header><div><span className="job-book-eyebrow">REVIEWED HANDOFF</span><h2 id="promotion-dialog-title">Prepare Job {promotionRow.jobNumber}</h2></div><button type="button" aria-label="Close" onClick={() => setPromotionRow(null)}>×</button></header>
-                <p className="job-book-dialog-note">Promotion will create one managed Job using this allocated number, link it back to this Intake entry, and then mark the entry Promoted.</p>
+                <header><div><span className="job-book-eyebrow">SERVICE COORDINATION</span><h2 id="promotion-dialog-title">Manage job {promotionRow.jobNumber}</h2></div><button type="button" aria-label="Close" onClick={() => setPromotionRow(null)}>×</button></header>
+                <p className="job-book-dialog-note">Review this entry before creating a managed Job for scheduling and technician allocation. It will keep the allocated job number and link back to this Intake entry.</p>
                 <div className="job-book-promotion-summary">
                     <div><span>Equipment</span><strong>{promotionRow.fleet || promotionRow.serial || 'Unconfigured'}</strong></div>
                     <div><span>Customer / Site</span><strong>{[promotionRow.customer, promotionRow.site].filter(Boolean).join(' · ') || 'Not set'}</strong></div>
                     <div><span>Description</span><strong>{promotionRow.description}</strong></div>
                 </div>
                 <label className="job-book-promotion-type">Managed Job type<select value={promotionJobType} onChange={(event) => setPromotionJobType(Number(event.target.value) as JobType)}>{STANDARD_JOB_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-                {!promotionReadiness.ready && <div className="job-book-promotion-warning"><strong>Review required before promotion</strong><ul>{promotionReadiness.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul></div>}
-                <div className="job-book-promotion-rule"><strong>Promotion stops here safely.</strong><span>The Intake entry is already live in Dataverse. No managed Job will be created until the atomic promotion operation is connected.</span></div>
+                {!promotionReadiness.ready && <div className="job-book-promotion-warning"><strong>Review required before creating a managed Job</strong><ul>{promotionReadiness.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul></div>}
+                <div className="job-book-promotion-rule"><strong>Managed Job creation is not available yet.</strong><span>This entry is saved in the Job Book. Creating a managed Job remains disabled until the server-side handoff is connected.</span></div>
                 <footer>
                     <button type="button" className="job-book-secondary" onClick={() => setPromotionRow(null)}>Close</button>
-                    <button type="button" className="job-book-primary" disabled title="Dataverse promotion is not enabled in this prototype.">Create managed Job</button>
+                    <button type="button" className="job-book-primary" disabled title="Managed Job creation from Intake is not enabled yet.">Create managed Job</button>
                 </footer>
             </section>
         </div>}
 
-        {machineDialogOpen && <div className="job-book-dialog-backdrop" role="presentation" onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setMachineDialogOpen(false)
-        }}>
-            <section className="job-book-dialog" role="dialog" aria-modal="true" aria-labelledby="machine-dialog-title">
-                <header><div><span className="job-book-eyebrow">LEGACY JOB BOOK MACHINE</span><h2 id="machine-dialog-title">Add machine details</h2></div><button type="button" aria-label="Close" onClick={() => setMachineDialogOpen(false)}>×</button></header>
-                <p className="job-book-dialog-note">This only fills the Job Book row. It will not create Equipment, a Customer, or a Site in Dataverse.</p>
-                <div className="job-book-form-grid">
-                    <label>Fleet number<input autoFocus value={machineDraft.fleet} onChange={(event) => setMachineDraft((current) => ({ ...current, fleet: event.target.value }))} /></label>
-                    <label>Serial number<input value={machineDraft.serial} onChange={(event) => setMachineDraft((current) => ({ ...current, serial: event.target.value }))} /></label>
-                    <label>Make<input value={machineDraft.make} onChange={(event) => setMachineDraft((current) => ({ ...current, make: event.target.value }))} /></label>
-                    <label>Model<input value={machineDraft.model} onChange={(event) => setMachineDraft((current) => ({ ...current, model: event.target.value }))} /></label>
-                    <label>Customer<input list="job-book-customers" value={machineDraft.customer} onChange={(event) => {
-                        const customer = event.target.value
-                        const linked = machineCustomerResults.find((item) => item.gr_name.localeCompare(customer, undefined, { sensitivity: 'accent' }) === 0)
-                        setMachineCustomerSearch(customer)
-                        setMachineCustomerSearchAttempt((current) => current + 1)
-                        setMachineSites([])
-                        setMachineSiteLoadStatus(linked ? 'loading' : 'idle')
-                        setMachineDraft((current) => ({ ...current, customer, customerId: linked?.gr_customerid ?? '', site: '', siteId: '' }))
-                    }} />{machineCustomerSearchStatus === 'loading' && <small>Searching Customers…</small>}{machineCustomerSearchStatus === 'error' && <button type="button" className="job-book-inline-retry" onClick={() => setMachineCustomerSearchAttempt((current) => current + 1)}>Retry Customer search</button>}</label>
-                    <label>Site<input list="job-book-sites" disabled={!machineDraft.customerId || machineSiteLoadStatus === 'loading'} value={machineDraft.site} onChange={(event) => chooseSite(event.target.value)} />{machineSiteLoadStatus === 'loading' && <small>Loading this Customer’s Sites…</small>}{machineSiteLoadStatus === 'error' && <button type="button" className="job-book-inline-retry" onClick={() => { setMachineSiteLoadStatus('loading'); setMachineSiteLoadAttempt((current) => current + 1) }}>Retry Sites</button>}</label>
-                    <div className="full-width"><VerifiedAddressField verified={machineDraft.addressVerified} value={machineDraft.address}
-                        onChange={(address, selection) => setMachineDraft((current) => ({ ...current, address, addressVerified: Boolean(selection), addressNotFoundConfirmed: false }))} />
-                        {machineDraft.address.trim() && !machineDraft.addressVerified && <label className="job-book-address-confirm dialog"><input type="checkbox" checked={machineDraft.addressNotFoundConfirmed} onChange={(event) => setMachineDraft((current) => ({ ...current, addressNotFoundConfirmed: event.target.checked }))} /><span>Address<br />not found</span></label>}</div>
-                </div>
-                <datalist id="job-book-customers">{machineCustomerResults.map((item) => <option key={item.gr_customerid} value={item.gr_name} />)}</datalist>
-                <datalist id="job-book-sites">{machineSites.map((item) => <option key={item.gr_siteid} value={item.gr_name} />)}</datalist>
-                {!isEquipmentConfigured(machineDraft) && <label className="job-book-keep-unconfigured"><input type="checkbox" checked={keepEquipmentUnconfigured} onChange={(event) => setKeepEquipmentUnconfigured(event.target.checked)} /><span><strong>Keep as unconfigured for now</strong><small>The Job row will be highlighted until a Fleet or Serial Number is added.</small></span></label>}
-                {machineWarning && <p className="job-book-dialog-error">{machineWarning}</p>}
-                <footer>
-                    <button type="button" className="job-book-secondary" onClick={() => setMachineDialogOpen(false)}>Cancel</button>
-                    <button type="button" className="job-book-primary" disabled={(!isEquipmentConfigured(machineDraft) && !keepEquipmentUnconfigured) || !addressIsAccepted(machineDraft)} onClick={saveMachine}>Save</button>
-                </footer>
-            </section>
-        </div>}
     </main>
 }

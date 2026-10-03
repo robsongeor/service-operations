@@ -3,7 +3,7 @@ import type {
     EmailDispatchResult,
 } from '../types/emailDispatch.types'
 
-const API_URL = `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2`
+const API_URL = `${import.meta.env?.VITE_DATAVERSE_URL ?? ''}/api/data/v9.2`
 
 function headers(token: string, includeContentType = false) {
     return {

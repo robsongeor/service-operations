@@ -1,10 +1,17 @@
-import { formatFleetNumbers } from '../../equipment/identifiers/alternateFleetNumbers'
+import { formatFleetNumbers } from '../../equipment/identifiers/alternateFleetNumbers.ts'
 import type { Job } from '../types/job.types'
 
 export const spreadsheetCell = (value?: string | null) =>
     (value ?? '').replace(/[\t\r\n]+/g, ' ').trim()
 
-export const jobBookFleetCell = (job: Job) => spreadsheetCell(formatFleetNumbers(
+export type NumberedJobBookClipboardSource = {
+    gr_jobnumber: string | null
+    gr_Mechanic?: { gr_name: string }
+    gr_Equipment?: { gr_fleet: string | null; gr_alternatefleetnumbers?: string | null }
+    gr_Site?: { gr_Customer?: { gr_name: string } }
+}
+
+export const jobBookFleetCell = (job: Pick<NumberedJobBookClipboardSource, 'gr_Equipment'>) => spreadsheetCell(formatFleetNumbers(
     job.gr_Equipment?.gr_fleet,
     job.gr_Equipment?.gr_alternatefleetnumbers,
 ))
@@ -35,7 +42,7 @@ export const copyJobBookSpreadsheetRow = async (job: Job) => {
     await navigator.clipboard.writeText(buildJobBookSpreadsheetRow(job))
 }
 
-export const buildNumberedJobBookSpreadsheetRow = (job: Job) => {
+export const buildNumberedJobBookSpreadsheetRow = (job: NumberedJobBookClipboardSource) => {
     const jobNumber = spreadsheetCell(job.gr_jobnumber)
     if (!jobNumber) return ''
     const mechanic = spreadsheetCell(job.gr_Mechanic?.gr_name)
@@ -49,7 +56,7 @@ export const buildNumberedJobBookSpreadsheetRow = (job: Job) => {
     ].join('\t') + '\n'
 }
 
-export const copyNumberedJobBookSpreadsheetRow = async (job: Job) => {
+export const copyNumberedJobBookSpreadsheetRow = async (job: NumberedJobBookClipboardSource) => {
     const row = buildNumberedJobBookSpreadsheetRow(job)
     if (!row) throw new Error('A Job Number is required before this Job can be copied.')
     if (!navigator.clipboard?.writeText) throw new Error('Clipboard access is unavailable.')

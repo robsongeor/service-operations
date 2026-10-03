@@ -7,13 +7,14 @@ type Props = {
     sites: Site[]
     isLoading: boolean
     error: string
+    readOnly?: boolean
     onOpenQuote: (quote: Quote) => void
 }
 
 const money = new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' })
 const date = new Intl.DateTimeFormat('en-NZ', { dateStyle: 'medium' })
 
-export default function CustomerQuotesTab({ quotes, sites, isLoading, error, onOpenQuote }: Props) {
+export default function CustomerQuotesTab({ quotes, sites, isLoading, error, readOnly = false, onOpenQuote }: Props) {
     const [statusFilter, setStatusFilter] = useState('all')
     const [siteFilter, setSiteFilter] = useState('all')
     const [sort, setSort] = useState<'created' | 'quote' | 'total'>('created')
@@ -41,7 +42,7 @@ export default function CustomerQuotesTab({ quotes, sites, isLoading, error, onO
         {visibleQuotes.length === 0 ? <div className="customer-quotes-empty">{quotes.length === 0 ? 'No Quotes for this Customer.' : 'No Quotes match the selected filters.'}</div> : <div className="customer-quotes-table-wrap">
             <table className="customer-quotes-table">
                 <thead><tr><th>Quote</th><th>Status</th><th>Job</th><th>Site / Equipment</th><th>Summary</th><th>Created</th><th>Total</th></tr></thead>
-                <tbody>{visibleQuotes.map((quote) => <tr key={quote.gr_quoteid} tabIndex={0} onClick={() => onOpenQuote(quote)} onKeyDown={(event) => { if (event.key === 'Enter') onOpenQuote(quote) }}>
+                <tbody>{visibleQuotes.map((quote) => <tr key={quote.gr_quoteid} tabIndex={readOnly ? undefined : 0} onClick={readOnly ? undefined : () => onOpenQuote(quote)} onKeyDown={readOnly ? undefined : (event) => { if (event.key === 'Enter') onOpenQuote(quote) }}>
                     <td><strong>{quote.gr_quotenumber || 'Pending number'}</strong><small>Rev {quote.gr_revision}</small></td>
                     <td><span className={`quote-status status-${quote.gr_quotestatus}`}>{QUOTE_STATUS_LABELS[quote.gr_quotestatus as QuoteStatus] ?? 'Unknown'}</span></td>
                     <td>{quote.gr_Job?.gr_jobnumber || 'No linked Job'}</td>

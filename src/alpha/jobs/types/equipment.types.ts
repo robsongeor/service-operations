@@ -4,6 +4,7 @@ import type { EquipmentOwnershipType } from '../../equipment/types/equipmentOwne
 import type { EquipmentSiteCheckAvailability } from '../../equipment/types/equipmentSiteCheckAvailability.types'
 
 export type Equipment = {
+    '@odata.etag'?: string
     gr_equipmentid: string
     gr_fleet: string | null
     gr_alternatefleetnumbers?: string | null

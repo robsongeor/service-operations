@@ -23,9 +23,19 @@ VITE_DATAVERSE_URL
 
 ### Management application roles
 
-Optional Entra application-role enforcement supports two role values:
+Optional Entra application-role enforcement supports three role values:
 
 - `ServiceOperations.FullAccess` grants the normal management application.
+- `ServiceOperations.JobCardAdmin` grants Job Card reviews plus Legacy Job Book and read-only
+  Quotes, Equipment, Customers, Sites and Contacts, plus corrections-only managed Job access.
+  `canCorrectJobDetails` permits equipment, Customer/Site, Contact, description and order/PO
+  corrections through the existing Job drawer hosted by Job Book. It does not grant coordination.
+  The approved exception is `canMoveEquipment`: both restricted roles can explicitly change the
+  current Equipment Site during new Job Book entry. This does not enable `canEditEquipment` or
+  master Customer/Site edits. `canCreateEquipmentDestination` additionally permits new Customer/
+  first-Site creation within that location panel, without enabling `canEditCustomers`. Live
+  Dataverse Create privileges remain separately approval-gated; see the
+  [equipment move security boundary](equipment.md#equipment-location-during-job-creation).
 - `ServiceOperations.JobBookOnly` grants only `/job-book`; FullAccess takes precedence if both
   claims are present.
 
@@ -35,13 +45,35 @@ enabled, a signed-in account with neither application role receives Access Denie
 navigation and feature visibility; Dataverse roles remain the authoritative data and mutation
 boundary.
 
-Development can simulate `full`, `job-book-only`, or `denied` through
+Development can simulate `full`, `job-card-admin`, `job-book-only`, or `denied` through
 `VITE_SIMULATED_ACCESS_MODE`. The override is ignored by production builds and displays a persistent
 warning because it validates application behaviour, not Dataverse security.
 
 The Job Book-only route can create and edit staging Intake entries but never exposes the managed Job
 editor. Once an entry is promoted, the row becomes a locked `Managed Job` summary for that access
 mode. Only FullAccess renders `Open Job` and routes into the operational Jobs screen.
+`canManageJobs` likewise grants the Intake-row **Manage job** preparation action only to
+FullAccess (the current service-coordinator access profile), not either restricted role.
+See [Job Book Intake](../features/JOB_BOOK_INTAKE_DESIGN.md#restricted-job-book-operators) for the
+guarded entry point and still-disabled managed-Job creation boundary.
+
+The Job Card Admin route set contains only Job Card reviews, Legacy Job Book, Quotes, Equipment,
+and Customers. Quotes and master records stay read-only outside the existing narrow Intake location
+exceptions. Admins can now correct managed Job details and the factual GT/Timecloud markers;
+JobBookOnly cannot. Job number, type, status, service type, assignment, scheduling,
+deletion and original technician submissions are protected. The address is derived from the
+selected Site; Job correction does not edit a master Site or move Equipment.
+`canEmailAssignedTechnician` separately allows Admins and FullAccess to email an already-numbered
+managed Job from Job Book. Admin recipients are fixed to the assigned technician; allocation stays
+coordinator-only. This does not enable Intake dispatch, the Jobs route, or additional assignments.
+Email Dispatch Create/Read/relationship permissions and server-side assigned-recipient enforcement
+must be verified in the approval-gated release; no live permission changes have been made.
+These client capabilities are not an authorization substitute: the separately approved
+least-privilege Dataverse role and Entra assignments remain required before enforcement is enabled.
+Do not grant unrestricted Job Write and assume these client checks enforce column-level security.
+Before release, validate server-side/Dataverse enforcement of the allowed correction columns and
+relationship scope (field security or a server-owned allowlisted operation as appropriate). No live
+role, privilege, assignment or environment setting was changed for this local implementation.
 
 `VITE_DATAVERSE_URL` is the organisation origin without `/api/data/v9.2` or a trailing
 slash. User preferences use the resolved account storage ID.

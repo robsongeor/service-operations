@@ -67,6 +67,77 @@ Equipment with linked Job history remains protected from deletion. The disabled 
 control exposes that preservation reason through a hover and keyboard-focus tooltip instead of
 occupying the drawer footer with persistent warning text.
 
+## Equipment location during Job creation
+
+Standard Create Job and new Legacy Job Book Intake share `JobEquipmentLocation` and
+`useEquipmentLocation`. Equipment remains the searchable entry point. A linked Customer/Site/address
+appears in a read-only tile; **Edit** reveals the existing bounded `JobCustomerField` and
+dependent `JobSiteContactFields`. An unlinked persisted machine opens the location fields directly.
+Unknown equipment and Intake-only machine snapshots retain their existing non-master-data flow.
+
+The tile presentation is `JobLocationSummary`, also reused by the existing Intake edit drawer.
+That drawer displays its saved location snapshot and reveals entry-only relationship fields through
+**Edit**; it does not mount the current-Equipment move hook or refresh away the recorded location.
+
+Both location editors expose **Add new customer** through the existing `JobCustomerField` /
+`CustomerRelationshipPicker` inline Customer-and-first-Site form, including verified-address input.
+For an already-selected Customer, the Site dropdown also exposes **Add new site**, using
+`JobSiteCreatePanel` extracted from the existing Jobs relationship form. The Customer is fixed while
+that panel is open; cancelling preserves the previous selection. The new Site is created under that
+Customer's ID and selected without creating another Customer or moving Equipment. Both destination
+paths reuse `createEquipmentSite` for identical duplicate/retry checks and `sitesApi.createSite`
+for persistence. Site name is editable, with the existing verified-address-derived default.
+`useEquipmentLocation` owns the shared creation action and reuses `customersApi.createCustomer` and
+`sitesApi.createSite` with one delegated token. An exact bounded Customer-name check reuses a single
+existing match and rejects ambiguous matches. An identical Site is reused; a same-named Site with
+a different address is not overwritten. Confirmed Customer creation is remembered across Site
+failure/retry within the open editor. These are sequential existing-service writes, not an atomic
+pair: errors explicitly identify a saved Customer, and uncertain results require checking/retry.
+There is no automatic rollback/delete; simultaneous matching creations still need a separately
+approved uniqueness rule if strict name uniqueness is required.
+
+Customer/Site creation saves real master records immediately and selects the destination without
+moving Equipment. **Save equipment location** remains a separate explicit action. Cancelling the
+entry does not delete those records. While the inline create form is open, both the outer Job/Intake
+submit and location save are blocked; while creation is saving, switching/closing is blocked too.
+Created records remain in the selected projection across a delayed list read, and Customer Dashboard
+queries are invalidated without a whole-directory reload.
+
+**Save equipment location** is an explicit, immediate asset update, independent of creating a Job
+or allocating an Intake number. Cancelling the new Job afterwards does not undo an already-saved
+move. Cancel location edit performs no write. A pending location edit blocks the Job/Intake submit;
+the drawer cannot close or switch Equipment while a move is saving. Contact remains Job-specific
+and is cleared when the committed Site changes. Existing Job and Intake editors retain their
+recorded relationship workflow rather than silently adopting the machine's current location.
+
+`equipmentLocationWorkflow` verifies persisted IDs, a concrete Equipment ETag, and the destination
+Site's authoritative Customer. It reuses `updateEquipmentSite` with `If-Match`, sending only
+`gr_Site@odata.bind` (no maintenance adoption, customer lookup, equipment identity, or history writes).
+Missing versions fail closed. A 412 exposes refresh/review recovery; a 403 explains the permission
+problem. An uncertain network result requires refreshing before repeating the move. Successful
+conditional writes update the current draft/shared Equipment projection and invalidate obsolete
+Equipment/Job Book index snapshots. Index background callbacks are generation-guarded. This action
+does not initiate a full Equipment-directory reload.
+
+The canonical create drawer supplies the client-only `equipmentLocationHandled` flag so `useJobs`
+does not perform its older implicit Equipment move a second time after creating the Job. Other
+existing Job-save callers retain their current contract. The flag is not a Dataverse column.
+
+Both restricted roles now have the separately approved **client capability** `canMoveEquipment`;
+`canEditEquipment` remains Full Access only. The separately approved `canCreateEquipmentDestination`
+client capability also permits both restricted roles to create a Customer/first Site or add a Site to
+an existing selected Customer in this
+panel only. `canEditCustomers` stays Full Access only: existing master records and the reference
+screens remain read-only. This is a presentation boundary, not
+server-side field authorization. Live permissions remain approval-gated: review Equipment Write/
+Append and Site Read/Append To, and enforce the approved Site-only write boundary with an appropriate
+Dataverse server-side control before production rollout. A general table-level Write grant alone
+must not be described as a Site-only security boundary. No roles or schema were provisioned for
+this change. Before release, separately approve Customer Create/Read/Append To and Site
+Create/Read/Append/Append To plus any required baseline privileges; no Customer/Site Write/Delete
+is needed for inline creation. Dataverse permissions cannot restrict a table Create grant to this
+one UI, so any required operation-only boundary needs server enforcement as well.
+
 ## Important Business Rules
 
 - A Job may be created without Equipment, but every transition to Complete requires linked

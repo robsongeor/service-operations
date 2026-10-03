@@ -52,6 +52,27 @@ row key. A separate random review ID is used in office links. States are `active
 IDs, minimum dispatch snapshot, creator identity, created/expiry/submitted/reviewed times,
 reviewer identity, notification outcome, submission values, and private photo references.
 
+Accepted technician fields are immutable evidence. Office review adds only allowlisted office
+fields: the explicit office status, bounded current note, optional GreenTree reference, review/
+outcome administrator identity and server timestamps, plus a bounded append-only activity JSON
+history. Every office transition copies the stored record, changes only those fields and lifecycle
+status, and replaces it under the loaded ETag. A stale ETag returns conflict rather than silently
+overwriting another administrator.
+
+Office states are Pending, In review, Needs clarification, On hold, and Processed in GreenTree.
+No invoice required is retired as an action; any previously saved outcome remains read-only.
+The UI groups Pending under Submitted, other non-terminal states under Review, and terminal/legacy
+outcomes under Completed. Existing `reviewed` rows without an office outcome derive as
+`Reviewed (legacy outcome not recorded)` and never imply GreenTree processing. Opening a card or
+marking Needs clarification never sends a technician message or creates a new link.
+
+Lifecycle queries remain bounded (501-row sentinel, at most 500 scanned/displayable rows) and
+sort a consistent bounded population before slicing page prefixes. Active/History API aliases
+remain compatible. A separate Open jobs projection joins confirmed Dataverse delivery metadata
+to batched submitted/reviewed Azure evidence; generating an `active` link does not count as a send.
+See [technician submission architecture](architecture/technician-job-submission.md) for matching,
+legacy-return checks, paging, permission preflight and limitations. No new storage table is created.
+
 Photo uploads use `uploads/<token-hash>/<content-derived-id>`. Final submission revalidates Blob
 size, content type, ownership metadata, token state, and Table ETag before saving those
 private references. Authenticated office requests stream files through the Function.

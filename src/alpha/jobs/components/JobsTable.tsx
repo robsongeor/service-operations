@@ -27,10 +27,15 @@ import { usesAzureJobCards } from '../types/jobCardWorkflow'
 import { parseAlternateFleetNumbers } from '../../equipment/identifiers/alternateFleetNumbers'
 import { JOB_DESCRIPTION_MAX_LENGTH } from '../domain/jobDescription'
 import JobEmailComposer from './JobEmailComposer'
+import JobQuickActions from './JobQuickActions'
 import type { JobEmailDeliveryState, JobEmailDraft } from '../services/jobEmail'
 import { buildJobBookSpreadsheetRow, buildNumberedJobBookSpreadsheetRow } from '../utils/jobBookClipboard'
+import { isCoordinatorManaged, jobWorklistLabel } from '../domain/unifiedJobWorkflow'
 
 type Props = {
+    unifiedWorklist?: boolean
+    onAllocateNumber?: (job: Job) => void
+    onManageJob?: (job: Job) => void
     jobs: Job[]
     visibleStatuses: JobStatus[]
     viewState: JobsViewState
@@ -42,7 +47,6 @@ type Props = {
     onJobFieldsChange: (
         jobId: string,
         fields: {
-            gr_jobnumber?: string
             gr_description?: string
             gr_ordernumber?: string
             'gr_Mechanic@odata.bind'?: string | null
@@ -68,6 +72,7 @@ const createdDateFormatter = new Intl.DateTimeFormat('en-NZ', {
 const JOBS_FEEDBACK_TIMEOUT_MS = 5000
 
 export default function JobsTable({
+    unifiedWorklist = false, onAllocateNumber, onManageJob,
     jobs,
     visibleStatuses,
     viewState,
@@ -264,6 +269,7 @@ export default function JobsTable({
         [selectedJobIds, sortedJobs],
     )
     const allShownJobsSelected = sortedJobs.length > 0 && selectedShownJobs.length === sortedJobs.length
+    const selectionContainsNumberedJob = selectedShownJobs.some((job) => Boolean(job.gr_jobnumber?.trim()))
 
     const toggleSelectedJob = (jobId: string) => {
         setSelectedJobIds((current) => {
@@ -302,7 +308,7 @@ export default function JobsTable({
     }
 
     const pasteSelectedJobNumbers = async () => {
-        if (!selectedShownJobs.length || isPastingJobNumbers) return
+        if (!selectedShownJobs.length || isPastingJobNumbers || selectionContainsNumberedJob) return
         setIsPastingJobNumbers(true)
         try {
             if (!navigator.clipboard?.readText) throw new Error('Clipboard access is unavailable.')
@@ -329,6 +335,7 @@ export default function JobsTable({
     }
 
     const copyJobForSpreadsheet = async (job: Job) => {
+        if (job.gr_registrationvoid) return
         const spreadsheetRow = buildNumberedJobBookSpreadsheetRow(job)
         if (!spreadsheetRow) return
 
@@ -361,8 +368,10 @@ export default function JobsTable({
 
             <div className="jobs-filter-bar">
                 <JobTypeTabs
+                    includeOperational={!unifiedWorklist}
+                    allLabel={unifiedWorklist ? 'All types' : 'All jobs'}
                     selectedJobType={selectedJobType}
-                    includeUnconfirmed
+                    includeUnconfirmed={!unifiedWorklist}
                     onChange={(jobType) => onViewStateChange({
                         ...viewState,
                         selectedJobType: jobType,
@@ -402,7 +411,7 @@ export default function JobsTable({
                 </button>
             </div>
 
-            <div className="jobs-bulk-copy-controls" aria-label="Job book spreadsheet export">
+            {!unifiedWorklist && <div className="jobs-bulk-copy-controls" aria-label="Job book spreadsheet export">
                 <label>
                     <input
                         type="checkbox"
@@ -415,15 +424,17 @@ export default function JobsTable({
                 <button type="button" onClick={() => void copySelectedJobs()} disabled={selectedShownJobs.length === 0}>
                     Copy {selectedShownJobs.length ? `${selectedShownJobs.length} selected` : 'selected'} for job book
                 </button>
-                <button
+                {!unifiedWorklist && <button
                     type="button"
                     onClick={() => void pasteSelectedJobNumbers()}
-                    disabled={selectedShownJobs.length === 0 || isPastingJobNumbers}
-                    title="Read one Job number per line from the clipboard and assign them in selected row order"
+                    disabled={selectedShownJobs.length === 0 || isPastingJobNumbers || selectionContainsNumberedJob}
+                    title={selectionContainsNumberedJob
+                        ? 'Select only unnumbered Jobs. Allocated numbers cannot be replaced.'
+                        : 'Read one Job number per line from the clipboard and assign them in selected row order'}
                 >
                     {isPastingJobNumbers ? 'Saving Job numbers…' : 'Paste Job numbers'}
-                </button>
-            </div>
+                </button>}
+            </div>}
 
             <div className="jobs-table-header-scroll" ref={tableHeaderScrollRef}>
                 <table
@@ -499,11 +510,11 @@ export default function JobsTable({
 
                         {sortedJobs.map((job) => {
                             const latestOfficeUpdate = latestOfficeUpdates[job.gr_jobid]
-                            const canCopyForSpreadsheet = Boolean(job.gr_jobnumber?.trim())
+                            const canCopyForSpreadsheet = !job.gr_registrationvoid && Boolean(job.gr_jobnumber?.trim())
                             const mechanicEmail = job.gr_Mechanic?.gr_email?.trim() ?? ''
-                            const canEmailTechnician = Boolean(job.gr_Mechanic) && isValidTechnicianEmail(mechanicEmail)
+                            const canEmailTechnician = !job.gr_registrationvoid && Boolean(job.gr_jobnumber?.trim()) && Boolean(job.gr_Mechanic) && isValidTechnicianEmail(mechanicEmail)
                             const emailDelivery = emailDeliveryStates[job.gr_jobid]
-                            const emailTooltip = !job.gr_Mechanic
+                            const emailTooltip = job.gr_registrationvoid ? 'Void entries cannot be sent.' : !job.gr_jobnumber?.trim() ? 'Allocate a Job number before emailing job details.' : !job.gr_Mechanic
                                 ? 'Assign a technician before emailing job details.'
                                 : !isValidTechnicianEmail(mechanicEmail)
                                     ? 'The allocated technician does not have an email address.'
@@ -514,13 +525,13 @@ export default function JobsTable({
                                 key={job.gr_jobid}
                                 data-status={job.gr_status}
                                 data-selected={selectedRowId === job.gr_jobid ? 'true' : undefined}
-                                tabIndex={0}
-                                title="Click the row to copy it for the job book"
+                                tabIndex={unifiedWorklist ? undefined : 0}
+                                title={unifiedWorklist ? undefined : 'Click the row to copy it for the job book'}
                                 onClick={(event) => {
-                                    if (!isInteractiveTarget(event.target)) void copyJobRow(job)
+                                    if (!unifiedWorklist && !isInteractiveTarget(event.target)) void copyJobRow(job)
                                 }}
                                 onKeyDown={(event) => {
-                                    if (event.key === 'Enter' && event.target === event.currentTarget) {
+                                    if (!unifiedWorklist && event.key === 'Enter' && event.target === event.currentTarget) {
                                         void copyJobRow(job)
                                     }
                                 }}
@@ -534,13 +545,9 @@ export default function JobsTable({
                                         className="jobs-table-inline jobs-table-job-number"
                                         type="text"
                                         aria-label="Job number"
+                                        readOnly
+                                        title={job.gr_jobnumber?.trim() ? 'Allocated Job numbers cannot be changed.' : 'Select this Job and use the number-allocation action.'}
                                         defaultValue={job.gr_jobnumber ?? ''}
-                                        onBlur={(event) => {
-                                            const newValue = event.target.value.trim()
-                                            if (newValue !== (job.gr_jobnumber ?? '')) {
-                                                onJobFieldsChange(job.gr_jobid, { gr_jobnumber: newValue })
-                                            }
-                                        }}
                                     />
                                 </td>
 
@@ -581,6 +588,7 @@ export default function JobsTable({
                                     <textarea
                                         key={`${job.gr_jobid}-description-${job.gr_description}`}
                                         className="jobs-table-inline jobs-table-description"
+                                        readOnly={Boolean(job.gr_registrationvoid)}
                                         aria-label="Job description"
                                         defaultValue={job.gr_description ?? ''}
                                         rows={2}
@@ -604,7 +612,7 @@ export default function JobsTable({
                                 </td>
 
                                 <td {...stickyProps('mechanic')}>
-                                    {job.gr_status === JOB_STATUSES.UNCONFIRMED ? (
+                                    {job.gr_registrationvoid || job.gr_status === JOB_STATUSES.UNCONFIRMED ? (
                                         <span className="jobs-table-muted">Not available</span>
                                     ) : <SearchableMechanicSelect
                                         mechanics={mechanics}
@@ -626,6 +634,7 @@ export default function JobsTable({
 
                                 <td {...stickyProps('status')}>
                                     <select
+                                        disabled={Boolean(job.gr_registrationvoid || (unifiedWorklist && !isCoordinatorManaged(job)))}
                                         className="jobs-table-select jobs-table-status"
                                         data-status={job.gr_status}
                                         aria-label="Job status"
@@ -645,6 +654,7 @@ export default function JobsTable({
                                     <input
                                         key={`${job.gr_jobid}-order-${job.gr_ordernumber}`}
                                         className="jobs-table-inline jobs-table-order"
+                                        readOnly={Boolean(job.gr_registrationvoid)}
                                         type="text"
                                         aria-label="Order number"
                                         placeholder="—"
@@ -662,15 +672,18 @@ export default function JobsTable({
 
                                 <td className="jobs-table-actions-column">
                                     <div className="jobs-table-actions">
-                                        <input
+                                        {unifiedWorklist && <span className="jobs-table-muted">{jobWorklistLabel(job)}</span>}
+                                        {onAllocateNumber && !job.gr_jobnumber && !job.gr_registrationvoid && <button type="button" className="job-quick-action job-quick-action-edit" onClick={() => onAllocateNumber(job)}>Allocate job number</button>}
+                                        {onManageJob && !isCoordinatorManaged(job) && !job.gr_registrationvoid && <button type="button" className="job-quick-action job-quick-action-edit" onClick={() => onManageJob(job)}>Manage job</button>}
+                                        {!unifiedWorklist && <input
                                             type="checkbox"
                                             checked={selectedJobIds.has(job.gr_jobid)}
                                             aria-label={`Select Job ${job.gr_jobnumber || 'row'} for job book export`}
                                             title="Select for job book export"
                                             onClick={(event) => event.stopPropagation()}
                                             onChange={() => toggleSelectedJob(job.gr_jobid)}
-                                        />
-                                        {(usesAzureJobCards(job) || hasTechnicianSubmission(job)) && (
+                                        />}
+                                        {!job.gr_registrationvoid && (usesAzureJobCards(job) || hasTechnicianSubmission(job)) && (
                                             <button
                                                 className={usesAzureJobCards(job) ? 'jobs-table-action' : 'jobs-submission-indicator'}
                                                 type="button"
@@ -683,43 +696,21 @@ export default function JobsTable({
                                             </button>
                                         )}
                                         <button
-                                            className="jobs-table-action"
+                                            className="job-quick-action job-quick-action-edit"
                                             type="button"
                                             onClick={() => onEditJob(job)}
+                                            disabled={Boolean(job.gr_registrationvoid)}
                                         >
                                             Edit
                                         </button>
-                                        <button
-                                            className="jobs-table-action jobs-spreadsheet-copy-action"
-                                            type="button"
-                                            title={canCopyForSpreadsheet
-                                                ? 'Copy for Spreadsheet'
-                                                : 'A Job Number is required before this Job can be copied.'}
-                                            aria-label="Copy Job details for spreadsheet"
-                                            onClick={() => void copyJobForSpreadsheet(job)}
-                                            disabled={!canCopyForSpreadsheet}
-                                        >
-                                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                                                <rect x="8" y="8" width="11" height="12" rx="2" />
-                                                <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h2" />
-                                            </svg>
-                                        </button>
-                                        <button
-                                            className={`jobs-table-action jobs-technician-email-action${emailDelivery ? ` ${emailDelivery.status}` : ''}`}
-                                            type="button"
-                                            title={emailTooltip}
-                                            aria-label="Email job details to technician"
-                                            onClick={() => {
-                                                if (!job.gr_Mechanic || !canEmailTechnician) return
-                                                setEmailComposerJob(job)
-                                            }}
-                                            disabled={!canEmailTechnician || emailDelivery?.status === 'sending' || Boolean(emailingJobId)}
-                                        >
-                                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                                                <path d="M3 6.5h18v11H3z" />
-                                                <path d="m4 7 8 6 8-6" />
-                                            </svg>
-                                        </button>
+                                        <JobQuickActions
+                                            onCopy={() => void copyJobForSpreadsheet(job)}
+                                            copyBlockedReason={canCopyForSpreadsheet ? '' : job.gr_registrationvoid ? 'Void entries cannot be copied for entry into other systems.' : 'A Job Number is required before this Job can be copied.'}
+                                            onEmail={() => { if (canEmailTechnician) setEmailComposerJob(job) }}
+                                            emailBlockedReason={canEmailTechnician ? '' : emailTooltip}
+                                            emailDelivery={emailDelivery}
+                                            emailBusy={Boolean(emailingJobId)}
+                                        />
                                     </div>
                                 </td>
                             </tr>

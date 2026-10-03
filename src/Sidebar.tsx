@@ -35,7 +35,9 @@ export default function Sidebar({ access }: { access: ApplicationAccess }) {
     const isAdmin = isServiceOperationsAdministrator(getSignedInUserInfo(activeAccount))
     const allowedMenuItems = access.canUseFullApplication
         ? menuItems
-        : menuItems.filter((item) => item.path === '/job-book')
+        : access.mode === 'job-card-admin'
+            ? menuItems.filter((item) => ['/job-card-reviews', '/job-book', '/quotes', '/equipment', '/customers'].includes(item.path))
+            : menuItems.filter((item) => item.path === '/job-book')
     const visibleMenuItems = isAdmin && access.canUseFullApplication
         ? [
             ...allowedMenuItems,

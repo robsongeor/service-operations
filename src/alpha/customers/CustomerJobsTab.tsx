@@ -19,6 +19,7 @@ type Props = {
     jobs: Job[]
     isLoading: boolean
     error: string
+    readOnly?: boolean
     onOpenJob: (job: Job) => void
 }
 
@@ -36,7 +37,7 @@ function safeFilePart(value: string) {
     return value.trim().replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'customer'
 }
 
-export default function CustomerJobsTab({ customerName, jobs, isLoading, error, onOpenJob }: Props) {
+export default function CustomerJobsTab({ customerName, jobs, isLoading, error, readOnly = false, onOpenJob }: Props) {
     const [filters, setFilters] = useState(DEFAULT_CUSTOMER_JOB_FILTERS)
     const [feedback, setFeedback] = useState('')
     const [costCentres, setCostCentres] = useState<FleetCostCentres>({})
@@ -158,7 +159,7 @@ export default function CustomerJobsTab({ customerName, jobs, isLoading, error, 
                             </tr></thead>
                             <tbody>{filteredJobs.map((job) => {
                                 const status = JOB_STATUS_OPTIONS.find((item) => item.value === job.gr_status)?.label ?? 'Unknown'
-                                return <tr key={job.gr_jobid} tabIndex={0} onClick={() => onOpenJob(job)} onKeyDown={(event) => { if (event.key === 'Enter') onOpenJob(job) }}>
+                                return <tr key={job.gr_jobid} tabIndex={readOnly ? undefined : 0} onClick={readOnly ? undefined : () => onOpenJob(job)} onKeyDown={readOnly ? undefined : (event) => { if (event.key === 'Enter') onOpenJob(job) }}>
                                     <td><strong>{job.gr_jobnumber || 'No Job Number'}</strong></td>
                                     <td><span className="customer-job-status" data-status={job.gr_status}>{status}</span></td>
                                     <td>{getJobTypeLabel(job.gr_jobtype)}</td>

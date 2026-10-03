@@ -1,6 +1,10 @@
 .edit-drawer-backdrop { position: fixed; z-index: 1000; inset: 0; display: flex; justify-content: flex-end; background: rgba(20,25,22,.28); }
 .edit-drawer { display: flex; flex-direction: column; width: min(480px,92vw); height: 100%; overflow: hidden; background: #fdfdfb; box-shadow: -16px 0 40px rgba(22,30,26,.16); }
 .edit-drawer:focus { outline: none; }
+.edit-form-dialog { max-height: calc(100dvh - 40px); overflow-y: auto; }
+.edit-form-dialog:focus { outline: none; }
+.edit-form-dialog :focus-visible { outline: 3px solid rgba(23,111,102,.4); outline-offset: 2px; }
+.edit-form-dialog-fields textarea { box-sizing: border-box; width: 100%; min-height: 100px; padding: 10px 11px; resize: vertical; border: 1px solid #d0d7d2; border-radius: 8px; background: #fff; color: #202421; font: inherit; font-size: .85rem; font-weight: 400; }
 .edit-drawer :focus-visible { outline: 3px solid rgba(23,111,102,.35); outline-offset: 2px; }
 .edit-drawer-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 22px 24px; border-bottom: 1px solid #e2e6e3; }
 .edit-drawer-header p, .edit-drawer-header h2 { margin: 0; }.edit-drawer-header p { color: #747b76; font-size: .7rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }.edit-drawer-header h2 { margin-top: 3px; font-size: 1.35rem; }

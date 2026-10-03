@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Equipment } from '../types/equipment.types'
 import type { Customer } from '../types/customer.types'
 import type { Site } from '../types/site.types'
@@ -6,12 +6,13 @@ import type { SiteContact } from '../types/siteContact.types'
 import { SERVICE_TYPES } from '../../equipment/servicePlans/equipmentServicePlan.types'
 import { isServiceTypeEnabled } from '../../equipment/servicePlans/maintenanceConfiguration'
 import type { useJobEditor } from '../hooks/useJobEditor'
-import { deriveSiteNameFromAddress } from '../../shared/siteName'
-import VerifiedAddressField from './VerifiedAddressField'
-import type { VerifiedAddressSuggestion } from '../services/addressSearchApi'
-import CustomerRelationshipPicker from '../../shared/customer-relationship/CustomerRelationshipPicker'
+import JobSiteCreatePanel, { type JobSiteCreateInput } from './JobSiteCreatePanel'
+import JobCustomerField from './JobCustomerField'
 import JobEquipmentField from './JobEquipmentField'
 import JobSiteContactFields from './JobSiteContactFields'
+import JobEquipmentLocation from './JobEquipmentLocation'
+import { isPersistedEquipmentId } from '../../equipment/services/equipmentLocationWorkflow'
+import type { JobCreationLocationErrors } from '../domain/jobCreationLocation'
 
 export type JobRelationshipLookupProps = {
     onSearchEquipment?: (query: string, context: { customerId?: string; siteId?: string }, signal?: AbortSignal) => Promise<Equipment[]>
@@ -23,6 +24,12 @@ export type JobRelationshipLookupProps = {
 }
 
 type Props = JobRelationshipLookupProps & {
+    locationRequired?: boolean
+    locationErrors?: JobCreationLocationErrors
+    manageEquipmentLocation?: boolean
+    correctionsOnly?: boolean
+    onLocationPendingChange?: (pending: boolean) => void
+    onLocationSavingChange?: (saving: boolean) => void
     editor: ReturnType<typeof useJobEditor>
     equipmentList: Equipment[]
     customers: Customer[]
@@ -37,8 +44,15 @@ type Props = JobRelationshipLookupProps & {
 }
 
 type Panel = '' | 'site' | 'contact'
+const ignoreLocationState = () => undefined
 
 export default function JobRelationshipFields({
+    locationRequired = false,
+    locationErrors,
+    manageEquipmentLocation = false,
+    correctionsOnly = false,
+    onLocationPendingChange = ignoreLocationState,
+    onLocationSavingChange = ignoreLocationState,
     editor,
     equipmentList,
     customers,
@@ -57,26 +71,20 @@ export default function JobRelationshipFields({
 }: Props) {
     const {
         draft, setDraft, customerSearch, setCustomerSearch,
-        customerSearchOpen, setCustomerSearchOpen, filteredCustomers,
         filteredSites, filteredContacts, selectCustomer, selectSite,
     } = editor
     const [panel, setPanel] = useState<Panel>('')
     const [isCreating, setIsCreating] = useState(false)
     const [createError, setCreateError] = useState('')
-    const [site, setSite] = useState({ name: '', address: '' })
-    const [siteAddressSelection, setSiteAddressSelection] = useState<VerifiedAddressSuggestion | null>(null)
     const [contact, setContact] = useState({ name: '', phone: '', email: '' })
     const selectedEquipment = equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)
-    const [remoteCustomerResults, setRemoteCustomerResults] = useState<Customer[]>([])
-    const [customerSearchStatus, setCustomerSearchStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+    const hasEquipmentLocation = manageEquipmentLocation && selectedEquipment && isPersistedEquipmentId(selectedEquipment.gr_equipmentid)
     const [siteLoadStatus, setSiteLoadStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
     const [siteLoadError, setSiteLoadError] = useState('')
     const [siteLoadAttempt, setSiteLoadAttempt] = useState(0)
     const [contactLoadStatus, setContactLoadStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
     const [contactLoadError, setContactLoadError] = useState('')
     const [contactLoadAttempt, setContactLoadAttempt] = useState(0)
-    const customerRemoteQueryActive = customerSearch.trim().length >= 2
-    const visibleCustomerSearchStatus = customerRemoteQueryActive ? customerSearchStatus : 'idle'
     const equipmentConflictsWithCustomer = (customerId: string) => {
         const equipmentCustomerId = selectedEquipment?.gr_Site?.gr_Customer?.gr_customerid
         return Boolean(equipmentCustomerId && equipmentCustomerId !== customerId)
@@ -85,36 +93,6 @@ export default function JobRelationshipFields({
         const equipmentSiteId = selectedEquipment?.gr_Site?.gr_siteid
         return Boolean(equipmentSiteId && equipmentSiteId !== siteId)
     }
-    const customerResults = useMemo(() => {
-        const records = new Map(filteredCustomers.map((item) => [item.gr_customerid.toLowerCase(), item]))
-        if (customerRemoteQueryActive) remoteCustomerResults.forEach((item) => records.set(item.gr_customerid.toLowerCase(), item))
-        return [...records.values()].slice(0, 8)
-    }, [customerRemoteQueryActive, filteredCustomers, remoteCustomerResults])
-
-    useEffect(() => {
-        if (!customerSearchOpen || !onSearchCustomers) return
-        const query = customerSearch.trim()
-        if (query.length < 2) return
-        const controller = new AbortController()
-        const timer = window.setTimeout(() => {
-            setCustomerSearchStatus('loading')
-            void onSearchCustomers(query, controller.signal)
-                .then((rows) => {
-                    if (!controller.signal.aborted) {
-                        setRemoteCustomerResults(rows)
-                        setCustomerSearchStatus('idle')
-                    }
-                })
-                .catch((error) => {
-                    if (!controller.signal.aborted && !(error instanceof DOMException && error.name === 'AbortError')) setCustomerSearchStatus('error')
-                })
-        }, 250)
-        return () => {
-            window.clearTimeout(timer)
-            controller.abort()
-        }
-    }, [customerSearch, customerSearchOpen, onSearchCustomers])
-
     useEffect(() => {
         if (!selectedEquipment || selectedEquipment.gr_equipmentid !== draft.equipmentId) return
         const timer = window.setTimeout(() => {
@@ -136,7 +114,7 @@ export default function JobRelationshipFields({
         const customerId = draft.customerId
         const controller = new AbortController()
         const timer = window.setTimeout(() => {
-            if (!customerId || !onLoadCustomerSites) {
+            if (!customerId || !onLoadCustomerSites || hasEquipmentLocation) {
                 setSiteLoadStatus('idle')
                 setSiteLoadError('')
                 return
@@ -146,7 +124,7 @@ export default function JobRelationshipFields({
             void onLoadCustomerSites(customerId, controller.signal).then((rows) => {
                 if (controller.signal.aborted) return
                 setSiteLoadStatus('ready')
-                if (rows.length === 1) {
+                if (!correctionsOnly && rows.length === 1) {
                     setDraft((current) => current.customerId === customerId && !current.siteId
                         ? { ...current, siteId: rows[0].gr_siteid }
                         : current)
@@ -161,7 +139,7 @@ export default function JobRelationshipFields({
             window.clearTimeout(timer)
             controller.abort()
         }
-    }, [draft.customerId, onLoadCustomerSites, setDraft, siteLoadAttempt])
+    }, [correctionsOnly, draft.customerId, hasEquipmentLocation, onLoadCustomerSites, setDraft, siteLoadAttempt])
 
     useEffect(() => {
         const siteId = draft.siteId
@@ -177,7 +155,7 @@ export default function JobRelationshipFields({
             void onLoadSiteContacts(siteId, controller.signal).then((rows) => {
                 if (controller.signal.aborted) return
                 setContactLoadStatus('ready')
-                if (rows.length === 1) {
+                if (!correctionsOnly && rows.length === 1) {
                     const contactId = rows[0].gr_Contact?.gr_contactid ?? ''
                     setDraft((current) => current.siteId === siteId && !current.contactId
                         ? { ...current, contactId }
@@ -193,7 +171,7 @@ export default function JobRelationshipFields({
             window.clearTimeout(timer)
             controller.abort()
         }
-    }, [contactLoadAttempt, draft.siteId, onLoadSiteContacts, setDraft])
+    }, [correctionsOnly, contactLoadAttempt, draft.siteId, onLoadSiteContacts, setDraft])
 
     const openPanel = (nextPanel: Panel) => {
         setPanel(nextPanel)
@@ -204,13 +182,12 @@ export default function JobRelationshipFields({
         setDraft((current) => ({
             ...current,
             equipmentId: item.gr_equipmentid,
-            serviceType: isServiceTypeEnabled(item, current.serviceType) ? current.serviceType : SERVICE_TYPES.NONE,
+            serviceType: correctionsOnly || isServiceTypeEnabled(item, current.serviceType) ? current.serviceType : SERVICE_TYPES.NONE,
         }))
         const site = item.gr_Site
         const customer = site?.gr_Customer
         if (site && customer) {
             setCustomerSearch(customer.gr_name)
-            setCustomerSearchOpen(false)
             selectCustomer(customer.gr_customerid)
             selectSite(site.gr_siteid)
         }
@@ -220,41 +197,37 @@ export default function JobRelationshipFields({
         setDraft((current) => ({ ...current, equipmentId: '' }))
     }
 
-    const createCustomerAndSite = async (input: { customerName: string; siteName: string; address: string }) => {
+    const createCustomerAndSiteRecords = async (input: { customerName: string; siteName: string; address: string }) => {
         const customerId = await onCreateCustomer({ name: input.customerName })
-        let siteId = ''
+        let siteId: string
         try {
             siteId = await onCreateSite({ customerId, name: input.siteName, address: input.address })
         } catch (error) {
             console.error(error)
             throw new Error('The customer was created, but the site could not be created. Add the site or try again.', { cause: error })
         }
+        return {
+            customer: { gr_customerid: customerId, gr_name: input.customerName },
+            site: { gr_siteid: siteId, gr_name: input.siteName, gr_address: input.address,
+                gr_Customer: { gr_customerid: customerId, gr_name: input.customerName } },
+        }
+    }
+
+    const createCustomerAndSite = async (input: { customerName: string; siteName: string; address: string }) => {
+        const created = await createCustomerAndSiteRecords(input)
+        const customerId = created.customer.gr_customerid
+        const siteId = created.site.gr_siteid
         if (equipmentConflictsWithCustomer(customerId) || equipmentConflictsWithSite(siteId)) clearEquipment()
         setDraft((current) => ({ ...current, customerId, siteId, contactId: '' }))
         setCustomerSearch(input.customerName)
     }
 
-    const createSite = async () => {
-        if (!draft.customerId) return setCreateError('Select a customer first.')
-        if (!siteAddressSelection || siteAddressSelection.formattedAddress !== site.address) return setCreateError('Select a verified address from the Geoapify suggestions.')
-        const siteName = site.name.trim() || deriveSiteNameFromAddress(site.address)
-        if (!siteName) return setCreateError('Enter a Site Name, or an Address that can be used to generate one.')
-        try {
-            setIsCreating(true)
-            setCreateError('')
-            const siteId = await onCreateSite({
-                customerId: draft.customerId, name: siteName,
-                address: site.address.trim() || undefined,
-            })
-            if (equipmentConflictsWithSite(siteId)) clearEquipment()
-            setDraft((current) => ({ ...current, siteId, contactId: '' }))
-            setSite({ name: '', address: '' })
-            setSiteAddressSelection(null)
-            setPanel('')
-        } catch (error) {
-            console.error(error)
-            setCreateError('Site could not be created.')
-        } finally { setIsCreating(false) }
+    const createSite = async (input: JobSiteCreateInput) => {
+        if (!draft.customerId) throw new Error('Select a customer first.')
+        const siteId = await onCreateSite({ customerId: draft.customerId, ...input })
+        if (equipmentConflictsWithSite(siteId)) clearEquipment()
+        setDraft((current) => ({ ...current, siteId, contactId: '' }))
+        setPanel('')
     }
 
     const createContact = async () => {
@@ -289,10 +262,11 @@ export default function JobRelationshipFields({
     return <>
         <div className="job-edit-divider job-edit-field-wide">
             <h3>Equipment and location</h3>
-            <p>Change which records this job references.</p>
+            <p>{manageEquipmentLocation ? 'Select equipment to use its current customer and site.' : 'Change which records this job references.'}</p>
         </div>
 
         <JobEquipmentField
+            showSelectedLocation={!hasEquipmentLocation}
             value={draft.equipmentId}
             equipmentList={equipmentList}
             customerId={draft.customerId}
@@ -301,33 +275,49 @@ export default function JobRelationshipFields({
             dependencyStatus={equipmentDependencyStatus}
             dependencyError={equipmentDependencyError}
             onRetryDependencies={onRetryEquipmentDependencies}
-            onCreateEquipment={onCreateEquipment}
+            onCreateEquipment={correctionsOnly ? undefined : onCreateEquipment}
             onSearchEquipment={onSearchEquipment}
             onChange={(item) => item ? selectEquipment(item) : clearEquipment()}
         />
 
-        <div className="job-edit-field-wide">
-            <CustomerRelationshipPicker
+        {hasEquipmentLocation ? <JobEquipmentLocation key={selectedEquipment.gr_equipmentid}
+            equipment={selectedEquipment}
+            onPendingChange={onLocationPendingChange}
+            onSavingChange={onLocationSavingChange}
+            onLocationChange={(row) => {
+                const site = row.gr_Site
+                const customer = site?.gr_Customer
+                setCustomerSearch(customer?.gr_name ?? '')
+                setDraft((current) => current.equipmentId !== row.gr_equipmentid ? current : ({
+                    ...current, customerId: customer?.gr_customerid ?? '', siteId: site?.gr_siteid ?? '',
+                    contactId: current.siteId === site?.gr_siteid ? current.contactId : '',
+                }))
+            }} /> : <div className="job-edit-field-wide">
+            <JobCustomerField
                 id="job-editor-customer"
+                required={locationRequired}
+                error={locationErrors?.customer}
                 query={customerSearch}
                 selectedId={draft.customerId}
-                options={customerResults.map((item) => ({ id: item.gr_customerid, label: item.gr_name }))}
+                customers={customers}
+                onSearchCustomers={onSearchCustomers}
                 onQueryChange={setCustomerSearch}
-                onOpenChange={setCustomerSearchOpen}
                 onClearSelection={() => setDraft((current) => ({ ...current, customerId: '', siteId: '', contactId: '' }))}
-                onSelect={(customerId) => {
-                    const selected = customerResults.find((item) => item.gr_customerid === customerId)
-                    if (!selected) return
+                onSelect={(selected) => {
+                    const customerId = selected.gr_customerid
                     setCustomerSearch(selected.gr_name)
-                    if (equipmentConflictsWithCustomer(customerId)) clearEquipment()
+                    if (!correctionsOnly && equipmentConflictsWithCustomer(customerId)) clearEquipment()
                     selectCustomer(customerId)
                 }}
-                onCreateCustomerAndSite={createCustomerAndSite}
-                searchStatus={visibleCustomerSearchStatus}
+                onCreateCustomerAndSite={correctionsOnly ? undefined : createCustomerAndSite}
             />
-        </div>
+        </div>}
 
         <JobSiteContactFields
+            showSite={!hasEquipmentLocation}
+            locationRequired={locationRequired}
+            siteError={locationErrors?.site}
+            addressError={locationErrors?.address}
             customerId={draft.customerId}
             siteId={draft.siteId}
             contactId={draft.contactId}
@@ -338,23 +328,18 @@ export default function JobRelationshipFields({
             contactLoadStatus={contactLoadStatus}
             contactLoadError={contactLoadError}
             onSiteChange={(siteId) => {
-                if (equipmentConflictsWithSite(siteId)) clearEquipment()
+                if (!correctionsOnly && equipmentConflictsWithSite(siteId)) clearEquipment()
                 selectSite(siteId)
             }}
             onContactChange={(contactId) => setDraft((current) => ({ ...current, contactId }))}
-            onAddSite={() => openPanel('site')}
-            onAddContact={() => openPanel('contact')}
+            onAddSite={correctionsOnly ? undefined : () => openPanel('site')}
+            onAddContact={correctionsOnly ? undefined : () => openPanel('contact')}
             onRetrySites={() => setSiteLoadAttempt((current) => current + 1)}
             onRetryContacts={() => setContactLoadAttempt((current) => current + 1)}
         />
-        {panel === 'site' && <div className="job-edit-create-panel job-edit-field-wide">
-            <div><h4>New site</h4><p>Create a site for {customerSearch} and select it for this job.</p></div>
-            <label className="job-edit-field"><span>Site name</span><input autoFocus value={site.name} onChange={(e) => setSite({ ...site, name: e.target.value })} /></label>
-            <VerifiedAddressField value={site.address} onChange={(address, selection) => { const previousDerived = deriveSiteNameFromAddress(site.address); const nextDerived = selection?.siteName || deriveSiteNameFromAddress(address); setSiteAddressSelection(selection); setCreateError(''); setSite({ ...site, address, name: !site.name.trim() || site.name === previousDerived ? nextDerived : site.name }) }} />
-            {site.name && site.name === deriveSiteNameFromAddress(site.address) && <p>Site Name generated from address.</p>}
-            {createError && <p className="job-edit-error" role="alert">{createError}</p>}
-            {actions(createSite, 'Create site', !siteAddressSelection || siteAddressSelection.formattedAddress !== site.address)}
-        </div>}
+        {correctionsOnly && draft.siteId && <label className="job-edit-field job-edit-field-wide"><span>Site address</span><input readOnly value={filteredSites.find((site) => site.gr_siteid === draft.siteId)?.gr_address ?? ''} /><small>The address comes from the selected Site. Correcting this Job does not edit the shared Site record or move Equipment.</small></label>}
+        {panel === 'site' && <JobSiteCreatePanel key={draft.customerId} customerName={customerSearch}
+            description="Create and select this Site for the job." onCreate={createSite} onCancel={() => setPanel('')} />}
 
         {panel === 'contact' && <div className="job-edit-create-panel job-edit-field-wide">
             <div><h4>New contact</h4><p>Create and select a contact for the chosen site.</p></div>

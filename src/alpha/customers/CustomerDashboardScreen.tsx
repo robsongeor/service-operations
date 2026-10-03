@@ -84,13 +84,13 @@ function hasCustomer(site: SiteCustomerReference, customerId: string): boolean {
     return getSiteCustomerId(site).toLowerCase() === customerId.toLowerCase()
 }
 
-export default function CustomerDashboardScreen() {
+export default function CustomerDashboardScreen({ readOnly = false }: { readOnly?: boolean }) {
     const quoteEditor = useQuoteEditorOverlay()
     const [searchParams, setSearchParams] = useSearchParams()
     const activeAccount = useActiveMsalAccount()
     const signedInUser = getSignedInUserInfo(activeAccount)
     const viewStorageKey = signedInUser ? getCustomerDashboardViewStateKey(signedInUser.storageId) : null
-    const bulkImportAllowed = canUseBulkEquipmentImport(signedInUser)
+    const bulkImportAllowed = !readOnly && canUseBulkEquipmentImport(signedInUser)
     const [selectedCustomerId, setSelectedCustomerId] = useState(() => viewStorageKey
         ? restoreCustomerDashboardSelection(viewStorageKey)
         : '')
@@ -711,7 +711,9 @@ export default function CustomerDashboardScreen() {
                     searchPlaceholder="Search customers"
                     emptyLabel="No matching customers"
                 />
-                <button className="page-header-primary-action" type="button" onClick={() => setCustomerDrawerMode('create')}>+ Create Customer</button>
+                {readOnly
+                    ? <span className="customer-dashboard-read-only">Read only</span>
+                    : <button className="page-header-primary-action" type="button" onClick={() => setCustomerDrawerMode('create')}>+ Create Customer</button>}
             </div>}
         />
 
@@ -732,7 +734,7 @@ export default function CustomerDashboardScreen() {
                     <span>Customer account</span>
                     <h2>{selectedCustomer.gr_name}</h2>
                 </div>
-                <div className="customer-dashboard-actions">
+                {!readOnly && <div className="customer-dashboard-actions">
                     <button
                         type="button"
                         disabled={selectedCustomer.gr_customerid.startsWith('prototype-customer-')}
@@ -741,7 +743,7 @@ export default function CustomerDashboardScreen() {
                     >Create Job</button>
                     <button type="button" onClick={() => { setCustomerDrawerInitialTab('sites'); setCustomerDrawerMode('edit') }}>Add Site</button>
                     <button type="button" onClick={() => { setCustomerDrawerInitialTab('info'); setCustomerDrawerMode('edit') }}>Edit Customer</button>
-                </div>
+                </div>}
             </section>
 
             <MetricStrip items={summaryMetrics} ariaLabel="Customer summary" />
@@ -839,7 +841,7 @@ export default function CustomerDashboardScreen() {
                                 >
                                     Export CSV
                                 </button>
-                                <button
+                                {!readOnly && <button
                                     type="button"
                                     onClick={(event) => {
                                         siteCheckDetailsTriggerRef.current = event.currentTarget
@@ -851,8 +853,8 @@ export default function CustomerDashboardScreen() {
                                     }}
                                 >
                                     Site Check
-                                </button>
-                                <button
+                                </button>}
+                                {!readOnly && <button
                                     type="button"
                                     disabled={site.gr_siteid.startsWith('prototype-site-') || selectedCustomer.gr_customerid.startsWith('prototype-customer-')}
                                     title={site.gr_siteid.startsWith('prototype-site-') ? 'Save this Site to Dataverse before creating Equipment.' : 'Create Equipment at this Site'}
@@ -869,8 +871,8 @@ export default function CustomerDashboardScreen() {
                                     }}
                                 >
                                     New Equipment
-                                </button>
-                                {!site.gr_siteid.startsWith('prototype-site-')
+                                </button>}
+                                {!readOnly && !site.gr_siteid.startsWith('prototype-site-')
                                     && !selectedCustomer.gr_customerid.startsWith('prototype-customer-')
                                     && <PageSettingsButton
                                         ref={(element) => {
@@ -912,7 +914,7 @@ export default function CustomerDashboardScreen() {
                                         const remaining = primary ? calculateHoursRemaining(item.gr_currenthourmeter ?? 0, primary.gr_nextduehours) : null
                                         const status = maintenance?.primary?.status ?? null
                                         const serviceLabel = primary ? SERVICE_TYPE_OPTIONS.find((option) => option.value === primary.gr_servicetype)?.label : null
-                                        return <tr key={item.gr_equipmentid} tabIndex={0} onClick={() => { clearSaveError(); void openEquipment(item) }} onKeyDown={(event) => {
+                                        return <tr key={item.gr_equipmentid} tabIndex={readOnly ? undefined : 0} onClick={readOnly ? undefined : () => { clearSaveError(); void openEquipment(item) }} onKeyDown={readOnly ? undefined : (event) => {
                                             if (event.key === 'Enter' || event.key === ' ') {
                                                 event.preventDefault()
                                                 clearSaveError()
@@ -942,12 +944,14 @@ export default function CustomerDashboardScreen() {
                 jobs={customerJobs}
                 isLoading={isJobsLoading}
                 error={jobsLoadError}
+                readOnly={readOnly}
                 onOpenJob={(job) => { void openDashboardJob(job) }}
             /> : activeTab === 'quotes' ? <CustomerQuotesTab
                 quotes={customerQuotes}
                 sites={customerSites}
                 isLoading={customerData.quotesLoading}
                 error={customerData.quotesError}
+                readOnly={readOnly}
                 onOpenQuote={(quote) => quoteEditor.openQuote(quote.gr_quoteid)}
             /> : activeTab === 'contacts' ? <section className="customer-contacts-panel" role="tabpanel">
                 <header>
@@ -987,7 +991,7 @@ export default function CustomerDashboardScreen() {
             </section> : <section className="customer-info-panel" role="tabpanel">
                 <header>
                     <div><span>Customer information</span><h3>{selectedCustomer.gr_name}</h3></div>
-                    <button type="button" onClick={() => { setCustomerDrawerInitialTab('info'); setCustomerDrawerMode('edit') }}>Edit information</button>
+                    {!readOnly && <button type="button" onClick={() => { setCustomerDrawerInitialTab('info'); setCustomerDrawerMode('edit') }}>Edit information</button>}
                 </header>
                 <dl className="customer-info-summary">
                     <div><dt>Name</dt><dd>{selectedCustomer.gr_name}</dd></div>
@@ -1006,7 +1010,7 @@ export default function CustomerDashboardScreen() {
             </section>}
         </>}
 
-        {siteCheckDetails && selectedCustomer && <SiteCheckDetailsDrawer
+        {!readOnly && siteCheckDetails && selectedCustomer && <SiteCheckDetailsDrawer
             key={`${siteCheckDetails.site.gr_siteid}-${siteCheckDetails.check?.gr_sitecheckid ?? 'history'}`}
             customerName={selectedCustomer.gr_name}
             siteName={siteCheckDetails.site.gr_name}
@@ -1083,7 +1087,7 @@ export default function CustomerDashboardScreen() {
             }}
         />}
 
-        {currentEditingEquipment && <EquipmentDrawer
+        {!readOnly && currentEditingEquipment && <EquipmentDrawer
             mode="edit"
             equipment={currentEditingEquipment}
             equipmentList={equipment}
@@ -1110,7 +1114,7 @@ export default function CustomerDashboardScreen() {
             onDelete={async () => { await deleteEquipment(currentEditingEquipment.gr_equipmentid); setEditingEquipment(null) }}
         />}
 
-        {pendingJobCreateInitialValues && <div className="equipment-job-load-overlay" role={jobCreatePreparationError ? 'alert' : 'status'}>
+        {!readOnly && pendingJobCreateInitialValues && <div className="equipment-job-load-overlay" role={jobCreatePreparationError ? 'alert' : 'status'}>
             <section>
                 <strong>{jobCreatePreparationError ? 'New Job could not be prepared' : 'Preparing New Job…'}</strong>
                 <p>{jobCreatePreparationError || 'Loading the selected Equipment, Customer, Site, and Contact.'}</p>
@@ -1121,7 +1125,7 @@ export default function CustomerDashboardScreen() {
             </section>
         </div>}
 
-        {creatingEquipmentInitialValues && <EquipmentDrawer
+        {!readOnly && creatingEquipmentInitialValues && <EquipmentDrawer
             mode="create"
             initialValues={creatingEquipmentInitialValues}
             equipmentList={equipment}
@@ -1140,7 +1144,7 @@ export default function CustomerDashboardScreen() {
             }}
         />}
 
-        {bulkImportSite && bulkImportAllowed && selectedCustomer && <BulkEquipmentImportDrawer
+        {!readOnly && bulkImportSite && bulkImportAllowed && selectedCustomer && <BulkEquipmentImportDrawer
             key={bulkImportSite.gr_siteid}
             user={signedInUser}
             customerId={selectedCustomer.gr_customerid}
@@ -1157,7 +1161,7 @@ export default function CustomerDashboardScreen() {
             onClose={() => setBulkImportSite(null)}
         />}
 
-        {siteSettingsSite && selectedCustomer && <SiteSettingsDrawer
+        {!readOnly && siteSettingsSite && selectedCustomer && <SiteSettingsDrawer
             key={`${siteSettingsSite.gr_siteid}-${siteChecks.isLoading
                 ? 'loading'
                 : siteChecks.schedules[0]?.gr_sitecheckscheduleid ?? 'new'}`}
@@ -1227,7 +1231,7 @@ export default function CustomerDashboardScreen() {
             onCreateContact={createContactForSite}
         />}
 
-        {runSiteCheckSite && selectedCustomer && <RunSiteCheckDrawer
+        {!readOnly && runSiteCheckSite && selectedCustomer && <RunSiteCheckDrawer
             key={runSiteCheckSite.gr_siteid}
             customerName={selectedCustomer.gr_name}
             siteName={runSiteCheckSite.gr_name}
@@ -1257,7 +1261,7 @@ export default function CustomerDashboardScreen() {
             }}
         />}
 
-        {creatingJobInitialValues && <JobCreateDrawer
+        {!readOnly && creatingJobInitialValues && <JobCreateDrawer
             mechanics={mechanics}
             mechanicsLoading={mechanicsLoading}
             mechanicsError={mechanicsError}
@@ -1283,7 +1287,7 @@ export default function CustomerDashboardScreen() {
             onClose={() => setCreatingJobInitialValues(null)}
         />}
 
-        {editingJob && <JobEditDrawer
+        {!readOnly && editingJob && <JobEditDrawer
             job={editingJob}
             mechanics={mechanics}
             equipmentList={jobEquipmentList}
@@ -1333,7 +1337,7 @@ export default function CustomerDashboardScreen() {
             }}
         />}
 
-        <JobCompletionWorkflow
+        {!readOnly && <JobCompletionWorkflow
             key={completionRequest?.job.gr_jobid ?? 'no-completion'}
             request={completionRequest}
             equipment={jobEquipmentList}
@@ -1346,9 +1350,9 @@ export default function CustomerDashboardScreen() {
             onCompleteStandard={completeStandardFromDashboard}
             onCompleteService={completeServiceFromDashboard}
             onCompleteWof={completeWofFromDashboard}
-        />
+        />}
 
-        {customerDrawerMode && <CustomerDrawer
+        {!readOnly && customerDrawerMode && <CustomerDrawer
             key={`${customerDrawerMode}-${selectedCustomerId}-${editingSiteId}`}
             mode={customerDrawerMode}
             initialTab={customerDrawerInitialTab}

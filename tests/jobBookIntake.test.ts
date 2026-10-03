@@ -3,6 +3,10 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import {
     createBlankJobBookRow,
+    applyIntakeCustomerToRow,
+    jobBookEquipmentFallback,
+    jobBookLocationFieldsVisible,
+    jobBookLocationSummaryVisible,
     getPromotionReadiness,
     JOB_BOOK_ENTRY_STAGES,
     MANAGED_JOB_ENTRY_MARKER_COLUMNS,
@@ -21,6 +25,136 @@ function jwt(claims: Record<string, string>) {
     const payload = Buffer.from(JSON.stringify(claims)).toString('base64url')
     return `header.${payload}.signature`
 }
+
+test('saved equipment snapshots provide display details without inventing a master link or changing location', () => {
+    const row = { ...createBlankJobBookRow(0), fleet: '123', serial: 'serial-123', make: 'Sample make', model: 'Sample model', customerId: 'saved-customer', siteId: 'saved-site' }
+    const before = structuredClone(row)
+    assert.deepEqual(jobBookEquipmentFallback(row), { gr_equipmentid: '', gr_fleet: '123', gr_serial: 'serial-123', gr_make: 'Sample make', gr_model: 'Sample model' })
+    assert.deepEqual(row, before)
+    assert.equal(jobBookEquipmentFallback({ ...row, fleet: '' })?.gr_serial, 'serial-123')
+})
+
+test('linked Equipment missing from the directory retains its ID; unknown and empty selections have no fallback', () => {
+    const blank = createBlankJobBookRow(0)
+    assert.equal(jobBookEquipmentFallback({ ...blank, equipmentId: 'linked-equipment' })?.gr_equipmentid, 'linked-equipment')
+    assert.equal(jobBookEquipmentFallback(blank), undefined)
+    assert.equal(jobBookEquipmentFallback({ ...blank, fleet: '   ', serial: ' ' }), undefined)
+    assert.equal(jobBookEquipmentFallback({ ...blank, fleet: 'old-snapshot', equipmentReviewRequired: true }), undefined)
+    const source = readFileSync(new URL('../src/alpha/job-book/JobBookPrototypeScreen.tsx', import.meta.url), 'utf8')
+    assert.match(source, /selectedEquipmentFallback=\{jobBookEquipmentFallback\(draft\)\}/)
+})
+
+test('new Intake hides Customer, Site and Contact until an equipment decision; existing entries remain editable', () => {
+    const blank = createBlankJobBookRow(0)
+    const withoutEquipment = { ...blank, customerId: 'previous-customer' }
+    assert.equal(jobBookLocationFieldsVisible(blank), false)
+    assert.equal(jobBookLocationFieldsVisible(withoutEquipment), false)
+    assert.equal(jobBookLocationFieldsVisible({ ...blank, equipmentId: 'existing-equipment' }), true)
+    assert.equal(jobBookLocationFieldsVisible({ ...blank, equipmentId: 'prototype-machine' }), true)
+    assert.equal(jobBookLocationFieldsVisible(setEquipmentReviewRequired(blank, true)), true)
+    assert.equal(jobBookLocationFieldsVisible(setEquipmentReviewRequired(setEquipmentReviewRequired(blank, true), false)), false)
+    assert.equal(jobBookLocationFieldsVisible(blank, true), true)
+    const source = readFileSync(new URL('../src/alpha/job-book/JobBookPrototypeScreen.tsx', import.meta.url), 'utf8')
+    assert.match(source, /showIntakeLocationFields && <>[\s\S]*<JobEquipmentLocation[\s\S]*<CustomerPicker[\s\S]*<JobSiteContactFields[\s\S]*<\/>\}/)
+    assert.match(source, /!intakeDrawerOpen \|\| !showIntakeLocationFields/)
+})
+
+test('editing linked equipment defaults to a location summary until Edit is explicitly chosen', () => {
+    const row = { ...createBlankJobBookRow(0), equipmentId: 'equipment-1', customerId: 'customer-1', siteId: 'site-1' }
+    const before = structuredClone(row)
+    assert.equal(jobBookLocationSummaryVisible(row, true), true)
+    assert.equal(jobBookLocationSummaryVisible(row, true, true), false)
+    assert.equal(jobBookLocationSummaryVisible(row, false), false)
+    for (const missing of ['customerId', 'siteId']) {
+        assert.equal(jobBookLocationSummaryVisible({ ...row, [missing]: '' }, true), false, missing)
+    }
+    assert.deepEqual(row, before)
+})
+
+test('unknown or absent Equipment still shows saved Customer/Site as a tile until Edit is chosen', () => {
+    const saved = { ...createBlankJobBookRow(0), customerId: 'customer-1', customer: 'Saved Customer', siteId: 'site-1', site: 'Saved Site', address: 'Saved address' }
+    for (const row of [saved, setEquipmentReviewRequired(saved, true)]) {
+        const before = structuredClone(row)
+        assert.equal(jobBookLocationSummaryVisible(row, true), true)
+        assert.equal(jobBookLocationSummaryVisible(row, true, true), false)
+        assert.equal(jobBookLocationSummaryVisible(row, true, false), true, 'reopening restores the tile')
+        assert.equal(jobBookLocationSummaryVisible(row, false), false, 'new Intake keeps its selectors')
+        assert.deepEqual(row, before)
+    }
+})
+
+test('saved snapshot-only Customer/Site also use the tile without requiring master lookups', () => {
+    const row = { ...createBlankJobBookRow(0), customer: 'Snapshot Customer', site: 'Snapshot Site', equipmentReviewRequired: true }
+    assert.equal(jobBookLocationSummaryVisible(row, true), true)
+    assert.equal(jobBookLocationSummaryVisible(row, true, true), false)
+    for (const missing of ['customer', 'site']) {
+        assert.equal(jobBookLocationSummaryVisible({ ...row, [missing]: '  ' }, true), false, 'incomplete entries retain selectors')
+    }
+    assert.equal(jobBookLocationSummaryVisible(createBlankJobBookRow(0), true), false)
+})
+
+test('newly created Customer/Site snapshots become a tile and explicit Edit restores controls', () => {
+    const row = { ...createBlankJobBookRow(0), equipmentId: 'prototype-machine', fleet: 'Sample machine', customerId: 'prototype-customer-new', customer: 'Created customer', siteId: 'prototype-site-new', site: 'Created site', address: '1 Sample Road' }
+    const before = structuredClone(row)
+    assert.equal(jobBookLocationSummaryVisible(row, false), false, 'ordinary incomplete/unconfirmed creation stays editable')
+    assert.equal(jobBookLocationSummaryVisible(row, true), true, 'successful Customer/Site creation confirms the location')
+    assert.equal(jobBookLocationSummaryVisible(row, true, true), false, 'Edit remains explicit')
+    assert.equal(jobBookLocationSummaryVisible(row, true, false), true, 'creating again restores the tile')
+    assert.deepEqual(row, before, 'presentation must not change the machine or its location')
+    assert.equal(jobBookLocationSummaryVisible({ ...row, siteId: '', site: '' }, true), false)
+    assert.equal(jobBookLocationSummaryVisible({ ...row, customerId: '', customer: '' }, true), false)
+})
+
+test('Intake creation confirms only the finished Customer/Site and reuses the existing summary', () => {
+    const screen = readFileSync(new URL('../src/alpha/job-book/JobBookPrototypeScreen.tsx', import.meta.url), 'utf8')
+    assert.match(screen, /jobBookLocationSummaryVisible\(draft, Boolean\(editingIntakeRow\) \|\| createdEntryLocation, editingEntryLocation\)/)
+    const create = screen.slice(screen.indexOf('onCreateCustomerAndSite={async'), screen.indexOf('}} /></div>}', screen.indexOf('onCreateCustomerAndSite={async')))
+    assert.match(create, /setDraft\([\s\S]*prototype-customer-[\s\S]*prototype-site-[\s\S]*setCreatedEntryLocation\(true\)[\s\S]*setEditingEntryLocation\(false\)/)
+    assert.match(create, /if \(UNIFIED_JOB_WALKTHROUGH && !editingIntakeRow\)/)
+    assert.doesNotMatch(create.slice(create.indexOf("setIntakeError('')")), /createCustomer\(|createSite\(|fetch\(/)
+    assert.match(screen, /createActionLabel="Create customer"/)
+    assert.doesNotMatch(screen, /createActionLabel="Use customer and site"/)
+})
+
+test('created-location presentation resets between entries and regional books', () => {
+    const screen = readFileSync(new URL('../src/alpha/job-book/JobBookPrototypeScreen.tsx', import.meta.url), 'utf8')
+    for (const [start, end] of [['const openNewIntakeEntry =', 'const openManageJob ='], ['const openIntakeEntryEditor =', 'const createLocalIntakeEquipment ='], ['const switchJobBook =', 'const searchJobBookCustomers =']]) {
+        assert.match(screen.slice(screen.indexOf(start), screen.indexOf(end)), /setCreatedEntryLocation\(false\)/)
+    }
+})
+
+test('new and edited entries reuse the same location tile without replacing saved locations', () => {
+    const screen = readFileSync(new URL('../src/alpha/job-book/JobBookPrototypeScreen.tsx', import.meta.url), 'utf8')
+    const location = readFileSync(new URL('../src/alpha/jobs/components/JobEquipmentLocation.tsx', import.meta.url), 'utf8')
+    const summary = readFileSync(new URL('../src/alpha/jobs/components/JobLocationSummary.tsx', import.meta.url), 'utf8')
+    assert.match(screen, /<JobLocationSummary customer=\{draft\.customer\} site=\{draft\.site\} address=\{draft\.address\}/)
+    assert.match(screen, /onEdit=\{\(\) => setEditingEntryLocation\(true\)\}/)
+    assert.match(screen, /showSite=\{!locationEquipment && !showEntryLocationSummary\}/)
+    assert.match(screen, /if \(showEntryLocationSummary\) return/)
+    assert.match(screen, /const selectIntakeEquipment = \(item: Equipment \| undefined\) => \{\s*setEditingEntryLocation\(false\)/)
+    assert.match(screen, /const openNewIntakeEntry = \(\) => \{\s*setEditingEntryLocation\(false\)/)
+    assert.match(screen, /setEditingEntryLocation\(false\)[\s\S]*setEditingIntakeRow\(row\)/)
+    assert.match(screen, /!editingIntakeRow && isPersistedEquipmentId/)
+    assert.match(location, /<JobLocationSummary customer=\{site\?\.gr_Customer\?\.gr_name\}/)
+    assert.match(summary, /onClick=\{onEdit\}>Edit<\/button>/)
+    assert.doesNotMatch(summary, /useEquipmentLocation|fetch|acquireDataverseAccessToken/)
+})
+
+test('Customer selection preserves unknown equipment or local machine details while clearing stale Site and Contact', () => {
+    const blank = createBlankJobBookRow(0)
+    for (const selected of [setEquipmentReviewRequired(blank, true), { ...blank, equipmentId: 'prototype-machine', fleet: 'TEST', equipmentConfigured: true }]) {
+        const before = { ...selected, customerId: 'old', siteId: 'old-site', contactId: 'old-contact', address: 'Old address' }
+        const updated = applyIntakeCustomerToRow(before, 'new', 'New Customer')
+        assert.equal(jobBookLocationFieldsVisible(updated), true)
+        assert.equal(updated.equipmentId, before.equipmentId)
+        assert.equal(updated.equipmentReviewRequired, before.equipmentReviewRequired)
+        assert.equal(updated.fleet, before.fleet)
+        assert.equal(updated.siteId, '')
+        assert.equal(updated.contactId, '')
+        assert.equal(updated.address, '')
+        assert.equal(before.siteId, 'old-site')
+    }
+})
 
 test('GT and Timecloud completion use separate managed Job columns', () => {
     assert.deepEqual(MANAGED_JOB_ENTRY_MARKER_COLUMNS, {
@@ -164,7 +298,6 @@ test('Job Book intake reuses the shared Job Equipment field and bounded Customer
     const equipmentField = readFileSync(new URL('../src/alpha/jobs/components/JobEquipmentField.tsx', import.meta.url), 'utf8')
     const sharedSelect = readFileSync(new URL('../src/alpha/shared/searchable-select/SearchableSelect.tsx', import.meta.url), 'utf8')
 
-    assert.match(screen, /import SearchableSelect/)
     assert.match(screen, /import JobEquipmentField/)
     assert.match(screen, /<JobEquipmentField/)
     assert.match(relationshipFields, /import JobEquipmentField/)
@@ -175,15 +308,16 @@ test('Job Book intake reuses the shared Job Equipment field and bounded Customer
     assert.match(relationshipFields, /<JobSiteContactFields/)
     assert.match(screen, /id="job-book-drawer-customer"/)
     assert.match(screen, /onCreateCustomerAndSite=/)
-    assert.match(screen, /Use customer and site/)
+    assert.match(screen, /createActionLabel="Create customer"/)
     assert.match(screen, /does not create master Dataverse records/)
     assert.match(screen, /customerId=\{draft\.customerId\}/)
     assert.match(screen, /applyCustomerSelection/)
     assert.match(screen, /unknownEquipmentOption=\{\{/)
     assert.match(equipmentField, /job-equipment-unknown-option/)
     assert.match(equipmentField, /unknownEquipmentOption\?\.selected/)
-    assert.match(screen, /if \(!value \|\| !customerName\) return/)
-    assert.match(screen, /setSearchQuery\(customerName\)/)
+    assert.match(screen, /input\.customerId === value && input\.customerName === customerName \? input\.text : customerName/)
+    assert.match(screen, /value && customerName \? \[\{ gr_customerid: value, gr_name: customerName \}\] : \[\]/)
+    assert.match(screen, /customerId === row\.customerId && customer === row\.customer/)
     assert.doesNotMatch(screen, /<input aria-label="Customer"/)
     assert.match(sharedSelect, /resultLimit\?: number/)
     assert.match(sharedSelect, /matching\.slice\(0, resultLimit\)/)
@@ -218,10 +352,22 @@ test('Intake entries edit through the shared drawer while managed Job navigation
     assert.match(screen, /allowManagedJobNavigation[\s\S]*Open Job[\s\S]*Managed Job/)
 })
 
+test('unconfigured equipment reopens the existing Intake drawer without a second editor', () => {
+    const screen = readFileSync(new URL('../src/alpha/job-book/JobBookPrototypeScreen.tsx', import.meta.url), 'utf8')
+    assert.match(screen, /const canEditIntake = isEditableJobBookIntake\(row\)/)
+    assert.match(screen, /row\.equipmentReviewRequired\s*\? canEditIntake\s*\? <button/)
+    assert.ok(screen.includes('onClick={() => openIntakeEntryEditor(row)}><strong>Equipment not configured</strong><small>Edit entry to set equipment</small>'))
+    assert.match(screen, /const openIntakeEntryEditor = \(row: JobBookRow\) => \{\s*if \(!isEditableJobBookIntake\(row\)\) return/)
+    assert.match(screen, /setEditingIntakeRow\(row\)[\s\S]*setDraft\(\{ \.\.\.row \}\)[\s\S]*setIntakeDrawerOpen\(true\)/)
+    assert.match(screen, /if \(editingIntakeRow\) \{\s*const saved = await updateJobBookIntakeRow\(token, draft\)/)
+    assert.match(screen, /<JobEquipmentField[\s\S]*onChange=\{selectIntakeEquipment\}/)
+    assert.doesNotMatch(screen, /openMachineDialog|machineDialogOpen|machine-dialog-title|setEditingRow|saveEditedRow|Click to add Fleet or Serial/)
+})
+
 test('shared Job Book relationship dropdowns close when focus moves outside them', () => {
     const equipmentField = readFileSync(new URL('../src/alpha/jobs/components/JobEquipmentField.tsx', import.meta.url), 'utf8')
     const customerPicker = readFileSync(new URL('../src/alpha/shared/customer-relationship/CustomerRelationshipPicker.tsx', import.meta.url), 'utf8')
-    const screen = readFileSync(new URL('../src/alpha/job-book/JobBookPrototypeScreen.tsx', import.meta.url), 'utf8')
+    const mechanicPicker = readFileSync(new URL('../src/alpha/jobs/components/SearchableMechanicSelect.tsx', import.meta.url), 'utf8')
     const coordination = readFileSync(new URL('../src/alpha/shared/dropdown/exclusiveDropdown.ts', import.meta.url), 'utf8')
 
     assert.match(equipmentField, /document\.addEventListener\('mousedown', closeOnOutsideClick, true\)/)
@@ -230,8 +376,37 @@ test('shared Job Book relationship dropdowns close when focus moves outside them
     assert.match(customerPicker, /rootRef\.current\?\.contains/)
     assert.match(equipmentField, /announceExclusiveDropdownOpen/)
     assert.match(customerPicker, /announceExclusiveDropdownOpen/)
-    assert.match(screen, /closeWhenAnotherDropdownOpens\(dropdownId/)
+    assert.match(mechanicPicker, /closeWhenAnotherDropdownOpens\(resultsId/)
+    assert.match(mechanicPicker, /document\.addEventListener\('mousedown', closeOnOutsideClick, true\)/)
     assert.match(coordination, /exclusive-dropdown-open/)
+})
+
+test('Equipment Change opens a focused replacement search without clearing selected relationships', () => {
+    const field = readFileSync(new URL('../src/alpha/jobs/components/JobEquipmentField.tsx', import.meta.url), 'utf8')
+    const change = field.slice(field.indexOf('const changeEquipment ='), field.indexOf('const select ='))
+    assert.match(change, /setEquipmentSearch\(''\)/)
+    assert.match(change, /setActiveIndex\(0\)/)
+    assert.match(change, /openSearch\(\)/)
+    assert.doesNotMatch(change, /onChange|clear\(|setCreatedSelection/)
+    assert.match(field, /aria-label="Change selected equipment" onClick=\{changeEquipment\}/)
+    assert.match(field, /aria-label="Change unknown equipment selection" onClick=\{changeEquipment\}/)
+    assert.match(field, /if \(searchOpen\) searchInputRef\.current\?\.focus\(\)/)
+    assert.match(field, /<input ref=\{searchInputRef\} role="combobox"/)
+})
+
+test('Equipment search dismissal restores the tile; only deliberate selections replace or clear it', () => {
+    const field = readFileSync(new URL('../src/alpha/jobs/components/JobEquipmentField.tsx', import.meta.url), 'utf8')
+    assert.match(field, /selectedEquipment && !searchOpen/)
+    assert.match(field, /unknownEquipmentOption\?\.selected && !searchOpen/)
+    assert.match(field, /event\.key === 'Escape' && searchOpen[\s\S]*event\.stopPropagation\(\); restoreChangeFocusRef\.current = true; setSearchOpen\(false\)/)
+    assert.match(field, /changeButtonRef\.current\?\.focus\(\)/)
+    const select = field.slice(field.indexOf('const select ='), field.indexOf('const clear ='))
+    assert.match(select, /unknownEquipmentOption\?\.onChange\(false\)/)
+    assert.match(select, /onChange\(item\)/)
+    const clear = field.slice(field.indexOf('const clear ='), field.indexOf('const createEquipment ='))
+    assert.match(clear, /onChange\(undefined\)/)
+    assert.match(field, /onClick=\{clear\}>No Equipment/)
+    assert.match(field, /select\(created\)/)
 })
 
 test('Job Book progressively loads shared Staff and bounded Customer Site relationships', () => {
@@ -244,8 +419,9 @@ test('Job Book progressively loads shared Staff and bounded Customer Site relati
     assert.match(screen, /fetchSiteContactsForSite\(token, siteId, controller\.signal\)/)
     assert.match(screen, /new AbortController\(\)/)
     assert.match(screen, /Retry Staff/)
-    assert.match(screen, /Retry Customer search/)
-    assert.match(screen, /Retry Sites/)
+    const customerField = readFileSync(new URL('../src/alpha/jobs/components/JobCustomerField.tsx', import.meta.url), 'utf8')
+    assert.match(customerField, /onRetrySearch=\{search\.retry\}/)
+    assert.match(screen, /onRetrySites=\{\(\) => setIntakeSiteLoadAttempt/)
     assert.doesNotMatch(screen, /fetchCustomers\(token\)/)
     assert.doesNotMatch(screen, /fetchSites\(token\)/)
     assert.doesNotMatch(screen, /subscribeToStaffChanges/)

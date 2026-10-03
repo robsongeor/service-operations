@@ -195,7 +195,7 @@ test('pending queue is bounded, reports overflow and only reads its saved snapsh
     assert.doesNotMatch(JSON.stringify(body), /queue-test-|queue-overflow|technician@example.com/)
 })
 
-test('review details and photos require office authentication and can be marked reviewed', async () => {
+test('review details and photos require office authentication and support explicit GreenTree completion', async () => {
     const pdfSnapshot = { equipmentMake: 'Still', equipmentModel: 'RX60', equipmentSerial: 'SER-TEST', orderNumber: 'PO-TEST', siteAddress: '1 Example Road' }
     const created = await generate({ snapshot: snapshot(pdfSnapshot) })
     const submitted = await invoke({ method: 'POST', headers: {}, body: {
@@ -213,11 +213,79 @@ test('review details and photos require office authentication and can be marked 
     assert.equal(detail.technicianEmail, undefined)
     assert.equal(detail.tokenHash, undefined)
     const reviewed = await service.handleReviewRequest({
-        method: 'POST', headers: { authorization: 'Bearer office' }, query: { reviewId }, body: { action: 'markReviewed', etag: detail.etag },
+        method: 'POST', headers: { authorization: 'Bearer office' }, query: { reviewId }, body: { action: 'completeGreenTreeProcessing', etag: detail.etag, greentreeReference: 'GT-TEST' },
     })
     assert.equal(JSON.parse(reviewed.body).status, 'reviewed')
+    assert.equal(JSON.parse(reviewed.body).officeStatus, 'processedInGreenTree')
     const empty = JSON.parse((await service.handleReviewRequest({ method: 'GET', headers: { authorization: 'Bearer office' }, query: {} })).body)
     assert.equal(empty.items.length, 0)
+})
+
+test('office review API enforces explicit transitions, immutable evidence and stale ETags', async () => {
+    const store = require('../api/services/jobCardStorage').getJobCardStore()
+    const reviewId = '00000000-0000-4000-8000-000000000041'
+    const original = await store.create({
+        ...snapshot({ siteAddress: '1 Evidence Road', equipmentSerial: 'IMMUTABLE-1' }),
+        tokenHash: 'office-workflow', reviewId, status: 'pendingReview', officeStatus: 'pending',
+        submittedOn: '2026-10-02T00:00:00Z', story: 'Technician evidence',
+        timeEntriesJson: JSON.stringify([{ date: '2026-10-02', hours: 1, kilometres: 2 }]),
+        partsJson: JSON.stringify([{ description: 'Seal', quantity: 1 }]), photosJson: '[]', officeActivitiesJson: '[]',
+    })
+    const headers = { authorization: 'Bearer office' }
+    const post = (body) => service.handleReviewRequest({ method: 'POST', headers, query: { reviewId }, body })
+
+    assert.equal((await post({ action: 'setOnHold', etag: original.etag })).status, 400)
+    assert.equal((await post({ action: 'markReviewed', etag: original.etag })).status, 400)
+    assert.equal((await post({ action: 'completeNoInvoiceRequired', etag: original.etag, note: 'Warranty repair' })).status, 400)
+    assert.deepEqual(await store.getByReviewId(reviewId), original, 'Rejected retired action must not mutate evidence or audit')
+    assert.equal((await post({ action: 'startReview', etag: original.etag, reviewedByUserId: 'spoofed' })).status, 400)
+
+    const startedResponse = await post({ action: 'startReview', etag: original.etag })
+    assert.equal(startedResponse.status, 200)
+    const started = JSON.parse(startedResponse.body)
+    assert.equal(started.officeStatus, 'inReview')
+    assert.equal(started.reviewStartedBy.displayName, 'Local Office User')
+    assert.equal((await post({ action: 'setOnHold', etag: original.etag, note: 'Waiting for PO' })).status, 409)
+
+    const heldResponse = await post({ action: 'setOnHold', etag: started.etag, note: 'Waiting for PO' })
+    assert.equal(heldResponse.status, 200)
+    const held = JSON.parse(heldResponse.body)
+    assert.equal(held.officeStatus, 'onHold')
+    assert.equal(held.officeActivities.length, 2)
+    const finalResponse = await post({ action: 'completeGreenTreeProcessing', etag: held.etag, note: 'Data entry complete' })
+    assert.equal(finalResponse.status, 200)
+    const final = JSON.parse(finalResponse.body)
+    assert.equal(final.officeStatus, 'processedInGreenTree')
+    assert.equal(final.outcomeBy.email, 'local.office@example.invalid')
+    assert.equal(final.status, 'reviewed')
+    assert.equal((await post({ action: 'completeGreenTreeProcessing', etag: final.etag })).status, 409)
+
+    const stored = await store.getByReviewId(reviewId)
+    for (const field of ['story', 'timeEntriesJson', 'partsJson', 'siteAddress', 'equipmentSerial', 'submittedOn']) {
+        assert.deepEqual(stored[field], original[field], field)
+    }
+})
+
+test('active and history review queries are separate, bounded, paged and legacy-safe', async () => {
+    const store = require('../api/services/jobCardStorage').getJobCardStore()
+    const base = { ...snapshot(), photosJson: '[]', officeActivitiesJson: '[]' }
+    await store.create({ ...base, tokenHash: 'active-old', reviewId: '00000000-0000-4000-8000-000000000051', status: 'pendingReview', officeStatus: 'pending', submittedOn: '2026-10-01T00:00:00Z' })
+    await store.create({ ...base, tokenHash: 'active-new', reviewId: '00000000-0000-4000-8000-000000000052', status: 'pendingReview', officeStatus: 'onHold', officeNote: 'Waiting', submittedOn: '2026-10-03T00:00:00Z' })
+    await store.create({ ...base, tokenHash: 'history-explicit', reviewId: '00000000-0000-4000-8000-000000000053', status: 'reviewed', officeStatus: 'processedInGreenTree', submittedOn: '2026-10-02T00:00:00Z' })
+    await store.create({ ...base, tokenHash: 'history-legacy', reviewId: '00000000-0000-4000-8000-000000000054', status: 'reviewed', submittedOn: '2026-09-01T00:00:00Z' })
+    await store.create({ ...base, tokenHash: 'history-retired', reviewId: '00000000-0000-4000-8000-000000000055', status: 'reviewed', officeStatus: 'noInvoiceRequired', officeNote: 'Historical reason', submittedOn: '2026-08-01T00:00:00Z' })
+    const headers = { authorization: 'Bearer office' }
+    const active = JSON.parse((await service.handleReviewRequest({ method: 'GET', headers, query: { view: 'active', offset: '0', limit: '1' } })).body)
+    assert.equal(active.items.length, 1)
+    assert.equal(active.items[0].officeStatus, 'onHold')
+    assert.equal(active.hasMore, true)
+    assert.equal(active.nextOffset, 1)
+    const history = JSON.parse((await service.handleReviewRequest({ method: 'GET', headers, query: { view: 'history', offset: '0', limit: '10' } })).body)
+    assert.deepEqual(history.items.map((item) => item.officeStatus), ['processedInGreenTree', 'legacyReviewed', 'noInvoiceRequired'])
+    assert.equal(history.items[1].greentreeReference, undefined)
+    assert.equal(history.items[2].greentreeReference, undefined)
+    assert.equal((await service.handleReviewRequest({ method: 'GET', headers, query: { view: 'active', offset: '500', limit: '1' } })).status, 400)
+    assert.equal((await service.handleReviewRequest({ method: 'GET', headers, query: { view: 'active', unexpected: 'true' } })).status, 400)
 })
 
 const validBody = () => ({ story: 'Synthetic deployment verification', hourMeter: 2510,
@@ -334,7 +402,7 @@ test('authenticated per-Job history includes Azure lifecycle states without expo
     await invoke({ method: 'POST', body: { ...validBody(), token: second.body.token } })
     const store = require('../api/services/jobCardStorage').getJobCardStore()
     const submitted = await store.getByTokenHash(service.test.hashToken(second.body.token))
-    await service.handleReviewRequest({ method: 'POST', headers, query: { reviewId: submitted.reviewId }, body: { action: 'markReviewed', etag: submitted.etag } })
+    await service.handleReviewRequest({ method: 'POST', headers, query: { reviewId: submitted.reviewId }, body: { action: 'completeGreenTreeProcessing', etag: submitted.etag } })
     const expired = await generate()
     const record = await store.getByTokenHash(service.test.hashToken(expired.body.token))
     await store.replace({ ...record, expiresOn: '2000-01-01T00:00:00Z' }, record.etag)

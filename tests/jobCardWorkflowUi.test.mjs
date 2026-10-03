@@ -100,7 +100,7 @@ const reviewFixture = (overrides = {}) => ({
     furtherWorkDetails: 'Order seal kit', safetyIssueIdentified: true, safetyIssueDetails: 'Damaged guard',
     timeEntries: [{ date: '2026-10-02', hours: 1.25, kilometres: 12 }], parts: [{ description: 'Hose', quantity: 1 }],
     photos: [{ id: 'photo-1', fileName: 'Evidence.jpg', mimeType: 'image/jpeg', size: 3 }],
-    notificationStatus: 'sent', ...overrides,
+    notificationStatus: 'sent', officeStatus: 'pending', officeActivities: [], isTerminal: false, ...overrides,
 })
 const renderReview = (overrides = {}, state = {}) => renderToStaticMarkup(createElement(MemoryRouter, null, createElement(ReviewDetail, {
     review: reviewFixture(overrides), state: { busy: false, error: '', photoUrls: {}, photoLoading: {},
@@ -115,22 +115,53 @@ const renderQueue = (props = {}, path = '/job-card-reviews') => renderToStaticMa
 
 test('queue reuses shared table controls and exposes only review navigation, not operational actions', () => {
     const markup = renderQueue()
-    for (const value of ['operations-table-panel', 'operations-table-toolbar', 'operations-filter-pills', 'operations-table-sort', 'searchable-select', 'job-type-tabs', 'Sort by photos', 'Reported attention', 'Repair hydraulics', '1 of 1 shown']) assert.ok(markup.includes(value), value)
+    for (const value of ['operations-table-panel', 'operations-table-toolbar', 'operations-filter-pills', 'operations-table-sort', 'searchable-select', 'drawer-tabs', 'Sort by photos', 'Reported attention', 'Repair hydraulics', '1 of 1 shown']) assert.ok(markup.includes(value), value)
+    assert.equal((markup.match(/role="tab"/g) || []).length, 4)
+    for (const label of ['Open jobs', 'Submitted', 'Review', 'Completed']) assert.ok(markup.includes(`role="tab">${label}</button>`))
+    assert.match(markup, /label="Job Card workflow"/)
+    assert.match(markup, /review-type-filter-label">Job type/)
+    assert.doesNotMatch(markup, /job-type-tabs|>Active<|>History</)
     assert.match(markup, /aria-sort="descending"/)
     assert.match(markup, /aria-label="Review Job 142314 submitted by Fixture technician"/)
     assert.doesNotMatch(markup, /Mark reviewed|Send email|Office status|Schedule|Site Check|Operational jobs/)
 })
 
 test('queue loading, failure, empty, no matches and bounded results stay distinct', () => {
-    assert.match(renderQueue({ busy: true, items: [] }), /Loading pending Job Cards/)
+    assert.match(renderQueue({ busy: true, items: [] }), /Loading submitted job cards/)
     const failure = renderQueue({ items: [], error: 'Access denied' })
     assert.match(failure, /role="alert"/)
     assert.match(failure, /does not mean the queue is empty/)
-    assert.doesNotMatch(failure, /No technician submissions are waiting/)
+    assert.doesNotMatch(failure, /No new technician submissions are waiting/)
     assert.match(renderQueue({ error: 'Offline' }), /Previously loaded rows remain below/)
-    assert.match(renderQueue({ items: [] }), /No technician submissions are waiting/)
-    assert.match(renderQueue({}, '/job-card-reviews?q=nonexistent'), /No submissions match these filters/)
-    assert.match(renderQueue({ truncated: true }), /not the entire queue/)
+    assert.match(renderQueue({ items: [] }), /No new technician submissions are waiting/)
+    assert.match(renderQueue({}, '/job-card-reviews?q=nonexistent'), /No records match these filters/)
+    assert.match(renderQueue({ truncated: true }), /More records are available to check for this stage/)
+    assert.match(renderQueue({ truncated: true, items: [] }), /No matching records in the pages checked so far/)
+    const capped = renderQueue({ truncated: true, canLoadMore: false })
+    assert.match(capped, /safe scan limit has been reached/)
+    assert.doesNotMatch(capped, />Load more</)
+})
+
+test('Open jobs shows sent progress, not fabricated submission evidence or editable managed Jobs', () => {
+    const { reviewId, submittedOn, officeStatus, ...base } = reviewFixture()
+    void reviewId; void submittedOn; void officeStatus
+    const markup = renderQueue({ queueView: 'open', items: [{ ...base, dispatchId: 'sent-1', sentOn: '2026-10-01T23:00:00Z' }] }, '/job-card-reviews?view=open&officeStatus=onHold&administrator=Jess&attention=safety&sort=photos')
+    assert.match(markup, /Awaiting submission/)
+    assert.match(markup, /Sort by sent/)
+    assert.match(markup, /1 of 1 shown/)
+    assert.match(markup, /Unsent and unnumbered jobs remain in staging/)
+    assert.doesNotMatch(markup, /href="\/jobs|href="\/job-card-reviews\/|Sort by photos|review-office-status-filter|review-administrator-filter|Reported attention|>Review →</)
+})
+
+test('Review explains notes-only clarification; Completed never relabels legacy outcomes as GreenTree processing', () => {
+    const reviewing = renderQueue({ queueView: 'review', items: [reviewFixture({ officeStatus: 'needsClarification' })] })
+    assert.match(reviewing, /Clarification records status and notes only; no message is sent/)
+    assert.match(reviewing, /Needs clarification/)
+    assert.match(reviewing, /review-office-status-filter/)
+    const completed = renderQueue({ queueView: 'completed', items: [reviewFixture({ officeStatus: 'legacyReviewed', isTerminal: true })] })
+    assert.match(completed, /Reviewed \(legacy outcome not recorded\)/)
+    assert.doesNotMatch(completed, /class="review-office-status processedInGreenTree"/)
+    assert.match(completed, /Historical outcomes retain their original labels/)
 })
 
 test('queue API preserves truncation metadata and delegated read-only authentication', async (t) => {
@@ -210,10 +241,34 @@ test('review groups the story beside evidence and retains every long submission 
 
 test('read-only local reviews disable review updates and email retries but retain read/download controls', () => {
     const markup = renderReview({ notificationStatus: 'failed' }, { readOnly: true })
-    assert.match(markup, /disabled="">Mark reviewed<\/button>/)
+    for (const label of ['Start review', 'Needs clarification', 'On hold', 'Processed in GreenTree']) {
+        assert.match(markup, new RegExp(`disabled="">${label}<\\/button>`))
+    }
     assert.match(markup, /disabled="">Retry notification<\/button>/)
     assert.match(markup, /<button type="button">Associated quotes<\/button>/)
     assert.match(markup, /<button type="button">Download submission PDF<\/button>/)
+    assert.doesNotMatch(markup, /No invoice required/)
+})
+
+test('office workflow presents every explicit state and keeps terminal outcomes immutable', () => {
+    const active = renderReview({
+        officeStatus: 'needsClarification',
+        officeNote: 'Please verify the order number.',
+        officeActionBy: { userId: 'admin-1', displayName: 'Jess Admin', email: 'jess@example.test' },
+        officeActionOn: '2026-10-02T01:00:00Z',
+        officeActivities: [{ action: 'setNeedsClarification', fromStatus: 'inReview', toStatus: 'needsClarification', occurredOn: '2026-10-02T01:00:00Z', actor: { userId: 'admin-1', displayName: 'Jess Admin' }, note: 'Please verify the order number.' }],
+    })
+    for (const value of ['Needs clarification', 'Jess Admin', 'Please verify the order number.', 'Activity history', 'Opening this review does not change its state']) assert.match(active, new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+    assert.match(active, />Processed in GreenTree<\/button>/)
+    assert.doesNotMatch(active, /No invoice required/)
+
+    const terminal = renderReview({ officeStatus: 'legacyReviewed', isTerminal: true, officeActivities: [] })
+    assert.match(terminal, /Reviewed \(legacy outcome not recorded\)/)
+    assert.doesNotMatch(terminal, />Processed in GreenTree<\/button>|>No invoice required<\/button>/)
+    const retired = renderReview({ officeStatus: 'noInvoiceRequired', isTerminal: true, officeNote: 'Historical reason' })
+    assert.match(retired, /No invoice required \(retired outcome\)/)
+    assert.match(retired, /Historical reason/)
+    assert.doesNotMatch(retired, />Processed in GreenTree<\/button>|>No invoice required<\/button>/)
 })
 
 test('photo downloads stay on the authenticated private API and pass cancellation', async (t) => {

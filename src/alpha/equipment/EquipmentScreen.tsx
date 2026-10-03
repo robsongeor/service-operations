@@ -33,11 +33,11 @@ type StateFilter = 'all' | 'active' | 'inactive'
 
 const text = (value?: string | null) => value?.trim().toLocaleLowerCase() ?? ''
 
-export default function EquipmentScreen() {
+export default function EquipmentScreen({ readOnly = false }: { readOnly?: boolean }) {
     const [searchParams, setSearchParams] = useSearchParams()
     const activeAccount = useActiveMsalAccount()
     const signedInUser = getSignedInUserInfo(activeAccount)
-    const csvToolsAllowed = canUseEquipmentCsvTools(signedInUser)
+    const csvToolsAllowed = !readOnly && canUseEquipmentCsvTools(signedInUser)
     const {
         equipment,
         equipmentCacheStatus,
@@ -81,12 +81,19 @@ export default function EquipmentScreen() {
     const equipmentJobHistory = useEquipmentJobHistory(editingEquipment?.gr_equipmentid)
 
     const openEquipment = useCallback((record: Equipment) => {
+        if (readOnly) return
         setEditingEquipment(record)
-    }, [])
+    }, [readOnly])
 
     useEffect(() => {
         const equipmentId = searchParams.get('equipmentId')
         if (!equipmentId || isLoading || editingEquipment) return
+        if (readOnly) {
+            const next = new URLSearchParams(searchParams)
+            next.delete('equipmentId')
+            setSearchParams(next, { replace: true })
+            return
+        }
         const record = equipment.find((item) =>
             item.gr_equipmentid.toLowerCase() === equipmentId.toLowerCase())
         if (!record) return
@@ -97,7 +104,7 @@ export default function EquipmentScreen() {
             setSearchParams(next, { replace: true })
         }, 0)
         return () => window.clearTimeout(timer)
-    }, [editingEquipment, equipment, isLoading, openEquipment, searchParams, setSearchParams])
+    }, [editingEquipment, equipment, isLoading, openEquipment, readOnly, searchParams, setSearchParams])
 
     const filterCustomers = useMemo(() => {
         const byId = new Map<string, NonNullable<Equipment['gr_Site']>['gr_Customer']>()
@@ -234,7 +241,7 @@ export default function EquipmentScreen() {
 
     return (
         <main className="equipment-page">
-            <header className="equipment-page-header"><div><p>Operations</p><h1>Equipment Manager</h1></div><div className="equipment-page-header-actions"><span>{equipment.length} records</span>{equipmentRealtimeStatus !== 'disabled' && <span className={`equipment-realtime-status ${equipmentRealtimeStatus}`}>{equipmentRealtimeStatus === 'connected' ? 'Live updates on' : equipmentRealtimeStatus === 'connecting' ? 'Connecting live updates…' : 'Live updates offline'}</span>}{equipmentCacheStatus && <span className="equipment-cache-status">{equipmentCacheStatus.refreshing ? 'Saved copy · refreshing…' : equipmentCacheStatus.source === 'device' ? `Saved copy from ${new Date(equipmentCacheStatus.savedAt).toLocaleString('en-NZ')}` : `Updated ${new Date(equipmentCacheStatus.savedAt).toLocaleString('en-NZ')}`}</span>}{csvToolsAllowed && <PageSettingsButton onClick={() => { setCsvError(''); setSettingsOpen(true) }} />}<button type="button" className="equipment-create-button" onClick={() => { clearSaveError(); setEditingEquipment(null); setIsCreatingEquipment(true) }}>New Equipment</button></div></header>
+            <header className="equipment-page-header"><div><p>Operations</p><h1>Equipment Manager</h1></div><div className="equipment-page-header-actions"><span>{equipment.length} records</span>{readOnly && <span>Read only</span>}{equipmentRealtimeStatus !== 'disabled' && <span className={`equipment-realtime-status ${equipmentRealtimeStatus}`}>{equipmentRealtimeStatus === 'connected' ? 'Live updates on' : equipmentRealtimeStatus === 'connecting' ? 'Connecting live updates…' : 'Live updates offline'}</span>}{equipmentCacheStatus && <span className="equipment-cache-status">{equipmentCacheStatus.refreshing ? 'Saved copy · refreshing…' : equipmentCacheStatus.source === 'device' ? `Saved copy from ${new Date(equipmentCacheStatus.savedAt).toLocaleString('en-NZ')}` : `Updated ${new Date(equipmentCacheStatus.savedAt).toLocaleString('en-NZ')}`}</span>}{csvToolsAllowed && <PageSettingsButton onClick={() => { setCsvError(''); setSettingsOpen(true) }} />}{!readOnly && <button type="button" className="equipment-create-button" onClick={() => { clearSaveError(); setEditingEquipment(null); setIsCreatingEquipment(true) }}>New Equipment</button>}</div></header>
             {isLoading ? <div className="equipment-data-state">Loading equipment…</div> : loadError ? (
                 <div className="equipment-data-state error"><div><strong>Equipment could not be loaded.</strong><p>{loadError}</p></div><button type="button" onClick={() => void reload()}>Try again</button></div>
             ) : <section className="equipment-list-card">
@@ -246,7 +253,7 @@ export default function EquipmentScreen() {
                 </div>
                 <div className="equipment-results-count">Showing {rows.length ? paged.start + 1 : 0}–{paged.end} of {rows.length}{rows.length !== equipment.length ? ` filtered (${equipment.length} total)` : ''}</div>
                 {servicePlansError && <div className="equipment-data-state error" role="alert"><div><strong>Maintenance summaries are temporarily unavailable.</strong><p>The Equipment list remains available.</p></div><button type="button" onClick={() => void servicePlanQuery.refetch()}>Try again</button></div>}
-                <EquipmentTable equipment={paged.rows} servicePlans={servicePlans} servicePlansLoading={servicePlansLoading} servicePlansUnavailable={Boolean(servicePlansError)} sortKey={sortKey} sortDirection={sortDirection} onSort={changeSort} onEdit={(item) => { clearSaveError(); void openEquipment(item) }} />
+                <EquipmentTable readOnly={readOnly} equipment={paged.rows} servicePlans={servicePlans} servicePlansLoading={servicePlansLoading} servicePlansUnavailable={Boolean(servicePlansError)} sortKey={sortKey} sortDirection={sortDirection} onSort={changeSort} onEdit={(item) => { clearSaveError(); void openEquipment(item) }} />
                 {paged.totalPages > 1 && <nav className="equipment-pagination" aria-label="Equipment pages"><button type="button" onClick={() => setPage(Math.max(1, paged.page - 1))} disabled={paged.page === 1}>Previous</button><span>Page <strong>{paged.page}</strong> of <strong>{paged.totalPages}</strong></span><button type="button" onClick={() => setPage(Math.min(paged.totalPages, paged.page + 1))} disabled={paged.page === paged.totalPages}>Next</button></nav>}
             </section>}
             {isCreatingEquipment && <EquipmentDrawer mode="create" customers={[]} sites={[]} equipmentList={equipment} jobs={[]} isSaving={isSaving} saveError={saveError} onSearchCustomers={searchEquipmentCustomers} onLoadCustomerSites={loadEquipmentCustomerSites} onClose={() => setIsCreatingEquipment(false)} onCreateCustomer={createCustomer} onCreateSite={createSite} onCreate={async (input, resolvedSite) => { await createEquipment(input, resolvedSite); setIsCreatingEquipment(false) }} />}

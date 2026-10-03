@@ -1,9 +1,18 @@
 import type { Site, SiteUpdateInput } from '../types/site.types'
 import { fetchAllDataversePages } from '../../shared/dataverse/fetchAllDataversePages.ts'
 import { invalidateOperationalQueries } from '../../shared/data/OperationalDataClient.ts'
-import { buildCustomerSitesUrl } from './jobRelationshipLookupUrls'
+import { buildCustomerSitesUrl } from './jobRelationshipLookupUrls.ts'
 
-const DATAVERSE_URL = import.meta.env.VITE_DATAVERSE_URL
+const DATAVERSE_URL = import.meta.env?.VITE_DATAVERSE_URL ?? ''
+
+export async function fetchLocationSite(accessToken: string, siteId: string): Promise<Site> {
+    const result = await fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_sites(${siteId})?$select=gr_siteid,gr_name,gr_address&$expand=gr_Customer($select=gr_customerid,gr_name)`, {
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+    })
+    if (!result.ok) throw new Error('The destination Site could not be verified. Try again.')
+    return result.json() as Promise<Site>
+}
 
 async function dataverseErrorMessage(response: Response, fallback: string) {
     const responseText = await response.text()

@@ -13,6 +13,8 @@ export type CustomerRelationshipOption = {
 
 type Props = {
     id: string
+    required?: boolean
+    error?: string
     query: string
     selectedId?: string
     options: CustomerRelationshipOption[]
@@ -21,15 +23,19 @@ type Props = {
     onSelect: (id: string) => void
     onOpenChange?: (open: boolean) => void
     onCreateCustomerAndSite?: (input: { customerName: string; siteName: string; address: string }) => Promise<void>
+    onCreateOpenChange?: (open: boolean) => void
     createDescription?: string
     createActionLabel?: string
     searchStatus?: 'idle' | 'loading' | 'error'
     searchError?: string
+    onRetrySearch?: () => void
     emptyLabel?: string
 }
 
 export default function CustomerRelationshipPicker({
     id,
+    required = false,
+    error,
     query,
     selectedId = '',
     options,
@@ -38,10 +44,12 @@ export default function CustomerRelationshipPicker({
     onSelect,
     onOpenChange,
     onCreateCustomerAndSite,
+    onCreateOpenChange,
     createDescription = 'Create both records together and select them.',
     createActionLabel = 'Create customer and site',
     searchStatus = 'idle',
     searchError = 'Customer search is temporarily unavailable.',
+    onRetrySearch,
     emptyLabel = 'No customers found',
 }: Props) {
     const resultsId = useId()
@@ -80,11 +88,13 @@ export default function CustomerRelationshipPicker({
         setAddressSelection(null)
         setCreateError('')
         setCreating(true)
+        onCreateOpenChange?.(true)
         setDropdownOpen(false)
     }
 
     const cancelCreate = () => {
         setCreating(false)
+        onCreateOpenChange?.(false)
         setCreateError('')
         setAddressSelection(null)
     }
@@ -106,6 +116,7 @@ export default function CustomerRelationshipPicker({
             setDraft({ customerName: '', siteName: '', address: '' })
             setAddressSelection(null)
             setCreating(false)
+            onCreateOpenChange?.(false)
         } catch (error) {
             setCreateError(error instanceof Error ? error.message : 'The customer or site could not be created.')
         } finally {
@@ -115,10 +126,13 @@ export default function CustomerRelationshipPicker({
 
     return <div className="customer-relationship-picker" ref={rootRef}>
         <label className="customer-relationship-search" htmlFor={id}>
-            <span>Customer</span>
+            <span>Customer{required && ' *'}</span>
             <input
                 id={id}
                 role="combobox"
+                aria-required={required || undefined}
+                aria-invalid={Boolean(error) || undefined}
+                aria-describedby={error ? `${id}-error` : undefined}
                 aria-expanded={open}
                 aria-controls={resultsId}
                 aria-autocomplete="list"
@@ -155,9 +169,11 @@ export default function CustomerRelationshipPicker({
                 </button>)}
                 {searchStatus === 'loading' && <span>Searching customers…</span>}
                 {searchStatus === 'error' && <span>{searchError}</span>}
+                {searchStatus === 'error' && onRetrySearch && <button type="button" onClick={onRetrySearch}>Retry customer search</button>}
                 {searchStatus !== 'loading' && searchStatus !== 'error' && options.length === 0 && <span>{emptyLabel}</span>}
             </div>}
         </label>
+        {error && <small className="customer-relationship-error" id={`${id}-error`} role="alert">{error}</small>}
 
         {creating && <section className="customer-relationship-create">
             <div><h4>New customer and site</h4><p>{createDescription}</p></div>

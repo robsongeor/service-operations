@@ -11,8 +11,12 @@ export type JobSaveInput = {
     jobType: JobType
     status: JobStatus
     equipmentId?: string
+    /** Creation drawer has explicitly managed the asset location; never move it again on Job save. */
+    equipmentLocationHandled?: boolean
     mechanicId?: string
     siteId?: string
+    /** Consistency check for corrections; the Job's Customer is stored through its Site. */
+    customerId?: string
     contactId?: string
     hourMeter?: number
     hourMeterReadingType?: HourMeterReadingType

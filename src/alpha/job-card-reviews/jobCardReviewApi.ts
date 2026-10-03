@@ -1,8 +1,19 @@
-import type { JobCardHistory, JobCardReview, JobCardReviewQueue } from './jobCardReview.types'
+import type { JobCardHistory, JobCardOfficeAction, JobCardReview, JobCardReviewQueue, JobCardReviewApiView } from './jobCardReview.types'
+
+export class JobCardReviewApiError extends Error {
+    readonly status: number
+    readonly code?: string
+
+    constructor(message: string, status: number, code?: string) {
+        super(message)
+        this.status = status
+        this.code = code
+    }
+}
 
 async function readJson<T>(response: Response): Promise<T> {
-    const body = await response.json().catch(() => ({})) as T & { error?: string }
-    if (!response.ok) throw new Error(body.error || 'The Job Card review service is unavailable.')
+    const body = await response.json().catch(() => ({})) as T & { error?: string; code?: string }
+    if (!response.ok) throw new JobCardReviewApiError(body.error || 'The Job Card review service is unavailable.', response.status, body.code)
     return body
 }
 
@@ -11,7 +22,12 @@ function headers(accessToken: string) {
 }
 
 export async function fetchPendingJobCardReviews(accessToken: string) {
-    const response = await fetch('/api/jobcardreviews', { cache: 'no-store', headers: headers(accessToken) })
+    return fetchJobCardReviews(accessToken, 'active')
+}
+
+export async function fetchJobCardReviews(accessToken: string, view: JobCardReviewApiView, offset = 0, limit = 100) {
+    const query = view === 'active' && offset === 0 && limit === 100 ? '' : `?${new URLSearchParams({ view, offset: String(offset), limit: String(limit) })}`
+    const response = await fetch(`/api/jobcardreviews${query}`, { cache: 'no-store', headers: headers(accessToken) })
     return readJson<JobCardReviewQueue>(response)
 }
 
@@ -25,9 +41,9 @@ export async function fetchJobCardReview(accessToken: string, reviewId: string) 
     return readJson<JobCardReview>(response)
 }
 
-export async function markJobCardReviewed(accessToken: string, reviewId: string, etag: string) {
+export async function updateJobCardOfficeReview(accessToken: string, reviewId: string, payload: { action: JobCardOfficeAction; etag: string; note?: string; greentreeReference?: string }) {
     const response = await fetch(`/api/jobcardreviews/${encodeURIComponent(reviewId)}`, {
-        method: 'POST', headers: { ...headers(accessToken), 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'markReviewed', etag }),
+        method: 'POST', headers: { ...headers(accessToken), 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
     })
     return readJson<JobCardReview>(response)
 }

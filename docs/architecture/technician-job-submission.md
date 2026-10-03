@@ -24,7 +24,8 @@ Site Check occurrence links remain a separate existing workflow, using
 7. ACS sends a minimal review notice. Failure never rolls back evidence; office review offers a
    notification retry using the same email operation identifier.
 8. Approved office reviewers open `/job-card-reviews` or the emailed link, load private photos,
-   and mark reviewed under the loaded ETag. Reviewer identity/time are retained.
+   and explicitly move the office workflow under the loaded ETag. The server records authoritative
+   administrator identity/time and never edits the technician evidence.
 
 ## Preserved form and rules
 
@@ -54,22 +55,74 @@ Ordinary Job dispatch records delivery through Email Dispatch and does not write
 assignment Card Status. Site Check dispatch retains its existing Sent updates. Future Dataverse
 import requires a separate explicit licensed-office action.
 
+## Office review workflow
+
+Opening a review does not mutate it. Submitted contains Pending; Review contains In review,
+Needs clarification, and On hold. Start review identifies the administrator but does not lock the
+shared queue. Needs clarification and On hold require notes and do not contact the technician or
+create a new link. Completed contains
+Processed in GreenTree and legacy Reviewed. GreenTree is the data-entry system, and confirming
+completed data entry there is the sole final workflow action; its reference is optional. The retired
+No invoice required action is rejected by the server. Any existing records with that outcome remain
+read-only in Completed with their original audit, not relabelled as GreenTree processing. Further-work
+and safety reports stay prominent but do not block V1 processing.
+
+All changes use explicit server actions and the loaded ETag. Conflict responses preserve the local
+dialog text and require refresh before retry. Activity history is server-authored and bounded.
+Existing reviewed records without the new outcome remain labelled `Reviewed (legacy outcome not
+recorded)` and never imply GreenTree processing.
+
 ## Office screens after legacy-control retirement
 
-The pending review queue uses Jobs-style shared table/toolbar, type tabs, sort controls and attention
-pills, plus shared searchable Customer/Technician selectors. Columns display saved Job number,
+The review queue has four separately loaded workflow tabs: **Open jobs**, **Submitted** (default),
+**Review**, and **Completed**. Shared drawer tabs, table/toolbar, sort controls, attention pills and
+searchable selectors are reused. Job type is a secondary filter, not a main tab. Columns display saved Job number,
 NZ submission date/time, type, Equipment, Customer/Site, work required, Technician, reported flags
 and photo count. Job and Review links open the saved review. Filters and sort are query-state;
-returning via **Pending reviews** restores them. No operational status/scheduling filters, edits,
+returning via the queue link restores them. No operational status/scheduling filters, edits,
 bulk actions or emails are exposed in the queue. Reported attention is not Job office status.
 
-`GET /api/jobcardreviews` reads up to 101 pending Azure records, returns at most 100 summaries and
-an explicit `truncated` flag. Type/description/Equipment identifiers come from the existing saved
+`GET /api/jobcardreviews` accepts allowlisted `view`, `offset`, and `limit` values, returns at most
+100 summaries per request, and exposes `hasMore`/`nextOffset` for visible incremental loading.
+Views are `open`, `submitted`, `review`, and `completed`. Legacy API `active`/`history` requests
+remain compatible; old UI `history` bookmarks open Completed and `active` opens Submitted.
+Offsets advance over source records, not visible matches. An empty stage page can still have more
+records to check; it must not claim the entire queue is empty. Offset is 0–499 and limit is 1–100,
+clamped at the 500-record scan boundary. Overflow at the boundary is labelled and stops Load more.
+Azure lifecycle queries sort the same bounded 501-row population before taking each page prefix,
+so changing the page size does not reorder earlier prefixes; this is not a transactional cursor.
+Type/description/Equipment identifiers come from the existing saved
 snapshot, not per-row Dataverse reads. No schema migration or public-portal response change is
 required. The Azure scan is bounded and is not a global newest-100 selection: search, filters and
 newest-first sorting apply only to the returned subset, and overflow is visibly labelled. Older
-snapshots with missing fields remain visible under All jobs with unrecorded-value fallbacks.
+snapshots with missing fields remain visible under All job types with unrecorded-value fallbacks.
 Loading, empty, no matches, failed refresh and stale retained rows have separate visible states.
+
+**Open jobs** is a read-only projection of `gr_emaildispatchs` with confirmed `gr_emailsent=true`,
+valid requested/completed timestamps and a linked numbered Job. Number formats are Auckland
+digits or WJ/HJ/CJ plus digits, without a four/five-digit ceiling. Unnumbered/placeholder Jobs,
+failed/pending sends, generated-but-unsent links and Site Checks are excluded. The query selects
+minimal delivery metadata and expands Job/Equipment/Site/Customer and assignment submission
+timestamps; it never reads email bodies/subjects or sends email. Related permissions are read-only.
+Repeat sends are deduplicated by Job + assignment + recipient, newest requested send first.
+Azure accepted/reviewed evidence is checked in batches of at most 20 Job IDs (501-record sentinel
+per batch, overflow fails closed), matching Job/assignment/recipient and submission after the
+send request. Missing old recipient values match conservatively. Recorded legacy primary or
+assignment submission timestamps also exclude already-returned cards; an earlier submission
+does not hide a later send cycle. No evidence or operational record is changed by this projection.
+
+Dispatch reads follow only same-origin/same-path continuation links and have finite page/row bounds.
+An access error or incomplete evidence check is an unavailable queue, not an empty queue. Open rows
+show **Sent** and **Awaiting submission**, with no fabricated review ID, review link or editing
+controls. Other stages use saved Azure snapshots. Stage/account changes remount data ownership and
+ignore stale responses; keyboard tab focus is restored after the stage changes.
+
+Release preflight must verify delegated **Read** on Email Dispatch and Job Assignment as well as
+the existing reference tables. No privileges are provisioned locally. Delivery confirmation is the
+recorded email-flow result, not proof the technician opened the email. Dispatch/submission matching
+uses existing identifiers and timestamps, not an exact stored request-ID relation. Off-system/paper
+returns without a recorded timestamp cannot be inferred, and retained dispatch history limits the
+visible backlog. Verify these boundaries with approved live testing before rollout.
 
 The ordinary Job drawer's Job Card tab uses one authenticated, reviewer-authorized
 `GET /api/jobcardreviews?jobId=<guid>` request to show Azure link/submission history. The response

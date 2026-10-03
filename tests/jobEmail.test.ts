@@ -146,7 +146,7 @@ test('Jobs table uses the in-app composer and pilot-gated link generation', () =
     assert.match(composer, /Contact email/)
     assert.match(composerStyles, /\.edit-form-dialog\.job-email-composer\s*\{[\s\S]*width: min\(840px, calc\(100vw - 32px\)\)/)
     assert.match(hook, /onlineJobCardPilotEnabled/)
-    assert.match(hook, /void \(async \(\) =>/)
+    assert.match(hook, /usePrimaryJobEmail\(\{ getAccessToken, onDelivered: fetchJobs \}\)/)
     assert.match(hook, /waitForEmailDispatch/)
     assert.match(hook, /assertJobEmailSendingAllowed\(window\.location\.hostname\)/)
 })

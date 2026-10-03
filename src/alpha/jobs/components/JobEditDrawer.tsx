@@ -43,6 +43,8 @@ import {
 } from '../../shared/data/operationalCollectionKeys'
 import { usesAzureJobCards } from '../types/jobCardWorkflow'
 import { jobEmailSendingAllowedForHostname, LOCAL_JOB_EMAIL_DISABLED_MESSAGE } from '../services/jobEmail'
+import { hasAllocatedJobNumber } from '../domain/jobNumberPolicy'
+import { UNIFIED_JOB_WALKTHROUGH } from '../domain/unifiedJobWorkflow'
 
 type ProgressiveLoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -58,7 +60,7 @@ function createJobEditorDraft(job: Job) {
         jobNumber: job.gr_jobnumber ?? '',
         orderNumber: job.gr_ordernumber ?? '',
         description: job.gr_description ?? '',
-        jobType: job.gr_jobtype ?? JOB_TYPES.BREAKDOWN,
+        jobType: job.gr_jobtype ?? (UNIFIED_JOB_WALKTHROUGH ? '' as const : JOB_TYPES.BREAKDOWN),
         mechanicId: job.gr_Mechanic?.gr_mechanicid ?? '',
         status: job.gr_status,
         equipmentId: job.gr_Equipment?.gr_equipmentid ?? '',
@@ -126,6 +128,9 @@ type Props = JobRelationshipLookupProps & {
     onLoadJobCardDetails?: (jobId: string, signal?: AbortSignal) => Promise<JobCardDetails>
     onLoadJobPhoto?: (photoId: string, signal?: AbortSignal) => Promise<string>
     initialTab?: 'details' | 'office' | 'scheduling' | 'jobcard' | 'quotes'
+    correctionsOnly?: boolean
+    saveBlockedReason?: string
+    onReloadCorrections?: () => void
     onClose: () => void
 }
 
@@ -174,6 +179,9 @@ export default function JobEditDrawer({
     onLoadJobCardDetails,
     onLoadJobPhoto,
     initialTab = 'details',
+    correctionsOnly = false,
+    saveBlockedReason = '',
+    onReloadCorrections,
     onClose,
 }: Props) {
     const [job, setJob] = useState(initialJob)
@@ -192,7 +200,7 @@ export default function JobEditDrawer({
     const [deleteError, setDeleteError] = useState('')
     const [isEmailing, setIsEmailing] = useState(false)
     const [showEmailLinkConfirm, setShowEmailLinkConfirm] = useState(false)
-    const [activeTab, setActiveTab] = useState<'details' | 'office' | 'scheduling' | 'jobcard' | 'quotes'>(initialTab)
+    const [activeTab, setActiveTab] = useState<'details' | 'office' | 'scheduling' | 'jobcard' | 'quotes'>(correctionsOnly ? 'details' : initialTab)
     const [officeAction, setOfficeAction] = useState(job.gr_currentofficeaction ?? OFFICE_ACTIONS.NONE)
     const [officeActionOwner, setOfficeActionOwner] = useState(job.gr_officeactionowner ?? '')
     const [officeAttentionRequired, setOfficeAttentionRequired] = useState(job.gr_officeattentionrequired === true)
@@ -345,11 +353,12 @@ export default function JobEditDrawer({
     const canEmailJob = !localSendingDisabled && hasJobNumber && Boolean(job.gr_Mechanic) && (azureJobCards || jobCardStatus === JOB_CARD_STATUSES.NOT_SENT)
 
     const saveChanges = async () => {
+        if (saveBlockedReason) return
         if (!editorReady) {
             setSaveError('Wait for the latest Job details and editor choices to finish loading before saving.')
             return
         }
-        if (!draft.jobType) {
+        if (!correctionsOnly && !draft.jobType) {
             setSaveError('Select a job type before saving.')
             return
         }
@@ -365,11 +374,11 @@ export default function JobEditDrawer({
         const selectedEquipment = equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)
         const historicalServiceSelection = draft.serviceType === job.gr_servicetype
             && draft.equipmentId === job.gr_Equipment?.gr_equipmentid
-        if (jobRequiresMaintenance(draft.jobType) && draft.serviceType !== SERVICE_TYPES.NONE
+        if (!correctionsOnly && jobRequiresMaintenance(draft.jobType) && draft.serviceType !== SERVICE_TYPES.NONE
             && !historicalServiceSelection && !isServiceTypeEnabled(selectedEquipment, draft.serviceType)) {
             return setSaveError('The selected Service Type is not active for this Equipment programme.')
         }
-        if (draft.status === 122830003 && jobRequiresMaintenance(draft.jobType)) {
+        if (!correctionsOnly && draft.status === 122830003 && jobRequiresMaintenance(draft.jobType)) {
             if (!draft.equipmentId) return setSaveError('Select equipment before completing a service job.')
             if (draft.serviceType === SERVICE_TYPES.NONE) return setSaveError('Select a service type before completing a service job.')
         }
@@ -381,11 +390,12 @@ export default function JobEditDrawer({
                 jobNumber: draft.jobNumber.trim(),
                 orderNumber: draft.orderNumber.trim(),
                 description: draft.description.trim(),
-                jobType: draft.jobType,
+                jobType: draft.jobType || JOB_TYPES.BREAKDOWN,
                 status: draft.status,
                 equipmentId: draft.equipmentId,
                 mechanicId: draft.mechanicId,
                 siteId: draft.siteId,
+                customerId: draft.customerId,
                 contactId: draft.contactId,
                 serviceType: draft.serviceType,
                 hourMeter: job.gr_hourmeter ?? undefined,
@@ -396,13 +406,14 @@ export default function JobEditDrawer({
             if (saved !== false) onClose()
         } catch (error) {
             console.error(error)
-            setSaveError('Changes could not be saved. Please try again.')
+            setSaveError(correctionsOnly && error instanceof Error ? error.message : 'Changes could not be saved. Please try again.')
         } finally {
             setIsSaving(false)
         }
     }
 
     const deleteJob = async () => {
+        if (correctionsOnly || hasAllocatedJobNumber(job)) return
         try {
             setIsDeleting(true)
             setDeleteError('')
@@ -411,13 +422,14 @@ export default function JobEditDrawer({
             onClose()
         } catch (error) {
             console.error(error)
-            setDeleteError('The job could not be deleted. Please try again.')
+            setDeleteError(error instanceof Error ? error.message : 'The job could not be deleted. Please try again.')
         } finally {
             setIsDeleting(false)
         }
     }
 
     const emailJob = async (confirmedReplacement = false) => {
+        if (correctionsOnly) return
         if (!hasJobNumber) {
             setSaveError(JOB_NUMBER_REQUIRED_EMAIL_MESSAGE)
             return
@@ -446,11 +458,11 @@ export default function JobEditDrawer({
     return (
         <>
         <JobDrawerShell
-            eyebrow="Edit job"
+            eyebrow={correctionsOnly ? 'Edit entry' : 'Edit job'}
             title={job.gr_jobnumber || 'Unnumbered job'}
             busy={isSaving || isDeleting || isEmailing}
             onClose={onClose}
-            headerAction={
+            headerAction={!correctionsOnly &&
                 <button
                     type="button"
                     className={`job-drawer-email-action${azureJobCards ? '' : ` status-${jobCardStatus}`}`}
@@ -464,7 +476,7 @@ export default function JobEditDrawer({
             footer={
                 <>
                     <div className="job-edit-footer-leading">
-                        <button
+                        {!correctionsOnly && !hasAllocatedJobNumber(job) && <button
                             type="button"
                             className="job-edit-delete-button"
                             onClick={() => {
@@ -474,10 +486,11 @@ export default function JobEditDrawer({
                             disabled={isSaving || coreStatus !== 'ready'}
                         >
                             Delete job
-                        </button>
-                        {saveError
-                            ? <span className="job-edit-save-error" role="alert">{saveError}</span>
-                            : <span>Save to update this job in Dataverse.</span>}
+                        </button>}
+                        {saveError || saveBlockedReason
+                            ? <span className="job-edit-save-error" role="alert">{saveError || saveBlockedReason}</span>
+                            : <span>{correctionsOnly ? 'Save corrections to this Job only.' : 'Save to update this job in Dataverse.'}</span>}
+                        {correctionsOnly && saveBlockedReason && <button type="button" onClick={onReloadCorrections}>Reload latest details</button>}
                     </div>
                     <div className="job-edit-footer-actions">
                         <button type="button" onClick={onClose} disabled={isSaving}>Cancel</button>
@@ -485,7 +498,7 @@ export default function JobEditDrawer({
                             type="button"
                             className="primary"
                             onClick={saveChanges}
-                            disabled={isSaving || !editorReady}
+                            disabled={isSaving || !editorReady || Boolean(saveBlockedReason)}
                         >
                             {isSaving ? 'Saving...' : 'Save changes'}
                         </button>
@@ -493,7 +506,7 @@ export default function JobEditDrawer({
                 </>
             }
         >
-            <nav className="job-edit-tabs" aria-label="Job sections">
+            {!correctionsOnly && <nav className="job-edit-tabs" aria-label="Job sections">
                 <button
                     type="button"
                     className={activeTab === 'details' ? 'active' : ''}
@@ -541,7 +554,8 @@ export default function JobEditDrawer({
                 >
                     Job card
                 </button>
-            </nav>
+            </nav>}
+            {correctionsOnly && <p className="job-edit-field-note">Correct the recorded Job details here. Job number, type, status, service type, technician assignment and scheduling remain protected. Original technician submissions are unchanged.</p>}
 
             <div className="job-edit-tab-panel" role="tabpanel">
                 {coreStatus === 'loading' && <div className="job-progressive-state" role="status">
@@ -557,6 +571,8 @@ export default function JobEditDrawer({
                     <div className="job-edit-grid">
                         <fieldset className="job-progressive-fieldset" disabled={coreStatus !== 'ready'}>
                             <JobCoreFields
+                                allowEmptyJobType={UNIFIED_JOB_WALKTHROUGH && !job.gr_jobtype}
+                                correctionsOnly={correctionsOnly}
                                 jobTypeOptions={job.gr_jobtype === JOB_TYPES.WOF || job.gr_jobtype === JOB_TYPES.SITE_CHECK
                                     ? JOB_TYPE_OPTIONS.filter((option) => option.value === job.gr_jobtype)
                                     : STANDARD_JOB_TYPE_OPTIONS}
@@ -580,12 +596,13 @@ export default function JobEditDrawer({
                                     {onPrepareReferenceData && <button type="button" onClick={() => { void onPrepareReferenceData().catch(() => undefined) }}>Try again</button>}
                                 </div>
                                 : <>
-                                    {jobRequiresMaintenance(draft.jobType) && <JobMaintenanceSummary
+                                    {!correctionsOnly && jobRequiresMaintenance(draft.jobType) && <JobMaintenanceSummary
                                         equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)}
                                         servicePlans={servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === draft.equipmentId.toLowerCase())}
                                     />}
 
                                     <JobRelationshipFields
+                                        correctionsOnly={correctionsOnly}
                                         editor={editor}
                                         equipmentList={equipmentList}
                                         customers={customers}
@@ -601,7 +618,7 @@ export default function JobEditDrawer({
                                         onLoadEquipmentServicePlans={onLoadEquipmentServicePlans}
                                     />
                                 </>}
-                        {job.gr_status === JOB_STATUSES.COMPLETE && <div className="job-completion-history job-edit-field-wide">
+                        {!correctionsOnly && job.gr_status === JOB_STATUSES.COMPLETE && <div className="job-completion-history job-edit-field-wide">
                             <span>Hour Meter at Completion</span>
                             <strong>{job.gr_hourmeter == null ? 'Not recorded' : `${job.gr_hourmeter.toLocaleString('en-NZ')} hours${job.gr_hourmeterreadingtype === HOUR_METER_READING_TYPES.ESTIMATED ? ' · Estimated' : ''}`}</strong>
                             <small>Reading date: {(job.gr_hourmeterrecordeddate ?? job.gr_completeddate)?.slice(0, 10) || 'Not recorded'}</small>

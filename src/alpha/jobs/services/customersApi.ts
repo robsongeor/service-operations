@@ -4,6 +4,22 @@ import { buildCustomerSearchUrl } from './jobRelationshipLookupUrls'
 
 const DATAVERSE_URL = import.meta.env.VITE_DATAVERSE_URL
 
+// Exact, bounded duplicate check; do not use the eight-result substring picker for creation.
+export async function findCustomersByName(accessToken: string, name: string): Promise<Customer[]> {
+    const query = new URLSearchParams({
+        '$select': 'gr_customerid,gr_name',
+        '$filter': `gr_name eq '${name.trim().replaceAll("'", "''")}'`,
+        '$top': '2',
+    })
+    const result = await fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_customers?${query}`, {
+        cache: 'no-store', headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+    })
+    if (!result.ok) throw new Error('Existing Customers could not be checked. No new Customer was created.')
+    const body = await result.json() as { value?: Customer[] }
+    if (!Array.isArray(body.value)) throw new Error('Existing Customers could not be checked. No new Customer was created.')
+    return body.value
+}
+
 export async function fetchCustomers(
     accessToken: string,
 ): Promise<Customer[]> {

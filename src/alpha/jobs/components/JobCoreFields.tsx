@@ -11,6 +11,7 @@ import { isServiceTypeEnabled, resolveMaintenanceConfiguration } from '../../equ
 import { JOB_DESCRIPTION_MAX_LENGTH } from '../domain/jobDescription'
 import type { Job } from '../types/job.types'
 import { copyJobBookSpreadsheetRow } from '../utils/jobBookClipboard'
+import { UNIFIED_JOB_WALKTHROUGH } from '../domain/unifiedJobWorkflow'
 
 type Props = {
     draft: JobEditorDraft
@@ -24,9 +25,11 @@ type Props = {
     jobTypeOptions?: typeof JOB_TYPE_OPTIONS
     equipment?: Equipment
     jobBookJob?: Job
+    correctionsOnly?: boolean
+    stagingOnly?: boolean
 }
 
-export default function JobCoreFields({ draft, setDraft, mechanics, mechanicsLoading = false, mechanicsError = '', onRetryMechanics, equipment, jobBookJob, allowEmptyJobType = false, jobTypeError = '', jobTypeOptions = JOB_TYPE_OPTIONS }: Props) {
+export default function JobCoreFields({ draft, setDraft, mechanics, mechanicsLoading = false, mechanicsError = '', onRetryMechanics, equipment, jobBookJob, allowEmptyJobType = false, jobTypeError = '', jobTypeOptions = JOB_TYPE_OPTIONS, correctionsOnly = false, stagingOnly = false }: Props) {
     const [mechanicSelectOpen, setMechanicSelectOpen] = useState(false)
     const [copyFeedback, setCopyFeedback] = useState('')
 
@@ -46,13 +49,14 @@ export default function JobCoreFields({ draft, setDraft, mechanics, mechanicsLoa
             <label className="job-edit-field">
                 <span>Job type</span>
                 <select
+                    disabled={correctionsOnly}
                     value={draft.jobType}
                     onChange={(event) => setDraft((current) => ({
                         ...current,
                         jobType: event.target.value ? Number(event.target.value) as JobType : '',
                     }))}
                 >
-                    {allowEmptyJobType && <option value="">Select job type</option>}
+                    {allowEmptyJobType && <option value="">{correctionsOnly ? 'Not configured' : 'Select job type'}</option>}
                     {jobTypeOptions.map((option) => (
                         <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
@@ -63,6 +67,7 @@ export default function JobCoreFields({ draft, setDraft, mechanics, mechanicsLoa
             <label className="job-edit-field">
                 <span>Status</span>
                 <select
+                    disabled={correctionsOnly}
                     value={draft.status}
                     onChange={(event) => {
                         const status = Number(event.target.value) as JobStatus
@@ -80,14 +85,19 @@ export default function JobCoreFields({ draft, setDraft, mechanics, mechanicsLoa
             </label>
 
             <label className="job-edit-field">
-                <span className="job-edit-field-heading"><span>Job number</span>{jobBookJob && <button type="button" title="Copy Job details to paste into the Job Book and allocate its next number" onClick={() => void copyForJobBook()}>Copy for Job Book</button>}</span>
+                <span className="job-edit-field-heading"><span>Job number</span>{jobBookJob && !correctionsOnly && !UNIFIED_JOB_WALKTHROUGH && <button type="button" title="Copy Job details to paste into the Job Book and allocate its next number" onClick={() => void copyForJobBook()}>Copy for Job Book</button>}</span>
                 <input
+                    readOnly={stagingOnly || correctionsOnly || Boolean(jobBookJob)}
                     value={draft.jobNumber}
                     onChange={(event) => setDraft((current) => ({
                         ...current,
                         jobNumber: event.target.value,
                     }))}
                 />
+                {stagingOnly && <small>Not allocated. Save to Staging, then use Allocate job number when needed.</small>}
+                {jobBookJob && <small>{jobBookJob.gr_jobnumber?.trim()
+                    ? 'Allocated Job numbers cannot be changed.'
+                    : 'No number allocated. Allocate it separately from the Jobs table.'}</small>}
                 {copyFeedback && <small className="job-edit-copy-feedback" role="status">{copyFeedback}</small>}
             </label>
 
@@ -117,7 +127,7 @@ export default function JobCoreFields({ draft, setDraft, mechanics, mechanicsLoa
 
             <label className="job-edit-field job-edit-field-wide">
                 <span>Mechanic</span>
-                {draft.status === JOB_STATUSES.UNCONFIRMED ? (
+                {correctionsOnly ? <input readOnly value={jobBookJob?.gr_Mechanic?.gr_name || 'Unassigned'} /> : draft.status === JOB_STATUSES.UNCONFIRMED ? (
                     <span className="job-edit-field-note">{UNCONFIRMED_OPERATION_MESSAGE}</span>
                 ) : <SearchableMechanicSelect
                     mechanics={mechanics}
@@ -145,12 +155,12 @@ export default function JobCoreFields({ draft, setDraft, mechanics, mechanicsLoa
                 </div>
                 <label className="job-edit-field">
                     <span>Service type *</span>
-                    <select value={draft.serviceType} onChange={(event) => setDraft((current) => ({
+                    <select disabled={correctionsOnly} value={draft.serviceType} onChange={(event) => setDraft((current) => ({
                         ...current,
                         serviceType: Number(event.target.value) as ServiceType,
                     }))}>
                         <option value={SERVICE_TYPES.NONE}>Select service type</option>
-                        {SERVICE_TYPE_OPTIONS.filter((option) => option.value !== SERVICE_TYPES.NONE && isServiceTypeEnabled(equipment, option.value)).map((option) => (
+                        {SERVICE_TYPE_OPTIONS.filter((option) => option.value !== SERVICE_TYPES.NONE && (correctionsOnly || isServiceTypeEnabled(equipment, option.value))).map((option) => (
                             <option key={option.value} value={option.value}>{option.label}</option>
                         ))}
                     </select>

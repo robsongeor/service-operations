@@ -18,7 +18,10 @@ import {
     updateJobOfficeAttention as updateJobOfficeAttentionApi,
     updateJob as updateJobApi,
     deleteJob as deleteJobApi,
+    buildJobUpdateFields,
 } from '../services/jobsApi'
+import { UNIFIED_JOB_WALKTHROUGH } from '../domain/unifiedJobWorkflow'
+import { updateWalkthroughJob } from '../services/unifiedJobWalkthroughApi'
 import { subscribeToJobChanges } from '../services/jobsRealtime'
 import type { JobSaveInput } from '../types/jobSave.types'
 import { JOB_STATUSES, UNCONFIRMED_OPERATION_MESSAGE, jobIsOperational, type JobStatus } from '../types/jobStatus.types'
@@ -35,7 +38,9 @@ import type { JobAssignment } from '../types/jobAssignment.types'
 import { fetchMechanics as fetchStaffDirectory } from '../../mechanics/services/mechanicsApi'
 import { subscribeToStaffChanges } from '../../mechanics/services/staffRealtime'
 import { createEmailDispatch, waitForEmailDispatch } from '../services/emailDispatchApi'
-import { assertJobEmailSendingAllowed, buildAssignmentJobEmail, buildPrimaryJobEmail, onlineJobCardPilotEnabled, type JobEmailDeliveryState, type JobEmailDraft } from '../services/jobEmail'
+import { assertJobEmailSendingAllowed, buildAssignmentJobEmail, buildPrimaryJobEmail, onlineJobCardPilotEnabled } from '../services/jobEmail'
+import { usePrimaryJobEmail } from './usePrimaryJobEmail'
+import { assertJobNumberUnchanged } from '../domain/jobNumberPolicy'
 import { assertJobHasEmailableJobNumber } from '../services/jobEmailRules'
 import { generateJobSubmissionLink } from '../services/jobSubmissionLinkApi'
 import { usesAzureJobCards } from '../types/jobCardWorkflow'
@@ -232,7 +237,6 @@ export function useJobs(options: UseJobsOptions = {}) {
     const jobsRealtimeStatus = useOperationalRealtimeStatus()
     const [referenceDataStatus, setReferenceDataStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
     const [referenceDataError, setReferenceDataError] = useState('')
-    const [emailDeliveryStates, setEmailDeliveryStates] = useState<Record<string, JobEmailDeliveryState>>({})
     const referenceDataRequestRef = useRef<Promise<JobReferenceData> | null>(null)
     const referenceDataValueRef = useRef<JobReferenceData | null>(null)
     const referenceDataReadyRef = useRef(false)
@@ -267,30 +271,22 @@ export function useJobs(options: UseJobsOptions = {}) {
     const scopedDataOfficeUpdates = options.scopedData?.officeUpdates
     const hasScopedScheduleOptions = scopedDataScheduleOptions !== undefined
     const hasScopedOfficeUpdates = scopedDataOfficeUpdates !== undefined
-    useEffect(() => {
-        if (loadGlobalOperationalData || !scopedDataJobs) return
-        setScopedJobs(scopedDataJobs)
-    }, [loadGlobalOperationalData, scopedDataJobs])
-    useEffect(() => {
-        if (loadGlobalOperationalData || !scopedDataEquipment) return
-        setScopedEquipmentList(scopedDataEquipment)
-    }, [loadGlobalOperationalData, scopedDataEquipment])
-    useEffect(() => {
-        if (loadGlobalOperationalData || !scopedDataSites) return
-        setSites(scopedDataSites)
-    }, [loadGlobalOperationalData, scopedDataSites])
-    useEffect(() => {
-        if (loadGlobalOperationalData || !scopedDataServicePlans) return
-        setServicePlans(scopedDataServicePlans)
-    }, [loadGlobalOperationalData, scopedDataServicePlans])
-    useEffect(() => {
-        if (loadGlobalOperationalData || !scopedDataScheduleOptions) return
-        setScheduleOptions(scopedDataScheduleOptions)
-    }, [loadGlobalOperationalData, scopedDataScheduleOptions])
-    useEffect(() => {
-        if (loadGlobalOperationalData || !scopedDataOfficeUpdates) return
-        setOfficeUpdates(scopedDataOfficeUpdates)
-    }, [loadGlobalOperationalData, scopedDataOfficeUpdates])
+    const scopedSources = [loadGlobalOperationalData, scopedDataJobs, scopedDataEquipment, scopedDataSites, scopedDataServicePlans, scopedDataScheduleOptions, scopedDataOfficeUpdates] as const
+    const [previousScopedSources, setPreviousScopedSources] = useState(scopedSources)
+    // Reconcile a changed parent snapshot before children render; effects would
+    // briefly expose the previous customer's data and trigger cascading renders.
+    if (scopedSources.some((source, index) => source !== previousScopedSources[index])) {
+        setPreviousScopedSources(scopedSources)
+        if (!loadGlobalOperationalData) {
+            const enteredScopedMode = previousScopedSources[0]
+            if (scopedDataJobs && (enteredScopedMode || scopedDataJobs !== previousScopedSources[1])) setScopedJobs(scopedDataJobs)
+            if (scopedDataEquipment && (enteredScopedMode || scopedDataEquipment !== previousScopedSources[2])) setScopedEquipmentList(scopedDataEquipment)
+            if (scopedDataSites && (enteredScopedMode || scopedDataSites !== previousScopedSources[3])) setSites(scopedDataSites)
+            if (scopedDataServicePlans && (enteredScopedMode || scopedDataServicePlans !== previousScopedSources[4])) setServicePlans(scopedDataServicePlans)
+            if (scopedDataScheduleOptions && (enteredScopedMode || scopedDataScheduleOptions !== previousScopedSources[5])) setScheduleOptions(scopedDataScheduleOptions)
+            if (scopedDataOfficeUpdates && (enteredScopedMode || scopedDataOfficeUpdates !== previousScopedSources[6])) setOfficeUpdates(scopedDataOfficeUpdates)
+        }
+    }
 
     useEffect(() => {
         hasSharedJobsRef.current = hasSharedJobs
@@ -849,7 +845,17 @@ export function useJobs(options: UseJobsOptions = {}) {
         return created
     }
 
+    const updateSampleFields = async (jobId: string, fields: Record<string, unknown>) => {
+        const original = jobs.find((job) => job.gr_jobid === jobId)
+        if (!original) throw new Error('Refresh Jobs before editing this sample.')
+        if (fields.gr_status === JOB_STATUSES.COMPLETE) throw new Error('Maintenance completion is outside this sample registration walkthrough.')
+        const updated = await updateWalkthroughJob(await getAccessToken(), original, fields)
+        setJobs((current) => current.map((job) => job.gr_jobid === jobId ? updated : job))
+        await onScopedDataChangedRef.current?.()
+    }
+
     const updateJobOfficeAttention = async (jobId: string, officeAttentionRequired: boolean) => {
+        if (UNIFIED_JOB_WALKTHROUGH) return updateSampleFields(jobId, { gr_officeattentionrequired: officeAttentionRequired })
         const token = await getAccessToken()
         await updateJobOfficeAttentionApi(token, jobId, officeAttentionRequired)
         setJobs((current) => current.map((job) => job.gr_jobid === jobId
@@ -858,6 +864,10 @@ export function useJobs(options: UseJobsOptions = {}) {
     }
 
     const updateJobStatus = async (jobId: string, status: JobStatus) => {
+        if (UNIFIED_JOB_WALKTHROUGH) {
+            await updateSampleFields(jobId, { gr_status: status, ...(status === JOB_STATUSES.UNCONFIRMED ? { 'gr_Mechanic@odata.bind': null } : {}) })
+            return true
+        }
         const currentJob = jobs.find((job) => job.gr_jobid === jobId)
         if (!currentJob) throw new Error('The job could not be found. Refresh the page and try again.')
         const isCompleting = status === JOB_STATUSES.COMPLETE && currentJob.gr_status !== JOB_STATUSES.COMPLETE
@@ -944,59 +954,7 @@ export function useJobs(options: UseJobsOptions = {}) {
         await fetchJobs()
     }
 
-    const queuePrimaryJobEmail = async (job: Job, draft: JobEmailDraft) => {
-        assertJobEmailSendingAllowed(window.location.hostname)
-        assertJobHasEmailableJobNumber(job)
-        if (!isValidTechnicianEmail(draft.recipientEmail)) {
-            throw new Error('Enter a valid technician email address before sending.')
-        }
-        if (!draft.subject.trim()) throw new Error('Enter an email subject before sending.')
-        setEmailDeliveryStates((current) => ({
-            ...current,
-            [job.gr_jobid]: { status: 'sending', message: 'Job Card email is being sent.' },
-        }))
-        try {
-            const token = await getAccessToken()
-            const submissionUrl = onlineJobCardPilotEnabled(draft.recipientEmail)
-                ? (await generateJobSubmissionLink(token, {
-                    jobId: job.gr_jobid,
-                    mechanicId: job.gr_Mechanic?.gr_mechanicid,
-                    recipientName: job.gr_Mechanic?.gr_name ?? 'Technician',
-                    recipientEmail: draft.recipientEmail,
-                })).url
-                : ''
-            const email = buildPrimaryJobEmail(job, submissionUrl, draft)
-            const dispatchId = await createEmailDispatch(token, { jobId: job.gr_jobid, ...email })
-            void (async () => {
-                try {
-                    await waitForEmailDispatch(token, dispatchId)
-                    if (!usesAzureJobCards(job)) await updateJobCardStatusApi(token, job.gr_jobid, JOB_CARD_STATUSES.SENT)
-                    setEmailDeliveryStates((current) => ({
-                        ...current,
-                        [job.gr_jobid]: { status: 'sent', message: 'Job Card email sent.' },
-                    }))
-                    await fetchJobs()
-                } catch (deliveryError) {
-                    setEmailDeliveryStates((current) => ({
-                        ...current,
-                        [job.gr_jobid]: {
-                            status: 'failed',
-                            message: deliveryError instanceof Error ? deliveryError.message : 'Job Card email delivery failed.',
-                        },
-                    }))
-                }
-            })()
-        } catch (queueError) {
-            setEmailDeliveryStates((current) => ({
-                ...current,
-                [job.gr_jobid]: {
-                    status: 'failed',
-                    message: queueError instanceof Error ? queueError.message : 'Job Card email could not be queued.',
-                },
-            }))
-            throw queueError
-        }
-    }
+    const { queuePrimaryJobEmail, emailDeliveryStates } = usePrimaryJobEmail({ getAccessToken, onDelivered: fetchJobs })
 
     const sendAssignmentJobEmail = async (job: Job, assignment: JobAssignment) => {
         assertJobEmailSendingAllowed(window.location.hostname)
@@ -1042,12 +1000,12 @@ export function useJobs(options: UseJobsOptions = {}) {
     const updateJobFields = async (
         jobId: string,
         fields: {
-            gr_jobnumber?: string
             gr_description?: string
             gr_ordernumber?: string
             'gr_Mechanic@odata.bind'?: string | null
         }
     ) => {
+        if (UNIFIED_JOB_WALKTHROUGH) return updateSampleFields(jobId, fields)
         const token = await getAccessToken()
         if (fields['gr_Mechanic@odata.bind']) await assertJobOperational(token, jobId)
 
@@ -1065,6 +1023,12 @@ export function useJobs(options: UseJobsOptions = {}) {
     const updateJob = async (jobId: string, job: JobSaveInput) => {
         const currentJob = jobs.find((item) => item.gr_jobid === jobId)
         if (!currentJob) throw new Error('The job could not be found. Refresh the page and try again.')
+        assertJobNumberUnchanged(currentJob, job.jobNumber)
+        if (UNIFIED_JOB_WALKTHROUGH) {
+            if (job.status === JOB_STATUSES.UNCONFIRMED) job = { ...job, mechanicId: undefined }
+            await updateSampleFields(jobId, buildJobUpdateFields(job))
+            return true
+        }
         const isCompleting = job.status === JOB_STATUSES.COMPLETE && currentJob.gr_status !== JOB_STATUSES.COMPLETE
         const completionKind = getJobCompletionKind(job.jobType)
         if (isCompleting) {
@@ -1138,7 +1102,6 @@ export function useJobs(options: UseJobsOptions = {}) {
             currentJob.gr_jobid === jobId
                 ? {
                     ...currentJob,
-                    gr_jobnumber: job.jobNumber,
                     gr_ordernumber: job.orderNumber,
                     gr_description: job.description,
                     gr_jobtype: job.jobType,
@@ -1446,7 +1409,7 @@ export function useJobs(options: UseJobsOptions = {}) {
 
         const jobId = await createJobApi(token, job)
 
-        if (job.equipmentId && job.siteId) {
+        if (job.equipmentId && job.siteId && !job.equipmentLocationHandled) {
             try {
                 await updateEquipmentSite(
                     token,

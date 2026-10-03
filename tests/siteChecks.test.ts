@@ -1655,7 +1655,7 @@ function completionContextResponses(input: {
     ]
 }
 
-test('same-status Site Check Job edits still patch fields such as Job number', async () => {
+test('same-status Site Check Job edits save details without rewriting an allocated number', async () => {
     const responses: (object | Response)[] = [
         ...completionContextResponses({
             currentStatus: JOB_STATUSES.ALLOCATED,
@@ -1692,7 +1692,8 @@ test('same-status Site Check Job edits still patch fields such as Job number', a
         },
     }, { apiUrl: 'https://example.test', fetcher: fetcher as typeof fetch })
 
-    assert.match(patchBody, /"gr_jobnumber":"145494"/)
+    assert.doesNotMatch(patchBody, /"gr_jobnumber"/)
+    assert.match(patchBody, /"gr_description":"Fortnightly checks"/)
     assert.equal(result?.alreadyApplied, false)
 })
 

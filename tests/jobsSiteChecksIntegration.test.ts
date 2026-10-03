@@ -127,17 +127,21 @@ test('Job number paste uses one atomic change set in selected-row order', async 
     let request: RequestInit | undefined
     let requestUrl = ''
     globalThis.fetch = async (url, init) => {
+        if (init?.method !== 'POST') return Response.json({ value: [
+            { gr_jobid: '00000000-0000-4000-8000-000000000001', gr_jobnumber: null, '@odata.etag': 'W/"1"' },
+            { gr_jobid: '00000000-0000-4000-8000-000000000002', gr_jobnumber: null, '@odata.etag': 'W/"2"' },
+        ] })
         requestUrl = String(url)
         request = init
         return new Response('HTTP/1.1 204 No Content\r\nHTTP/1.1 204 No Content', { status: 200 })
     }
     try {
         await allocateJobNumbers('token', [
-            { job: { gr_jobid: 'job-1', '@odata.etag': 'W/"1"' } as never, jobNumber: '145850' },
-            { job: { gr_jobid: 'job-2', '@odata.etag': 'W/"2"' } as never, jobNumber: '145851' },
+            { job: { gr_jobid: '00000000-0000-4000-8000-000000000001', '@odata.etag': 'W/"1"' } as never, jobNumber: '145850' },
+            { job: { gr_jobid: '00000000-0000-4000-8000-000000000002', '@odata.etag': 'W/"2"' } as never, jobNumber: '145851' },
         ])
         assert.match(requestUrl, /\/api\/data\/v9\.2\/\$batch$/)
-        assert.match(String(request?.body), /PATCH \/api\/data\/v9\.2\/gr_jobs\(job-1\)/)
+        assert.match(String(request?.body), /PATCH \/api\/data\/v9\.2\/gr_jobs\(00000000-0000-4000-8000-000000000001\)/)
         assert.match(String(request?.body), /If-Match: W\/"1"/)
         assert.match(String(request?.body), /\{"gr_jobnumber":"145850"\}/)
         assert.match(String(request?.body), /\{"gr_jobnumber":"145851"\}/)

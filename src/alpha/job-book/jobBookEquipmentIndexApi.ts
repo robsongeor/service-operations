@@ -83,11 +83,13 @@ export async function fetchJobBookEquipmentIndex(
     options: FetchJobBookEquipmentIndexOptions = {},
 ) {
     const scope = jobBookEquipmentIndexScope(accessToken)
-    const loadNetwork = async () => {
+    const loadNetwork = async (generation = sharedJobBookEquipmentIndexCache.captureGeneration(scope)) => {
         const rows = await fetchAllEquipmentIndexPages(accessToken)
         const refreshedAt = Date.now()
-        void writePersistedJobBookEquipmentIndex(scope, rows, refreshedAt)
-        options.onBackgroundRefresh?.(rows, refreshedAt)
+        if (sharedJobBookEquipmentIndexCache.isGenerationCurrent(scope, generation)) {
+            void writePersistedJobBookEquipmentIndex(scope, rows, refreshedAt)
+            options.onBackgroundRefresh?.(rows, refreshedAt)
+        }
         return rows
     }
 
@@ -96,8 +98,9 @@ export async function fetchJobBookEquipmentIndex(
             const snapshot = await readPersistedJobBookEquipmentIndex(scope)
             if (snapshot) {
                 options.onDeviceSnapshot?.(snapshot.rows, snapshot.savedAt)
-                void loadNetwork()
-                    .then((rows) => sharedJobBookEquipmentIndexCache.write(scope, rows))
+                const generation = sharedJobBookEquipmentIndexCache.captureGeneration(scope)
+                void loadNetwork(generation)
+                    .then((rows) => sharedJobBookEquipmentIndexCache.writeIfCurrent(scope, generation, rows))
                     .catch(() => options.onBackgroundRefreshError?.())
                 return snapshot.rows
             }

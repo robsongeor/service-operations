@@ -8,6 +8,7 @@ type Props = {
     includeUnconfirmed?: boolean
     includeOperational?: boolean
     jobTypeOptions?: typeof JOB_TYPE_OPTIONS
+    allLabel?: string
 }
 
 export default function JobTypeTabs({
@@ -17,6 +18,7 @@ export default function JobTypeTabs({
     includeUnconfirmed = false,
     includeOperational = true,
     jobTypeOptions = JOB_TYPE_OPTIONS,
+    allLabel = 'All jobs',
 }: Props) {
     return (
         <div className="job-type-tabs" role="tablist" aria-label={ariaLabel}>
@@ -34,7 +36,7 @@ export default function JobTypeTabs({
                 </button>
             )}
             <button type="button" role="tab" aria-selected={selectedJobType === 'all'} className={selectedJobType === 'all' ? 'job-type-tab active' : 'job-type-tab'} onClick={() => onChange('all')}>
-                All jobs
+                {allLabel}
             </button>
         </div>
     )

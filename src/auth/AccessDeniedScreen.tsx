@@ -19,10 +19,12 @@ export default function AccessDeniedScreen({
             <span>ACCESS CONTROL</span>
             <h1 id="access-denied-title">{restrictedRoute ? 'This area is not available' : 'Access has not been assigned'}</h1>
             <p>{restrictedRoute
-                ? 'Your account is limited to the Legacy Job Book. Return to the Job Book to continue.'
+                ? access.mode === 'job-card-admin'
+                    ? 'Your account is limited to Job Card review and the approved read-only reference areas. Return to Job Card reviews to continue.'
+                    : 'Your account is limited to the Legacy Job Book. Return to the Job Book to continue.'
                 : 'Your account is signed in but does not have an application role for Service Operations.'}</p>
             {user && <small>Signed in as {user.displayName}</small>}
-            {restrictedRoute && <a href="/job-book">Return to Legacy Job Book</a>}
+            {restrictedRoute && <a href={access.mode === 'job-card-admin' ? '/job-card-reviews' : '/job-book'}>{access.mode === 'job-card-admin' ? 'Return to Job Card reviews' : 'Return to Legacy Job Book'}</a>}
         </section>
     </main>
 }

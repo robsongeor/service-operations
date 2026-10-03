@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "status": "local-source-only-not-provisioned",
+  "pluginType": "ServiceOperations.JobRegistration.JobRegistrationPlugin",
+  "transaction": "synchronous MainOperation; IsInTransaction must be true; initiating caller only",
+  "newJobId": "RequestId",
+  "newLedgerId": "RequestId",
+  "numberSource": "Existing regional Dataverse AutoNumber; never client arithmetic",
+  "apis": [
+    {
+      "name": "gr_RegisterJobBookJob",
+      "isFunction": false,
+      "binding": "Global",
+      "allowedCustomProcessingStepType": "None",
+      "requiredPrivilegeSource": { "table": "gr_jobbookentry", "operation": "Create" },
+      "privilegeGate": "Resolve ExecutePrivilegeName from published metadata during approved preflight; require caller regional Create plus Job Create/Write privileges. Never leave ExecutePrivilegeName empty.",
+      "parameters": { "RequestId": "Guid required", "Book": "String required", "Description": "String required, max 4000", "OrderNumber": "String optional, max 100", "SiteId": "Guid required", "EquipmentId": "Guid optional", "EquipmentUnknown": "Boolean required", "ContactId": "Guid optional", "MechanicId": "Guid optional" }
+    },
+    {
+      "name": "gr_AllocateJobBookNumber",
+      "isFunction": false,
+      "binding": "Global",
+      "allowedCustomProcessingStepType": "None",
+      "requiredPrivilegeSource": { "table": "gr_jobscheduleoption", "operation": "Create" },
+      "privilegeGate": "Resolve ExecutePrivilegeName from published metadata and verify only coordinators hold this privilege. If Admin also holds it, STOP and choose a reviewed existing coordinator-only privilege; do not silently broaden authorization.",
+      "parameters": { "RequestId": "Guid required", "Book": "String required", "JobId": "Guid required", "ExpectedRowVersion": "String required, numeric exact SDK RowVersion" }
+    }
+  ],
+  "response": { "JobId": "Guid", "LedgerId": "Guid", "Book": "String", "JobNumber": "String", "JobRowVersion": "String", "WasReplay": "Boolean" },
+  "proposedSchema": {
+    "gr_job": { "gr_coordinatormanaged": "Boolean; new registration explicitly false; existing records require reviewed migration and legacy fallback" },
+    "regionalTables": ["gr_jobbookentry", "gr_waikatojobbookentry", "gr_hastingsjobbookentry", "gr_christchurchjobbookentry"],
+    "regionalColumns": { "gr_registeredjob": "Optional Lookup to gr_job; independent of historical gr_promotedjob", "gr_registrationfingerprint": "Optional String max 64; canonical SHA-256 replay identity" },
+    "regionalChoiceAddition": { "gr_stage": { "label": "Registered", "value": 122830004 } },
+    "requiredExistingMetadata": ["gr_job optimistic concurrency enabled", "active unique gr_jobnumber key on gr_job", "active unique gr_jobnumber key on each regional ledger", "regional AutoNumbers configured and approved cutover seeds set", "gr_job.gr_jobtype accepts no value without defaulting to an operational type", "all referenced lookup logical names and caller privileges verified"]
+  },
+  "invariantPlugin": {
+    "type": "ServiceOperations.JobRegistration.JobNumberInvariantPlugin",
+    "stage": "PreOperation",
+    "mode": "Synchronous",
+    "tables": ["gr_job", "gr_jobbookentry", "gr_waikatojobbookentry", "gr_hastingsjobbookentry", "gr_christchurchjobbookentry"],
+    "messages": ["Create", "Update", "Delete"],
+    "updateFilteringAttributes": "NONE: protect ledger snapshots as well as number writes",
+    "updateAndDeletePreImage": { "alias": "Before", "columns": ["gr_jobnumber", "gr_registeredjob", "gr_registrationfingerprint", "gr_stage"], "jobColumnsOnly": ["gr_jobnumber"] },
+    "gate": "Do not register until imports/migration and every creation/allocation/deletion caller including WOF/Site Checks have switched to reviewed workflows. It intentionally blocks legacy manual numbering and registered-ledger edits. Registered Void needs its separate atomic operation before rollout. Verify cascading deletes and privilege-bypass permissions in approved environment tests."
+  },
+  "releaseGates": ["schema and privilege review", "signed assembly packaging and Custom API/step registration", "server-side Admin field authorization outside these two actions", "atomic registered-entry Void workflow", "master-record/snapshot-only Intake migration decision", "specialist numbering adapters", "bounded unified screen integration", "production approvals and target-user security tests"],
+  "provisioningIncluded": false,
+  "migrationIncluded": false,
+  "seedsIncluded": false
+}
