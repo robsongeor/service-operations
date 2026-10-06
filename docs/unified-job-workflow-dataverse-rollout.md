@@ -13,7 +13,7 @@ runs explicitly made no changes.
 Confirmed present:
 
 - the unmanaged `ServiceOperationsNew` solution;
-- optimistic concurrency on `gr_job`;
+- optimistic concurrency on `gr_job` (the earlier audit did not verify the four regional ledgers);
 - the four proposed execute-privilege sources for Job Book Entry create/write, Job Schedule Option
   create, and Email Dispatch create;
 - one existing `System Administrator` role and one existing `Service Operations` role; both hold
@@ -60,7 +60,9 @@ reviewed pass/fail evidence in the release record.
 Provisioning must be reviewed and executed as one compatible unit:
 
 1. Job membership/Void columns, guarded-dispatch fingerprint, and the registered Job/fingerprint
-   columns plus Registered stage on all four regional ledgers.
+   columns plus Registered stage on all four regional ledgers. Optimistic concurrency must be
+   enabled on the Job and every regional ledger before the atomic registered-entry Void action is
+   exposed; otherwise its exact-version ledger update fails at Dataverse.
 2. A signed assembly containing registration, workflow, number-invariant and restricted-access
    plugin types.
 3. Five synchronous global Custom APIs with non-empty reviewed `ExecutePrivilegeName` values and

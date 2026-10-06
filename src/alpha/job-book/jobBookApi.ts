@@ -207,6 +207,14 @@ export async function updateManagedJobBookMarker(
     }
 }
 
+export function confirmsRegisteredVoid(latest: JobBookRow, attempted: JobBookRow, reason: string) {
+    return latest.entryStage === JOB_BOOK_ENTRY_STAGES.VOID &&
+        latest.jobBookKey === attempted.jobBookKey &&
+        latest.linkedJobId.toLowerCase() === attempted.linkedJobId.toLowerCase() &&
+        latest.registeredLedgerId?.toLowerCase() === attempted.registeredLedgerId?.toLowerCase() &&
+        latest.voidReason === reason.trim()
+}
+
 function mapIntakeRow(row: IntakeApiRow, book: JobBookConfig): JobBookRow {
     const intakeRecordId = String(row[book.idField as keyof IntakeApiRow] ?? '')
     if (UNIFIED_JOB_RUNTIME && row.gr_registeredjob) {
@@ -369,6 +377,12 @@ export async function voidJobBookIntakeRow(accessToken: string, row: JobBookRow,
             if (UNIFIED_JOB_WALKTHROUGH) await walkthroughJobAction(accessToken, 'void', { book: row.jobBookKey, ledgerId: row.registeredLedgerId, jobId: row.linkedJobId, jobEtag: row.etag, ledgerEtag: row.ledgerEtag, reason: reason.trim() })
             else await runJobWorkflow(accessToken, { kind: 'void', book: row.jobBookKey, ledgerId: row.registeredLedgerId, jobId: row.linkedJobId, jobEtag: row.etag, ledgerEtag: row.ledgerEtag ?? '', reason: reason.trim() })
         } catch (cause) {
+            // A committed Dataverse Custom API can still lose or reject its response. Reconcile the
+            // exact linked pair before asking the operator to retry a terminal action.
+            try {
+                const latest = await fetchJobBookIntakeRow(accessToken, row)
+                if (confirmsRegisteredVoid(latest, row, reason)) return latest
+            } catch { /* retain the original action failure */ }
             if (cause instanceof Error && cause.message.startsWith('Someone else')) throw new JobBookConflictError()
             throw cause
         }

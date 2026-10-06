@@ -4,7 +4,7 @@ import test from 'node:test'
 import { createBlankJobBookRow, getPromotionReadiness, JOB_BOOK_ENTRY_STAGES, type JobBookRow } from '../src/alpha/job-book/jobBookPrototype.ts'
 import { JOB_BOOKS } from '../src/alpha/job-book/jobBookConfig.ts'
 import { canUpdateJobBookMarkers, isEditableJobBookIntake, jobBookVoidBlockedReason, jobBookVoidReasonError } from '../src/alpha/job-book/jobBookEntryWorkflow.ts'
-import { fetchJobBookIntakeRow, fetchJobBookIntakeRows, JobBookConflictError, updateJobBookIntakeMarker, updateJobBookIntakeRow, updateManagedJobBookMarker, voidJobBookIntakeRow } from '../src/alpha/job-book/jobBookApi.ts'
+import { confirmsRegisteredVoid, fetchJobBookIntakeRow, fetchJobBookIntakeRows, JobBookConflictError, updateJobBookIntakeMarker, updateJobBookIntakeRow, updateManagedJobBookMarker, voidJobBookIntakeRow } from '../src/alpha/job-book/jobBookApi.ts'
 
 const row: JobBookRow = {
     ...createBlankJobBookRow(900010), id: 'intake-auckland-entry-1', entrySource: 'dataverse-intake',
@@ -157,6 +157,19 @@ test('Void entries cannot be edited or marked through any normal save path', asy
         await assert.rejects(updateJobBookIntakeMarker('sample-token', voided, field, true), /read-only/)
         await assert.rejects(updateManagedJobBookMarker('sample-token', voided, field, true), /read-only/)
     }
+})
+
+test('registered Void reconciliation accepts only the exact linked pair and reason', () => {
+    const attempted = { ...row, linkedJobId: 'job-1', registeredLedgerId: 'ledger-1' }
+    const latest = { ...attempted, entryStage: JOB_BOOK_ENTRY_STAGES.VOID, voidReason: 'Duplicate' }
+    assert.equal(confirmsRegisteredVoid(latest, attempted, '  Duplicate  '), true)
+    for (const patch of [
+        { entryStage: JOB_BOOK_ENTRY_STAGES.REGISTERED },
+        { voidReason: 'Different' },
+        { linkedJobId: 'job-2' },
+        { registeredLedgerId: 'ledger-2' },
+        { jobBookKey: 'waikato' as const },
+    ]) assert.equal(confirmsRegisteredVoid({ ...latest, ...patch }, attempted, 'Duplicate'), false)
 })
 
 test('managed marker save recovers a missing table ETag before applying the protected update', async (t) => {

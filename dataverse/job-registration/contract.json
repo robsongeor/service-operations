@@ -67,7 +67,7 @@
     "regionalTables": ["gr_jobbookentry", "gr_waikatojobbookentry", "gr_hastingsjobbookentry", "gr_christchurchjobbookentry"],
     "regionalColumns": { "gr_registeredjob": "Optional Lookup to gr_job; independent of historical gr_promotedjob", "gr_registrationfingerprint": "Optional String max 64; canonical SHA-256 replay identity" },
     "regionalChoiceAddition": { "gr_stage": { "label": "Registered", "value": 122830004 } },
-    "requiredExistingMetadata": ["gr_job optimistic concurrency enabled", "active unique gr_jobnumber key on gr_job", "active unique gr_jobnumber key on each regional ledger", "regional AutoNumbers configured and approved cutover seeds set", "gr_job.gr_jobtype accepts no value without defaulting to an operational type", "all referenced lookup logical names and caller privileges verified"]
+    "requiredExistingMetadata": ["gr_job optimistic concurrency enabled", "optimistic concurrency enabled on each regional ledger", "active unique gr_jobnumber key on gr_job", "active unique gr_jobnumber key on each regional ledger", "regional AutoNumbers configured and approved cutover seeds set", "gr_job.gr_jobtype accepts no value without defaulting to an operational type", "all referenced lookup logical names and caller privileges verified"]
   },
   "invariantPlugin": {
     "type": "ServiceOperations.JobRegistration.JobNumberInvariantPlugin",

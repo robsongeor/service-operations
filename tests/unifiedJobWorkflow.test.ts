@@ -138,6 +138,7 @@ test('recovery storage survives remount, is actor scoped and preserves the ident
 
 test('deployment readiness tooling is read-only and non-interactive by default', () => {
     const script = readFileSync(new URL('../scripts/inspect-unified-job-workflow-readiness.ps1', import.meta.url), 'utf8')
+    const provisioner = readFileSync(new URL('../scripts/manage-unified-job-workflow-deployment.ps1', import.meta.url), 'utf8')
     const manifest = JSON.parse(readFileSync(new URL('../dataverse/job-registration/readiness-manifest.json', import.meta.url), 'utf8'))
     assert.match(script, /\[string\]\$LoginPrompt = 'Never'/)
     assert.match(script, /WhoAmIRequest|RetrieveEntityRequest|RetrieveAttributeRequest|RetrieveRolePrivilegesRoleRequest/)
@@ -146,6 +147,9 @@ test('deployment readiness tooling is read-only and non-interactive by default',
     assert.equal(manifest.customApis.length, 5)
     assert.equal(manifest.regionalNumberContracts.length, 4)
     assert.match(script, /AutoNumberFormat[\s\S]*EntityKeyIndexStatus/)
+    assert.match(script, /regionalTables[\s\S]*IsOptimisticConcurrencyEnabled/)
+    assert.match(provisioner, /Ensure-OptimisticConcurrency \$service 'gr_job'/)
+    assert.match(provisioner, /regionalTables\)\{Ensure-OptimisticConcurrency/)
     assert.ok(manifest.activationBlockers.length >= 5)
 })
 

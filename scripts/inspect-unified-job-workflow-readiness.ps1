@@ -105,6 +105,9 @@ try {
     if ($jobMetadata -and [bool]$jobMetadata.IsOptimisticConcurrencyEnabled) { Add-Finding 'Invariant' 'gr_job optimistic concurrency' 'Pass' 'Enabled.' }
     else { Add-Finding 'Invariant' 'gr_job optimistic concurrency' 'Fail' 'Not enabled or table unavailable.' }
     foreach ($table in $manifest.regionalTables) {
+        $metadata = Get-EntityMetadata $service $table
+        if ($metadata -and [bool]$metadata.IsOptimisticConcurrencyEnabled) { Add-Finding 'Invariant' "$table optimistic concurrency" 'Pass' 'Enabled.' }
+        else { Add-Finding 'Invariant' "$table optimistic concurrency" 'Fail' 'Required by atomic registered-entry Void; not enabled or table unavailable.' }
         $stage = Get-AttributeMetadata $service $table 'gr_stage'
         $option = @(if ($stage -and $stage.OptionSet) { $stage.OptionSet.Options | Where-Object Value -eq [int]$manifest.registeredStage })
         if ($option.Count -eq 1) { Add-Finding 'Schema' "$table.gr_stage Registered" 'Pass' "Choice $($manifest.registeredStage) exists." }

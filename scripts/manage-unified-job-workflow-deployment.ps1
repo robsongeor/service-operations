@@ -60,6 +60,26 @@ function Get-Attribute($Service, [string]$Table, [string]$Name) {
     try { $Service.Execute($request).AttributeMetadata }
     catch { if ($_.Exception.Message -match 'not found|does not exist|Could not find') { return $null }; throw }
 }
+function Get-EntityMetadata($Service, [string]$Table) {
+    $request = [Microsoft.Xrm.Sdk.Messages.RetrieveEntityRequest]::new()
+    $request.LogicalName = $Table
+    $request.EntityFilters = [Microsoft.Xrm.Sdk.Metadata.EntityFilters]::Entity
+    $request.RetrieveAsIfPublished = $true
+    $Service.Execute($request).EntityMetadata
+}
+function Ensure-OptimisticConcurrency($Service, [string]$Table) {
+    $metadata = Get-EntityMetadata $Service $Table
+    if ([bool]$metadata.IsOptimisticConcurrencyEnabled) { return }
+    if (-not $provision) { throw "Optimistic concurrency is not enabled on $Table." }
+    $entity = [Microsoft.Xrm.Sdk.Metadata.EntityMetadata]::new()
+    $entity.LogicalName = $Table
+    $entity.IsOptimisticConcurrencyEnabled = $true
+    $request = [Microsoft.Xrm.Sdk.Messages.UpdateEntityRequest]::new()
+    $request.Entity = $entity
+    $request.SolutionUniqueName = $SolutionUniqueName
+    $Service.Execute($request) | Out-Null
+    Write-Host "Enabled optimistic concurrency on $Table"
+}
 function Add-Attribute($Service, [string]$Table, $Attribute) {
     $request = [Microsoft.Xrm.Sdk.Messages.CreateAttributeRequest]::new()
     $request.EntityName = $Table; $request.Attribute = $Attribute; $request.SolutionUniqueName = $SolutionUniqueName
@@ -218,6 +238,8 @@ try {
     $solution=@(Find-Exactly $service 'solution' 'uniquename' $SolutionUniqueName @('solutionid','uniquename','ismanaged'));Require($solution.Count-eq1 -and -not[bool]$solution[0]['ismanaged']) 'Expected one unmanaged target solution.'
     $manifest=Get-PackageManifest
     foreach($column in $readiness.columns){if($column.type-eq'Lookup'){Ensure-Lookup $service $column}else{Ensure-Column $service $column}}
+    Ensure-OptimisticConcurrency $service 'gr_job'
+    foreach($table in $readiness.regionalTables){Ensure-OptimisticConcurrency $service ([string]$table)}
     foreach($table in $readiness.regionalTables){Ensure-Choice $service ([string]$table) 'gr_stage' 'Registered' ([int]$readiness.registeredStage)}
     if($provision){Publish-Metadata $service;Write-Output 'Published unified workflow metadata.'}
     $allPrivileges=@(Get-AllPrivileges $service);$roles=@{};foreach($definition in $roleGrants.profiles){$roles[[string]$definition.profile]=Ensure-Role $service $definition $allPrivileges}
