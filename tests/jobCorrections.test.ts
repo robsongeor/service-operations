@@ -77,15 +77,20 @@ test('successful save verifies Site, preserves unchanged historical Contact and 
     globalThis.fetch = async (url, options) => {
         calls.push(String(url))
         if (String(url).includes('gr_sites(')) return json(job.gr_Site)
-        assert.equal(options?.method, 'PATCH')
-        assert.equal(new Headers(options.headers).get('If-Match'), 'W/"v1"')
-        assert.deepEqual(JSON.parse(String(options.body)), { gr_description: 'Corrected' })
+        if (options?.method === 'PATCH') {
+            assert.equal(String(url).includes('?$select='), false)
+            assert.equal(new Headers(options.headers).get('If-Match'), 'W/"v1"')
+            assert.equal(new Headers(options.headers).get('Prefer'), null)
+            assert.deepEqual(JSON.parse(String(options.body)), { gr_description: 'Corrected' })
+            return new Response(null, { status: 204 })
+        }
+        assert.ok(String(url).includes('?$select='))
         return json({ ...job, gr_description: 'Corrected', '@odata.etag': 'W/"v2"' })
     }
     const saved = await saveJobCorrections('sample', job, input)
     assert.equal(saved.gr_description, 'Corrected')
     assert.equal(saved.gr_techniciansubmissionstory, job.gr_techniciansubmissionstory)
-    assert.equal(calls.length, 2)
+    assert.equal(calls.length, 3)
 })
 
 test('Customer/Site mismatch blocks correction, not just its presentation', async () => {
@@ -128,9 +133,11 @@ test('permission rejection is actionable and does not retry', async () => {
 test('historical unlinked Job can receive a description correction without invented relationships', async () => {
     const historical = { ...job, gr_Equipment: undefined, gr_Site: undefined, gr_Contact: undefined }
     globalThis.fetch = async (_url, options) => {
-        assert.equal(options?.method, 'PATCH')
-        assert.deepEqual(JSON.parse(String(options.body)), { gr_description: 'Corrected' })
-        return json({ ...historical, gr_description: 'Corrected' })
+        if (options?.method === 'PATCH') {
+            assert.deepEqual(JSON.parse(String(options.body)), { gr_description: 'Corrected' })
+            return new Response(null, { status: 204 })
+        }
+        return json({ ...historical, gr_description: 'Corrected', '@odata.etag': 'W/"v2"' })
     }
     await saveJobCorrections('sample', historical, { ...input, equipmentId: '', siteId: '', customerId: '', contactId: '' })
 })

@@ -43,6 +43,10 @@ function jobUrl(jobId: string) {
     return `${DATAVERSE_URL}/api/data/v9.2/gr_jobs(${requiredId(jobId)})?$select=${SELECT}&$expand=${EXPAND}`
 }
 
+function jobRecordUrl(jobId: string) {
+    return `${DATAVERSE_URL}/api/data/v9.2/gr_jobs(${requiredId(jobId)})`
+}
+
 function headers(token: string) {
     return { Authorization: `Bearer ${token}`, Accept: 'application/json' }
 }
@@ -83,7 +87,6 @@ export function buildJobCorrectionsPatch(original: Job, input: JobCorrectionsInp
 }
 
 export async function saveJobCorrections(token: string, original: CorrectableJob, input: JobCorrectionsInput): Promise<CorrectableJob> {
-    const url = jobUrl(original.gr_jobid)
     const etag = original['@odata.etag']
     if (!etag || !/^(W\/)?"[^"\r\n]+"$/.test(etag)) throw new Error('Reload the Job before saving. Its current version is unavailable.')
     const patch = buildJobCorrectionsPatch(original, input)
@@ -99,18 +102,15 @@ export async function saveJobCorrections(token: string, original: CorrectableJob
         if (!result.ok || !(await result.json() as { value?: unknown[] }).value?.length) throw new Error('The selected Contact is not linked to this Site. Select the Contact again.')
     }
     if (!Object.keys(patch).length) return original
-    const response = await fetch(url, {
+    const response = await fetch(jobRecordUrl(original.gr_jobid), {
         method: 'PATCH',
-        headers: { ...headers(token), 'Content-Type': 'application/json', 'If-Match': etag, Prefer: 'return=representation' },
+        headers: { ...headers(token), 'Content-Type': 'application/json', 'If-Match': etag },
         body: JSON.stringify(patch),
     })
     if (response.status === 412) throw new JobCorrectionConflictError()
     if (!response.ok) throw new Error(response.status === 403 ? 'You do not have permission to correct this Job. No changes were saved.' : 'Job corrections could not be saved. Reload the Job before trying again.')
     try {
-        if (response.status === 204) return await fetchJobForCorrection(token, original.gr_jobid)
-        const job = await response.json() as CorrectableJob
-        if (job.gr_jobid?.toLowerCase() !== original.gr_jobid.toLowerCase()) throw new Error('Invalid saved record.')
-        return { ...job, '@odata.etag': job['@odata.etag'] || response.headers.get('ETag') || undefined }
+        return await fetchJobForCorrection(token, original.gr_jobid)
     } catch {
         throw new JobCorrectionRefreshError()
     }
