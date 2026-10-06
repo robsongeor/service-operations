@@ -76,7 +76,7 @@ test('normal coordinator editor retains operational controls but protects alloca
     assert.match(html, />Scheduling/)
     assert.doesNotMatch(html, /Delete job/)
     assert.match(html, /readOnly="" value="WJ1234567"/)
-    assert.match(html, /Copy for Job Book/)
+    assert.doesNotMatch(html, /Copy for Job Book/)
     assert.doesNotMatch(html, /Job type<\/span><select disabled/)
 })
 

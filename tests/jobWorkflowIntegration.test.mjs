@@ -96,10 +96,10 @@ test('production worklist filters preserve tab meaning and reject untrusted pagi
 
 test('unified runtime fails closed before every remaining direct number mutation', async () => {
     globalThis.fetch = async () => { throw new Error('A blocked number mutation must not reach Dataverse.') }
-    await assert.rejects(() => createJob('token', { jobNumber: '145900' }), /cannot be supplied during unified creation/)
-    await assert.rejects(() => createJobsAtomically('token', [{ jobNumber: '145900' }]), /spreadsheet import is disabled/)
-    await assert.rejects(() => allocateJobNumbers('token', [{ job: {}, jobNumber: '145900' }]), /Direct Job number paste is disabled/)
-    await assert.rejects(() => allocateSiteCheckJobNumbers('token', []), /Direct Site Check number paste is disabled/)
+    await assert.rejects(() => createJob('token', { jobNumber: '145900' }), /cannot be supplied during creation/)
+    await assert.rejects(() => createJobsAtomically('token', [{ jobNumber: '145900' }]), /regional allocation system/)
+    await assert.rejects(() => allocateJobNumbers('token', [{ job: {}, jobNumber: '145900' }]), /Manual Job number entry is disabled/)
+    await assert.rejects(() => allocateSiteCheckJobNumbers('token', []), /Manual Site Check Job number entry is disabled/)
     await assert.rejects(() => clearSiteCheckJobNumber('token', {}), /cannot be cleared or reused/)
     await assert.rejects(() => deleteSiteCheckOccurrence('token', {}, [{ gr_jobnumber: '145900' }], []), /must be retained as history/)
 })

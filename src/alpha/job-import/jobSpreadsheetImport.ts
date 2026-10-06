@@ -145,10 +145,6 @@ export function resolveJobSpreadsheetRows(
         const key = normalized(mechanic.gr_name)
         mechanicsByName.set(key, [...(mechanicsByName.get(key) ?? []), mechanic])
     })
-    const existingNumbers = new Set(references.jobs.map((job) => normalized(job.gr_jobnumber)))
-    const pastedNumberCounts = new Map<string, number>()
-    rows.forEach((row) => pastedNumberCounts.set(normalized(row.jobNumber), (pastedNumberCounts.get(normalized(row.jobNumber)) ?? 0) + 1))
-
     return rows.map((row) => {
         const issues: JobSpreadsheetIssue[] = []
         const effectiveFleet = corrections.fleetValues?.[row.id] ?? row.fleet
@@ -163,11 +159,6 @@ export function resolveJobSpreadsheetRows(
         const customer = equipmentCustomer
         const mechanicMatches = mechanicsByName.get(normalized(effectiveMechanicName)) ?? []
         const mechanic = uniqueMatch(mechanicMatches)
-        const numberKey = normalized(row.jobNumber)
-
-        if (!/^\d+$/.test(row.jobNumber)) issues.push({ severity: 'error', message: 'Job Number must contain digits only.' })
-        else if (existingNumbers.has(numberKey)) issues.push({ severity: 'error', message: `Job ${row.jobNumber} already exists.` })
-        if (numberKey && (pastedNumberCounts.get(numberKey) ?? 0) > 1) issues.push({ severity: 'error', message: 'Job Number is duplicated in the pasted table.' })
         if (!row.completedDate) issues.push({ severity: 'error', message: 'Date must be a valid day/month/year.' })
         if (!row.description) issues.push({ severity: 'error', message: 'Description is required.' })
         else if (row.description.length > 4000) issues.push({ severity: 'error', message: 'Description exceeds 4,000 characters.' })

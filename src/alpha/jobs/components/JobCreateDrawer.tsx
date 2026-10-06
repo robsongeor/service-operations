@@ -24,7 +24,6 @@ import { jobRequiresMaintenance, STANDARD_JOB_TYPE_OPTIONS } from '../types/jobT
 import JobMaintenanceSummary from './JobMaintenanceSummary'
 import { isServiceTypeEnabled } from '../../equipment/servicePlans/maintenanceConfiguration'
 import type { Job } from '../types/job.types'
-import { findDuplicateJobNumber } from '../utils/jobNumber'
 
 export type JobCreateInitialValues = {
     jobNumber?: string
@@ -59,7 +58,6 @@ type Props = JobRelationshipLookupProps & {
     onCreateScheduleOption: (option: JobScheduleOptionInput) => Promise<void>
     initialValues?: JobCreateInitialValues
     jobTypeOptions?: { label: string; value: JobType }[]
-    requireJobNumber?: boolean
     closeAfterCreate?: boolean
     onClose: () => void
     stagingOnly?: boolean
@@ -69,7 +67,7 @@ export default function JobCreateDrawer({
     mechanics, mechanicsLoading, mechanicsError, onRetryMechanics, equipmentList, sites, customers, siteContacts, servicePlans,
     onCreateCustomer, onCreateSite, onCreateContact, onCreateEquipment,
     onCreateJob, onCreated, onCreateScheduleOption, initialValues,
-    jobTypeOptions = STANDARD_JOB_TYPE_OPTIONS, requireJobNumber = false, closeAfterCreate = true, existingJobs = [], onClose,
+    jobTypeOptions = STANDARD_JOB_TYPE_OPTIONS, closeAfterCreate = true, onClose,
     onSearchEquipment, onSearchCustomers, onLoadCustomerSites, onLoadSiteContacts,
     onLoadEquipment, onLoadEquipmentServicePlans,
     stagingOnly = false,
@@ -150,9 +148,6 @@ export default function JobCreateDrawer({
             setJobTypeError('Select a job type before creating the job.')
             return
         }
-        if (requireJobNumber && !draft.jobNumber.trim()) return setSaveError('Enter a Job Number before creating the job.')
-        const duplicateJob = findDuplicateJobNumber(existingJobs, draft.jobNumber)
-        if (duplicateJob) return setSaveError(`Job Number ${duplicateJob.gr_jobnumber?.trim()} already exists. Open the existing Job or enter a different number.`)
         if (!draft.description.trim()) return setSaveError('Enter a job description before creating the job.')
         const locationError = locationErrors.customer || locationErrors.site || locationErrors.address
         if (locationError) return setSaveError(locationError)
@@ -170,7 +165,7 @@ export default function JobCreateDrawer({
             setIsSaving(true)
             setSaveError('')
             const jobInput: JobSaveInput = {
-                jobNumber: stagingOnly ? '' : draft.jobNumber.trim(),
+                jobNumber: '',
                 orderNumber: draft.orderNumber.trim(),
                 description: draft.description.trim(),
                 jobType: draft.jobType,
@@ -212,7 +207,7 @@ export default function JobCreateDrawer({
     return (
         <JobDrawerShell
             eyebrow="Create job"
-            title={draft.jobNumber.trim() || 'New job'}
+            title="New job"
             busy={isSaving || locationSaving}
             onClose={onClose}
             footer={<>

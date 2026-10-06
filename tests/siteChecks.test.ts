@@ -305,7 +305,7 @@ test('Site Checks workspace reuses the canonical drawers and does not load the g
     assert.match(sidebar, /label: 'Site Checks'/)
 })
 
-test('Site Check Job Book export and number allocation preserve one deterministic row order', async () => {
+test('legacy Site Check number allocation is disabled before any request', async () => {
     const jobs = [
         {
             gr_jobid: IDS.job,
@@ -348,23 +348,12 @@ test('Site Check Job Book export and number allocation preserve one deterministi
     assert.throws(() => parseSiteCheckJobNumbers('145410\n145410', jobs), /unique/)
     assert.throws(() => parseSiteCheckJobNumbers('145410\nABC', jobs), /digits only/)
 
-    let requestBody = ''
-    await allocateSiteCheckJobNumbers('token', allocations, {
-        apiUrl: 'https://example.test',
-        fetcher: (async (_input, init) => {
-            requestBody = String(init?.body)
-            return new Response(
-                'HTTP/1.1 204 No Content\r\nHTTP/1.1 204 No Content\r\n',
-                { status: 200 },
-            )
-        }) as typeof fetch,
-    })
-    assert.match(requestBody, /PATCH \/api\/data\/v9\.2\/gr_jobs\(55555555-5555-5555-5555-555555555555\)/)
-    assert.match(requestBody, /If-Match: W\/"1"/)
-    assert.match(requestBody, /"gr_jobnumber":"145410"/)
+    await assert.rejects(() => allocateSiteCheckJobNumbers('token', allocations, {
+        fetcher: (async () => { assert.fail('No request should occur') }) as typeof fetch,
+    }), /regional allocation system/)
 })
 
-test('clearing a duplicate Site Check Job Number preserves the generated Job', async () => {
+test('clearing a Site Check Job Number is permanently disabled', async () => {
     const job = {
         gr_jobid: IDS.job,
         gr_jobnumber: '145567',
@@ -374,32 +363,9 @@ test('clearing a duplicate Site Check Job Number preserves the generated Job', a
         gr_Mechanic: null,
         '@odata.etag': 'W/"21"',
     }
-    let requestUrl = ''
-    let requestInit: RequestInit | undefined
-    await clearSiteCheckJobNumber('token', job, {
-        apiUrl: 'https://example.test',
-        fetcher: (async (input, init) => {
-            requestUrl = String(input)
-            requestInit = init
-            return new Response(null, { status: 204 })
-        }) as typeof fetch,
-    })
-    assert.equal(requestUrl, `https://example.test/gr_jobs(${IDS.job})`)
-    assert.equal(requestInit?.method, 'PATCH')
-    assert.equal((requestInit?.headers as Record<string, string>)['If-Match'], 'W/"21"')
-    assert.equal(requestInit?.body, JSON.stringify({ gr_jobnumber: null }))
-})
-
-test('clearing a Site Check Job Number requires a number and concurrency version', async () => {
-    const base = {
-        gr_jobid: IDS.job,
-        gr_status: JOB_STATUSES.ALLOCATED,
-        _gr_sitecheck_value: IDS.siteCheck,
-        gr_Equipment: null,
-        gr_Mechanic: null,
-    }
-    await assert.rejects(() => clearSiteCheckJobNumber('token', { ...base, gr_jobnumber: null }), /does not have/)
-    await assert.rejects(() => clearSiteCheckJobNumber('token', { ...base, gr_jobnumber: '145567' }), /Reload/)
+    await assert.rejects(() => clearSiteCheckJobNumber('token', job, {
+        fetcher: (async () => { assert.fail('No request should occur') }) as typeof fetch,
+    }), /permanent and cannot be cleared or reused/)
 })
 
 test('Site Check deletion atomically clears an active pointer and deletes Jobs before occurrence', async () => {

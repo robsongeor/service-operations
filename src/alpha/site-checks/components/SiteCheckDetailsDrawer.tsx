@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import EditDrawerFormDialog from '../../shared/drawer/EditDrawerFormDialog'
 import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation'
 import EditDrawerSection from '../../shared/drawer/EditDrawerSection'
 import EditDrawerShell from '../../shared/drawer/EditDrawerShell'
@@ -9,7 +8,6 @@ import { HOUR_METER_READING_TYPES } from '../../equipment/hourMeter/hourMeterRea
 import { EQUIPMENT_SITE_CHECK_AVAILABILITY_OPTIONS } from '../../equipment/types/equipmentSiteCheckAvailability.types'
 import type { Equipment } from '../../jobs/types/equipment.types'
 import { calculateSiteCheckProgress, wasSiteCheckCompletedLate } from '../domain/siteCheckCalculations'
-import { buildSiteCheckJobBookRows, parseSiteCheckJobNumbers } from '../domain/siteCheckJobBook'
 import {
     SITE_CHECK_FREQUENCY_OPTIONS,
     SITE_CHECK_STATUSES,
@@ -23,27 +21,19 @@ import {
 import './SiteCheckDetailsDrawer.css'
 import type { SiteCheckAssignmentEmailInput } from '../services/siteCheckAssignmentApi'
 import SiteCheckScheduleSettings from './SiteCheckScheduleSettings'
-import { UNIFIED_JOB_RUNTIME } from '../../jobs/domain/unifiedJobWorkflow'
 
 type Tab = 'summary' | 'settings' | 'history'
 
 type Props = {
     customerName: string
     siteName: string
-    siteAddress?: string | null
     siteId: string
     initialSiteCheck?: SiteCheck | null
     initialTab?: Tab
     technicianName: (id: string) => string
     loadHistoryPage: (siteId: string, nextLink?: string) => Promise<SiteCheckPage<SiteCheck>>
     loadJobsPage: (siteCheckId: string, nextLink?: string) => Promise<SiteCheckPage<SiteCheckDetailJob>>
-    loadAllJobs: (siteCheckId: string) => Promise<SiteCheckDetailJob[]>
     loadAllEquipmentExclusions: (siteCheckId: string) => Promise<SiteCheckEquipmentExclusion[]>
-    allocateJobNumbers: (allocations: readonly {
-        job: SiteCheckDetailJob
-        jobNumber: string
-    }[]) => Promise<void>
-    clearJobNumber: (job: SiteCheckDetailJob) => Promise<void>
     prepareAssignmentEmail: (input: SiteCheckAssignmentEmailInput) => Promise<string>
     onDelete: (siteCheck: SiteCheck) => Promise<void>
     onOpenJob: (jobId: string, trigger: HTMLButtonElement) => void
@@ -111,17 +101,13 @@ function availabilityLabel(exclusion: SiteCheckEquipmentExclusion) {
 export default function SiteCheckDetailsDrawer({
     customerName,
     siteName,
-    siteAddress,
     siteId,
     initialSiteCheck,
     initialTab = 'summary',
     technicianName,
     loadHistoryPage,
     loadJobsPage,
-    loadAllJobs,
     loadAllEquipmentExclusions,
-    allocateJobNumbers,
-    clearJobNumber,
     prepareAssignmentEmail,
     onDelete,
     onOpenJob,
@@ -142,17 +128,9 @@ export default function SiteCheckDetailsDrawer({
     const [historyLoading, setHistoryLoading] = useState(false)
     const [jobsLoading, setJobsLoading] = useState(false)
     const [error, setError] = useState('')
-    const [jobBookFeedback, setJobBookFeedback] = useState('')
-    const [jobBookBusy, setJobBookBusy] = useState(false)
-    const [showJobNumberDialog, setShowJobNumberDialog] = useState(false)
-    const [pastedJobNumbers, setPastedJobNumbers] = useState('')
-    const [jobNumberError, setJobNumberError] = useState('')
     const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false)
     const [deleteBusy, setDeleteBusy] = useState(false)
     const [deleteError, setDeleteError] = useState('')
-    const [jobNumberToClear, setJobNumberToClear] = useState<SiteCheckDetailJob | null>(null)
-    const [clearNumberBusy, setClearNumberBusy] = useState(false)
-    const [clearNumberError, setClearNumberError] = useState('')
     const [emailBusy, setEmailBusy] = useState(false)
     const selectedId = selected?.gr_sitecheckid
     const loadedJobsFor = useRef('')
@@ -289,16 +267,6 @@ export default function SiteCheckDetailsDrawer({
                                 >
                                     Open Equipment
                                 </button>
-                                {!UNIFIED_JOB_RUNTIME && job.gr_jobnumber?.trim() && <button
-                                    type="button"
-                                    className="site-check-clear-number"
-                                    onClick={() => {
-                                        setClearNumberError('')
-                                        setJobNumberToClear(job)
-                                    }}
-                                >
-                                    Clear Job number
-                                </button>}
                                 </div>
                             </> : <button
                                 type="button"
@@ -315,89 +283,6 @@ export default function SiteCheckDetailsDrawer({
             {jobsLoading ? 'Loading…' : 'Load more Jobs'}
         </button>}
     </>
-
-    const loadCompleteOrderedJobs = async () => {
-        if (!selectedId) throw new Error('Select a Site Check first.')
-        const completeJobs = await loadAllJobs(selectedId)
-        const expected = selected?.gr_expectedjobcount ?? 0
-        if (completeJobs.length !== expected) {
-            throw new Error(
-                `Expected ${expected} generated Jobs but found ${completeJobs.length}. Job Book actions are blocked until this is repaired.`,
-            )
-        }
-        setJobs(completeJobs)
-        setJobsNext(undefined)
-        loadedJobsFor.current = selectedId
-        return completeJobs
-    }
-
-    const copyForJobBook = async () => {
-        setJobBookBusy(true)
-        setJobBookFeedback('')
-        setError('')
-        try {
-            const completeJobs = await loadCompleteOrderedJobs()
-            await navigator.clipboard.writeText(
-                buildSiteCheckJobBookRows(completeJobs, customerName, siteAddress),
-            )
-            setJobBookFeedback(`${completeJobs.length} Job Book rows copied in allocation order.`)
-        } catch (cause) {
-            setError(cause instanceof Error ? cause.message : 'The Job Book rows could not be copied.')
-        } finally {
-            setJobBookBusy(false)
-        }
-    }
-
-    const openJobNumberDialog = async () => {
-        setJobBookBusy(true)
-        setJobBookFeedback('')
-        setError('')
-        try {
-            await loadCompleteOrderedJobs()
-            setPastedJobNumbers('')
-            setJobNumberError('')
-            setShowJobNumberDialog(true)
-        } catch (cause) {
-            setError(cause instanceof Error ? cause.message : 'The generated Jobs could not be loaded.')
-        } finally {
-            setJobBookBusy(false)
-        }
-    }
-
-    const applyJobNumbers = async () => {
-        setJobNumberError('')
-        setJobBookBusy(true)
-        try {
-            await allocateJobNumbers(parseSiteCheckJobNumbers(pastedJobNumbers, jobs))
-            const refreshedJobs = await loadCompleteOrderedJobs()
-            setShowJobNumberDialog(false)
-            setPastedJobNumbers('')
-            setJobBookFeedback(`${refreshedJobs.length} Job numbers were allocated.`)
-        } catch (cause) {
-            setJobNumberError(cause instanceof Error ? cause.message : 'The Job numbers could not be allocated.')
-        } finally {
-            setJobBookBusy(false)
-        }
-    }
-
-    const confirmClearJobNumber = async () => {
-        if (!jobNumberToClear || !selectedId) return
-        setClearNumberBusy(true)
-        setClearNumberError('')
-        try {
-            await clearJobNumber(jobNumberToClear)
-            const refreshedJobs = await loadAllJobs(selectedId)
-            setJobs(refreshedJobs)
-            setJobsNext(undefined)
-            loadedJobsFor.current = selectedId
-            setJobNumberToClear(null)
-            setJobBookFeedback(`Job Number ${jobNumberToClear.gr_jobnumber?.trim()} was removed. The Site Check Job was preserved.`)
-        } catch (cause) {
-            setClearNumberError(cause instanceof Error ? cause.message : 'The Job Number could not be removed.')
-        } finally {
-            setClearNumberBusy(false)
-        }
-    }
 
     const deleteSelectedSiteCheck = async () => {
         if (!selected) return
@@ -498,25 +383,10 @@ export default function SiteCheckDetailsDrawer({
                 </>}
             </EditDrawerSection>
             {hasCurrentCheck && <><EditDrawerSection title="Current Jobs and Equipment">
-                {selected && !UNIFIED_JOB_RUNTIME && <div className="site-check-job-book">
-                    <div>
-                        <strong>Job Book allocation</strong>
-                        <span>Copy the generated Jobs to Excel, then paste the allocated Job numbers back in the same row order.</span>
-                    </div>
-                    <div>
-                        <button type="button" disabled={jobBookBusy || jobsLoading} onClick={() => void copyForJobBook()}>
-                            {jobBookBusy ? 'Working…' : 'Copy Jobs for Excel'}
-                        </button>
-                        <button type="button" disabled={jobBookBusy || jobsLoading} onClick={() => void openJobNumberDialog()}>
-                            Paste Job numbers
-                        </button>
-                    </div>
-                    {jobBookFeedback && <p role="status">{jobBookFeedback}</p>}
-                </div>}
-                {selected && UNIFIED_JOB_RUNTIME && <div className="site-check-job-book" role="status">
+                {selected && <div className="site-check-job-book" role="status">
                     <div>
                         <strong>Regional number allocation</strong>
-                        <span>Direct Excel copy/paste and number clearing are disabled. Open generated Jobs on the Jobs Site Check tab and use Allocate job number.</span>
+                        <span>Job numbers are assigned only through the regional allocation system. Existing numbers cannot be edited or cleared.</span>
                     </div>
                 </div>}
                 {generatedJobs(false)}
@@ -611,55 +481,11 @@ export default function SiteCheckDetailsDrawer({
                 </button>}
             </EditDrawerSection>
         </div>
-        {showJobNumberDialog && <EditDrawerFormDialog
-            eyebrow="Job Book allocation"
-            title={`Allocate ${jobs.length} Job numbers`}
-            error={jobNumberError}
-            isBusy={jobBookBusy}
-            submitLabel={jobBookBusy ? 'Applying…' : 'Apply Job numbers'}
-            onCancel={() => {
-                setShowJobNumberDialog(false)
-                setJobNumberError('')
-            }}
-            onSubmit={() => void applyJobNumbers()}
-        >
-            <label className="site-check-job-number-field">
-                <span>Job numbers, one per line</span>
-                <textarea
-                    rows={Math.min(Math.max(jobs.length, 5), 16)}
-                    value={pastedJobNumbers}
-                    onChange={(event) => setPastedJobNumbers(event.target.value)}
-                    placeholder={'145410\n145411\n145412'}
-                    autoFocus
-                    disabled={jobBookBusy}
-                />
-            </label>
-            <p>The first number is assigned to the first Job shown in the generated list. This update is atomic: either every number is saved or none are.</p>
-            {jobs.some((job) => job.gr_jobnumber?.trim()) && <p><strong>Some Jobs already have numbers.</strong> Applying this list will replace them.</p>}
-        </EditDrawerFormDialog>}
-        {jobNumberToClear && <EditDrawerConfirmation
-            eyebrow="Duplicate Job number"
-            title={`Clear Job Number ${jobNumberToClear.gr_jobnumber?.trim()}?`}
-            message={<>
-                <p>This removes only the Job Number from this generated Site Check Job.</p>
-                <p>The Job, Equipment relationship, Site Check progress, and any existing history will be preserved.</p>
-            </>}
-            error={clearNumberError}
-            isBusy={clearNumberBusy}
-            confirmLabel={clearNumberBusy ? 'Clearing…' : 'Clear Job number'}
-            onCancel={() => {
-                setJobNumberToClear(null)
-                setClearNumberError('')
-            }}
-            onConfirm={() => void confirmClearJobNumber()}
-        />}
         {showDeleteConfirmation && selected && <EditDrawerConfirmation
             eyebrow="Permanent deletion"
             title="Delete this Site Check and its Jobs?"
             message={<>
-                <p>{UNIFIED_JOB_RUNTIME
-                    ? `This can permanently delete the Site Check occurrence only while all ${selected.gr_expectedjobcount} generated Jobs remain unnumbered. Allocated Jobs must be retained as history.`
-                    : `This permanently deletes the Site Check occurrence and all ${selected.gr_expectedjobcount} generated Jobs.`}</p>
+                <p>This can permanently delete the Site Check occurrence only while all {selected.gr_expectedjobcount} generated Jobs remain unnumbered. Allocated Jobs must be retained as history.</p>
                 <p>The Site Check Schedule, frequency, due date, Equipment scope, and manual selections will be preserved.</p>
             </>}
             error={deleteError}

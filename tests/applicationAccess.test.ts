@@ -132,19 +132,18 @@ test('unified production Jobs uses the bounded worklist without changing the def
     assert.doesNotMatch(screen, /Refresh Jobs|Load more Jobs/)
 })
 
-test('unified WOF presents Job numbers as immutable and points to guarded allocation', () => {
+test('WOF always presents Job numbers as immutable and points to regional allocation', () => {
     const drawer = readFileSync(new URL('../src/alpha/wof/components/WofEditorDrawer.tsx', import.meta.url), 'utf8')
-    assert.match(drawer, /readOnly=\{UNIFIED_JOB_RUNTIME\}/)
-    assert.match(drawer, /saved unnumbered[\s\S]*Jobs WOF tab[\s\S]*Allocate job number/)
+    assert.match(drawer, /value=\{jobNumber\} readOnly/)
+    assert.match(drawer, /saved unnumbered[\s\S]*regional allocation system/)
     assert.match(drawer, /Allocated Job numbers are permanent/)
 })
 
-test('unified Site Checks removes direct number paste and clear presentation', () => {
+test('Site Checks remove direct number paste and clear presentation', () => {
     const drawer = readFileSync(new URL('../src/alpha/site-checks/components/SiteCheckDetailsDrawer.tsx', import.meta.url), 'utf8')
-    assert.match(drawer, /!UNIFIED_JOB_RUNTIME && job\.gr_jobnumber/)
-    assert.match(drawer, /selected && !UNIFIED_JOB_RUNTIME && <div className="site-check-job-book">/)
-    assert.match(drawer, /Direct Excel copy\/paste and number clearing are disabled/)
-    assert.match(drawer, /Jobs Site Check tab[\s\S]*Allocate job number/)
+    assert.doesNotMatch(drawer, /Clear Job number|Paste Job numbers|UNIFIED_JOB_RUNTIME/)
+    assert.match(drawer, /selected && <div className="site-check-job-book" role="status">/)
+    assert.match(drawer, /assigned only through the regional allocation system/)
     assert.match(drawer, /Allocated Jobs must be retained as history/)
 })
 

@@ -313,27 +313,21 @@ timezone conversion and reviews every row against the authoritative Jobs, Equipm
 collections before any write. Fleet matching covers primary and alternate Fleet Numbers. Customer
 is always derived from the matched Equipment's Site; spreadsheet Customer and Model values are
 ignored because the matched Equipment record is authoritative. Equipment without a Site or Customer,
-plus missing, ambiguous, or duplicate relationships, block a row. Review can
+plus missing, ambiguous, or duplicate relationships, block a row. The spreadsheet Job Number is a
+read-only source reference and is never written to the new Job. Review can
 be filtered to every non-imported row containing either an error or warning. Row-level correction
-remains available for Job Number, Date, Fleet, Mechanic, and Description.
+remains available for Date, Fleet, Mechanic, and Description.
 
-Selected ready rows are created as historical Complete Breakdown or Workshop Jobs in one Dataverse
-changeset after a batched duplicate-number preflight. All selected creates succeed or none do, and the
-active Job Number alternate key remains the final simultaneous-write guard. Existing Job Numbers are
-also blocked during review against the loaded Jobs table. Spreadsheet Date becomes
+Selected ready rows are created as unnumbered historical Complete Breakdown or Workshop Jobs in one
+Dataverse changeset. All selected creates succeed or none do. Only the regional allocation system may
+later assign their permanent Job Numbers. Spreadsheet Date becomes
 Completed Date. This controlled migration does not synthesize hour-meter evidence or run current
 Equipment maintenance completion effects; it therefore must not be used in place of the normal
 Job-completion workflow. A source row containing several Fleet Numbers remains blocked because one
 managed Job can reference only one Equipment and the importer never invents Job-number suffixes.
 
-The feature-owned Jobs table also owns Job Book clipboard exchange. A row click copies one
-job-book row; its explicit multi-select controls copy selected, currently shown Jobs in the
-visible sorted order as tab-separated rows. The existing Fleet Number cell contains the primary
-Fleet Number followed by each normalized alternate Fleet Number, separated by ` / `, without
-changing the Job Book column layout. The paired paste action reads one numeric Job
-number per clipboard line and atomically assigns them to that same sorted selection. It
-validates count, uniqueness, and ETags before any write, then refreshes the authoritative
-Jobs projection.
+The Jobs table does not accept copied or pasted Job Numbers. Existing numbers remain visible and
+searchable, while all new permanent numbers are assigned only by the regional allocation system.
 
 Job Book Intake is a separate organization-owned Dataverse ledger, not an Unset Job type. Creating
 an Intake row atomically receives its Job Number from the `gr_jobbookentry.gr_jobnumber` AutoNumber;
@@ -362,11 +356,9 @@ intake, but Site suggestions require a linked Customer.
   canonical drawer immediately from the available summary. The drawer then refreshes the exact Job;
   editing and saving unlock only after that authoritative core arrives, preserving complete
   Customer/Site/Equipment context without delaying the shell for unrelated lookups or photos.
-- A non-empty Job Number must be unique across Jobs. The canonical create service performs an exact,
-  authenticated Dataverse preflight for every creation entry point before POST; the main Jobs drawer
-  also rejects a normalized duplicate from its loaded projection immediately. Blank Job Numbers
-  remain allowed where the originating workflow permits them. The Active `gr_job_jobnumber_key`
-  alternate key provides the hard guarantee against simultaneous duplicate submissions.
+- Ordinary creation and historical import must submit an empty Job Number. Existing numbers are
+  read-only and permanent. The regional allocation system is the only approved writer, and the
+  Active `gr_job_jobnumber_key` alternate key remains a uniqueness safeguard.
 - Breakdown, Service, and Workshop Jobs may exist without Equipment.
 - Site Check is a protected Job Type created only by the Site Check workflow. It is excluded
   from ordinary Job creation options, requires Equipment, and reuses the canonical Job
@@ -400,12 +392,8 @@ intake, but Site suggestions require a linked Customer.
   occurrence but does not roll the recurring Schedule backward. Its technician may be
   reassigned, but its protected Job Type and original Site/Equipment
   relationships cannot be changed. Job Card Status remains outside this workflow.
-- Generated Site Check Jobs may receive externally allocated numeric Job numbers through
-  the Site Check details drawer. Exact-count/format validation and stable creation order are
-  domain-owned; all numbers are written atomically with Job ETags and then reloaded.
-- A duplicate allocation may be corrected from that same generated-Job list by clearing only the
-  selected Job Number after explicit confirmation. The write is ETag-protected and preserves the
-  generated Job, parent occurrence, expected count, Equipment relationship, status, and history.
+- Generated Site Check Jobs remain unnumbered until the regional allocation system assigns their
+  permanent numbers. The Site Check drawer cannot paste, replace or clear Job Numbers.
 - New Site Check Jobs share an occurrence description in the form
   `<Frequency> checks for <dd/mm/yyyy>`, where the date is the Monday starting the
   occurrence's New Zealand-local week. Historical descriptions are not backfilled.

@@ -14,7 +14,6 @@ import type {
 } from '../types/siteCheck.types.ts'
 import { validateSiteCheckSchedule } from '../domain/siteCheckCalculations.ts'
 import { SITE_CHECK_EQUIPMENT_SCOPES } from '../types/siteCheck.types.ts'
-import { UNIFIED_JOB_RUNTIME } from '../../jobs/domain/unifiedJobWorkflow.ts'
 
 const DEFAULT_API_URL = `${import.meta.env?.VITE_DATAVERSE_URL ?? ''}/api/data/v9.2`
 const GUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -429,77 +428,11 @@ export async function fetchSiteCheckEquipmentExclusionsPage(
 }
 
 export async function allocateSiteCheckJobNumbers(
-    accessToken: string,
-    allocations: readonly { job: SiteCheckDetailJob; jobNumber: string }[],
-    options: { apiUrl?: string; fetcher?: typeof fetch } = {},
+    _accessToken: string,
+    _allocations: readonly { job: SiteCheckDetailJob; jobNumber: string }[],
+    _options: { apiUrl?: string; fetcher?: typeof fetch } = {},
 ) {
-    if (UNIFIED_JOB_RUNTIME) {
-        throw new Error('Direct Site Check number paste is disabled in the unified workflow. The reviewed specialist regional-allocation adapter is required.')
-    }
-    if (allocations.length === 0) throw new Error('No Site Check Jobs were supplied.')
-    const seenJobs = new Set<string>()
-    const seenNumbers = new Set<string>()
-    allocations.forEach(({ job, jobNumber }) => {
-        const jobId = requireGuid(job.gr_jobid, 'Job ID').toLowerCase()
-        const normalizedNumber = jobNumber.trim()
-        if (seenJobs.has(jobId)) throw new Error('A Site Check Job was supplied more than once.')
-        if (!/^\d+$/.test(normalizedNumber)) throw new Error('Job numbers must contain digits only.')
-        if (seenNumbers.has(normalizedNumber)) throw new Error('Each Job number must be unique.')
-        if (!job['@odata.etag']) throw new Error('Reload the Site Check Jobs before allocating numbers.')
-        seenJobs.add(jobId)
-        seenNumbers.add(normalizedNumber)
-    })
-
-    const suffix = crypto.randomUUID().replaceAll('-', '')
-    const batchBoundary = `batch_${suffix}`
-    const changeBoundary = `changeset_${suffix}`
-    const lines = [
-        `--${batchBoundary}`,
-        `Content-Type: multipart/mixed; boundary=${changeBoundary}`,
-        '',
-    ]
-    allocations.forEach(({ job, jobNumber }, index) => {
-        lines.push(
-            `--${changeBoundary}`,
-            'Content-Type: application/http',
-            'Content-Transfer-Encoding: binary',
-            `Content-ID: ${index + 1}`,
-            '',
-            `PATCH /api/data/v9.2/gr_jobs(${job.gr_jobid}) HTTP/1.1`,
-            'Accept: application/json',
-            'Content-Type: application/json; type=entry',
-            `If-Match: ${job['@odata.etag']}`,
-            '',
-            JSON.stringify({ gr_jobnumber: jobNumber.trim() }),
-            '',
-        )
-    })
-    lines.push(`--${changeBoundary}--`, `--${batchBoundary}--`, '')
-
-    const fetcher = options.fetcher ?? fetch
-    const response = await fetcher(`${options.apiUrl ?? DEFAULT_API_URL}/$batch`, {
-        method: 'POST',
-        headers: {
-            ...headers(accessToken),
-            'Content-Type': `multipart/mixed; boundary=${batchBoundary}`,
-            'OData-MaxVersion': '4.0',
-            'OData-Version': '4.0',
-        },
-        body: lines.join('\r\n'),
-    })
-    const responseBody = await response.text()
-    const statuses = [...responseBody.matchAll(/HTTP\/1\.1\s+(\d{3})/g)]
-        .map((match) => Number(match[1]))
-    const failure = statuses.find((status) => status >= 400)
-    if (!response.ok || failure) {
-        if ((failure ?? response.status) === 412) {
-            throw new Error('One or more Jobs changed elsewhere. Reload and paste the numbers again.')
-        }
-        throw new Error('Dataverse rejected the atomic Job number allocation.')
-    }
-    if (statuses.filter((status) => status >= 200 && status < 300).length !== allocations.length) {
-        throw new Error('Dataverse did not confirm every Job number update.')
-    }
+    throw new Error('Manual Site Check Job number entry is disabled. Use the regional allocation system.')
 }
 
 export async function deleteSiteCheckOccurrence(
@@ -510,8 +443,8 @@ export async function deleteSiteCheckOccurrence(
     schedule?: SiteCheckSchedule | null,
     options: { apiUrl?: string; fetcher?: typeof fetch } = {},
 ) {
-    if (UNIFIED_JOB_RUNTIME && jobs.some((job) => Boolean(job.gr_jobnumber?.trim()))) {
-        throw new Error('A Site Check with allocated Job numbers must be retained as history. It cannot be permanently deleted in the unified workflow.')
+    if (jobs.some((job) => Boolean(job.gr_jobnumber?.trim()))) {
+        throw new Error('A Site Check with allocated Job numbers must be retained as history. It cannot be permanently deleted.')
     }
     const apiUrl = options.apiUrl ?? DEFAULT_API_URL
     const fetcher = options.fetcher ?? fetch
@@ -667,35 +600,11 @@ export async function deleteSiteCheckOccurrence(
 }
 
 export async function clearSiteCheckJobNumber(
-    accessToken: string,
-    job: SiteCheckDetailJob,
-    options: { apiUrl?: string; fetcher?: typeof fetch } = {},
+    _accessToken: string,
+    _job: SiteCheckDetailJob,
+    _options: { apiUrl?: string; fetcher?: typeof fetch } = {},
 ) {
-    if (UNIFIED_JOB_RUNTIME) {
-        throw new Error('Allocated Job numbers are permanent in the unified workflow and cannot be cleared or reused.')
-    }
-    const jobId = requireGuid(job.gr_jobid, 'Job ID')
-    if (!job._gr_sitecheck_value) throw new Error('Only a generated Site Check Job can have its number cleared here.')
-    if (!job.gr_jobnumber?.trim()) throw new Error('This Site Check Job does not have a Job Number.')
-    if (!job['@odata.etag']) throw new Error('Reload the generated Jobs before clearing this Job Number.')
-    const response = await (options.fetcher ?? fetch)(
-        `${options.apiUrl ?? DEFAULT_API_URL}/gr_jobs(${jobId})`,
-        {
-            method: 'PATCH',
-            headers: {
-                ...headers(accessToken),
-                'Content-Type': 'application/json',
-                'If-Match': job['@odata.etag'],
-            },
-            body: JSON.stringify({ gr_jobnumber: null }),
-        },
-    )
-    if (response.status === 412) {
-        throw new Error('This Job changed elsewhere. Reload the Site Check before clearing its number.')
-    }
-    if (!response.ok) {
-        throw new Error('Dataverse rejected the Job Number removal. The Site Check Job was not changed.')
-    }
+    throw new Error('Allocated Job numbers are permanent and cannot be cleared or reused.')
 }
 
 export async function saveSiteCheckSchedule(

@@ -12,8 +12,8 @@ import {
 } from './jobsDataCache.ts'
 import { assertJobDescriptionLength } from '../domain/jobDescription.ts'
 import { assertJobCreationLocation } from '../domain/jobCreationLocation.ts'
-import { assertJobCanBeDeleted, assertJobCanReceiveNumber, requireJobNumberEtag, requireJobNumberRecordId, validateImportedJobNumber } from '../domain/jobNumberPolicy.ts'
-import { readJobNumberForDeletion, verifyUnnumberedJobs } from './jobNumberGuard.ts'
+import { assertJobCanBeDeleted, requireJobNumberEtag } from '../domain/jobNumberPolicy.ts'
+import { readJobNumberForDeletion } from './jobNumberGuard.ts'
 import { fetchLocationSite } from './sitesApi.ts'
 import type { JobCardSubmission } from '../types/jobCardSubmission.types.ts'
 import { invalidateOperationalQueries } from '../../shared/data/OperationalDataClient.ts'
@@ -476,7 +476,6 @@ export function buildJobCreatePayload(
     assertJobTypeAllowedForCreation(job.jobType, source)
     assertJobDescriptionLength(job.description)
     const newJob: Record<string, string | number> = {
-        ...(UNIFIED_JOB_RUNTIME ? {} : { gr_jobnumber: job.jobNumber }),
         gr_ordernumber: job.orderNumber,
         gr_description: job.description,
         gr_jobtype: job.jobType,
@@ -513,8 +512,8 @@ export async function createJob(
     job: JobSaveInput,
     source: JobCreationSource = 'standard',
 ): Promise<string> {
-    if (UNIFIED_JOB_RUNTIME && job.jobNumber.trim()) {
-        throw new Error('A Job number cannot be supplied during unified creation. Save the Job to Staging, then use regional allocation.')
+    if (job.jobNumber.trim()) {
+        throw new Error('A Job number cannot be supplied during creation. Save the Job unnumbered, then use regional allocation.')
     }
     const newJob = buildJobCreatePayload(job, source)
     if (!job.equipmentId?.trim()) {
@@ -526,7 +525,6 @@ export async function createJob(
             address: site?.gr_address,
         })
     }
-    await assertJobNumberAvailable(accessToken, job.jobNumber)
     const result = await fetch(
         `${DATAVERSE_URL}/api/data/v9.2/gr_jobs`,
         {
@@ -557,12 +555,8 @@ export function buildJobCreateChangeSet(
 ) {
     if (!jobs.length) throw new Error('Select at least one ready Job to import.')
     if (jobs.length > 500) throw new Error('Import no more than 500 Jobs at once.')
-    const numbers = jobs.map((job) => job.jobNumber.trim())
-    if (numbers.some((jobNumber) => !/^\d+$/.test(jobNumber))) {
-        throw new Error('Every imported Job Number must contain digits only.')
-    }
-    if (new Set(numbers).size !== numbers.length) {
-        throw new Error('Every imported Job Number must be unique.')
+    if (jobs.some((job) => job.jobNumber.trim())) {
+        throw new Error('Spreadsheet import cannot supply Job numbers. Use the regional allocation system.')
     }
 
     const suffix = requestId.replaceAll('-', '')
@@ -595,32 +589,8 @@ export function buildJobCreateChangeSet(
     }
 }
 
-async function findExistingJobNumbers(accessToken: string, jobNumbers: readonly string[]) {
-    const existing = new Set<string>()
-    for (let start = 0; start < jobNumbers.length; start += 50) {
-        const values = jobNumbers.slice(start, start + 50)
-        const filter = values.map((value) => `gr_jobnumber eq '${escapeODataString(value.trim())}'`).join(' or ')
-        const query = new URLSearchParams({ '$select': 'gr_jobnumber', '$filter': filter, '$top': String(values.length) })
-        const response = await fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobs?${query}`, {
-            cache: 'no-store',
-            headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
-        })
-        if (!response.ok) throw new Error('The imported Job Numbers could not be checked. No Jobs were created.')
-        const result = await response.json() as { value?: Array<{ gr_jobnumber?: string | null }> }
-        result.value?.forEach((job) => { if (job.gr_jobnumber) existing.add(job.gr_jobnumber.trim()) })
-    }
-    return existing
-}
-
 export async function createJobsAtomically(accessToken: string, jobs: readonly JobSaveInput[]) {
-    if (UNIFIED_JOB_RUNTIME) {
-        throw new Error('Numbered spreadsheet import is disabled in the unified workflow until the reviewed migration adapter is available.')
-    }
     const batch = buildJobCreateChangeSet(jobs)
-    const existing = await findExistingJobNumbers(accessToken, jobs.map((job) => job.jobNumber))
-    if (existing.size) {
-        throw new Error(`Job Number${existing.size === 1 ? '' : 's'} ${[...existing].sort().join(', ')} already exist${existing.size === 1 ? 's' : ''}. No Jobs were created.`)
-    }
     const response = await fetch(`${DATAVERSE_URL}/api/data/v9.2/$batch`, {
         method: 'POST',
         headers: {
@@ -767,82 +737,10 @@ export async function updateJobFields(
 }
 
 export async function allocateJobNumbers(
-    token: string,
-    allocations: readonly { job: Job; jobNumber: string }[],
+    _token: string,
+    _allocations: readonly { job: Job; jobNumber: string }[],
 ) {
-    if (UNIFIED_JOB_RUNTIME) throw new Error('Direct Job number paste is disabled in the unified workflow. Use the regional allocation operation.')
-    if (!allocations.length) throw new Error('Select one or more Jobs before pasting job numbers.')
-    if (allocations.length > 100) throw new Error('Allocate numbers to at most 100 Jobs at a time.')
-    // Keep the displayed version stable across preflight, even if the caller refreshes its rows.
-    const requested = allocations.map(({ job, jobNumber }) => ({
-        job: { gr_jobid: job.gr_jobid, gr_jobnumber: job.gr_jobnumber, '@odata.etag': job['@odata.etag'] },
-        jobNumber,
-    }))
-    const seenJobIds = new Set<string>()
-    const seenNumbers = new Set<string>()
-    requested.forEach(({ job, jobNumber }) => {
-        const jobId = requireJobNumberRecordId(job.gr_jobid)
-        const normalizedNumber = validateImportedJobNumber(jobNumber)
-        assertJobCanReceiveNumber(job)
-        if (seenJobIds.has(jobId)) throw new Error('A Job was selected more than once.')
-        if (seenNumbers.has(normalizedNumber)) throw new Error('Each pasted Job number must be unique.')
-        requireJobNumberEtag(job)
-        seenJobIds.add(jobId)
-        seenNumbers.add(normalizedNumber)
-    })
-
-    await verifyUnnumberedJobs(token, `${DATAVERSE_URL}/api/data/v9.2`, requested.map(({ job }) => job))
-
-    const suffix = crypto.randomUUID().replaceAll('-', '')
-    const batchBoundary = `batch_${suffix}`
-    const changeBoundary = `changeset_${suffix}`
-    const lines = [
-        `--${batchBoundary}`,
-        `Content-Type: multipart/mixed; boundary=${changeBoundary}`,
-        '',
-    ]
-    requested.forEach(({ job, jobNumber }, index) => {
-        lines.push(
-            `--${changeBoundary}`,
-            'Content-Type: application/http',
-            'Content-Transfer-Encoding: binary',
-            `Content-ID: ${index + 1}`,
-            '',
-            `PATCH /api/data/v9.2/gr_jobs(${job.gr_jobid}) HTTP/1.1`,
-            'Accept: application/json',
-            'Content-Type: application/json; type=entry',
-            `If-Match: ${job['@odata.etag']}`,
-            '',
-            JSON.stringify({ gr_jobnumber: jobNumber.trim() }),
-            '',
-        )
-    })
-    lines.push(`--${changeBoundary}--`, `--${batchBoundary}--`, '')
-
-    const response = await fetch(`${DATAVERSE_URL}/api/data/v9.2/$batch`, {
-        method: 'POST',
-        headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': `multipart/mixed; boundary=${batchBoundary}`,
-            Accept: 'application/json',
-            'OData-MaxVersion': '4.0',
-            'OData-Version': '4.0',
-        },
-        body: lines.join('\r\n'),
-    })
-    const responseBody = await response.text()
-    const statuses = [...responseBody.matchAll(/HTTP\/1\.1\s+(\d{3})/g)].map((match) => Number(match[1]))
-    const failure = statuses.find((status) => status >= 400)
-    if (!response.ok || failure) {
-        if ((failure ?? response.status) === 412) {
-            throw new Error('One or more Jobs changed elsewhere. Reload and paste the numbers again.')
-        }
-        throw new Error('Dataverse rejected the atomic Job number update.')
-    }
-    if (statuses.filter((status) => status >= 200 && status < 300).length !== requested.length) {
-        throw new Error('Dataverse did not confirm every Job number update.')
-    }
-    invalidateJobsCache(token)
+    throw new Error('Manual Job number entry is disabled. Use the regional allocation system.')
 }
 
 export async function updateJobOfficeAttention(

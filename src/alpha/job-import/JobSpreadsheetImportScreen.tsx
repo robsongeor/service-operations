@@ -77,7 +77,7 @@ export default function JobSpreadsheetImportScreen() {
         const importRows = resolvedRows.filter((row) => row.ready && selectedIds.has(row.id) && !importedIds.has(row.id))
         if (!importRows.length) return
         const jobs: JobSaveInput[] = importRows.map((row) => ({
-            jobNumber: row.jobNumber,
+            jobNumber: '',
             orderNumber: '',
             description: row.description,
             jobType,
@@ -109,7 +109,7 @@ export default function JobSpreadsheetImportScreen() {
         <PageHeader
             eyebrow="Jobs"
             title="Spreadsheet Job Import"
-            subtitle="Paste historical Jobs from Excel, match them to existing app records, correct problems, then create only the reviewed rows."
+            subtitle="Paste historical Jobs from Excel, match them to existing app records, correct problems, then create the reviewed rows without manually assigning Job numbers."
         />
 
         <section className="job-import-paste" aria-labelledby="job-import-paste-heading">
@@ -146,7 +146,7 @@ export default function JobSpreadsheetImportScreen() {
                 <div>
                     <span>Step 2</span>
                     <h2 id="job-import-review-heading">Correct and review matches</h2>
-                    <p>Imported Jobs are Complete. Spreadsheet Date becomes Completed Date. Customer is always derived from the matched Equipment's Site.</p>
+                    <p>Imported Jobs are Complete and unnumbered. Spreadsheet Job Number is kept on screen as a source reference only; allocation is handled separately. Spreadsheet Date becomes Completed Date. Customer is always derived from the matched Equipment's Site.</p>
                 </div>
                 <div className="job-import-global-fields">
                     <label>Job type for all Jobs
@@ -184,7 +184,7 @@ export default function JobSpreadsheetImportScreen() {
                                 else next.delete(row.id)
                                 return next
                             })} /></td>
-                            <td><input value={row.jobNumber} disabled={imported} inputMode="numeric" aria-label={`Job Number for spreadsheet row ${row.sourceRow}`} onChange={(event) => updateRow(row.id, { jobNumber: event.target.value.trim() })} /><small>Spreadsheet row {row.sourceRow}</small></td>
+                            <td><strong>{row.jobNumber || '—'}</strong><small>Source reference only · not imported</small></td>
                             <td><input type="date" value={row.completedDate} disabled={imported} aria-label={`Completed Date for Job ${row.jobNumber}`} onChange={(event) => updateRow(row.id, { sourceDate: event.target.value, completedDate: event.target.value })} /><small>{row.completedDate ? 'Completed Date' : `Invalid source: ${row.sourceDate || 'blank'}`}</small></td>
                             <td><strong>{row.customer?.gr_name || 'No Customer on Equipment'}</strong><small>From matched Equipment</small></td>
                             <td><input list="job-import-fleet-options" value={row.effectiveFleet} disabled={imported} aria-label={`Fleet Number for Job ${row.jobNumber}`} onChange={(event) => updateFleetCorrection(row.id, event.target.value)} /><small>{row.equipment ? `${row.equipment.gr_fleet || 'No primary Fleet'} · ${row.equipment.gr_model || 'No model'} · ${row.equipment.gr_Site?.gr_name || 'No Site'}` : 'No unique Equipment match'}</small></td>
@@ -207,7 +207,7 @@ export default function JobSpreadsheetImportScreen() {
             onCancel={() => { if (!isSaving) setConfirmOpen(false) }}
             onSubmit={() => { void importSelected() }}
         >
-            <p>Every selected row will be created as a Complete {jobType === JOB_TYPES.WORKSHOP ? 'Workshop' : 'Breakdown'} Job. The spreadsheet Date becomes Completed Date.</p>
+            <p>Every selected row will be created as an unnumbered Complete {jobType === JOB_TYPES.WORKSHOP ? 'Workshop' : 'Breakdown'} Job. The spreadsheet Job Number is not written; the regional allocation system is the only number writer. The spreadsheet Date becomes Completed Date.</p>
             <p>The import is atomic: Dataverse must accept every selected Job or none are created. Imported Jobs can only be removed individually through the normal Job workflow.</p>
         </EditDrawerFormDialog>}
     </main>

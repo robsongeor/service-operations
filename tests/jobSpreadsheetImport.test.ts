@@ -48,12 +48,12 @@ test('review resolves Equipment and uses its authoritative Customer', () => {
     assert.deepEqual(review.issues, [])
 })
 
-test('review blocks multi-Equipment rows, missing staff, and duplicate Jobs', () => {
+test('review blocks multi-Equipment rows and missing staff while treating the source number as reference only', () => {
     const rows = parseJobSpreadsheetPaste(`${header}141793\t17/02/2026\tUnknown\tFM-X17\tFN2433/FN2434\tOther Customer\tAdjust units`)
     const [review] = resolveJobSpreadsheetRows(rows, { equipment, mechanics, jobs: [{ gr_jobid: 'existing', createdon: '', gr_jobnumber: '141793', gr_status: JOB_STATUSES.COMPLETE, gr_ordernumber: null, gr_description: '' }] })
     assert.equal(review.ready, false)
     const messages = review.issues.map((issue) => issue.message).join(' ')
-    assert.match(messages, /already exists/)
+    assert.doesNotMatch(messages, /already exists/)
     assert.match(messages, /contains more than one Fleet Number/)
     assert.match(messages, /Staff member Unknown was not found/)
 })
@@ -74,16 +74,24 @@ test('review blocks Equipment that has no Customer through its Site', () => {
     assert.match(review.issues.map((issue) => issue.message).join(' '), /no Customer through its Site/)
 })
 
-test('atomic Job import change set creates complete linked Jobs in one transaction', () => {
+test('atomic Job import change set creates unnumbered complete linked Jobs in one transaction', () => {
     const batch = buildJobCreateChangeSet([{
-        jobNumber: '141793', orderNumber: '', description: 'Uplift unit', jobType: JOB_TYPES.BREAKDOWN,
+        jobNumber: '', orderNumber: '', description: 'Uplift unit', jobType: JOB_TYPES.BREAKDOWN,
         status: JOB_STATUSES.COMPLETE, equipmentId: 'equipment-2638', mechanicId: 'mechanic-fotu',
         siteId: 'site-suntory', completedDate: '2026-02-17', serviceType: SERVICE_TYPES.NONE,
     }], 'request-1')
     assert.equal(batch.operationCount, 1)
     assert.match(batch.contentType, /batch_job_import_request1/)
     assert.match(batch.body, /POST \/api\/data\/v9\.2\/gr_jobs/)
-    assert.match(batch.body, /"gr_jobnumber":"141793"/)
+    assert.doesNotMatch(batch.body, /gr_jobnumber/)
     assert.match(batch.body, /"gr_completeddate":"2026-02-17"/)
     assert.match(batch.body, /gr_Equipment@odata\.bind/)
+})
+
+test('atomic Job import rejects a manually supplied number', () => {
+    assert.throws(() => buildJobCreateChangeSet([{
+        jobNumber: '141793', orderNumber: '', description: 'Uplift unit', jobType: JOB_TYPES.BREAKDOWN,
+        status: JOB_STATUSES.COMPLETE, equipmentId: 'equipment-2638', mechanicId: 'mechanic-fotu',
+        siteId: 'site-suntory', completedDate: '2026-02-17', serviceType: SERVICE_TYPES.NONE,
+    }]), /regional allocation system/)
 })

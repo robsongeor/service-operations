@@ -128,7 +128,7 @@ function InvoiceJobCreateDrawer({ item, onClose, onCreated }: InvoiceJobCreatePr
         onCreateJob={jobs.createJob}
         onCreateScheduleOption={jobs.createScheduleOption}
         initialValues={{
-            jobNumber: item.jobLookupValue.trim() || revision?.gr_greentreereference || '',
+            jobNumber: '',
             orderNumber: greenTreeJobOrderNumber(revision?.gr_rawordernumber),
             status: JOB_STATUSES.COMPLETE,
             equipmentId: matchedEquipment?.gr_equipmentid,
@@ -145,7 +145,6 @@ function InvoiceJobCreateDrawer({ item, onClose, onCreated }: InvoiceJobCreatePr
                 model: revision?.gr_model || '',
             },
         }}
-        requireJobNumber
         onCreated={onCreated}
         onClose={onClose}
     />

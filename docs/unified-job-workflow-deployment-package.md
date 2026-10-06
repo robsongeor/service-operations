@@ -94,6 +94,10 @@ never delete or renumber records as generic rollback.
 
 ## Remaining approval blockers
 
+- Provision the Entra `ServiceOperations.ServiceCoordinator` application role, assign and test Bruce,
+  then remove his temporary FullAccess only after the restricted role passes acceptance testing.
+- Register and verify the server-side Job number/ledger invariant guard. The browser no longer offers
+  manual Job Number entry, but live use must also reject direct Dataverse, integration and stale-client writes.
 - Complete signing-key recovery backup; the owner-approved key and corrected `r2` package exist.
 - Capture secure restricted-role IDs after role creation; the exact 29 registrations are validated offline.
 - Admit/license the eight missing Dataverse users and select controlled pilot accounts.

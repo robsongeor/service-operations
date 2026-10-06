@@ -303,17 +303,13 @@ export default function SiteChecksScreen() {
             key={`${details.site.gr_siteid}-${details.check?.gr_sitecheckid ?? 'history'}`}
             customerName={details.site.gr_Customer?.gr_name ?? 'Customer unavailable'}
             siteName={details.site.gr_name}
-            siteAddress={details.site.gr_address}
             siteId={details.site.gr_siteid}
             initialSiteCheck={details.check}
             initialTab={details.tab}
             technicianName={(id) => mechanicsById.get(id.toLowerCase())?.gr_name ?? 'Technician unavailable'}
             loadHistoryPage={workspace.loadHistoryPage}
             loadJobsPage={workspace.loadDetailJobsPage}
-            loadAllJobs={workspace.loadAllDetailJobs}
             loadAllEquipmentExclusions={workspace.loadAllEquipmentExclusions}
-            allocateJobNumbers={workspace.allocateJobNumbers}
-            clearJobNumber={workspace.clearJobNumber}
             prepareAssignmentEmail={workspace.prepareAssignmentEmail}
             onDelete={async (check) => {
                 await workspace.deleteOccurrence(check)

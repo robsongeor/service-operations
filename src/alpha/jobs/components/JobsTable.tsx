@@ -52,7 +52,6 @@ type Props = {
             'gr_Mechanic@odata.bind'?: string | null
         }
     ) => Promise<void>
-    onJobNumberAllocation: (allocations: readonly { job: Job; jobNumber: string }[]) => Promise<void>
     onEmailTechnician: (job: Job, draft: JobEmailDraft) => Promise<void>
     emailDeliveryStates: Record<string, JobEmailDeliveryState>
     onEditJob: (job: Job) => void
@@ -82,7 +81,6 @@ export default function JobsTable({
     resetToDefaultDisabled,
     onStatusChange,
     onJobFieldsChange,
-    onJobNumberAllocation,
     onEmailTechnician,
     emailDeliveryStates,
     onEditJob,
@@ -96,7 +94,6 @@ export default function JobsTable({
     const { searchText, selectedJobType, officeAttentionFilter, scheduledJobsVisibility, sort } = viewState
     const [selectedRowId, setSelectedRowId] = useState<string | null>(null)
     const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(() => new Set())
-    const [isPastingJobNumbers, setIsPastingJobNumbers] = useState(false)
     const [openMechanicJobId, setOpenMechanicJobId] = useState<string | null>(null)
     const [savingMechanicJobId, setSavingMechanicJobId] = useState<string | null>(null)
     const [emailingJobId, setEmailingJobId] = useState<string | null>(null)
@@ -270,7 +267,6 @@ export default function JobsTable({
         [selectedJobIds, sortedJobs],
     )
     const allShownJobsSelected = sortedJobs.length > 0 && selectedShownJobs.length === sortedJobs.length
-    const selectionContainsNumberedJob = selectedShownJobs.some((job) => Boolean(job.gr_jobnumber?.trim()))
 
     const toggleSelectedJob = (jobId: string) => {
         setSelectedJobIds((current) => {
@@ -306,33 +302,6 @@ export default function JobsTable({
             })
         }
 
-    }
-
-    const pasteSelectedJobNumbers = async () => {
-        if (!selectedShownJobs.length || isPastingJobNumbers || selectionContainsNumberedJob) return
-        setIsPastingJobNumbers(true)
-        try {
-            if (!navigator.clipboard?.readText) throw new Error('Clipboard access is unavailable.')
-            const pastedNumbers = (await navigator.clipboard.readText())
-                .split(/\r?\n/)
-                .map((value) => value.trim())
-                .filter(Boolean)
-            if (pastedNumbers.length !== selectedShownJobs.length) {
-                throw new Error(`Paste ${selectedShownJobs.length} Job numbers, one per line, in the selected row order.`)
-            }
-            await onJobNumberAllocation(selectedShownJobs.map((job, index) => ({ job, jobNumber: pastedNumbers[index] })))
-            setCopyFeedback({
-                message: `${selectedShownJobs.length} Job numbers saved.`,
-                isError: false,
-            })
-        } catch (error) {
-            setCopyFeedback({
-                message: error instanceof Error ? error.message : 'The Job numbers could not be saved.',
-                isError: true,
-            })
-        } finally {
-            setIsPastingJobNumbers(false)
-        }
     }
 
     const copyJobForSpreadsheet = async (job: Job) => {
@@ -425,16 +394,6 @@ export default function JobsTable({
                 <button type="button" onClick={() => void copySelectedJobs()} disabled={selectedShownJobs.length === 0}>
                     Copy {selectedShownJobs.length ? `${selectedShownJobs.length} selected` : 'selected'} for job book
                 </button>
-                {!unifiedWorklist && <button
-                    type="button"
-                    onClick={() => void pasteSelectedJobNumbers()}
-                    disabled={selectedShownJobs.length === 0 || isPastingJobNumbers || selectionContainsNumberedJob}
-                    title={selectionContainsNumberedJob
-                        ? 'Select only unnumbered Jobs. Allocated numbers cannot be replaced.'
-                        : 'Read one Job number per line from the clipboard and assign them in selected row order'}
-                >
-                    {isPastingJobNumbers ? 'Saving Job numbers…' : 'Paste Job numbers'}
-                </button>}
             </div>}
 
             <div className="jobs-table-header-scroll" ref={tableHeaderScrollRef}>

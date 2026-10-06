@@ -113,38 +113,22 @@ test('Jobs table supports copying selected visible Job Book rows in sorted order
     assert.match(jobsTable, /Select Job \$\{job\.gr_jobnumber \|\| 'row'\} for job book export/)
 })
 
-test('Job drawer reuses the Job Book row clipboard format', () => {
+test('Job drawer shows Job numbers read-only without clipboard allocation actions', () => {
     const coreFields = readFileSync(new URL('../src/alpha/jobs/components/JobCoreFields.tsx', import.meta.url), 'utf8')
     const editDrawer = readFileSync(new URL('../src/alpha/jobs/components/JobEditDrawer.tsx', import.meta.url), 'utf8')
-    assert.match(coreFields, /copyJobBookSpreadsheetRow\(jobBookJob\)/)
-    assert.match(coreFields, />Copy for Job Book</)
-    assert.doesNotMatch(coreFields, /disabled=\{!jobBookJob\.gr_jobnumber/)
+    assert.match(coreFields, /<input\s+readOnly\s+value=\{draft\.jobNumber\}/)
+    assert.doesNotMatch(coreFields, /copyJobBookSpreadsheetRow|Copy for Job Book/)
     assert.match(editDrawer, /jobBookJob=\{job\}/)
 })
 
-test('Job number paste uses one atomic change set in selected-row order', async () => {
+test('Job number paste is rejected before any network request', async () => {
     const originalFetch = globalThis.fetch
-    let request: RequestInit | undefined
-    let requestUrl = ''
-    globalThis.fetch = async (url, init) => {
-        if (init?.method !== 'POST') return Response.json({ value: [
-            { gr_jobid: '00000000-0000-4000-8000-000000000001', gr_jobnumber: null, '@odata.etag': 'W/"1"' },
-            { gr_jobid: '00000000-0000-4000-8000-000000000002', gr_jobnumber: null, '@odata.etag': 'W/"2"' },
-        ] })
-        requestUrl = String(url)
-        request = init
-        return new Response('HTTP/1.1 204 No Content\r\nHTTP/1.1 204 No Content', { status: 200 })
-    }
+    globalThis.fetch = async () => { assert.fail('No request should occur') }
     try {
-        await allocateJobNumbers('token', [
+        await assert.rejects(() => allocateJobNumbers('token', [
             { job: { gr_jobid: '00000000-0000-4000-8000-000000000001', '@odata.etag': 'W/"1"' } as never, jobNumber: '145850' },
             { job: { gr_jobid: '00000000-0000-4000-8000-000000000002', '@odata.etag': 'W/"2"' } as never, jobNumber: '145851' },
-        ])
-        assert.match(requestUrl, /\/api\/data\/v9\.2\/\$batch$/)
-        assert.match(String(request?.body), /PATCH \/api\/data\/v9\.2\/gr_jobs\(00000000-0000-4000-8000-000000000001\)/)
-        assert.match(String(request?.body), /If-Match: W\/"1"/)
-        assert.match(String(request?.body), /\{"gr_jobnumber":"145850"\}/)
-        assert.match(String(request?.body), /\{"gr_jobnumber":"145851"\}/)
+        ]), /regional allocation system/)
     } finally {
         globalThis.fetch = originalFetch
     }
@@ -173,10 +157,10 @@ test('Job creation rejects duplicate numbers in loaded state and authoritative D
     }
 })
 
-test('every Job creation performs the Dataverse duplicate preflight before POST', () => {
+test('ordinary Job creation rejects manual numbers before POST', () => {
     const api = readFileSync(new URL('../src/alpha/jobs/services/jobsApi.ts', import.meta.url), 'utf8')
     const drawer = readFileSync(new URL('../src/alpha/jobs/components/JobCreateDrawer.tsx', import.meta.url), 'utf8')
-    assert.match(api, /await assertJobNumberAvailable\(accessToken, job\.jobNumber\)/)
-    assert.match(drawer, /findDuplicateJobNumber\(existingJobs, draft\.jobNumber\)/)
-    assert.match(drawer, /already exists\. Open the existing Job or enter a different number/)
+    assert.match(api, /if \(job\.jobNumber\.trim\(\)\)/)
+    assert.match(api, /Manual Job number entry is disabled/)
+    assert.doesNotMatch(drawer, /findDuplicateJobNumber|enter a different number/)
 })

@@ -1045,7 +1045,6 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
             key={`${siteCheckDetails.site.gr_siteid}-${siteCheckDetails.check?.gr_sitecheckid ?? 'history'}`}
             customerName={selectedCustomer.gr_name}
             siteName={siteCheckDetails.site.gr_name}
-            siteAddress={siteCheckDetails.site.gr_address}
             siteId={siteCheckDetails.site.gr_siteid}
             initialSiteCheck={siteCheckDetails.check}
             initialTab={siteCheckDetails.tab}
@@ -1054,10 +1053,7 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
             )?.gr_name ?? 'Technician unavailable'}
             loadHistoryPage={siteChecks.loadHistoryPage}
             loadJobsPage={siteChecks.loadDetailJobsPage}
-            loadAllJobs={siteChecks.loadAllDetailJobs}
             loadAllEquipmentExclusions={siteChecks.loadAllEquipmentExclusions}
-            allocateJobNumbers={siteChecks.allocateJobNumbers}
-            clearJobNumber={siteChecks.clearJobNumber}
             prepareAssignmentEmail={siteChecks.prepareAssignmentEmail}
             scheduleSettings={{
                 equipment: equipmentForSite(siteCheckDetails.site),

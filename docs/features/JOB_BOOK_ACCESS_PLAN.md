@@ -17,7 +17,7 @@ assignments, missing role definitions and the proposed implementation/onboarding
 | Business role | Decision | Implementation status |
 | --- | --- | --- |
 | Full access | George only; unrestricted application access | Existing `ServiceOperations.FullAccess` profile |
-| Service coordinator | Bruce and Andy; operational management with the approved restricted screen set | Separate frontend profile implemented as `ServiceOperations.ServiceCoordinator`; Microsoft assignment is not yet provisioned |
+| Service coordinator | Bruce and Andy; operational management with the approved restricted screen set | Separate frontend profile implemented as `ServiceOperations.ServiceCoordinator`; Microsoft provisioning, Bruce assignment and named-user verification are mandatory go-live blockers |
 | Office Admin | Jess, Nargiza and Pubudu; entry, corrections, technician assignment/email, markers and review | Existing `ServiceOperations.JobCardAdmin` client profile; authoritative permissions still require verification |
 | Job Book Admin | Five entry/correction users; eligible-entry Void allowed; corrections remain allowed after coordinator handoff; no technician assignment/email, review or GT/Timecloud marker changes | Proposed distinct `ServiceOperations.JobBookAdmin`; not implemented or provisioned |
 | Job Book only | Not planned for this rollout | Keep existing implementation; do not assign it as part of rollout |
@@ -148,6 +148,14 @@ Job Import, Equipment Photos, Job Card Reviews, Job Book, Scheduling, Quotes and
 They cannot open Overview, Staff, Greentree Review, Equipment Map, Job Map, Site Checks,
 Chargeable Invoices or Checklist Admin. These items are absent from the menu and their direct URLs
 fail closed. George's FullAccess profile remains unrestricted.
+
+### Mandatory provisioning before live use
+
+The client profile alone is not sufficient. A Microsoft administrator must create the enabled Entra
+application role `ServiceOperations.ServiceCoordinator`, assign it to Bruce, and complete a named-user
+access test. Keep Bruce's current FullAccess assignment until that restricted test passes, then remove
+FullAccess so it cannot bypass the screen boundary. Andy is not assigned until his rollout is approved.
+This item is explicitly blocking V2 live usage, not deferred post-launch work.
 
 ## Decisions still needed
 

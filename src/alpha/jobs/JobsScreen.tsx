@@ -51,7 +51,7 @@ export default function JobsScreen() {
         scheduleOptions,
         servicePlans,
         officeUpdates,
-        createJob, updateJob, deleteJob, updateJobStatus, updateJobFields, allocateJobNumbers,
+        createJob, updateJob, deleteJob, updateJobStatus, updateJobFields,
         updateJobCardStatus,
         sendPrimaryJobEmail, queuePrimaryJobEmail, emailDeliveryStates, sendAssignmentJobEmail,
         createJobAssignment, deleteJobAssignment,
@@ -303,7 +303,6 @@ export default function JobsScreen() {
                         return updateJobStatus(jobId, status)
                     }}
                     onJobFieldsChange={updateJobFields}
-                    onJobNumberAllocation={allocateJobNumbers}
                     onEmailTechnician={queuePrimaryJobEmail}
                     emailDeliveryStates={emailDeliveryStates}
                     onEditJob={(job) => openJob(job)}

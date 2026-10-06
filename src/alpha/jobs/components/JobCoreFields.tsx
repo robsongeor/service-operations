@@ -10,8 +10,6 @@ import type { Equipment } from '../types/equipment.types'
 import { isServiceTypeEnabled, resolveMaintenanceConfiguration } from '../../equipment/servicePlans/maintenanceConfiguration'
 import { JOB_DESCRIPTION_MAX_LENGTH } from '../domain/jobDescription'
 import type { Job } from '../types/job.types'
-import { copyJobBookSpreadsheetRow } from '../utils/jobBookClipboard'
-import { UNIFIED_JOB_WALKTHROUGH } from '../domain/unifiedJobWorkflow'
 
 type Props = {
     draft: JobEditorDraft
@@ -29,20 +27,8 @@ type Props = {
     stagingOnly?: boolean
 }
 
-export default function JobCoreFields({ draft, setDraft, mechanics, mechanicsLoading = false, mechanicsError = '', onRetryMechanics, equipment, jobBookJob, allowEmptyJobType = false, jobTypeError = '', jobTypeOptions = JOB_TYPE_OPTIONS, correctionsOnly = false, stagingOnly = false }: Props) {
+export default function JobCoreFields({ draft, setDraft, mechanics, mechanicsLoading = false, mechanicsError = '', onRetryMechanics, equipment, jobBookJob, allowEmptyJobType = false, jobTypeError = '', jobTypeOptions = JOB_TYPE_OPTIONS, correctionsOnly = false }: Props) {
     const [mechanicSelectOpen, setMechanicSelectOpen] = useState(false)
-    const [copyFeedback, setCopyFeedback] = useState('')
-
-    const copyForJobBook = async () => {
-        if (!jobBookJob) return
-        try {
-            await copyJobBookSpreadsheetRow(jobBookJob)
-            setCopyFeedback('Copied for Job Book')
-        } catch (error) {
-            console.error(error)
-            setCopyFeedback('Unable to copy Job')
-        }
-    }
 
     return (
         <>
@@ -85,20 +71,15 @@ export default function JobCoreFields({ draft, setDraft, mechanics, mechanicsLoa
             </label>
 
             <label className="job-edit-field">
-                <span className="job-edit-field-heading"><span>Job number</span>{jobBookJob && !correctionsOnly && !UNIFIED_JOB_WALKTHROUGH && <button type="button" title="Copy Job details to paste into the Job Book and allocate its next number" onClick={() => void copyForJobBook()}>Copy for Job Book</button>}</span>
+                <span>Job number</span>
                 <input
-                    readOnly={stagingOnly || correctionsOnly || Boolean(jobBookJob)}
+                    readOnly
                     value={draft.jobNumber}
-                    onChange={(event) => setDraft((current) => ({
-                        ...current,
-                        jobNumber: event.target.value,
-                    }))}
                 />
-                {stagingOnly && <small>Not allocated. Save to Staging, then use Allocate job number when needed.</small>}
+                {!jobBookJob?.gr_jobnumber?.trim() && <small>Not allocated. Save the Job, then use the regional allocation system.</small>}
                 {jobBookJob && <small>{jobBookJob.gr_jobnumber?.trim()
                     ? 'Allocated Job numbers cannot be changed.'
-                    : 'No number allocated. Allocate it separately from the Jobs table.'}</small>}
-                {copyFeedback && <small className="job-edit-copy-feedback" role="status">{copyFeedback}</small>}
+                    : 'No number allocated. Use the regional allocation system.'}</small>}
             </label>
 
             <label className="job-edit-field">

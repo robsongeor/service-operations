@@ -8,8 +8,6 @@ import type { Mechanic } from '../../jobs/types/mechanic.types'
 import type { Site } from '../../jobs/types/site.types'
 import { createSiteChecksDataCoordinator, type SiteChecksSnapshot } from '../services/siteChecksCoordinator'
 import {
-    allocateSiteCheckJobNumbers,
-    clearSiteCheckJobNumber,
     deleteSiteCheckOccurrence,
     fetchSiteCheckDetailJobsPage,
     fetchSiteCheckEquipmentExclusionsPage,
@@ -194,13 +192,6 @@ export function useSiteCheckWorkspace() {
         return records
     }, [acquireAccessToken])
 
-    const allocateJobNumbers = useCallback(async (
-        allocations: readonly { job: SiteCheckDetailJob; jobNumber: string }[],
-    ) => allocateSiteCheckJobNumbers(await acquireAccessToken(), allocations), [acquireAccessToken])
-
-    const clearJobNumber = useCallback(async (job: SiteCheckDetailJob) =>
-        clearSiteCheckJobNumber(await acquireAccessToken(), job), [acquireAccessToken])
-
     const deleteOccurrence = useCallback(async (occurrence: SiteCheck) => {
         const token = await acquireAccessToken()
         const jobs: SiteCheckDetailJob[] = []
@@ -243,8 +234,6 @@ export function useSiteCheckWorkspace() {
         loadDetailJobsPage,
         loadAllDetailJobs,
         loadAllEquipmentExclusions,
-        allocateJobNumbers,
-        clearJobNumber,
         prepareAssignmentEmail,
         deleteOccurrence,
     }
