@@ -14,7 +14,7 @@ const job: CorrectableJob = {
     gr_Equipment: { gr_equipmentid: id(5), gr_fleet: 'F1', gr_make: 'Make', gr_model: 'Model', gr_serial: 'S1' },
     gr_techniciansubmissionstory: 'Immutable evidence', gr_completeddate: '2026-10-02',
 }
-const input: JobCorrectionsInput = { description: 'Corrected', orderNumber: 'PO1', customerId: id(3), siteId: id(2), contactId: id(4), equipmentId: id(5) }
+const input: JobCorrectionsInput = { description: 'Corrected', orderNumber: 'PO1', customerId: id(3), siteId: id(2), contactId: id(4), equipmentId: id(5), mechanicId: '' }
 const originalFetch = globalThis.fetch
 test.afterEach(() => { globalThis.fetch = originalFetch })
 const json = (body: unknown, status = 200) => Response.json(body, { status })
@@ -41,13 +41,13 @@ test('patch contains changed data only, preserving all original operational fiel
 })
 
 test('relationship corrections use only Job bindings, never mutate master records', () => {
-    assert.deepEqual(buildJobCorrectionsPatch(job, { ...input, equipmentId: id(6), customerId: id(7), siteId: id(8), contactId: '' }), {
-        gr_description: 'Corrected', 'gr_Equipment@odata.bind': `/gr_equipments(${id(6)})`, 'gr_Site@odata.bind': `/gr_sites(${id(8)})`, 'gr_Contact@odata.bind': null,
+    assert.deepEqual(buildJobCorrectionsPatch(job, { ...input, equipmentId: id(6), mechanicId: id(9), customerId: id(7), siteId: id(8), contactId: '' }), {
+        gr_description: 'Corrected', 'gr_Equipment@odata.bind': `/gr_equipments(${id(6)})`, 'gr_Mechanic@odata.bind': `/gr_mechanics(${id(9)})`, 'gr_Site@odata.bind': `/gr_sites(${id(8)})`, 'gr_Contact@odata.bind': null,
     })
     assert.equal(buildJobCorrectionsPatch(job, { ...input, equipmentId: '' })['gr_Equipment@odata.bind'], null)
 })
 
-for (const field of ['jobNumber', 'jobType', 'status', 'serviceType', 'mechanicId', 'hourMeter', 'currentOfficeAction', 'gr_gtentered', 'gr_techniciansubmissionstory', 'address']) {
+for (const field of ['jobNumber', 'jobType', 'status', 'serviceType', 'hourMeter', 'currentOfficeAction', 'gr_gtentered', 'gr_techniciansubmissionstory', 'address']) {
     test(`rejects unexpected correction field: ${field}`, () => {
         assert.throws(() => buildJobCorrectionsPatch(job, { ...input, [field]: 'tampered' }), /Only recorded Job details/)
     })
@@ -156,5 +156,6 @@ test('restricted host keeps five routes and projects only correction fields into
     assert.match(hook, /invalidateJobsCache\(token\)/)
     assert.match(hook, /setReloadReason\(error.message\)/)
     const projection = hook.split('saveJobCorrections(token, job, {')[1].split('})')[0]
-    assert.doesNotMatch(projection, /\.\.\.input|status:|jobType:|mechanicId:|jobNumber:/)
+    assert.doesNotMatch(projection, /\.\.\.input|status:|jobType:|jobNumber:/)
+    assert.match(projection, /mechanicId:/)
 })

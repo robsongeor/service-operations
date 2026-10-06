@@ -45,6 +45,8 @@ import { usesAzureJobCards } from '../types/jobCardWorkflow'
 import { jobEmailSendingAllowedForHostname, LOCAL_JOB_EMAIL_DISABLED_MESSAGE } from '../services/jobEmail'
 import { hasAllocatedJobNumber } from '../domain/jobNumberPolicy'
 import { UNIFIED_JOB_WALKTHROUGH } from '../domain/unifiedJobWorkflow'
+import SearchableMechanicSelect from './SearchableMechanicSelect'
+import { JOB_DESCRIPTION_MAX_LENGTH } from '../domain/jobDescription'
 
 type ProgressiveLoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -129,6 +131,8 @@ type Props = JobRelationshipLookupProps & {
     onLoadJobPhoto?: (photoId: string, signal?: AbortSignal) => Promise<string>
     initialTab?: 'details' | 'office' | 'scheduling' | 'jobcard' | 'quotes'
     correctionsOnly?: boolean
+    jobBookLabel?: string
+    canCorrectMechanic?: boolean
     saveBlockedReason?: string
     onReloadCorrections?: () => void
     onClose: () => void
@@ -180,6 +184,8 @@ export default function JobEditDrawer({
     onLoadJobPhoto,
     initialTab = 'details',
     correctionsOnly = false,
+    jobBookLabel = 'Auckland',
+    canCorrectMechanic = false,
     saveBlockedReason = '',
     onReloadCorrections,
     onClose,
@@ -200,6 +206,7 @@ export default function JobEditDrawer({
     const [deleteError, setDeleteError] = useState('')
     const [isEmailing, setIsEmailing] = useState(false)
     const [showEmailLinkConfirm, setShowEmailLinkConfirm] = useState(false)
+    const [correctionMechanicOpen, setCorrectionMechanicOpen] = useState(false)
     const [activeTab, setActiveTab] = useState<'details' | 'office' | 'scheduling' | 'jobcard' | 'quotes'>(correctionsOnly ? 'details' : initialTab)
     const [officeAction, setOfficeAction] = useState(job.gr_currentofficeaction ?? OFFICE_ACTIONS.NONE)
     const [officeActionOwner, setOfficeActionOwner] = useState(job.gr_officeactionowner ?? '')
@@ -458,8 +465,9 @@ export default function JobEditDrawer({
     return (
         <>
         <JobDrawerShell
-            eyebrow={correctionsOnly ? 'Edit entry' : 'Edit job'}
-            title={job.gr_jobnumber || 'Unnumbered job'}
+            eyebrow={correctionsOnly ? `${jobBookLabel} Job Book` : 'Edit job'}
+            title={correctionsOnly ? `Edit ${jobBookLabel} Job Book entry` : job.gr_jobnumber || 'Unnumbered job'}
+            className={correctionsOnly ? 'job-book-intake-drawer' : undefined}
             busy={isSaving || isDeleting || isEmailing}
             onClose={onClose}
             headerAction={!correctionsOnly &&
@@ -489,7 +497,7 @@ export default function JobEditDrawer({
                         </button>}
                         {saveError || saveBlockedReason
                             ? <span className="job-edit-save-error" role="alert">{saveError || saveBlockedReason}</span>
-                            : <span>{correctionsOnly ? 'Save corrections to this Job only.' : 'Save to update this job in Dataverse.'}</span>}
+                            : <span>{correctionsOnly ? `Editing Job Book ${job.gr_jobnumber || 'entry'}.` : 'Save to update this job in Dataverse.'}</span>}
                         {correctionsOnly && saveBlockedReason && <button type="button" onClick={onReloadCorrections}>Reload latest details</button>}
                     </div>
                     <div className="job-edit-footer-actions">
@@ -555,8 +563,6 @@ export default function JobEditDrawer({
                     Job card
                 </button>
             </nav>}
-            {correctionsOnly && <p className="job-edit-field-note">Correct the recorded Job details here. Job number, type, status, service type, technician assignment and scheduling remain protected. Original technician submissions are unchanged.</p>}
-
             <div className="job-edit-tab-panel" role="tabpanel">
                 {coreStatus === 'loading' && <div className="job-progressive-state" role="status">
                     <strong>Refreshing latest Job details…</strong>
@@ -567,7 +573,29 @@ export default function JobEditDrawer({
                     <span>{coreError || 'The focused Job refresh did not complete.'}</span>
                     <button type="button" onClick={() => { void focusedJobQuery.refetch().catch(() => undefined) }}>Try again</button>
                 </div>}
-                {activeTab === 'details' && (
+                {activeTab === 'details' && correctionsOnly && <>
+                    <div className="job-book-intake-meta"><div><span>Job number</span><strong>{job.gr_jobnumber || 'Unnumbered'}</strong></div><div><span>Entry date</span><strong>{job.createdon ? new Date(job.createdon).toLocaleDateString('en-NZ') : '—'}</strong></div></div>
+                    <fieldset className="job-book-intake-section job-create-fields" disabled={coreStatus !== 'ready' || isSaving}>
+                        <div className="job-book-intake-section-heading"><h3>Equipment and location</h3><p>Selecting Equipment fills its Customer, Site and address.</p></div>
+                        {referenceDataStatus === 'loading' || referenceDataStatus === 'idle'
+                            ? <div className="job-progressive-state job-edit-field-wide" role="status"><strong>Loading Equipment and customer choices…</strong></div>
+                            : referenceDataStatus === 'error'
+                                ? <div className="job-progressive-state error job-edit-field-wide" role="alert"><strong>Editor choices could not be loaded</strong><span>{referenceDataError}</span></div>
+                                : <JobRelationshipFields correctionsOnly editor={editor} equipmentList={equipmentList} customers={customers}
+                                    onCreateCustomer={onCreateCustomer} onCreateSite={onCreateSite} onCreateContact={onCreateContact} onCreateEquipment={onCreateEquipment}
+                                    onSearchEquipment={onSearchEquipment} onSearchCustomers={onSearchCustomers} onLoadCustomerSites={onLoadCustomerSites}
+                                    onLoadSiteContacts={onLoadSiteContacts} onLoadEquipment={onLoadEquipment} onLoadEquipmentServicePlans={onLoadEquipmentServicePlans} />}
+                    </fieldset>
+                    <fieldset className="job-book-intake-section" disabled={coreStatus !== 'ready' || isSaving}>
+                        <div className="job-book-intake-section-heading"><h3>Job details</h3><p>Record what is required and who should attend.</p></div>
+                        <label className="job-book-intake-field"><span>Description of the job <span className="job-book-required-mark">*</span></span><textarea required maxLength={JOB_DESCRIPTION_MAX_LENGTH} aria-label="Job description (required)" placeholder="Describe the fault or work required" rows={4} value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} /></label>
+                        <div className="job-edit-field job-edit-field-wide"><span>Mechanic</span>{canCorrectMechanic
+                            ? <SearchableMechanicSelect mechanics={mechanics} selectedId={draft.mechanicId} selectedName={job.gr_Mechanic?.gr_name ?? ''} isOpen={correctionMechanicOpen} isSaving={isSaving} variant="drawer" onOpen={() => setCorrectionMechanicOpen(true)} onClose={() => setCorrectionMechanicOpen(false)} onSelect={(mechanicId) => { setDraft((current) => ({ ...current, mechanicId })); setCorrectionMechanicOpen(false) }} />
+                            : <span>{job.gr_Mechanic?.gr_name || 'Not assigned'}</span>}</div>
+                        <label className="job-book-intake-field"><span>Customer PO <small>(optional)</small></span><input aria-label="Customer purchase order" placeholder="Enter a PO number if supplied" value={draft.orderNumber} onChange={(event) => setDraft((current) => ({ ...current, orderNumber: event.target.value }))} /></label>
+                    </fieldset>
+                </>}
+                {activeTab === 'details' && !correctionsOnly && (
                     <div className="job-edit-grid">
                         <fieldset className="job-progressive-fieldset" disabled={coreStatus !== 'ready'}>
                             <JobCoreFields

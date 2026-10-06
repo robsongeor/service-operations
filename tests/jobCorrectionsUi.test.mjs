@@ -21,35 +21,35 @@ const site = { gr_siteid: 'site', gr_name: 'Historical Site', gr_address: 'Saved
 const equipment = { gr_equipmentid: 'equipment', gr_fleet: 'SAVED-EQUIPMENT', gr_make: 'Make', gr_model: 'Model', gr_serial: 'SERIAL' }
 const job = { gr_jobid: 'job', gr_jobnumber: 'WJ1234567', gr_jobtype: 122830000, gr_status: 122830003, gr_description: 'Saved description', gr_ordernumber: 'PO-1', gr_Equipment: equipment, gr_Site: site, gr_Mechanic: { gr_mechanicid: 'mechanic', gr_name: 'Saved Technician' } }
 const render = (props = {}) => renderToStaticMarkup(createElement(Provider, { scope: 'sample-corrections' }, createElement(Drawer, {
-    job, correctionsOnly: true, mechanics: [], equipmentList: [equipment], customers: [site.gr_Customer], sites: [site], siteContacts: [], scheduleOptions: [], servicePlans: [],
+    job, correctionsOnly: true, jobBookLabel: 'Auckland', canCorrectMechanic: true, mechanics: [job.gr_Mechanic], equipmentList: [equipment], customers: [site.gr_Customer], sites: [site], siteContacts: [], scheduleOptions: [], servicePlans: [],
     onSave: unavailable, onDelete: unavailable, onClose: unavailable, onCreateCustomer: unavailable, onCreateSite: unavailable, onCreateContact: unavailable, onCreateEquipment: unavailable,
     onCreateScheduleOption: unavailable, onUpdateScheduleOption: unavailable, onDeleteScheduleOption: unavailable, onCreateQuote: unavailable, onOpenQuote: unavailable,
     onJobCardStatusChange: unavailable, onCreateAssignment: unavailable, onSendPrimary: unavailable, onSendAssignment: unavailable, onDeleteAssignment: unavailable, ...props,
 })))
 
-test('corrections drawer reuses core fields but locks coordinator controls and number', () => {
+test('corrections drawer matches the new Job Book entry layout and functions', () => {
     const html = render()
-    assert.match(html, /Job type<\/span><select disabled/)
-    assert.match(html, /Status<\/span><select disabled/)
-    assert.match(html, /readOnly="" value="WJ1234567"/)
-    assert.match(html, /readOnly="" value="Saved Technician"/)
+    assert.match(html, /Edit Auckland Job Book entry/)
+    assert.match(html, /Job number<\/span><strong>WJ1234567/)
+    assert.match(html, /Equipment and location/)
+    assert.match(html, /Job details/)
+    assert.doesNotMatch(html, /Job type|Status<\/span>/)
     assert.match(html, /<textarea[^>]*>Saved description<\/textarea>/)
     assert.match(html, /value="PO-1"/)
     assert.match(html, /SAVED-EQUIPMENT/)
     assert.match(html, /Saved Site address/)
-    assert.match(html, /Edit entry/)
+    assert.match(html, /Saved Technician/)
 })
 
 test('corrections drawer has no scheduling, dispatch, deletion, master creation or evidence editing actions', () => {
     const html = render({ initialTab: 'scheduling' })
     assert.doesNotMatch(html, /role="tab"|Delete job|Email job|Add new equipment|Add new customer|Add site|Add contact|Create quote|Copy for Job Book/)
-    assert.match(html, /Original technician submissions are unchanged/)
-    assert.match(html, /Edit entry/)
+    assert.match(html, /Edit Auckland Job Book entry/)
 })
 
-test('service type is read-only without a maintenance schedule editor', () => {
+test('service type is omitted with the coordinator-only controls', () => {
     const html = render({ job: { ...job, gr_jobtype: 122830001, gr_servicetype: 122830001 } })
-    assert.match(html, /Service type \*<\/span><select disabled/)
+    assert.doesNotMatch(html, /Service type/)
     assert.doesNotMatch(html, /job-maintenance-summary/)
 })
 

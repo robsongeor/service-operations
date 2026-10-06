@@ -13,11 +13,12 @@ export type JobCorrectionsInput = {
     description: string
     orderNumber: string
     equipmentId: string
+    mechanicId: string
     customerId: string
     siteId: string
     contactId: string
 }
-const INPUT_FIELDS = new Set(['description', 'orderNumber', 'equipmentId', 'customerId', 'siteId', 'contactId'])
+const INPUT_FIELDS = new Set(['description', 'orderNumber', 'equipmentId', 'mechanicId', 'customerId', 'siteId', 'contactId'])
 
 export class JobCorrectionConflictError extends Error {
     constructor() {
@@ -62,7 +63,7 @@ export function buildJobCorrectionsPatch(original: Job, input: JobCorrectionsInp
     const description = input.description.trim()
     if (!description) throw new Error('Enter a Job description before saving.')
     assertJobDescriptionLength(description)
-    for (const id of [input.equipmentId, input.customerId, input.siteId, input.contactId]) if (id) requiredId(id)
+    for (const id of [input.equipmentId, input.mechanicId, input.customerId, input.siteId, input.contactId]) if (id) requiredId(id)
     if (Boolean(input.customerId) !== Boolean(input.siteId)) throw new Error('Select both a Customer and its Site before saving.')
     if (input.contactId && !input.siteId) throw new Error('Select a Site for the Contact before saving.')
     const patch: Record<string, string | null> = {}
@@ -70,6 +71,7 @@ export function buildJobCorrectionsPatch(original: Job, input: JobCorrectionsInp
     if (input.orderNumber.trim() !== (original.gr_ordernumber ?? '').trim()) patch.gr_ordernumber = input.orderNumber.trim() || null
     for (const [name, collection, value, previous] of [
         ['gr_Equipment', 'gr_equipments', input.equipmentId, original.gr_Equipment?.gr_equipmentid],
+        ['gr_Mechanic', 'gr_mechanics', input.mechanicId, original.gr_Mechanic?.gr_mechanicid],
         ['gr_Site', 'gr_sites', input.siteId, original.gr_Site?.gr_siteid],
         ['gr_Contact', 'gr_contacts', input.contactId, original.gr_Contact?.gr_contactid],
     ]) {
