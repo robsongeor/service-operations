@@ -206,6 +206,12 @@ test('historical Void rows remain visible with their original markers even witho
     assert.equal(saved.timecloudEntered, true)
 })
 
+test('unified intake reads use the deployed registered Job navigation property', () => {
+    const source = readFileSync(new URL('../src/alpha/job-book/jobBookApi.ts', import.meta.url), 'utf8')
+    assert.match(source, /gr_registeredjob\(\$select=/)
+    assert.doesNotMatch(source, /gr_RegisteredJob/)
+})
+
 test('screen and dialog reuse the workflow rules, retain Void evidence, and offer explicit conflict recovery', () => {
     const read = (path: string) => readFileSync(new URL(`../src/alpha/job-book/${path}`, import.meta.url), 'utf8')
     const screen = read('JobBookPrototypeScreen.tsx')

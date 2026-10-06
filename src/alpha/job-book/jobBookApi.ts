@@ -76,7 +76,7 @@ type IntakeApiRow = {
     gr_Site?: { gr_siteid: string }
     gr_Contact?: { gr_contactid: string; gr_name: string }
     gr_PromotedJob?: { gr_jobid: string }
-    gr_RegisteredJob?: JobBookApiRow
+    gr_registeredjob?: JobBookApiRow
 }
 
 const INTAKE_STAGE_TO_NAME = {
@@ -196,8 +196,8 @@ export async function updateManagedJobBookMarker(
 
 function mapIntakeRow(row: IntakeApiRow, book: JobBookConfig): JobBookRow {
     const intakeRecordId = String(row[book.idField as keyof IntakeApiRow] ?? '')
-    if (UNIFIED_JOB_RUNTIME && row.gr_RegisteredJob) {
-        const job = row.gr_RegisteredJob
+    if (UNIFIED_JOB_RUNTIME && row.gr_registeredjob) {
+        const job = row.gr_registeredjob
         if (!job.gr_jobid || job.gr_jobnumber !== row.gr_jobnumber) throw new Error('The Job Book link needs reconciliation. No replacement Job or number was created.')
         return {
             ...mapManagedJobBookRow(job, book),
@@ -252,7 +252,7 @@ export function jobBookIntakeContactLookupIsAvailable() {
 
 function intakeExpand() {
     const expanded = INTAKE_CONTACT_LOOKUP_ENABLED ? INTAKE_EXPAND : INTAKE_EXPAND_WITHOUT_CONTACT
-    return UNIFIED_JOB_RUNTIME ? `${expanded},gr_RegisteredJob($select=gr_jobid,createdon,gr_jobnumber,gr_ordernumber,gr_description,gr_gtentered,gr_timecloudentered${UNIFIED_JOB_SELECT};$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_serial,gr_make,gr_model),gr_Mechanic($select=gr_mechanicid,gr_name),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name))` : expanded
+    return UNIFIED_JOB_RUNTIME ? `${expanded},gr_registeredjob($select=gr_jobid,createdon,gr_jobnumber,gr_ordernumber,gr_description,gr_gtentered,gr_timecloudentered${UNIFIED_JOB_SELECT};$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_serial,gr_make,gr_model),gr_Mechanic($select=gr_mechanicid,gr_name),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name))` : expanded
 }
 
 export async function fetchJobBookIntakeRows(accessToken: string, book: JobBookConfig = JOB_BOOKS.auckland, continuationLink?: string): Promise<JobBookPage> {
