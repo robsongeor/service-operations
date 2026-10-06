@@ -13,6 +13,7 @@ import JobSiteContactFields from './JobSiteContactFields'
 import JobEquipmentLocation from './JobEquipmentLocation'
 import { isPersistedEquipmentId } from '../../equipment/services/equipmentLocationWorkflow'
 import type { JobCreationLocationErrors } from '../domain/jobCreationLocation'
+import JobLocationSummary from './JobLocationSummary'
 
 export type JobRelationshipLookupProps = {
     onSearchEquipment?: (query: string, context: { customerId?: string; siteId?: string }, signal?: AbortSignal) => Promise<Equipment[]>
@@ -30,6 +31,7 @@ type Props = JobRelationshipLookupProps & {
     correctionsOnly?: boolean
     allowCorrectionMasterCreation?: boolean
     hideHeading?: boolean
+    useLocationSummary?: boolean
     onLocationPendingChange?: (pending: boolean) => void
     onLocationSavingChange?: (saving: boolean) => void
     editor: ReturnType<typeof useJobEditor>
@@ -55,6 +57,7 @@ export default function JobRelationshipFields({
     correctionsOnly = false,
     allowCorrectionMasterCreation = false,
     hideHeading = false,
+    useLocationSummary = false,
     onLocationPendingChange = ignoreLocationState,
     onLocationSavingChange = ignoreLocationState,
     editor,
@@ -78,10 +81,14 @@ export default function JobRelationshipFields({
         filteredSites, filteredContacts, selectCustomer, selectSite,
     } = editor
     const [panel, setPanel] = useState<Panel>('')
+    const [editingLocation, setEditingLocation] = useState(false)
     const [isCreating, setIsCreating] = useState(false)
     const [createError, setCreateError] = useState('')
     const [contact, setContact] = useState({ name: '', phone: '', email: '' })
     const selectedEquipment = equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)
+    const selectedSite = filteredSites.find((site) => site.gr_siteid === draft.siteId) ?? selectedEquipment?.gr_Site
+    const selectedCustomer = customers.find((customer) => customer.gr_customerid === draft.customerId) ?? selectedSite?.gr_Customer
+    const showLocationSummary = useLocationSummary && !editingLocation && Boolean(draft.customerId || draft.siteId)
     const hasEquipmentLocation = manageEquipmentLocation && selectedEquipment && isPersistedEquipmentId(selectedEquipment.gr_equipmentid)
     const [siteLoadStatus, setSiteLoadStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
     const [siteLoadError, setSiteLoadError] = useState('')
@@ -183,6 +190,7 @@ export default function JobRelationshipFields({
     }
 
     const selectEquipment = (item: Equipment) => {
+        setEditingLocation(false)
         setDraft((current) => ({
             ...current,
             equipmentId: item.gr_equipmentid,
@@ -198,6 +206,7 @@ export default function JobRelationshipFields({
     }
 
     const clearEquipment = () => {
+        setEditingLocation(true)
         setDraft((current) => ({ ...current, equipmentId: '' }))
     }
 
@@ -284,7 +293,9 @@ export default function JobRelationshipFields({
             onChange={(item) => item ? selectEquipment(item) : clearEquipment()}
         />
 
-        {hasEquipmentLocation ? <JobEquipmentLocation key={selectedEquipment.gr_equipmentid}
+        {showLocationSummary ? <section className="job-equipment-location job-edit-field-wide" aria-label="Job location">
+            <JobLocationSummary customer={selectedCustomer?.gr_name ?? customerSearch} site={selectedSite?.gr_name ?? ''} address={selectedSite?.gr_address ?? ''} onEdit={() => setEditingLocation(true)} />
+        </section> : hasEquipmentLocation ? <JobEquipmentLocation key={selectedEquipment.gr_equipmentid}
             equipment={selectedEquipment}
             onPendingChange={onLocationPendingChange}
             onSavingChange={onLocationSavingChange}
@@ -317,7 +328,7 @@ export default function JobRelationshipFields({
             />
         </div>}
 
-        <JobSiteContactFields
+        {!showLocationSummary && <JobSiteContactFields
             showSite={!hasEquipmentLocation}
             locationRequired={locationRequired}
             siteError={locationErrors?.site}
@@ -340,8 +351,8 @@ export default function JobRelationshipFields({
             onAddContact={correctionsOnly ? undefined : () => openPanel('contact')}
             onRetrySites={() => setSiteLoadAttempt((current) => current + 1)}
             onRetryContacts={() => setContactLoadAttempt((current) => current + 1)}
-        />
-        {correctionsOnly && draft.siteId && <label className="job-edit-field job-edit-field-wide"><span>Site address</span><input readOnly value={filteredSites.find((site) => site.gr_siteid === draft.siteId)?.gr_address ?? ''} /><small>The address comes from the selected Site. Correcting this Job does not edit the shared Site record or move Equipment.</small></label>}
+        />}
+        {correctionsOnly && !showLocationSummary && draft.siteId && <label className="job-edit-field job-edit-field-wide"><span>Site address</span><input readOnly value={filteredSites.find((site) => site.gr_siteid === draft.siteId)?.gr_address ?? ''} /><small>The address comes from the selected Site. Correcting this Job does not edit the shared Site record or move Equipment.</small></label>}
         {panel === 'site' && <JobSiteCreatePanel key={draft.customerId} customerName={customerSearch}
             description="Create and select this Site for the job." onCreate={createSite} onCancel={() => setPanel('')} />}
 

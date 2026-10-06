@@ -39,6 +39,8 @@ test('corrections drawer matches the new Job Book entry layout and functions', (
     assert.match(html, /value="PO-1"/)
     assert.match(html, /SAVED-EQUIPMENT/)
     assert.match(html, /Saved Site address/)
+    assert.match(html, /aria-label="Edit location"/)
+    assert.doesNotMatch(html, /<span>Customer<\/span><input|<span>Site<\/span><select/)
     assert.match(html, /Saved Technician/)
 })
 

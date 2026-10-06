@@ -17,6 +17,6 @@ export default function JobLocationSummary({ customer, site, address, onEdit, di
             <span>{site || 'No site linked'}</span>
             {address && <small>{address}</small>}
         </div>
-        {onEdit && <button type="button" disabled={disabled} onClick={onEdit}>Edit</button>}
+        {onEdit && <button type="button" aria-label="Edit location" disabled={disabled} onClick={onEdit}>Edit</button>}
     </div>
 }
