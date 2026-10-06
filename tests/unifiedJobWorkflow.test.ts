@@ -113,11 +113,15 @@ test('Staging means unnumbered, not Unconfirmed, and older work retains its oper
 })
 test('Job Book reconciles only explicit registration links, keeping legacy and snapshot-only rows', () => {
     const base = createBlankJobBookRow(1)
-    const registered = { ...base, id: 'linked', registeredLedgerId: 'ledger', linkedJobId: 'job', coordinatorManaged: false, entryStage: 'registered' as const }
+    const registered = { ...base, id: 'linked', registeredLedgerId: 'ledger', linkedJobId: 'job', ledgerEtag: 'W/"20"', etag: '', coordinatorManaged: false, entryStage: 'registered' as const }
     const history = { ...base, id: 'history', entryStage: 'legacy' as const }
-    const result = reconcileJobBookRows([registered, history], [{ ...base, id: 'job-row', linkedJobId: 'job' }, { ...base, id: 'unrelated-job', linkedJobId: 'other' }])
+    const result = reconcileJobBookRows([registered, history], [{ ...base, id: 'job-row', linkedJobId: 'job', etag: 'W/"10"', entered: true }, { ...base, id: 'unrelated-job', linkedJobId: 'other' }])
     assert.deepEqual(result.map((row) => row.id), ['linked', 'history', 'unrelated-job'])
-    assert.equal(jobBookVoidBlockedReason(registered), '')
+    assert.equal(result[0].etag, 'W/"10"', 'the direct Job supplies its exact version')
+    assert.equal(result[0].ledgerEtag, 'W/"20"', 'the ledger keeps its independent exact version')
+    assert.equal(result[0].entered, true, 'current Job markers override an expanded ledger snapshot')
+    assert.equal(registered.etag, '', 'reconciliation never mutates source records')
+    assert.equal(jobBookVoidBlockedReason({ ...registered, entered: false }), '')
     assert.ok(jobBookVoidBlockedReason({ ...registered, entered: true }))
 })
 test('recovery storage survives remount, is actor scoped and preserves the identical request', () => {
