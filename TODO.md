@@ -36,6 +36,12 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
 
 - [ ] Configure and verify the production server-only `DATAVERSE_URL`,
   `DATAVERSE_TENANT_ID`, `DATAVERSE_CLIENT_ID`, and `DATAVERSE_CLIENT_SECRET` settings.
+- [ ] Provision an independent or dedicated shared permanent Job Card backend for V2, then retire
+  the temporary V2-to-V1 bridge. Configure the private Dataverse, Azure Storage, ACS email,
+  reviewer and public-URL settings listed in
+  [`docs/architecture/deployment.md`](docs/architecture/deployment.md#temporary-v2-job-card-backend-bridge),
+  pass the full production-safe Job Card smoke, remove `VITE_JOB_CARD_SHARED_BACKEND` from the V2
+  workflow, redeploy and verify before removing the proxy. Do not retire V1 while the bridge is in use.
 - [x] Run a production-safe Azure Technician Job Card submission smoke test covering link
   generation, public lookup, submission, manager review, photo download, and replay
   rejection.

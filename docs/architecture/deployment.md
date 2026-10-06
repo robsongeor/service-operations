@@ -51,6 +51,39 @@ New job-level Job Cards use the resources/settings templates documented in
 [Azure Job Card Storage](../azure-job-card-storage.md). Deploy resources and backend
 configuration before the API/client cutover. Keep existing settings for Site Checks.
 
+### Temporary V2 Job Card backend bridge
+
+The V2 pilot currently sets `VITE_JOB_CARD_SHARED_BACKEND=v1-production`. Marked Job Card
+requests received by V2's managed `/api/jobsubmission` endpoint are forwarded server-to-server to
+the fixed V1 production Static Web App origin. V1 therefore remains the source of truth for Job
+Card links, private storage, technician submissions, photos, email and review while the bridge is
+enabled. Do not retire V1 or its Job Card resources during this period.
+
+This bridge is an interim rollout measure, not the permanent architecture. Before it can be
+removed, provision the equivalent settings on V2 or on a dedicated shared Job Card backend:
+
+```text
+DATAVERSE_URL
+DATAVERSE_TENANT_ID
+DATAVERSE_CLIENT_ID
+DATAVERSE_CLIENT_SECRET
+AZURE_STORAGE_CONNECTION_STRING
+JOB_CARD_STORAGE_MODE=azure
+JOB_CARD_TABLE_NAME
+JOB_CARD_PHOTO_CONTAINER
+ACS_EMAIL_CONNECTION_STRING
+ACS_EMAIL_SENDER
+JOB_CARD_REVIEW_EMAIL_TO
+JOB_CARD_REVIEWER_EMAILS
+APP_PUBLIC_URL
+```
+
+After provisioning, run the production-safe Job Card smoke covering link generation, public
+lookup, submission, photo storage/download, email, manager review and replay rejection. Only after
+that smoke passes should `VITE_JOB_CARD_SHARED_BACKEND` be removed from the V2 deployment workflow,
+V2 redeployed and verified, and the proxy code retired. Provisioning, setting changes and bridge
+retirement remain separately approved production operations.
+
 Server-only Site Check / legacy portal variables:
 
 ```text
