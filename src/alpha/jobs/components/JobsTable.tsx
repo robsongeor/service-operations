@@ -680,7 +680,7 @@ export default function JobsTable({
 
                                 <td className="jobs-table-actions-column">
                                     <div className="jobs-table-actions">
-                                        {unifiedWorklist && <span className="jobs-table-muted">{jobWorklistLabel(job)}</span>}
+                                        {unifiedWorklist && !isCoordinatorManaged(job) && <span className="jobs-table-muted">{jobWorklistLabel(job)}</span>}
                                         {onAllocateNumber && !job.gr_jobnumber && !job.gr_registrationvoid && <button type="button" className="job-quick-action job-quick-action-edit" onClick={() => onAllocateNumber(job)}>Allocate job number</button>}
                                         {onManageJob && !isCoordinatorManaged(job) && !job.gr_registrationvoid && <button type="button" className="job-quick-action job-quick-action-edit" onClick={() => onManageJob(job)}>Manage job</button>}
                                         {!unifiedWorklist && <input

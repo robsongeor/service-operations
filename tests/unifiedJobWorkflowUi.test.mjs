@@ -95,6 +95,7 @@ test('single coordination tab row separates membership from type and unconfirmed
     ]
     const operational = renderWorklist(rows, 'operational')
     assert.match(operational, /Managed site check/)
+    assert.doesNotMatch(operational, /jobs-table-muted">Managed</)
     for (const text of ['Unnumbered staging', 'Registered book work', 'Historical ledger entry']) assert.ok(!operational.includes(text))
     assert.equal((operational.match(/role="tablist"/g) ?? []).length, 1)
     assert.match(operational, />Unconfirmed</)
