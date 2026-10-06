@@ -1,7 +1,12 @@
 const service = require('../services/jobSubmissionService')
+const { proxyJobCardReviews, usesSharedBackend } = require('../services/jobCardReviewsProxy')
 
 module.exports = async function jobCardReviews(context, request) {
     try {
+        if (usesSharedBackend(request)) {
+            context.res = await proxyJobCardReviews(request)
+            return
+        }
         context.res = await service.handleReviewRequest({
             ...request,
             query: {

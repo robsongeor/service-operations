@@ -54,10 +54,13 @@ configuration before the API/client cutover. Keep existing settings for Site Che
 ### Temporary V2 Job Card backend bridge
 
 The V2 pilot currently sets `VITE_JOB_CARD_SHARED_BACKEND=v1-production`. Marked Job Card
-requests received by V2's managed `/api/jobsubmission` endpoint are forwarded server-to-server to
-the fixed V1 production Static Web App origin. V1 therefore remains the source of truth for Job
-Card links, private storage, technician submissions, photos, email and review while the bridge is
-enabled. Do not retire V1 or its Job Card resources during this period.
+requests received by V2's managed `/api/jobsubmission` and `/api/jobcardreviews` endpoints are
+forwarded server-to-server to the fixed V1 production Static Web App origin. V1 therefore remains
+the source of truth for Job Card links, private storage, technician submissions, photos, email,
+review queues and office review actions while the bridge is enabled. The bridge forwards only the
+delegated Dataverse bearer token and bounded request data; it does not forward browser cookies,
+standard authorization headers, origins or caller-selected destinations. Do not retire V1 or its
+Job Card resources during this period.
 
 This bridge is an interim rollout measure, not the permanent architecture. Before it can be
 removed, provision the equivalent settings on V2 or on a dedicated shared Job Card backend:

@@ -18,7 +18,13 @@ async function readJson<T>(response: Response): Promise<T> {
 }
 
 function headers(accessToken: string) {
-    return { 'X-Dataverse-Authorization': `Bearer ${accessToken}`, Accept: 'application/json' }
+    return {
+        'X-Dataverse-Authorization': `Bearer ${accessToken}`,
+        ...(import.meta.env?.VITE_JOB_CARD_SHARED_BACKEND === 'v1-production'
+            ? { 'X-Job-Card-Shared-Backend': 'v1-production' }
+            : {}),
+        Accept: 'application/json',
+    }
 }
 
 export async function fetchPendingJobCardReviews(accessToken: string) {
