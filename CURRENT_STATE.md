@@ -44,7 +44,8 @@ Branch: `codex/legacy-job-book-job-cards-integration`
   Field-level enforcement and screen wiring remain implementation work; general existing
   Customer/Site editing and unrelated Equipment actions are not included in this decision.
 - Job Card review/Processed in GreenTree access is limited to George, Bruce, Andy, Jess, Nargiza and
-  Pubudu. The separate reviewer allowlist still needs Pubudu added during an approved rollout.
+  Pubudu. On 6 October 2026 the live shared V1 backend reviewer allowlist was reconciled to exactly
+  this approved set, preserving George and adding Bruce, Andy, Jess, Nargiza and Pubudu.
 - Office Admin access across all four regions is confirmed, without regional restrictions.
   Pilot waves and source spreadsheets remain to be confirmed. Production integration
   and live access verification are prerequisites; no rollout or permission change has been performed.
@@ -82,9 +83,9 @@ Branch: `codex/legacy-job-book-job-cards-integration`
   submissions remain protected. `/jobs` and Intake **Manage job** remain coordinator-only.
   The shared Job editor uses a narrow correction API with exact ETags and explicit conflict reload.
   JobBookOnly cannot correct managed Jobs. Live column-level authorization remains approval-gated.
-- Development can simulate `job-card-admin`. Entra/Dataverse role provisioning and assignment,
-  production reviewer allowlist/settings, deployment, and named-user smoke testing remain the
-  approval-gated Phases 4–5 and have not been performed.
+- Development can simulate `job-card-admin`. The shared V1 production reviewer allowlist is now
+  configured for the approved six users. V2 currently reaches that backend through the temporary
+  review proxy; permanent V2/shared-backend provisioning and named-user smoke testing remain.
 - `npm run dev:job-card-walkthrough` starts an isolated, sample-only walkthrough on loopback port
   5180, using the real app and review service with in-memory storage and synthetic identities.
   It does not load normal Vite configuration or environment files. The walkthrough exposed and

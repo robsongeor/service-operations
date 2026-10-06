@@ -104,8 +104,9 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
   excluded. Pubudu is admitted as the third Office Admin rollout user and live Office Admin pilot and
   now holds `Service Operations - Office Admin` additively. Smoke-test that path before removing the
   broader `Service Operations` role; then run final denial tests with no Full/Coordinator overlap.
-  Preserve unrelated platform roles and add Pubudu to the separately controlled Job Card reviewer
-  allowlist only during its approved rollout.
+  Preserve unrelated platform roles. The separately controlled live Job Card reviewer allowlist was
+  reconciled on 6 October 2026 for George, Bruce, Andy, Jess, Nargiza and Pubudu. Recreate and verify
+  this setting when the permanent V2/shared backend is provisioned.
   Durable cross-device recovery and cache retention remain.
   Existing Intake dispatch remains blocked; schema, migration and permission rollout stay
   approval-gated. See the [implementation sequence](docs/features/JOB_BOOK_INTAKE_DESIGN.md#unified-workflow-decision-3-october-2026).
@@ -114,8 +115,9 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
   [`docs/features/JOB_CARD_ADMIN_REVIEW_IMPLEMENTATION_PLAN.md`](docs/features/JOB_CARD_ADMIN_REVIEW_IMPLEMENTATION_PLAN.md):
   immutable technician evidence, explicit office statuses/notes and audit, Active/History queues,
   the `ServiceOperations.JobCardAdmin` route role, least-privilege Dataverse access, and the
-  server-side reviewer allowlist. Entra/Dataverse provisioning and assignments, environment-setting
-  changes, deployment, and production pilot remain separate approval gates.
+  server-side reviewer allowlist. The approved live reviewer setting is configured on the shared V1
+  backend; Entra/Dataverse provisioning and assignments, permanent V2 backend configuration, and
+  the remaining production pilot checks remain separate approval gates.
 
 - [ ] Complete restricted Legacy Job Book rollout: create the Entra application roles
   `ServiceOperations.FullAccess` and `ServiceOperations.JobBookOnly`, approve the named user/group

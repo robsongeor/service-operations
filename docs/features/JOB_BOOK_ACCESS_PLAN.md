@@ -65,7 +65,9 @@ it does not permit corrections to managed Jobs. Keep Office Admin on the existin
 profile and implement the distinct restricted profile, including navigation, landing route and
 server/Dataverse enforcement. Job Card API/private evidence access must match the approved
 reviewer set. Inspect existing production reviewers before applying a reconciled manifest.
-No application code, live role or reviewer allowlist has changed in this planning step.
+The live shared V1 backend reviewer allowlist was reconciled on 6 October 2026 for George, Bruce,
+Andy, Jess, Nargiza and Pubudu. This setting must be recreated and verified when the permanent
+V2/shared backend replaces the temporary proxy.
 
 ## Job Book Admin correction scope
 
@@ -170,7 +172,8 @@ locally; no live Microsoft assignments have changed. The draft server guard is n
 - [ ] Provision/assign roles only as a separately authorized rollout action after verification.
 - [ ] Test each role with its actual account, including denied actions and direct API requests.
 - [ ] Keep George's FullAccess and the coordinator role distinct in the assignment manifest.
-- [ ] Test the final Job Card reviewer allowlist separately; preserve existing authorized access.
+- [x] Reconcile the live shared V1 Job Card reviewer allowlist to the approved six users, preserving
+  existing authorized access. Repeat verification when the permanent V2/shared backend is provisioned.
 
 Related: [rollout plan](JOB_BOOK_ROLLOUT_PLAN.md),
 [Admin review design](JOB_CARD_ADMIN_REVIEW_IMPLEMENTATION_PLAN.md),
@@ -188,7 +191,8 @@ The [draft Dataverse guard](../../dataverse/access/README.md) has offline policy
 not installable yet: registration, linked Void and initial dispatch must be integrated first.
 The open implementation checkboxes above intentionally include real API and actual-account
 verification, which local UI checks cannot satisfy. Microsoft user provisioning, licensing,
-role assignments and the final reviewer allowlist remain outstanding.
+role assignments and permanent V2 backend provisioning remain outstanding. The shared V1 reviewer
+allowlist is configured; named-user testing is still required.
 
 Latest local verification, including the bounded production-worklist, readiness, specialist-allocation, migration-policy and deployment-plan slices: all 785 tests in
 `npm test` pass, the
