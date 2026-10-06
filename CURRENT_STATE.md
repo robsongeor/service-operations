@@ -47,6 +47,10 @@ Branch: `codex/legacy-job-book-job-cards-integration`
   Pubudu. On 6 October 2026 the live shared V1 backend reviewer allowlist was reconciled to exactly
   this approved set, preserving George and adding Bruce, Andy, Jess, Nargiza and Pubudu.
 - Office Admin access across all four regions is confirmed, without regional restrictions.
+- On 7 October 2026 Pubudu's legacy broad `Service Operations` Dataverse role was removed after an
+  exact pre-check confirmed the replacement `Service Operations - Office Admin` assignment. A
+  post-change read verified that Office Admin and the three unrelated Dataverse platform roles were
+  preserved and that no other direct role changed.
   Pilot waves and source spreadsheets remain to be confirmed. Production integration
   and live access verification are prerequisites; no rollout or permission change has been performed.
 - Visible navigation and screen labels now say Job Book; historical Legacy record stages stay intact.
@@ -200,11 +204,11 @@ Branch: `codex/legacy-job-book-job-cards-integration`
   API gate. The two proposed restricted roles remain absent, so their final IDs and grants must be
   verified after approved creation. No target change occurred.
   A post-provision admission check confirms `pubudu@liftrucks.co.nz` is present with no returned
-  team roles and now holds `Service Operations - Office Admin` additively alongside the existing
-  `Service Operations` and three unrelated Dataverse platform roles. Pubudu is the third Office
-  Admin in the eleven-user rollout roster and the live Office Admin pilot. Smoke-test the replacement
-  path before removing `Service Operations`; final Office Admin denial tests require that broader
-  workflow role to be absent. The other eight intended accounts remain absent.
+  team roles and holds `Service Operations - Office Admin` alongside three unrelated Dataverse
+  platform roles. On 7 October 2026 the legacy broad `Service Operations` role was removed with
+  exact before/after verification; no other direct role changed. Pubudu is the third Office Admin
+  in the eleven-user rollout roster and the live Office Admin pilot. The other eight intended
+  accounts remain absent.
   The restricted guard previously blocked the trusted registration/allocation child writes as well
   as direct writes. It now recognizes only exact synchronous API children bound to the matching
   request, Job, regional ledger, field set, status, links, fingerprint and number format. Direct,

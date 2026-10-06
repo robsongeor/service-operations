@@ -68,10 +68,10 @@ licensing review. Existing unrelated assignments are explicitly preserved. Bruce
 FullAccess until the added Coordinator path passes with his real account; old access is removed only
 after the replacement succeeds.
 
-Pubudu is the third Office Admin rollout user and the live Office Admin pilot. The account currently
-holds `Service Operations`. Add and smoke-test the replacement Office Admin role first, then remove
-that broader workflow role before the final Office Admin denial tests or it would invalidate the
-result. The cutover requires a fresh assignment export, one workflow role at a time, preservation of
+Pubudu is the third Office Admin rollout user and the live Office Admin pilot. The replacement Office
+Admin role was verified and the broader `Service Operations` role was removed with exact before/after
+verification on 7 October 2026. The account is now ready for final Office Admin denial tests. The
+cutover requires a fresh assignment export, one workflow role at a time, preservation of
 unrelated platform roles and explicit approval. Pubudu performs the account sign-in and MFA; no
 credential is collected.
 

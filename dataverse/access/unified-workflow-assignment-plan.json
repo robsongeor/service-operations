@@ -28,12 +28,11 @@
       "upn": "pubudu@liftrucks.co.nz",
       "purpose": "Live Office Admin pilot and denial verification account.",
       "homeProfile": "office",
-      "currentDirectRoles": ["Dataverse as a Cluster App Role", "Dataverse Intelligence Learning Management Role", "Dataverse Search Role", "Service Operations"],
+      "currentDirectRoles": ["Dataverse as a Cluster App Role", "Dataverse Intelligence Learning Management Role", "Dataverse Search Role", "Service Operations - Office Admin"],
       "currentTeamRoles": [],
       "constraints": [
-        "The existing Service Operations role makes lower-profile denial tests invalid while it remains assigned.",
         "Export current Entra and direct/team Dataverse assignments before any approved test change.",
-        "Add and smoke-test Office Admin before removing Service Operations, then remove Service Operations before the final Office Admin denial tests.",
+        "The legacy Service Operations role was removed on 7 October 2026 after Office Admin assignment verification.",
         "Reject any remaining overlap with Full or Coordinator workflow roles during the final pilot.",
         "Preserve unrelated platform roles; Office Admin is the permanent rollout profile after a successful pilot.",
         "The account owner performs sign-in and MFA; credentials are never shared or stored."
