@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "status": "review-only-not-approved-for-assignment",
+  "sourceAuditDate": "2026-10-03",
+  "assignmentIncluded": false,
+  "removalIncluded": false,
+  "profiles": {
+    "full": { "entraValue": "ServiceOperations.FullAccess", "dataverseRole": "System Administrator" },
+    "coordinator": { "entraValue": "ServiceOperations.ServiceCoordinator", "dataverseRole": "Service Operations" },
+    "office": { "entraValue": "ServiceOperations.JobCardAdmin", "dataverseRole": "Service Operations - Office Admin" },
+    "book": { "entraValue": "ServiceOperations.JobBookAdmin", "dataverseRole": "Service Operations - Job Book Admin" }
+  },
+  "intendedUsers": [
+    { "upn": "georger@liftrucks.co.nz", "profile": "full", "currentAppAssignment": "FullAccess plus default access", "dataverseAdmission": "present" },
+    { "upn": "brucef@liftrucks.co.nz", "profile": "coordinator", "currentAppAssignment": "FullAccess", "dataverseAdmission": "present" },
+    { "upn": "andyl@liftrucks.co.nz", "profile": "coordinator", "currentAppAssignment": "none returned", "dataverseAdmission": "missing-review-required" },
+    { "upn": "pubudu@liftrucks.co.nz", "profile": "office", "currentAppAssignment": "review-required", "dataverseAdmission": "present" },
+    { "upn": "jessamynb@liftrucks.co.nz", "profile": "office", "currentAppAssignment": "JobBookOnly", "dataverseAdmission": "missing-review-required" },
+    { "upn": "nargiza@liftrucks.co.nz", "profile": "office", "currentAppAssignment": "JobBookOnly", "dataverseAdmission": "missing-review-required" },
+    { "upn": "martinh@liftrucks.co.nz", "profile": "book", "currentAppAssignment": "JobBookOnly", "dataverseAdmission": "missing-review-required" },
+    { "upn": "lancec@liftrucks.co.nz", "profile": "book", "currentAppAssignment": "JobBookOnly", "dataverseAdmission": "missing-review-required" },
+    { "upn": "ranjani@liftrucks.co.nz", "profile": "book", "currentAppAssignment": "none returned", "dataverseAdmission": "missing-review-required" },
+    { "upn": "ashneelk@liftrucks.co.nz", "profile": "book", "currentAppAssignment": "none returned", "dataverseAdmission": "missing-review-required" },
+    { "upn": "kaizerg@liftrucks.co.nz", "profile": "book", "currentAppAssignment": "JobBookOnly", "dataverseAdmission": "missing-review-required" }
+  ],
+  "roleTestPilots": [
+    {
+      "upn": "pubudu@liftrucks.co.nz",
+      "purpose": "Live Office Admin pilot and denial verification account.",
+      "homeProfile": "office",
+      "currentDirectRoles": ["Dataverse as a Cluster App Role", "Dataverse Intelligence Learning Management Role", "Dataverse Search Role", "Service Operations"],
+      "currentTeamRoles": [],
+      "constraints": [
+        "The existing Service Operations role makes lower-profile denial tests invalid while it remains assigned.",
+        "Export current Entra and direct/team Dataverse assignments before any approved test change.",
+        "Add and smoke-test Office Admin before removing Service Operations, then remove Service Operations before the final Office Admin denial tests.",
+        "Reject any remaining overlap with Full or Coordinator workflow roles during the final pilot.",
+        "Preserve unrelated platform roles; Office Admin is the permanent rollout profile after a successful pilot.",
+        "The account owner performs sign-in and MFA; credentials are never shared or stored."
+      ]
+    }
+  ],
+  "jobCardReviewerProfiles": ["full", "coordinator", "office"],
+  "gates": [
+    "Resolve every account to one enabled licensed target identity and capture immutable object IDs only in the approved execution evidence.",
+    "Export current Entra app assignments plus direct and team-derived Dataverse roles immediately before change.",
+    "Create missing Entra role definitions and Dataverse roles before assigning users; preserve existing stable definitions.",
+    "Deploy the compatible flag-off application, APIs and guards before changing any user assignment.",
+    "Add and test the target role before removing an old role; Bruce keeps FullAccess until coordinator access passes, and Pubudu keeps Service Operations until Office Admin basic access passes.",
+    "Preserve unrelated assignments and users outside this eleven-account manifest.",
+    "Reconcile the separate Job Card reviewer service allowlist and prove Job Book Admin denial.",
+    "Stop on any unexpected direct/team grant that restores a denied capability."
+  ],
+  "rollback": [
+    "Keep the feature flag off or disable it first.",
+    "Restore each changed account's pre-change Entra and Dataverse assignment set from the captured export.",
+    "Do not remove or delete shared roles, team membership or unrelated assignments as generic rollback.",
+    "Retain schema and immutable business history; rollback authorization and executable components only.",
+    "Re-test the restored application access before closing the incident."
+  ]
+}

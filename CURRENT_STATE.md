@@ -11,17 +11,20 @@ Branch: `codex/legacy-job-book-job-cards-integration`
 - Equipment detail saves allow fleet/alternate fleets/make/model/serial/Site only, require an
   exact ETag, refresh the saved record and skip maintenance-plan synchronization.
 - `dataverse/access/RestrictedAccessPlugin.cs` is a local, unregistered draft. Its offline
-  policy tests do not constitute live enforcement. See its README for missing registration,
-  linked Void and dispatch integration; do not install it or grant broad roles as a substitute.
+  policy tests do not constitute live enforcement. Registration plus exact-version Manage job
+  atomic linked Void and assigned-technician initial dispatch now have local transactional plugin
+  contracts; Custom API/step registration and target authorization tests remain. Do not install the guard
+  or grant broad roles as a substitute.
 - Sample role selector includes Job Book Admin, Office Admin and Service coordinator. No
   Microsoft roles, users, reviewer settings or live data were changed by this implementation.
 
 ## Job Book Microsoft access audit (read-only)
 
-- [Live audit](docs/features/JOB_BOOK_ACCESS_AUDIT.md): all ten agreed Entra accounts exist/enabled;
-  only George and Bruce were found in Dataverse by object ID and independent email checks.
-- Entra has only FullAccess and JobBookOnly; Bruce currently has FullAccess. Existing out-of-roster
-  assignments for Paul and Pubudu were preserved. No permissions or settings were changed.
+- [Live audit](docs/features/JOB_BOOK_ACCESS_AUDIT.md): the original ten Entra accounts exist/enabled.
+  The 6 October recheck finds George, Bruce and newly added Office Admin pilot Pubudu in Dataverse;
+  the other eight rollout users remain absent.
+- Entra has only FullAccess and JobBookOnly; Bruce currently has FullAccess. Existing assignments
+  for Paul and Pubudu were preserved; Pubudu is now in the rollout roster. No permission changed.
 - Existing Job Book Only Dataverse privileges include broad Job/Equipment/Customer writes;
   the new restricted roles require verified server enforcement before assignment.
 
@@ -31,17 +34,17 @@ Branch: `codex/legacy-job-book-job-cards-integration`
   responsibilities, role selection, acceptance evidence, migration, one-writer cutover and rollback.
 - The [access plan](docs/features/JOB_BOOK_ACCESS_PLAN.md) records George as sole FullAccess,
   Bruce/Andy as distinct Service coordinators (initial capability parity, future restrictions),
-  Jess/Nargiza as Office Admins, and five Job Book Admins. JobBookOnly is not planned.
-  The new coordinator and Job Book Admin profiles are not implemented. Job Book Admins may
+  Jess/Nargiza/Pubudu as Office Admins, and five Job Book Admins. JobBookOnly is not planned.
+  The new profiles are implemented locally but not provisioned. Job Book Admins may
   correct factual details after handoff and Void eligible entries under existing safeguards,
   but cannot assign/email technicians, change GT/Timecloud
   ticks or review Job Cards.
-- Both Admin groups, including Jess and Nargiza, may create Customers/Sites, explicitly move
+- Both Admin groups, including Jess, Nargiza and Pubudu, may create Customers/Sites, explicitly move
   Equipment and update Equipment details. Separate Customers and Equipment screens are agreed for both Admin groups.
   Field-level enforcement and screen wiring remain implementation work; general existing
   Customer/Site editing and unrelated Equipment actions are not included in this decision.
-- Job Card review/Processed in GreenTree access is limited to George, Bruce, Andy, Jess and
-  Nargiza. Separating reviewer permission from the existing broad Admin profile remains to be implemented.
+- Job Card review/Processed in GreenTree access is limited to George, Bruce, Andy, Jess, Nargiza and
+  Pubudu. The separate reviewer allowlist still needs Pubudu added during an approved rollout.
 - Office Admin access across all four regions is confirmed, without regional restrictions.
   Pilot waves and source spreadsheets remain to be confirmed. Production integration
   and live access verification are prerequisites; no rollout or permission change has been performed.
@@ -123,12 +126,90 @@ Branch: `codex/legacy-job-book-job-cards-integration`
   screen is connected in the ordinary runtime. An isolated `--unified` walkthrough now connects
   registration/allocation to both screens, preserves retained requests across refresh, distinguishes
   Staging/Operational/All jobs, reconciles explicit links without converting old Intake, and models
-  same-Job management and registered-entry Void. Membership/Void endpoints and Job Void fields are
-  fixture-only; production implementations and general Admin server-field authorization remain unfinished. Site Check
-  specialist number-clear/allocation/deletion paths must be adapted before the guard can be installed.
+  same-Job management and registered-entry Void. A local, unregistered `JobWorkflowPlugin` now
+  implements caller-scoped exact-version membership and atomic registered-entry Void contracts,
+  with replay, rollback, invariant-guard and restricted-access tests. A strict client adapter exists
+  behind the disabled `VITE_UNIFIED_JOB_WORKFLOW_ENABLED` gate. That gate now also switches Jobs to a
+  bounded 100-row Dataverse worklist with explicit paging, trusted continuation links and server-side
+  Operational/Unconfirmed/type filters; ordinary builds remain on the existing global query. The same
+  gate routes restricted Admin email through a replay-safe initial-dispatch API
+  that verifies the current assigned technician and never accepts assignment changes. Custom APIs,
+  columns, privileges, registration and live authorization are not provisioned or verified. Broader
+  Admin enforcement remains unfinished. Site Check/WOF allocation now uses the reviewed guarded
+  regional operation while direct specialist paste, clear and numbered deletion fail closed.
   Current creation/import and first-allocation spreadsheet paste remain transitional. No live
   schema, seed, role, data, email or deployment changes were made. See the
   [implementation sequence](docs/features/JOB_BOOK_INTAKE_DESIGN.md#unified-workflow-decision-3-october-2026).
+  Latest bounded-worklist/readiness/specialist-adapter validation: the full 785-test application suite, 50 focused workflow tests,
+  production build, focused lint, 46 compiled workflow-plugin checks and 64 access-guard checks pass.
+  A machine-readable deployment manifest and single-session read-only Dataverse readiness script
+  now inventory the required schema, APIs, plugins, privileges and roles. The script is non-interactive
+  by default and contains no provisioning operations. An approved read-only target audit on 6 October
+  2026 completed 40 checks with no changes: the solution, Job concurrency and four candidate privilege
+  sources exist; five Custom APIs, 12 columns, four Registered-stage additions and two restricted roles
+  are absent. The audit originally recorded six activation blockers; the specialist adapter closes
+  one locally, leaving five current manifest blockers. The localhost fixture remains separate and available.
+  The first specialist reconciliation slice now blocks every remaining direct/manual number write
+  before Dataverse when the unified gate is enabled. Site Check clearing and numbered-occurrence
+  deletion are blocked, WOF corrections omit numbers, and new WOF work remains unnumbered. Ordinary
+  production behaviour is unchanged while the gate is off. Specialist Jobs now use the guarded
+  per-Job regional allocator from their Jobs tabs without changing type, evidence or source links.
+  A machine-readable migration policy, default-deny role policy and bounded aggregate-only
+  business-data audit are now local. They prohibit automatic number-text linkage and inferred
+  coordinator membership. An approved read-only target run on 6 October 2026 read 1,191 Jobs and
+  zero rows in all four regional ledger tables: 1,154 Jobs are numbered (1,130 Auckland, five
+  Waikato, three Hastings, eight Christchurch and eight unknown-format) and 37 are unnumbered.
+  No identifiers/number values were emitted and no data changed. Existing numbered Jobs will be
+  grandfathered without fabricated ledgers. The eight values were then explicitly inspected as
+  legacy labels/codes; they remain immutable and regionless, with only a count/set fingerprint stored
+  for future drift detection. The missing membership column remains a stop condition. No backfill/write tool exists.
+  A complete review-only deployment package now expands the compatible unit to 12 schema columns,
+  four Registered Choice additions, a verified four-plugin `1.0.0.0` assembly, five Custom APIs,
+  29 synchronous PreOperation guard steps, four default-deny role profiles and the agreed eleven-account
+  assignment plan. The planner, temporary assembly build, 785 application tests, 50 focused workflow
+  tests, 46 compiled workflow checks, 64 access checks and production build pass. George is now the
+  primary custodian of a protected PC-local 2,048-bit signature key outside the repository. A signed
+  package was retained locally: assembly `1.0.0.0`, public key token `0edea2881bb8578c`, SHA-256
+  `621a914b204f0c1bef8243924212fe3533c6ef4f7cf8e558cbae0351b10af45f`, with four verified plugin
+  types and a matching manifest. On 6 October 2026 the approved flag-off Dataverse package was
+  provisioned and independently verified: all 12 columns, four Registered Choice values, two new
+  restricted roles, the signed assembly and four plugin types, five Custom APIs, 29 synchronous
+  PreOperation guards and required pre-images are present. After the release was redirected to a
+  separate V2 deployment, all 29 guard steps were disabled and verified disabled so the shared
+  Dataverse environment cannot change V1 behaviour during pilot preparation. No migration, seed,
+  application release or feature-flag change occurred. Backup-owner selection and tested recovery
+  remain production gates.
+  Approved live read-only follow-ups confirmed the four configured AutoNumber formats, all four
+  Active unique keys and provisional next evidence `147174`, `WJ1548`, `HJ12253`, `CJ23859`; those
+  values must be recalculated immediately before cutover and no seed changed. The expanded metadata
+  audit now reports 47 checks / 28 not ready. The eleven-account admission recheck finds George
+  (Basic User, Site Check Checklist Administrator, System Administrator), Bruce (Service Operations)
+  and Pubudu (including Service Operations) in Dataverse; the other eight remain absent and no intended account returned a
+  team-derived role. No user, licence, role or assignment was changed.
+  The packaging pipeline is now hardened for signing: Package mode accepts only an existing `.snk`
+  outside the repository, refuses artifact overwrite, requires a non-empty public key token and
+  writes a companion hash/type manifest. The custody policy now records George as primary owner,
+  protected Local AppData storage and the verified public identity. A compatible signed package now
+  exists locally; backup-owner selection and tested recovery remain incomplete.
+  The registration review is also hardened offline: API request/response sets, action binding,
+  privilege-sharing authorization sets, all 29 step identities and exact pre-image columns now fail
+  closed on drift. The enhanced dry-run and 46 compiled plugin tests pass. After renewed George
+  account selection, the live read-only audit again completed 47 checks / 28 not ready: all four
+  proposed privileges exist and every current Full/Coordinator business-unit role record passes its
+  API gate. The two proposed restricted roles remain absent, so their final IDs and grants must be
+  verified after approved creation. No target change occurred.
+  A post-provision admission check confirms `pubudu@liftrucks.co.nz` is present with no returned
+  team roles and now holds `Service Operations - Office Admin` additively alongside the existing
+  `Service Operations` and three unrelated Dataverse platform roles. Pubudu is the third Office
+  Admin in the eleven-user rollout roster and the live Office Admin pilot. Smoke-test the replacement
+  path before removing `Service Operations`; final Office Admin denial tests require that broader
+  workflow role to be absent. The other eight intended accounts remain absent.
+  The restricted guard previously blocked the trusted registration/allocation child writes as well
+  as direct writes. It now recognizes only exact synchronous API children bound to the matching
+  request, Job, regional ledger, field set, status, links, fingerprint and number format. Direct,
+  extra-field and mismatched children still fail. The 64 access checks and 46 workflow checks pass.
+  Corrected signed package `r2` retains token `0edea2881bb8578c` and has SHA-256
+  `621a914b204f0c1bef8243924212fe3533c6ef4f7cf8e558cbae0351b10af45f`; the original package is superseded.
   Validation: all 730 tests pass, including 17 number-policy tests and shared drawer rendering;
   build, changed-file lint and diff checks pass. Full lint retains the same three unrelated
   EquipmentDrawer/MaintenanceBookingScreen errors; build retains the known large-chunk warning.

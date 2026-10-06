@@ -68,6 +68,12 @@ Never run this mode from application deployment, routine validation, or an infer
 request. Record counts first and require explicit confirmation that Schedules, history, and
 generated Jobs may all be permanently deleted.
 
+When the disabled unified Job workflow gate is enabled, the legacy Excel copy/paste allocation and
+Job-number clearing controls are removed. Their service methods also fail before any Dataverse request.
+Occurrence deletion remains available only when every generated Job is unnumbered; allocated Jobs are
+retained as history. Generated Jobs are allocated individually from the Jobs **Site Check** tab through
+the guarded regional operation, which creates the linked ledger without changing Site Check evidence.
+
 ## Confirmed request budgets
 
 | Operation | Expected requests |

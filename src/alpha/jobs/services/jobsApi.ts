@@ -20,12 +20,60 @@ import { invalidateOperationalQueries } from '../../shared/data/OperationalDataC
 import { fetchAllDataversePages } from '../../shared/dataverse/fetchAllDataversePages.ts'
 import { buildDataverseIdFilterBatches } from '../../shared/dataverse/boundedDataverseFilters.ts'
 import { usesAzureJobCards } from '../types/jobCardWorkflow.ts'
-import { UNIFIED_JOB_WALKTHROUGH, UNIFIED_JOB_SELECT } from '../domain/unifiedJobWorkflow.ts'
+import { UNIFIED_JOB_RUNTIME, UNIFIED_JOB_SELECT } from '../domain/unifiedJobWorkflow.ts'
+import { JOB_STATUSES } from '../types/jobStatus.types.ts'
+import type { JobTypeFilter } from '../types/jobType.types.ts'
 
 const DATAVERSE_URL = import.meta.env?.VITE_DATAVERSE_URL ?? ''
 const HOUR_METER_READING_SELECT = HOUR_METER_CLASSIFICATION_ENABLED ? ',gr_hourmeterreadingtype,gr_hourmeterrecordeddate' : ''
-const JOB_SELECT = `gr_jobid,createdon,gr_jobnumber,gr_status,gr_ordernumber,gr_description,gr_jobtype,gr_jobcardstatus,gr_jobcardsenton,gr_jobcardsubmittedon,gr_jobcardclosedon,gr_hourmeter${HOUR_METER_READING_SELECT},gr_completeddate,gr_servicetype,gr_currentofficeaction,gr_officeactionowner,gr_officeattentionrequired,gr_techniciansubmissiontokenhash,gr_techniciansubmissiontokencreatedon,gr_techniciansubmissiontokenexpireson,gr_techniciansubmissiontokenused,gr_techniciansubmissionsubmittedon,gr_techniciansubmissionhourmeter,gr_techniciansubmissionstory,gr_techniciansubmissionfurtherworkrequired,gr_techniciansubmissionfurtherworkdetails,gr_techniciansubmissionsafetyissueidentified,gr_techniciansubmissionsafetyissuedetails,_gr_sitecheck_value${UNIFIED_JOB_WALKTHROUGH ? UNIFIED_JOB_SELECT : ''}`
+const JOB_SELECT = `gr_jobid,createdon,gr_jobnumber,gr_status,gr_ordernumber,gr_description,gr_jobtype,gr_jobcardstatus,gr_jobcardsenton,gr_jobcardsubmittedon,gr_jobcardclosedon,gr_hourmeter${HOUR_METER_READING_SELECT},gr_completeddate,gr_servicetype,gr_currentofficeaction,gr_officeactionowner,gr_officeattentionrequired,gr_techniciansubmissiontokenhash,gr_techniciansubmissiontokencreatedon,gr_techniciansubmissiontokenexpireson,gr_techniciansubmissiontokenused,gr_techniciansubmissionsubmittedon,gr_techniciansubmissionhourmeter,gr_techniciansubmissionstory,gr_techniciansubmissionfurtherworkrequired,gr_techniciansubmissionfurtherworkdetails,gr_techniciansubmissionsafetyissueidentified,gr_techniciansubmissionsafetyissuedetails,_gr_sitecheck_value${UNIFIED_JOB_RUNTIME ? UNIFIED_JOB_SELECT : ''}`
 const JOB_EXPAND = 'gr_Equipment($select=gr_equipmentid,gr_fleet,gr_alternatefleetnumbers,gr_make,gr_model,gr_serial,gr_currenthourmeter,gr_currenthourmeterrecordeddate,gr_servicetrackingenabled),gr_Mechanic($select=gr_mechanicid,gr_name,gr_phone,gr_email),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name,gr_phone,gr_email)'
+
+export const UNIFIED_JOBS_PAGE_SIZE = 100
+
+export function unifiedJobsServerFilter(scope: JobTypeFilter | 'staging') {
+    if (scope === 'all') return ''
+    if (scope === 'operational') return '(gr_coordinatormanaged eq true or gr_coordinatormanaged eq null) and gr_registrationvoid ne true'
+    if (scope === 'staging') return 'gr_jobnumber eq null and gr_registrationvoid ne true'
+    if (scope === 'unconfirmed') return `gr_status eq ${JOB_STATUSES.UNCONFIRMED} and gr_registrationvoid ne true`
+    return `gr_jobtype eq ${scope} and gr_registrationvoid ne true`
+}
+
+function trustedUnifiedJobsNextLink(value?: string) {
+    if (!value) return ''
+    if (!DATAVERSE_URL) throw new Error('Dataverse is not configured.')
+    const base = new URL(DATAVERSE_URL)
+    const next = new URL(value, base)
+    if (next.origin !== base.origin || !/^\/api\/data\/v9\.2\/gr_jobs$/i.test(next.pathname)) {
+        throw new Error('Dataverse returned an invalid Jobs continuation link.')
+    }
+    return next.toString()
+}
+
+export async function fetchUnifiedJobsPage(
+    accessToken: string,
+    scope: JobTypeFilter | 'staging',
+    continuationLink = '',
+    signal?: AbortSignal,
+): Promise<{ records: Job[]; next: string }> {
+    if (!UNIFIED_JOB_RUNTIME) throw new Error('The unified Jobs worklist is disabled.')
+    if (!DATAVERSE_URL) throw new Error('Dataverse is not configured.')
+    const filter = unifiedJobsServerFilter(scope)
+    const initial = `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=${JOB_SELECT}&$expand=${JOB_EXPAND}${filter ? `&$filter=${encodeURIComponent(filter)}` : ''}&$orderby=createdon desc,gr_jobid asc`
+    const response = await fetch(continuationLink ? trustedUnifiedJobsNextLink(continuationLink) : initial, {
+        cache: 'no-store',
+        signal,
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: 'application/json',
+            'Cache-Control': 'no-cache',
+            Prefer: `odata.maxpagesize=${UNIFIED_JOBS_PAGE_SIZE}`,
+        },
+    })
+    if (!response.ok) throw new Error('The Jobs worklist could not be loaded.')
+    const data = await response.json() as { value?: Job[]; '@odata.nextLink'?: string }
+    return { records: data.value ?? [], next: trustedUnifiedJobsNextLink(data['@odata.nextLink']) }
+}
 
 type FetchJobsOptions = JobsCacheReadOptions & {
     useDeviceCache?: boolean
@@ -428,7 +476,7 @@ export function buildJobCreatePayload(
     assertJobTypeAllowedForCreation(job.jobType, source)
     assertJobDescriptionLength(job.description)
     const newJob: Record<string, string | number> = {
-        gr_jobnumber: job.jobNumber,
+        ...(UNIFIED_JOB_RUNTIME ? {} : { gr_jobnumber: job.jobNumber }),
         gr_ordernumber: job.orderNumber,
         gr_description: job.description,
         gr_jobtype: job.jobType,
@@ -465,6 +513,9 @@ export async function createJob(
     job: JobSaveInput,
     source: JobCreationSource = 'standard',
 ): Promise<string> {
+    if (UNIFIED_JOB_RUNTIME && job.jobNumber.trim()) {
+        throw new Error('A Job number cannot be supplied during unified creation. Save the Job to Staging, then use regional allocation.')
+    }
     const newJob = buildJobCreatePayload(job, source)
     if (!job.equipmentId?.trim()) {
         // Reuse the exact Site reader; a stale dropdown must not save an incomplete location.
@@ -562,6 +613,9 @@ async function findExistingJobNumbers(accessToken: string, jobNumbers: readonly 
 }
 
 export async function createJobsAtomically(accessToken: string, jobs: readonly JobSaveInput[]) {
+    if (UNIFIED_JOB_RUNTIME) {
+        throw new Error('Numbered spreadsheet import is disabled in the unified workflow until the reviewed migration adapter is available.')
+    }
     const batch = buildJobCreateChangeSet(jobs)
     const existing = await findExistingJobNumbers(accessToken, jobs.map((job) => job.jobNumber))
     if (existing.size) {
@@ -716,6 +770,7 @@ export async function allocateJobNumbers(
     token: string,
     allocations: readonly { job: Job; jobNumber: string }[],
 ) {
+    if (UNIFIED_JOB_RUNTIME) throw new Error('Direct Job number paste is disabled in the unified workflow. Use the regional allocation operation.')
     if (!allocations.length) throw new Error('Select one or more Jobs before pasting job numbers.')
     if (allocations.length > 100) throw new Error('Allocate numbers to at most 100 Jobs at a time.')
     // Keep the displayed version stable across preflight, even if the caller refreshes its rows.

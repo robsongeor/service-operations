@@ -1,5 +1,5 @@
 import type { Job } from '../types/job.types.ts'
-import { assertJobEmailSendingAllowed, buildPrimaryJobEmail, onlineJobCardPilotEnabled, TECHNICIAN_COMMENTS_MAX_LENGTH, type JobEmailDraft } from './jobEmail.ts'
+import { assertJobEmailSendingAllowed, buildPrimaryJobEmail, onlineJobCardPilotEnabled, TECHNICIAN_COMMENTS_MAX_LENGTH, type JobEmail, type JobEmailDraft } from './jobEmail.ts'
 import { assertJobHasEmailableJobNumber } from './jobEmailRules.ts'
 import { isValidTechnicianEmail } from '../utils/technicianMailto.ts'
 import { usesAzureJobCards } from '../types/jobCardWorkflow.ts'
@@ -9,6 +9,7 @@ import { createEmailDispatch, waitForEmailDispatch } from './emailDispatchApi.ts
 import { generateJobSubmissionLink } from './jobSubmissionLinkApi.ts'
 import { updateJobCardStatus } from './jobsApi.ts'
 import { fetchJobForCorrection } from './jobCorrectionsApi.ts'
+import { JOB_WORKFLOW_ENABLED, runJobWorkflow } from './jobWorkflowApi.ts'
 
 export function assignedTechnicianEmailBlockedReason(job: Job) {
     if (!job.gr_jobnumber?.trim()) return 'A Job Number must be assigned before this Job can be emailed.'
@@ -19,7 +20,8 @@ export function assignedTechnicianEmailBlockedReason(job: Job) {
     return ''
 }
 
-type Options = { hostname: string; assignedRecipientOnly?: boolean; verifyCurrentJob?: boolean }
+export type InitialDispatchAttempt = { requestId: string; email?: JobEmail }
+type Options = { hostname: string; assignedRecipientOnly?: boolean; verifyCurrentJob?: boolean; dispatchAttempt?: InitialDispatchAttempt }
 
 /** Shared by Jobs and Job Book. Opening a preview never calls this mutation workflow. */
 export async function queuePrimaryJobDispatch(token: string, original: Job, draft: JobEmailDraft, options: Options) {
@@ -43,12 +45,22 @@ export async function queuePrimaryJobDispatch(token: string, original: Job, draf
     if (options.assignedRecipientOnly && draft.recipientEmail.trim().toLowerCase() !== job.gr_Mechanic?.gr_email?.trim().toLowerCase()) throw new Error('Admins can email only the assigned technician. Ask a coordinator to change the allocation.')
     // Validate the base message before creating any secure link.
     buildPrimaryJobEmail(job, '', draft)
-    const submissionUrl = onlineJobCardPilotEnabled(draft.recipientEmail)
-        ? (await generateJobSubmissionLink(token, {
-            jobId: job.gr_jobid, mechanicId: job.gr_Mechanic?.gr_mechanicid,
-            recipientName: job.gr_Mechanic?.gr_name ?? 'Technician', recipientEmail: draft.recipientEmail,
-        })).url : ''
-    const dispatchId = await createEmailDispatch(token, { jobId: job.gr_jobid, ...buildPrimaryJobEmail(job, submissionUrl, draft) })
+    let email = options.dispatchAttempt?.email
+    if (!email) {
+        const submissionUrl = onlineJobCardPilotEnabled(draft.recipientEmail)
+            ? (await generateJobSubmissionLink(token, {
+                jobId: job.gr_jobid, mechanicId: job.gr_Mechanic?.gr_mechanicid,
+                recipientName: job.gr_Mechanic?.gr_name ?? 'Technician', recipientEmail: draft.recipientEmail,
+            })).url : ''
+        email = buildPrimaryJobEmail(job, submissionUrl, draft)
+        if (options.dispatchAttempt) options.dispatchAttempt.email = email
+    }
+    const dispatchId = options.assignedRecipientOnly && JOB_WORKFLOW_ENABLED
+        ? (await runJobWorkflow(token, {
+            kind: 'dispatch', requestId: options.dispatchAttempt?.requestId ?? crypto.randomUUID(), jobId: job.gr_jobid,
+            jobEtag: job['@odata.etag'] ?? '', recipientEmail: email.recipientEmail, subject: email.subject, body: email.body,
+        })).dispatchId as string
+        : await createEmailDispatch(token, { jobId: job.gr_jobid, ...email })
     return {
         dispatchId,
         confirmDelivery: async () => {

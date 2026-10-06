@@ -27,13 +27,24 @@ namespace ServiceOperations.JobRegistration.Tests
         static ParameterCollection AllocateRequest(Entity job, int n = 2, string book = "waikato") { return new ParameterCollection {
             { "RequestId", Id(n) }, { "Book", book }, { "JobId", job.Id }, { "ExpectedRowVersion", job.RowVersion }
         }; }
+        static ParameterCollection ManageRequest(Entity job) { return new ParameterCollection {
+            { "JobId", job.Id }, { "ExpectedJobRowVersion", job.RowVersion }
+        }; }
+        static ParameterCollection VoidRequest(Entity job, Entity ledger, string book = "auckland", string reason = "Entered twice") { return new ParameterCollection {
+            { "Book", book }, { "JobId", job.Id }, { "LedgerId", ledger.Id },
+            { "ExpectedJobRowVersion", job.RowVersion }, { "ExpectedLedgerRowVersion", ledger.RowVersion }, { "Reason", reason }
+        }; }
+        static ParameterCollection DispatchRequest(Entity job, int n = 50) { return new ParameterCollection {
+            { "RequestId", Id(n) }, { "JobId", job.Id }, { "ExpectedJobRowVersion", job.RowVersion },
+            { "RecipientEmail", "tech@example.invalid" }, { "Subject", "Job details" }, { "Body", "<p>Safe fixture body</p>" }
+        }; }
         static Database Fixture()
         {
             var db = new Database();
             db.Put(new Entity("gr_customer", Customer) { Attributes = { { "gr_name", "Sample Customer" }, { "statecode", new OptionSetValue(0) } } });
             db.Put(new Entity("gr_site", Site) { Attributes = { { "gr_name", "Sample Site" }, { "gr_address", "Test address" }, { "gr_customer", new EntityReference("gr_customer", Customer) }, { "statecode", new OptionSetValue(0) } } });
             db.Put(new Entity("gr_equipment", Equipment) { Attributes = { { "gr_fleet", "F1" }, { "statecode", new OptionSetValue(0) } } });
-            db.Put(new Entity("gr_mechanic", Mechanic) { Attributes = { { "gr_name", "Sample Technician" }, { "statecode", new OptionSetValue(0) }, { "gr_jobassignmentenabled", true } } });
+            db.Put(new Entity("gr_mechanic", Mechanic) { Attributes = { { "gr_name", "Sample Technician" }, { "gr_email", "tech@example.invalid" }, { "statecode", new OptionSetValue(0) }, { "gr_jobassignmentenabled", true } } });
             db.Put(new Entity("gr_sitecontact", Contact) { Attributes = { { "gr_site", new EntityReference("gr_site", Site) }, { "gr_contact", new EntityReference("gr_contact", Contact) }, { "statecode", new OptionSetValue(0) } } });
             return db;
         }
@@ -173,11 +184,119 @@ namespace ServiceOperations.JobRegistration.Tests
                 Reject(() => db.Invoke(JobRegistrationPlugin.RegisterMessage, NewRequest()), "REQUEST_REUSED");
                 Check(db.Count("gr_job") == 0, "Historical ledger was promoted");
             });
-            Test("specialist allocation is rejected pending its reviewed adapter", () => {
+            Test("specialist Jobs use the reviewed regional allocation adapter", () => {
                 foreach (int type in new[] { 122830003, 122830004 }) {
                     var db = Fixture(); var job = Draft(db); job["gr_jobtype"] = new OptionSetValue(type);
-                    Reject(() => db.Invoke(JobRegistrationPlugin.AllocateMessage, AllocateRequest(job)), "SPECIALIST");
+                    var output = db.Invoke(JobRegistrationPlugin.AllocateMessage, AllocateRequest(job));
+                    var saved = db.Get("gr_job", job.Id);
+                    Check(saved.GetAttributeValue<OptionSetValue>("gr_jobtype").Value == type, "Specialist Job type changed");
+                    Check(saved.GetAttributeValue<string>("gr_techniciansubmissionstory") == "Immutable evidence", "Specialist evidence changed");
+                    Check(saved.GetAttributeValue<string>("gr_jobnumber") == (string)output["JobNumber"], "Specialist number was not allocated");
+                    Check(db.Count(Table("waikato")) == 1, "Specialist allocation did not create its regional ledger");
                 }
+            });
+            Test("Manage job changes only coordinator membership and safely replays", () => {
+                var db = Fixture(); var job = Draft(db); job[JobRegistrationPlugin.CoordinatorManaged] = false;
+                var request = ManageRequest(job); var first = db.Invoke(JobWorkflowPlugin.ManageMessage, request);
+                var saved = db.Get("gr_job", job.Id);
+                Check(saved.GetAttributeValue<bool>(JobRegistrationPlugin.CoordinatorManaged), "Membership was not enabled");
+                Check(saved.GetAttributeValue<OptionSetValue>("gr_status").Value == 122830005 && saved.GetAttributeValue<string>("gr_techniciansubmissionstory") == "Immutable evidence", "Manage changed operational data");
+                Check(!(bool)first["WasReplay"] && (bool)db.Invoke(JobWorkflowPlugin.ManageMessage, request)["WasReplay"], "Manage replay failed");
+            });
+            Test("Manage job rejects stale, Void and additional-field requests", () => {
+                var db = Fixture(); var job = Draft(db); job[JobRegistrationPlugin.CoordinatorManaged] = false;
+                var stale = ManageRequest(job); job.RowVersion = "999";
+                Reject(() => db.Invoke(JobWorkflowPlugin.ManageMessage, stale), "CONFLICT");
+                job[JobWorkflowPlugin.RegistrationVoid] = true;
+                Reject(() => db.Invoke(JobWorkflowPlugin.ManageMessage, ManageRequest(job)), "INVALID");
+                var tampered = ManageRequest(job); tampered["JobType"] = 122830000;
+                Reject(() => db.Invoke(JobWorkflowPlugin.ManageMessage, tampered), "INVALID");
+            });
+            foreach (string book in new[] { "auckland", "waikato", "hastings", "christchurch" })
+            {
+                string selected = book;
+                Test("Void registered " + selected + " entry atomically and safely replay", () => {
+                    var db = Fixture(); db.Invoke(JobRegistrationPlugin.RegisterMessage, NewRequest(1, selected));
+                    var job = db.Get("gr_job", Id(1)); var ledger = db.Get(Table(selected), Id(1));
+                    var request = VoidRequest(job, ledger, selected); var output = db.Invoke(JobWorkflowPlugin.VoidMessage, request);
+                    var savedJob = db.Get("gr_job", job.Id); var savedLedger = db.Get(Table(selected), ledger.Id);
+                    Check(savedJob.GetAttributeValue<bool>(JobWorkflowPlugin.RegistrationVoid) && savedJob.GetAttributeValue<string>(JobWorkflowPlugin.RegistrationVoidReason) == "Entered twice", "Job Void state missing");
+                    Check(savedLedger.GetAttributeValue<OptionSetValue>("gr_stage").Value == JobWorkflowPlugin.VoidStage && savedLedger.GetAttributeValue<string>("gr_voidreason") == "Entered twice", "Ledger Void state missing");
+                    Check(savedJob.GetAttributeValue<string>("gr_jobnumber") == savedLedger.GetAttributeValue<string>("gr_jobnumber"), "Number changed");
+                    Check(!(bool)output["WasReplay"] && (bool)db.Invoke(JobWorkflowPlugin.VoidMessage, request)["WasReplay"], "Void replay failed");
+                });
+            }
+            Test("registered Void rejects markers, coordinator membership and mismatched links", () => {
+                for (int scenario = 0; scenario < 4; scenario++) {
+                    var db = Fixture(); db.Invoke(JobRegistrationPlugin.RegisterMessage, NewRequest());
+                    var job = db.Get("gr_job", Id(1)); var ledger = db.Get(Table("auckland"), Id(1));
+                    if (scenario == 0) job["gr_gtentered"] = true;
+                    if (scenario == 1) job["gr_timecloudentered"] = true;
+                    if (scenario == 2) job[JobRegistrationPlugin.CoordinatorManaged] = true;
+                    if (scenario == 3) ledger[JobRegistrationPlugin.RegisteredJob] = new EntityReference("gr_job", Id(999));
+                    Reject(() => db.Invoke(JobWorkflowPlugin.VoidMessage, VoidRequest(job, ledger)), scenario == 3 ? "INCONSISTENT" : "INVALID");
+                    Check(!job.GetAttributeValue<bool>(JobWorkflowPlugin.RegistrationVoid) && ledger.GetAttributeValue<OptionSetValue>("gr_stage").Value == JobRegistrationPlugin.RegisteredStage, "Rejected Void changed state");
+                }
+            });
+            Test("registered Void requires exact versions and rolls back both writes", () => {
+                var db = Fixture(); db.Invoke(JobRegistrationPlugin.RegisterMessage, NewRequest());
+                var job = db.Get("gr_job", Id(1)); var ledger = db.Get(Table("auckland"), Id(1)); var stale = VoidRequest(job, ledger);
+                job.RowVersion = "999";
+                Reject(() => db.Invoke(JobWorkflowPlugin.VoidMessage, stale), "CONFLICT");
+                job.RowVersion = (int.Parse(stale["ExpectedJobRowVersion"].ToString()) + 1).ToString();
+                var current = VoidRequest(job, ledger); db.FailWrite = 2;
+                Reject(() => db.Invoke(JobWorkflowPlugin.VoidMessage, current), "SAVE_FAILED");
+                Check(!db.Get("gr_job", job.Id).GetAttributeValue<bool>(JobWorkflowPlugin.RegistrationVoid) && db.Get(Table("auckland"), ledger.Id).GetAttributeValue<OptionSetValue>("gr_stage").Value == JobRegistrationPlugin.RegisteredStage, "Partial Void survived rollback");
+            });
+            Test("registered Void validates reason, region and input allowlist before writes", () => {
+                var db = Fixture(); db.Invoke(JobRegistrationPlugin.RegisterMessage, NewRequest());
+                var job = db.Get("gr_job", Id(1)); var ledger = db.Get(Table("auckland"), Id(1));
+                foreach (string reason in new[] { " ", new string('x', 1001) }) Reject(() => db.Invoke(JobWorkflowPlugin.VoidMessage, VoidRequest(job, ledger, "auckland", reason)), "INVALID");
+                Reject(() => db.Invoke(JobWorkflowPlugin.VoidMessage, VoidRequest(job, ledger, "unknown")), "INVALID");
+                var tampered = VoidRequest(job, ledger); tampered["GtEntered"] = false;
+                Reject(() => db.Invoke(JobWorkflowPlugin.VoidMessage, tampered), "INVALID");
+                Check(db.LastWrites == 0, "Invalid Void wrote data");
+            });
+            Test("initial dispatch verifies the assigned technician and safely replays", () => {
+                var db = Fixture(); db.Invoke(JobRegistrationPlugin.RegisterMessage, NewRequest());
+                var job = db.Get("gr_job", Id(1)); var request = DispatchRequest(job);
+                var first = db.Invoke(JobWorkflowPlugin.DispatchMessage, request);
+                var dispatch = db.Get("gr_emaildispatch", Id(50));
+                Check((Guid)first["DispatchId"] == Id(50) && !(bool)first["WasReplay"], "Dispatch response mismatch");
+                Check(dispatch.GetAttributeValue<EntityReference>("gr_job").Id == job.Id && dispatch.GetAttributeValue<string>("gr_recipientemail") == "tech@example.invalid", "Dispatch target mismatch");
+                Check(!dispatch.Contains("gr_jobassignment") && !dispatch.GetAttributeValue<bool>("gr_emailsent"), "Dispatch changed assignment or invented delivery");
+                Check((bool)db.Invoke(JobWorkflowPlugin.DispatchMessage, request)["WasReplay"] && db.Count("gr_emaildispatch") == 1, "Dispatch replay duplicated delivery");
+            });
+            Test("initial dispatch rejects stale Jobs, recipient overrides and unrelated inputs", () => {
+                var db = Fixture(); db.Invoke(JobRegistrationPlugin.RegisterMessage, NewRequest());
+                var job = db.Get("gr_job", Id(1)); var stale = DispatchRequest(job); job.RowVersion = "999";
+                Reject(() => db.Invoke(JobWorkflowPlugin.DispatchMessage, stale), "CONFLICT");
+                var changedRecipient = DispatchRequest(job); changedRecipient["RecipientEmail"] = "other@example.invalid";
+                Reject(() => db.Invoke(JobWorkflowPlugin.DispatchMessage, changedRecipient), "INVALID");
+                var tampered = DispatchRequest(job); tampered["MechanicId"] = Mechanic;
+                Reject(() => db.Invoke(JobWorkflowPlugin.DispatchMessage, tampered), "INVALID");
+                Check(db.Count("gr_emaildispatch") == 0, "Rejected dispatch created a row");
+            });
+            Test("initial dispatch fails closed for ineligible Job or technician state", () => {
+                for (int scenario = 0; scenario < 6; scenario++) {
+                    var db = Fixture(); db.Invoke(JobRegistrationPlugin.RegisterMessage, NewRequest());
+                    var job = db.Get("gr_job", Id(1)); var mechanic = db.Get("gr_mechanic", Mechanic);
+                    if (scenario == 0) job["gr_jobnumber"] = null;
+                    if (scenario == 1) job[JobWorkflowPlugin.RegistrationVoid] = true;
+                    if (scenario == 2) job["gr_status"] = new OptionSetValue(122830005);
+                    if (scenario == 3) job["gr_jobtype"] = new OptionSetValue(122830004);
+                    if (scenario == 4) mechanic["statecode"] = new OptionSetValue(1);
+                    if (scenario == 5) mechanic["gr_jobassignmentenabled"] = false;
+                    Reject(() => db.Invoke(JobWorkflowPlugin.DispatchMessage, DispatchRequest(job)), "INVALID");
+                }
+            });
+            Test("initial dispatch write failure creates no delivery and same request can retry", () => {
+                var db = Fixture(); db.Invoke(JobRegistrationPlugin.RegisterMessage, NewRequest());
+                var job = db.Get("gr_job", Id(1)); var request = DispatchRequest(job); db.FailWrite = 1;
+                Reject(() => db.Invoke(JobWorkflowPlugin.DispatchMessage, request), "SAVE_FAILED");
+                Check(db.Count("gr_emaildispatch") == 0, "Failed dispatch survived rollback");
+                db.FailWrite = 0; db.Invoke(JobWorkflowPlugin.DispatchMessage, request);
+                Check(db.Count("gr_emaildispatch") == 1, "Dispatch retry did not save exactly once");
             });
             Test("missing transaction, async execution and impersonation fail closed", () => {
                 var db = Fixture();
@@ -208,6 +327,18 @@ namespace ServiceOperations.JobRegistration.Tests
                 var ledger = new Entity("gr_jobbookentry", Id(1)) { Attributes = { { "gr_jobnumber", "123" }, { JobRegistrationPlugin.RegisteredJob, new EntityReference("gr_job", Id(1)) } } };
                 Reject(() => Guard("Update", new Entity(ledger.LogicalName, ledger.Id), ledger), "snapshots are immutable");
             });
+            Test("server guard permits only the exact atomic registered Void child update", () => {
+                var before = new Entity("gr_jobbookentry", Id(1)) { Attributes = {
+                    { "gr_jobnumber", "900001" }, { JobRegistrationPlugin.RegisteredJob, new EntityReference("gr_job", Id(700)) },
+                    { JobRegistrationPlugin.Fingerprint, "fingerprint" }, { "gr_stage", new OptionSetValue(JobRegistrationPlugin.RegisteredStage) }
+                } };
+                var target = new Entity(before.LogicalName, before.Id) { Attributes = { { "gr_stage", new OptionSetValue(JobWorkflowPlugin.VoidStage) }, { "gr_voidreason", "Duplicate" } } };
+                var parent = new ParameterCollection { { "Book", "auckland" }, { "JobId", Id(700) }, { "LedgerId", before.Id }, { "Reason", "Duplicate" } };
+                Guard("Update", target, before, parent, JobWorkflowPlugin.VoidMessage);
+                Reject(() => Guard("Update", target, before), "snapshots are immutable");
+                target["gr_description"] = "tampered";
+                Reject(() => Guard("Update", target, before, parent, JobWorkflowPlugin.VoidMessage), "snapshots are immutable");
+            });
             Test("only the matching server registration context may allocate", () => {
                 var before = new Entity("gr_job", Id(1)); var patch = new Entity("gr_job", Id(1)) { Attributes = { { "gr_jobnumber", "123" } } };
                 Reject(() => Guard("Update", patch, before), "through the regional");
@@ -226,11 +357,11 @@ namespace ServiceOperations.JobRegistration.Tests
             });
             Console.WriteLine("Plugin tests passed: " + passed);
         }
-        static void Guard(string message, Entity target, Entity before, ParameterCollection parentRequest = null)
+        static void Guard(string message, Entity target, Entity before, ParameterCollection parentRequest = null, string parentMessage = null)
         {
             var parent = parentRequest == null ? null : InterfaceProxy.For<IPluginExecutionContext>(new Dictionary<string, object> {
                 { "Stage", 30 }, { "Mode", 0 }, { "IsInTransaction", true }, { "InitiatingUserId", Caller },
-                { "MessageName", JobRegistrationPlugin.RegisterMessage }, { "InputParameters", parentRequest }, { "ParentContext", null }
+                { "MessageName", parentMessage ?? JobRegistrationPlugin.RegisterMessage }, { "InputParameters", parentRequest }, { "ParentContext", null }
             });
             var images = new EntityImageCollection(); if (before != null) images["Before"] = before;
             var context = InterfaceProxy.For<IPluginExecutionContext>(new Dictionary<string, object> {
@@ -270,7 +401,9 @@ namespace ServiceOperations.JobRegistration.Tests
                     { "InitiatingUserId", identity }, { "MessageName", message }, { "InputParameters", request }, { "OutputParameters", output }
                 });
                 try {
-                    new JobRegistrationPlugin().Execute(new Provider(context, new Factory(this, service)));
+                    if (message == JobWorkflowPlugin.ManageMessage || message == JobWorkflowPlugin.VoidMessage || message == JobWorkflowPlugin.DispatchMessage)
+                        new JobWorkflowPlugin().Execute(new Provider(context, new Factory(this, service)));
+                    else new JobRegistrationPlugin().Execute(new Provider(context, new Factory(this, service)));
                     service.Commit(); return output;
                 } finally { LastReads = service.Reads; LastWrites = service.Writes; }
             }
@@ -314,8 +447,10 @@ namespace ServiceOperations.JobRegistration.Tests
                 Check(update.ConcurrencyBehavior == ConcurrencyBehavior.IfRowVersionMatches, "Conditional update required");
                 Entity authoritative;
                 if (current.RowVersion != update.Target.RowVersion || (db.Records.TryGetValue(key, out authoritative) && authoritative.RowVersion != originals[key])) throw new Exception("Version conflict");
-                var number = update.Target.GetAttributeValue<string>("gr_jobnumber");
-                if (rows.Values.Any(row => row.LogicalName == "gr_job" && row.Id != current.Id && row.GetAttributeValue<string>("gr_jobnumber") == number)) throw new Exception("Unique number conflict");
+                if (update.Target.Contains("gr_jobnumber")) {
+                    var number = update.Target.GetAttributeValue<string>("gr_jobnumber");
+                    if (rows.Values.Any(row => row.LogicalName == "gr_job" && row.Id != current.Id && row.GetAttributeValue<string>("gr_jobnumber") == number)) throw new Exception("Unique number conflict");
+                }
                 foreach (var field in update.Target.Attributes) current[field.Key] = field.Value;
                 current.RowVersion = (++db.Clock).ToString(); touched.Add(key); return new UpdateResponse();
             }

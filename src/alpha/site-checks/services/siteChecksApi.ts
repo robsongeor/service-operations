@@ -14,6 +14,7 @@ import type {
 } from '../types/siteCheck.types.ts'
 import { validateSiteCheckSchedule } from '../domain/siteCheckCalculations.ts'
 import { SITE_CHECK_EQUIPMENT_SCOPES } from '../types/siteCheck.types.ts'
+import { UNIFIED_JOB_RUNTIME } from '../../jobs/domain/unifiedJobWorkflow.ts'
 
 const DEFAULT_API_URL = `${import.meta.env?.VITE_DATAVERSE_URL ?? ''}/api/data/v9.2`
 const GUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -432,6 +433,9 @@ export async function allocateSiteCheckJobNumbers(
     allocations: readonly { job: SiteCheckDetailJob; jobNumber: string }[],
     options: { apiUrl?: string; fetcher?: typeof fetch } = {},
 ) {
+    if (UNIFIED_JOB_RUNTIME) {
+        throw new Error('Direct Site Check number paste is disabled in the unified workflow. The reviewed specialist regional-allocation adapter is required.')
+    }
     if (allocations.length === 0) throw new Error('No Site Check Jobs were supplied.')
     const seenJobs = new Set<string>()
     const seenNumbers = new Set<string>()
@@ -506,6 +510,9 @@ export async function deleteSiteCheckOccurrence(
     schedule?: SiteCheckSchedule | null,
     options: { apiUrl?: string; fetcher?: typeof fetch } = {},
 ) {
+    if (UNIFIED_JOB_RUNTIME && jobs.some((job) => Boolean(job.gr_jobnumber?.trim()))) {
+        throw new Error('A Site Check with allocated Job numbers must be retained as history. It cannot be permanently deleted in the unified workflow.')
+    }
     const apiUrl = options.apiUrl ?? DEFAULT_API_URL
     const fetcher = options.fetcher ?? fetch
     const occurrenceId = requireGuid(occurrence.gr_sitecheckid, 'Site Check ID')
@@ -664,6 +671,9 @@ export async function clearSiteCheckJobNumber(
     job: SiteCheckDetailJob,
     options: { apiUrl?: string; fetcher?: typeof fetch } = {},
 ) {
+    if (UNIFIED_JOB_RUNTIME) {
+        throw new Error('Allocated Job numbers are permanent in the unified workflow and cannot be cleared or reused.')
+    }
     const jobId = requireGuid(job.gr_jobid, 'Job ID')
     if (!job._gr_sitecheck_value) throw new Error('Only a generated Site Check Job can have its number cleared here.')
     if (!job.gr_jobnumber?.trim()) throw new Error('This Site Check Job does not have a Job Number.')

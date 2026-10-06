@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "status": "review-required-not-provisioned",
+  "default": "deny",
+  "directNumberMutation": false,
+  "profiles": [
+    {
+      "profile": "full",
+      "dataverseRole": "System Administrator",
+      "frontendProfile": "ServiceOperations.FullAccess",
+      "allowedApis": ["gr_RegisterJobBookJob", "gr_AllocateJobBookNumber", "gr_ManageJobBookJob", "gr_VoidRegisteredJobBookEntry", "gr_QueueInitialJobDispatch"],
+      "capabilities": ["factual-job-correction", "initial-technician-assignment", "later-assignment-and-scheduling", "entry-markers", "job-card-review", "customer-site-create", "customer-site-edit", "restricted-equipment-edit", "coordinator-worklist"]
+    },
+    {
+      "profile": "coordinator",
+      "dataverseRole": "Service Operations",
+      "frontendProfile": "ServiceOperations.ServiceCoordinator",
+      "allowedApis": ["gr_RegisterJobBookJob", "gr_AllocateJobBookNumber", "gr_ManageJobBookJob", "gr_VoidRegisteredJobBookEntry", "gr_QueueInitialJobDispatch"],
+      "capabilities": ["factual-job-correction", "initial-technician-assignment", "later-assignment-and-scheduling", "entry-markers", "job-card-review", "customer-site-create", "customer-site-edit", "restricted-equipment-edit", "coordinator-worklist"]
+    },
+    {
+      "profile": "office",
+      "dataverseRole": "Service Operations - Office Admin",
+      "frontendProfile": "ServiceOperations.JobCardAdmin",
+      "allowedApis": ["gr_RegisterJobBookJob", "gr_VoidRegisteredJobBookEntry", "gr_QueueInitialJobDispatch"],
+      "capabilities": ["factual-job-correction", "initial-technician-assignment", "entry-markers", "job-card-review", "customer-site-create", "restricted-equipment-edit"]
+    },
+    {
+      "profile": "book",
+      "dataverseRole": "Service Operations - Job Book Admin",
+      "frontendProfile": "ServiceOperations.JobBookAdmin",
+      "allowedApis": ["gr_RegisterJobBookJob", "gr_VoidRegisteredJobBookEntry"],
+      "capabilities": ["factual-job-correction", "customer-site-create", "restricted-equipment-edit"]
+    }
+  ],
+  "alwaysDenied": [
+    "direct-job-number-create-update-clear",
+    "numbered-job-delete",
+    "registered-ledger-delete-or-relink",
+    "historical-evidence-rewrite",
+    "browser-asserted-role-or-parent-context",
+    "system-service-impersonation"
+  ],
+  "assignmentGates": [
+    "Resolve every intended user to one licensed target identity.",
+    "Inventory direct and team-derived Dataverse roles before adding or removing anything.",
+    "Reject overlapping grants that restore a capability denied by the intended profile.",
+    "Test allowed and denied direct API calls using each real pilot profile.",
+    "Deploy compatible app, API and guards before changing assignments.",
+    "Keep Full Access and Service Coordinator distinct even while their initial capabilities match."
+  ]
+}

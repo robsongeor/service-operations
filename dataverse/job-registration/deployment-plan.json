@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "status": "dry-run-review-only-not-approved-for-provisioning",
+  "environment": "https://org0d4246d7.crm6.dynamics.com",
+  "solutionUniqueName": "ServiceOperationsNew",
+  "featureFlagDuringDeployment": false,
+  "orderedUnits": [
+    "preflight-and-export",
+    "schema-columns-and-choice",
+    "signed-plugin-assembly",
+    "custom-apis",
+    "synchronous-guard-steps",
+    "least-privilege-roles-and-secure-role-ids",
+    "compatible-application-release-flag-off",
+    "controlled-verification",
+    "separately-approved-feature-enable"
+  ],
+  "schemaSource": "readiness-manifest.json",
+  "apiSource": "readiness-manifest.json",
+  "roleSource": "../access/unified-workflow-role-policy.json",
+  "roleGrantSource": "../access/unified-workflow-role-grants.json",
+  "assignmentSource": "../access/unified-workflow-assignment-plan.json",
+  "assembly": {
+    "name": "ServiceOperations.UnifiedJobWorkflow",
+    "version": "1.0.0.0",
+    "isolationMode": "Sandbox",
+    "sourceHashRequired": true,
+    "strongNameRequired": true,
+    "types": [
+      "ServiceOperations.JobRegistration.JobRegistrationPlugin",
+      "ServiceOperations.JobRegistration.JobWorkflowPlugin",
+      "ServiceOperations.JobRegistration.JobNumberInvariantPlugin",
+      "ServiceOperations.Access.RestrictedAccessPlugin"
+    ]
+  },
+  "guardSteps": [
+    {
+      "pluginType": "ServiceOperations.JobRegistration.JobNumberInvariantPlugin",
+      "stage": "PreOperation",
+      "mode": "Synchronous",
+      "executionOrder": 10,
+      "tables": ["gr_job", "gr_jobbookentry", "gr_waikatojobbookentry", "gr_hastingsjobbookentry", "gr_christchurchjobbookentry"],
+      "messages": ["Create", "Update", "Delete"],
+      "filteringAttributes": [],
+      "images": {
+        "Create": null,
+        "Update": { "alias": "Before", "jobColumns": ["gr_jobnumber"], "ledgerColumns": ["gr_jobnumber", "gr_registeredjob", "gr_registrationfingerprint", "gr_stage"] },
+        "Delete": { "alias": "Before", "jobColumns": ["gr_jobnumber"], "ledgerColumns": ["gr_jobnumber", "gr_registeredjob", "gr_registrationfingerprint", "gr_stage"] }
+      }
+    },
+    {
+      "pluginType": "ServiceOperations.Access.RestrictedAccessPlugin",
+      "stage": "PreOperation",
+      "mode": "Synchronous",
+      "executionOrder": 20,
+      "filteringAttributes": [],
+      "registrations": [
+        { "message": "Create", "tables": ["gr_customer", "gr_site", "gr_job", "gr_jobbookentry", "gr_waikatojobbookentry", "gr_hastingsjobbookentry", "gr_christchurchjobbookentry", "gr_emaildispatch"], "image": null },
+        { "message": "Update", "tables": ["gr_equipment"], "image": { "alias": "Before", "columns": [] } },
+        { "message": "Update", "tables": ["gr_job"], "image": { "alias": "Before", "columns": ["gr_registrationvoid"] } },
+        { "message": "Update", "tables": ["gr_jobbookentry", "gr_waikatojobbookentry", "gr_hastingsjobbookentry", "gr_christchurchjobbookentry"], "image": { "alias": "Before", "columns": ["gr_stage", "gr_registeredjob", "gr_promotedjob", "gr_entered", "gr_timecloudentered"] } }
+      ],
+      "secureConfiguration": "full=<role GUIDs>;coordinator=<role GUIDs>;office=<role GUIDs>;book=<role GUIDs>",
+      "secureConfigurationRequired": true
+    }
+  ],
+  "rollback": {
+    "featureFlagFirst": "Keep false throughout deployment and verification; if later enabled, disable first.",
+    "steps": "Disable newly registered guard steps and Custom APIs as one reviewed rollback action.",
+    "application": "Redeploy the last compatible flag-off application build.",
+    "schema": "Retain nullable columns and Choice values; do not delete populated metadata during operational rollback.",
+    "data": "Never renumber, delete ledgers, clear links, or reverse completed business transactions as generic rollback.",
+    "roles": "Restore assignments from the pre-change direct/team role export; do not delete shared roles blindly."
+  },
+  "provisioningIncluded": false,
+  "deploymentIncluded": false,
+  "assignmentIncluded": false,
+  "featureEnableIncluded": false
+}

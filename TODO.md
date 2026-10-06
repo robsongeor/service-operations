@@ -47,9 +47,53 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
   guards, disabled client adapter and offline SDK tests are implemented locally. A separate `--unified`
   fake-data walkthrough now connects both screens with session request/replay recovery, saved-master
   versus snapshot-only reconciliation, sample registered-entry Void, independent coordinator
-  membership and bounded pages. Next: production implementations/authorization for membership and
-  atomic Void, durable cross-device recovery, server-filtered queries and cache retention. Reconcile Site Check
-  number-clear/allocation/deletion paths and enforce the invariant server-side before release.
+  membership and bounded pages. Local transactional plugin contracts now cover exact-version
+  membership and atomic registered-entry Void with caller-context guard integration; they remain
+  unregistered. A strict disabled client adapter and bounded production worklist are connected behind
+  the disabled gate; the default ordinary runtime is unchanged.
+  Assigned-technician initial dispatch now has a replay-safe guarded API and gated client path;
+  Manage/Void are also wired behind the same disabled gate while the localhost fixture remains separate.
+  The production worklist now uses 100-row Dataverse pages, trusted continuation links and server-side
+  Operational/Unconfirmed/type filters. A read-only readiness manifest/audit now defines the proposed
+  APIs, columns, role gates and activation blockers. The approved target audit confirmed the exact
+  missing delta without changes: five APIs, 12 columns, four regional Choice additions and two roles.
+  Direct manual create/import/paste writes, number clearing and numbered Site Check deletion now fail
+  closed behind the disabled gate; WOF number editing is omitted and new WOF Jobs remain unnumbered.
+  The reviewed regional allocator now accepts those specialist Jobs without changing their type,
+  evidence or source relationship, and the UI directs users to the guarded per-Job action. Next:
+  the migration/role package now has machine-readable no-auto-link and default-deny policies plus a
+  bounded aggregate-only audit, but all write/backfill decisions still need approval. The approved
+  read-only run found 1,191 Jobs, zero regional ledger rows and eight
+  unknown-format numbers. Preserve 1,154 numbered Jobs as legacy without fabricating ledgers; the
+  eight values are reviewed immutable regionless exceptions with fingerprint drift detection.
+  Review regional sequence/source evidence, assembly signing, exact
+  registration and rollback before writing or approving a Provision mode.
+  The compatible deployment unit is now rendered and validated: 12 columns, four Registered Choice
+  additions, four plugin types in assembly `1.0.0.0`, five APIs, 29 guard steps, four role profiles
+  and eleven reviewed assignments. The approved flag-off Dataverse package is provisioned and an
+  independent Verify run passes. All 29 shared-environment guard steps are disabled for V1 safety
+  while a separate V2 application deployment is prepared. No migration, seed, V1 application release
+  or feature enablement was performed. Remaining blockers include application/Entra role work, eight users' Dataverse
+  admission, sequence ownership and controlled live smoke testing. Feature enablement remains a
+  later approval.
+  Live read-only checks confirmed all four AutoNumber formats and Active keys plus provisional next
+  values `147174`, `WJ1548`, `HJ12253`, `CJ23859`; recalculate at cutover. George and Bruce remain
+  the only admitted intended Dataverse users, with no returned team-role grants; the other eight
+  still require authorized admission/licensing work.
+  Signing readiness now refuses repository-held keys and existing artifact overwrite, requires an
+  external owner-approved `.snk`, and emits a public-token/source/assembly-hash manifest without
+  deploying. George owns the protected PC-local key; signed assembly `1.0.0.0` has public key token
+  `0edea2881bb8578c` and a verified manifest. Nominate a backup owner, create protected recovery
+  storage and prove a recovery build before production use.
+  Exact registration review covers API request/response schemas, privilege-sharing authorization
+  sets, all 29 step identities and every pre-image column. The new Office Admin and Job Book Admin
+  roles use the Basic User baseline plus only the reviewed custom grants; Delete/Assign/Share remain
+  excluded. Pubudu is admitted as the third Office Admin rollout user and live Office Admin pilot and
+  now holds `Service Operations - Office Admin` additively. Smoke-test that path before removing the
+  broader `Service Operations` role; then run final denial tests with no Full/Coordinator overlap.
+  Preserve unrelated platform roles and add Pubudu to the separately controlled Job Card reviewer
+  allowlist only during its approved rollout.
+  Durable cross-device recovery and cache retention remain.
   Existing Intake dispatch remains blocked; schema, migration and permission rollout stay
   approval-gated. See the [implementation sequence](docs/features/JOB_BOOK_INTAKE_DESIGN.md#unified-workflow-decision-3-october-2026).
 

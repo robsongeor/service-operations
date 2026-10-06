@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "status": "read-only-preflight-not-approved-for-provisioning",
+  "target": {
+    "environmentUrl": "https://org0d4246d7.crm6.dynamics.com",
+    "solutionUniqueName": "ServiceOperationsNew"
+  },
+  "columns": [
+    { "table": "gr_job", "name": "gr_coordinatormanaged", "type": "Boolean" },
+    { "table": "gr_job", "name": "gr_registrationvoid", "type": "Boolean" },
+    { "table": "gr_job", "name": "gr_registrationvoidreason", "type": "Memo", "minimumLength": 1000 },
+    { "table": "gr_emaildispatch", "name": "gr_jobdispatchfingerprint", "type": "String", "minimumLength": 64 },
+    { "table": "gr_jobbookentry", "name": "gr_registeredjob", "type": "Lookup", "target": "gr_job" },
+    { "table": "gr_jobbookentry", "name": "gr_registrationfingerprint", "type": "String", "minimumLength": 64 },
+    { "table": "gr_waikatojobbookentry", "name": "gr_registeredjob", "type": "Lookup", "target": "gr_job" },
+    { "table": "gr_waikatojobbookentry", "name": "gr_registrationfingerprint", "type": "String", "minimumLength": 64 },
+    { "table": "gr_hastingsjobbookentry", "name": "gr_registeredjob", "type": "Lookup", "target": "gr_job" },
+    { "table": "gr_hastingsjobbookentry", "name": "gr_registrationfingerprint", "type": "String", "minimumLength": 64 },
+    { "table": "gr_christchurchjobbookentry", "name": "gr_registeredjob", "type": "Lookup", "target": "gr_job" },
+    { "table": "gr_christchurchjobbookentry", "name": "gr_registrationfingerprint", "type": "String", "minimumLength": 64 }
+  ],
+  "regionalTables": [
+    "gr_jobbookentry",
+    "gr_waikatojobbookentry",
+    "gr_hastingsjobbookentry",
+    "gr_christchurchjobbookentry"
+  ],
+  "regionalNumberContracts": [
+    { "book": "auckland", "table": "gr_jobbookentry", "autoNumberFormat": "{SEQNUM:6}", "key": "gr_jobbookentry_jobnumber_key" },
+    { "book": "waikato", "table": "gr_waikatojobbookentry", "autoNumberFormat": "WJ{SEQNUM:4}", "key": "gr_waikatojobbookentry_jobnumber_key" },
+    { "book": "hastings", "table": "gr_hastingsjobbookentry", "autoNumberFormat": "HJ{SEQNUM:5}", "key": "gr_hastingsjobbookentry_jobnumber_key" },
+    { "book": "christchurch", "table": "gr_christchurchjobbookentry", "autoNumberFormat": "CJ{SEQNUM:5}", "key": "gr_christchurchjobbookentry_jobnumber_key" }
+  ],
+  "registeredStage": 122830004,
+  "customApis": [
+    { "name": "gr_RegisterJobBookJob", "pluginType": "ServiceOperations.JobRegistration.JobRegistrationPlugin", "executePrivilege": "prvCreategr_JobBookEntry", "requests": ["RequestId", "Book", "Description", "OrderNumber", "SiteId", "EquipmentId", "EquipmentUnknown", "ContactId", "MechanicId"], "responses": ["JobId", "LedgerId", "Book", "JobNumber", "JobRowVersion", "WasReplay"] },
+    { "name": "gr_AllocateJobBookNumber", "pluginType": "ServiceOperations.JobRegistration.JobRegistrationPlugin", "executePrivilege": "prvCreategr_JobScheduleOption", "requests": ["RequestId", "Book", "JobId", "ExpectedRowVersion"], "responses": ["JobId", "LedgerId", "Book", "JobNumber", "JobRowVersion", "WasReplay"] },
+    { "name": "gr_ManageJobBookJob", "pluginType": "ServiceOperations.JobRegistration.JobWorkflowPlugin", "executePrivilege": "prvCreategr_JobScheduleOption", "requests": ["JobId", "ExpectedJobRowVersion"], "responses": ["JobId", "JobRowVersion", "CoordinatorManaged", "RegistrationVoid", "WasReplay"] },
+    { "name": "gr_VoidRegisteredJobBookEntry", "pluginType": "ServiceOperations.JobRegistration.JobWorkflowPlugin", "executePrivilege": "prvWritegr_JobBookEntry", "requests": ["Book", "JobId", "LedgerId", "ExpectedJobRowVersion", "ExpectedLedgerRowVersion", "Reason"], "responses": ["JobId", "LedgerId", "JobRowVersion", "LedgerRowVersion", "CoordinatorManaged", "RegistrationVoid", "WasReplay"] },
+    { "name": "gr_QueueInitialJobDispatch", "pluginType": "ServiceOperations.JobRegistration.JobWorkflowPlugin", "executePrivilege": "prvCreategr_EmailDispatch", "requests": ["RequestId", "JobId", "ExpectedJobRowVersion", "RecipientEmail", "Subject", "Body"], "responses": ["DispatchId", "WasReplay"] }
+  ],
+  "roles": [
+    { "profile": "full", "name": "System Administrator", "state": "existing-review-required", "allowedApis": ["gr_RegisterJobBookJob", "gr_AllocateJobBookNumber", "gr_ManageJobBookJob", "gr_VoidRegisteredJobBookEntry", "gr_QueueInitialJobDispatch"] },
+    { "profile": "coordinator", "name": "Service Operations", "state": "existing-review-required", "allowedApis": ["gr_RegisterJobBookJob", "gr_AllocateJobBookNumber", "gr_ManageJobBookJob", "gr_VoidRegisteredJobBookEntry", "gr_QueueInitialJobDispatch"] },
+    { "profile": "office", "name": "Service Operations - Office Admin", "state": "proposed-not-created", "allowedApis": ["gr_RegisterJobBookJob", "gr_VoidRegisteredJobBookEntry", "gr_QueueInitialJobDispatch"] },
+    { "profile": "book", "name": "Service Operations - Job Book Admin", "state": "proposed-not-created", "allowedApis": ["gr_RegisterJobBookJob", "gr_VoidRegisteredJobBookEntry"] }
+  ],
+  "activationBlockers": [
+    "Approve the historical migration/backfill and regional cutover sequence; never infer links from matching number text.",
+    "Package and sign the plugin assembly, then review every Custom API and step registration as one compatible unit.",
+    "Approve the least-privilege role manifest and secure Dataverse role-ID configuration after checking broader direct/team grants.",
+    "Admit and license intended pilot users in the target environment before assigning or testing roles.",
+    "Deploy a compatible application build before enabling VITE_UNIFIED_JOB_WORKFLOW_ENABLED or changing user assignments."
+  ]
+}

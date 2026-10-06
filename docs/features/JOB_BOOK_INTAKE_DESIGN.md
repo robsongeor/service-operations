@@ -316,12 +316,19 @@ does not automatically make a Job coordinator-managed or mark it entered in anot
 The target server must enforce number immutability across **all** callers, including direct
 Dataverse writes and specialist Site Check clear-number/allocation/deletion paths. The local
 `JobNumberInvariantPlugin` supplies the number/ledger guard, but is not registered. Specialist
-paths are not yet adapted and remain a release blocker for installing that guard and enabling the
-unified contract. Frontend restrictions are not column-level authorization. Existing direct manual
+paths are now adapted to the guarded allocator, but it remains unregistered and target-untested.
+Frontend restrictions are not column-level authorization. Existing direct manual
 number input during creation/import and the spreadsheet allocation workflow remain transitional
 until the automatic operation and migration plan are ready; they must not be presented as the new
 regional allocator. The ordinary shared save builder no longer carries a stale number even when
 used by a specialist completion workflow.
+
+The first specialist reconciliation slice now fails closed behind the disabled unified gate:
+manual create/import/paste writes cannot reach Dataverse, Site Check numbers cannot be cleared,
+numbered Site Check Jobs cannot be deleted with their occurrence, WOF updates omit the number, and
+new WOF work stays unnumbered. The ordinary runtime is unchanged. This closes bypasses but deliberately
+does not enable rollout. Site Check and WOF Jobs now use the reviewed per-Job regional allocator from
+their Jobs tabs, preserving specialist data while creating the same immutable ledger snapshot.
 
 Ledger linkage is not coordinator membership. Do not reinterpret every old Promoted stage as the
 new management flag, or overwrite historical promotion audit data to implement the new link.
@@ -353,8 +360,9 @@ Two global, synchronous Custom API Actions share `JobRegistrationPlugin`:
   that metadata/defaults and dependent server automation support it before release.
 - `gr_AllocateJobBookNumber`: accepts a stable request GUID, region, existing Job ID and exact
   RowVersion. It changes only the Job number, not status, assignment, type, coordinator membership,
-  current master data, schedules or evidence. WOF/Site Check allocation is rejected pending its
-  dedicated reviewed adapter. No existing Intake promotion/adoption is implemented by this action.
+  current master data, schedules or evidence. The same reviewed operation accepts WOF and Site Check
+  Jobs; their source links and specialist evidence remain untouched. No existing Intake
+  promotion/adoption is implemented by this action.
 
 The caller creates and retains its request GUID **once** at confirmation. That GUID becomes the
 ledger primary ID and, for new work, the Job primary ID. A SHA-256 fingerprint covers normalized
@@ -386,8 +394,9 @@ numbers, deletion of numbered Jobs or ledger history, and editing/relinking regi
 Only a matching parent registration API context may perform initial allocation; a browser parameter
 cannot supply that context. Its required `Before` images and registration details are in the JSON
 contract. **Do not install it now**: legacy imports/direct Intake creation, registered-entry Void,
-specialist clear-number/allocation/deletion paths and cascade/bypass behavior need a coordinated
-cutover and approved platform checks first. The plugin does not implement general Admin field-level
+cascade/bypass behavior and target plugin ordering need a coordinated cutover and approved platform
+checks first. The specialist direct paths now fail closed and specialist allocation uses the guarded
+API, but neither plugin is registered. The plugin does not implement general Admin field-level
 authorization for existing Job corrections, reassignment or scheduling.
 
 Both APIs require a verified `ExecutePrivilegeName`, resolved from actual published privilege
@@ -445,16 +454,24 @@ Implemented in this mode:
   allocation's response was lost and the Job already shows its number. The region/payload stay
   frozen; retry replays the original request without reapplying later corrections. A confirmed
   concurrency rejection requires reloading before discarding that rejected allocation request.
-- Jobs fetches 100 records per page with explicit Load more; filtering is over loaded records.
-  Job Book retains incremental paging. Exact post-save reads and bounded refreshes replace global
-  all-Jobs loads. Production server-filtered worklists and cache/retention policy remain rollout work.
+- Jobs fetches 100 records per page with explicit Load more. The disabled production gate now applies
+  server-side Operational, Unconfirmed and Job Type filters and accepts only same-environment Jobs
+  continuation links. Job Book retains incremental paging. Exact post-save reads and bounded refreshes
+  replace global all-Jobs loads. Durable cache/retention policy remains rollout work.
 
 `VITE_UNIFIED_JOB_WALKTHROUGH` is a separate development-only flag, set by this fixture launcher.
 Do not set it in normal configuration or treat role simulation as security verification.
-The sample `gr_registrationvoid` / `gr_registrationvoidreason` Job fields and `/__walkthrough/jobs`
-membership/Void operations are **not** provisioned Dataverse columns/APIs and are not additions to
-the signed-off registration contract. Production atomic Void, membership authorization, general
-Admin field restrictions, and integration with real completion/scheduling/email remain unfinished.
+The sample `/__walkthrough/jobs` endpoints remain fixture-only. The proposed
+`gr_registrationvoid` / `gr_registrationvoidreason` Job fields and transactional Manage job/linked
+Void Custom API contracts now have local C# plugin source, exact-version rollback/replay tests and
+caller-context access-guard integration. A strict client adapter is disabled by default behind
+`VITE_UNIFIED_JOB_WORKFLOW_ENABLED=false`; enabling it also selects the bounded production Jobs
+worklist, but the flag remains off and the required target schema is not provisioned. The operations are
+**not** provisioned, registered or live-authorized. The same local contract now includes replay-safe
+initial dispatch: the server resolves the assigned technician, verifies the exact Job version and permits
+only its exact Email Dispatch child write. The gated client retains one request/body for uncertain retries
+within the active session; Azure secure-link creation remains a separate service boundary. General Admin
+field restrictions and integration with real completion/scheduling remain unfinished.
 Maintenance completion is deliberately blocked in this focused fixture. Do not install the local
 number invariant guard until the specialist Site Check paths and approved migration are reconciled.
 

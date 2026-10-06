@@ -82,6 +82,10 @@ helpers parse, format, load, and save WOF and registration dates without timezon
   repairs the missing Inspection link against that active Job instead of creating a duplicate.
 - A completed Inspection remains ready for office administration until its new expiry is
   written to the Equipment record. The Equipment then returns to normal expiry monitoring.
+- Under the disabled unified Job workflow gate, WOF no longer supplies or edits `gr_jobnumber`.
+  New WOF Jobs remain unnumbered Staging work and existing numbers are read-only. After creation,
+  the Jobs **WOF** tab exposes the guarded regional allocation operation. It changes only the Job
+  number and creates its linked ledger; target testing remains required before enablement.
 - A WOF Job cannot transition to Complete until a valid new expiry is supplied. Completion
   also requires the shared, visible Job Completion Date. That date defaults to today, may be
   corrected to a non-future date, is written to the Job Completed Date, and owns the WOF Inspection

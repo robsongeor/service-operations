@@ -14,6 +14,7 @@ $sdkAssembly = Join-Path $SdkToolsPath 'Microsoft.Xrm.Sdk.dll'
 $repository = Split-Path -Parent $PSScriptRoot
 $sources = @(
     (Join-Path $repository 'dataverse\job-registration\JobRegistrationPlugin.cs'),
+    (Join-Path $repository 'dataverse\job-registration\JobWorkflowPlugin.cs'),
     (Join-Path $repository 'dataverse\job-registration\JobNumberInvariantPlugin.cs'),
     (Join-Path $repository 'tests\dataverse\JobRegistrationPluginTests.cs')
 )

@@ -2,8 +2,9 @@ import { JOB_BOOK_ENTRY_STAGES, MANAGED_JOB_ENTRY_MARKER_COLUMNS, type JobBookRo
 import { JOB_BOOKS, jobNumberBelongsToBook, managedJobNumberFilter, type JobBookConfig } from './jobBookConfig.ts'
 import { assertJobCreationLocation } from '../jobs/domain/jobCreationLocation.ts'
 import { isEditableJobBookIntake, jobBookVoidBlockedReason, jobBookVoidReasonError } from './jobBookEntryWorkflow.ts'
-import { UNIFIED_JOB_WALKTHROUGH, UNIFIED_JOB_SELECT } from '../jobs/domain/unifiedJobWorkflow.ts'
+import { UNIFIED_JOB_RUNTIME, UNIFIED_JOB_WALKTHROUGH, UNIFIED_JOB_SELECT } from '../jobs/domain/unifiedJobWorkflow.ts'
 import { walkthroughJobAction } from '../jobs/services/unifiedJobWalkthroughApi.ts'
+import { runJobWorkflow } from '../jobs/services/jobWorkflowApi.ts'
 
 const DATAVERSE_URL = import.meta.env?.VITE_DATAVERSE_URL ?? ''
 
@@ -108,7 +109,7 @@ export type JobBookPage = {
 }
 
 export async function fetchRecentJobBookRows(accessToken: string, book: JobBookConfig = JOB_BOOKS.auckland, continuationLink?: string): Promise<JobBookPage> {
-    const select = `gr_jobid,createdon,gr_jobnumber,gr_ordernumber,gr_description,gr_gtentered,gr_timecloudentered${UNIFIED_JOB_WALKTHROUGH ? UNIFIED_JOB_SELECT : ''}`
+    const select = `gr_jobid,createdon,gr_jobnumber,gr_ordernumber,gr_description,gr_gtentered,gr_timecloudentered${UNIFIED_JOB_RUNTIME ? UNIFIED_JOB_SELECT : ''}`
     const expand = 'gr_Equipment($select=gr_equipmentid,gr_fleet,gr_alternatefleetnumbers,gr_serial,gr_make,gr_model),gr_Mechanic($select=gr_mechanicid,gr_name),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name)'
     const nextUrl = continuationLink
         ? trustedNextLink(continuationLink)
@@ -152,7 +153,7 @@ export function mapManagedJobBookRow(job: JobBookApiRow, book: JobBookConfig): J
         entered: Boolean(job.gr_gtentered),
         timecloudEntered: Boolean(job.gr_timecloudentered),
         equipmentConfigured: Boolean(job.gr_Equipment?.gr_fleet?.trim() || job.gr_Equipment?.gr_serial?.trim()),
-        equipmentReviewRequired: UNIFIED_JOB_WALKTHROUGH && !job.gr_Equipment,
+        equipmentReviewRequired: UNIFIED_JOB_RUNTIME && !job.gr_Equipment,
         entryStage: job.gr_registrationvoid ? JOB_BOOK_ENTRY_STAGES.VOID : job.gr_coordinatormanaged === false ? JOB_BOOK_ENTRY_STAGES.REGISTERED : JOB_BOOK_ENTRY_STAGES.PROMOTED,
         voidReason: job.gr_registrationvoidreason ?? '',
         entrySource: 'dataverse-job',
@@ -195,7 +196,7 @@ export async function updateManagedJobBookMarker(
 
 function mapIntakeRow(row: IntakeApiRow, book: JobBookConfig): JobBookRow {
     const intakeRecordId = String(row[book.idField as keyof IntakeApiRow] ?? '')
-    if (UNIFIED_JOB_WALKTHROUGH && row.gr_RegisteredJob) {
+    if (UNIFIED_JOB_RUNTIME && row.gr_RegisteredJob) {
         const job = row.gr_RegisteredJob
         if (!job.gr_jobid || job.gr_jobnumber !== row.gr_jobnumber) throw new Error('The Job Book link needs reconciliation. No replacement Job or number was created.')
         return {
@@ -251,7 +252,7 @@ export function jobBookIntakeContactLookupIsAvailable() {
 
 function intakeExpand() {
     const expanded = INTAKE_CONTACT_LOOKUP_ENABLED ? INTAKE_EXPAND : INTAKE_EXPAND_WITHOUT_CONTACT
-    return UNIFIED_JOB_WALKTHROUGH ? `${expanded},gr_RegisteredJob($select=gr_jobid,createdon,gr_jobnumber,gr_ordernumber,gr_description,gr_gtentered,gr_timecloudentered${UNIFIED_JOB_SELECT};$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_serial,gr_make,gr_model),gr_Mechanic($select=gr_mechanicid,gr_name),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name))` : expanded
+    return UNIFIED_JOB_RUNTIME ? `${expanded},gr_RegisteredJob($select=gr_jobid,createdon,gr_jobnumber,gr_ordernumber,gr_description,gr_gtentered,gr_timecloudentered${UNIFIED_JOB_SELECT};$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_serial,gr_make,gr_model),gr_Mechanic($select=gr_mechanicid,gr_name),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name))` : expanded
 }
 
 export async function fetchJobBookIntakeRows(accessToken: string, book: JobBookConfig = JOB_BOOKS.auckland, continuationLink?: string): Promise<JobBookPage> {
@@ -350,9 +351,10 @@ async function readCurrentIntakeVersion(accessToken: string, row: JobBookRow) {
 export async function voidJobBookIntakeRow(accessToken: string, row: JobBookRow, reason: string): Promise<JobBookRow> {
     const error = jobBookVoidBlockedReason(row) || jobBookVoidReasonError(reason)
     if (error) throw new Error(error)
-    if (UNIFIED_JOB_WALKTHROUGH && row.registeredLedgerId) {
+    if (UNIFIED_JOB_RUNTIME && row.registeredLedgerId) {
         try {
-            await walkthroughJobAction(accessToken, 'void', { book: row.jobBookKey, ledgerId: row.registeredLedgerId, jobId: row.linkedJobId, jobEtag: row.etag, ledgerEtag: row.ledgerEtag, reason: reason.trim() })
+            if (UNIFIED_JOB_WALKTHROUGH) await walkthroughJobAction(accessToken, 'void', { book: row.jobBookKey, ledgerId: row.registeredLedgerId, jobId: row.linkedJobId, jobEtag: row.etag, ledgerEtag: row.ledgerEtag, reason: reason.trim() })
+            else await runJobWorkflow(accessToken, { kind: 'void', book: row.jobBookKey, ledgerId: row.registeredLedgerId, jobId: row.linkedJobId, jobEtag: row.etag, ledgerEtag: row.ledgerEtag ?? '', reason: reason.trim() })
         } catch (cause) {
             if (cause instanceof Error && cause.message.startsWith('Someone else')) throw new JobBookConflictError()
             throw cause

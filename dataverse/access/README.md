@@ -18,6 +18,14 @@ not match the agreed policy.
 - Office and Book profiles have separate marker permissions. Customer/Site
   creation, factual Job corrections, Equipment details and eligible unlinked
   Intake Void have narrow allowlists. Other generic writes fail closed.
+- The local transactional `JobWorkflowPlugin` implements exact-version Manage
+  job and linked registered-entry Void operations. Linked Void updates the Job
+  and regional ledger together, and this guard permits only those exact child
+  writes from the matching caller-context Custom API. Direct writes still fail.
+- The same local plugin implements replay-safe initial dispatch. It resolves the
+  assigned technician server-side, requires an exact Job version, rejects
+  recipient/assignment overrides, and creates only the exact guarded Email
+  Dispatch child row. The Azure secure-link service remains separate.
 
 Run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
 scripts/test-restricted-access-plugin.ps1` from the repository root. The offline
@@ -26,11 +34,13 @@ SDK. They do not prove real role resolution or deployment behavior.
 
 ## Required before registration or user assignment
 
-1. Integrate authorization into the registration, linked Void and initial
-   technician/dispatch operations. This draft deliberately blocks generic
-   Job/ledger/dispatch creation and linked-ledger updates, so installing it now
-   would break allowed workflows. Do not bypass it by trusting a browser flag,
-   arbitrary parent context or unverified shared variable.
+1. Registration, Manage job/linked Void and initial assigned-technician dispatch
+   now have local transactional plugin contracts, but their Custom APIs, privileges,
+   columns and steps are not provisioned or target-tested. Verify the Azure
+   link/Dataverse dispatch boundary and recovery with approved pilot accounts.
+   This draft deliberately blocks generic
+   Job/ledger/dispatch creation and linked-ledger updates. Do not bypass it by
+   trusting a browser flag, arbitrary parent context or unverified shared variable.
 2. Review every write path, including bulk messages, relationship operations,
    reassignment, status changes, imports, automation and application users.
    Define separate least-privilege data roles and remove overlapping broader
@@ -55,4 +65,7 @@ SDK. They do not prove real role resolution or deployment behavior.
 
 The authoritative roster and remaining acceptance gates are in
 [the access plan](../../docs/features/JOB_BOOK_ACCESS_PLAN.md) and
-[the live read-only audit](../../docs/features/JOB_BOOK_ACCESS_AUDIT.md).
+[the live read-only audit](../../docs/features/JOB_BOOK_ACCESS_AUDIT.md). The machine-readable
+unified-workflow API/capability boundary is in
+[`unified-workflow-role-policy.json`](unified-workflow-role-policy.json); it is a review artifact,
+not a role-provisioning manifest.

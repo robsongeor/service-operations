@@ -55,13 +55,13 @@ These are application roles, not Microsoft tenant administrator privileges.
 | --- | --- | --- |
 | George only | Unrestricted application access | Existing `ServiceOperations.FullAccess` |
 | Bruce and Andy | Same application capabilities initially; restrict separately later | Proposed distinct `ServiceOperations.ServiceCoordinator`, not implemented/provisioned |
-| Jess and Nargiza | Office Admin: corrections, assignment/email, GT/Timecloud markers and review; same Customer/Site creation and Equipment move/detail-edit scope as Job Book Admin | Existing `ServiceOperations.JobCardAdmin` client profile |
+| Jess, Nargiza and Pubudu | Office Admin: corrections, assignment/email, GT/Timecloud markers and review; same Customer/Site creation and Equipment move/detail-edit scope as Job Book Admin | Existing `ServiceOperations.JobCardAdmin` client profile; Pubudu is the admitted live pilot |
 | Martin, Lance, Ranjani, Ashneel and Kaizer | Job Book Admin: entry, eligible-entry Void, factual corrections after handoff, Customer/Site creation, Equipment moves and detail edits; no assignment/email, markers or review | Proposed distinct `ServiceOperations.JobBookAdmin`, not implemented/provisioned |
 | Job Book only | Not planned for this rollout | Retain existing implementation without rollout assignments |
 
 ServiceCoordinator must remain a distinct role even while capabilities match FullAccess.
 Do not give coordinators an additional FullAccess claim that would bypass later restrictions.
-Job Card review is limited to George, both Service coordinators, Jess and Nargiza. The other
+Job Card review is limited to George, both Service coordinators, Jess, Nargiza and Pubudu. The other
 five Job Book Admins retain entry and correction duties without assignment/email, marker writes
 or review access. Implementing this distinct profile is required before rollout.
 Both Admin groups have separate Customers and Equipment screens under the agreed creation,

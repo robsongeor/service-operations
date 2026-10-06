@@ -40,9 +40,14 @@ namespace ServiceOperations.JobRegistration
             if (target == null) throw new InvalidPluginExecutionException("A record update is required.");
             if (!job)
             {
-                if (before.GetAttributeValue<EntityReference>(JobRegistrationPlugin.RegisteredJob) != null ||
-                    !string.IsNullOrWhiteSpace(before.GetAttributeValue<string>(JobRegistrationPlugin.Fingerprint)))
-                    throw new InvalidPluginExecutionException("Registered number-ledger snapshots are immutable. Correct the working Job instead.");
+                bool registered = before.GetAttributeValue<EntityReference>(JobRegistrationPlugin.RegisteredJob) != null ||
+                    !string.IsNullOrWhiteSpace(before.GetAttributeValue<string>(JobRegistrationPlugin.Fingerprint));
+                if (registered)
+                {
+                    if (!IsRegisteredVoid(context, target))
+                        throw new InvalidPluginExecutionException("Registered number-ledger snapshots are immutable. Correct the working Job instead.");
+                    return;
+                }
                 if (target.Contains(JobRegistrationPlugin.RegisteredJob) || target.Contains(JobRegistrationPlugin.Fingerprint) ||
                     (target.GetAttributeValue<OptionSetValue>("gr_stage") != null && target.GetAttributeValue<OptionSetValue>("gr_stage").Value == JobRegistrationPlugin.RegisteredStage))
                     throw new InvalidPluginExecutionException("Historical Intake cannot be relinked by ordinary editing.");
@@ -69,6 +74,28 @@ namespace ServiceOperations.JobRegistration
                 string book = parent.InputParameters.Contains("Book") ? parent.InputParameters["Book"] as string : null;
                 string table = book == "auckland" ? "gr_jobbookentry" : "gr_" + book + "jobbookentry";
                 return table == context.PrimaryEntityName;
+            }
+            return false;
+        }
+
+        static bool IsRegisteredVoid(IPluginExecutionContext context, Entity target)
+        {
+            if (target.Attributes.Keys.Any(key => key != "gr_stage" && key != "gr_voidreason") ||
+                target.GetAttributeValue<OptionSetValue>("gr_stage") == null ||
+                target.GetAttributeValue<OptionSetValue>("gr_stage").Value != JobWorkflowPlugin.VoidStage ||
+                String.IsNullOrWhiteSpace(target.GetAttributeValue<string>("gr_voidreason"))) return false;
+            var parent = context.ParentContext;
+            for (int depth = 0; parent != null && depth < 8; depth++, parent = parent.ParentContext)
+            {
+                if (parent.Stage != 30 || parent.Mode != 0 || !parent.IsInTransaction ||
+                    parent.InitiatingUserId != context.InitiatingUserId || parent.MessageName != JobWorkflowPlugin.VoidMessage) continue;
+                if (!parent.InputParameters.Contains("LedgerId") || !(parent.InputParameters["LedgerId"] is Guid) ||
+                    (Guid)parent.InputParameters["LedgerId"] != target.Id) return false;
+                string book = parent.InputParameters.Contains("Book") ? parent.InputParameters["Book"] as string : null;
+                string table = book == "auckland" ? "gr_jobbookentry" :
+                    book == "waikato" || book == "hastings" || book == "christchurch" ? "gr_" + book + "jobbookentry" : null;
+                string reason = parent.InputParameters.Contains("Reason") ? parent.InputParameters["Reason"] as string : null;
+                return table == target.LogicalName && String.Equals(reason == null ? null : reason.Trim(), target.GetAttributeValue<string>("gr_voidreason"), StringComparison.Ordinal);
             }
             return false;
         }

@@ -122,9 +122,8 @@ namespace ServiceOperations.JobRegistration
                 if (!string.IsNullOrWhiteSpace(current.GetAttributeValue<string>("gr_jobnumber")))
                     throw Failure("ALREADY_NUMBERED", "The Job already has a number. It cannot receive another.");
                 if (current.RowVersion != expectedVersion) throw Failure("CONFLICT", "The Job changed elsewhere. Reload before allocating its number.");
-                // WOF/Site Check require their own reviewed adapter and must not bypass specialist flows.
-                int? jobType = current.GetAttributeValue<OptionSetValue>("gr_jobtype") == null ? (int?)null : current.GetAttributeValue<OptionSetValue>("gr_jobtype").Value;
-                if (jobType == 122830003 || jobType == 122830004) throw Failure("SPECIALIST", "Allocate this number through the specialist workflow once supported.");
+                // Specialist Jobs retain their source records and operational fields. Number allocation
+                // changes only the Job number and creates the same immutable regional ledger snapshot.
                 job = current;
             }
 

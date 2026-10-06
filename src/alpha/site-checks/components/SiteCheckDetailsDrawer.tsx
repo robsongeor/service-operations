@@ -23,6 +23,7 @@ import {
 import './SiteCheckDetailsDrawer.css'
 import type { SiteCheckAssignmentEmailInput } from '../services/siteCheckAssignmentApi'
 import SiteCheckScheduleSettings from './SiteCheckScheduleSettings'
+import { UNIFIED_JOB_RUNTIME } from '../../jobs/domain/unifiedJobWorkflow'
 
 type Tab = 'summary' | 'settings' | 'history'
 
@@ -288,7 +289,7 @@ export default function SiteCheckDetailsDrawer({
                                 >
                                     Open Equipment
                                 </button>
-                                {job.gr_jobnumber?.trim() && <button
+                                {!UNIFIED_JOB_RUNTIME && job.gr_jobnumber?.trim() && <button
                                     type="button"
                                     className="site-check-clear-number"
                                     onClick={() => {
@@ -497,7 +498,7 @@ export default function SiteCheckDetailsDrawer({
                 </>}
             </EditDrawerSection>
             {hasCurrentCheck && <><EditDrawerSection title="Current Jobs and Equipment">
-                {selected && <div className="site-check-job-book">
+                {selected && !UNIFIED_JOB_RUNTIME && <div className="site-check-job-book">
                     <div>
                         <strong>Job Book allocation</strong>
                         <span>Copy the generated Jobs to Excel, then paste the allocated Job numbers back in the same row order.</span>
@@ -511,6 +512,12 @@ export default function SiteCheckDetailsDrawer({
                         </button>
                     </div>
                     {jobBookFeedback && <p role="status">{jobBookFeedback}</p>}
+                </div>}
+                {selected && UNIFIED_JOB_RUNTIME && <div className="site-check-job-book" role="status">
+                    <div>
+                        <strong>Regional number allocation</strong>
+                        <span>Direct Excel copy/paste and number clearing are disabled. Open generated Jobs on the Jobs Site Check tab and use Allocate job number.</span>
+                    </div>
                 </div>}
                 {generatedJobs(false)}
             </EditDrawerSection>
@@ -650,7 +657,9 @@ export default function SiteCheckDetailsDrawer({
             eyebrow="Permanent deletion"
             title="Delete this Site Check and its Jobs?"
             message={<>
-                <p>This permanently deletes the Site Check occurrence and all {selected.gr_expectedjobcount} generated Jobs.</p>
+                <p>{UNIFIED_JOB_RUNTIME
+                    ? `This can permanently delete the Site Check occurrence only while all ${selected.gr_expectedjobcount} generated Jobs remain unnumbered. Allocated Jobs must be retained as history.`
+                    : `This permanently deletes the Site Check occurrence and all ${selected.gr_expectedjobcount} generated Jobs.`}</p>
                 <p>The Site Check Schedule, frequency, due date, Equipment scope, and manual selections will be preserved.</p>
             </>}
             error={deleteError}

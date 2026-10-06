@@ -11,6 +11,7 @@ import { WOF_RESULTS } from '../types/wof.types'
 import { getWofJobCreationDisposition, normalizeWofDateOnly, verifyWofExpiryWithRetry, wofDatesMatch } from '../utils/wofRules'
 import { newZealandDateOnly } from '../../shared/dates/dateOnly'
 import { fetchAllDataversePages } from '../../shared/dataverse/fetchAllDataversePages'
+import { UNIFIED_JOB_RUNTIME } from '../../jobs/domain/unifiedJobWorkflow'
 
 const API_URL = `${import.meta.env.VITE_DATAVERSE_URL}/api/data/v9.2`
 
@@ -191,7 +192,7 @@ async function patch(token: string, path: string, body: Record<string, unknown>,
 export async function updateWof(token: string, input: UpdateWofInput) {
     const internal = input.assignmentMode === 'internal'
     await patch(token, `gr_jobs(${input.jobId})`, {
-        gr_jobnumber: input.jobNumber.trim() || null,
+        ...(!UNIFIED_JOB_RUNTIME ? { gr_jobnumber: input.jobNumber.trim() || null } : {}),
         gr_description: input.description.trim(),
         'gr_Equipment@odata.bind': `/gr_equipments(${input.equipment.gr_equipmentid})`,
         'gr_Site@odata.bind': input.equipment.gr_Site?.gr_siteid ? `/gr_sites(${input.equipment.gr_Site.gr_siteid})` : null,

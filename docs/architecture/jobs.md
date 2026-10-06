@@ -73,6 +73,14 @@ privileges and secure-link API authority, including server-side assigned-recipie
 restricted Admins. Browser capabilities and the preflight check alone cannot enforce that boundary.
 See [email delivery](../email-dispatch-flow.md) for transport ownership.
 
+The local unified-workflow contract now adds `gr_QueueInitialJobDispatch`. Behind the disabled
+`VITE_UNIFIED_JOB_WORKFLOW_ENABLED` gate, restricted Admin sends use a retained request ID and the
+exact rendered message. The caller-scoped plugin rereads the Job and assigned technician, verifies
+the Job row version and recipient, rejects Site Check/Void/unnumbered/Unconfirmed work and creates
+one fingerprinted Email Dispatch row. Same-session uncertain retries reuse the identical request and
+body. The Azure secure-link call remains separate, and no Custom API, fingerprint column, privilege,
+step or role has been provisioned or live-tested.
+
 ## Job number safety foundation (3 October 2026)
 
 The [unified Job Book decision](../features/JOB_BOOK_INTAKE_DESIGN.md#unified-workflow-decision-3-october-2026)
@@ -80,11 +88,12 @@ separates registration, numbering and coordinator membership. Its first local im
 protects existing numbers without switching persistence or requiring unprovisioned columns.
 The next server/client slice now exists as local source and offline tests; see the authoritative
 [transactional registration contract](../features/JOB_BOOK_INTAKE_DESIGN.md#transactional-registration-implementation-local-only).
-It is not provisioned or wired into the ordinary runtime. Both screens now use it only in the
-[isolated unified walkthrough](../features/JOB_BOOK_INTAKE_DESIGN.md#unified-screen-walkthrough-3-october-2026-sample-data-only),
-with retained-request recovery and shared creation/correction controls. Sample Void/membership
-operations remain fixture-only. This is not a substitute for the remaining schema, privilege,
-migration and specialist-workflow rollout.
+It is not provisioned and stays disabled by default. The production feature gate now wires the same
+screen boundary to 100-row Dataverse pages, validates continuation links, and applies server-side
+Operational, Unconfirmed and Job Type filters. The
+[isolated unified walkthrough](../features/JOB_BOOK_INTAKE_DESIGN.md#unified-screen-walkthrough-3-october-2026-sample-data-only)
+retains its fixture endpoints and shared creation/correction controls. This is not a substitute for
+the remaining schema, privilege, migration and specialist-workflow rollout.
 
 `jobNumberPolicy` owns allocated-number detection, immutable editor checks, first-allocation
 eligibility, retained-number deletion protection and the transitional regional import format.
@@ -102,8 +111,11 @@ zeros and allow regional sequences to grow beyond four/five digits, up to the sc
 
 The canonical drawer hides ordinary Delete for numbered Jobs. The API rereads the exact record
 and rejects numbered deletion; an unnumbered deletion uses that current ETag, protecting a concurrent
-allocation. This is not a new cancellation action. Site Check occurrence deletion/clear-number and
-its allocation path remain specialist workflows to reconcile before releasing the unified contract.
+allocation. This is not a new cancellation action. When the unified runtime gate is enabled, remaining
+direct number paste/create/import paths fail closed, Site Check number clearing is unavailable, and an
+occurrence containing a numbered Job cannot be deleted. WOF corrections omit the number field and new
+WOF Jobs remain unnumbered. Both specialist types use the same guarded per-Job regional allocator from
+their Jobs tabs; allocation preserves type, evidence and source relationships while creating the ledger.
 No new server-side immutable-column enforcement is claimed. `tests/jobNumberPolicy.test.ts` covers
 payload exclusions, permissions presentation, regional formats, bounded preflight, stale callers,
 allocation/deletion races and fail-closed responses; drawer rendering is also covered by the

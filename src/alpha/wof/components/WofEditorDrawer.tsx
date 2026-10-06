@@ -15,6 +15,7 @@ import type { CreateWofInput, ServiceProvider, TechnicianQualification, UpdateWo
 import { WOF_RESULTS } from '../types/wof.types'
 import { getWofDeletionBlockReason, isQualificationValid, WOF_PROVIDER_TYPE_CODE } from '../utils/wofRules'
 import { parseAlternateFleetNumbers } from '../../equipment/identifiers/alternateFleetNumbers'
+import { UNIFIED_JOB_RUNTIME } from '../../jobs/domain/unifiedJobWorkflow'
 
 type Props = {
     inspection?: WofInspection; schedule?: JobScheduleOption
@@ -119,7 +120,9 @@ export default function WofEditorDrawer(props: Props) {
                 {!editing && <button type="button" className="wof-add-equipment" onClick={() => setCreatingEquipment(true)}>+ Add new equipment</button>}
                 {completed && <p className="wof-protected-note">Equipment cannot be changed after the linked Job is completed.</p>}
                 {selectedEquipment && <div className="wof-equipment-summary"><span>REGO <strong>{selectedEquipment.gr_registrationnumber || 'Not recorded'}</strong></span><span>Current expiry <strong>{selectedEquipment.gr_currentwofexpiry || 'Unknown'}</strong></span><span>Customer <strong>{selectedEquipment.gr_Site?.gr_Customer?.gr_name || 'Not recorded'}</strong></span><span>Site <strong>{selectedEquipment.gr_Site?.gr_name || 'Not recorded'}</strong></span></div>}
-                <label>Job number<input value={jobNumber} onChange={(event) => setJobNumber(event.target.value)} /></label>
+                <label>Job number<input value={jobNumber} onChange={(event) => setJobNumber(event.target.value)} readOnly={UNIFIED_JOB_RUNTIME} placeholder={UNIFIED_JOB_RUNTIME ? 'Allocated after creation' : undefined} /></label>
+                {UNIFIED_JOB_RUNTIME && !editing && <p className="wof-protected-note">The WOF Job will be saved unnumbered. After saving, open it on the Jobs WOF tab and use Allocate job number.</p>}
+                {UNIFIED_JOB_RUNTIME && editing && <p className="wof-protected-note">Allocated Job numbers are permanent and cannot be edited from WOF.</p>}
                 <label>Work description *<textarea rows={3} value={description} onChange={(event) => setDescription(event.target.value)} /></label>
                 <label>Scheduled date<input type="date" value={scheduledDate} onChange={(event) => { setScheduledDate(event.target.value); if (!editing) setPerformerId('') }} /></label>
                 {editing && deletionBlockReason && <p className="wof-protected-note">{deletionBlockReason}</p>}

@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "status": "approved-for-flag-off-provisioning",
+  "baselineRole": "Basic User",
+  "depth": "Global",
+  "profiles": [
+    {
+      "profile": "office",
+      "name": "Service Operations - Office Admin",
+      "tables": {
+        "gr_Job": ["Create", "Read", "Write", "Append", "AppendTo"],
+        "gr_JobBookEntry": ["Create", "Read", "Write", "Append", "AppendTo"],
+        "gr_WaikatoJobBookEntry": ["Create", "Read", "Write", "Append", "AppendTo"],
+        "gr_HastingsJobBookEntry": ["Create", "Read", "Write", "Append", "AppendTo"],
+        "gr_ChristchurchJobBookEntry": ["Create", "Read", "Write", "Append", "AppendTo"],
+        "gr_Customer": ["Create", "Read", "AppendTo"],
+        "gr_Site": ["Create", "Read", "Append", "AppendTo"],
+        "gr_Equipment": ["Read", "Write", "Append", "AppendTo"],
+        "gr_Contact": ["Read", "AppendTo"],
+        "gr_SiteContact": ["Read"],
+        "gr_Mechanic": ["Read", "AppendTo"],
+        "gr_EmailDispatch": ["Create", "Read", "Append"],
+        "gr_JobAssignment": ["Read"],
+        "gr_JobOfficeUpdate": ["Read"],
+        "gr_Quote": ["Read"],
+        "gr_QuoteLine": ["Read"],
+        "gr_PricingItem": ["Read"],
+        "gr_PurchaseOrderRecipient": ["Read"]
+      }
+    },
+    {
+      "profile": "book",
+      "name": "Service Operations - Job Book Admin",
+      "tables": {
+        "gr_Job": ["Create", "Read", "Write", "Append", "AppendTo"],
+        "gr_JobBookEntry": ["Create", "Read", "Write", "Append", "AppendTo"],
+        "gr_WaikatoJobBookEntry": ["Create", "Read", "Write", "Append", "AppendTo"],
+        "gr_HastingsJobBookEntry": ["Create", "Read", "Write", "Append", "AppendTo"],
+        "gr_ChristchurchJobBookEntry": ["Create", "Read", "Write", "Append", "AppendTo"],
+        "gr_Customer": ["Create", "Read", "AppendTo"],
+        "gr_Site": ["Create", "Read", "Append", "AppendTo"],
+        "gr_Equipment": ["Read", "Write", "Append", "AppendTo"],
+        "gr_Contact": ["Read", "AppendTo"],
+        "gr_SiteContact": ["Read"],
+        "gr_Mechanic": ["Read", "AppendTo"],
+        "gr_JobAssignment": ["Read"],
+        "gr_JobOfficeUpdate": ["Read"]
+      }
+    }
+  ],
+  "alwaysExcludedOperations": ["Delete", "Assign", "Share"],
+  "alwaysExcludedPrivileges": [
+    "prvCreategr_JobScheduleOption",
+    "prvWritegr_JobScheduleOption",
+    "prvCreategr_Equipment",
+    "prvWritegr_Customer",
+    "prvWritegr_Site",
+    "prvCreategr_Mechanic"
+  ],
+  "notes": [
+    "Restricted Job and ledger writes require the synchronous server guards; table Write alone is never treated as field authorization.",
+    "Office receives Email Dispatch Create only for the guarded initial-dispatch API; generic direct creation is denied by the restricted-access step.",
+    "Job Book Admin receives no Email Dispatch or coordinator Job Schedule Option privilege.",
+    "Job Card private evidence remains separately authorized by the Azure reviewer allowlist."
+  ]
+}

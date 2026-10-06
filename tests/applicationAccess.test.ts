@@ -112,13 +112,38 @@ test('Job Book guards Manage job presentation and entry point while retaining In
     const screen = readFileSync(new URL('../src/alpha/job-book/JobBookPrototypeScreen.tsx', import.meta.url), 'utf8')
     assert.match(screen, /const \{ canManageJobs, canCorrectJobDetails, canEmailAssignedTechnician \} = applicationAccessFromEnvironment\(account\)/)
     assert.match(screen, /const openManageJob = \(row: JobBookRow\) => \{\s*if \(!canManageJobs \|\| \(!isEditableJobBookIntake\(row\) && !row\.registeredLedgerId\)\) return/)
-    assert.match(screen, /if \(UNIFIED_JOB_WALKTHROUGH && row\.registeredLedgerId\) \{[\s\S]*?fetchJobForCorrection[\s\S]*?setManagingJob[\s\S]*?return\s*\}\s*setPromotionRow\(row\)/)
+    assert.match(screen, /if \(UNIFIED_JOB_RUNTIME && row\.registeredLedgerId\) \{[\s\S]*?fetchJobForCorrection[\s\S]*?setManagingJob[\s\S]*?return\s*\}\s*setPromotionRow\(row\)/)
     assert.match(screen, /\{canManageJobs && row\.coordinatorManaged !== true && <button[^>]*onClick=\{\(\) => openManageJob\(row\)\}>Manage job<\/button>\}/)
     assert.match(screen, /canEditIntake\s*\? <button[^>]*onClick=\{\(\) => openIntakeEntryEditor\(row\)\}>Edit entry<\/button>/)
     assert.match(screen, /\{canManageJobs && promotionRow && promotionReadiness &&/)
     assert.match(screen, /id="promotion-dialog-title">Manage job \{promotionRow\.jobNumber\}/)
     assert.match(screen, /<button[^>]*disabled[^>]*>Create managed Job<\/button>/)
     assert.doesNotMatch(screen, /Prepare promotion/)
+})
+
+test('unified production Jobs uses the bounded worklist without changing the default runtime', () => {
+    const screen = readFileSync(new URL('../src/alpha/jobs/JobsScreen.tsx', import.meta.url), 'utf8')
+    const worklist = readFileSync(new URL('../src/alpha/jobs/hooks/useUnifiedJobWorklist.ts', import.meta.url), 'utf8')
+    assert.match(screen, /useUnifiedJobWorklist\(viewState\.selectedJobType\)/)
+    assert.match(screen, /useJobs\(UNIFIED_JOB_RUNTIME \? \{ loadGlobalOperationalData: false/)
+    assert.match(screen, /unifiedWorklist=\{UNIFIED_JOB_RUNTIME\}/)
+    assert.match(worklist, /fetchUnifiedJobsPage\(token, scope, cursor\)/)
+})
+
+test('unified WOF presents Job numbers as immutable and points to guarded allocation', () => {
+    const drawer = readFileSync(new URL('../src/alpha/wof/components/WofEditorDrawer.tsx', import.meta.url), 'utf8')
+    assert.match(drawer, /readOnly=\{UNIFIED_JOB_RUNTIME\}/)
+    assert.match(drawer, /saved unnumbered[\s\S]*Jobs WOF tab[\s\S]*Allocate job number/)
+    assert.match(drawer, /Allocated Job numbers are permanent/)
+})
+
+test('unified Site Checks removes direct number paste and clear presentation', () => {
+    const drawer = readFileSync(new URL('../src/alpha/site-checks/components/SiteCheckDetailsDrawer.tsx', import.meta.url), 'utf8')
+    assert.match(drawer, /!UNIFIED_JOB_RUNTIME && job\.gr_jobnumber/)
+    assert.match(drawer, /selected && !UNIFIED_JOB_RUNTIME && <div className="site-check-job-book">/)
+    assert.match(drawer, /Direct Excel copy\/paste and number clearing are disabled/)
+    assert.match(drawer, /Jobs Site Check tab[\s\S]*Allocate job number/)
+    assert.match(drawer, /Allocated Jobs must be retained as history/)
 })
 
 test('enforced access denies an account without an application role', () => {

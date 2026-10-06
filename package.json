@@ -18,7 +18,7 @@
     "test:equipment": "node --experimental-strip-types --test tests/equipmentAlternateFleetNumbers.test.ts tests/equipmentDataCache.test.ts tests/equipmentDataQuality.test.ts tests/equipmentMap.test.ts tests/equipmentPagination.test.ts tests/equipmentRealtime.test.ts tests/equipmentRealtimeApi.test.cjs tests/greentreeEquipmentReconciliation.test.ts",
     "test:job-book": "node --experimental-strip-types --test tests/jobBookIntake.test.ts tests/jobBookVoid.test.ts tests/jobBookActions.test.ts tests/jobBookActionsUi.test.mjs tests/jobCorrections.test.ts tests/jobCorrectionsUi.test.mjs tests/jobCustomerSearch.test.ts tests/mechanicSelect.test.ts tests/equipmentLocation.test.ts tests/jobCreationLocation.test.ts tests/jobSiteContactFieldsUi.test.mjs tests/jobEquipmentFieldUi.test.mjs",
     "test:job-number-policy": "node --experimental-strip-types --test tests/jobNumberPolicy.test.ts",
-    "test:job-registration": "node --experimental-strip-types --test tests/jobRegistration.test.ts tests/unifiedJobWorkflow.test.ts tests/unifiedJobWorkflowUi.test.mjs",
+    "test:job-registration": "node --experimental-strip-types --test tests/jobRegistration.test.ts tests/jobWorkflowApi.test.ts tests/jobWorkflowIntegration.test.mjs tests/unifiedJobWorkflow.test.ts tests/unifiedJobWorkflowUi.test.mjs",
     "test:job-registration-plugin": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test-job-registration-plugin.ps1",
     "test:job-email": "node --experimental-strip-types --test tests/jobEmail.test.ts",
     "test:technician-submission": "node --experimental-strip-types --test tests/technicianSubmission.test.ts tests/jobCardWorkflowUi.test.mjs tests/jobCardPhotoDownload.test.mjs tests/jobCardReviewQueue.test.ts",

@@ -24,11 +24,46 @@
       "requiredPrivilegeSource": { "table": "gr_jobscheduleoption", "operation": "Create" },
       "privilegeGate": "Resolve ExecutePrivilegeName from published metadata and verify only coordinators hold this privilege. If Admin also holds it, STOP and choose a reviewed existing coordinator-only privilege; do not silently broaden authorization.",
       "parameters": { "RequestId": "Guid required", "Book": "String required", "JobId": "Guid required", "ExpectedRowVersion": "String required, numeric exact SDK RowVersion" }
+    },
+    {
+      "name": "gr_ManageJobBookJob",
+      "pluginType": "ServiceOperations.JobRegistration.JobWorkflowPlugin",
+      "isFunction": false,
+      "binding": "Global",
+      "allowedCustomProcessingStepType": "None",
+      "requiredPrivilegeSource": { "table": "gr_jobscheduleoption", "operation": "Create" },
+      "privilegeGate": "Use the same reviewed coordinator-only ExecutePrivilegeName as number allocation. FullAccess and ServiceCoordinator only; Admin roles must not hold it.",
+      "parameters": { "JobId": "Guid required", "ExpectedJobRowVersion": "String required, numeric exact SDK RowVersion" },
+      "response": { "JobId": "Guid", "JobRowVersion": "String", "CoordinatorManaged": "Boolean", "RegistrationVoid": "Boolean", "WasReplay": "Boolean" }
+    },
+    {
+      "name": "gr_VoidRegisteredJobBookEntry",
+      "pluginType": "ServiceOperations.JobRegistration.JobWorkflowPlugin",
+      "isFunction": false,
+      "binding": "Global",
+      "allowedCustomProcessingStepType": "None",
+      "requiredPrivilegeSource": { "table": "gr_jobbookentry", "operation": "Write" },
+      "privilegeGate": "Resolve a reviewed privilege held by FullAccess, ServiceCoordinator, OfficeAdmin and JobBookAdmin only. The plugin, invariant guard and restricted-access guard must be deployed together.",
+      "parameters": { "Book": "String required", "JobId": "Guid required", "LedgerId": "Guid required", "ExpectedJobRowVersion": "String required, numeric exact SDK RowVersion", "ExpectedLedgerRowVersion": "String required, numeric exact SDK RowVersion", "Reason": "String required, max 1000" },
+      "response": { "JobId": "Guid", "LedgerId": "Guid", "JobRowVersion": "String", "LedgerRowVersion": "String", "CoordinatorManaged": "Boolean", "RegistrationVoid": "Boolean", "WasReplay": "Boolean" }
+    },
+    {
+      "name": "gr_QueueInitialJobDispatch",
+      "pluginType": "ServiceOperations.JobRegistration.JobWorkflowPlugin",
+      "isFunction": false,
+      "binding": "Global",
+      "allowedCustomProcessingStepType": "None",
+      "requiredPrivilegeSource": { "table": "gr_emaildispatch", "operation": "Create" },
+      "privilegeGate": "FullAccess, ServiceCoordinator and OfficeAdmin only. JobBookAdmin must not hold the ExecutePrivilegeName. Generic Email Dispatch Create remains blocked by the restricted-access guard.",
+      "parameters": { "RequestId": "Guid required and retained for retry", "JobId": "Guid required", "ExpectedJobRowVersion": "String required, numeric exact SDK RowVersion", "RecipientEmail": "String required, max 320; must equal the current assigned technician", "Subject": "String required, max 500", "Body": "String required, max 100000" },
+      "response": { "DispatchId": "Guid", "WasReplay": "Boolean" },
+      "boundary": "The Azure submission-link service remains separate. The client must finish link generation and render the bounded message before calling this API; retries must reuse the identical RequestId and body."
     }
   ],
   "response": { "JobId": "Guid", "LedgerId": "Guid", "Book": "String", "JobNumber": "String", "JobRowVersion": "String", "WasReplay": "Boolean" },
   "proposedSchema": {
-    "gr_job": { "gr_coordinatormanaged": "Boolean; new registration explicitly false; existing records require reviewed migration and legacy fallback" },
+    "gr_job": { "gr_coordinatormanaged": "Boolean; new registration explicitly false; existing records require reviewed migration and legacy fallback", "gr_registrationvoid": "Boolean; set only by the atomic registered-entry Void API", "gr_registrationvoidreason": "String max 1000; set with gr_registrationvoid by the same transaction" },
+    "gr_emaildispatch": { "gr_jobdispatchfingerprint": "String max 64; canonical SHA-256 replay identity for guarded initial dispatch" },
     "regionalTables": ["gr_jobbookentry", "gr_waikatojobbookentry", "gr_hastingsjobbookentry", "gr_christchurchjobbookentry"],
     "regionalColumns": { "gr_registeredjob": "Optional Lookup to gr_job; independent of historical gr_promotedjob", "gr_registrationfingerprint": "Optional String max 64; canonical SHA-256 replay identity" },
     "regionalChoiceAddition": { "gr_stage": { "label": "Registered", "value": 122830004 } },
@@ -42,9 +77,9 @@
     "messages": ["Create", "Update", "Delete"],
     "updateFilteringAttributes": "NONE: protect ledger snapshots as well as number writes",
     "updateAndDeletePreImage": { "alias": "Before", "columns": ["gr_jobnumber", "gr_registeredjob", "gr_registrationfingerprint", "gr_stage"], "jobColumnsOnly": ["gr_jobnumber"] },
-    "gate": "Do not register until imports/migration and every creation/allocation/deletion caller including WOF/Site Checks have switched to reviewed workflows. It intentionally blocks legacy manual numbering and registered-ledger edits. Registered Void needs its separate atomic operation before rollout. Verify cascading deletes and privilege-bypass permissions in approved environment tests."
+    "gate": "Do not register until imports/migration and every creation/allocation/deletion caller including WOF/Site Checks have switched to reviewed workflows. It intentionally blocks legacy manual numbering and registered-ledger edits except the exact atomic registered-entry Void child update. Verify Custom API parent-context behavior, cascading deletes and privilege-bypass permissions in approved environment tests."
   },
-  "releaseGates": ["schema and privilege review", "signed assembly packaging and Custom API/step registration", "server-side Admin field authorization outside these two actions", "atomic registered-entry Void workflow", "master-record/snapshot-only Intake migration decision", "specialist numbering adapters", "bounded unified screen integration", "production approvals and target-user security tests"],
+  "releaseGates": ["schema and privilege review", "signed assembly packaging and Custom API/step registration", "server-side Admin field authorization including target-environment verification of the linked Void child writes", "master-record/snapshot-only Intake migration decision", "specialist numbering adapters", "bounded unified screen integration", "production approvals and target-user security tests"],
   "provisioningIncluded": false,
   "migrationIncluded": false,
   "seedsIncluded": false

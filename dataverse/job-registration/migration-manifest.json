@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "status": "read-only-analysis-not-approved-for-backfill",
+  "writeIncluded": false,
+  "autoLinkAllowed": false,
+  "maximumRecordsPerTable": 50000,
+  "jobTable": {
+    "name": "gr_job",
+    "number": "gr_jobnumber",
+    "type": "gr_jobtype",
+    "coordinatorManaged": "gr_coordinatormanaged"
+  },
+  "regionalBooks": [
+    { "book": "auckland", "table": "gr_jobbookentry", "prefix": "", "minimumDigits": 6, "numberPattern": "^[0-9]+$" },
+    { "book": "waikato", "table": "gr_waikatojobbookentry", "prefix": "WJ", "minimumDigits": 4, "numberPattern": "^WJ[0-9]+$" },
+    { "book": "hastings", "table": "gr_hastingsjobbookentry", "prefix": "HJ", "minimumDigits": 5, "numberPattern": "^HJ[0-9]+$" },
+    { "book": "christchurch", "table": "gr_christchurchjobbookentry", "prefix": "CJ", "minimumDigits": 5, "numberPattern": "^CJ[0-9]+$" }
+  ],
+  "ledgerColumns": {
+    "number": "gr_jobnumber",
+    "registeredJob": "gr_registeredjob",
+    "historicalPromotedJob": "gr_promotedjob",
+    "stage": "gr_stage"
+  },
+  "specialistJobTypes": {
+    "wof": 122830003,
+    "siteCheck": 122830004
+  },
+  "reviewedUnknownFormatExceptionSet": {
+    "count": 8,
+    "sha256": "8f50c3817223b03c17ff2dbf57f858b726bd2c04d0b1efb59f365474a1489ef1",
+    "decision": "Preserve unchanged as grandfathered legacy values; do not assign a region, fabricate a ledger, renumber, or permit these formats for new allocation."
+  },
+  "classifications": [
+    "already-linked-consistent",
+    "linked-number-mismatch",
+    "linked-job-missing",
+    "historical-promoted-preserve",
+    "one-job-number-candidate-manual-review",
+    "no-job-number-match",
+    "multiple-job-number-matches",
+    "duplicate-ledger-number-across-regions",
+    "invalid-regional-number-format",
+    "numberless-ledger",
+    "legacy-numbered-job-without-ledger",
+    "legacy-numbered-job-auckland",
+    "legacy-numbered-job-waikato",
+    "legacy-numbered-job-hastings",
+    "legacy-numbered-job-christchurch",
+    "legacy-numbered-job-unknown-region",
+    "unnumbered-job",
+    "coordinator-membership-true",
+    "coordinator-membership-false",
+    "coordinator-membership-unset",
+    "coordinator-membership-column-missing"
+  ],
+  "decisionRules": [
+    "Never create or update a link from matching number text automatically.",
+    "Never reinterpret gr_promotedjob or a historical Promoted stage as gr_registeredjob.",
+    "Never infer coordinator membership from Job type, status, number, ledger presence or historical promotion.",
+    "Never fabricate regional ledger rows for existing numbered Jobs; preserve them as grandfathered legacy Jobs unless separately reviewed source evidence is imported.",
+    "Leave existing coordinator membership unset and use the explicit legacy operational fallback; new registration writes false and reviewed Manage writes true.",
+    "The reviewed unknown-format exception set is identified only by count and fingerprint; any set drift is a stop condition.",
+    "Never renumber, clear, delete or move historical Job or ledger rows during analysis.",
+    "Every proposed one-to-one link requires an approved reviewed evidence file and exact row versions.",
+    "Any duplicate, mismatch, missing counterpart, malformed number or cross-region collision is a stop condition.",
+    "AutoNumber seed ownership and rollback must be approved independently of record linkage."
+  ]
+}

@@ -5,6 +5,8 @@ import EditDrawerFormDialog from '../../shared/drawer/EditDrawerFormDialog'
 import { useJobRegistration } from '../hooks/useJobRegistration'
 import { fetchJobForCorrection } from '../services/jobCorrectionsApi'
 import { walkthroughJobAction } from '../services/unifiedJobWalkthroughApi'
+import { runJobWorkflow } from '../services/jobWorkflowApi'
+import { UNIFIED_JOB_WALKTHROUGH } from '../domain/unifiedJobWorkflow'
 import { useActiveMsalAccount } from '../../../auth/useActiveMsalAccount'
 
 export default function JobRegistrationDialog({ job: initial, mode, getAccessToken, onClose, onSaved }: {
@@ -27,7 +29,11 @@ export default function JobRegistrationDialog({ job: initial, mode, getAccessTok
         if (busy || registration.busy) return
         setBusy(true); setError('')
         try {
-            if (mode === 'manage') await walkthroughJobAction(await getAccessToken(), 'manage', { jobId: job.gr_jobid, etag: job['@odata.etag'] })
+            if (mode === 'manage') {
+                const token = await getAccessToken()
+                if (UNIFIED_JOB_WALKTHROUGH) await walkthroughJobAction(token, 'manage', { jobId: job.gr_jobid, etag: job['@odata.etag'] })
+                else await runJobWorkflow(token, { kind: 'manage', jobId: job.gr_jobid, jobEtag: job['@odata.etag'] ?? '' })
+            }
             else {
                 const result = await registration.submit({ kind: 'allocate', requestId: crypto.randomUUID(), book, jobId: job.gr_jobid, etag: job['@odata.etag'] ?? '' })
                 if (!result) return

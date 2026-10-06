@@ -1,9 +1,11 @@
 import type { Job } from '../types/job.types.ts'
+import { JOB_WORKFLOW_ENABLED } from '../services/jobWorkflowApi.ts'
 
-// Deliberately NOT the production registration release flag. The additional
-// operations below have fixture implementations only, not provisioned APIs.
+// The walkthrough flag stays development-only. The separate production gate is
+// disabled by default and must not be enabled before schema/API/security rollout.
 export const UNIFIED_JOB_WALKTHROUGH = import.meta.env?.DEV === true
     && import.meta.env?.VITE_UNIFIED_JOB_WALKTHROUGH === 'true'
+export const UNIFIED_JOB_RUNTIME = UNIFIED_JOB_WALKTHROUGH || JOB_WORKFLOW_ENABLED
 
 export type JobWorklist = 'operational' | 'staging' | 'all'
 export const UNIFIED_JOB_SELECT = ',gr_coordinatormanaged,gr_registrationvoid,gr_registrationvoidreason'

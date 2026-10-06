@@ -9,7 +9,7 @@ import { fetchCustomerSites, createSite } from '../jobs/services/sitesApi'
 import { createEquipment } from '../jobs/services/equipmentApi'
 import { invalidateJobsCache } from '../jobs/services/jobsApi'
 import { createEquipmentDestination } from '../equipment/services/equipmentLocationWorkflow'
-import { UNIFIED_JOB_WALKTHROUGH } from '../jobs/domain/unifiedJobWorkflow'
+import { UNIFIED_JOB_RUNTIME, UNIFIED_JOB_WALKTHROUGH } from '../jobs/domain/unifiedJobWorkflow'
 import { useJobRegistration } from '../jobs/hooks/useJobRegistration'
 import JobRegistrationDialog from '../jobs/components/JobRegistrationDialog'
 import { fetchJobForCorrection } from '../jobs/services/jobCorrectionsApi'
@@ -564,7 +564,7 @@ export default function JobBookPrototypeScreen({
     }
     const openManageJob = (row: JobBookRow) => {
         if (!canManageJobs || (!isEditableJobBookIntake(row) && !row.registeredLedgerId)) return
-        if (UNIFIED_JOB_WALKTHROUGH && row.registeredLedgerId) {
+        if (UNIFIED_JOB_RUNTIME && row.registeredLedgerId) {
             void getAccessToken().then((token) => fetchJobForCorrection(token, row.linkedJobId)).then(setManagingJob).catch((cause) => setSaveError(cause instanceof Error ? cause.message : 'Job could not be loaded.'))
             return
         }

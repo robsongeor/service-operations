@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react'
 import type { Job } from '../types/job.types'
 import { assertJobEmailSendingAllowed, type JobEmailDeliveryState, type JobEmailDraft } from '../services/jobEmail'
-import { queuePrimaryJobDispatch } from '../services/primaryJobEmailWorkflow'
+import { queuePrimaryJobDispatch, type InitialDispatchAttempt } from '../services/primaryJobEmailWorkflow'
 import { invalidateJobsCache } from '../services/jobsApi'
+import { JOB_WORKFLOW_ENABLED } from '../services/jobWorkflowApi'
 
 type Options = {
     getAccessToken: () => Promise<string>
@@ -15,6 +16,7 @@ type Options = {
 export function usePrimaryJobEmail({ getAccessToken, enabled = true, assignedRecipientOnly = false, verifyCurrentJob = false, onDelivered }: Options) {
     const [emailDeliveryStates, setEmailDeliveryStates] = useState<Record<string, JobEmailDeliveryState>>({})
     const pending = useRef(new Set<string>())
+    const dispatchAttempts = useRef(new Map<string, { key: string; attempt: InitialDispatchAttempt }>())
     const queuePrimaryJobEmail = async (job: Job, draft: JobEmailDraft) => {
         if (!enabled) throw new Error('You do not have permission to email this Job.')
         assertJobEmailSendingAllowed(window.location.hostname)
@@ -24,7 +26,15 @@ export function usePrimaryJobEmail({ getAccessToken, enabled = true, assignedRec
         state('sending', 'Job Card email is being sent.')
         try {
             const token = await getAccessToken()
-            const queued = await queuePrimaryJobDispatch(token, job, draft, { hostname: window.location.hostname, assignedRecipientOnly, verifyCurrentJob })
+            const attemptKey = JSON.stringify([job.gr_jobid, job['@odata.etag'], draft.recipientEmail.trim().toLowerCase(), draft.subject.trim(), draft.technicianComments?.trim() ?? ''])
+            let retained = dispatchAttempts.current.get(job.gr_jobid)
+            if (!retained || retained.key !== attemptKey) {
+                retained = { key: attemptKey, attempt: { requestId: crypto.randomUUID() } }
+                dispatchAttempts.current.set(job.gr_jobid, retained)
+            }
+            const guardedAttempt = assignedRecipientOnly && JOB_WORKFLOW_ENABLED ? retained.attempt : undefined
+            const queued = await queuePrimaryJobDispatch(token, job, draft, { hostname: window.location.hostname, assignedRecipientOnly, verifyCurrentJob, dispatchAttempt: guardedAttempt })
+            if (guardedAttempt) dispatchAttempts.current.delete(job.gr_jobid)
             void (async () => {
                 try {
                     await queued.confirmDelivery()

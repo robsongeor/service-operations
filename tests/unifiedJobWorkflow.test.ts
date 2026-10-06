@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { createUnifiedJobFixture, fixtureBooks } from '../scripts/dev/unifiedJobFixture.mjs'
 import { jobMatchesWorklist, jobWorklistLabel, UNIFIED_JOB_WALKTHROUGH } from '../src/alpha/jobs/domain/unifiedJobWorkflow.ts'
 import { registrationAttemptStore } from '../src/alpha/jobs/services/jobRegistrationAttempt.ts'
@@ -129,4 +130,111 @@ test('recovery storage survives remount, is actor scoped and preserves the ident
     registrationAttemptStore(storage, 'admin-a').clear()
     assert.equal(values.size, 0)
     assert.throws(() => registrationAttemptStore({ ...storage, setItem: () => {} }, 'admin-a').save(command), /No request was sent/)
+})
+
+test('deployment readiness tooling is read-only and non-interactive by default', () => {
+    const script = readFileSync(new URL('../scripts/inspect-unified-job-workflow-readiness.ps1', import.meta.url), 'utf8')
+    const manifest = JSON.parse(readFileSync(new URL('../dataverse/job-registration/readiness-manifest.json', import.meta.url), 'utf8'))
+    assert.match(script, /\[string\]\$LoginPrompt = 'Never'/)
+    assert.match(script, /WhoAmIRequest|RetrieveEntityRequest|RetrieveAttributeRequest|RetrieveRolePrivilegesRoleRequest/)
+    assert.doesNotMatch(script, /CreateEntityRequest|CreateAttributeRequest|UpdateAttributeRequest|DeleteRequest|PublishXmlRequest|AddPrivilegesRoleRequest/)
+    assert.equal(manifest.status, 'read-only-preflight-not-approved-for-provisioning')
+    assert.equal(manifest.customApis.length, 5)
+    assert.equal(manifest.regionalNumberContracts.length, 4)
+    assert.match(script, /AutoNumberFormat[\s\S]*EntityKeyIndexStatus/)
+    assert.ok(manifest.activationBlockers.length >= 5)
+})
+
+test('migration audit is bounded, aggregate-only and cannot write backfills', () => {
+    const script = readFileSync(new URL('../scripts/inspect-unified-job-migration.ps1', import.meta.url), 'utf8')
+    const manifest = JSON.parse(readFileSync(new URL('../dataverse/job-registration/migration-manifest.json', import.meta.url), 'utf8'))
+    assert.equal(manifest.writeIncluded, false)
+    assert.equal(manifest.autoLinkAllowed, false)
+    assert.equal(manifest.regionalBooks.length, 4)
+    assert.ok(manifest.maximumRecordsPerTable > 0)
+    assert.match(script, /\[string\]\$LoginPrompt = 'Never'/)
+    assert.match(script, /exceeds the reviewed \$Maximum-row audit bound/)
+    assert.match(script, /No identifiers, number values or record changes were emitted/)
+    assert.match(script, /\[switch\]\$ShowExceptionNumbers/)
+    assert.match(script, /if \(\$ShowExceptionNumbers\)/)
+    assert.match(script, /\[switch\]\$ShowCutoverCandidates/)
+    assert.match(script, /recalculate immediately before cutover/)
+    assert.deepEqual(manifest.regionalBooks.map((book: { minimumDigits: number }) => book.minimumDigits), [6, 4, 5, 5])
+    assert.doesNotMatch(script, /CreateRequest|UpdateRequest|DeleteRequest|AssociateRequest|DisassociateRequest|ExecuteMultipleRequest|ImportSolutionRequest|AddPrivilegesRoleRequest/)
+    assert.ok(manifest.decisionRules.some((rule: string) => /Never create or update a link/.test(rule)))
+    assert.ok(manifest.decisionRules.some((rule: string) => /Never infer coordinator membership/.test(rule)))
+    assert.ok(manifest.decisionRules.some((rule: string) => /Never fabricate regional ledger rows/.test(rule)))
+    assert.ok(manifest.decisionRules.some((rule: string) => /Leave existing coordinator membership unset/.test(rule)))
+    assert.equal(manifest.reviewedUnknownFormatExceptionSet.count, 8)
+    assert.match(manifest.reviewedUnknownFormatExceptionSet.sha256, /^[a-f0-9]{64}$/)
+    assert.match(script, /reviewedExceptionSetMatches/)
+})
+
+test('role policy agrees with Custom API gates and permanently denies direct numbering', () => {
+    const readiness = JSON.parse(readFileSync(new URL('../dataverse/job-registration/readiness-manifest.json', import.meta.url), 'utf8'))
+    const policy = JSON.parse(readFileSync(new URL('../dataverse/access/unified-workflow-role-policy.json', import.meta.url), 'utf8'))
+    assert.equal(policy.default, 'deny')
+    assert.equal(policy.directNumberMutation, false)
+    assert.deepEqual(policy.profiles.map((profile: { profile: string }) => profile.profile), ['full', 'coordinator', 'office', 'book'])
+    for (const profile of policy.profiles) {
+        const expected = readiness.roles.find((role: { profile: string }) => role.profile === profile.profile)
+        assert.ok(expected)
+        assert.deepEqual([...profile.allowedApis].sort(), [...expected.allowedApis].sort())
+    }
+    assert.ok(policy.alwaysDenied.includes('direct-job-number-create-update-clear'))
+    assert.ok(policy.alwaysDenied.includes('system-service-impersonation'))
+})
+
+test('dry-run deployment package is complete, ordered and cannot deploy', () => {
+    const readiness = JSON.parse(readFileSync(new URL('../dataverse/job-registration/readiness-manifest.json', import.meta.url), 'utf8'))
+    const contract = JSON.parse(readFileSync(new URL('../dataverse/job-registration/contract.json', import.meta.url), 'utf8'))
+    const plan = JSON.parse(readFileSync(new URL('../dataverse/job-registration/deployment-plan.json', import.meta.url), 'utf8'))
+    const planner = readFileSync(new URL('../scripts/plan-unified-job-workflow-deployment.ps1', import.meta.url), 'utf8')
+    const builder = readFileSync(new URL('../scripts/build-unified-job-workflow-plugin.ps1', import.meta.url), 'utf8')
+    assert.equal(readiness.columns.length, 12)
+    assert.equal(readiness.regionalTables.length, 4)
+    assert.equal(readiness.customApis.length, 5)
+    assert.equal(plan.featureFlagDuringDeployment, false)
+    assert.equal(plan.assembly.version, '1.0.0.0')
+    assert.equal(plan.provisioningIncluded, false)
+    assert.equal(plan.deploymentIncluded, false)
+    assert.equal(plan.assignmentIncluded, false)
+    assert.equal(plan.featureEnableIncluded, false)
+    assert.deepEqual(plan.assembly.types, [
+        'ServiceOperations.JobRegistration.JobRegistrationPlugin',
+        'ServiceOperations.JobRegistration.JobWorkflowPlugin',
+        'ServiceOperations.JobRegistration.JobNumberInvariantPlugin',
+        'ServiceOperations.Access.RestrictedAccessPlugin',
+    ])
+    const invariant = plan.guardSteps[0]
+    assert.deepEqual(invariant.tables, contract.invariantPlugin.tables)
+    assert.deepEqual(invariant.messages, contract.invariantPlugin.messages)
+    assert.deepEqual(invariant.images.Update.ledgerColumns, contract.invariantPlugin.updateAndDeletePreImage.columns)
+    assert.deepEqual(invariant.filteringAttributes, [])
+    assert.match(plan.rollback.data, /Never renumber, delete ledgers, clear links/)
+    assert.match(builder, /Package mode requires an existing, owner-approved strong-name key/)
+    assert.match(builder, /strong-name key must be stored outside the repository/)
+    assert.match(builder, /existing artifacts are never overwritten/)
+    assert.match(builder, /ServiceOperations\.UnifiedJobWorkflow\.manifest\.json/)
+    assert.match(builder, /deploymentPerformed = \$false/)
+    assert.doesNotMatch(planner, /CrmServiceClient|CreateRequest|UpdateRequest|DeleteRequest|ImportSolutionRequest|AddPrivilegesRoleRequest/)
+    assert.doesNotMatch(builder, /CrmServiceClient|RegisterPlugin|ImportSolution|pac solution import/)
+})
+
+test('assignment plan preserves the agreed roster and cannot change access', () => {
+    const assignments = JSON.parse(readFileSync(new URL('../dataverse/access/unified-workflow-assignment-plan.json', import.meta.url), 'utf8'))
+    const admissionAudit = readFileSync(new URL('../scripts/inspect-unified-job-role-admission.ps1', import.meta.url), 'utf8')
+    assert.equal(assignments.assignmentIncluded, false)
+    assert.equal(assignments.removalIncluded, false)
+    assert.equal(assignments.intendedUsers.length, 11)
+    assert.deepEqual(Object.fromEntries(['full', 'coordinator', 'office', 'book'].map((profile) => [profile, assignments.intendedUsers.filter((user: { profile: string }) => user.profile === profile).length])), {
+        full: 1, coordinator: 2, office: 3, book: 5,
+    })
+    assert.equal(assignments.intendedUsers.filter((user: { dataverseAdmission: string }) => user.dataverseAdmission !== 'present').length, 8)
+    assert.ok(assignments.gates.some((gate: string) => /direct and team-derived/.test(gate)))
+    assert.ok(assignments.gates.some((gate: string) => /preserve unrelated assignments/i.test(gate)))
+    assert.ok(assignments.rollback.some((step: string) => /Restore each changed account's pre-change/.test(step)))
+    assert.match(admissionAudit, /\[string\]\$LoginPrompt = 'Never'/)
+    for (const table of ['systemuserroles', 'teamroles', 'teammembership']) assert.match(admissionAudit, new RegExp(table))
+    assert.doesNotMatch(admissionAudit, /CreateRequest|UpdateRequest|DeleteRequest|AssignRequest|AddMembersTeamRequest|AssociateRequest/)
 })
