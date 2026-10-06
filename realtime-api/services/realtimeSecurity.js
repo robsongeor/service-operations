@@ -1,3 +1,7 @@
+const DEPLOYED_APP_ORIGINS = [
+    'https://kind-wave-0cdea2200.2.azurestaticapps.net',
+]
+
 function requestHeader(request, name) {
     const target = name.toLowerCase()
     const entry = Object.entries(request.headers || {}).find(([key]) => key.toLowerCase() === target)
@@ -10,7 +14,7 @@ function bearerToken(request) {
 }
 
 function allowedOrigins() {
-    return [process.env.APP_ORIGIN, process.env.APP_ORIGINS]
+    return [process.env.APP_ORIGIN, process.env.APP_ORIGINS, ...DEPLOYED_APP_ORIGINS]
         .filter(Boolean)
         .flatMap((value) => String(value).split(','))
         .map((value) => value.trim().replace(/\/$/, ''))
