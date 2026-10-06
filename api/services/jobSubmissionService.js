@@ -129,7 +129,8 @@ async function loadDataverseSnapshot(authorization, jobId, assignmentId, recipie
 
 function validateSnapshot(snapshot) {
     return Boolean(snapshot && snapshot.jobNumber && GUID_PATTERN.test(snapshot.sourceJobId)
-        && Number.isInteger(snapshot.jobType) && (!snapshot.assignmentId || GUID_PATTERN.test(snapshot.assignmentId))
+        && (snapshot.jobType == null || Number.isInteger(snapshot.jobType))
+        && (!snapshot.assignmentId || GUID_PATTERN.test(snapshot.assignmentId))
         && GUID_PATTERN.test(snapshot.technicianId) && snapshot.technicianName
         && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(snapshot.technicianEmail)
         && snapshot.jobNumber.length <= 200 && snapshot.workRequired.length <= 10000
