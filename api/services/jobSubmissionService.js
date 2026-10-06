@@ -2,6 +2,8 @@ const { createHash, randomBytes, randomUUID } = require('node:crypto')
 const { getJobCardStore, resetJobCardStore } = require('./jobCardStorage')
 const { sendReviewNotification } = require('./jobCardNotification')
 const { isLocalDevelopment } = require('./jobCardEnvironment')
+const { applyOfficeTransition, officeProjection } = require('./jobCardOfficeReview')
+const { listOpenJobs } = require('./jobCardOpenJobs')
 
 const SERVICE_JOB = 122830001
 const DEFAULT_EXPIRY_HOURS = 168
@@ -41,7 +43,7 @@ function safeJson(value, fallback) {
 async function validateAuthenticatedUser(request) {
     const authorization = requestHeader(request, 'x-dataverse-authorization') || requestHeader(request, 'authorization')
     if (!/^Bearer\s+\S+$/i.test(authorization)) return null
-    if (isLocalDevelopment()) return { authorization, userId: 'local-office-user' }
+    if (isLocalDevelopment()) return { authorization, userId: 'local-office-user', displayName: 'Local Office User', email: 'local.office@example.invalid' }
     const origin = dataverseOrigin()
     if (!origin) return null
     const response = await fetch(`${origin}/api/data/v9.2/WhoAmI`, { headers: { Authorization: authorization, Accept: 'application/json' } })
@@ -327,6 +329,7 @@ async function handlePublicPost(request) {
         furtherWorkRequired: body.furtherWorkRequired, furtherWorkDetails: body.furtherWorkRequired ? body.furtherWorkDetails : '',
         safetyIssueIdentified: body.safetyIssueIdentified, safetyIssueDetails: body.safetyIssueIdentified ? body.safetyIssueDetails : '',
         photosJson: JSON.stringify(photos), photoCount: photos.length, notificationStatus: 'pending',
+        officeStatus: 'pending', officeActivitiesJson: '[]',
     }
     let saved
     try { saved = await getJobCardStore().replace(submitted, found.record.etag) }
@@ -347,6 +350,7 @@ function reviewSummary(record) {
         jobType: Number.isInteger(record.jobType) ? record.jobType : undefined,
         workRequired: record.workRequired || undefined, equipmentDisplayName: record.equipmentDisplayName || undefined,
         fleetNumber: record.fleetNumber || undefined, equipmentSerial: record.equipmentSerial || undefined,
+        ...officeProjection(record),
     }
 }
 
@@ -362,24 +366,33 @@ function reviewDetails(record) {
         furtherWorkDetails: record.furtherWorkDetails || undefined, safetyIssueDetails: record.safetyIssueDetails || undefined,
         photos: safeJson(record.photosJson, []).map((photo) => ({ id: photo.id, fileName: photo.fileName, mimeType: photo.mimeType, size: photo.size })),
         reviewedOn: record.reviewedOn || undefined, reviewedByUserId: record.reviewedByUserId || undefined,
+        ...officeProjection(record),
     }
+}
+
+async function authorizeReviewer(identity) {
+    if (isLocalDevelopment()) return identity
+    const allowed = (process.env.JOB_CARD_REVIEWER_EMAILS || '').split(',').map((email) => email.trim().toLowerCase()).filter(Boolean)
+    if (!GUID_PATTERN.test(identity.userId) || !allowed.length) return null
+    const userResponse = await fetch(`${dataverseOrigin()}/api/data/v9.2/systemusers(${identity.userId})?$select=fullname,internalemailaddress,domainname`, { headers: { Authorization: identity.authorization, Accept: 'application/json' } })
+    if (!userResponse.ok) return null
+    const user = await userResponse.json()
+    const email = [user.internalemailaddress, user.domainname].find((value) => typeof value === 'string' && allowed.includes(value.trim().toLowerCase()))
+    return email ? { ...identity, displayName: String(user.fullname || email).trim(), email: email.trim().toLowerCase() } : null
 }
 
 async function handleReviewRequest(request) {
     if (!['GET', 'POST'].includes(request.method)) return jsonResponse(405, { error: 'Method not allowed.' }, { Allow: 'GET, POST' })
     const identity = await validateAuthenticatedUser(request)
     if (!identity) return jsonResponse(401, { error: 'Authentication is required.' }, { 'WWW-Authenticate': 'Bearer' })
-    if (!isLocalDevelopment()) {
-        const allowed = (process.env.JOB_CARD_REVIEWER_EMAILS || '').split(',').map((email) => email.trim().toLowerCase()).filter(Boolean)
-        if (!GUID_PATTERN.test(identity.userId) || !allowed.length) return jsonResponse(403, { error: 'Job Card reviewer access is required.' })
-        const userResponse = await fetch(`${dataverseOrigin()}/api/data/v9.2/systemusers(${identity.userId})?$select=internalemailaddress,domainname`, { headers: { Authorization: identity.authorization, Accept: 'application/json' } })
-        if (!userResponse.ok) return jsonResponse(403, { error: 'Job Card reviewer access is required.' })
-        const user = await userResponse.json()
-        if (![user.internalemailaddress, user.domainname].some((email) => typeof email === 'string' && allowed.includes(email.trim().toLowerCase()))) return jsonResponse(403, { error: 'Job Card reviewer access is required.' })
-    }
+    const reviewer = await authorizeReviewer(identity)
+    if (!reviewer) return jsonResponse(403, { error: 'Job Card reviewer access is required.' })
     const reviewId = typeof request.query?.reviewId === 'string' ? request.query.reviewId.trim() : ''
     const photoId = typeof request.query?.photoId === 'string' ? request.query.photoId.trim() : ''
     const jobId = typeof request.query?.jobId === 'string' ? request.query.jobId.trim() : ''
+    const queryKeys = Object.keys(request.query || {})
+    const allowedQueryKeys = new Set(['reviewId', 'photoId', 'jobId', 'view', 'offset', 'limit'])
+    if (queryKeys.some((key) => !allowedQueryKeys.has(key))) return jsonResponse(400, { error: 'The review query contains unsupported fields.' })
     if (request.query?.jobId !== undefined) {
         if (request.method !== 'GET' || reviewId || photoId || !GUID_PATTERN.test(jobId)) return jsonResponse(400, { error: 'A valid Job history request is required.' })
         const records = await getJobCardStore().listByJobId(jobId, 501)
@@ -394,8 +407,27 @@ async function handleReviewRequest(request) {
     }
     if (!reviewId) {
         if (request.method !== 'GET') return jsonResponse(400, { error: 'A review item is required.' })
-        const records = await getJobCardStore().listPending(101)
-        return jsonResponse(200, { items: records.slice(0, 100).map(reviewSummary), truncated: records.length > 100 })
+        if (photoId) return jsonResponse(400, { error: 'A review item is required for photo retrieval.' })
+        const view = request.query?.view || 'active'
+        const offsetText = request.query?.offset ?? '0'
+        const limitText = request.query?.limit ?? '100'
+        if (!['open', 'submitted', 'review', 'completed', 'active', 'history'].includes(view) || !/^\d+$/.test(String(offsetText)) || !/^\d+$/.test(String(limitText))) return jsonResponse(400, { error: 'The review query is invalid.' })
+        const offset = Number(offsetText)
+        const requestedLimit = Number(limitText)
+        if (offset >= 500 || requestedLimit < 1 || requestedLimit > 100) return jsonResponse(400, { error: 'The review query is outside the supported range.' })
+        const limit = Math.min(requestedLimit, 500 - offset)
+        if (view === 'open') {
+            try { return jsonResponse(200, await listOpenJobs({ origin: dataverseOrigin(), authorization: identity.authorization, store: getJobCardStore(), offset, limit })) }
+            catch { return jsonResponse(503, { error: 'Open jobs could not be verified. Check access to Email Dispatch, Jobs and submission history, then retry.' }) }
+        }
+        const records = ['history', 'completed'].includes(view)
+            ? await getJobCardStore().listHistory(offset + limit + 1)
+            : await getJobCardStore().listActive(offset + limit + 1)
+        const items = records.slice(offset, offset + limit).map(reviewSummary).filter((item) =>
+            view === 'submitted' ? item.officeStatus === 'pending' : view === 'review' ? ['inReview', 'needsClarification', 'onHold'].includes(item.officeStatus) : true)
+        const truncated = records.length > offset + limit
+        const hasMore = truncated && offset + limit < 500
+        return jsonResponse(200, { items, view, hasMore, nextOffset: hasMore ? offset + limit : undefined, truncated, scanLimitReached: truncated && !hasMore })
     }
     if (!GUID_PATTERN.test(reviewId)) return jsonResponse(404, { error: 'The review item was not found.' })
     const record = await getJobCardStore().getByReviewId(reviewId)
@@ -412,15 +444,24 @@ async function handleReviewRequest(request) {
         if (record.notificationStatus === 'sent') return jsonResponse(200, reviewDetails(record))
         return jsonResponse(200, reviewDetails(await notifyReview(record) || record))
     }
-    if (request.method === 'POST' && request.body?.action === 'markReviewed') {
-        if (record.status === 'reviewed') return jsonResponse(200, reviewDetails(record))
-        if (request.body.etag !== record.etag) return jsonResponse(409, { error: 'The review changed. Refresh before marking it reviewed.' })
-        let reviewed
-        try { reviewed = await getJobCardStore().replace({ ...record, status: 'reviewed', reviewedOn: new Date().toISOString(), reviewedByUserId: identity.userId }, record.etag) }
-        catch (error) { if (error.statusCode === 412) return jsonResponse(409, { error: 'The review changed. Refresh and retry.' }); throw error }
-        return jsonResponse(200, reviewDetails(reviewed))
+    if (request.method === 'POST') {
+        // V1 still posts markReviewed. Preserve that deployed client while the V2 UI uses
+        // the explicit office workflow and optional GreenTree reference.
+        const transition = request.body?.action === 'markReviewed'
+            ? { action: 'completeGreenTreeProcessing', etag: request.body?.etag }
+            : request.body
+        if (typeof transition?.etag !== 'string' || transition.etag !== record.etag) return jsonResponse(409, { code: 'conflict', error: 'Another administrator changed this review. Refresh it before retrying.' })
+        let updated
+        try {
+            const replacement = applyOfficeTransition(record, transition, reviewer)
+            updated = await getJobCardStore().replace(replacement, record.etag)
+        } catch (error) {
+            if (error?.statusCode === 412) return jsonResponse(409, { code: 'conflict', error: 'Another administrator changed this review. Refresh it before retrying.' })
+            if (error?.statusCode) return jsonResponse(error.statusCode, { code: error.code, error: error.message })
+            throw error
+        }
+        return jsonResponse(200, reviewDetails(updated))
     }
-    if (request.method === 'POST') return jsonResponse(400, { error: 'Unknown review action.' })
     return jsonResponse(200, reviewDetails(record))
 }
 

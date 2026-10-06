@@ -102,11 +102,28 @@ class MemoryJobCardStore {
     }
 
     async listPending(limit = 100) {
+        return this.listActive(limit)
+    }
+
+    async listSubmittedByJobIds(jobIds, limit = 501) {
+        const ids = new Set(jobIds.map((id) => id.toLowerCase()))
+        return [...this.entities.values()].filter((item) => ids.has(String(item.sourceJobId).toLowerCase())
+            && ['pendingReview', 'reviewed'].includes(item.status)).slice(0, limit).map(clone)
+    }
+
+    async listActive(limit = 100) {
+        return this.listByLifecycleStatus('pendingReview', limit)
+    }
+
+    async listHistory(limit = 100) {
+        return this.listByLifecycleStatus('reviewed', limit)
+    }
+
+    async listByLifecycleStatus(status, limit) {
         return [...this.entities.values()]
-            .filter((item) => item.status === 'pendingReview')
+            .filter((item) => item.status === status)
             .sort((left, right) => String(right.submittedOn).localeCompare(String(left.submittedOn)))
-            .slice(0, limit)
-            .map(clone)
+            .slice(0, limit).map(clone)
     }
 
     async replace(entity, etag) {
@@ -204,8 +221,28 @@ class AzureJobCardStore {
     }
 
     async listPending(limit = 100) {
-        const entities = await this.collect(`PartitionKey eq '${PARTITION_KEY}' and status eq 'pendingReview'`, limit)
-        return entities.sort((left, right) => String(right.submittedOn).localeCompare(String(left.submittedOn)))
+        return this.listActive(limit)
+    }
+
+    async listSubmittedByJobIds(jobIds, limit = 501) {
+        if (!jobIds.length) return []
+        const jobs = jobIds.map((id) => `sourceJobId eq '${String(id).replaceAll("'", "''")}'`).join(' or ')
+        return this.collect(`PartitionKey eq '${PARTITION_KEY}' and (status eq 'pendingReview' or status eq 'reviewed') and (${jobs})`, limit)
+    }
+
+    async listActive(limit = 100) {
+        return this.listByLifecycleStatus('pendingReview', limit)
+    }
+
+    async listHistory(limit = 100) {
+        return this.listByLifecycleStatus('reviewed', limit)
+    }
+
+    async listByLifecycleStatus(status, limit) {
+        // Sort one bounded population consistently before taking a requested page prefix.
+        // Sorting different-size prefixes can skip records between offset pages.
+        const entities = await this.collect(`PartitionKey eq '${PARTITION_KEY}' and status eq '${status}'`, 501)
+        return entities.sort((left, right) => String(right.submittedOn).localeCompare(String(left.submittedOn)) || String(left.reviewId).localeCompare(String(right.reviewId))).slice(0, limit)
     }
 
     async replace(entity, etag) {
