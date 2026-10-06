@@ -159,6 +159,40 @@ test('Void entries cannot be edited or marked through any normal save path', asy
     }
 })
 
+test('managed marker save recovers a missing table ETag before applying the protected update', async (t) => {
+    const managed = {
+        ...row,
+        entrySource: 'dataverse-job' as const,
+        entryStage: JOB_BOOK_ENTRY_STAGES.PROMOTED,
+        linkedJobId: 'managed-job-1',
+        intakeRecordId: '',
+        etag: '',
+    }
+    const calls: string[] = []
+    t.mock.method(globalThis, 'fetch', async (_url: unknown, init?: RequestInit) => {
+        calls.push(init?.method ?? 'GET')
+        if (!init?.method) {
+            assert.equal(init?.cache, 'no-store')
+            return Response.json({ gr_jobid: managed.linkedJobId, gr_gtentered: false, gr_timecloudentered: false }, { headers: { ETag: 'W/"7"' } })
+        }
+        assert.equal(init.method, 'PATCH')
+        assert.equal((init.headers as Record<string, string>)['If-Match'], 'W/"7"')
+        assert.deepEqual(JSON.parse(String(init.body)), { gr_gtentered: true })
+        return Response.json({ gr_jobid: managed.linkedJobId, gr_gtentered: true, gr_timecloudentered: false }, { headers: { ETag: 'W/"8"' } })
+    })
+
+    const saved = await updateManagedJobBookMarker('sample-token', managed, 'entered', true)
+    assert.deepEqual(calls, ['GET', 'PATCH'])
+    assert.deepEqual(saved, { entered: true, timecloudEntered: false, etag: 'W/"8"' })
+})
+
+test('managed marker recovery fails closed when the latest Job version cannot be verified', async (t) => {
+    const managed = { ...row, entrySource: 'dataverse-job' as const, linkedJobId: 'managed-job-1', etag: '' }
+    const mock = t.mock.method(globalThis, 'fetch', async () => Response.json({ gr_jobid: 'different-job' }, { headers: { ETag: 'W/"7"' } }))
+    await assert.rejects(updateManagedJobBookMarker('sample-token', managed, 'entered', true), /could not be verified/)
+    assert.equal(mock.mock.callCount(), 1, 'no PATCH is attempted with unverified version data')
+})
+
 test('stale edit and marker saves cannot resurrect or mutate a newly voided entry', async (t) => {
     for (const etag of [row.etag, 'W/"2"']) {
         const mock = t.mock.method(globalThis, 'fetch', async (_url: unknown, init?: RequestInit) => {

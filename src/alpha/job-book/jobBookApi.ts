@@ -171,15 +171,28 @@ export async function updateManagedJobBookMarker(
     value: boolean,
 ): Promise<Pick<JobBookRow, 'entered' | 'timecloudEntered' | 'etag'>> {
     if (row.entryStage === JOB_BOOK_ENTRY_STAGES.VOID) throw new Error('Void entries are read-only.')
-    if (!row.linkedJobId || !row.etag) throw new Error('Reload this Job before saving the entry marker.')
+    if (!row.linkedJobId) throw new Error('Reload this Job before saving the entry marker.')
+    const jobUrl = `${DATAVERSE_URL}/api/data/v9.2/gr_jobs(${row.linkedJobId})?$select=gr_jobid,gr_gtentered,gr_timecloudentered`
+    let etag = row.etag
+    if (!etag) {
+        const latestResponse = await fetch(jobUrl, {
+            cache: 'no-store',
+            headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+        })
+        if (!latestResponse.ok) throw new Error('The current Job version could not be loaded. Try again.')
+        const latest = await latestResponse.json() as Pick<JobBookApiRow, '@odata.etag' | 'gr_jobid'>
+        if (latest.gr_jobid?.toLowerCase() !== row.linkedJobId.toLowerCase()) throw new Error('The current Job version could not be verified. Try again.')
+        etag = latest['@odata.etag'] || latestResponse.headers.get('ETag') || ''
+        if (!etag) throw new Error('The current Job version could not be loaded. Try again.')
+    }
     const dataverseField = MANAGED_JOB_ENTRY_MARKER_COLUMNS[field]
-    const response = await fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobs(${row.linkedJobId})?$select=gr_gtentered,gr_timecloudentered`, {
+    const response = await fetch(jobUrl, {
         method: 'PATCH',
         headers: {
             Authorization: `Bearer ${accessToken}`,
             Accept: 'application/json',
             'Content-Type': 'application/json',
-            'If-Match': row.etag,
+            'If-Match': etag,
             Prefer: 'return=representation',
         },
         body: JSON.stringify({ [dataverseField]: value }),
@@ -190,7 +203,7 @@ export async function updateManagedJobBookMarker(
     return {
         entered: Boolean(saved.gr_gtentered),
         timecloudEntered: Boolean(saved.gr_timecloudentered),
-        etag: saved['@odata.etag'] ?? '',
+        etag: saved['@odata.etag'] || response.headers.get('ETag') || '',
     }
 }
 
