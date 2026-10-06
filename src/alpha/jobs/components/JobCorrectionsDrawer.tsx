@@ -13,13 +13,16 @@ type Props = {
     jobBookLabel?: string
     mechanics?: Mechanic[]
     canAssignTechnician?: boolean
+    onCreateCustomer?: (customer: { name: string }) => Promise<string>
+    onCreateSite?: (site: { customerId: string; name: string; address?: string }) => Promise<string>
+    onCreateEquipment?: (equipment: { fleet: string; alternateFleet?: string; serial: string; make?: string; model?: string }) => Promise<string>
     getAccessToken: () => Promise<string>
     onSaved: (job: CorrectableJob) => void
     onClose: () => void
 }
 
 /** Capability-guarded by its host. Reuses the canonical Job editor, with no operational mutation callbacks. */
-export default function JobCorrectionsDrawer({ jobId, jobBookLabel = 'Auckland', mechanics = [], canAssignTechnician = false, getAccessToken, onSaved, onClose }: Props) {
+export default function JobCorrectionsDrawer({ jobId, jobBookLabel = 'Auckland', mechanics = [], canAssignTechnician = false, onCreateCustomer, onCreateSite, onCreateEquipment, getAccessToken, onSaved, onClose }: Props) {
     const corrections = useJobCorrections(jobId, getAccessToken, onSaved)
     const [confirmReload, setConfirmReload] = useState(false)
     if (!corrections.job) return <JobDrawerShell eyebrow="Edit entry" title="Managed Job" onClose={onClose} footer={<button type="button" onClick={onClose}>Close</button>}>
@@ -27,12 +30,12 @@ export default function JobCorrectionsDrawer({ jobId, jobBookLabel = 'Auckland',
         {corrections.loadError && <button type="button" onClick={corrections.reload}>Try again</button>}
     </JobDrawerShell>
     return <>
-        <JobEditDrawer key={corrections.job['@odata.etag']} correctionsOnly jobBookLabel={jobBookLabel} canCorrectMechanic={canAssignTechnician} job={corrections.job}
+        <JobEditDrawer key={corrections.job['@odata.etag']} correctionsOnly jobBookLabel={jobBookLabel} canCorrectMechanic={canAssignTechnician} allowCorrectionMasterCreation={Boolean(onCreateCustomer && onCreateSite && onCreateEquipment)} job={corrections.job}
             mechanics={mechanics} equipmentList={corrections.equipment} customers={corrections.customers} sites={corrections.sites} siteContacts={corrections.contacts} scheduleOptions={[]} servicePlans={[]}
             onSearchCustomers={corrections.findCustomers} onSearchEquipment={corrections.findEquipment} onLoadCustomerSites={corrections.loadSites} onLoadSiteContacts={corrections.loadContacts}
             onSave={corrections.save} onClose={onClose}
             saveBlockedReason={corrections.reloadReason} onReloadCorrections={() => setConfirmReload(true)}
-            onCreateCustomer={unavailable} onCreateSite={unavailable} onCreateContact={unavailable} onCreateEquipment={unavailable}
+            onCreateCustomer={onCreateCustomer ?? unavailable} onCreateSite={onCreateSite ?? unavailable} onCreateContact={unavailable} onCreateEquipment={onCreateEquipment ?? unavailable}
             onDelete={unavailable} onCreateScheduleOption={unavailable} onUpdateScheduleOption={unavailable} onDeleteScheduleOption={unavailable}
             onCreateQuote={unavailable} onOpenQuote={unavailable} onJobCardStatusChange={unavailable} onCreateAssignment={unavailable} onSendPrimary={unavailable} onSendAssignment={unavailable} onDeleteAssignment={unavailable}
         />

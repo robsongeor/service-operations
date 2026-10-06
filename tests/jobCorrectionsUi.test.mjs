@@ -3,6 +3,7 @@ import test from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createServer } from 'vite'
+import { readFileSync } from 'node:fs'
 
 let server, Drawer, Provider
 const originalFetch = globalThis.fetch
@@ -45,6 +46,15 @@ test('corrections drawer has no scheduling, dispatch, deletion, master creation 
     const html = render({ initialTab: 'scheduling' })
     assert.doesNotMatch(html, /role="tab"|Delete job|Email job|Add new equipment|Add new customer|Add site|Add contact|Create quote|Copy for Job Book/)
     assert.match(html, /Edit Auckland Job Book entry/)
+})
+
+test('Job Book corrections can expose the same Equipment and Customer creation actions as new entry', () => {
+    const html = render({ allowCorrectionMasterCreation: true, job: { ...job, gr_Equipment: undefined, gr_Site: undefined }, equipmentList: [], customers: [], sites: [] })
+    assert.match(html, /Search primary or alternate fleet/)
+    assert.match(html, /Search customers/)
+    const relationships = readFileSync(new URL('../src/alpha/jobs/components/JobRelationshipFields.tsx', import.meta.url), 'utf8')
+    assert.match(relationships, /correctionsOnly && !allowCorrectionMasterCreation \? undefined : onCreateEquipment/)
+    assert.match(relationships, /correctionsOnly && !allowCorrectionMasterCreation \? undefined : createCustomerAndSite/)
 })
 
 test('service type is omitted with the coordinator-only controls', () => {

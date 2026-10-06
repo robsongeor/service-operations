@@ -940,7 +940,11 @@ export default function JobBookPrototypeScreen({
             </fieldset>
         </JobDrawerShell>}
 
-        {canCorrectJobDetails && correctingJobId && <JobCorrectionsDrawer key={correctingJobId} jobId={correctingJobId} jobBookLabel={selectedJobBook.label} mechanics={mechanics} canAssignTechnician={canAssignInitialTechnician} getAccessToken={getAccessToken} onClose={() => setCorrectingJobId('')} onSaved={(job) => {
+        {canCorrectJobDetails && correctingJobId && <JobCorrectionsDrawer key={correctingJobId} jobId={correctingJobId} jobBookLabel={selectedJobBook.label} mechanics={mechanics} canAssignTechnician={canAssignInitialTechnician}
+            onCreateCustomer={async (input) => createCustomer(await getAccessToken(), input)}
+            onCreateSite={async (input) => createSite(await getAccessToken(), input)}
+            onCreateEquipment={async (input) => createEquipment(await getAccessToken(), input)}
+            getAccessToken={getAccessToken} onClose={() => setCorrectingJobId('')} onSaved={(job) => {
             const saved = mapManagedJobBookRow(job, selectedJobBook)
             setRecentRows((current) => current.map((row) => row.linkedJobId === job.gr_jobid ? { ...row, ...saved } : row))
             setIntakeRows((current) => current.map((row) => row.linkedJobId === job.gr_jobid ? { ...row, ...saved, intakeRecordId: row.intakeRecordId } : row))

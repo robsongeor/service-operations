@@ -133,6 +133,7 @@ type Props = JobRelationshipLookupProps & {
     correctionsOnly?: boolean
     jobBookLabel?: string
     canCorrectMechanic?: boolean
+    allowCorrectionMasterCreation?: boolean
     saveBlockedReason?: string
     onReloadCorrections?: () => void
     onClose: () => void
@@ -186,6 +187,7 @@ export default function JobEditDrawer({
     correctionsOnly = false,
     jobBookLabel = 'Auckland',
     canCorrectMechanic = false,
+    allowCorrectionMasterCreation = false,
     saveBlockedReason = '',
     onReloadCorrections,
     onClose,
@@ -581,7 +583,7 @@ export default function JobEditDrawer({
                             ? <div className="job-progressive-state job-edit-field-wide" role="status"><strong>Loading Equipment and customer choices…</strong></div>
                             : referenceDataStatus === 'error'
                                 ? <div className="job-progressive-state error job-edit-field-wide" role="alert"><strong>Editor choices could not be loaded</strong><span>{referenceDataError}</span></div>
-                                : <JobRelationshipFields correctionsOnly editor={editor} equipmentList={equipmentList} customers={customers}
+                                : <JobRelationshipFields correctionsOnly allowCorrectionMasterCreation={allowCorrectionMasterCreation} hideHeading editor={editor} equipmentList={equipmentList} customers={customers}
                                     onCreateCustomer={onCreateCustomer} onCreateSite={onCreateSite} onCreateContact={onCreateContact} onCreateEquipment={onCreateEquipment}
                                     onSearchEquipment={onSearchEquipment} onSearchCustomers={onSearchCustomers} onLoadCustomerSites={onLoadCustomerSites}
                                     onLoadSiteContacts={onLoadSiteContacts} onLoadEquipment={onLoadEquipment} onLoadEquipmentServicePlans={onLoadEquipmentServicePlans} />}

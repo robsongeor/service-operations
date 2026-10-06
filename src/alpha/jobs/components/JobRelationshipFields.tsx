@@ -28,6 +28,8 @@ type Props = JobRelationshipLookupProps & {
     locationErrors?: JobCreationLocationErrors
     manageEquipmentLocation?: boolean
     correctionsOnly?: boolean
+    allowCorrectionMasterCreation?: boolean
+    hideHeading?: boolean
     onLocationPendingChange?: (pending: boolean) => void
     onLocationSavingChange?: (saving: boolean) => void
     editor: ReturnType<typeof useJobEditor>
@@ -51,6 +53,8 @@ export default function JobRelationshipFields({
     locationErrors,
     manageEquipmentLocation = false,
     correctionsOnly = false,
+    allowCorrectionMasterCreation = false,
+    hideHeading = false,
     onLocationPendingChange = ignoreLocationState,
     onLocationSavingChange = ignoreLocationState,
     editor,
@@ -260,10 +264,10 @@ export default function JobRelationshipFields({
     )
 
     return <>
-        <div className="job-edit-divider job-edit-field-wide">
+        {!hideHeading && <div className="job-edit-divider job-edit-field-wide">
             <h3>Equipment and location</h3>
             <p>{manageEquipmentLocation ? 'Select equipment to use its current customer and site.' : 'Change which records this job references.'}</p>
-        </div>
+        </div>}
 
         <JobEquipmentField
             showSelectedLocation={!hasEquipmentLocation}
@@ -275,7 +279,7 @@ export default function JobRelationshipFields({
             dependencyStatus={equipmentDependencyStatus}
             dependencyError={equipmentDependencyError}
             onRetryDependencies={onRetryEquipmentDependencies}
-            onCreateEquipment={correctionsOnly ? undefined : onCreateEquipment}
+            onCreateEquipment={correctionsOnly && !allowCorrectionMasterCreation ? undefined : onCreateEquipment}
             onSearchEquipment={onSearchEquipment}
             onChange={(item) => item ? selectEquipment(item) : clearEquipment()}
         />
@@ -309,7 +313,7 @@ export default function JobRelationshipFields({
                     if (!correctionsOnly && equipmentConflictsWithCustomer(customerId)) clearEquipment()
                     selectCustomer(customerId)
                 }}
-                onCreateCustomerAndSite={correctionsOnly ? undefined : createCustomerAndSite}
+                onCreateCustomerAndSite={correctionsOnly && !allowCorrectionMasterCreation ? undefined : createCustomerAndSite}
             />
         </div>}
 
