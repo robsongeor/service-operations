@@ -14,11 +14,39 @@ jobs:
     if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
     runs-on: ubuntu-latest
     name: Build and Deploy Job
+    env:
+      VITE_MSAL_CLIENT_ID: ${{ vars.VITE_MSAL_CLIENT_ID }}
+      VITE_MSAL_TENANT_ID: ${{ vars.VITE_MSAL_TENANT_ID }}
+      VITE_DATAVERSE_URL: ${{ vars.VITE_DATAVERSE_URL }}
+      VITE_JOB_BOOK_CONTACT_LOOKUP_ENABLED: "true"
+      VITE_REGIONAL_JOB_BOOKS_ENABLED: "false"
+      VITE_REGIONAL_JOB_BOOK_ALLOCATION_ENABLED: "false"
+      VITE_UNIFIED_JOB_REGISTRATION_ENABLED: "true"
+      VITE_UNIFIED_JOB_WORKFLOW_ENABLED: "true"
+      VITE_APPLICATION_ACCESS_CONTROL_ENABLED: "false"
+      VITE_EQUIPMENT_REALTIME_API_URL: https://serviceops-equipment-realtime-bbd3f9.azurewebsites.net/api
     steps:
       - uses: actions/checkout@v3
         with:
           submodules: true
           lfs: false
+          fetch-depth: 0
+      - name: Determine application version
+        shell: bash
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          echo "VITE_APP_VERSION=V2 Pilot · $SHORT_SHA" >> "$GITHUB_ENV"
+          echo "VITE_APP_VERSION_IS_RELEASE=false" >> "$GITHUB_ENV"
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Build application
+        run: |
+          npm ci
+          npm test
+          npm run build
       - name: Build And Deploy
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
@@ -28,9 +56,10 @@ jobs:
           action: "upload"
           ###### Repository/Build Configurations - These values can be configured to match your app requirements. ######
           # For more information regarding Static Web App workflow configurations, please visit: https://aka.ms/swaworkflowconfig
-          app_location: "/" # App source code path
+          app_location: "dist" # Prebuilt client artifact
           api_location: "api" # Api source code path - optional
-          output_location: "dist" # Built app content directory - optional
+          output_location: ""
+          skip_app_build: true
           ###### End of Repository/Build Configurations ######
 
   close_pull_request_job:
