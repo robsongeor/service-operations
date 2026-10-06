@@ -110,10 +110,18 @@ test('Intake creation confirms only the finished Customer/Site and reuses the ex
     assert.match(screen, /jobBookLocationSummaryVisible\(draft, Boolean\(editingIntakeRow\) \|\| createdEntryLocation, editingEntryLocation\)/)
     const create = screen.slice(screen.indexOf('onCreateCustomerAndSite={async'), screen.indexOf('}} /></div>}', screen.indexOf('onCreateCustomerAndSite={async')))
     assert.match(create, /setDraft\([\s\S]*prototype-customer-[\s\S]*prototype-site-[\s\S]*setCreatedEntryLocation\(true\)[\s\S]*setEditingEntryLocation\(false\)/)
-    assert.match(create, /if \(UNIFIED_JOB_WALKTHROUGH && !editingIntakeRow\)/)
+    assert.match(create, /if \(UNIFIED_JOB_RUNTIME && !editingIntakeRow\)/)
     assert.doesNotMatch(create.slice(create.indexOf("setIntakeError('')")), /createCustomer\(|createSite\(|fetch\(/)
     assert.match(screen, /createActionLabel="Create customer"/)
     assert.doesNotMatch(screen, /createActionLabel="Use customer and site"/)
+})
+
+test('production unified workflow registers new Job Book entries atomically', () => {
+    const screen = readFileSync(new URL('../src/alpha/job-book/JobBookPrototypeScreen.tsx', import.meta.url), 'utf8')
+    assert.match(screen, /useJobRegistration\(`\$\{account\?\.homeAccountId\}\.job-book`, getAccessToken, UNIFIED_JOB_RUNTIME\)/)
+    assert.match(screen, /else if \(UNIFIED_JOB_RUNTIME\) \{[\s\S]*registration\.submit\(\{ kind: 'register'/)
+    assert.match(screen, /const persist = UNIFIED_JOB_RUNTIME && !editingIntakeRow/)
+    assert.match(screen, /UNIFIED_JOB_RUNTIME && registration\.pending/)
 })
 
 test('created-location presentation resets between entries and regional books', () => {

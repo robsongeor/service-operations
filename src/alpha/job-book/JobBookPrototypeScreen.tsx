@@ -137,7 +137,7 @@ function CustomerPicker({ id, value, customerName, required, error, onSearchCust
             onChange(selected.gr_customerid, selected.gr_name)
         }}
         onCreateCustomerAndSite={onCreateCustomerAndSite}
-        createDescription={UNIFIED_JOB_WALKTHROUGH ? 'Create a saved sample Customer and Site. These remain available if the entry is cancelled.' : 'Use this customer and site on the Job Book entry. This does not create master Dataverse records.'}
+        createDescription={UNIFIED_JOB_RUNTIME ? 'Create a saved Customer and Site. These remain available if the entry is cancelled.' : 'Use this customer and site on the Job Book entry. This does not create master Dataverse records.'}
         createActionLabel="Create customer"
     />
 }
@@ -189,7 +189,7 @@ export default function JobBookPrototypeScreen({
         () => acquireDataverseAccessToken(instance, account),
         [account, instance],
     )
-    const registration = useJobRegistration(`${account?.homeAccountId}.job-book`, getAccessToken, UNIFIED_JOB_WALKTHROUGH)
+    const registration = useJobRegistration(`${account?.homeAccountId}.job-book`, getAccessToken, UNIFIED_JOB_RUNTIME)
     const staffDirectoryQuery = useOperationalQuery<Mechanic[]>({
         key: STAFF_DIRECTORY_QUERY_KEY,
         enabled: Boolean(account),
@@ -242,7 +242,7 @@ export default function JobBookPrototypeScreen({
     const reconcileIntakeRow = (saved: JobBookRow) => {
         setIntakeRows((current) => appendUniqueRows(current, [saved]))
         if (saved.linkedJobId) setRecentRows((current) => current.map((item) => item.linkedJobId === saved.linkedJobId ? saved : item))
-        if (UNIFIED_JOB_WALKTHROUGH) invalidateJobsCache()
+        if (UNIFIED_JOB_RUNTIME) invalidateJobsCache()
     }
     const voidEntry = useJobBookVoid(getAccessToken, reconcileIntakeRow)
     const rowActions = useJobBookActions(getAccessToken, canEmailAssignedTechnician, !canManageJobs)
@@ -524,7 +524,7 @@ export default function JobBookPrototypeScreen({
             if (editingIntakeRow) {
                 const saved = await updateJobBookIntakeRow(token, draft, !canAssignInitialTechnician)
                 setIntakeRows((current) => current.map((item) => item.intakeRecordId === saved.intakeRecordId ? saved : item))
-            } else if (UNIFIED_JOB_WALKTHROUGH) {
+            } else if (UNIFIED_JOB_RUNTIME) {
                 if (!isPersistedEquipmentId(draft.siteId) || (!draft.equipmentReviewRequired && !isPersistedEquipmentId(draft.equipmentId))) throw new Error('Select saved Equipment and Site records. Snapshot-only entries need reconciliation, not another number.')
                 const result = await registration.submit({ kind: 'register', requestId: crypto.randomUUID(), book: selectedJobBookKey,
                     description: draft.description, orderNumber: draft.customerPo, siteId: draft.siteId,
@@ -581,7 +581,7 @@ export default function JobBookPrototypeScreen({
         setIntakeDrawerOpen(true)
     }
     const createLocalIntakeEquipment = async (input: NewJobEquipmentInput) => {
-        const persist = UNIFIED_JOB_WALKTHROUGH && !editingIntakeRow
+        const persist = UNIFIED_JOB_RUNTIME && !editingIntakeRow
         const id = persist ? await createEquipment(await getAccessToken(), input) : `prototype-${crypto.randomUUID()}`
         const record: PrototypeEquipment = {
             id,
@@ -717,7 +717,7 @@ export default function JobBookPrototypeScreen({
         </nav>}
         {regionalAllocationLocked && <p className="job-book-cutover-notice" role="status"><strong>{selectedJobBook.label} allocation is protected.</strong> Existing entries can be reviewed after migration; new numbers remain disabled until the final seed is verified.</p>}
         {saveError && <p className="job-book-save-error" role="alert">{saveError}</p>}
-        {UNIFIED_JOB_WALKTHROUGH && registration.pending && <div className="job-book-cutover-notice" role="status">An entry save needs confirmation. Its original request is retained; do not create another entry. <button type="button" disabled={registration.busy} onClick={() => void resumeRegistration()}>Resume saved request</button></div>}
+        {UNIFIED_JOB_RUNTIME && registration.pending && <div className="job-book-cutover-notice" role="status">An entry save needs confirmation. Its original request is retained; do not create another entry. <button type="button" disabled={registration.busy} onClick={() => void resumeRegistration()}>Resume saved request</button></div>}
         {registration.error && <p className="job-book-save-error" role="alert">{registration.error}</p>}
         {voidEntry.notice && <p className="job-book-action-notice" role="status">{voidEntry.notice}</p>}
 
@@ -838,8 +838,8 @@ export default function JobBookPrototypeScreen({
                     siteId={draft.siteId}
                     required
                     error={intakeValidationAttempted && !equipmentIsAccepted(draft) ? 'Select Equipment or add new equipment.' : undefined}
-                    createDescription={UNIFIED_JOB_WALKTHROUGH && !editingIntakeRow ? 'Create saved sample Equipment. Its location can then be linked below.' : 'Add the machine details to this Job Book entry. This does not create Equipment in Dataverse.'}
-                    createActionLabel={UNIFIED_JOB_WALKTHROUGH && !editingIntakeRow ? 'Create equipment' : 'Use equipment details'}
+                    createDescription={UNIFIED_JOB_RUNTIME && !editingIntakeRow ? 'Create saved Equipment. Its location can then be linked below.' : 'Add the machine details to this Job Book entry. This does not create Equipment in Dataverse.'}
+                    createActionLabel={UNIFIED_JOB_RUNTIME && !editingIntakeRow ? 'Create equipment' : 'Use equipment details'}
                     onCreateEquipment={createLocalIntakeEquipment}
                     onChange={selectIntakeEquipment}
                     unknownEquipmentOption={{
@@ -882,7 +882,7 @@ export default function JobBookPrototypeScreen({
                         setDraft((current) => applyCustomerSelection(current, customerId, customerName))
                     }}
                     onCreateCustomerAndSite={async ({ customerName, siteName, address }) => {
-                        if (UNIFIED_JOB_WALKTHROUGH && !editingIntakeRow) {
+                        if (UNIFIED_JOB_RUNTIME && !editingIntakeRow) {
                             const token = await getAccessToken()
                             const { customer, site } = await createEquipmentDestination({ customerName, siteName, address }, true, {
                                 findCustomers: (name) => findCustomersByName(token, name), createCustomer: (input) => createCustomer(token, input),
