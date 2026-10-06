@@ -96,8 +96,10 @@ never delete or renumber records as generic rollback.
 
 - Provision the Entra `ServiceOperations.ServiceCoordinator` application role, assign and test Bruce,
   then remove his temporary FullAccess only after the restricted role passes acceptance testing.
-- Register and verify the server-side Job number/ledger invariant guard. The browser no longer offers
-  manual Job Number entry, but live use must also reject direct Dataverse, integration and stale-client writes.
+- Keep the 15 shared Dataverse Job number/ledger invariant steps disabled while V1 still requires
+  manual Job Number entry. V2 blocks manual entry in its frontend during this explicitly accepted
+  overlap. When V1 is retired or migrated, enable and verify the invariant steps as a separate
+  cutover so direct Dataverse, integration and stale-client writes are also rejected.
 - Complete signing-key recovery backup; the owner-approved key and corrected `r2` package exist.
 - Capture secure restricted-role IDs after role creation; the exact 29 registrations are validated offline.
 - Admit/license the eight missing Dataverse users and select controlled pilot accounts.

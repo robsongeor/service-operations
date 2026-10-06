@@ -116,7 +116,10 @@ direct number paste/create/import paths fail closed, Site Check number clearing 
 occurrence containing a numbered Job cannot be deleted. WOF corrections omit the number field and new
 WOF Jobs remain unnumbered. Both specialist types use the same guarded per-Job regional allocator from
 their Jobs tabs; allocation preserves type, evidence and source relationships while creating the ledger.
-No new server-side immutable-column enforcement is claimed. `tests/jobNumberPolicy.test.ts` covers
+No new server-side immutable-column enforcement is active. The registered invariant steps remain
+disabled during the V1/V2 shared-Dataverse overlap because V1 still needs its existing manual-number
+workflow; V2 is frontend-blocked only. Enable and verify the invariant steps only as a separate V1
+retirement or migration cutover. `tests/jobNumberPolicy.test.ts` covers
 payload exclusions, permissions presentation, regional formats, bounded preflight, stale callers,
 allocation/deletion races and fail-closed responses; drawer rendering is also covered by the
 corrections UI tests.

@@ -11,8 +11,11 @@ Branch: `v2-deployment`
   role passes acceptance testing, then be removed; Andy is assigned only when his rollout is approved.
 - Browser-based manual Job Number entry has been removed from ordinary Jobs, Site Checks, WOF and
   historical spreadsheet import. New/imported records are unnumbered until the regional allocation
-  system assigns a permanent number. Before production cutover, register and verify the server-side
-  number/ledger invariant guard so Dataverse, integrations and stale clients cannot bypass this rule.
+  system assigns a permanent number. On 7 October 2026 George explicitly deferred activation of the
+  shared Dataverse number/ledger invariant guard because V1 still requires its existing manual-number
+  workflow. V2 is frontend-blocked only during this overlap. The 15 registered invariant steps must
+  remain disabled until V1 is retired or migrated, then be enabled and verified as a separate cutover.
+  This accepted transition does not authorize direct-number writes from V2 or integrations.
 
 ## Local role implementation — not activated in Microsoft
 
