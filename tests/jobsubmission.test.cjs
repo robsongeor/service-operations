@@ -111,6 +111,30 @@ test('production link generation reads a snapshot with the office token and make
     assert.ok(calls.every((call) => call.authorization === 'Bearer office-token'))
 })
 
+test('production link generation accepts a registered Job awaiting service-operator classification', async () => {
+    delete process.env.JOB_CARD_LOCAL_DEVELOPMENT
+    process.env.DATAVERSE_URL = 'https://example.crm.dynamics.com'
+    global.fetch = async (url) => {
+        if (String(url).endsWith('/WhoAmI')) return Response.json({ UserId: 'office-user-id' })
+        if (String(url).includes('/gr_jobs(')) return Response.json({
+            gr_jobid: '00000000-0000-4000-8000-000000000001', gr_jobnumber: '147174',
+            gr_description: 'Inspect reported fault',
+            gr_Equipment: { gr_equipmentid: '00000000-0000-4000-8000-000000000002', gr_make: 'Still', gr_model: 'FM-X25', gr_fleet: 'FN2131' },
+            gr_Site: { gr_name: 'Kerrs Road', gr_Customer: { gr_name: 'Godfrey Hirst' } },
+            gr_Mechanic: { gr_mechanicid: '00000000-0000-4000-8000-000000000003', gr_name: 'Test Technician', gr_email: 'georger@liftrucks.co.nz' },
+        })
+        throw new Error(`Unexpected request ${url}`)
+    }
+    const generated = await invoke({ method: 'POST', headers: { 'x-dataverse-authorization': 'Bearer office-token' }, body: {
+        action: 'generate', jobId: '00000000-0000-4000-8000-000000000001', recipientEmail: 'georger@liftrucks.co.nz',
+    } })
+    assert.equal(generated.status, 201)
+    const token = JSON.parse(generated.body).token
+    const publicResponse = await invoke({ method: 'GET', headers: {}, query: { token } })
+    assert.equal(publicResponse.status, 200)
+    assert.equal(JSON.parse(publicResponse.body).requiresHourMeter, false)
+})
+
 test('submission validation preserves strict story, meter, child, and photo-reference rules', () => {
     const record = { jobType: 122830001, equipmentId: 'equipment', currentHourMeter: 2500 }
     assert.match(service.test.validateSubmission(record, { story: '', hourMeter: 2500 }), /story/i)
