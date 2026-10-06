@@ -71,3 +71,8 @@ test('Node v4 entrypoints preserve protected receiver and authenticated negotiat
     assert.match(negotiate, /authLevel: 'anonymous'/)
     assert.match(negotiate, /route: 'negotiate'/)
 })
+
+test('V2 disables the optional realtime client until its Function deployment credential is restored', () => {
+    const workflow = fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', 'azure-static-web-apps-kind-wave-0cdea2200.yml'), 'utf8')
+    assert.match(workflow, /VITE_EQUIPMENT_REALTIME_API_URL: ""/)
+})

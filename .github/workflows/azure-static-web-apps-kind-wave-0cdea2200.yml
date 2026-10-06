@@ -24,7 +24,8 @@ jobs:
       VITE_UNIFIED_JOB_REGISTRATION_ENABLED: "true"
       VITE_UNIFIED_JOB_WORKFLOW_ENABLED: "true"
       VITE_APPLICATION_ACCESS_CONTROL_ENABLED: "true"
-      VITE_EQUIPMENT_REALTIME_API_URL: https://serviceops-equipment-realtime-bbd3f9.azurewebsites.net/api
+      # Re-enable after AZURE_REALTIME_FUNCTIONAPP_PUBLISH_PROFILE is restored and the V2 CORS allow-list is deployed.
+      VITE_EQUIPMENT_REALTIME_API_URL: ""
     steps:
       - uses: actions/checkout@v3
         with:

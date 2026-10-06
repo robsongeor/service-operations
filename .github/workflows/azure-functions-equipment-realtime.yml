@@ -1,12 +1,6 @@
 name: Deploy Equipment Realtime Function
 
 on:
-  push:
-    branches:
-      - v2-deployment
-    paths:
-      - "realtime-api/**"
-      - ".github/workflows/azure-functions-equipment-realtime.yml"
   workflow_dispatch:
 
 jobs:
