@@ -5,7 +5,7 @@ import SidebarBrand from './SidebarBrand'
 import { getSignedInUserInfo } from './auth/signedInUser'
 import { useActiveMsalAccount } from './auth/useActiveMsalAccount'
 import { isServiceOperationsAdministrator } from './auth/adminAuthorization'
-import type { ApplicationAccess } from './auth/applicationAccess'
+import { SERVICE_COORDINATOR_NAVIGATION_PATHS, type ApplicationAccess } from './auth/applicationAccess'
 import './Sidebar.css'
 
 const menuItems = [
@@ -34,14 +34,16 @@ export default function Sidebar({ access }: { access: ApplicationAccess }) {
     const [isOpen, setIsOpen] = useState(() => globalThis.innerWidth > 760)
     const activeAccount = useActiveMsalAccount()
     const isAdmin = isServiceOperationsAdministrator(getSignedInUserInfo(activeAccount))
-    const allowedMenuItems = access.canUseFullApplication
+    const allowedMenuItems = access.mode === 'full'
         ? menuItems
-        : access.mode === 'job-card-admin'
+        : access.mode === 'service-coordinator'
+            ? menuItems.filter((item) => SERVICE_COORDINATOR_NAVIGATION_PATHS.includes(item.path as typeof SERVICE_COORDINATOR_NAVIGATION_PATHS[number]))
+            : access.mode === 'job-card-admin'
             ? menuItems.filter((item) => ['/job-card-reviews', '/job-book', '/quotes', '/equipment', '/customers'].includes(item.path))
             : access.mode === 'job-book-admin'
                 ? menuItems.filter((item) => ['/job-book', '/equipment', '/customers'].includes(item.path))
                 : menuItems.filter((item) => item.path === '/job-book')
-    const visibleMenuItems = isAdmin && access.canUseFullApplication
+    const visibleMenuItems = isAdmin && access.mode === 'full'
         ? [
             ...allowedMenuItems,
             { label: 'Checklist Admin', shortLabel: 'A', path: '/site-checks/checklists' },

@@ -4,8 +4,10 @@ Branch: `codex/legacy-job-book-job-cards-integration`
 
 ## Local role implementation — not activated in Microsoft
 
-- Frontend ServiceCoordinator has temporary FullAccess capability parity; JobBookAdmin is
-  distinct from Office Admin and legacy JobBookOnly. Restricted Admin menus and Equipment
+- Frontend ServiceCoordinator now has a restricted screen boundary: Overview, Staff, Greentree
+  Review, Equipment Map, Job Map, Site Checks, Chargeable Invoices and Checklist Admin are hidden
+  and direct routes are denied. FullAccess remains unrestricted. JobBookAdmin is distinct from
+  Office Admin and legacy JobBookOnly. Restricted Admin menus and Equipment
   editing are implemented. Job Book Admin entry markers are read-only and technician actions
   are excluded. Both Admin profiles can create Customers/Sites through separate screens.
 - Equipment detail saves allow fleet/alternate fleets/make/model/serial/Site only, require an
@@ -33,7 +35,7 @@ Branch: `codex/legacy-job-book-job-cards-integration`
 - The owner-facing [Excel replacement plan](docs/features/JOB_BOOK_ROLLOUT_PLAN.md) now defines
   responsibilities, role selection, acceptance evidence, migration, one-writer cutover and rollback.
 - The [access plan](docs/features/JOB_BOOK_ACCESS_PLAN.md) records George as sole FullAccess,
-  Bruce/Andy as distinct Service coordinators (initial capability parity, future restrictions),
+  Bruce/Andy as distinct Service coordinators with an approved restricted screen set,
   Jess/Nargiza/Pubudu as Office Admins, and five Job Book Admins. JobBookOnly is not planned.
   The new profiles are implemented locally but not provisioned. Job Book Admins may
   correct factual details after handoff and Void eligible entries under existing safeguards,

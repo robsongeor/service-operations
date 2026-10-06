@@ -47,6 +47,6 @@
     "Reject overlapping grants that restore a capability denied by the intended profile.",
     "Test allowed and denied direct API calls using each real pilot profile.",
     "Deploy compatible app, API and guards before changing assignments.",
-    "Keep Full Access and Service Coordinator distinct even while their initial capabilities match."
+    "Keep Full Access and Service Coordinator distinct; Full Access must not bypass the coordinator screen restrictions."
   ]
 }

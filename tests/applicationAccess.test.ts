@@ -217,12 +217,34 @@ test('App and Sidebar enforce the Job Card Admin route and presentation boundary
     assert.match(customers, /readOnly/)
 })
 
-test('coordinator has initial full capability parity but a distinct role and mode', () => {
+test('coordinator retains operational capabilities without full-application navigation', () => {
     const options = { enforceAccessControl: true, isDevelopment: false }
     const full = resolveApplicationAccess(accountWithRoles([APPLICATION_ROLES.FULL_ACCESS]), options)
     const coordinator = resolveApplicationAccess(accountWithRoles([APPLICATION_ROLES.SERVICE_COORDINATOR]), options)
     assert.equal(coordinator.mode, 'service-coordinator')
-    for (const key of Object.keys(full).filter((key) => key.startsWith('can'))) assert.equal(coordinator[key as keyof typeof coordinator], full[key as keyof typeof full], key)
+    assert.equal(coordinator.canUseFullApplication, false)
+    for (const key of Object.keys(full).filter((key) => key.startsWith('can') && key !== 'canUseFullApplication')) assert.equal(coordinator[key as keyof typeof coordinator], full[key as keyof typeof full], key)
+})
+
+test('App and Sidebar enforce the Service Coordinator screen boundary', () => {
+    const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
+    const sidebar = readFileSync(new URL('../src/Sidebar.tsx', import.meta.url), 'utf8')
+    const access = readFileSync(new URL('../src/auth/applicationAccess.ts', import.meta.url), 'utf8')
+    const coordinatorRoutes = app.match(/access\.mode === 'service-coordinator' \? <Routes>([\s\S]*?)<\/Routes> : access\.mode === 'job-book-only'/)?.[1] ?? ''
+    assert.ok(coordinatorRoutes)
+    assert.match(coordinatorRoutes, /Navigate to="\/jobs"/)
+    assert.match(coordinatorRoutes, /path="\*" element=\{<AccessDeniedScreen/)
+    for (const route of ['/customers', '/equipment', '/maintenance-booking', '/wof', '/jobs', '/job-import', '/equipment-photos', '/job-card-reviews', '/job-book', '/scheduling', '/quotes', '/pricing']) {
+        assert.ok(coordinatorRoutes.includes(`path="${route}"`), `allowed route ${route}`)
+        assert.ok(access.includes(`'${route}'`), `navigation path ${route}`)
+    }
+    for (const route of ['/', '/staff', '/equipment/greentree-test', '/equipment-map', '/job-map', '/site-checks', '/chargeable-invoices', '/site-checks/checklists']) {
+        if (route !== '/') assert.ok(!coordinatorRoutes.includes(`path="${route}"`), `restricted route ${route}`)
+        assert.ok(!access.includes(`'${route}',`), `restricted navigation path ${route}`)
+    }
+    assert.match(sidebar, /access\.mode === 'service-coordinator'/)
+    assert.match(sidebar, /SERVICE_COORDINATOR_NAVIGATION_PATHS\.includes/)
+    assert.match(sidebar, /isAdmin && access\.mode === 'full'/)
 })
 test('Job Book Admin separates corrections and master data from dispatch, markers and review', () => {
     const options = { enforceAccessControl: true, isDevelopment: false }

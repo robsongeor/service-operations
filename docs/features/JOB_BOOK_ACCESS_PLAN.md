@@ -17,14 +17,13 @@ assignments, missing role definitions and the proposed implementation/onboarding
 | Business role | Decision | Implementation status |
 | --- | --- | --- |
 | Full access | George only; unrestricted application access | Existing `ServiceOperations.FullAccess` profile |
-| Service coordinator | Bruce and Andy; initially the same application capabilities as Full access, with restrictions to be defined later | Separate role proposed as `ServiceOperations.ServiceCoordinator`; not yet implemented or provisioned |
+| Service coordinator | Bruce and Andy; operational management with the approved restricted screen set | Separate frontend profile implemented as `ServiceOperations.ServiceCoordinator`; Microsoft assignment is not yet provisioned |
 | Office Admin | Jess, Nargiza and Pubudu; entry, corrections, technician assignment/email, markers and review | Existing `ServiceOperations.JobCardAdmin` client profile; authoritative permissions still require verification |
 | Job Book Admin | Five entry/correction users; eligible-entry Void allowed; corrections remain allowed after coordinator handoff; no technician assignment/email, review or GT/Timecloud marker changes | Proposed distinct `ServiceOperations.JobBookAdmin`; not implemented or provisioned |
 | Job Book only | Not planned for this rollout | Keep existing implementation; do not assign it as part of rollout |
 
-Keep Service coordinator distinct from Full access even while capabilities match. Do not assign
-Bruce or Andy FullAccess merely to achieve temporary parity: a remaining FullAccess claim would
-bypass later coordinator restrictions. Future changes must cover both UI capabilities and
+Keep Service coordinator distinct from Full access. Do not assign Bruce or Andy FullAccess: a
+remaining FullAccess claim would bypass the coordinator screen restrictions. Future changes must cover both UI capabilities and
 authoritative server/Dataverse permissions, including other roles and team grants.
 
 Unrestricted access here means access within Service Operations. It does not imply Microsoft
@@ -141,6 +140,15 @@ These are intended navigation and action boundaries. They must also hold for dir
 related-record drawers and API requests. The profiles and restricted screens are now implemented
 locally; no live Microsoft assignments have changed. The draft server guard is not deployed.
 
+## Agreed Service Coordinator navigation
+
+Service Coordinators can use Customers, Equipment, Maintenance Booking, WOF / REGO, Service Jobs,
+Job Import, Equipment Photos, Job Card Reviews, Job Book, Scheduling, Quotes and Pricing.
+
+They cannot open Overview, Staff, Greentree Review, Equipment Map, Job Map, Site Checks,
+Chargeable Invoices or Checklist Admin. These items are absent from the menu and their direct URLs
+fail closed. George's FullAccess profile remains unrestricted.
+
 ## Decisions still needed
 
 - [x] Both Admin groups may view and work across all four regional Job Books; no regional restrictions.
@@ -155,12 +163,12 @@ locally; no live Microsoft assignments have changed. The draft server guard is n
 - [x] Define the local Equipment field allowlist: fleet, alternate fleet numbers, make, model,
   serial and Site. Excludes maintenance, compliance, ownership and historical readings;
   production enforcement still needs acceptance tests.
-- [ ] Define later Service coordinator restrictions; temporary parity is the current instruction.
+- [x] Define the Service coordinator screen boundary and deny the eight excluded direct routes.
 - [ ] Select the pilot users from this roster and confirm the acceptance-test environment.
 
 ## Implementation and rollout checks
 
-- [x] Add and test the distinct ServiceCoordinator frontend profile and its initial capability parity.
+- [x] Add and test the distinct ServiceCoordinator frontend profile and restricted screen boundary.
   The matching Entra role is not yet created or assigned.
 - [ ] Implement JobBookAdmin separately from JobBookOnly and JobCardAdmin. Verify corrections
   before/after handoff and eligible-entry Void; deny assignment/email, marker writes, review and coordinator operations

@@ -92,7 +92,23 @@ function App() {
           {access.isSimulated && <div className="access-simulation-banner" role="status">
             Simulating {access.mode} access — this is a navigation test, not a security test.
           </div>}
-          {access.mode === 'job-book-only' ? <Routes>
+          {access.mode === 'service-coordinator' ? <Routes>
+            <Route path="/" element={<Navigate to="/jobs" replace />} />
+            <Route path="/customers" element={<CustomerDashboardScreen />} />
+            <Route path="/equipment" element={<EquipmentScreen />} />
+            <Route path="/maintenance-booking" element={<MaintenanceBookingScreen />} />
+            <Route path="/jobs" element={<JobsScreen key={signedInUser?.storageId || 'account-pending'} />} />
+            <Route path="/job-import" element={<JobSpreadsheetImportScreen key={signedInUser?.storageId || 'account-pending'} />} />
+            <Route path="/equipment-photos" element={<EquipmentPhotoUploadScreen key={signedInUser?.storageId || 'account-pending'} />} />
+            <Route path="/job-card-reviews" element={<JobCardReviewsScreen key={`${signedInUser?.storageId}-queue`} />} />
+            <Route path="/job-card-reviews/:reviewId" element={<JobCardReviewsScreen key={`${signedInUser?.storageId}-${location.pathname}`} />} />
+            <Route path="/job-book" element={<JobBookPrototypeScreen key={signedInUser?.storageId || 'account-pending'} />} />
+            <Route path="/scheduling" element={<SchedulingScreen />} />
+            <Route path="/quotes" element={<QuotesScreen key={signedInUser?.storageId || 'account-pending'} />} />
+            <Route path="/pricing" element={<PricingScreen />} />
+            <Route path="/wof" element={<WofScreen key={signedInUser?.storageId || 'account-pending'} accountId={signedInUser?.storageId || 'account-pending'} />} />
+            <Route path="*" element={<AccessDeniedScreen access={access} user={signedInUser} restrictedRoute />} />
+          </Routes> : access.mode === 'job-book-only' ? <Routes>
             <Route path="/" element={<Navigate to="/job-book" replace />} />
             <Route path="/job-book" element={<JobBookPrototypeScreen key={signedInUser?.storageId || 'account-pending'} allowManagedJobNavigation={false} allowManagedJobMarkerUpdates={false} />} />
             <Route path="*" element={<AccessDeniedScreen access={access} user={signedInUser} restrictedRoute />} />

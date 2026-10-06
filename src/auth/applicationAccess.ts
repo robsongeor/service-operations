@@ -8,6 +8,21 @@ export const APPLICATION_ROLES = {
     JOB_CARD_ADMIN: 'ServiceOperations.JobCardAdmin',
 } as const
 
+export const SERVICE_COORDINATOR_NAVIGATION_PATHS = [
+    '/customers',
+    '/equipment',
+    '/maintenance-booking',
+    '/wof',
+    '/jobs',
+    '/job-import',
+    '/equipment-photos',
+    '/job-card-reviews',
+    '/job-book',
+    '/scheduling',
+    '/quotes',
+    '/pricing',
+] as const
+
 export type ApplicationAccessMode = 'full' | 'service-coordinator' | 'job-book-admin' | 'job-book-only' | 'job-card-admin' | 'denied'
 export type SimulatedAccessMode = ApplicationAccessMode | null
 
@@ -60,7 +75,7 @@ function accessForMode(mode: ApplicationAccessMode, isSimulated = false): Applic
     const admin = office || bookAdmin
     return {
         mode,
-        canUseFullApplication: coordinator,
+        canUseFullApplication: mode === 'full',
         canUseJobBook: mode !== 'denied',
         canManageJobs: coordinator,
         canCorrectJobDetails: coordinator || admin,
