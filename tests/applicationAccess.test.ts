@@ -128,6 +128,8 @@ test('unified production Jobs uses the bounded worklist without changing the def
     assert.match(screen, /useJobs\(UNIFIED_JOB_RUNTIME \? \{ loadGlobalOperationalData: false/)
     assert.match(screen, /unifiedWorklist=\{UNIFIED_JOB_RUNTIME\}/)
     assert.match(worklist, /fetchUnifiedJobsPage\(token, scope, cursor\)/)
+    assert.match(worklist, /pageNumber < 50/)
+    assert.doesNotMatch(screen, /Refresh Jobs|Load more Jobs/)
 })
 
 test('unified WOF presents Job numbers as immutable and points to guarded allocation', () => {
