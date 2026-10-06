@@ -23,7 +23,7 @@ jobs:
       VITE_REGIONAL_JOB_BOOK_ALLOCATION_ENABLED: "false"
       VITE_UNIFIED_JOB_REGISTRATION_ENABLED: "true"
       VITE_UNIFIED_JOB_WORKFLOW_ENABLED: "true"
-      VITE_APPLICATION_ACCESS_CONTROL_ENABLED: "false"
+      VITE_APPLICATION_ACCESS_CONTROL_ENABLED: "true"
       VITE_EQUIPMENT_REALTIME_API_URL: https://serviceops-equipment-realtime-bbd3f9.azurewebsites.net/api
     steps:
       - uses: actions/checkout@v3
