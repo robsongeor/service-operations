@@ -1,7 +1,12 @@
 const jobSubmissionService = require('../services/jobSubmissionService')
+const { proxyJobSubmission, usesSharedBackend } = require('../services/jobSubmissionProxy')
 
 module.exports = async function jobSubmission(context, request) {
     try {
+        if (usesSharedBackend(request)) {
+            context.res = await proxyJobSubmission(request)
+            return
+        }
         if (request.method === 'GET') {
             context.res = await jobSubmissionService.handlePublicGet(request)
         } else if (request.method === 'POST' && request.body?.action === 'generate') {

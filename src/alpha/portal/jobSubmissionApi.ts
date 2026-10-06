@@ -1,5 +1,9 @@
 import type { JobCardSubmissionInput, PublicJobSubmissionDetails, PublicSubmissionError } from './jobSubmission.types'
 
+const sharedBackendHeaders: Record<string, string> = import.meta.env?.VITE_JOB_CARD_SHARED_BACKEND === 'v1-production'
+    ? { 'X-Job-Card-Shared-Backend': 'v1-production' }
+    : {}
+
 export class JobSubmissionError extends Error {
     readonly code: PublicSubmissionError['code']
 
@@ -20,7 +24,7 @@ async function readResponse<T>(response: Response): Promise<T> {
 export async function fetchPublicJobSubmission(token: string): Promise<PublicJobSubmissionDetails> {
     const response = await fetch(`/api/jobsubmission?token=${encodeURIComponent(token)}`, {
         cache: 'no-store',
-        headers: { Accept: 'application/json' },
+        headers: { ...sharedBackendHeaders, Accept: 'application/json' },
     })
     return readResponse<PublicJobSubmissionDetails>(response)
 }
@@ -30,14 +34,14 @@ export async function submitPublicJobCard(token: string, submission: JobCardSubm
     for (const photo of submission.photos) {
         const response = await fetch('/api/jobsubmission', {
             method: 'POST',
-            headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+            headers: { ...sharedBackendHeaders, Accept: 'application/json', 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'uploadPhoto', token, photo }),
         })
         photos.push(await readResponse<{ uploadId: string }>(response))
     }
     const response = await fetch('/api/jobsubmission', {
         method: 'POST',
-        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        headers: { ...sharedBackendHeaders, Accept: 'application/json', 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, ...submission, photos }),
     })
     await readResponse<{ submitted: true }>(response)

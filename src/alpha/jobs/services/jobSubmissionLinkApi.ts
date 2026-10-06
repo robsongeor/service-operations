@@ -44,12 +44,17 @@ export type JobSubmissionRecipient = {
     recipientEmail: string
 }
 
+const sharedBackendHeaders: Record<string, string> = import.meta.env?.VITE_JOB_CARD_SHARED_BACKEND === 'v1-production'
+    ? { 'X-Job-Card-Shared-Backend': 'v1-production' }
+    : {}
+
 export async function generateJobSubmissionLink(accessToken: string, recipient: JobSubmissionRecipient, replaceActive = false): Promise<{ url: string; expiresOn: string }> {
     const response = await fetch('/api/jobsubmission', {
         method: 'POST',
         cache: 'no-store',
         headers: {
             'X-Dataverse-Authorization': `Bearer ${accessToken}`,
+            ...sharedBackendHeaders,
             Accept: 'application/json',
             'Content-Type': 'application/json',
         },
