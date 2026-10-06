@@ -78,11 +78,12 @@ JOB_CARD_REVIEWER_EMAILS
 APP_PUBLIC_URL
 ```
 
-New Office Admin Job Book registrations can remain without `gr_jobtype` until a service operator
-classifies them. The Job Card backend accepts that interim state without inventing a Job Type or
-requiring a service hour meter. This compatibility does not replace the planned Job Type
-provisioning and service-operator classification workflow; that rollout must be completed and
-verified separately.
+New Office Admin Job Book registrations can temporarily remain without `gr_jobtype`. The Job Card
+backend accepts that interim state without inventing a Job Type or requiring a service hour meter.
+This compatibility does not replace the planned Office Admin Job Type selection: the owner will
+confirm an expanded category list, the categories must then be provisioned, and Job Type must become
+a required Office Admin entry field. Job Status is a separate control and is not implied by this
+requirement.
 
 After provisioning, run the production-safe Job Card smoke covering link generation, public
 lookup, submission, photo storage/download, email, manager review and replay rejection. Only after
