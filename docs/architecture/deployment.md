@@ -78,6 +78,12 @@ JOB_CARD_REVIEWER_EMAILS
 APP_PUBLIC_URL
 ```
 
+New Office Admin Job Book registrations can remain without `gr_jobtype` until a service operator
+classifies them. The Job Card backend accepts that interim state without inventing a Job Type or
+requiring a service hour meter. This compatibility does not replace the planned Job Type
+provisioning and service-operator classification workflow; that rollout must be completed and
+verified separately.
+
 After provisioning, run the production-safe Job Card smoke covering link generation, public
 lookup, submission, photo storage/download, email, manager review and replay rejection. Only after
 that smoke passes should `VITE_JOB_CARD_SHARED_BACKEND` be removed from the V2 deployment workflow,

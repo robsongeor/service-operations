@@ -36,6 +36,10 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
 
 - [ ] Configure and verify the production server-only `DATAVERSE_URL`,
   `DATAVERSE_TENANT_ID`, `DATAVERSE_CLIENT_ID`, and `DATAVERSE_CLIENT_SECRET` settings.
+- [ ] Complete and verify Job Type provisioning and the service-operator classification workflow
+  for newly registered Office Admin Job Book entries. Office Admin create/edit must continue to
+  omit these operator controls; an interim unclassified Job may send a Job Card without an invented
+  type or service hour-meter requirement, but it must subsequently receive its correct Job Type.
 - [ ] Provision an independent or dedicated shared permanent Job Card backend for V2, then retire
   the temporary V2-to-V1 bridge. Configure the private Dataverse, Azure Storage, ACS email,
   reviewer and public-URL settings listed in
