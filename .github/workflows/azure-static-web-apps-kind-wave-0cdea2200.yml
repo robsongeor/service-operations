@@ -42,11 +42,12 @@ jobs:
         with:
           node-version: 20
           cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Test application
+        run: npm test
       - name: Build application
-        run: |
-          npm ci
-          npm test
-          npm run build
+        run: npm run build
       - name: Build And Deploy
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
