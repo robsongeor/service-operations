@@ -147,7 +147,7 @@ test('Site Check history opens from cached data and retains an exact-Job fallbac
 })
 
 test('Customer Dashboard loads selected-customer collections without starting global Jobs or Equipment reads', () => {
-    assert.match(dashboardSource, /useCustomerDashboardData\(selectedCustomerId, activeTab === 'quotes'\)/)
+    assert.match(dashboardSource, /useCustomerDashboardData\(selectedCustomerId, activeTab === 'quotes' && access\.canViewQuotes\)/)
     assert.match(dashboardSource, /useEquipmentManager\(\{[\s\S]*?loadGlobalOperationalData: false/)
     assert.match(dashboardSource, /useJobs\(\{[\s\S]*?loadGlobalOperationalData: false/)
     assert.match(customerDataSource, /fetchCustomerSites/)

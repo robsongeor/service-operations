@@ -316,11 +316,15 @@ export async function createJobBookIntakeRow(accessToken: string, row: JobBookRo
     return mapIntakeRow(await response.json() as IntakeApiRow, book)
 }
 
-export async function updateJobBookIntakeRow(accessToken: string, row: JobBookRow): Promise<JobBookRow> {
+export async function updateJobBookIntakeRow(accessToken: string, row: JobBookRow, correctionsOnly = false): Promise<JobBookRow> {
     if (!isEditableJobBookIntake(row)) throw new Error('Only unpromoted Intake entries can be edited. Void entries are read-only.')
     const current = await readCurrentIntakeVersion(accessToken, row)
     if (!isEditableJobBookIntake(current)) throw new Error('This entry is no longer editable.')
-    return patchIntakeRow(accessToken, row, intakePayload(row))
+    const payload: Record<string, unknown> = intakePayload(row)
+    if (correctionsOnly) {
+        for (const key of ['gr_mechanictext', 'gr_Mechanic@odata.bind', 'gr_entered', 'gr_timecloudentered']) delete payload[key]
+    }
+    return patchIntakeRow(accessToken, row, payload)
 }
 
 export async function fetchJobBookIntakeRow(accessToken: string, row: Pick<JobBookRow, 'jobBookKey' | 'intakeRecordId'>): Promise<JobBookRow> {

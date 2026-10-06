@@ -427,8 +427,10 @@ Implemented in this mode:
 - Jobs creation saves an unnumbered staging Job. **Allocate job number** selects a regional book
   and registers that same Job; **Manage job** independently adds that same record to Operational.
   Neither sends email or marks GreenTree/Timecloud. New basic Jobs have no invented Job Type.
-- Jobs worklists distinguish Staging (unnumbered), Operational (explicit membership) and All jobs.
-  The secondary tabs filter type only. An unnumbered managed Job can belong to both Staging and
+- Service coordination uses one tab row: Operational, Breakdown, Service, Workshop, WOF,
+  Site Check, Unconfirmed and All jobs. Operational uses explicit coordinator membership;
+  Unconfirmed retains its status meaning. All jobs includes read-only unlinked ledger history
+  alongside working Jobs, without creating or converting historical records. An unnumbered managed Job can belong to both Staging and
   Operational. Older Jobs lacking the new membership metadata keep their existing managed fallback.
   Coordinator settings are configured after Manage job. The legacy spreadsheet allocation controls
   and row-click spreadsheet export are absent in this mode; the order-book copy action is retained.

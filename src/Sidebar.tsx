@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import SidebarFooter from './SidebarFooter'
+import SidebarBrand from './SidebarBrand'
 import { getSignedInUserInfo } from './auth/signedInUser'
 import { useActiveMsalAccount } from './auth/useActiveMsalAccount'
 import { isServiceOperationsAdministrator } from './auth/adminAuthorization'
@@ -16,12 +17,12 @@ const menuItems = [
     { label: 'Greentree Review', shortLabel: 'GT', path: '/equipment/greentree-test' },
     { label: 'Equipment Map', shortLabel: 'M', path: '/equipment-map' },
     { label: 'WOF / REGO', shortLabel: 'W', path: '/wof' },
-    { label: 'Jobs', shortLabel: 'J', path: '/jobs' },
+    { label: 'Service coordination', shortLabel: 'SC', path: '/jobs' },
     { label: 'Job Import', shortLabel: 'JI', path: '/job-import' },
     { label: 'Equipment Photos', shortLabel: 'P', path: '/equipment-photos' },
     { label: 'Job Card reviews', shortLabel: 'JR', path: '/job-card-reviews' },
     { label: 'Job Map', shortLabel: 'JM', path: '/job-map' },
-    { label: 'Job Book Legacy', shortLabel: 'JB', path: '/job-book' },
+    { label: 'Job Book', shortLabel: 'JB', path: '/job-book' },
     { label: 'Site Checks', shortLabel: 'S', path: '/site-checks' },
     { label: 'Scheduling', shortLabel: 'C', path: '/scheduling' },
     { label: 'Quotes', shortLabel: 'Q', path: '/quotes' },
@@ -37,7 +38,9 @@ export default function Sidebar({ access }: { access: ApplicationAccess }) {
         ? menuItems
         : access.mode === 'job-card-admin'
             ? menuItems.filter((item) => ['/job-card-reviews', '/job-book', '/quotes', '/equipment', '/customers'].includes(item.path))
-            : menuItems.filter((item) => item.path === '/job-book')
+            : access.mode === 'job-book-admin'
+                ? menuItems.filter((item) => ['/job-book', '/equipment', '/customers'].includes(item.path))
+                : menuItems.filter((item) => item.path === '/job-book')
     const visibleMenuItems = isAdmin && access.canUseFullApplication
         ? [
             ...allowedMenuItems,
@@ -57,13 +60,7 @@ export default function Sidebar({ access }: { access: ApplicationAccess }) {
                 {isOpen ? '‹' : '›'}
             </button>
 
-            <div className="sidebar-header">
-                <div className="sidebar-logo" aria-hidden="true">SO</div>
-                <div className="sidebar-brand">
-                    <strong>Service</strong>
-                    <span>Operations</span>
-                </div>
-            </div>
+            <SidebarBrand key={isOpen ? 'open' : 'collapsed'} />
 
             <p className="sidebar-section-title">Main menu</p>
 

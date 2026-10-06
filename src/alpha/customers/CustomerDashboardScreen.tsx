@@ -1,3 +1,6 @@
+import { applicationAccessFromEnvironment } from '../../auth/applicationAccess'
+import CustomerRelationshipPicker from '../shared/customer-relationship/CustomerRelationshipPicker'
+import JobSiteCreatePanel from '../jobs/components/JobSiteCreatePanel'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
@@ -88,6 +91,11 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
     const quoteEditor = useQuoteEditorOverlay()
     const [searchParams, setSearchParams] = useSearchParams()
     const activeAccount = useActiveMsalAccount()
+    const access = applicationAccessFromEnvironment(activeAccount)
+    const canCreateRestricted = readOnly && access.canCreateEquipmentDestination
+    const [relationshipQuery, setRelationshipQuery] = useState('')
+    const [addingRestrictedSite, setAddingRestrictedSite] = useState(false)
+    const retainedCreatedCustomer = useRef<Customer | null>(null)
     const signedInUser = getSignedInUserInfo(activeAccount)
     const viewStorageKey = signedInUser ? getCustomerDashboardViewStateKey(signedInUser.storageId) : null
     const bulkImportAllowed = !readOnly && canUseBulkEquipmentImport(signedInUser)
@@ -95,7 +103,7 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
         ? restoreCustomerDashboardSelection(viewStorageKey)
         : '')
     const [activeTab, setActiveTab] = useState<'sites' | 'jobs' | 'quotes' | 'contacts' | 'info'>('sites')
-    const customerData = useCustomerDashboardData(selectedCustomerId, activeTab === 'quotes')
+    const customerData = useCustomerDashboardData(selectedCustomerId, activeTab === 'quotes' && access.canViewQuotes)
     const {
         customers,
         isLoading: isCustomerListLoading,
@@ -711,8 +719,24 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
                     searchPlaceholder="Search customers"
                     emptyLabel="No matching customers"
                 />
+                {canCreateRestricted && <CustomerRelationshipPicker id="restricted-customer-create" query={relationshipQuery}
+                    options={[]} onQueryChange={setRelationshipQuery} onClearSelection={() => setRelationshipQuery('')} onSelect={() => undefined}
+                    createDescription="Create a Customer and its first Site. Saved records remain if you leave this screen."
+                    onCreateCustomerAndSite={async (input) => {
+                        const name = input.customerName.trim().toLowerCase()
+                        const customer = allCustomers.find((item) => item.gr_name.trim().toLowerCase() === name)
+                            ?? (retainedCreatedCustomer.current?.gr_name.trim().toLowerCase() === name ? retainedCreatedCustomer.current : null)
+                            ?? await createDashboardCustomer({ name: input.customerName })
+                        retainedCreatedCustomer.current = customer
+                        setLocalCustomers((current) => [...current.filter((item) => item.gr_customerid !== customer.gr_customerid), customer])
+                        await createDashboardSite({ customerId: customer.gr_customerid, name: input.siteName, address: input.address }, customer)
+                        setSelectedCustomerId(customer.gr_customerid)
+                        setRelationshipQuery('')
+                        retainedCreatedCustomer.current = null
+                        setSiteSuccess('Customer and Site saved.')
+                    }} />}
                 {readOnly
-                    ? <span className="customer-dashboard-read-only">Read only</span>
+                    ? <span className="customer-dashboard-read-only">{canCreateRestricted ? 'Customer / Site creation enabled' : 'Read only'}</span>
                     : <button className="page-header-primary-action" type="button" onClick={() => setCustomerDrawerMode('create')}>+ Create Customer</button>}
             </div>}
         />
@@ -734,6 +758,7 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
                     <span>Customer account</span>
                     <h2>{selectedCustomer.gr_name}</h2>
                 </div>
+                {canCreateRestricted && <button type="button" onClick={() => setAddingRestrictedSite(true)}>Add Site</button>}
                 {!readOnly && <div className="customer-dashboard-actions">
                     <button
                         type="button"
@@ -746,12 +771,18 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
                 </div>}
             </section>
 
+            {canCreateRestricted && addingRestrictedSite && <JobSiteCreatePanel customerName={selectedCustomer.gr_name}
+                onCancel={() => setAddingRestrictedSite(false)} onCreate={async (input) => {
+                    await createDashboardSite({ customerId: selectedCustomer.gr_customerid, ...input }, selectedCustomer)
+                    setAddingRestrictedSite(false)
+                    setSiteSuccess('Site saved.')
+                }} />}
             <MetricStrip items={summaryMetrics} ariaLabel="Customer summary" />
 
             <nav className="customer-dashboard-tabs" aria-label="Customer sections" role="tablist">
                 <button type="button" role="tab" aria-selected={activeTab === 'sites'} className={activeTab === 'sites' ? 'active' : ''} onClick={() => setActiveTab('sites')}>Sites <span>{customerSites.length}</span></button>
                 <button type="button" role="tab" aria-selected={activeTab === 'jobs'} className={activeTab === 'jobs' ? 'active' : ''} onClick={() => setActiveTab('jobs')}>Jobs <span>{customerJobs.length}</span></button>
-                <button type="button" role="tab" aria-selected={activeTab === 'quotes'} className={activeTab === 'quotes' ? 'active' : ''} onClick={() => setActiveTab('quotes')}>Quotes <span>{customerQuotes.length}</span></button>
+                {access.canViewQuotes && <button type="button" role="tab" aria-selected={activeTab === 'quotes'} className={activeTab === 'quotes' ? 'active' : ''} onClick={() => setActiveTab('quotes')}>Quotes <span>{customerQuotes.length}</span></button>}
                 <button type="button" role="tab" aria-selected={activeTab === 'contacts'} className={activeTab === 'contacts' ? 'active' : ''} onClick={() => setActiveTab('contacts')}>Contacts <span>{customerContacts.length}</span></button>
                 <button type="button" role="tab" aria-selected={activeTab === 'info'} className={activeTab === 'info' ? 'active' : ''} onClick={() => setActiveTab('info')}>Info</button>
             </nav>

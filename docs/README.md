@@ -21,6 +21,13 @@ by scanning the repository.
 | Deployment and environment configuration | [`architecture/deployment.md`](architecture/deployment.md) |
 | Sanitized PDF development templates | [`templates/README.md`](templates/README.md) |
 
+## Job Book rollout
+
+For replacing the Excel job books, use the owner-facing [rollout plan](features/JOB_BOOK_ROLLOUT_PLAN.md):
+user access, engineering prerequisites, acceptance checks, migration rehearsal, cutover and rollback.
+The [user access plan](features/JOB_BOOK_ACCESS_PLAN.md) owns the agreed roles and intended account roster.
+The [Microsoft access audit](features/JOB_BOOK_ACCESS_AUDIT.md) records live read-only findings and required changes.
+
 ## Feature architecture
 
 | Subsystem | Architecture | Detailed schema or workflow |

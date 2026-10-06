@@ -1,3 +1,5 @@
+import { applicationAccessFromEnvironment } from '../../../auth/applicationAccess'
+import { updateEquipmentDetails } from '../services/equipmentDetailsApi'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { useActiveMsalAccount } from '../../../auth/useActiveMsalAccount'
@@ -261,6 +263,13 @@ export function useEquipmentManager(options: UseEquipmentManagerOptions = {}) {
         setSaveError('')
         try {
             const token = await getToken()
+            const access = applicationAccessFromEnvironment(account)
+            if (!access.canEditEquipment) {
+                if (!access.canEditEquipmentDetails) throw new Error('Equipment editing is not permitted.')
+                const updated = await updateEquipmentDetails(token, record, input)
+                setEquipment((current) => current.map((item) => item.gr_equipmentid === updated.gr_equipmentid ? updated : item))
+                return updated
+            }
             await updateEquipmentApi(token, record.gr_equipmentid, input)
             const selectedSite = resolvedSite ?? sites.find((site) => site.gr_siteid === input.siteId)
             const updated = applyEquipmentUpdate(record, input, selectedSite)

@@ -49,6 +49,7 @@ import {
 import '../EquipmentScreen.css'
 
 type SharedProps = {
+    detailsOnly?: boolean
     customers: Customer[]
     sites: Site[]
     onSearchCustomers?: (query: string, signal?: AbortSignal) => Promise<Customer[]>
@@ -803,10 +804,10 @@ export default function EquipmentDrawer(props: Props) {
             title={isCreate ? 'New Equipment' : equipment?.gr_fleet || 'Equipment details'}
             busy={busy}
             onClose={close}
-            headerAction={!isCreate && props.onCreateJob && <button type="button" className="equipment-create-job-button" onClick={() => props.onCreateJob?.(props.equipment)} disabled={busy}>Create Job</button>}
+            headerAction={!isCreate && !props.detailsOnly && props.onCreateJob && <button type="button" className="equipment-create-job-button" onClick={() => props.onCreateJob?.(props.equipment)} disabled={busy}>Create Job</button>}
             footer={<>
                 <div className="equipment-footer-leading">
-                    {!isCreate && <div className="equipment-delete-control" tabIndex={history.length > 0 ? 0 : undefined}>
+                    {!isCreate && !props.detailsOnly && <div className="equipment-delete-control" tabIndex={history.length > 0 ? 0 : undefined}>
                         <button type="button" className="equipment-delete-button" disabled={busy || history.length > 0} aria-describedby={history.length > 0 ? 'equipment-delete-explanation' : undefined} onClick={() => { setDeleteError(''); setShowDeleteConfirm(true) }}>Delete equipment</button>
                         {history.length > 0 && <span id="equipment-delete-explanation" className="equipment-delete-tooltip" role="tooltip">This Equipment cannot be deleted because it has linked Job history. Historical records must be preserved.</span>}
                     </div>}
@@ -837,7 +838,7 @@ export default function EquipmentDrawer(props: Props) {
                     {matchingEquipment && <div className="equipment-equipment-duplicate-warning" role="alert">Equipment {matchingEquipment.gr_fleet || matchingEquipment.gr_serial} already exists. Change the identifier before creating Equipment.</div>}
                 </div>}
                 {!isCreate && <nav className="equipment-edit-tabs" aria-label="Equipment sections">
-                    {tabs.map((tab) => <button
+                    {tabs.filter((tab) => !props.detailsOnly || tab.id === 'details').map((tab) => <button
                         key={tab.id}
                         type="button"
                         className={activeTab === tab.id ? 'active' : ''}
@@ -871,7 +872,7 @@ export default function EquipmentDrawer(props: Props) {
                             </label>
                             <label>Make<input value={form.make} onChange={(event) => updateField('make', event.target.value)} /></label>
                             <label>Model<input value={form.model} onChange={(event) => updateField('model', event.target.value)} /></label>
-                            <label>
+                            {!props.detailsOnly && <label>
                                 Equipment Ownership
                                 <select
                                     value={form.ownershipType ?? ''}
@@ -887,8 +888,8 @@ export default function EquipmentDrawer(props: Props) {
                                         <option key={option.value} value={option.value}>{option.label}</option>,
                                     )}
                                 </select>
-                            </label>
-                            {siteChecksEnabled && <label>
+                            </label>}
+                            {!props.detailsOnly && siteChecksEnabled && <label>
                                 Site Check Availability
                                 <select
                                     value={form.siteCheckAvailability ?? ''}
@@ -991,7 +992,7 @@ export default function EquipmentDrawer(props: Props) {
                         </div>
                     </EditDrawerSection>}
 
-                    {(isCreate || activeTab === 'details') && <EditDrawerSection
+                    {!props.detailsOnly && (isCreate || activeTab === 'details') && <EditDrawerSection
                         title="Road compliance"
                         meta={<FormSwitch
                             label="Road use"
@@ -1023,7 +1024,7 @@ export default function EquipmentDrawer(props: Props) {
 
                     {isCreate && parsedSpreadsheetRow && <details className="equipment-spreadsheet-source" open={sourceContextOpen} onToggle={(event) => setSourceContextOpen(event.currentTarget.open)}><summary>Spreadsheet source</summary><dl><div><dt>Job Number</dt><dd>{parsedSpreadsheetRow.jobNumber || '-'}</dd></div><div><dt>Date</dt><dd>{parsedSpreadsheetRow.date || '-'}</dd></div><div><dt>Mechanic</dt><dd>{parsedSpreadsheetRow.mechanic || '-'}</dd></div><div><dt>Description</dt><dd>{parsedSpreadsheetRow.description || '-'}</dd></div><div><dt>Contact details</dt><dd>{parsedSpreadsheetRow.contactDetails || '-'}</dd></div><div><dt>Status</dt><dd>{parsedSpreadsheetRow.status || '-'}</dd></div><div><dt>Comments</dt><dd>{parsedSpreadsheetRow.comments || '-'}</dd></div><div><dt>Order number</dt><dd>{parsedSpreadsheetRow.orderNumber || '-'}</dd></div><div><dt>in so</dt><dd>{parsedSpreadsheetRow.inSo || '-'}</dd></div></dl></details>}
 
-                    {!isCreate && activeTab === 'maintenance' && <EditDrawerSection title="Maintenance">
+                    {!props.detailsOnly && !isCreate && activeTab === 'maintenance' && <EditDrawerSection title="Maintenance">
                         <div className="equipment-form-grid">
                             <label>Power Type<select value={form.powerType} onChange={(event) => {
                                 const powerType = Number(event.target.value) as PowerType
@@ -1153,7 +1154,7 @@ export default function EquipmentDrawer(props: Props) {
                         </div>
                     </EditDrawerSection>}
 
-                    {!isCreate && activeTab === 'history' && <EditDrawerSection title="Job History" meta={<span className="equipment-history-count">{props.isJobHistoryLoading ? 'Loading…' : `${history.length} ${history.length === 1 ? 'job' : 'jobs'}`}</span>}>
+                    {!props.detailsOnly && !isCreate && activeTab === 'history' && <EditDrawerSection title="Job History" meta={<span className="equipment-history-count">{props.isJobHistoryLoading ? 'Loading…' : `${history.length} ${history.length === 1 ? 'job' : 'jobs'}`}</span>}>
                         <p className="equipment-history-note">Historical rows use each Job's recorded Site and are not changed when this Equipment moves.</p>
                         {props.isJobHistoryLoading
                             ? <div className="equipment-history-empty" role="status">Loading linked Jobs…</div>

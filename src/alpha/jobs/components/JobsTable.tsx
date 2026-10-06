@@ -156,7 +156,8 @@ export default function JobsTable({
 
     const jobsForSelectedType = useMemo(() => jobs.filter((job) => {
         if (selectedJobType === 'unconfirmed' && job.gr_status !== JOB_STATUSES.UNCONFIRMED) return false
-        if (selectedJobType === 'operational' && job.gr_jobtype === JOB_TYPES.SITE_CHECK) return false
+        if (job.legacyBookEntry) return selectedJobType === 'all'
+        if (selectedJobType === 'operational' && (unifiedWorklist ? !isCoordinatorManaged(job) || job.gr_registrationvoid : job.gr_jobtype === JOB_TYPES.SITE_CHECK)) return false
         if (selectedJobType !== 'all' && selectedJobType !== 'operational' && selectedJobType !== 'unconfirmed' && job.gr_jobtype !== selectedJobType) return false
         if (!jobMatchesScheduledVisibility(job.gr_jobid, scheduleOptions, scheduledJobsVisibility)) return false
         const needsAttention = jobNeedsOfficeAttention(job)
@@ -166,7 +167,7 @@ export default function JobsTable({
                 ? needsAttention
                 : !needsAttention
         return matchesOfficeActionFilter
-    }), [jobs, officeAttentionFilter, scheduleOptions, scheduledJobsVisibility, selectedJobType])
+    }), [jobs, officeAttentionFilter, scheduleOptions, scheduledJobsVisibility, selectedJobType, unifiedWorklist])
 
     const matchingJobs = useMemo(() => {
         const search = searchText.trim().toLowerCase()
@@ -362,16 +363,16 @@ export default function JobsTable({
 
     return (<>
         <TablePanel className="jobs-list-card">
-            <TableToolbar eyebrow="Operations" title="Jobs" searchLabel="Search jobs" placeholder="Search jobs..."
+            <TableToolbar eyebrow="Operations" title="Service coordination" searchLabel="Search jobs" placeholder="Search jobs..."
                 search={searchText} onSearch={(value) => onViewStateChange({ ...viewState, searchText: value })}
                 count={searchText.trim() ? `${matchingJobs.length} of ${jobsForSelectedType.length}` : `${jobsForSelectedType.length} shown`} />
 
             <div className="jobs-filter-bar">
                 <JobTypeTabs
-                    includeOperational={!unifiedWorklist}
-                    allLabel={unifiedWorklist ? 'All types' : 'All jobs'}
+                    includeOperational
+                    allLabel="All jobs"
                     selectedJobType={selectedJobType}
-                    includeUnconfirmed={!unifiedWorklist}
+                    includeUnconfirmed
                     onChange={(jobType) => onViewStateChange({
                         ...viewState,
                         selectedJobType: jobType,
@@ -509,6 +510,13 @@ export default function JobsTable({
                         )}
 
                         {sortedJobs.map((job) => {
+                            if (job.legacyBookEntry) return <tr key={job.gr_jobid}>
+                                <td colSpan={JOBS_TABLE_COLUMNS.length + 1}>
+                                    <strong>{job.gr_jobnumber}</strong> · {job.gr_description} · {job.gr_Site?.gr_Customer?.gr_name} · {job.gr_Site?.gr_name}
+                                    {' · '}<span>Legacy Job Book · {job.legacyBookEntry.void ? 'Void · ' : ''}read-only</span>{' · '}
+                                    <a href="/job-book">Open Legacy Job Book</a>
+                                </td>
+                            </tr>
                             const latestOfficeUpdate = latestOfficeUpdates[job.gr_jobid]
                             const canCopyForSpreadsheet = !job.gr_registrationvoid && Boolean(job.gr_jobnumber?.trim())
                             const mechanicEmail = job.gr_Mechanic?.gr_email?.trim() ?? ''

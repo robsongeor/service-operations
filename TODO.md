@@ -6,6 +6,10 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
 
 ## Priority 0 — Production readiness
 
+- [ ] Complete the owner-facing [Job Book Excel replacement rollout plan](docs/features/JOB_BOOK_ROLLOUT_PLAN.md):
+  confirm users/duties/regions, finish real integration, record acceptance evidence, rehearse migration,
+  then separately approve the single-writer cutover. No rollout until release criteria pass.
+
 - [ ] Complete regional Job Book migration and cutover using
   [`docs/features/REGIONAL_JOB_BOOKS.md`](docs/features/REGIONAL_JOB_BOOKS.md): obtain, retain, import,
   and reconcile each regional spreadsheet; derive and verify each production seed; target-smoke

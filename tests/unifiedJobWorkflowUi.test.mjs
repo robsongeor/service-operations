@@ -4,7 +4,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createServer } from 'vite'
 
-let server, Registration, Create, Table, Provider
+let server, Registration, Create, Table, Provider, EquipmentDrawer, detailsPatch
 const originalWindow = globalThis.window
 const originalFetch = globalThis.fetch
 const values = new Map()
@@ -19,6 +19,8 @@ test.before(async () => {
     Registration = (await server.ssrLoadModule('/src/alpha/jobs/components/JobRegistrationDialog.tsx')).default
     Create = (await server.ssrLoadModule('/src/alpha/jobs/components/JobCreateDrawer.tsx')).default
     Table = (await server.ssrLoadModule('/src/alpha/jobs/components/JobsTable.tsx')).default
+    EquipmentDrawer = (await server.ssrLoadModule('/src/alpha/equipment/components/EquipmentDrawer.tsx')).default
+    detailsPatch = (await server.ssrLoadModule('/src/alpha/equipment/services/equipmentDetailsApi.ts')).equipmentDetailsPatch
     Provider = (await server.ssrLoadModule('/src/alpha/shared/data/OperationalDataClientProvider.tsx')).OperationalDataClientProvider
 })
 test.after(async () => { globalThis.window = originalWindow; globalThis.fetch = originalFetch; await server?.close() })
@@ -71,4 +73,56 @@ test('unified Void rows have no allocation, management, spreadsheet-export or se
     assert.doesNotMatch(html, /Allocate job number|Manage job|Paste Job numbers|Job book spreadsheet export|Click the row to copy/)
     assert.match(html, /disabled="">Edit/)
     assert.match(html, /Void entries cannot be sent/)
+})
+
+function renderWorklist(rows, tab) {
+    return renderToStaticMarkup(createElement(Table, {
+        unifiedWorklist: true, jobs: rows, visibleStatuses: [122830001],
+        viewState: { searchText: '', selectedJobType: tab, officeAttentionFilter: 'all', scheduledJobsVisibility: 'all', sort: { field: 'created', direction: 'desc' } },
+        onAllocateNumber: unavailable, onManageJob: unavailable, onViewStateChange: unavailable, onToggleStatus: unavailable, onResetToDefault: unavailable,
+        onStatusChange: unavailable, onJobFieldsChange: unavailable, onJobNumberAllocation: unavailable, onEmailTechnician: unavailable, emailDeliveryStates: {},
+        onEditJob: unavailable, onOpenJobCard: unavailable, onOpenEquipment: unavailable, mechanics: [], officeUpdates: [], scheduleOptions: [], stickyThroughColumnId: null,
+    }))
+}
+
+test('single coordination tab row separates membership from type and unconfirmed status', () => {
+    const rows = [
+        { ...job, gr_jobid: id(10), gr_description: 'Managed site check', gr_coordinatormanaged: true, gr_jobtype: 122830004 },
+        { ...job, gr_jobid: id(11), gr_description: 'Unnumbered staging' },
+        { ...job, gr_jobid: id(12), gr_description: 'Registered book work', gr_jobnumber: '910001' },
+        { ...job, gr_jobid: id(13), gr_description: 'Unconfirmed work', gr_status: 122830005 },
+        { ...job, gr_jobid: id(14), gr_description: 'Historical ledger entry', legacyBookEntry: { void: false } },
+    ]
+    const operational = renderWorklist(rows, 'operational')
+    assert.match(operational, /Managed site check/)
+    for (const text of ['Unnumbered staging', 'Registered book work', 'Historical ledger entry']) assert.ok(!operational.includes(text))
+    assert.equal((operational.match(/role="tablist"/g) ?? []).length, 1)
+    assert.match(operational, />Unconfirmed</)
+    assert.match(operational, />All jobs</)
+    assert.doesNotMatch(operational, />All types</)
+    const all = renderWorklist(rows, 'all')
+    for (const row of rows) assert.ok(all.includes(row.gr_description))
+    const unconfirmed = renderWorklist(rows, 'unconfirmed')
+    assert.match(unconfirmed, /Unconfirmed work/)
+    assert.doesNotMatch(unconfirmed, /Unnumbered staging|Historical ledger entry/)
+    const legacy = renderWorklist([rows[4]], 'all')
+    assert.match(legacy, /read-only/)
+    assert.doesNotMatch(legacy, /Allocate job number|Manage job|>Edit</)
+})
+
+test('restricted Equipment editor excludes maintenance, compliance, ownership and deletion', () => {
+    const html = renderToStaticMarkup(createElement(Provider, { scope: 'restricted-equipment-test' }, createElement(EquipmentDrawer, {
+        mode: 'edit', detailsOnly: true, equipment: { gr_equipmentid: id(91), gr_fleet: 'F1', gr_make: 'Make', gr_model: 'Model', gr_serial: 'Serial', statecode: 0 },
+        customers: [], sites: [], equipmentList: [], jobs: [], isSaving: false, saveError: '',
+        onClose: unavailable, onSave: unavailable, onDelete: unavailable, onSaveMaintenanceHistory: unavailable,
+    })))
+    assert.match(html, /Serial number/)
+    assert.doesNotMatch(html, /Delete equipment|Road compliance|Equipment Ownership|Site Check Availability|>Maintenance<|>Job History</)
+})
+test('Equipment correction payload excludes unrelated fields and rejects unsaved Sites', () => {
+    const input = { fleet: ' F1 ', alternateFleetNumbers: '', make: ' Make ', model: 'Model', serial: 'Serial', siteId: id(92), maintenanceProfile: 9, currentWofExpiry: '2030-01-01', ownershipType: 3 }
+    const patch = detailsPatch(input)
+    assert.deepEqual(Object.keys(patch).sort(), ['gr_fleet','gr_alternatefleetnumbers','gr_make','gr_model','gr_serial','gr_Site@odata.bind'].sort())
+    assert.equal(patch.gr_fleet, 'F1')
+    assert.throws(() => detailsPatch({ ...input, siteId: 'prototype-site' }), /saved Site/)
 })

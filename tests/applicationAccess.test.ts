@@ -28,6 +28,9 @@ test('Job Book-only role cannot use the rest of the management application', () 
     ]), { enforceAccessControl: true, isDevelopment: false })
     assert.deepEqual(access, {
         mode: 'job-book-only',
+        canUpdateEntryMarkers: true,
+        canAssignInitialTechnician: true,
+        canEditEquipmentDetails: false,
         canUseFullApplication: false,
         canUseJobBook: true,
         canManageJobs: false,
@@ -53,6 +56,9 @@ test('Job Card Admin has the five-area capability set with corrections but no co
     })
     assert.deepEqual(access, {
         mode: 'job-card-admin',
+        canUpdateEntryMarkers: true,
+        canAssignInitialTechnician: true,
+        canEditEquipmentDetails: true,
         canUseFullApplication: false,
         canUseJobBook: true,
         canManageJobs: false,
@@ -178,8 +184,30 @@ test('App and Sidebar enforce the Job Card Admin route and presentation boundary
     assert.match(app, /<QuotesScreen[^>]*readOnly/)
     assert.match(app, /<EquipmentScreen readOnly/)
     assert.match(app, /<CustomerDashboardScreen readOnly/)
-    assert.match(app, /allowManagedJobMarkerUpdates=\{access.canCorrectJobDetails\}/)
+    assert.match(app, /allowManagedJobMarkerUpdates=\{access.canUpdateEntryMarkers\}/)
     assert.match(quotes, /readOnly/)
     assert.match(equipment, /readOnly/)
     assert.match(customers, /readOnly/)
+})
+
+test('coordinator has initial full capability parity but a distinct role and mode', () => {
+    const options = { enforceAccessControl: true, isDevelopment: false }
+    const full = resolveApplicationAccess(accountWithRoles([APPLICATION_ROLES.FULL_ACCESS]), options)
+    const coordinator = resolveApplicationAccess(accountWithRoles([APPLICATION_ROLES.SERVICE_COORDINATOR]), options)
+    assert.equal(coordinator.mode, 'service-coordinator')
+    for (const key of Object.keys(full).filter((key) => key.startsWith('can'))) assert.equal(coordinator[key as keyof typeof coordinator], full[key as keyof typeof full], key)
+})
+test('Job Book Admin separates corrections and master data from dispatch, markers and review', () => {
+    const options = { enforceAccessControl: true, isDevelopment: false }
+    const book = resolveApplicationAccess(accountWithRoles([APPLICATION_ROLES.JOB_BOOK_ADMIN]), options)
+    assert.equal(book.mode, 'job-book-admin')
+    for (const key of ['canCorrectJobDetails','canEditEquipmentDetails','canMoveEquipment','canCreateEquipmentDestination','canViewCustomers','canViewEquipment'] as const) assert.equal(book[key], true, key)
+    for (const key of ['canManageJobs','canAssignInitialTechnician','canUpdateEntryMarkers','canEmailAssignedTechnician','canReviewJobCards','canViewQuotes','canEditEquipment','canEditCustomers'] as const) assert.equal(book[key], false, key)
+    const office = resolveApplicationAccess(accountWithRoles([APPLICATION_ROLES.JOB_CARD_ADMIN]), options)
+    assert.equal(office.canEditEquipmentDetails, true)
+    assert.equal(office.canAssignInitialTechnician, true)
+    assert.equal(office.canUpdateEntryMarkers, true)
+    assert.equal(office.canReviewJobCards, true)
+    assert.equal(resolveApplicationAccess(accountWithRoles([APPLICATION_ROLES.JOB_BOOK_ADMIN, APPLICATION_ROLES.JOB_CARD_ADMIN]), options).mode, 'job-card-admin')
+    assert.equal(resolveApplicationAccess(accountWithRoles([APPLICATION_ROLES.JOB_BOOK_ADMIN, APPLICATION_ROLES.SERVICE_COORDINATOR]), options).mode, 'service-coordinator')
 })

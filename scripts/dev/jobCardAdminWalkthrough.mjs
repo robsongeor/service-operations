@@ -19,10 +19,11 @@ process.env.JOB_CARD_STORAGE_MODE = 'memory'
 process.env.JOB_CARD_LOCAL_DEVELOPMENT = 'false'
 process.env.JOB_CARD_NOTIFICATION_MODE = 'memory'
 process.env.DATAVERSE_URL = 'https://job-card-walkthrough.invalid'
-process.env.JOB_CARD_REVIEWER_EMAILS = 'nargiza@example.invalid,jess@example.invalid'
+process.env.JOB_CARD_REVIEWER_EMAILS = 'nargiza@example.invalid,jess@example.invalid,coordinator@example.invalid'
 const actors = {
     'walkthrough-nargiza': { userId: id(901), displayName: 'Nargiza (sample administrator)', email: 'nargiza@example.invalid' },
     'walkthrough-jess': { userId: id(902), displayName: 'Jess (sample administrator)', email: 'jess@example.invalid' },
+    'walkthrough-book-admin': { userId: id(904), displayName: 'Sample Job Book Admin', email: 'book-admin@example.invalid' },
     'walkthrough-coordinator': { userId: id(903), displayName: 'Sample coordinator', email: 'coordinator@example.invalid' },
 }
 // Exercise the real server identity lookup with synthetic responses. All other outbound fetches fail.
@@ -141,6 +142,7 @@ const plugin = {
             void (async () => {
                 const actorKey = request.headers.authorization?.replace(/^Bearer /, '')
                 const actor = actors[actorKey]
+                const bookAdmin = actorKey === 'walkthrough-book-admin'
                 const coordinator = actorKey === 'walkthrough-coordinator' || simulatedMode === 'full'
                 if (unified && url.pathname.startsWith('/__walkthrough/jobs')) {
                     if (!actor) return json(response, 401, {})
@@ -148,7 +150,15 @@ const plugin = {
                         if (!coordinator) return json(response, 403, {})
                         const offset = Number(url.searchParams.get('cursor') || 0)
                         if (!Number.isInteger(offset) || offset < 0) return json(response, 400, {})
-                        return json(response, 200, { records: workingJobs.slice(offset, offset + 100), next: offset + 100 < workingJobs.length ? String(offset + 100) : '' })
+                        const legacy = Object.entries(fixtureBooks).flatMap(([book, [table, primaryKey]]) =>
+                            (fixtureTables()[table] ?? []).filter((entry) => !entry.gr_RegisteredJob?.gr_jobid && !entry._gr_registeredjob_value && !entry.gr_PromotedJob?.gr_jobid && !entry._gr_promotedjob_value).map((entry) => ({
+                                gr_jobid: `legacy:${book}:${entry[primaryKey]}`, gr_jobnumber: entry.gr_jobnumber,
+                                createdon: entry.createdon, gr_description: entry.gr_description, gr_status: 122830001,
+                                gr_coordinatormanaged: false, legacyBookEntry: { void: entry.gr_stage === 122830003 },
+                                gr_Site: entry.gr_Site ?? { gr_name: entry.gr_sitesnapshot, gr_Customer: { gr_name: entry.gr_customersnapshot } },
+                            })))
+                        const records = [...workingJobs, ...legacy]
+                        return json(response, 200, { records: records.slice(offset, offset + 100), next: offset + 100 < records.length ? String(offset + 100) : '' })
                     }
                     if (request.method === 'POST') {
                         const body = await bodyOf(request)
@@ -180,6 +190,7 @@ const plugin = {
                     const tables = fixtureTables()
                     if (unified && ['gr_RegisterJobBookJob', 'gr_AllocateJobBookNumber'].includes(table[1]) && request.method === 'POST') {
                         if (!actor) return json(response, 401, {})
+                        if (bookAdmin && body.MechanicId) return json(response, 403, { error: 'Technician assignment is not permitted.' })
                         const result = unifiedJobs.registration(table[1], await bodyOf(request), actor, coordinator)
                         if (loseNextRegistrationResponse) { loseNextRegistrationResponse = false; return json(response, 503, { error: { message: 'Simulated lost acknowledgement after commit.' } }) }
                         return json(response, 200, result)
@@ -221,6 +232,7 @@ const plugin = {
                         if (targetJob.gr_registrationvoid) return json(response, 409, {})
                         if (request.headers['if-match'] !== targetJob['@odata.etag']) return json(response, 412, {})
                         const body = await bodyOf(request)
+                        if (bookAdmin && Object.keys(body).some((key) => ['gr_gtentered', 'gr_timecloudentered', 'gr_Mechanic@odata.bind'].includes(key))) return json(response, 403, {})
                         const allowed = ['gr_description', 'gr_ordernumber', 'gr_Equipment@odata.bind', 'gr_Site@odata.bind', 'gr_Contact@odata.bind', 'gr_gtentered', 'gr_timecloudentered', ...(unified && coordinator ? ['gr_Mechanic@odata.bind', 'gr_jobtype', 'gr_status', 'gr_servicetype', 'gr_currentofficeaction', 'gr_officeactionowner', 'gr_officeattentionrequired', 'gr_hourmeter'] : [])]
                         if (Object.keys(body).some((key) => !allowed.includes(key))) return json(response, 403, {})
                         if ('gr_description' in body && (typeof body.gr_description !== 'string' || !body.gr_description.trim())) return json(response, 400, {})
@@ -289,11 +301,13 @@ const plugin = {
                         if (!row) return json(response, 404, {})
                         if (request.headers['if-match'] !== row['@odata.etag']) return json(response, 412, {})
                         const body = await bodyOf(request)
-                        if (Object.keys(body).length !== 1 || !body['gr_Site@odata.bind']) return json(response, 403, {})
+                        if (Object.keys(body).some((key) => !['gr_fleet', 'gr_alternatefleetnumbers', 'gr_make', 'gr_model', 'gr_serial', 'gr_Site@odata.bind'].includes(key)) || !body['gr_Site@odata.bind']) return json(response, 403, {})
                         const target = tables.gr_sites.find((item) => `/gr_sites(${item.gr_siteid})` === body['gr_Site@odata.bind'])
                         if (!target) return json(response, 400, {})
                         // Replace the fixture object, preserving Job/Quote snapshots referencing the old one.
-                        const next = { ...row, gr_Site: target, _gr_site_value: target.gr_siteid, '@odata.etag': `W/"equipment-${Date.now()}"` }
+                        const { 'gr_Site@odata.bind': ignoredSiteBinding, ...details } = body
+                        void ignoredSiteBinding
+                        const next = { ...row, ...details, gr_Site: target, _gr_site_value: target.gr_siteid, '@odata.etag': `W/"equipment-${Date.now()}"` }
                         if (row === equipment) equipment = next
                         else if (row === unlinkedEquipment) unlinkedEquipment = next
                         else createdEquipment.splice(createdEquipment.indexOf(row), 1, next)
@@ -303,6 +317,7 @@ const plugin = {
                     // Only synthetic Intake markers and Intake entries may be changed here.
                     if (ledgerRows[table[1]] && ['PATCH', 'POST'].includes(request.method)) {
                         const body = await bodyOf(request)
+                        if (bookAdmin && Object.keys(body).some((key) => ['gr_entered', 'gr_timecloudentered', 'gr_mechanictext', 'gr_Mechanic@odata.bind'].includes(key))) return json(response, 403, {})
                         if (unified && request.method === 'POST') return json(response, 403, { error: 'Use the registration action for new sample entries.' })
                         const row = table[2] ? intakeRows.find((item) => item.gr_jobbookentryid === table[2]) : { ...intake, gr_voidreason: null, gr_jobbookentryid: id(402 + intakeRows.length), gr_jobnumber: String(900010 + intakeRows.length) }
                         if (!row) return json(response, 404, { error: 'Sample Intake entry not found.' })

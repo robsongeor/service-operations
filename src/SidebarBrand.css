@@ -1,0 +1,90 @@
+.sidebar-header > button.sidebar-logo {
+    padding: 0;
+    border: 0;
+    font-family: inherit;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.sidebar-header > button.sidebar-logo:focus-visible {
+    outline: 2px solid #d9383e;
+    outline-offset: 4px;
+}
+
+.sidebar-forklift-stage {
+    position: absolute;
+    inset: 0 0 auto;
+    height: 104px;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.sidebar-forklift {
+    position: absolute;
+    top: calc(var(--cargo-y) - 24px);
+    left: 0;
+    width: 124px;
+    height: 80px;
+    animation: forklift-journey 8s cubic-bezier(0.45, 0, 0.2, 1) both;
+}
+
+.sidebar-forklift-forks,
+.sidebar-forklift-cargo {
+    animation: forklift-lift 8s cubic-bezier(0.45, 0, 0.2, 1) both;
+}
+
+.sidebar-forklift-cargo {
+    position: absolute;
+    left: 82px;
+    top: 24px;
+    animation: forklift-lift 8s cubic-bezier(0.45, 0, 0.2, 1) both, forklift-cargo 8s both;
+}
+
+.sidebar-header--working > .sidebar-logo {
+    animation: forklift-home-logo 8s both;
+}
+
+.sidebar-header--working > .sidebar-brand {
+    animation: forklift-brand-clearance 8s both;
+}
+
+@keyframes forklift-brand-clearance {
+    0%, 100% { opacity: 1; }
+    12%, 92% { opacity: 0; }
+}
+
+/* Hide only during the offscreen wrap, keeping the truck facing right. */
+@keyframes forklift-journey {
+    0% { transform: translateX(-140px); opacity: 1; }
+    18%, 28% { transform: translateX(var(--pickup-x)); opacity: 1; }
+    48% { transform: translateX(var(--exit-x)); opacity: 1; }
+    49% { transform: translateX(var(--exit-x)); opacity: 0; }
+    50%, 54% { transform: translateX(-140px); opacity: 0; }
+    55% { transform: translateX(-140px); opacity: 1; }
+    72%, 84% { transform: translateX(var(--pickup-x)); opacity: 1; }
+    100% { transform: translateX(var(--exit-x)); opacity: 1; }
+}
+
+@keyframes forklift-lift {
+    0%, 18%, 82%, 100% { transform: translateY(0); }
+    28%, 72% { transform: translateY(-12px); }
+}
+
+@keyframes forklift-cargo {
+    0%, 17.99% { visibility: hidden; }
+    18%, 81.99% { visibility: visible; }
+    82%, 100% { visibility: hidden; }
+}
+
+@keyframes forklift-home-logo {
+    0%, 17.99% { opacity: 1; }
+    18%, 81.99% { opacity: 0; }
+    82%, 100% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sidebar-forklift-stage { display: none; }
+    .sidebar-header--working > .sidebar-logo { animation: none; }
+    .sidebar-header--working > .sidebar-brand { animation: none; }
+}

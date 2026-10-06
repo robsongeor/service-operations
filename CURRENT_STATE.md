@@ -2,6 +2,59 @@
 
 Branch: `codex/legacy-job-book-job-cards-integration`
 
+## Local role implementation — not activated in Microsoft
+
+- Frontend ServiceCoordinator has temporary FullAccess capability parity; JobBookAdmin is
+  distinct from Office Admin and legacy JobBookOnly. Restricted Admin menus and Equipment
+  editing are implemented. Job Book Admin entry markers are read-only and technician actions
+  are excluded. Both Admin profiles can create Customers/Sites through separate screens.
+- Equipment detail saves allow fleet/alternate fleets/make/model/serial/Site only, require an
+  exact ETag, refresh the saved record and skip maintenance-plan synchronization.
+- `dataverse/access/RestrictedAccessPlugin.cs` is a local, unregistered draft. Its offline
+  policy tests do not constitute live enforcement. See its README for missing registration,
+  linked Void and dispatch integration; do not install it or grant broad roles as a substitute.
+- Sample role selector includes Job Book Admin, Office Admin and Service coordinator. No
+  Microsoft roles, users, reviewer settings or live data were changed by this implementation.
+
+## Job Book Microsoft access audit (read-only)
+
+- [Live audit](docs/features/JOB_BOOK_ACCESS_AUDIT.md): all ten agreed Entra accounts exist/enabled;
+  only George and Bruce were found in Dataverse by object ID and independent email checks.
+- Entra has only FullAccess and JobBookOnly; Bruce currently has FullAccess. Existing out-of-roster
+  assignments for Paul and Pubudu were preserved. No permissions or settings were changed.
+- Existing Job Book Only Dataverse privileges include broad Job/Equipment/Customer writes;
+  the new restricted roles require verified server enforcement before assignment.
+
+## Job Book rollout planning (local)
+
+- The owner-facing [Excel replacement plan](docs/features/JOB_BOOK_ROLLOUT_PLAN.md) now defines
+  responsibilities, role selection, acceptance evidence, migration, one-writer cutover and rollback.
+- The [access plan](docs/features/JOB_BOOK_ACCESS_PLAN.md) records George as sole FullAccess,
+  Bruce/Andy as distinct Service coordinators (initial capability parity, future restrictions),
+  Jess/Nargiza as Office Admins, and five Job Book Admins. JobBookOnly is not planned.
+  The new coordinator and Job Book Admin profiles are not implemented. Job Book Admins may
+  correct factual details after handoff and Void eligible entries under existing safeguards,
+  but cannot assign/email technicians, change GT/Timecloud
+  ticks or review Job Cards.
+- Both Admin groups, including Jess and Nargiza, may create Customers/Sites, explicitly move
+  Equipment and update Equipment details. Separate Customers and Equipment screens are agreed for both Admin groups.
+  Field-level enforcement and screen wiring remain implementation work; general existing
+  Customer/Site editing and unrelated Equipment actions are not included in this decision.
+- Job Card review/Processed in GreenTree access is limited to George, Bruce, Andy, Jess and
+  Nargiza. Separating reviewer permission from the existing broad Admin profile remains to be implemented.
+- Office Admin access across all four regions is confirmed, without regional restrictions.
+  Pilot waves and source spreadsheets remain to be confirmed. Production integration
+  and live access verification are prerequisites; no rollout or permission change has been performed.
+- Visible navigation and screen labels now say Job Book; historical Legacy record stages stay intact.
+
+## Service coordination navigation (local)
+
+- The Jobs screen is now labelled Service coordination. The unified sample uses one tab row:
+  Operational, Breakdown, Service, Workshop, WOF, Site Check, Unconfirmed, All jobs.
+- Operational selects coordinator-managed non-Void Jobs; Unconfirmed remains the existing status.
+  All jobs includes unnumbered and numbered work plus read-only unlinked legacy ledger entries.
+  No historical entry is converted to a working Job. Paging and other table filters remain.
+
 ## Job Card Admin Review Phases 1–3 (implemented locally)
 
 - The Azure-backed review service now owns explicit Pending, In review, Needs clarification, On

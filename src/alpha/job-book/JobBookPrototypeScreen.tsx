@@ -179,6 +179,7 @@ export default function JobBookPrototypeScreen({
     const { instance } = useMsal()
     const account = useActiveMsalAccount()
     const { canManageJobs, canCorrectJobDetails, canEmailAssignedTechnician } = applicationAccessFromEnvironment(account)
+    const { canUpdateEntryMarkers: canWriteMarkers, canAssignInitialTechnician } = applicationAccessFromEnvironment(account)
     const jobBooks = useMemo(() => availableJobBooks(), [])
     const [selectedJobBookKey, setSelectedJobBookKey] = useState<JobBookKey>('auckland')
     const bookPageGeneration = useRef(0)
@@ -521,14 +522,14 @@ export default function JobBookPrototypeScreen({
         try {
             const token = await acquireDataverseAccessToken(instance, account)
             if (editingIntakeRow) {
-                const saved = await updateJobBookIntakeRow(token, draft)
+                const saved = await updateJobBookIntakeRow(token, draft, !canAssignInitialTechnician)
                 setIntakeRows((current) => current.map((item) => item.intakeRecordId === saved.intakeRecordId ? saved : item))
             } else if (UNIFIED_JOB_WALKTHROUGH) {
                 if (!isPersistedEquipmentId(draft.siteId) || (!draft.equipmentReviewRequired && !isPersistedEquipmentId(draft.equipmentId))) throw new Error('Select saved Equipment and Site records. Snapshot-only entries need reconciliation, not another number.')
                 const result = await registration.submit({ kind: 'register', requestId: crypto.randomUUID(), book: selectedJobBookKey,
                     description: draft.description, orderNumber: draft.customerPo, siteId: draft.siteId,
                     equipmentId: draft.equipmentId || undefined, equipmentUnknown: draft.equipmentReviewRequired,
-                    contactId: draft.contactId || undefined, mechanicId: draft.mechanicId || undefined })
+                    contactId: draft.contactId || undefined, mechanicId: canAssignInitialTechnician ? draft.mechanicId || undefined : undefined })
                 if (!result) return
                 await finishRegistration(result)
             } else {
@@ -654,7 +655,7 @@ export default function JobBookPrototypeScreen({
         }))
     }
     const updateRowField = async (row: JobBookRow, field: 'entered' | 'timecloudEntered', value: boolean) => {
-        if (!canUpdateJobBookMarkers(row, allowManagedJobMarkerUpdates) || voidEntry.row?.id === row.id) return
+        if (!canWriteMarkers || !canUpdateJobBookMarkers(row, allowManagedJobMarkerUpdates) || voidEntry.row?.id === row.id) return
         const isEntryMarker = field === 'entered' || field === 'timecloudEntered'
         if (isEntryMarker && savingEntryMarkers.has(row.id)) return
         if (isEntryMarker) setSavingEntryMarkers((current) => new Set(current).add(row.id))
@@ -692,7 +693,7 @@ export default function JobBookPrototypeScreen({
     return <main className="job-book-screen">
         <header className="job-book-header">
             <div>
-                <span className="job-book-eyebrow">LEGACY JOB BOOK</span>
+                <span className="job-book-eyebrow">JOB BOOK</span>
                 <h1>{selectedJobBook.label} Job Book</h1>
                 <p>View {selectedJobBook.label} managed Jobs and Intake entries in one separate register.</p>
             </div>
@@ -743,7 +744,7 @@ export default function JobBookPrototypeScreen({
                 </tr></thead>
                 <tbody>{displayedRows.map((row) => {
                     const canEditIntake = isEditableJobBookIntake(row)
-                    const canUpdateEntryMarkers = canUpdateJobBookMarkers(row, allowManagedJobMarkerUpdates)
+                    const canUpdateEntryMarkers = canWriteMarkers && canUpdateJobBookMarkers(row, allowManagedJobMarkerUpdates)
                     const isVoid = row.entryStage === JOB_BOOK_ENTRY_STAGES.VOID
                     const voidBlocked = jobBookVoidBlockedReason(row)
                     const markerBusy = savingEntryMarkers.has(row.id) || voidEntry.row?.id === row.id
@@ -762,8 +763,8 @@ export default function JobBookPrototypeScreen({
                             ? <span className="job-book-table-value job-book-address-value"><strong>{splitSiteAddress(row.address).street}</strong>{splitSiteAddress(row.address).locality && <small>{splitSiteAddress(row.address).locality}</small>}</span>
                             : <span className="job-book-table-value">—</span>}</td>
                         <td><span className="job-book-table-value">{row.customerPo || '—'}</span></td>
-                        <td className="gt-entry-column">{canUpdateEntryMarkers || isVoid ? <label className={`job-book-table-check ${row.entered ? 'complete' : ''}`}><input type="checkbox" aria-label={`GT Entry completed for Job ${row.jobNumber}`} disabled={isVoid || markerBusy} checked={row.entered} onChange={(event) => void updateRowField(row, 'entered', event.target.checked)} />{savingEntryMarkers.has(row.id) ? <span>Saving</span> : row.entered ? <span>Done</span> : null}</label> : <span className="job-book-status-pill">Unavailable</span>}</td>
-                        <td className="timecloud-entry-column">{canUpdateEntryMarkers || isVoid ? <label className={`job-book-table-check ${row.timecloudEntered ? 'complete' : ''}`}><input type="checkbox" aria-label={`Timecloud Entry completed for Job ${row.jobNumber}`} disabled={isVoid || markerBusy} checked={row.timecloudEntered} onChange={(event) => void updateRowField(row, 'timecloudEntered', event.target.checked)} />{savingEntryMarkers.has(row.id) ? <span>Saving</span> : row.timecloudEntered ? <span>Done</span> : null}</label> : <span className="job-book-status-pill">Unavailable</span>}</td>
+                        <td className="gt-entry-column">{canUpdateEntryMarkers || isVoid || !canWriteMarkers ? <label className={`job-book-table-check ${row.entered ? 'complete' : ''}`}><input type="checkbox" aria-label={`GT Entry completed for Job ${row.jobNumber}`} disabled={!canUpdateEntryMarkers || isVoid || markerBusy} checked={row.entered} onChange={(event) => void updateRowField(row, 'entered', event.target.checked)} />{savingEntryMarkers.has(row.id) ? <span>Saving</span> : row.entered ? <span>Done</span> : null}</label> : <span className="job-book-status-pill">Unavailable</span>}</td>
+                        <td className="timecloud-entry-column">{canUpdateEntryMarkers || isVoid || !canWriteMarkers ? <label className={`job-book-table-check ${row.timecloudEntered ? 'complete' : ''}`}><input type="checkbox" aria-label={`Timecloud Entry completed for Job ${row.jobNumber}`} disabled={!canUpdateEntryMarkers || isVoid || markerBusy} checked={row.timecloudEntered} onChange={(event) => void updateRowField(row, 'timecloudEntered', event.target.checked)} />{savingEntryMarkers.has(row.id) ? <span>Saving</span> : row.timecloudEntered ? <span>Done</span> : null}</label> : <span className="job-book-status-pill">Unavailable</span>}</td>
                         <td><div className="job-book-row-actions">{canEditIntake
                             ? <button type="button" className="job-quick-action job-quick-action-edit" onClick={() => openIntakeEntryEditor(row)}>Edit entry</button>
                             : isVoid
@@ -933,8 +934,8 @@ export default function JobBookPrototypeScreen({
                 <div className="job-book-intake-section-heading"><h3>Job details</h3><p>Record what is required and who should attend.</p></div>
                 <label className={`job-book-intake-field${intakeValidationAttempted && !draft.description.trim() ? ' error' : ''}`}><span>Description of the job <span className="job-book-required-mark">*</span></span><textarea required maxLength={JOB_DESCRIPTION_MAX_LENGTH} aria-label="Job description (required)" placeholder="Describe the fault or work required" rows={4} value={draft.description} onChange={(event) => { setIntakeError(''); setDraft((current) => ({ ...current, description: event.target.value })) }} />
                     {intakeValidationAttempted && !draft.description.trim() && <small className="job-book-intake-field-error">Enter a description of the job.</small>}</label>
-                <div className="job-edit-field job-edit-field-wide"><span>Mechanic</span><MechanicPicker key={draft.id} selectedId={draft.mechanicId} value={draft.mechanicName} mechanics={mechanics}
-                    onChange={(mechanicId, mechanicName) => setDraft((current) => ({ ...current, mechanicId, mechanicName }))} /></div>
+                {canAssignInitialTechnician ? <div className="job-edit-field job-edit-field-wide"><span>Mechanic</span><MechanicPicker key={draft.id} selectedId={draft.mechanicId} value={draft.mechanicName} mechanics={mechanics}
+                    onChange={(mechanicId, mechanicName) => setDraft((current) => ({ ...current, mechanicId, mechanicName }))} /></div> : <div className="job-edit-field"><span>Technician</span><span>{draft.mechanicName || 'Not assigned'}</span></div>}
                 <label className="job-book-intake-field"><span>Customer PO <small>(optional)</small></span><input aria-label="Customer purchase order" placeholder="Enter a PO number if supplied" value={draft.customerPo} onChange={(event) => setDraft((current) => ({ ...current, customerPo: event.target.value }))} /></label>
             </fieldset>
         </JobDrawerShell>}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useUnifiedJobWorklist } from './hooks/useUnifiedJobWorklist'
-import { UNIFIED_JOB_WALKTHROUGH, isCoordinatorManaged, jobMatchesWorklist, type JobWorklist } from './domain/unifiedJobWorkflow'
+import { UNIFIED_JOB_WALKTHROUGH, isCoordinatorManaged } from './domain/unifiedJobWorkflow'
 import JobRegistrationDialog from './components/JobRegistrationDialog'
 import JobCorrectionsDrawer from './components/JobCorrectionsDrawer'
 import { useJobRegistration } from './hooks/useJobRegistration'
@@ -39,7 +39,6 @@ export default function JobsScreen() {
     const allocationRecovery = useJobRegistration(`${activeAccount?.homeAccountId}.allocation`, unifiedWorklist.getAccessToken, UNIFIED_JOB_WALKTHROUGH)
     const [recoveryError, setRecoveryError] = useState('')
     const scopedData = useMemo(() => ({ jobs: unifiedWorklist.jobs, equipment: [], sites: [], servicePlans: [], scheduleOptions: [], officeUpdates: [] }), [unifiedWorklist.jobs])
-    const [worklist, setWorklist] = useState<JobWorklist>('operational')
     const [workflowJob, setWorkflowJob] = useState<{ job: Job; mode: 'allocate' | 'manage' } | null>(null)
     const {
         jobs, equipmentList, mechanics, mechanicsLoading, mechanicsError, retryMechanics, sites, customers, siteContacts,
@@ -72,7 +71,7 @@ export default function JobsScreen() {
     const [defaultView, setDefaultView] = useState<JobsDefaultView>(() => defaultViewStorageKey
         ? restoreJobsDefaultView(defaultViewStorageKey) ?? APPLICATION_DEFAULT_JOBS_VIEW
         : APPLICATION_DEFAULT_JOBS_VIEW)
-    const [viewState, setViewState] = useState<JobsViewState>(() => UNIFIED_JOB_WALKTHROUGH ? { ...DEFAULT_JOBS_VIEW_STATE, selectedJobType: 'all' } : storageKey
+    const [viewState, setViewState] = useState<JobsViewState>(() => UNIFIED_JOB_WALKTHROUGH ? { ...DEFAULT_JOBS_VIEW_STATE } : storageKey
         ? restoreJobsViewState(storageKey, true) ?? applyJobsDefaultView(defaultView)
         : DEFAULT_JOBS_VIEW_STATE)
     const [settingsOpen, setSettingsOpen] = useState(false)
@@ -109,6 +108,7 @@ export default function JobsScreen() {
     }
 
     const openJob = (job: Job, tab: 'details' | 'jobcard' = 'details') => {
+        if (job.legacyBookEntry) { navigate('/job-book'); return }
         setEditingInitialTab(tab)
         setEditingJob(job)
     }
@@ -154,7 +154,7 @@ export default function JobsScreen() {
         }))
     }
 
-    const filteredJobs = jobs.filter((job) => visibleStatuses.includes(job.gr_status) && (!UNIFIED_JOB_WALKTHROUGH || jobMatchesWorklist(job, worklist)))
+    const filteredJobs = jobs.filter((job) => job.legacyBookEntry ? viewState.selectedJobType === 'all' : visibleStatuses.includes(job.gr_status))
     const scheduledSettingLabels: Record<ScheduledJobsVisibility, string> = {
         all: 'All scheduled Jobs',
         today: 'Scheduled today',
@@ -227,7 +227,7 @@ export default function JobsScreen() {
                         type="button"
                         onClick={() => navigate('/job-book')}
                     >
-                        Job Book Legacy
+                        Job Book
                     </button>
                     <button
                         className="jobs-create-button"
@@ -240,8 +240,6 @@ export default function JobsScreen() {
                 </div>
             </header>
             {UNIFIED_JOB_WALKTHROUGH && <section className="jobs-filter-bar" aria-label="Job worklists">
-                <div className="job-type-tabs" role="tablist" aria-label="Job worklists">{(['operational', 'staging', 'all'] as const).map((value) => <button type="button" role="tab" key={value} className={`job-type-tab${worklist === value ? ' active' : ''}`} aria-selected={worklist === value} onClick={() => setWorklist(value)}>{value === 'all' ? 'All jobs' : value === 'staging' ? 'Staging' : 'Operational'}</button>)}</div>
-                <p>{worklist === 'staging' ? 'Unnumbered work, regardless of status. Allocate a number only when needed.' : worklist === 'operational' ? 'Jobs deliberately added to the coordinator worklist.' : 'Numbered Job Book work, staging and coordinator-managed Jobs. Older ledger-only history remains in Job Book.'}</p>
                 <button type="button" disabled={unifiedWorklist.busy} onClick={() => void unifiedWorklist.reload()}>Refresh Jobs</button>
                 {allocationRecovery.pending?.kind === 'allocate' && <p role="status">A number request needs confirmation. <button type="button" onClick={() => {
                     const request = allocationRecovery.pending

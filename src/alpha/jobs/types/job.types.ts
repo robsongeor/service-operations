@@ -7,6 +7,8 @@ import type { HourMeterReadingType } from '../../equipment/hourMeter/hourMeterRe
 import type { JobCardSubmission } from './jobCardSubmission.types'
 
 export type Job = {
+    /** Read-only ledger projection in the isolated walkthrough; never a writable Job. */
+    legacyBookEntry?: { void: boolean }
     gr_jobid: string
     '@odata.etag'?: string
     createdon: string
