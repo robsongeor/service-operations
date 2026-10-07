@@ -444,7 +444,7 @@ Implemented in this mode:
   alongside working Jobs, without creating or converting historical records. An unnumbered managed Job can belong to both Staging and
   Operational. Older Jobs lacking the new membership metadata keep their existing managed fallback.
   Coordinator settings are configured after Manage job. The legacy spreadsheet allocation controls
-  and row-click spreadsheet export are absent in this mode; the order-book copy action is retained.
+  and row-click spreadsheet export are absent from the Jobs table; explicit copy actions are retained.
 - Job Book merges only explicit registered-ledger/Job links. Current details, corrections and
   factual markers come from Job; ledger snapshots remain unchanged. No number-based merging,
   historic backfill or automatic conversion of old Intake/Legacy/Void entries occurs. Older Intake

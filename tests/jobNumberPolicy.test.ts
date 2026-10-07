@@ -161,6 +161,7 @@ test('canonical drawer/table never expose number edits and numbered deletion is 
     assert.match(read('components/JobsTable.tsx'), /<span className="jobs-table-job-number"/)
     assert.doesNotMatch(read('components/JobsTable.tsx'), /onJobFieldsChange\(job.gr_jobid, \{ gr_jobnumber/)
     assert.doesNotMatch(read('components/JobsTable.tsx'), /Paste Job numbers|onJobNumberAllocation|onAllocateNumber|Allocate job number/)
+    assert.doesNotMatch(read('components/JobsTable.tsx'), /copyJobRow|Click the row to copy|data-selected=/)
     assert.doesNotMatch(read('JobsScreen.tsx'), /onAllocateNumber|Resume number request|mode="allocate"/)
     assert.match(read('components/JobEditDrawer.tsx'), /!correctionsOnly && !hasAllocatedJobNumber\(job\) && <button/)
     assert.doesNotMatch(read('hooks/useJobs.ts'), /gr_jobnumber: job.jobNumber/)

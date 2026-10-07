@@ -91,7 +91,6 @@ export default function JobsTable({
     stickyThroughColumnId,
 }: Props) {
     const { searchText, selectedJobType, officeAttentionFilter, scheduledJobsVisibility, sort } = viewState
-    const [selectedRowId, setSelectedRowId] = useState<string | null>(null)
     const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(() => new Set())
     const [openMechanicJobId, setOpenMechanicJobId] = useState<string | null>(null)
     const [savingMechanicJobId, setSavingMechanicJobId] = useState<string | null>(null)
@@ -242,25 +241,6 @@ export default function JobsTable({
         onViewStateChange({ ...viewState, sort: nextSort })
     }
 
-    const copyJobRow = async (job: Job) => {
-        const spreadsheetRow = buildJobBookSpreadsheetRow(job)
-        try {
-            await navigator.clipboard.writeText(spreadsheetRow)
-            setSelectedRowId(job.gr_jobid)
-            setCopyFeedback({
-                message: `Job ${job.gr_jobnumber || 'row'} copied — paste it into the job book.`,
-                isError: false,
-            })
-        } catch (error) {
-            console.error(error)
-            setCopyFeedback({
-                message: 'The row could not be copied. Check clipboard permission and try again.',
-                isError: true,
-            })
-        }
-
-    }
-
     const selectedShownJobs = useMemo(
         () => sortedJobs.filter((job) => selectedJobIds.has(job.gr_jobid)),
         [selectedJobIds, sortedJobs],
@@ -323,11 +303,6 @@ export default function JobsTable({
         }
 
     }
-
-    const isInteractiveTarget = (target: EventTarget | null) =>
-        target instanceof Element && Boolean(
-            target.closest('button, input, select, textarea, a, label'),
-        )
 
     return (<>
         <TablePanel className="jobs-list-card">
@@ -490,17 +465,6 @@ export default function JobsTable({
                             <tr
                                 key={job.gr_jobid}
                                 data-status={job.gr_status}
-                                data-selected={selectedRowId === job.gr_jobid ? 'true' : undefined}
-                                tabIndex={unifiedWorklist ? undefined : 0}
-                                title={unifiedWorklist ? undefined : 'Click the row to copy it for the job book'}
-                                onClick={(event) => {
-                                    if (!unifiedWorklist && !isInteractiveTarget(event.target)) void copyJobRow(job)
-                                }}
-                                onKeyDown={(event) => {
-                                    if (!unifiedWorklist && event.key === 'Enter' && event.target === event.currentTarget) {
-                                        void copyJobRow(job)
-                                    }
-                                }}
                             >
                                 <td {...stickyProps('attention')} className={`${stickyProps('attention').className ?? ''} jobs-attention-column`.trim()}>
                                     {jobNeedsOfficeAttention(job) && <span className="jobs-office-indicator" title="Office attention required" aria-label="Office attention required" />}

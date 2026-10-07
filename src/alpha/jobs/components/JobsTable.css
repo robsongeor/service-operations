@@ -163,18 +163,7 @@
 }
 
 .jobs-table tbody tr {
-    cursor: copy;
-    outline: 0 solid transparent;
-    outline-offset: -2px;
     transition: background 100ms ease;
-}
-
-.jobs-table tbody tr[data-selected="true"] {
-    outline: 2px solid #315b4d;
-}
-
-.jobs-table tbody tr:focus-visible {
-    outline: 2px solid #315b4d;
 }
 
 .jobs-table tbody tr:hover {
