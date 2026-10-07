@@ -118,7 +118,7 @@ test('restricted Equipment editor includes road compliance but excludes maintena
         onClose: unavailable, onSave: unavailable, onDelete: unavailable, onSaveMaintenanceHistory: unavailable,
     })))
     assert.match(html, /Serial number/)
-    assert.match(html, /Road compliance/)
+    assert.match(html, /WOF \/ REGO/)
     assert.doesNotMatch(html, /Delete equipment|Equipment Ownership|Site Check Availability|>Maintenance<|>Job History</)
 })
 test('Equipment correction payload includes road compliance, excludes unrelated fields and rejects unsaved Sites', () => {

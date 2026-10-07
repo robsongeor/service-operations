@@ -933,7 +933,7 @@ export default function EquipmentDrawer(props: Props) {
                     </EditDrawerSection>}
 
                     {(isCreate || activeTab === 'details') && <EditDrawerSection
-                        title="Road compliance"
+                        title="WOF / REGO"
                         meta={<FormSwitch
                             label="Road use"
                             checked={form.complianceStatus === EQUIPMENT_COMPLIANCE_STATUSES.ROAD_REGISTERED}
@@ -1156,7 +1156,7 @@ export default function EquipmentDrawer(props: Props) {
         />}
 
         {!isCreate && showDeregisterConfirm && <EditDrawerConfirmation
-            eyebrow="Road compliance"
+            eyebrow="WOF / REGO"
             title="De-register this equipment?"
             message={<>Its registration number, REGO expiry, and WOF expiry will be cleared, and it will be removed from road-compliance monitoring. Jobs and WOF inspection history will be retained.</>}
             error={complianceError}
