@@ -108,16 +108,110 @@ export type JobBookPage = {
     nextLink?: string
 }
 
-export async function fetchRecentJobBookRows(accessToken: string, book: JobBookConfig = JOB_BOOKS.auckland, continuationLink?: string): Promise<JobBookPage> {
+export type JobBookSearchFilters = {
+    search: string
+    date: string
+    mechanic: string
+    equipment: string
+    customerSite: string
+}
+
+type JobBookPageOptions = {
+    filters?: JobBookSearchFilters
+    pageSize?: number
+    signal?: AbortSignal
+}
+
+export type JobBookSearchBatch = {
+    recentRecords: JobBookRow[]
+    intakeRecords: JobBookRow[]
+    recentNextLink?: string
+    intakeNextLink?: string
+}
+
+function odataText(value: string) {
+    return value.trim().replaceAll("'", "''")
+}
+
+function containsAny(term: string, fields: string[]) {
+    const value = odataText(term)
+    return value ? `(${fields.map((field) => `contains(${field},'${value}')`).join(' or ')})` : ''
+}
+
+function aucklandStartOfDay(value: string) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+    if (!match) return ''
+    const target = [Number(match[1]), Number(match[2]), Number(match[3])]
+    let instant = Date.UTC(target[0], target[1] - 1, target[2])
+    const formatter = new Intl.DateTimeFormat('en-NZ', {
+        timeZone: 'Pacific/Auckland', year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+    })
+    for (let iteration = 0; iteration < 3; iteration++) {
+        const parts = Object.fromEntries(formatter.formatToParts(new Date(instant)).map((part) => [part.type, part.value]))
+        const represented = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), Number(parts.hour), Number(parts.minute), Number(parts.second))
+        const wanted = Date.UTC(target[0], target[1] - 1, target[2])
+        instant += wanted - represented
+    }
+    return new Date(instant)
+}
+
+function createdOnDayFilter(value: string) {
+    const start = aucklandStartOfDay(value)
+    if (!start) return ''
+    const nextLocalDate = new Date(`${value}T12:00:00Z`)
+    nextLocalDate.setUTCDate(nextLocalDate.getUTCDate() + 1)
+    const end = aucklandStartOfDay(nextLocalDate.toISOString().slice(0, 10))
+    return end ? `(createdon ge ${start.toISOString()} and createdon lt ${end.toISOString()})` : ''
+}
+
+function combinedFilter(parts: string[]) {
+    return parts.filter(Boolean).join(' and ')
+}
+
+export function managedJobBookSearchFilter(book: JobBookConfig, filters?: JobBookSearchFilters) {
+    if (!filters) return managedJobNumberFilter(book)
+    return combinedFilter([
+        managedJobNumberFilter(book),
+        createdOnDayFilter(filters.date),
+        containsAny(filters.mechanic, ['gr_Mechanic/gr_name']),
+        containsAny(filters.equipment, ['gr_Equipment/gr_fleet', 'gr_Equipment/gr_alternatefleetnumbers', 'gr_Equipment/gr_serial', 'gr_Equipment/gr_make', 'gr_Equipment/gr_model']),
+        containsAny(filters.customerSite, ['gr_Site/gr_Customer/gr_name', 'gr_Site/gr_name', 'gr_Site/gr_address']),
+        containsAny(filters.search, [
+            'gr_jobnumber', 'gr_ordernumber', 'gr_description', 'gr_Mechanic/gr_name',
+            'gr_Equipment/gr_fleet', 'gr_Equipment/gr_alternatefleetnumbers', 'gr_Equipment/gr_serial', 'gr_Equipment/gr_make', 'gr_Equipment/gr_model',
+            'gr_Site/gr_Customer/gr_name', 'gr_Site/gr_name', 'gr_Site/gr_address', 'gr_Contact/gr_name',
+        ]),
+    ])
+}
+
+export function intakeJobBookSearchFilter(filters?: JobBookSearchFilters) {
+    if (!filters) return ''
+    return combinedFilter([
+        createdOnDayFilter(filters.date),
+        containsAny(filters.mechanic, ['gr_mechanictext', 'gr_Mechanic/gr_name']),
+        containsAny(filters.equipment, ['gr_fleetsnapshot', 'gr_serialsnapshot', 'gr_makesnapshot', 'gr_modelsnapshot']),
+        containsAny(filters.customerSite, ['gr_customersnapshot', 'gr_sitesnapshot', 'gr_addresssnapshot']),
+        containsAny(filters.search, [
+            'gr_jobnumber', 'gr_description', 'gr_customerpo', 'gr_mechanictext', 'gr_Mechanic/gr_name',
+            'gr_fleetsnapshot', 'gr_serialsnapshot', 'gr_makesnapshot', 'gr_modelsnapshot',
+            'gr_customersnapshot', 'gr_sitesnapshot', 'gr_addresssnapshot',
+        ]),
+    ])
+}
+
+export async function fetchRecentJobBookRows(accessToken: string, book: JobBookConfig = JOB_BOOKS.auckland, continuationLink?: string, options: JobBookPageOptions = {}): Promise<JobBookPage> {
     const select = `gr_jobid,createdon,gr_jobnumber,gr_ordernumber,gr_description,gr_gtentered,gr_timecloudentered${UNIFIED_JOB_RUNTIME ? UNIFIED_JOB_SELECT : ''}`
     const expand = 'gr_Equipment($select=gr_equipmentid,gr_fleet,gr_alternatefleetnumbers,gr_serial,gr_make,gr_model),gr_Mechanic($select=gr_mechanicid,gr_name),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name)'
+    const filter = managedJobBookSearchFilter(book, options.filters)
     const nextUrl = continuationLink
         ? trustedNextLink(continuationLink)
-        : `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=${select}&$expand=${expand}&$filter=${managedJobNumberFilter(book)}&$orderby=createdon desc`
+        : `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=${select}&$expand=${expand}&$filter=${encodeURIComponent(filter)}&$orderby=createdon desc`
     if (!nextUrl) return { records: [] }
     const response = await fetch(nextUrl, {
         cache: 'no-store',
-        headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json', Prefer: `odata.maxpagesize=${JOB_BOOK_PAGE_SIZE}` },
+        signal: options.signal,
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json', Prefer: `odata.maxpagesize=${options.pageSize ?? JOB_BOOK_PAGE_SIZE}` },
     })
     if (!response.ok) throw new Error('Managed Job Book entries could not be loaded.')
     const data = await response.json() as { value?: JobBookApiRow[]; '@odata.nextLink'?: string }
@@ -276,15 +370,17 @@ function intakeExpand() {
     return UNIFIED_JOB_RUNTIME ? `${expanded},gr_registeredjob($select=gr_jobid,createdon,gr_jobnumber,gr_ordernumber,gr_description,gr_gtentered,gr_timecloudentered${UNIFIED_JOB_SELECT};$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_serial,gr_make,gr_model),gr_Mechanic($select=gr_mechanicid,gr_name),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name))` : expanded
 }
 
-export async function fetchJobBookIntakeRows(accessToken: string, book: JobBookConfig = JOB_BOOKS.auckland, continuationLink?: string): Promise<JobBookPage> {
+export async function fetchJobBookIntakeRows(accessToken: string, book: JobBookConfig = JOB_BOOKS.auckland, continuationLink?: string, options: JobBookPageOptions = {}): Promise<JobBookPage> {
     const select = `${book.idField},${INTAKE_SELECT}`
+    const filter = intakeJobBookSearchFilter(options.filters)
     const nextUrl = continuationLink
         ? trustedNextLink(continuationLink)
-        : `${DATAVERSE_URL}/api/data/v9.2/${book.tableSetName}?$select=${select}&$expand=${intakeExpand()}&$orderby=createdon desc`
+        : `${DATAVERSE_URL}/api/data/v9.2/${book.tableSetName}?$select=${select}&$expand=${intakeExpand()}${filter ? `&$filter=${encodeURIComponent(filter)}` : ''}&$orderby=createdon desc`
     if (!nextUrl) return { records: [] }
     const response = await fetch(nextUrl, {
         cache: 'no-store',
-        headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json', Prefer: `odata.maxpagesize=${JOB_BOOK_PAGE_SIZE}` },
+        signal: options.signal,
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json', Prefer: `odata.maxpagesize=${options.pageSize ?? JOB_BOOK_PAGE_SIZE}` },
     })
     if (!response.ok) throw new Error('Job Book Intake entries could not be loaded.')
     const data = await response.json() as { value?: IntakeApiRow[]; '@odata.nextLink'?: string }
@@ -292,6 +388,66 @@ export async function fetchJobBookIntakeRows(accessToken: string, book: JobBookC
         records: (data.value ?? []).map((row) => mapIntakeRow(row, book)),
         nextLink: trustedNextLink(data['@odata.nextLink']),
     }
+}
+
+export async function fetchJobBookSearchBatch(
+    accessToken: string,
+    book: JobBookConfig,
+    filters: JobBookSearchFilters,
+    continuation?: { recentNextLink?: string; intakeNextLink?: string },
+    signal?: AbortSignal,
+): Promise<JobBookSearchBatch> {
+    const initial = continuation === undefined
+    let recentNextLink = continuation?.recentNextLink
+    let intakeNextLink = continuation?.intakeNextLink
+    let recentRecords: JobBookRow[] = []
+    let intakeRecords: JobBookRow[] = []
+    const recentAvailable = initial || Boolean(recentNextLink)
+    const intakeAvailable = initial || Boolean(intakeNextLink)
+    const sourceCount = Number(recentAvailable) + Number(intakeAvailable)
+    if (!sourceCount) return { recentRecords, intakeRecords, recentNextLink, intakeNextLink }
+
+    const firstPageSize = Math.floor(JOB_BOOK_PAGE_SIZE / sourceCount)
+    const [recentPage, intakePage] = await Promise.all([
+        recentAvailable ? fetchRecentJobBookRows(accessToken, book, recentNextLink, { filters, pageSize: firstPageSize, signal }) : undefined,
+        intakeAvailable ? fetchJobBookIntakeRows(accessToken, book, intakeNextLink, { filters, pageSize: firstPageSize, signal }) : undefined,
+    ])
+    if (recentPage) {
+        recentRecords = recentPage.records.slice(0, firstPageSize)
+        recentNextLink = recentPage.nextLink
+    }
+    if (intakePage) {
+        intakeRecords = intakePage.records.slice(0, firstPageSize)
+        intakeNextLink = intakePage.nextLink
+    }
+
+    let remaining = JOB_BOOK_PAGE_SIZE - recentRecords.length - intakeRecords.length
+    let topUpRequests = 0
+    while (remaining > 0 && (recentNextLink || intakeNextLink) && topUpRequests < 4) {
+        if (recentNextLink) {
+            topUpRequests++
+            const page = await fetchRecentJobBookRows(accessToken, book, recentNextLink, { filters, pageSize: remaining, signal })
+            recentRecords = appendSearchRecords(recentRecords, page.records.slice(0, remaining))
+            recentNextLink = page.nextLink
+            remaining -= page.records.length
+            if (page.records.length) continue
+        }
+        if (remaining > 0 && intakeNextLink) {
+            topUpRequests++
+            const page = await fetchJobBookIntakeRows(accessToken, book, intakeNextLink, { filters, pageSize: remaining, signal })
+            intakeRecords = appendSearchRecords(intakeRecords, page.records.slice(0, remaining))
+            intakeNextLink = page.nextLink
+            remaining -= page.records.length
+            if (!page.records.length && !recentNextLink) break
+        }
+    }
+    return { recentRecords, intakeRecords, recentNextLink, intakeNextLink }
+}
+
+function appendSearchRecords(current: JobBookRow[], incoming: JobBookRow[]) {
+    const rows = new Map(current.map((row) => [row.id, row]))
+    incoming.forEach((row) => rows.set(row.id, row))
+    return [...rows.values()]
 }
 
 function intakePayload(row: JobBookRow) {

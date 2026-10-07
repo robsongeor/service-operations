@@ -40,7 +40,7 @@ import { STAFF_DIRECTORY_QUERY_KEY } from '../shared/data/operationalCollectionK
 import { STANDARD_JOB_TYPE_OPTIONS, type JobType } from '../jobs/types/jobType.types'
 import { JOB_DESCRIPTION_MAX_LENGTH } from '../jobs/domain/jobDescription'
 import { jobCreationLocationErrors } from '../jobs/domain/jobCreationLocation'
-import { createJobBookIntakeRow, fetchJobBookIntakeRows, fetchJobBookIntakeRow, fetchRecentJobBookRows, jobBookIntakeContactLookupIsAvailable, updateJobBookIntakeRow, updateJobBookIntakeMarker, updateManagedJobBookMarker, mapManagedJobBookRow } from './jobBookApi'
+import { createJobBookIntakeRow, fetchJobBookIntakeRows, fetchJobBookIntakeRow, fetchJobBookSearchBatch, fetchRecentJobBookRows, jobBookIntakeContactLookupIsAvailable, updateJobBookIntakeRow, updateJobBookIntakeMarker, updateManagedJobBookMarker, mapManagedJobBookRow } from './jobBookApi'
 import { canUpdateJobBookMarkers, isEditableJobBookIntake, jobBookVoidBlockedReason } from './jobBookEntryWorkflow'
 import { useJobBookVoid } from './useJobBookVoid'
 import JobBookVoidDialog from './JobBookVoidDialog'
@@ -76,6 +76,19 @@ function appendUniqueRows(current: JobBookRow[], incoming: JobBookRow[]) {
     const byId = new Map(current.map((row) => [row.id, row]))
     incoming.forEach((row) => byId.set(row.id, row))
     return [...byId.values()]
+}
+
+function prepareJobBookRows(intakeRows: JobBookRow[], recentRows: JobBookRow[], equipment: PrototypeEquipment[]) {
+    return reconcileJobBookRows(intakeRows, recentRows)
+        .map((row) => {
+            const sourceEquipment = equipment.find((item) => item.id.toLowerCase() === row.equipmentId.toLowerCase())
+            return {
+                ...row,
+                make: row.make || sourceEquipment?.make || '',
+                model: row.model || sourceEquipment?.model || '',
+            }
+        })
+        .sort((a, b) => jobNumberSequence(b.jobNumber) - jobNumberSequence(a.jobNumber))
 }
 
 function displayDate(value: string) {
@@ -222,6 +235,14 @@ export default function JobBookPrototypeScreen({
     const intakeLocationErrors = requireIntakeLocation ? jobCreationLocationErrors({ ...draft, equipmentId: '' }) : {}
     const [intakeError, setIntakeError] = useState('')
     const [filters, setFilters] = useState<JobBookFilters>(EMPTY_FILTERS)
+    const searchGeneration = useRef(0)
+    const [searchRecentRows, setSearchRecentRows] = useState<JobBookRow[]>([])
+    const [searchIntakeRows, setSearchIntakeRows] = useState<JobBookRow[]>([])
+    const [searchRecentNextLink, setSearchRecentNextLink] = useState<string>()
+    const [searchIntakeNextLink, setSearchIntakeNextLink] = useState<string>()
+    const [searchReady, setSearchReady] = useState(false)
+    const [searchResultKey, setSearchResultKey] = useState('')
+    const [searchingRows, setSearchingRows] = useState(false)
     const [promotionRow, setPromotionRow] = useState<JobBookRow | null>(null)
     const [managingJob, setManagingJob] = useState<Job | null>(null)
     const [promotionJobType, setPromotionJobType] = useState<JobType>(STANDARD_JOB_TYPE_OPTIONS[0].value)
@@ -259,6 +280,14 @@ export default function JobBookPrototypeScreen({
         setRecentNextLink(undefined)
         setIntakeNextLink(undefined)
         setFilters(EMPTY_FILTERS)
+        searchGeneration.current++
+        setSearchRecentRows([])
+        setSearchIntakeRows([])
+        setSearchRecentNextLink(undefined)
+        setSearchIntakeNextLink(undefined)
+        setSearchReady(false)
+        setSearchResultKey('')
+        setSearchingRows(false)
         setDraft(createBlankJobBookRow(0, jobBookKey))
         setEditingEntryLocation(false)
         setCreatedEntryLocation(false)
@@ -377,20 +406,51 @@ export default function JobBookPrototypeScreen({
         }
     }, [draft.siteId, getAccessToken, intakeContactLoadAttempt, intakeContactLookupAvailable, intakeDrawerOpen, showIntakeLocationFields])
 
-    const allRows = useMemo(() => reconcileJobBookRows(intakeRows, recentRows)
-        .map((row) => {
-            const sourceEquipment = equipment.find((item) => item.id.toLowerCase() === row.equipmentId.toLowerCase())
-            return {
-                ...row,
-                make: row.make || sourceEquipment?.make || '',
-                model: row.model || sourceEquipment?.model || '',
-            }
-        })
-        .sort((a, b) => jobNumberSequence(b.jobNumber) - jobNumberSequence(a.jobNumber)), [equipment, intakeRows, recentRows])
+    const allRows = useMemo(() => prepareJobBookRows(intakeRows, recentRows, equipment), [equipment, intakeRows, recentRows])
+    const searchRows = useMemo(() => prepareJobBookRows(searchIntakeRows, searchRecentRows, equipment), [equipment, searchIntakeRows, searchRecentRows])
+    const filtersActive = Object.values(filters).some(Boolean)
+    const activeFilterCount = Object.values(filters).filter(Boolean).length
+    const searchFilterKey = JSON.stringify(filters)
+    const searchCurrent = searchReady && searchResultKey === searchFilterKey
+
+    useEffect(() => {
+        const generation = ++searchGeneration.current
+        if (!filtersActive || !account) return
+        const controller = new AbortController()
+        const timer = window.setTimeout(() => {
+            setSearchReady(false)
+            setPageLoadError('')
+            setSearchingRows(true)
+            void getAccessToken()
+                .then((token) => fetchJobBookSearchBatch(token, selectedJobBook, filters, undefined, controller.signal))
+                .then((batch) => {
+                    if (controller.signal.aborted || generation !== searchGeneration.current) return
+                    setSearchRecentRows(batch.recentRecords)
+                    setSearchIntakeRows(batch.intakeRecords)
+                    setSearchRecentNextLink(batch.recentNextLink)
+                    setSearchIntakeNextLink(batch.intakeNextLink)
+                    setSearchResultKey(searchFilterKey)
+                    setSearchReady(true)
+                })
+                .catch((error) => {
+                    if (controller.signal.aborted || generation !== searchGeneration.current || (error instanceof DOMException && error.name === 'AbortError')) return
+                    setPageLoadError(error instanceof Error ? error.message : 'The Job Book search could not be completed.')
+                })
+                .finally(() => {
+                    if (generation === searchGeneration.current) setSearchingRows(false)
+                })
+        }, 350)
+        return () => {
+            window.clearTimeout(timer)
+            controller.abort()
+        }
+    }, [account, filters, filtersActive, getAccessToken, searchFilterKey, selectedJobBook])
+
     const displayedRows = useMemo(() => {
         const includes = (values: Array<string | undefined>, term: string) => !term.trim()
             || values.some((value) => value?.toLocaleLowerCase('en-NZ').includes(term.trim().toLocaleLowerCase('en-NZ')))
-        return allRows.filter((row) => {
+        const sourceRows = filtersActive && searchCurrent ? searchRows : allRows
+        return sourceRows.filter((row) => {
             if (filters.date && row.date !== filters.date) return false
             if (!includes([row.mechanicName], filters.mechanic)) return false
             if (!includes([row.fleet, row.serial, row.make, row.model], filters.equipment)) return false
@@ -400,7 +460,7 @@ export default function JobBookPrototypeScreen({
                 row.make, row.model, row.customer, row.site, row.address, row.description, row.customerPo, row.entryStage, row.voidReason,
             ], filters.search)
         })
-    }, [allRows, filters])
+    }, [allRows, filters, filtersActive, searchCurrent, searchRows])
     const sharedEquipmentList = useMemo<Equipment[]>(() => equipment.map((item) => ({
         gr_equipmentid: item.id,
         gr_fleet: item.fleet || null,
@@ -434,11 +494,36 @@ export default function JobBookPrototypeScreen({
     }, [draft.contactId, draft.contactName, intakeContacts])
     const mechanicFilterOptions = useMemo(() => [...new Set(allRows.map((row) => row.mechanicName.trim()).filter(Boolean))].sort(), [allRows])
     const customerSiteFilterOptions = useMemo(() => [...new Set(allRows.flatMap((row) => [row.customer.trim(), row.site.trim()]).filter(Boolean))].sort(), [allRows])
-    const filtersActive = Object.values(filters).some(Boolean)
-    const activeFilterCount = Object.values(filters).filter(Boolean).length
-    const hasMoreRows = Boolean(recentNextLink || intakeNextLink)
+    const hasMoreRows = filtersActive
+        ? searchCurrent && Boolean(searchRecentNextLink || searchIntakeNextLink)
+        : Boolean(recentNextLink || intakeNextLink)
     const loadMoreRows = useCallback(async () => {
-        if (!account || pageLoadInProgressRef.current || (!recentNextLink && !intakeNextLink)) return
+        if (!account || pageLoadInProgressRef.current) return
+        if (filtersActive) {
+            if (!searchCurrent || (!searchRecentNextLink && !searchIntakeNextLink)) return
+            const generation = searchGeneration.current
+            pageLoadInProgressRef.current = true
+            setLoadingMoreRows(true)
+            setPageLoadError('')
+            try {
+                const batch = await fetchJobBookSearchBatch(await getAccessToken(), selectedJobBook, filters, {
+                    recentNextLink: searchRecentNextLink,
+                    intakeNextLink: searchIntakeNextLink,
+                })
+                if (generation !== searchGeneration.current) return
+                setSearchRecentRows((current) => appendUniqueRows(current, batch.recentRecords))
+                setSearchIntakeRows((current) => appendUniqueRows(current, batch.intakeRecords))
+                setSearchRecentNextLink(batch.recentNextLink)
+                setSearchIntakeNextLink(batch.intakeNextLink)
+            } catch (error) {
+                if (generation === searchGeneration.current) setPageLoadError(error instanceof Error ? error.message : 'More matching Job Book entries could not be loaded.')
+            } finally {
+                pageLoadInProgressRef.current = false
+                if (generation === searchGeneration.current) setLoadingMoreRows(false)
+            }
+            return
+        }
+        if (!recentNextLink && !intakeNextLink) return
         const generation = bookPageGeneration.current
         pageLoadInProgressRef.current = true
         setLoadingMoreRows(true)
@@ -466,7 +551,7 @@ export default function JobBookPrototypeScreen({
                 setLoadingMoreRows(false)
             }
         }
-    }, [account, getAccessToken, intakeNextLink, recentNextLink, selectedJobBook])
+    }, [account, filters, filtersActive, getAccessToken, intakeNextLink, recentNextLink, searchCurrent, searchIntakeNextLink, searchRecentNextLink, selectedJobBook])
 
     useEffect(() => {
         const sentinel = infiniteScrollSentinelRef.current
@@ -698,7 +783,9 @@ export default function JobBookPrototypeScreen({
                 <p>View {selectedJobBook.label} managed Jobs and Intake entries in one separate register.</p>
             </div>
             <div className="job-book-header-summary" aria-label="Job Book status">
-                <span>{displayedRows.length} shown · {allRows.length} loaded</span>
+                <span>{filtersActive
+                    ? searchingRows ? 'Searching all Job Book entries…' : `${displayedRows.length} matching`
+                    : `${displayedRows.length} shown · ${allRows.length} loaded`}</span>
                 <span>{equipment.length.toLocaleString()} equipment</span>
                 {loading && <span>Refreshing…</span>}
                 {loadError && <span className="job-book-error" title={loadError}>Load warning</span>}
@@ -735,7 +822,7 @@ export default function JobBookPrototypeScreen({
             </section>
         </details>
 
-        <section className="job-book-grid-wrap" aria-label={`${selectedJobBook.label} Job Book`}>
+        <section className="job-book-grid-wrap" aria-label={`${selectedJobBook.label} Job Book`} aria-busy={searchingRows}>
             <table className="job-book-grid">
                 <thead><tr>
                     <th className="job-number-column">Job Number</th><th className="date-column">Date</th><th className="mechanic-column">Mechanic</th>
@@ -798,11 +885,15 @@ export default function JobBookPrototypeScreen({
         {canEmailAssignedTechnician && rowActions.emailJob && <JobEmailComposer key={rowActions.emailJob.gr_jobid} job={rowActions.emailJob} assignedRecipientOnly={!canManageJobs} onCancel={rowActions.close} onSend={rowActions.send} />}
         <div ref={infiniteScrollSentinelRef} className="job-book-page-loader" aria-live="polite">
             {pageLoadError && <span className="job-book-page-error" role="alert">{pageLoadError}</span>}
-            {hasMoreRows
+            {searchingRows
+                ? <span>Searching up to 100 matching entries…</span>
+                : hasMoreRows
                 ? <button type="button" onClick={() => void loadMoreRows()} disabled={loadingMoreRows}>
-                    {loadingMoreRows ? 'Loading more entries…' : filtersActive ? 'Load more entries to continue searching' : 'Scroll for more entries'}
+                    {loadingMoreRows ? 'Loading more entries…' : filtersActive ? 'Load more results' : 'Scroll for more entries'}
                 </button>
-                : !loading && allRows.length > 0 && <span>All available entries loaded</span>}
+                : filtersActive && searchCurrent
+                    ? <span>{displayedRows.length ? 'All matching entries loaded' : 'No matching entries found'}</span>
+                    : !loading && allRows.length > 0 && <span>All available entries loaded</span>}
         </div>
         </section>
 

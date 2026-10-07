@@ -14,6 +14,7 @@ import {
     splitSiteAddress,
 } from '../src/alpha/job-book/jobBookPrototype.ts'
 import { JOB_BOOKS, jobNumberBelongsToBook, jobNumberSequence, managedJobNumberFilter } from '../src/alpha/job-book/jobBookConfig.ts'
+import { fetchJobBookSearchBatch, intakeJobBookSearchFilter, managedJobBookSearchFilter } from '../src/alpha/job-book/jobBookApi.ts'
 import {
     deletePersistedJobBookEquipmentIndex,
     jobBookEquipmentIndexScope,
@@ -435,20 +436,85 @@ test('Job Book progressively loads shared Staff and bounded Customer Site relati
     assert.doesNotMatch(screen, /subscribeToStaffChanges/)
 })
 
-test('Job Book rows use bounded Dataverse pages and infinite scrolling', () => {
+test('Job Book rows use bounded Dataverse pages, server search and infinite scrolling', () => {
     const screen = readFileSync(new URL('../src/alpha/job-book/JobBookPrototypeScreen.tsx', import.meta.url), 'utf8')
     const api = readFileSync(new URL('../src/alpha/job-book/jobBookApi.ts', import.meta.url), 'utf8')
 
     assert.match(api, /JOB_BOOK_PAGE_SIZE = 100/)
     assert.match(api, /continuationLink\s*\?\s*trustedNextLink\(continuationLink\)/)
-    assert.match(api, /odata\.maxpagesize=\$\{JOB_BOOK_PAGE_SIZE\}/)
+    assert.match(api, /odata\.maxpagesize=\$\{options\.pageSize \?\? JOB_BOOK_PAGE_SIZE\}/)
     assert.doesNotMatch(api, /\$top=\$\{JOB_BOOK_PAGE_SIZE\}/)
     assert.doesNotMatch(api, /while \(nextUrl\)/)
     assert.match(screen, /new IntersectionObserver/)
     assert.match(screen, /infiniteScrollSentinelRef/)
     assert.match(screen, /fetchRecentJobBookRows\(token, selectedJobBook, recentNextLink\)/)
     assert.match(screen, /fetchJobBookIntakeRows\(token, selectedJobBook, intakeNextLink\)/)
-    assert.match(screen, /filtersActive \? 'Load more entries to continue searching'/)
+    assert.match(screen, /fetchJobBookSearchBatch/)
+    assert.match(screen, /}, 350\)/)
+    assert.match(screen, /filtersActive \? 'Load more results'/)
+    assert.match(api, /remaining = JOB_BOOK_PAGE_SIZE/)
+})
+
+test('Job Book server filters cover visible columns, escape input and use Auckland dates', () => {
+    const filters = { search: "Godfrey's", date: '2026-10-07', mechanic: 'Ricardo', equipment: 'FN2131', customerSite: 'Kerrs' }
+    const managed = managedJobBookSearchFilter(JOB_BOOKS.auckland, filters)
+    const intake = intakeJobBookSearchFilter(filters)
+
+    assert.match(managed, /gr_jobnumber ne null/)
+    assert.match(managed, /contains\(gr_description,'Godfrey''s'\)/)
+    assert.match(managed, /contains\(gr_Equipment\/gr_fleet,'FN2131'\)/)
+    assert.match(managed, /contains\(gr_Site\/gr_Customer\/gr_name,'Kerrs'\)/)
+    assert.match(managed, /createdon ge 2026-10-06T11:00:00\.000Z/)
+    assert.match(managed, /createdon lt 2026-10-07T11:00:00\.000Z/)
+    assert.match(intake, /contains\(gr_customersnapshot,'Kerrs'\)/)
+    assert.match(intake, /contains\(gr_customerpo,'Godfrey''s'\)/)
+})
+
+test('Job Book search downloads no more than 100 records in its first batch', async () => {
+    const originalFetch = globalThis.fetch
+    const preferences: string[] = []
+    globalThis.fetch = async (input, init) => {
+        preferences.push(new Headers(init?.headers).get('Prefer') ?? '')
+        const managed = String(input).includes('/gr_jobs?')
+        const value = Array.from({ length: 50 }, (_, index) => managed ? {
+            gr_jobid: `job-${index}`,
+            createdon: '2026-10-07T00:00:00Z',
+            gr_jobnumber: String(147000 + index),
+            gr_ordernumber: null,
+            gr_description: 'Matching job',
+            gr_gtentered: false,
+            gr_timecloudentered: false,
+        } : {
+            gr_jobbookentryid: `intake-${index}`,
+            createdon: '2026-10-07T00:00:00Z',
+            gr_jobnumber: String(148000 + index),
+            gr_stage: 122830000,
+            gr_mechanictext: null,
+            gr_fleetsnapshot: null,
+            gr_serialsnapshot: null,
+            gr_makesnapshot: null,
+            gr_modelsnapshot: null,
+            gr_customersnapshot: null,
+            gr_sitesnapshot: null,
+            gr_addresssnapshot: null,
+            gr_addressverified: false,
+            gr_addressnotfoundconfirmed: false,
+            gr_description: 'Matching intake',
+            gr_customerpo: null,
+            gr_entered: false,
+            gr_timecloudentered: false,
+            gr_equipmentreviewrequired: true,
+        })
+        return new Response(JSON.stringify({ value }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    }
+    try {
+        const filters = { search: 'Matching', date: '', mechanic: '', equipment: '', customerSite: '' }
+        const batch = await fetchJobBookSearchBatch('token', JOB_BOOKS.auckland, filters)
+        assert.equal(batch.recentRecords.length + batch.intakeRecords.length, 100)
+        assert.deepEqual(preferences, ['odata.maxpagesize=50', 'odata.maxpagesize=50'])
+    } finally {
+        globalThis.fetch = originalFetch
+    }
 })
 
 test('Job Book keeps status in the page header without a duplicated workspace title', () => {
