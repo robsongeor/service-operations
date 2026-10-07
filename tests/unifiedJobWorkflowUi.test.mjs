@@ -28,11 +28,12 @@ test.after(async () => { globalThis.window = originalWindow; globalThis.fetch = 
 test.beforeEach(() => values.clear())
 const renderRegistration = (props = {}) => renderToStaticMarkup(createElement(Registration, { job, mode: 'allocate', getAccessToken: unavailable, onSaved: unavailable, onClose: unavailable, ...props }))
 
-test('unified worklist keeps its loading snapshot referentially stable', () => {
+test('coordination tabs filter one complete worklist without reloading Dataverse', () => {
     const source = readFileSync(new URL('../src/alpha/jobs/hooks/useUnifiedJobWorklist.ts', import.meta.url), 'utf8')
-    assert.match(source, /const EMPTY_JOBS: Job\[\] = \[\]/)
-    assert.match(source, /jobs: scopeIsCurrent \? jobs : EMPTY_JOBS/)
-    assert.doesNotMatch(source, /jobs: scopeIsCurrent \? jobs : \[\]/)
+    assert.match(source, /export function useUnifiedJobWorklist\(\)/)
+    assert.match(source, /fetchUnifiedJobsPage\(token, 'all', cursor\)/)
+    assert.match(source, /\}, \[getAccessToken\]\)/)
+    assert.doesNotMatch(source, /scope: JobTypeFilter|\[getAccessToken, scope\]/)
 })
 
 test('allocation confirms permanence, all four regions and independent coordinator membership', () => {

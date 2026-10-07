@@ -39,7 +39,7 @@ export default function JobsScreen() {
     const [viewState, setViewState] = useState<JobsViewState>(() => UNIFIED_JOB_WALKTHROUGH ? { ...DEFAULT_JOBS_VIEW_STATE } : storageKey
         ? restoreJobsViewState(storageKey, true) ?? applyJobsDefaultView(defaultView)
         : DEFAULT_JOBS_VIEW_STATE)
-    const unifiedWorklist = useUnifiedJobWorklist(viewState.selectedJobType)
+    const unifiedWorklist = useUnifiedJobWorklist()
     const scopedData = useMemo(() => ({ jobs: unifiedWorklist.jobs, equipment: [], sites: [], servicePlans: [], scheduleOptions: [], officeUpdates: [] }), [unifiedWorklist.jobs])
     const [workflowJob, setWorkflowJob] = useState<Job | null>(null)
     const [allocationJob, setAllocationJob] = useState<Job | null>(null)

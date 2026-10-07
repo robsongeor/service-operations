@@ -6,16 +6,12 @@ import { fetchWalkthroughJobsPage } from '../services/unifiedJobWalkthroughApi'
 import { fetchUnifiedJobsPage } from '../services/jobsApi'
 import { UNIFIED_JOB_RUNTIME, UNIFIED_JOB_WALKTHROUGH } from '../domain/unifiedJobWorkflow'
 import type { Job } from '../types/job.types'
-import type { JobTypeFilter } from '../types/jobType.types'
 
-const EMPTY_JOBS: Job[] = []
-
-export function useUnifiedJobWorklist(scope: JobTypeFilter) {
+export function useUnifiedJobWorklist() {
     const { instance } = useMsal()
     const account = useActiveMsalAccount()
     const getAccessToken = useCallback(() => acquireDataverseAccessToken(instance, account), [instance, account])
     const [jobs, setJobs] = useState<Job[]>([])
-    const [loadedScope, setLoadedScope] = useState<JobTypeFilter | null>(null)
     const [busy, setBusy] = useState(UNIFIED_JOB_RUNTIME)
     const [error, setError] = useState('')
     const generation = useRef(0)
@@ -31,7 +27,7 @@ export function useUnifiedJobWorklist(scope: JobTypeFilter) {
             for (let pageNumber = 0; pageNumber < 50; pageNumber++) {
                 const page = UNIFIED_JOB_WALKTHROUGH
                     ? await fetchWalkthroughJobsPage(token, cursor)
-                    : await fetchUnifiedJobsPage(token, scope, cursor)
+                    : await fetchUnifiedJobsPage(token, 'all', cursor)
                 for (const row of page.records) rows.set(row.gr_jobid.toLowerCase(), row)
                 if (!page.next) { cursor = ''; break }
                 if (seen.has(page.next)) throw new Error('Dataverse returned a repeated Jobs continuation page.')
@@ -44,18 +40,16 @@ export function useUnifiedJobWorklist(scope: JobTypeFilter) {
                 return
             }
             setJobs([...rows.values()])
-            setLoadedScope(scope)
         } catch (cause) {
             if (current === generation.current) setError(cause instanceof Error ? cause.message : 'Jobs could not be loaded.')
             if (requireConfirmation) throw cause
         } finally { if (current === generation.current) setBusy(false) }
-    }, [getAccessToken, scope])
+    }, [getAccessToken])
     useEffect(() => {
         if (!UNIFIED_JOB_RUNTIME) return
         const requestGeneration = generation
         const timer = setTimeout(() => void load(), 0)
         return () => { clearTimeout(timer); requestGeneration.current++ }
     }, [load])
-    const scopeIsCurrent = loadedScope === scope
-    return { jobs: scopeIsCurrent ? jobs : EMPTY_JOBS, busy: busy || !scopeIsCurrent, error, reload: load, getAccessToken }
+    return { jobs, busy, error, reload: load, getAccessToken }
 }
