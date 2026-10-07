@@ -98,7 +98,6 @@ function App() {
             <Route path="/equipment" element={<EquipmentScreen />} />
             <Route path="/jobs" element={<JobsScreen key={signedInUser?.storageId || 'account-pending'} />} />
             <Route path="/job-import" element={<JobSpreadsheetImportScreen key={signedInUser?.storageId || 'account-pending'} />} />
-            <Route path="/equipment-photos" element={<EquipmentPhotoUploadScreen key={signedInUser?.storageId || 'account-pending'} />} />
             <Route path="/job-card-reviews" element={<JobCardReviewsScreen key={`${signedInUser?.storageId}-queue`} />} />
             <Route path="/job-card-reviews/:reviewId" element={<JobCardReviewsScreen key={`${signedInUser?.storageId}-${location.pathname}`} />} />
             <Route path="/job-book" element={<JobBookPrototypeScreen key={signedInUser?.storageId || 'account-pending'} />} />

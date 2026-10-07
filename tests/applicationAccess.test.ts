@@ -244,11 +244,11 @@ test('App and Sidebar enforce the Service Coordinator screen boundary', () => {
     assert.ok(coordinatorRoutes)
     assert.match(coordinatorRoutes, /Navigate to="\/jobs"/)
     assert.match(coordinatorRoutes, /path="\*" element=\{<AccessDeniedScreen/)
-    for (const route of ['/customers', '/equipment', '/wof', '/jobs', '/job-import', '/equipment-photos', '/job-card-reviews', '/job-book', '/scheduling', '/quotes', '/pricing']) {
+    for (const route of ['/customers', '/equipment', '/wof', '/jobs', '/job-import', '/job-card-reviews', '/job-book', '/scheduling', '/quotes', '/pricing']) {
         assert.ok(coordinatorRoutes.includes(`path="${route}"`), `allowed route ${route}`)
         assert.ok(access.includes(`'${route}'`), `navigation path ${route}`)
     }
-    for (const route of ['/', '/staff', '/maintenance-booking', '/equipment/greentree-test', '/equipment-map', '/job-map', '/site-checks', '/chargeable-invoices', '/site-checks/checklists']) {
+    for (const route of ['/', '/staff', '/maintenance-booking', '/equipment-photos', '/equipment/greentree-test', '/equipment-map', '/job-map', '/site-checks', '/chargeable-invoices', '/site-checks/checklists']) {
         if (route !== '/') assert.ok(!coordinatorRoutes.includes(`path="${route}"`), `restricted route ${route}`)
         assert.ok(!access.includes(`'${route}',`), `restricted navigation path ${route}`)
     }

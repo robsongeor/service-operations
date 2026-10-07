@@ -14,7 +14,6 @@ export const SERVICE_COORDINATOR_NAVIGATION_PATHS = [
     '/wof',
     '/jobs',
     '/job-import',
-    '/equipment-photos',
     '/job-card-reviews',
     '/job-book',
     '/scheduling',
