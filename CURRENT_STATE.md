@@ -1119,6 +1119,11 @@ Branch: `v2-deployment`
   Web App environment variables on 15 August 2026. Signed-in verification that markers resolve in
   production remains outstanding. No role, business record, credential, deployment, or cloud
   configuration was changed by the shared-cache work.
+  On 7 October 2026, V2 `ServiceOps-V2` was provisioned with the existing production
+  `DATAVERSE_URL` and `GEOAPIFY_API_KEY` server-only settings copied from V1; V1 was not modified.
+  The V2 address API was deployed from commit `f491493` by successful Azure run `37569362708`, then
+  verified with a short-lived delegated Dataverse token: `/api/addresssearch` returned `200` and a
+  bounded Geoapify suggestion. Secret values remain outside source control and client configuration.
 
 - Staff Directory is published in `v1.6.0`: the UI is renamed from
   Mechanics to Staff, `/mechanics` redirects to `/staff`, Department, `Can be assigned Jobs`, and
