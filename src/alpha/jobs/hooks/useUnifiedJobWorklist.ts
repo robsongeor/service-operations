@@ -8,6 +8,8 @@ import { UNIFIED_JOB_RUNTIME, UNIFIED_JOB_WALKTHROUGH } from '../domain/unifiedJ
 import type { Job } from '../types/job.types'
 import type { JobTypeFilter } from '../types/jobType.types'
 
+const EMPTY_JOBS: Job[] = []
+
 export function useUnifiedJobWorklist(scope: JobTypeFilter) {
     const { instance } = useMsal()
     const account = useActiveMsalAccount()
@@ -55,5 +57,5 @@ export function useUnifiedJobWorklist(scope: JobTypeFilter) {
         return () => { clearTimeout(timer); requestGeneration.current++ }
     }, [load])
     const scopeIsCurrent = loadedScope === scope
-    return { jobs: scopeIsCurrent ? jobs : [], busy: busy || !scopeIsCurrent, error, reload: load, getAccessToken }
+    return { jobs: scopeIsCurrent ? jobs : EMPTY_JOBS, busy: busy || !scopeIsCurrent, error, reload: load, getAccessToken }
 }

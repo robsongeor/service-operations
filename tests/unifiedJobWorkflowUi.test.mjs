@@ -3,6 +3,7 @@ import test from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createServer } from 'vite'
+import { readFileSync } from 'node:fs'
 
 let server, Registration, Create, Table, Provider, EquipmentDrawer, detailsPatch
 const originalWindow = globalThis.window
@@ -26,6 +27,13 @@ test.before(async () => {
 test.after(async () => { globalThis.window = originalWindow; globalThis.fetch = originalFetch; await server?.close() })
 test.beforeEach(() => values.clear())
 const renderRegistration = (props = {}) => renderToStaticMarkup(createElement(Registration, { job, mode: 'allocate', getAccessToken: unavailable, onSaved: unavailable, onClose: unavailable, ...props }))
+
+test('unified worklist keeps its loading snapshot referentially stable', () => {
+    const source = readFileSync(new URL('../src/alpha/jobs/hooks/useUnifiedJobWorklist.ts', import.meta.url), 'utf8')
+    assert.match(source, /const EMPTY_JOBS: Job\[\] = \[\]/)
+    assert.match(source, /jobs: scopeIsCurrent \? jobs : EMPTY_JOBS/)
+    assert.doesNotMatch(source, /jobs: scopeIsCurrent \? jobs : \[\]/)
+})
 
 test('allocation confirms permanence, all four regions and independent coordinator membership', () => {
     const html = renderRegistration()
