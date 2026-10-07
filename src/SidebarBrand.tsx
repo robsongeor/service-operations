@@ -12,8 +12,8 @@ export default function SidebarBrand() {
         const stage = stageRef.current?.getBoundingClientRect()
         if (!logo || !stage) return
         setJourney({
-            '--pickup-x': `${logo.left - stage.left - 82}px`,
-            '--exit-x': `${stage.width + 20}px`,
+            '--pickup-x': `${logo.left - stage.left - 60}px`,
+            '--exit-x': `${stage.width + 15}px`,
             '--cargo-y': `${logo.top - stage.top}px`,
         } as CSSProperties)
     }
@@ -43,15 +43,16 @@ export default function SidebarBrand() {
                     <div className="sidebar-forklift" onAnimationEnd={(event) => {
                         if (event.animationName === 'forklift-journey') setJourney(null)
                     }}>
-                        <svg width="124" height="80" viewBox="0 0 124 80" fill="none">
-                            <g fill="#000000">
-                                <path d="M8 51V47Q8 40 15 38L24 35L32 23Q35 18 41 18H49Q55 18 58 24L65 38L69 40Q74 42 74 48V53Q74 58 70 58H69A12 12 0 0 0 45 58H37A12 12 0 0 0 13 58Q8 58 8 51Z" />
-                                <circle cx="25" cy="58" r="8.5" />
-                                <circle cx="57" cy="58" r="8.5" />
+                        <svg width="93" height="60" viewBox="0 0 124 80" fill="none">
+                            <g fill="#0b0d0c">
+                                <path d="M7 48C7 39 12 33 21 30L31 27L37 43H61L68 48V57H65A11 11 0 0 0 43 57H39A14 14 0 0 0 11 57H10C8 57 7 54 7 48Z" />
+                                <path d="M29 42L35 15Q36 10 41 10H49Q54 10 56 15L65 43H58L50 18Q49 15 46 15H42Q39 15 38 19L33 42H29Z" />
+                                <circle cx="25" cy="57" r="10.5" />
+                                <circle cx="54" cy="57" r="7.5" />
                             </g>
-                            <rect x="72" y="17" width="6" height="47" rx="3" fill="#d9383e" />
+                            <path d="M72 10H78V63H72Z" fill="#d9383e" />
                             <g className="sidebar-forklift-forks">
-                                <path d="M78 45Q81 45 81 48V58Q81 60 83 60H118Q121 60 121 62.5Q121 65 118 65H79Q75 65 75 61V48Q75 45 78 45Z" fill="#d9383e" />
+                                <path d="M75 45H80V58Q80 60 83 60H119Q122 60 122 63Q122 66 119 66H79Q75 66 75 62V45Z" fill="#d9383e" />
                             </g>
                         </svg>
                         <div className="sidebar-forklift-cargo"><span className="sidebar-logo">SO</span></div>
