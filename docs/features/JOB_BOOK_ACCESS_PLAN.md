@@ -111,6 +111,8 @@ cancelling a Job entry does not undo an already saved Customer, Site or Equipmen
 Duplicate checks, retry recovery, exact-version saves and server-side permissions must be verified.
 Both Admin groups have the same approved creation, movement and Equipment-detail editing scope.
 Both Admin groups have separate Customers and Equipment screens, alongside Job Book.
+Equipment workspace Customer/Site creation uses the same canonical verified-address component as
+the Job drawer, rather than maintaining a separate inline new-Customer form.
 The precise Equipment field allowlist remains an implementation decision.
 
 ## Office Admin scope retained for review

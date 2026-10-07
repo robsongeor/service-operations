@@ -19,7 +19,7 @@ import { resolveEffectiveServicePlans } from '../servicePlans/servicePlanCalcula
 import { normalizeEquipmentInput, toEquipmentDateOnlyValue, type EquipmentCreateInitialValues, type EquipmentUpdateInput } from '../types/equipmentManager.types'
 import { classifyEquipmentIdentifier, deriveSiteNameFromAddress, normalizeCustomerName, parseSpreadsheetRow, type IdentifierClassification, type SpreadsheetRow } from '../utils/equipmentCreateHelpers'
 import SearchableSelect, { type SearchableSelectOption } from '../../shared/searchable-select/SearchableSelect'
-import CustomerRelationshipPicker from '../../shared/customer-relationship/CustomerRelationshipPicker'
+import JobCustomerField from '../../jobs/components/JobCustomerField'
 import VerifiedAddressField from '../../jobs/components/VerifiedAddressField'
 import type { VerifiedAddressSuggestion } from '../../jobs/services/addressSearchApi'
 import { formatMaintenanceInterval, MAINTENANCE_PROFILES, POWER_TYPES, resolveMaintenanceConfiguration, SERVICE_PROGRAMMES, type MaintenanceProfile, type PowerType, type ServiceProgramme } from '../servicePlans/maintenanceConfiguration'
@@ -94,7 +94,7 @@ type MaintenanceHistoryForm = {
     readingRecordedDate: string
     plans: Record<PlannedServiceType, { lastCompletedDate: string; lastCompletedHours: string }>
 }
-type CustomerMode = 'none' | 'existing' | 'new'
+type CustomerMode = 'none' | 'existing'
 type SiteMode = 'none' | 'existing' | 'new'
 
 const siteOptionLabel = (site: Site) => site.gr_name || 'Unnamed site'
@@ -135,7 +135,6 @@ export default function EquipmentDrawer(props: Props) {
         () => mergeRecords([...suppliedSites], loadedSites, (site) => site.gr_siteid),
         [loadedSites, suppliedSites],
     )
-    const [customerSearchState, setCustomerSearchState] = useState<'idle' | 'loading' | 'error'>('idle')
     const [siteLoadState, setSiteLoadState] = useState<'idle' | 'loading' | 'error'>('idle')
     const initialSite = isCreate && initialValues?.siteId
         ? sites.find((site) => site.gr_siteid === initialValues.siteId)
@@ -183,7 +182,6 @@ export default function EquipmentDrawer(props: Props) {
     const [customerId, setCustomerId] = useState(equipment?.gr_Site?.gr_Customer?.gr_customerid ?? initialCustomer?.gr_customerid ?? '')
     const [customerMode, setCustomerMode] = useState<CustomerMode>(equipment?.gr_Site?.gr_Customer || initialCustomer ? 'existing' : 'none')
     const [siteMode, setSiteMode] = useState<SiteMode>(equipment?.gr_Site || initialSite ? 'existing' : 'none')
-    const [customerQuery, setCustomerQuery] = useState(equipment?.gr_Site?.gr_Customer?.gr_name ?? initialCustomer?.gr_name ?? initialValues?.customerName ?? '')
     const [, setSiteQuery] = useState(equipment?.gr_Site?.gr_name ?? initialSite?.gr_name ?? initialValues?.siteName ?? '')
     const [formError, setFormError] = useState('')
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -220,27 +218,6 @@ export default function EquipmentDrawer(props: Props) {
     const [complianceError, setComplianceError] = useState('')
     const [isComplianceSaving, setIsComplianceSaving] = useState(false)
     const [showProgrammeChangeConfirm, setShowProgrammeChangeConfirm] = useState(false)
-
-    useEffect(() => {
-        if (!onSearchCustomers) return
-        const controller = new AbortController()
-        const timer = window.setTimeout(() => {
-            setCustomerSearchState('loading')
-            void onSearchCustomers(customerSearch, controller.signal)
-                .then((rows) => {
-                    if (controller.signal.aborted) return
-                    setAvailableCustomers((current) => mergeRecords(current, rows, (customer) => customer.gr_customerid))
-                    setCustomerSearchState('idle')
-                })
-                .catch(() => {
-                    if (!controller.signal.aborted) setCustomerSearchState('error')
-                })
-        }, 250)
-        return () => {
-            window.clearTimeout(timer)
-            controller.abort()
-        }
-    }, [customerSearch, onSearchCustomers])
 
     useEffect(() => {
         if (!customerId || !onLoadCustomerSites) {
@@ -309,23 +286,6 @@ export default function EquipmentDrawer(props: Props) {
         secondary: site.gr_address || selectedCustomer?.gr_name,
         searchText: [site.gr_address, selectedCustomer?.gr_name].filter(Boolean).join(' '),
     }))
-    const normalizedCustomerSearch = normalizeCustomerName(customerSearch)
-    const customerOptions = [...customers]
-        .filter((customer) => !normalizedCustomerSearch || normalizeCustomerName(customer.gr_name).includes(normalizedCustomerSearch))
-        .sort((a, b) => a.gr_name.localeCompare(b.gr_name))
-        .slice(0, 8)
-        .map((customer) => {
-            const siteCount = sites.filter((site) => site.gr_Customer?.gr_customerid === customer.gr_customerid).length
-            return {
-                id: customer.gr_customerid,
-                label: customer.gr_name,
-                secondary: `${siteCount} ${siteCount === 1 ? 'site' : 'sites'}`,
-            }
-        })
-    const normalizedCustomerQuery = normalizeCustomerName(customerQuery)
-    const exactCustomerMatch = normalizedCustomerQuery
-        ? customers.find((customer) => normalizeCustomerName(customer.gr_name) === normalizedCustomerQuery)
-        : undefined
     const derivedSiteName = deriveSiteNameFromAddress(newSite.address)
     const effectiveNewSiteName = newSite.name.trim() || derivedSiteName
     const matchingSiteAddress = newSite.address.trim()
@@ -485,14 +445,14 @@ export default function EquipmentDrawer(props: Props) {
 
         let requiresReview = classification.kind === 'unresolved' || classification.kind === 'missing'
         const pastedCustomer = row.customer
-        if (pastedCustomer && !customerQuery.trim()) {
+        if (pastedCustomer && !customerSearch.trim()) {
             const normalized = normalizeCustomerName(pastedCustomer)
             const exact = customers.filter((customer) => normalizeCustomerName(customer.gr_name) === normalized)
             const possible = customers.filter((customer) => {
                 const name = normalizeCustomerName(customer.gr_name)
                 return name.includes(normalized) || normalized.includes(name)
             })
-            setCustomerQuery(pastedCustomer)
+            setCustomerSearch(pastedCustomer)
             setSiteQuery('')
             updateField('siteId', '')
             if (exact.length === 1) {
@@ -514,16 +474,16 @@ export default function EquipmentDrawer(props: Props) {
                 }
             } else {
                 setCustomerId('')
-                setCustomerMode('new')
-                setSiteMode('new')
+                setCustomerMode('none')
+                setSiteMode('none')
                 setNewSite({ name: deriveSiteNameFromAddress(row.address), address: row.address })
                 setNewSiteAddressSelection(null)
                 requiresReview ||= possible.length > 0
             }
-        } else if (pastedCustomer && customerQuery !== pastedCustomer) skipped.push('Customer')
+        } else if (pastedCustomer && customerSearch !== pastedCustomer) skipped.push('Customer')
         if (row.address && newSite.address.trim()) {
             if (newSite.address !== row.address) skipped.push('Address')
-        } else if (row.address && customerQuery.trim()) {
+        } else if (row.address && customerSearch.trim()) {
             setNewSite({ name: deriveSiteNameFromAddress(row.address), address: row.address })
             setNewSiteAddressSelection(null)
             setSiteMode('new')
@@ -600,10 +560,6 @@ export default function EquipmentDrawer(props: Props) {
             setRelatedError('Select an existing Customer or enter a new Customer name.')
             return
         }
-        if (customerMode === 'new' && !customerQuery.trim()) {
-            setRelatedError('Enter a Customer name.')
-            return
-        }
         if (customerMode !== 'none' && siteMode === 'none') {
             setRelatedError('Select an existing Site or enter a new Site.')
             return
@@ -631,17 +587,7 @@ export default function EquipmentDrawer(props: Props) {
             let createdRelatedRecords = false
             let resolvedSite = sites.find((site) => site.gr_siteid === trimmed.siteId)
             if (customerMode !== 'none') {
-                let resolvedCustomer = selectedCustomer
-                if (customerMode === 'new') {
-                    if (!props.onCreateCustomer) throw new Error('Customer creation is not available from this Equipment view.')
-                    const duplicate = customers.find((customer) => normalizeCustomerName(customer.gr_name) === normalizeCustomerName(customerQuery))
-                    resolvedCustomer = duplicate ?? await props.onCreateCustomer({ name: customerQuery.trim() })
-                    setAvailableCustomers((current) => mergeRecords(current, [resolvedCustomer!], (customer) => customer.gr_customerid))
-                    createdRelatedRecords = !duplicate
-                    setCustomerId(resolvedCustomer.gr_customerid)
-                    setCustomerMode('existing')
-                    setCustomerQuery(resolvedCustomer.gr_name)
-                }
+                const resolvedCustomer = selectedCustomer
                 if (!resolvedCustomer) throw new Error('The selected Customer could not be found.')
 
                 if (siteMode === 'new') {
@@ -756,7 +702,6 @@ export default function EquipmentDrawer(props: Props) {
         setCustomerMode('existing')
         setCustomerSearch(customer.gr_name)
         setSiteMode(selectedSite ? 'existing' : retainSpreadsheetSite ? 'new' : 'none')
-        setCustomerQuery(customer.gr_name)
         setSiteQuery(selectedSite?.gr_name ?? '')
         if (!retainSpreadsheetSite) {
             setNewSite({ name: '', address: '' })
@@ -785,12 +730,11 @@ export default function EquipmentDrawer(props: Props) {
             console.error(error)
             throw new Error(duplicate
                 ? 'The site could not be created. Try again.'
-                : 'The customer was created, but the site could not be created. Add the site or try again.')
+                : 'The customer was created, but the site could not be created. Add the site or try again.', { cause: error })
         }
         setAvailableSites((current) => mergeRecords(current, [createdSite], (site) => site.gr_siteid))
         setCustomerId(createdCustomer.gr_customerid)
         setCustomerMode('existing')
-        setCustomerQuery(createdCustomer.gr_name)
         setCustomerSearch(createdCustomer.gr_name)
         setForm((current) => ({ ...current, siteId: createdSite.gr_siteid }))
         setSiteMode('existing')
@@ -918,12 +862,13 @@ export default function EquipmentDrawer(props: Props) {
                             {isCreate && form.serviceProgramme === SERVICE_PROGRAMMES.CUSTOM && <>{([['A', 'customAEnabled'], ['B', 'customBEnabled'], ['C', 'customCEnabled']] as const).map(([label, field]) => <label className="equipment-wof-required" key={field}><input type="checkbox" checked={form[field]} onChange={(event) => updateField(field, event.target.checked)} /> {label} Service enabled</label>)}</>}
                             {isCreate && form.maintenanceProfile === MAINTENANCE_PROFILES.CUSTOM && <>{form.customAEnabled && <label>Custom A interval (days)<input type="number" min="1" value={form.customAIntervalDays} onChange={(event) => updateField('customAIntervalDays', event.target.value)} /></label>}{form.customBEnabled && form.serviceProgramme === SERVICE_PROGRAMMES.CUSTOM && <label>Custom B interval (days)<input type="number" min="1" value={form.customBIntervalDays} onChange={(event) => updateField('customBIntervalDays', event.target.value)} /></label>}{form.customCEnabled && <label>Custom C interval (days)<input type="number" min="1" value={form.customCIntervalDays} onChange={(event) => updateField('customCIntervalDays', event.target.value)} /></label>}</>}
                             <div className="equipment-relationship-fields">
-                                <CustomerRelationshipPicker
+                                <JobCustomerField
                                     id="equipment-customer"
                                     query={customerSearch}
                                     selectedId={customerMode === 'existing' ? customerId : ''}
-                                    options={customerOptions}
-                                    onQueryChange={(query) => { setCustomerSearch(query); setCustomerQuery(query) }}
+                                    customers={customers}
+                                    onSearchCustomers={onSearchCustomers}
+                                    onQueryChange={setCustomerSearch}
                                     onClearSelection={() => {
                                         setCustomerId('')
                                         setCustomerMode('none')
@@ -934,18 +879,12 @@ export default function EquipmentDrawer(props: Props) {
                                         setNewSiteAddressSelection(null)
                                         setRelatedError('')
                                     }}
-                                    onSelect={(nextCustomerId) => {
-                                        const customer = customers.find((candidate) => candidate.gr_customerid === nextCustomerId)
-                                        if (customer) {
-                                            selectExistingCustomer(customer)
-                                        }
+                                    onSelect={(customer) => {
+                                        setAvailableCustomers((current) => mergeRecords(current, [customer], (candidate) => candidate.gr_customerid))
+                                        selectExistingCustomer(customer)
                                     }}
                                     onCreateCustomerAndSite={canCreateRelationships ? createCustomerAndSite : undefined}
-                                    searchStatus={customerSearchState}
-                                    searchError={customerSearchState === 'error' ? 'Customer search is temporarily unavailable.' : ''}
                                 />
-                                {customerMode === 'new' && <label>New Customer Name<input value={customerQuery} placeholder="Enter customer name" onChange={(event) => { setCustomerQuery(event.target.value); setRelatedError('') }} /></label>}
-                                {exactCustomerMatch && customerMode === 'new' && <div className="equipment-customer-duplicate-warning" role="alert"><p>A Customer with this name already exists. Select the existing Customer.</p><button type="button" onClick={() => selectExistingCustomer(exactCustomerMatch)}>Select {exactCustomerMatch.gr_name}</button></div>}
 
                                 {siteMode !== 'new' && <SearchableSelect
                                     id="equipment-site"
@@ -976,7 +915,6 @@ export default function EquipmentDrawer(props: Props) {
                                     searchError={siteLoadState === 'error' ? 'Sites are temporarily unavailable.' : ''}
                                 />}
                                 {canCreateRelationships && selectedCustomer && siteMode !== 'new' && <button className="equipment-autocomplete-create" type="button" onClick={() => { updateField('siteId', ''); setSiteMode('new'); setNewSite({ name: '', address: '' }); setNewSiteAddressSelection(null); setRelatedError('') }}>+ Add new site</button>}
-                                {canCreateRelationships && customerMode === 'new' && siteMode !== 'new' && <button className="equipment-autocomplete-create" type="button" onClick={() => { setSiteMode('new'); setNewSite({ name: '', address: '' }); setNewSiteAddressSelection(null) }}>+ Add first site</button>}
                                 {siteMode === 'new' && <div className="equipment-inline-site-fields">
                                     <label>Site Name<input value={newSite.name} onChange={(event) => { setNewSite((current) => ({ ...current, name: event.target.value })); setRelatedError('') }} /></label>
                                     <VerifiedAddressField value={newSite.address} onChange={(address, selection) => {

@@ -439,7 +439,7 @@ test('Equipment Manager progressively loads register support instead of full sta
     assert.match(screen, /useEquipmentJobHistory\(detailsOnly \? undefined : editingEquipment\?\.gr_equipmentid\)/)
     assert.match(drawer, /const tabs:[\s\S]*props\.detailsOnly \? \[/)
     assert.match(drawer, /resultLimit=\{8\}/)
-    assert.match(drawer, /onSearchCustomers\(customerSearch, controller\.signal\)/)
+    assert.match(drawer, /<JobCustomerField[\s\S]*onSearchCustomers=\{onSearchCustomers\}/)
     assert.match(drawer, /onLoadCustomerSites\(customerId, controller\.signal\)/)
     assert.match(manager, /loadGlobalRelationships \? getToken\(\)\.then\(fetchCustomers\) : Promise\.resolve\(\[\]\)/)
     assert.match(manager, /loadGlobalServicePlans \? getToken\(\)\.then\(fetchEquipmentServicePlans\) : Promise\.resolve\(\[\]\)/)

@@ -31,6 +31,9 @@ Branch: `v2-deployment`
   status, maintenance plans or Job history. The permitted drawer is limited to Equipment details
   and Road compliance,
   avoiding maintenance-table reads that Office Admin is not authorised to perform.
+- Equipment workspace Customer selection and new Customer/Site creation reuse the canonical Job
+  drawer Customer field, including bounded search and verified-address creation. The older duplicate
+  new-Customer and first-Site inputs are not rendered.
 - `dataverse/access/RestrictedAccessPlugin.cs` is a local, unregistered draft. Its offline
   policy tests do not constitute live enforcement. Registration plus exact-version Manage job
   atomic linked Void and assigned-technician initial dispatch now have local transactional plugin
