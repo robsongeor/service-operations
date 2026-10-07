@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Verify', 'ProvisionRole', 'AssignBruce', 'AssignServiceCoordinator')]
+    [ValidateSet('Verify', 'ProvisionRole', 'AssignBruce', 'AssignServiceCoordinator', 'RemoveServiceCoordinator')]
     [string]$Mode = 'Verify',
     [string]$TenantId = 'a348f38c-33d0-4ce9-a0df-6a66cc0562a1',
     [string]$ApplicationClientId = '9e9edbea-dfee-4995-aa1f-e9d10d16e093',
@@ -13,6 +13,7 @@ Set-StrictMode -Version Latest
 $coordinatorValue = 'ServiceOperations.ServiceCoordinator'
 $coordinatorRoleId = [Guid]'367042d5-563a-4828-9d9a-6d8c75b5afa5'
 $fullAccessValue = 'ServiceOperations.FullAccess'
+$officeAdminValue = 'ServiceOperations.JobCardAdmin'
 
 function Require([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw $Message }
@@ -79,8 +80,10 @@ $user = Get-User
 $applicationRoles = @($application.appRoles)
 $coordinatorRoles = @(Find-Role $applicationRoles $coordinatorValue)
 $fullRoles = @(Find-Role $applicationRoles $fullAccessValue)
+$officeRoles = @(Find-Role $applicationRoles $officeAdminValue)
 Require ($coordinatorRoles.Count -le 1) 'Duplicate Service Coordinator application role definitions found.'
 Require ($fullRoles.Count -eq 1) 'Expected exactly one existing FullAccess application role.'
+Require ($officeRoles.Count -eq 1) 'Expected exactly one existing Office Admin application role.'
 
 if ($Mode -eq 'ProvisionRole' -and $coordinatorRoles.Count -eq 0) {
     Require (@($applicationRoles | Where-Object { [string]$_.id -eq [string]$coordinatorRoleId }).Count -eq 0) 'The reviewed Service Coordinator role ID is already used by another role.'
@@ -142,4 +145,22 @@ if ($Mode -eq 'AssignBruce' -or $Mode -eq 'AssignServiceCoordinator') {
     }
     Write-AssignmentSummary $after $applicationRoles
     Write-Output "Verified additive pilot assignment: Service Coordinator added for $PilotUpn and all existing assignments were preserved."
+} elseif ($Mode -eq 'RemoveServiceCoordinator') {
+    Require ($coordinatorRoles.Count -eq 1) 'The Service Coordinator application role is not provisioned.'
+    $coordinatorAssignments = @($assignments | Where-Object { [string]$_.appRoleId -eq [string]$coordinatorRoles[0].id })
+    $officeAssignments = @($assignments | Where-Object { [string]$_.appRoleId -eq [string]$officeRoles[0].id })
+    Require ($coordinatorAssignments.Count -eq 1) "Refusing change because $PilotUpn does not have exactly one Service Coordinator assignment."
+    Require ($officeAssignments.Count -eq 1) "Refusing change because $PilotUpn does not have exactly one Office Admin assignment."
+
+    Invoke-MgGraphRequest -Method DELETE -Uri "https://graph.microsoft.com/v1.0/users/$($user.id)/appRoleAssignments/$($coordinatorAssignments[0].id)" | Out-Null
+
+    $after = @(Get-Assignments ([string]$user.id))
+    Require (@($after | Where-Object { [string]$_.appRoleId -eq [string]$coordinatorRoles[0].id }).Count -eq 0) 'Service Coordinator assignment is still present after removal.'
+    Require (@($after | Where-Object { [string]$_.appRoleId -eq [string]$officeRoles[0].id }).Count -eq 1) 'Office Admin assignment was not preserved.'
+    Require ($after.Count -eq ($assignments.Count - 1)) 'Unexpected application-role count after removal; stop and inspect the account.'
+    foreach ($assignment in @($assignments | Where-Object { [string]$_.id -ne [string]$coordinatorAssignments[0].id })) {
+        Require (@($after | Where-Object { [string]$_.id -eq [string]$assignment.id }).Count -eq 1) 'An unrelated application-role assignment was not preserved.'
+    }
+    Write-AssignmentSummary $after $applicationRoles
+    Write-Output "Verified: Service Coordinator removed for $PilotUpn; Office Admin and unrelated application assignments remain."
 }

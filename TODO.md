@@ -102,8 +102,9 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
   sets, all 29 step identities and every pre-image column. The new Office Admin and Job Book Admin
   roles use the Basic User baseline plus only the reviewed custom grants; Delete/Assign/Share remain
   excluded. Pubudu is admitted as the third Office Admin rollout user and live Office Admin pilot and
-  now holds `Service Operations - Office Admin` additively. Smoke-test that path before removing the
-  broader `Service Operations` role; then run final denial tests with no Full/Coordinator overlap.
+  now holds `Service Operations - Office Admin`. The temporary broader `Service Operations` and
+  Entra Service Coordinator assignments were removed with exact verification on 7 October 2026;
+  run final denial tests with no Full/Coordinator overlap.
   Preserve unrelated platform roles. The separately controlled live Job Card reviewer allowlist was
   reconciled on 6 October 2026 for George, Bruce, Andy, Jess, Nargiza and Pubudu. Recreate and verify
   this setting when the permanent V2/shared backend is provisioned.

@@ -71,16 +71,17 @@ after the replacement succeeds.
 Pubudu is the third Office Admin rollout user and the live Office Admin pilot. The replacement Office
 Admin role was verified and the broader `Service Operations` role was removed with exact before/after
 verification on 7 October 2026. The broader role was then temporarily restored, additively, for
-permission-gap diagnosis. The Entra `ServiceOperations.ServiceCoordinator` role was also temporarily
-assigned so Pubudu can test the restricted Service Operations Manager interface while retaining the
-Office Admin assignment. Remove both temporary additions and repeat the denial tests before production sign-off. The
+permission-gap diagnosis, and the Entra `ServiceOperations.ServiceCoordinator` role was temporarily
+assigned for the restricted Service Operations Manager test. Both temporary additions were removed
+with exact before/after verification on 7 October 2026; the Office Admin assignments and unrelated
+roles were preserved. Repeat the Office Admin denial tests before production sign-off. The
 cutover requires a fresh assignment export, one workflow role at a time, preservation of
 unrelated platform roles and explicit approval. Pubudu performs the account sign-in and MFA; no
 credential is collected.
 
 The approved live read-only admission recheck on 6 October 2026 found George, Bruce and Pubudu present.
 George currently holds Basic User, Site Check Checklist Administrator and System Administrator;
-Bruce and Pubudu hold Service Operations. Andy, Jess, Nargiza, Martin, Lance, Ranjani, Ashneel and Kaizer are
+Bruce holds Service Operations. Pubudu holds Service Operations - Office Admin. Andy, Jess, Nargiza, Martin, Lance, Ranjani, Ashneel and Kaizer are
 still absent from Dataverse. No intended account had a returned team-derived role in this audit.
 
 The secure plugin configuration requires the exact business-unit Dataverse role IDs for Full,

@@ -76,7 +76,10 @@ Branch: `v2-deployment`
 - On 7 October 2026 Pubudu's legacy broad `Service Operations` Dataverse role was removed after an
   exact pre-check confirmed the replacement `Service Operations - Office Admin` assignment. A
   post-change read verified that Office Admin and the three unrelated Dataverse platform roles were
-  preserved and that no other direct role changed.
+  preserved and that no other direct role changed. After a temporary diagnostic re-assignment, the
+  broad role was removed again with the same checks. The temporary Entra
+  `ServiceOperations.ServiceCoordinator` assignment was also removed; `JobCardAdmin` and the
+  unrelated pre-existing `JobBookOnly` assignment remain.
   Pilot waves and source spreadsheets remain to be confirmed. Production integration
   and live access verification are prerequisites; no rollout or permission change has been performed.
 - Visible navigation and screen labels now say Job Book; historical Legacy record stages stay intact.
