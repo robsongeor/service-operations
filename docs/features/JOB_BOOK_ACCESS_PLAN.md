@@ -151,7 +151,7 @@ server guard is not enabled during the V1/V2 shared-Dataverse overlap.
 ## Agreed Service Coordinator navigation
 
 Service Coordinators can use Customers, Equipment, WOF / REGO, Service Jobs,
-Job Import, Job Card Reviews, Job Book, Scheduling, Quotes and Pricing.
+Job Card Reviews, Job Book, Scheduling, Quotes and Pricing. Job Import is restricted to Full Access.
 
 They cannot open Overview, Staff, Maintenance Booking, Greentree Review, Equipment Photos, Equipment Map, Job Map, Site Checks,
 Chargeable Invoices or Checklist Admin. These items are absent from the menu and their direct URLs
