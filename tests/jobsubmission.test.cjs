@@ -418,6 +418,25 @@ test('creating a replacement link invalidates the previous active token', async 
     assert.equal(newLookup.status, 200)
 })
 
+test('withdrawing an active technician link requires a reason, revokes access and keeps its audit history', async () => {
+    const created = await generate()
+    const store = require('../api/services/jobCardStorage').getJobCardStore()
+    const record = await store.getByTokenHash(service.test.hashToken(created.body.token))
+    const request = (body) => service.handleReviewRequest({ method: 'POST', headers: { authorization: 'Bearer office' }, query: { reviewId: record.reviewId }, body })
+    assert.equal((await request({ action: 'withdraw', etag: record.etag, reason: ' ' })).status, 400)
+    const response = await request({ action: 'withdraw', etag: record.etag, reason: 'Technician is no longer available' })
+    assert.equal(response.status, 200)
+    const withdrawn = JSON.parse(response.body)
+    assert.equal(withdrawn.status, 'withdrawn')
+    assert.equal(withdrawn.withdrawnReason, 'Technician is no longer available')
+    assert.equal(withdrawn.withdrawnByDisplayName, 'Local Office User')
+    assert.equal((await invoke({ method: 'GET', headers: {}, query: { token: created.body.token } })).status, 410)
+    assert.equal((await request({ action: 'withdraw', etag: withdrawn.etag, reason: 'Again' })).status, 409)
+    const history = JSON.parse((await service.handleReviewRequest({ method: 'GET', headers: { authorization: 'Bearer office' }, query: { jobId: record.sourceJobId } })).body)
+    assert.equal(history.items[0].status, 'withdrawn')
+    assert.equal(history.items[0].withdrawnReason, 'Technician is no longer available')
+})
+
 test('authenticated per-Job history includes Azure lifecycle states without exposing tokens or evidence', async () => {
     const jobId = '00000000-0000-4000-8000-000000000001'
     const headers = { authorization: 'Bearer office' }

@@ -3,10 +3,16 @@
 .job-card-azure-history h4 { margin: 0; color: #263d33; }
 .job-card-azure-history p { font-size: .8rem; line-height: 1.5; color: #59675f; }
 .job-card-azure-history ul { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 10px; }
-.job-card-azure-history li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px; border: 1px solid #dfe5e1; border-radius: 8px; background: #fff; }
+.job-card-azure-history li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding: 12px; border: 1px solid #dfe5e1; border-radius: 8px; background: #fff; }
 .job-card-azure-history li > div { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
 .job-card-azure-history li span, .job-card-azure-history li small { font-size: .78rem; color: #59675f; }
 .job-card-azure-history a, .job-card-azure-history button { flex-shrink: 0; padding: 8px 12px; border: 1px solid #cfd5d1; border-radius: 7px; background: #fff; color: #155f43; font-size: .78rem; font-weight: 700; text-decoration: none; cursor: pointer; }
 .job-card-azure-history button:disabled { opacity: .55; cursor: wait; }
 .job-card-azure-history .job-card-error { color: #9c3030; }
+.job-card-azure-history .job-card-history-actions { display: flex; align-items: center; gap: 8px; }
+.job-card-azure-history .job-card-withdraw { flex: 1 0 100%; display: grid; gap: 8px; padding-top: 10px; border-top: 1px solid #e5e9e6; }
+.job-card-azure-history .job-card-withdraw label { display: grid; gap: 5px; font-size: .78rem; font-weight: 700; color: #344a40; }
+.job-card-azure-history .job-card-withdraw textarea { min-height: 68px; resize: vertical; padding: 9px; border: 1px solid #cfd5d1; border-radius: 7px; font: inherit; }
+.job-card-azure-history .job-card-withdraw p { margin: 0; color: #9c3030; }
+.job-card-azure-history .job-card-withdraw > div { display: flex; justify-content: flex-end; gap: 8px; }
 @media (max-width: 560px) { .job-card-azure-history li { align-items: flex-start; flex-direction: column; } }

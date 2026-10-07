@@ -37,6 +37,19 @@ function wasSubmitted(dispatch, record) {
     return Date.parse(record.submittedOn) >= Date.parse(dispatch.gr_requestedon)
 }
 
+function cycleForDispatch(dispatch, records) {
+    const completedOn = Date.parse(dispatch.gr_completedon)
+    return records.filter((record) => normalize(record.sourceJobId) === normalize(dispatch._gr_job_value)
+        && normalize(record.assignmentId) === normalize(dispatch._gr_jobassignment_value)
+        && (!record.technicianEmail || normalize(record.technicianEmail) === normalize(dispatch.gr_recipientemail))
+        && Number.isFinite(Date.parse(record.createdOn)) && Date.parse(record.createdOn) <= completedOn)
+        .sort((left, right) => String(right.createdOn).localeCompare(String(left.createdOn)))[0]
+}
+
+function cycleIsOpen(record) {
+    return !record || (record.status === 'active' && Date.parse(record.expiresOn) > Date.now())
+}
+
 function hasLegacySubmission(dispatch) {
     // Read only recorded timestamps, never old status labels, and never change the archive.
     if (dispatch._gr_jobassignment_value) {
@@ -69,11 +82,14 @@ async function listOpenJobs({ origin, authorization, store, offset, limit }) {
     const evidence = []
     // Batched relationship checks, never one request per row and never an unbounded evidence load.
     for (let start = 0; start < jobIds.length; start += 20) {
-        const records = await store.listSubmittedByJobIds(jobIds.slice(start, start + 20), 501)
-        if (records.length > 500) throw new Error('Submission history exceeds the safe Open jobs scan. No incomplete result was returned.')
+        const records = await store.listByJobIds(jobIds.slice(start, start + 20), 501)
+        if (records.length > 500) throw new Error('Job Card history exceeds the safe Open jobs scan. No incomplete result was returned.')
         evidence.push(...records)
     }
-    const items = candidates.filter((row) => !evidence.some((record) => wasSubmitted(row, record))).map((row) => {
+    const items = candidates.filter((row) => {
+        const cycle = cycleForDispatch(row, evidence)
+        return cycleIsOpen(cycle) && !evidence.some((record) => wasSubmitted(row, record))
+    }).map((row) => {
         const job = row.gr_Job
         const equipment = job.gr_Equipment
         return {
@@ -91,4 +107,4 @@ async function listOpenJobs({ origin, authorization, store, offset, limit }) {
     return { items, view: 'open', hasMore, nextOffset: hasMore ? offset + limit : undefined, truncated, scanLimitReached: truncated && !hasMore }
 }
 
-module.exports = { listOpenJobs, wasSubmitted }
+module.exports = { listOpenJobs, wasSubmitted, cycleForDispatch, cycleIsOpen }

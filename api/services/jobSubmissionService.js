@@ -370,6 +370,18 @@ function reviewDetails(record) {
     }
 }
 
+function historySummary(record) {
+    return {
+        reviewId: record.reviewId, assignmentId: record.assignmentId || undefined,
+        technicianName: record.technicianName, createdOn: record.createdOn, expiresOn: record.expiresOn,
+        submittedOn: record.submittedOn || undefined, reviewedOn: record.reviewedOn || undefined,
+        status: record.status === 'active' && Date.parse(record.expiresOn) <= Date.now() ? 'expired' : record.status,
+        photoCount: record.photoCount || 0, etag: record.etag,
+        withdrawnOn: record.withdrawnOn || undefined, withdrawnReason: record.withdrawnReason || undefined,
+        withdrawnByDisplayName: record.withdrawnByDisplayName || undefined,
+    }
+}
+
 async function authorizeReviewer(identity) {
     if (isLocalDevelopment()) return identity
     const allowed = (process.env.JOB_CARD_REVIEWER_EMAILS || '').split(',').map((email) => email.trim().toLowerCase()).filter(Boolean)
@@ -396,13 +408,7 @@ async function handleReviewRequest(request) {
     if (request.query?.jobId !== undefined) {
         if (request.method !== 'GET' || reviewId || photoId || !GUID_PATTERN.test(jobId)) return jsonResponse(400, { error: 'A valid Job history request is required.' })
         const records = await getJobCardStore().listByJobId(jobId, 501)
-        const items = records.slice(0, 500).map((record) => ({
-            reviewId: record.reviewId, assignmentId: record.assignmentId || undefined,
-            technicianName: record.technicianName, createdOn: record.createdOn, expiresOn: record.expiresOn,
-            submittedOn: record.submittedOn || undefined, reviewedOn: record.reviewedOn || undefined,
-            status: record.status === 'active' && Date.parse(record.expiresOn) <= Date.now() ? 'expired' : record.status,
-            photoCount: record.photoCount || 0,
-        })).sort((left, right) => right.createdOn.localeCompare(left.createdOn))
+        const items = records.slice(0, 500).map(historySummary).sort((left, right) => right.createdOn.localeCompare(left.createdOn))
         return jsonResponse(200, { items, truncated: records.length > 500 })
     }
     if (!reviewId) {
@@ -431,7 +437,27 @@ async function handleReviewRequest(request) {
     }
     if (!GUID_PATTERN.test(reviewId)) return jsonResponse(404, { error: 'The review item was not found.' })
     const record = await getJobCardStore().getByReviewId(reviewId)
-    if (!record || !['pendingReview', 'reviewed'].includes(record.status)) return jsonResponse(404, { error: 'The review item was not found.' })
+    const withdraw = request.method === 'POST' && request.body?.action === 'withdraw'
+    if (!record || (!withdraw && !['pendingReview', 'reviewed'].includes(record.status))) return jsonResponse(404, { error: 'The review item was not found.' })
+    if (withdraw) {
+        if (photoId) return jsonResponse(400, { error: 'A Job Card link withdrawal cannot target a photo.' })
+        const reason = typeof request.body?.reason === 'string' ? request.body.reason.trim() : ''
+        if (!reason || reason.length > 500) return jsonResponse(400, { code: 'invalid', error: 'Enter a withdrawal reason of no more than 500 characters.' })
+        if (typeof request.body?.etag !== 'string' || request.body.etag !== record.etag) return jsonResponse(409, { code: 'conflict', error: 'This Job Card changed. Refresh it before retrying.' })
+        const expiresOn = Date.parse(record.expiresOn)
+        if (record.status !== 'active' || !Number.isFinite(expiresOn) || expiresOn <= Date.now()) return jsonResponse(409, { code: 'conflict', error: 'Only a current active Job Card link can be withdrawn.' })
+        try {
+            const updated = await getJobCardStore().replace({
+                ...record, status: 'withdrawn', withdrawnOn: new Date().toISOString(), withdrawnReason: reason,
+                withdrawnByUserId: reviewer.userId, withdrawnByDisplayName: reviewer.displayName,
+                withdrawnByEmail: reviewer.email || '',
+            }, record.etag)
+            return jsonResponse(200, historySummary(updated))
+        } catch (error) {
+            if (error?.statusCode === 412) return jsonResponse(409, { code: 'conflict', error: 'This Job Card changed. Refresh it before retrying.' })
+            throw error
+        }
+    }
     if (photoId) {
         if (request.method !== 'GET') return jsonResponse(405, { error: 'Method not allowed.' }, { Allow: 'GET' })
         const photo = safeJson(record.photosJson, []).find((item) => item.id === photoId)

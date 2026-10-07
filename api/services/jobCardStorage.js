@@ -111,6 +111,11 @@ class MemoryJobCardStore {
             && ['pendingReview', 'reviewed'].includes(item.status)).slice(0, limit).map(clone)
     }
 
+    async listByJobIds(jobIds, limit = 501) {
+        const ids = new Set(jobIds.map((id) => id.toLowerCase()))
+        return [...this.entities.values()].filter((item) => ids.has(String(item.sourceJobId).toLowerCase())).slice(0, limit).map(clone)
+    }
+
     async listActive(limit = 100) {
         return this.listByLifecycleStatus('pendingReview', limit)
     }
@@ -228,6 +233,12 @@ class AzureJobCardStore {
         if (!jobIds.length) return []
         const jobs = jobIds.map((id) => `sourceJobId eq '${String(id).replaceAll("'", "''")}'`).join(' or ')
         return this.collect(`PartitionKey eq '${PARTITION_KEY}' and (status eq 'pendingReview' or status eq 'reviewed') and (${jobs})`, limit)
+    }
+
+    async listByJobIds(jobIds, limit = 501) {
+        if (!jobIds.length) return []
+        const jobs = jobIds.map((id) => `sourceJobId eq '${String(id).replaceAll("'", "''")}'`).join(' or ')
+        return this.collect(`PartitionKey eq '${PARTITION_KEY}' and (${jobs})`, limit)
     }
 
     async listActive(limit = 100) {

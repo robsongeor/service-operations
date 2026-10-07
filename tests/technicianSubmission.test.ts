@@ -72,7 +72,7 @@ test('ordinary Jobs use Azure regardless of legacy card status while Site Checks
 test('assignment removal fails closed when history is unknown, incomplete or references the assignment', () => {
     assert.equal(canRemoveAzureAssignment('assignment-1', undefined, []), false)
     assert.equal(canRemoveAzureAssignment('assignment-1', { items: [], truncated: true }, []), false)
-    const item: JobCardRequestSummary = { reviewId: 'review-1', assignmentId: 'assignment-1', technicianName: 'Test', createdOn: '2026-10-02T00:00:00Z', expiresOn: '2026-10-03T00:00:00Z', status: 'reviewed', photoCount: 0 }
+    const item: JobCardRequestSummary = { reviewId: 'review-1', assignmentId: 'assignment-1', technicianName: 'Test', createdOn: '2026-10-02T00:00:00Z', expiresOn: '2026-10-03T00:00:00Z', status: 'reviewed', photoCount: 0, etag: 'version-1' }
     assert.equal(canRemoveAzureAssignment('assignment-1', { items: [item], truncated: false }, []), false)
     assert.equal(canRemoveAzureAssignment('assignment-1', { items: [], truncated: false }, [{ _gr_jobassignment_value: 'assignment-1' }]), false)
     assert.equal(canRemoveAzureAssignment('assignment-2', { items: [item], truncated: false }, []), true)

@@ -158,17 +158,31 @@ test('dispatch continuation is same-origin only, bounded and follows valid small
     assert.equal(calls, 1)
 })
 
-test('Open history checks batch Job IDs and fail closed on incomplete evidence', async () => {
+test('Open lifecycle checks batch Job IDs and fail closed on incomplete evidence', async () => {
     global.fetch = async () => Response.json({ value: [dispatch(1), dispatch(2)] })
     const batches = []
-    const store = { listSubmittedByJobIds: async (ids, limit) => { batches.push(ids); assert.equal(limit, 501); return [] } }
+    const store = { listByJobIds: async (ids, limit) => { batches.push(ids); assert.equal(limit, 501); return [] } }
     await listOpenJobs({ origin, authorization: 'Bearer sample', store, offset: 0, limit: 100 })
     assert.deepEqual(batches, [[id(101), id(102)]])
-    store.listSubmittedByJobIds = async () => Array.from({ length: 501 }, () => record(1))
+    store.listByJobIds = async () => Array.from({ length: 501 }, () => record(1))
     await assert.rejects(listOpenJobs({ origin, authorization: 'Bearer sample', store, offset: 0, limit: 100 }), /safe Open jobs scan/)
     const azure = Object.create(AzureJobCardStore.prototype)
-    azure.collect = async (filter, limit) => { assert.match(filter, /status eq 'pendingReview' or status eq 'reviewed'/); assert.match(filter, new RegExp(id(101))); assert.equal(limit, 501); return [] }
-    await azure.listSubmittedByJobIds([id(101), id(102)])
+    azure.collect = async (filter, limit) => { assert.doesNotMatch(filter, /status eq/); assert.match(filter, new RegExp(id(101))); assert.equal(limit, 501); return [] }
+    await azure.listByJobIds([id(101), id(102)])
+})
+
+test('withdrawn, replaced and expired technician cycles leave Open while a current cycle remains', async () => {
+    const rows = [dispatch(1), dispatch(2), dispatch(3), dispatch(4)]
+    global.fetch = async () => Response.json({ value: rows })
+    const store = getJobCardStore()
+    for (const [index, status] of ['withdrawn', 'superseded', 'active', 'active'].entries()) {
+        await store.create(record(30 + index, {
+            sourceJobId: id(101 + index), status, submittedOn: undefined,
+            createdOn: '2026-10-02T00:59:00Z', expiresOn: index === 2 ? '2000-01-01T00:00:00Z' : '2099-01-01T00:00:00Z',
+        }))
+    }
+    const result = JSON.parse((await get('open')).body)
+    assert.deepEqual(result.items.map((item) => item.dispatchId), [id(4)])
 })
 
 test('Open requires reviewer authentication before reading dispatches', async () => {

@@ -1,4 +1,4 @@
-import type { JobCardHistory, JobCardOfficeAction, JobCardReview, JobCardReviewQueue, JobCardReviewApiView } from './jobCardReview.types'
+import type { JobCardHistory, JobCardOfficeAction, JobCardRequestSummary, JobCardReview, JobCardReviewQueue, JobCardReviewApiView } from './jobCardReview.types'
 
 export class JobCardReviewApiError extends Error {
     readonly status: number
@@ -40,6 +40,14 @@ export async function fetchJobCardReviews(accessToken: string, view: JobCardRevi
 export async function fetchJobCardHistory(accessToken: string, jobId: string) {
     const response = await fetch(`/api/jobcardreviews?jobId=${encodeURIComponent(jobId)}`, { cache: 'no-store', headers: headers(accessToken) })
     return readJson<JobCardHistory>(response)
+}
+
+export async function withdrawJobCard(accessToken: string, reviewId: string, etag: string, reason: string) {
+    const response = await fetch(`/api/jobcardreviews/${encodeURIComponent(reviewId)}`, {
+        method: 'POST', headers: { ...headers(accessToken), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'withdraw', etag, reason }),
+    })
+    return readJson<JobCardRequestSummary>(response)
 }
 
 export async function fetchJobCardReview(accessToken: string, reviewId: string) {

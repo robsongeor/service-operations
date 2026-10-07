@@ -8,8 +8,12 @@ export type JobCardRequestSummary = {
     expiresOn: string
     submittedOn?: string
     reviewedOn?: string
-    status: 'active' | 'expired' | 'superseded' | 'pendingReview' | 'reviewed'
+    status: 'active' | 'expired' | 'superseded' | 'withdrawn' | 'pendingReview' | 'reviewed'
     photoCount: number
+    etag: string
+    withdrawnOn?: string
+    withdrawnReason?: string
+    withdrawnByDisplayName?: string
 }
 
 export type JobCardHistory = { items: JobCardRequestSummary[]; truncated: boolean }
