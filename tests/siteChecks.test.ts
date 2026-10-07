@@ -1963,9 +1963,8 @@ test('Site Check details drawer uses accessible shared tabs, progress, paginatio
     assert.doesNotMatch(drawer, /label: 'Current Check'/)
     assert.doesNotMatch(drawer, /label: 'Jobs & Equipment'/)
     assert.doesNotMatch(drawer, /loginRedirect|loginPopup|acquireTokenPopup/)
-    assert.match(dashboard, />\s*Site Check\s*<\/button>/)
-    assert.doesNotMatch(dashboard, /View Current Site Check|Site Check History/)
-    assert.match(dashboard, /setSiteCheckDetails\(\{ site: runSiteCheckSite, check: created/)
+    assert.doesNotMatch(dashboard, />\s*Site Check\s*<\/button>/)
+    assert.doesNotMatch(dashboard, /View Current Site Check|Site Check History|<SiteCheckDetailsDrawer/)
 })
 
 test('hardening contract preserves disabled history and contains no interactive authentication path', async () => {
@@ -2024,7 +2023,7 @@ test('hardening contract preserves disabled history and contains no interactive 
     assert.match(sources, /SITE_CHECK_CREATION_MAX_PAYLOAD_BYTES/)
 })
 
-test('shared drawer and Site Check navigation enforce keyboard containment and focus return', () => {
+test('shared drawer and remaining Customer Site settings navigation enforce keyboard containment and focus return', () => {
     const shell = readFileSync(
         new URL('../src/alpha/shared/drawer/EditDrawerShell.tsx', import.meta.url),
         'utf8',
@@ -2039,6 +2038,6 @@ test('shared drawer and Site Check navigation enforce keyboard containment and f
     assert.match(shell, /event\.shiftKey/)
     assert.match(shell, /aria-modal="true"/)
     assert.match(shell, /drawerRef\.current\?\.focus\(\)/)
-    assert.match(dashboard, /siteCheckDetailsTriggerRef/)
+    assert.match(dashboard, /siteSettingsTriggerRefs/)
     assert.match(dashboard, /trigger\?\.focus\(\)/)
 })

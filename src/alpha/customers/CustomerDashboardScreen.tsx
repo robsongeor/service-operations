@@ -41,12 +41,9 @@ import PageSettingsButton from '../shared/settings/PageSettingsButton'
 import { formatWofDateOnly, getWofDueStatus } from '../wof/utils/wofRules'
 import { useSiteChecks } from '../site-checks/hooks/useSiteChecks'
 import { useCustomerDashboardData } from './useCustomerDashboardData'
-import { buildSiteCheckDashboardProjection, type ReportableSiteCheckState } from '../site-checks/domain/siteCheckDashboard'
+import { buildSiteCheckDashboardProjection } from '../site-checks/domain/siteCheckDashboard'
 import { SITE_CHECK_FREQUENCY_OPTIONS } from '../site-checks/types/siteCheck.types'
 import { currentNewZealandDateOnly } from '../shared/dates/dateOnly'
-import RunSiteCheckDrawer from '../site-checks/components/RunSiteCheckDrawer'
-import SiteCheckDetailsDrawer from '../site-checks/components/SiteCheckDetailsDrawer'
-import type { SiteCheck } from '../site-checks/types/siteCheck.types'
 import {
     getCustomerDashboardViewStateKey,
     restoreCustomerDashboardSelection,
@@ -72,7 +69,6 @@ type SiteCustomerReference = {
 }
 type SiteEquipmentSortKey = 'fleet' | 'wofExpiry' | 'dataStatus'
 type SiteEquipmentSort = { key: SiteEquipmentSortKey; direction: 'asc' | 'desc' }
-type SiteCheckDashboardFilter = ReportableSiteCheckState | 'all'
 const DEFAULT_SITE_EQUIPMENT_SORT: SiteEquipmentSort = { key: 'fleet', direction: 'asc' }
 
 function display(value?: string | number | null) {
@@ -176,7 +172,6 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
         cancelJobCompletion,
         isLoading: isJobsLoading,
         loadError: jobsLoadError,
-        fetchJobs,
         fetchJobForDrawer,
         fetchJobCardDetails,
         fetchJobPhotoBody,
@@ -227,15 +222,6 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
     const [siteSuccess, setSiteSuccess] = useState('')
     const [localCustomers, setLocalCustomers] = useState<Customer[]>([])
     const [customerDrafts, setCustomerDrafts] = useState<Record<string, CustomerDraft>>({})
-    const [siteCheckFilter, setSiteCheckFilter] = useState<SiteCheckDashboardFilter>('all')
-    const [runSiteCheckSite, setRunSiteCheckSite] = useState<Site | null>(null)
-    const [siteCheckDetails, setSiteCheckDetails] = useState<{
-        site: Site
-        check?: SiteCheck | null
-        tab: 'summary' | 'history'
-    } | null>(null)
-    const siteCheckNestedTriggerRef = useRef<HTMLButtonElement | null>(null)
-    const siteCheckDetailsTriggerRef = useRef<HTMLButtonElement | null>(null)
     const siteSettingsTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({})
     const sitesHeadingRef = useRef<HTMLHeadingElement>(null)
     const equipmentJobHistory = useEquipmentJobHistory(editingEquipment?.gr_equipmentid)
@@ -383,28 +369,7 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
         .filter((schedule) => schedule.gr_enabled)
         .map((schedule) => schedule._gr_site_value)
     const siteCheckBySite = new Map(siteCheckDashboard.items.map((item) => [item.siteId, item]))
-    const visibleCustomerSites = siteCheckFilter === 'all'
-        ? customerSites
-        : customerSites.filter((site) =>
-            siteCheckBySite.get(site.gr_siteid.toLowerCase())?.state === siteCheckFilter)
-    const applySiteCheckFilter = (filter: ReportableSiteCheckState) => {
-        const nextFilter = siteCheckFilter === filter ? 'all' : filter
-        setActiveTab('sites')
-        setSiteCheckFilter(nextFilter)
-        if (nextFilter !== 'all') {
-            const matchingSiteIds = customerSites
-                .filter((site) => siteCheckBySite.get(site.gr_siteid.toLowerCase())?.state === nextFilter)
-                .map((site) => site.gr_siteid)
-            setExpandedSitesByCustomer((current) => ({
-                ...current,
-                [selectedCustomerId]: {
-                    ...current[selectedCustomerId],
-                    ...Object.fromEntries(matchingSiteIds.map((siteId) => [siteId, true])),
-                },
-            }))
-        }
-        window.setTimeout(() => sitesHeadingRef.current?.focus(), 0)
-    }
+    const visibleCustomerSites = customerSites
     const selectedCustomerDraft = customerDrafts[selectedCustomerId]
     const customerContacts: CustomerContact[] = [
         ...(selectedCustomerDraft?.accountsContact ? [{
@@ -502,25 +467,17 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
         ...(!readOnly ? [{
             label: 'Checks Up to date',
             value: siteCheckDashboard.summary['up-to-date'],
-            active: siteCheckFilter === 'up-to-date',
-            onActivate: () => applySiteCheckFilter('up-to-date'),
         }, {
             label: 'Checks Due',
             value: siteCheckDashboard.summary.due,
             tone: 'warning' as const,
-            active: siteCheckFilter === 'due',
-            onActivate: () => applySiteCheckFilter('due'),
         }, {
             label: 'Checks Overdue',
             value: siteCheckDashboard.summary.overdue,
             tone: 'danger' as const,
-            active: siteCheckFilter === 'overdue',
-            onActivate: () => applySiteCheckFilter('overdue'),
         }, {
             label: 'Checks In progress',
             value: siteCheckDashboard.summary['in-progress'],
-            active: siteCheckFilter === 'in-progress',
-            onActivate: () => applySiteCheckFilter('in-progress'),
         },
         { label: 'Services Due Soon', value: maintenanceCounts.dueSoon, tone: 'warning' as const },
         { label: 'Overdue Services', value: maintenanceCounts.overdue, tone: 'danger' as const }] : []),
@@ -577,11 +534,6 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
         link.click()
         URL.revokeObjectURL(url)
         setSiteSuccess(`${siteEquipment.length} Equipment record${siteEquipment.length === 1 ? '' : 's'} exported for ${site.gr_name}.`)
-    }
-
-    const initialJobValuesForCustomer = (customer: Customer): JobCreateInitialValues => {
-        const onlySite = customerSites.length === 1 ? customerSites[0] : undefined
-        return { customerId: customer.gr_customerid, siteId: onlySite?.gr_siteid ?? '' }
     }
 
     const initialJobValuesForEquipment = (record: Equipment): JobCreateInitialValues => ({
@@ -760,12 +712,6 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
                 </div>
                 {canCreateRestricted && <button type="button" onClick={() => setAddingRestrictedSite(true)}>Add Site</button>}
                 {!readOnly && <div className="customer-dashboard-actions">
-                    <button
-                        type="button"
-                        disabled={selectedCustomer.gr_customerid.startsWith('prototype-customer-')}
-                        title={selectedCustomer.gr_customerid.startsWith('prototype-customer-') ? 'Save this Customer to Dataverse before creating Jobs.' : undefined}
-                        onClick={() => void openJobCreate(initialJobValuesForCustomer(selectedCustomer))}
-                    >Create Job</button>
                     <button type="button" onClick={() => { setCustomerDrawerInitialTab('sites'); setCustomerDrawerMode('edit') }}>Add Site</button>
                     <button type="button" onClick={() => { setCustomerDrawerInitialTab('info'); setCustomerDrawerMode('edit') }}>Edit Customer</button>
                 </div>}
@@ -807,16 +753,13 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
                         ? 'Loading Site Check status…'
                         : siteChecks.loadError
                             ? `Site Check status is unavailable. ${siteChecks.loadError}`
-                            : siteCheckFilter !== 'all'
-                                ? <span>Showing {visibleCustomerSites.length} {siteCheckFilter.replaceAll('-', ' ')} Site{visibleCustomerSites.length === 1 ? '' : 's'}. <button type="button" onClick={() => setSiteCheckFilter('all')}>Clear filter</button></span>
-                                : siteCheckDashboard.invalidCount > 0
+                            : siteCheckDashboard.invalidCount > 0
                                     ? `${siteCheckDashboard.invalidCount} enabled Site Check Schedule${siteCheckDashboard.invalidCount === 1 ? ' is' : 's are'} incomplete and excluded from the summary.`
                                     : ''}
                 </div>}
 
                 {customerSites.length === 0 ? <div className="customer-dashboard-empty compact">No sites have been recorded for this customer yet.</div>
-                    : visibleCustomerSites.length === 0 ? <div className="customer-dashboard-empty compact">No Sites match this Site Check filter.</div>
-                        : visibleCustomerSites.map((site) => {
+                    : visibleCustomerSites.map((site) => {
                     const rows = equipmentForSite(site)
                     const equipmentSort = equipmentSortBySite[site.gr_siteid] ?? DEFAULT_SITE_EQUIPMENT_SORT
                     const operatingHours = customerDrafts[selectedCustomer.gr_customerid]?.sites.find((item) => item.id === site.gr_siteid)?.operatingHours
@@ -872,19 +815,6 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
                                 >
                                     Export CSV
                                 </button>
-                                {!readOnly && <button
-                                    type="button"
-                                    onClick={(event) => {
-                                        siteCheckDetailsTriggerRef.current = event.currentTarget
-                                        setSiteCheckDetails({
-                                            site,
-                                            check: siteCheck?.activeSiteCheck,
-                                            tab: 'summary',
-                                        })
-                                    }}
-                                >
-                                    Site Check
-                                </button>}
                                 {!readOnly && <button
                                     type="button"
                                     disabled={site.gr_siteid.startsWith('prototype-site-') || selectedCustomer.gr_customerid.startsWith('prototype-customer-')}
@@ -1041,79 +971,6 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
             </section>}
         </>}
 
-        {!readOnly && siteCheckDetails && selectedCustomer && <SiteCheckDetailsDrawer
-            key={`${siteCheckDetails.site.gr_siteid}-${siteCheckDetails.check?.gr_sitecheckid ?? 'history'}`}
-            customerName={selectedCustomer.gr_name}
-            siteName={siteCheckDetails.site.gr_name}
-            siteId={siteCheckDetails.site.gr_siteid}
-            initialSiteCheck={siteCheckDetails.check}
-            initialTab={siteCheckDetails.tab}
-            technicianName={(id) => mechanics.find(
-                (mechanic) => mechanic.gr_mechanicid.toLowerCase() === id.toLowerCase(),
-            )?.gr_name ?? 'Technician unavailable'}
-            loadHistoryPage={siteChecks.loadHistoryPage}
-            loadJobsPage={siteChecks.loadDetailJobsPage}
-            loadAllEquipmentExclusions={siteChecks.loadAllEquipmentExclusions}
-            prepareAssignmentEmail={siteChecks.prepareAssignmentEmail}
-            scheduleSettings={{
-                equipment: equipmentForSite(siteCheckDetails.site),
-                schedule: siteChecks.schedules.find((schedule) =>
-                    schedule._gr_site_value.toLowerCase() === siteCheckDetails.site.gr_siteid.toLowerCase()),
-                selectedEquipmentIds: siteChecks.scheduleEquipment
-                    .filter((selection) => selection._gr_sitecheckschedule_value.toLowerCase()
-                        === siteChecks.schedules.find((schedule) =>
-                            schedule._gr_site_value.toLowerCase() === siteCheckDetails.site.gr_siteid.toLowerCase()
-                        )?.gr_sitecheckscheduleid.toLowerCase())
-                    .map((selection) => selection._gr_equipment_value),
-                loading: siteChecks.isLoading,
-                saving: siteChecks.isSaving,
-                error: siteChecks.loadError || siteChecks.saveError,
-                onSave: async (input) => { await siteChecks.saveSchedule(input) },
-            }}
-            canStart={['due', 'overdue'].includes(
-                siteCheckBySite.get(siteCheckDetails.site.gr_siteid.toLowerCase())?.state ?? '',
-            )}
-            onStart={() => {
-                siteChecks.clearStartError()
-                setSiteCheckDetails(null)
-                setRunSiteCheckSite(siteCheckDetails.site)
-            }}
-            onDelete={async (check) => {
-                await siteChecks.deleteOccurrence(check)
-                await fetchJobs()
-                const trigger = siteCheckDetailsTriggerRef.current
-                siteCheckNestedTriggerRef.current = null
-                siteCheckDetailsTriggerRef.current = null
-                setSiteCheckDetails(null)
-                window.setTimeout(() => trigger?.focus(), 0)
-            }}
-            onOpenJob={(jobId, trigger) => {
-                siteCheckNestedTriggerRef.current = trigger
-                const job = operationalJobs.find((candidate) => candidate.gr_jobid.toLowerCase() === jobId.toLowerCase())
-                if (job) {
-                    setEditingJob(job)
-                    return
-                }
-
-                void fetchJobForDrawer(jobId).then((refreshedJob) => {
-                    if (refreshedJob) setEditingJob(refreshedJob)
-                })
-            }}
-            onOpenEquipment={(equipmentId, trigger) => {
-                const record = equipment.find((item) => item.gr_equipmentid.toLowerCase() === equipmentId.toLowerCase())
-                if (!record) return
-                siteCheckNestedTriggerRef.current = trigger
-                void openEquipment(record)
-            }}
-            onClose={() => {
-                const trigger = siteCheckDetailsTriggerRef.current
-                siteCheckNestedTriggerRef.current = null
-                siteCheckDetailsTriggerRef.current = null
-                setSiteCheckDetails(null)
-                window.setTimeout(() => trigger?.focus(), 0)
-            }}
-        />}
-
         {!readOnly && currentEditingEquipment && <EquipmentDrawer
             mode="edit"
             equipment={currentEditingEquipment}
@@ -1129,10 +986,7 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
             saveError={saveError}
             siteCheckEnabledSiteIds={siteCheckEnabledSiteIds}
             onClose={() => {
-                const trigger = siteCheckNestedTriggerRef.current
-                siteCheckNestedTriggerRef.current = null
                 setEditingEquipment(null)
-                window.setTimeout(() => trigger?.focus(), 0)
             }}
             onSave={async (input) => { const updated = await updateEquipment(currentEditingEquipment, input); setEditingEquipment(updated) }}
             onSaveMaintenanceHistory={async (plans, input) => { const updated = await saveEquipmentMaintenanceHistory(currentEditingEquipment, plans, input); setEditingEquipment(updated.equipment) }}
@@ -1258,36 +1112,6 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
             onCreateContact={createContactForSite}
         />}
 
-        {!readOnly && runSiteCheckSite && selectedCustomer && <RunSiteCheckDrawer
-            key={runSiteCheckSite.gr_siteid}
-            customerName={selectedCustomer.gr_name}
-            siteName={runSiteCheckSite.gr_name}
-            siteId={runSiteCheckSite.gr_siteid}
-            schedule={siteChecks.schedules.find((schedule) =>
-                schedule._gr_site_value.toLowerCase() === runSiteCheckSite.gr_siteid.toLowerCase()
-            )}
-            equipment={equipmentForSite(runSiteCheckSite)}
-            selectedEquipmentIds={siteChecks.scheduleEquipment
-                .filter((selection) => selection._gr_sitecheckschedule_value.toLowerCase()
-                    === siteChecks.schedules.find((schedule) =>
-                        schedule._gr_site_value.toLowerCase()
-                        === runSiteCheckSite.gr_siteid.toLowerCase()
-                    )?.gr_sitecheckscheduleid.toLowerCase())
-                .map((selection) => selection._gr_equipment_value)}
-            mechanics={mechanics}
-            busy={siteChecks.isStarting}
-            error={siteChecks.startError}
-            onStart={siteChecks.startSiteCheck}
-            onComplete={(created) => {
-                setSiteSuccess(`${created.gr_name} started successfully.`)
-                setSiteCheckDetails({ site: runSiteCheckSite, check: created, tab: 'summary' })
-                setRunSiteCheckSite(null)
-            }}
-            onClose={() => {
-                if (!siteChecks.isStarting) setRunSiteCheckSite(null)
-            }}
-        />}
-
         {!readOnly && creatingJobInitialValues && <JobCreateDrawer
             mechanics={mechanics}
             mechanicsLoading={mechanicsLoading}
@@ -1356,12 +1180,7 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
             onRefreshJob={fetchJobForDrawer}
             onLoadJobCardDetails={fetchJobCardDetails}
             onLoadJobPhoto={fetchJobPhotoBody}
-            onClose={() => {
-                const trigger = siteCheckNestedTriggerRef.current
-                siteCheckNestedTriggerRef.current = null
-                setEditingJob(null)
-                window.setTimeout(() => trigger?.focus(), 0)
-            }}
+            onClose={() => setEditingJob(null)}
         />}
 
         {!readOnly && <JobCompletionWorkflow

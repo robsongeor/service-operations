@@ -81,7 +81,7 @@ test('Site Checks settings use the focused hook and preserve the existing drawer
     assert.match(dashboardSource, /buildSiteCheckDashboardProjection/)
     assert.match(dashboardSource, /aria-live="polite"/)
     assert.match(dashboardSource, /sitesHeadingRef\.current\?\.focus/)
-    assert.match(dashboardSource, /Object\.fromEntries\(matchingSiteIds/)
+    assert.doesNotMatch(dashboardSource, /applySiteCheckFilter|Object\.fromEntries\(matchingSiteIds/)
     assert.match(siteCheckDetailsSource, /<SiteCheckScheduleSettings/)
     assert.match(scheduleSettingsSource, /<FormSwitch/)
     assert.match(scheduleSettingsSource, /SITE_CHECK_FREQUENCY_OPTIONS/)
@@ -115,10 +115,10 @@ test('details and settings retain the existing service workflows', () => {
     assert.match(drawerSource, /onClick=\{requestSettingsSave\}/)
 })
 
-test('due Sites open the shared-pattern Run Site Check drawer with stable retry identity', () => {
+test('Customer Dashboard leaves Site Check actions to the dedicated workspace', () => {
     assert.match(siteCheckDetailsSource, />Start Site Check<\/button>/)
-    assert.match(dashboardSource, /<RunSiteCheckDrawer/)
-    assert.match(dashboardSource, /onStart=\{siteChecks\.startSiteCheck\}/)
+    assert.doesNotMatch(dashboardSource, /<RunSiteCheckDrawer|<SiteCheckDetailsDrawer/)
+    assert.doesNotMatch(dashboardSource, />\s*Site Check\s*<\/button>/)
     assert.match(runDrawerSource, /<EditDrawerShell/)
     assert.match(runDrawerSource, /<SearchableMechanicSelect/)
     assert.match(runDrawerSource, /useRef\(crypto\.randomUUID\(\)\)/)
@@ -128,22 +128,18 @@ test('due Sites open the shared-pattern Run Site Check drawer with stable retry 
     assert.match(runDrawerSource, /availabilityOverrides/)
     assert.match(runDrawerSource, /Site Check availability for/)
     assert.match(runDrawerSource, /Create \$\{includedEquipment\.length\} Site Check Job/)
-    assert.match(dashboardSource, /setSiteCheckDetails\(\{ site: runSiteCheckSite, check: created, tab: 'summary' \}\)/)
 })
 
-test('every Site uses one consistent Site Check entry point', () => {
+test('Customer Dashboard keeps Site Check status passive', () => {
     assert.match(dashboardSource, /siteCheck\?\.schedule\.gr_enabled && <span className="customer-site-check-summary"/)
-    assert.match(dashboardSource, />\s*Site Check\s*<\/button>/)
-    assert.match(dashboardSource, /check: siteCheck\?\.activeSiteCheck,[\s\S]*?tab: 'summary'/)
-    assert.doesNotMatch(dashboardSource, /View Current Site Check|Site Check History|>\s*Run Site Check\s*<\/button>/)
+    assert.doesNotMatch(dashboardSource, /onActivate: \(\) => applySiteCheckFilter/)
+    assert.doesNotMatch(dashboardSource, /View Current Site Check|Site Check History|>\s*(?:Run )?Site Check\s*<\/button>/)
 })
 
-test('Site Check history opens from cached data and retains an exact-Job fallback', () => {
+test('Customer Dashboard retains exact-Job refresh without exposing Site Check history', () => {
     assert.match(dashboardSource, /fetchJobForDrawer,/)
-    assert.match(
-        dashboardSource,
-        /onOpenJob=\{\(jobId, trigger\) => \{[\s\S]*?if \(job\) \{[\s\S]*?setEditingJob\(job\)[\s\S]*?fetchJobForDrawer\(jobId\)\.then\(\(refreshedJob\)/,
-    )
+    assert.match(dashboardSource, /onRefreshJob=\{fetchJobForDrawer\}/)
+    assert.doesNotMatch(dashboardSource, /loadHistoryPage=\{siteChecks\.loadHistoryPage\}/)
 })
 
 test('Customer Dashboard loads selected-customer collections without starting global Jobs or Equipment reads', () => {

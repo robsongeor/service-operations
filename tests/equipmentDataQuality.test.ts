@@ -315,10 +315,10 @@ test('WOF Equipment drawer uses the same focused Job history workflow', () => {
     assert.match(wofScreen, /onRetryJobHistory=/)
 })
 
-test('Customer Dashboard prepares Job reference data before applying Customer or Equipment defaults', () => {
+test('Customer Dashboard prepares Job reference data for Equipment defaults without a Customer-level Create Job action', () => {
     const dashboard = readFileSync(new URL('../src/alpha/customers/CustomerDashboardScreen.tsx', import.meta.url), 'utf8')
     assert.match(dashboard, /const referenceData = await prepareJobReferenceData\(\)/)
-    assert.match(dashboard, /void openJobCreate\(initialJobValuesForCustomer\(selectedCustomer\)\)/)
+    assert.doesNotMatch(dashboard, /initialJobValuesForCustomer|>Create Job<\/button>/)
     assert.match(dashboard, /void openJobCreate\(initialJobValuesForEquipment\(record\)\)/)
     assert.match(dashboard, /equipmentId: selectedEquipment\?\.gr_equipmentid/)
     assert.match(dashboard, /contactsForSite\.length === 1/)
