@@ -24,6 +24,11 @@ export default function JobTypeTabs({
 }: Props) {
     return (
         <div className="job-type-tabs" role="tablist" aria-label={ariaLabel}>
+            {includeUnnumbered && (
+                <button type="button" role="tab" aria-selected={selectedJobType === 'unnumbered'} className={selectedJobType === 'unnumbered' ? 'job-type-tab job-status-tab active' : 'job-type-tab job-status-tab'} onClick={() => onChange('unnumbered')}>
+                    Unnumbered
+                </button>
+            )}
             {includeOperational && <button type="button" role="tab" aria-selected={selectedJobType === 'operational'} className={selectedJobType === 'operational' ? 'job-type-tab active' : 'job-type-tab'} onClick={() => onChange('operational')}>
                 Operational
             </button>}
@@ -32,11 +37,6 @@ export default function JobTypeTabs({
                     {jobType.label}
                 </button>
             ))}
-            {includeUnnumbered && (
-                <button type="button" role="tab" aria-selected={selectedJobType === 'unnumbered'} className={selectedJobType === 'unnumbered' ? 'job-type-tab job-status-tab active' : 'job-type-tab job-status-tab'} onClick={() => onChange('unnumbered')}>
-                    Unnumbered
-                </button>
-            )}
             {includeUnconfirmed && (
                 <button type="button" role="tab" aria-selected={selectedJobType === 'unconfirmed'} className={selectedJobType === 'unconfirmed' ? 'job-type-tab job-status-tab active' : 'job-type-tab job-status-tab'} onClick={() => onChange('unconfirmed')}>
                     Unconfirmed

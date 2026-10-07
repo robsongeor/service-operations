@@ -104,6 +104,7 @@ test('single coordination tab row separates membership from type and unconfirmed
     assert.match(operational, />Unconfirmed</)
     assert.match(operational, />Unnumbered</)
     assert.match(operational, />All jobs</)
+    assert.ok(operational.indexOf('>Unnumbered</button>') < operational.indexOf('>Operational</button>'))
     assert.doesNotMatch(operational, />All types</)
     const all = renderWorklist(rows, 'all')
     for (const row of rows) assert.ok(all.includes(row.gr_description))
@@ -131,15 +132,15 @@ test('restricted Equipment editor includes road compliance but excludes maintena
     assert.doesNotMatch(html, /Delete equipment|Equipment Ownership|Site Check Availability|>Maintenance<|>Job History</)
 })
 
-test('unnumbered Jobs are shown before numbered Jobs while retaining the selected sort within each group', () => {
+test('Jobs retain the selected sort regardless of whether they have a number', () => {
     const rows = [
         { ...job, gr_jobid: id(21), gr_jobnumber: '910001', gr_description: 'Newest numbered', createdon: '2026-10-07T00:00:00Z' },
         { ...job, gr_jobid: id(22), gr_jobnumber: '', gr_description: 'Older unnumbered', createdon: '2026-10-05T00:00:00Z' },
         { ...job, gr_jobid: id(23), gr_jobnumber: null, gr_description: 'Newest unnumbered', createdon: '2026-10-06T00:00:00Z' },
     ]
     const html = renderWorklist(rows, 'all')
+    assert.ok(html.indexOf('Newest numbered') < html.indexOf('Newest unnumbered'))
     assert.ok(html.indexOf('Newest unnumbered') < html.indexOf('Older unnumbered'))
-    assert.ok(html.indexOf('Older unnumbered') < html.indexOf('Newest numbered'))
 })
 test('Equipment correction payload includes road compliance, excludes unrelated fields and rejects unsaved Sites', () => {
     const input = { fleet: ' F1 ', alternateFleetNumbers: '', make: ' Make ', model: 'Model', serial: 'Serial', siteId: id(92), registrationNumber: 'ABC123', complianceStatus: 122830000, wofRequired: true, currentWofExpiry: '2030-01-01', regoExpiry: '2029-12-01', maintenanceProfile: 9, ownershipType: 3 }
