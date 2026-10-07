@@ -71,8 +71,9 @@ after the replacement succeeds.
 Pubudu is the third Office Admin rollout user and the live Office Admin pilot. The replacement Office
 Admin role was verified and the broader `Service Operations` role was removed with exact before/after
 verification on 7 October 2026. The broader role was then temporarily restored, additively, for
-permission-gap diagnosis while the frontend remains in the Office Admin profile. Remove the broad
-role again and repeat the denial tests before production sign-off. The
+permission-gap diagnosis. The Entra `ServiceOperations.ServiceCoordinator` role was also temporarily
+assigned so Pubudu can test the restricted Service Operations Manager interface while retaining the
+Office Admin assignment. Remove both temporary additions and repeat the denial tests before production sign-off. The
 cutover requires a fresh assignment export, one workflow role at a time, preservation of
 unrelated platform roles and explicit approval. Pubudu performs the account sign-in and MFA; no
 credential is collected.

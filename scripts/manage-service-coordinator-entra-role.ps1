@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Verify', 'ProvisionRole', 'AssignBruce')]
+    [ValidateSet('Verify', 'ProvisionRole', 'AssignBruce', 'AssignServiceCoordinator')]
     [string]$Mode = 'Verify',
     [string]$TenantId = 'a348f38c-33d0-4ce9-a0df-6a66cc0562a1',
     [string]$ApplicationClientId = '9e9edbea-dfee-4995-aa1f-e9d10d16e093',
@@ -113,13 +113,15 @@ if ($coordinatorRoles.Count -eq 1) {
 $assignments = @(Get-Assignments ([string]$user.id))
 Write-AssignmentSummary $assignments $applicationRoles
 
-if ($Mode -eq 'AssignBruce') {
+if ($Mode -eq 'AssignBruce' -or $Mode -eq 'AssignServiceCoordinator') {
     Require ($coordinatorRoles.Count -eq 1) 'Provision the Service Coordinator application role before assignment.'
     $coordinator = $coordinatorRoles[0]
     $fullAssignments = @($assignments | Where-Object { [string]$_.appRoleId -eq [string]$fullRoles[0].id })
-    Require ($fullAssignments.Count -eq 1) 'Bruce must retain exactly one FullAccess assignment during the additive pilot step.'
+    if ($Mode -eq 'AssignBruce') {
+        Require ($fullAssignments.Count -eq 1) 'Bruce must retain exactly one FullAccess assignment during the additive pilot step.'
+    }
     $coordinatorAssignments = @($assignments | Where-Object { [string]$_.appRoleId -eq [string]$coordinator.id })
-    Require ($coordinatorAssignments.Count -le 1) 'Duplicate Service Coordinator assignments found for Bruce.'
+    Require ($coordinatorAssignments.Count -le 1) "Duplicate Service Coordinator assignments found for $PilotUpn."
     if ($coordinatorAssignments.Count -eq 0) {
         $body = @{
             principalId = [string]$user.id
@@ -130,7 +132,14 @@ if ($Mode -eq 'AssignBruce') {
     }
     $after = @(Get-Assignments ([string]$user.id))
     Require (@($after | Where-Object { [string]$_.appRoleId -eq [string]$coordinator.id }).Count -eq 1) 'Service Coordinator assignment could not be verified.'
-    Require (@($after | Where-Object { [string]$_.appRoleId -eq [string]$fullRoles[0].id }).Count -eq 1) 'FullAccess was not preserved during the additive pilot assignment.'
+    if ($Mode -eq 'AssignBruce') {
+        Require (@($after | Where-Object { [string]$_.appRoleId -eq [string]$fullRoles[0].id }).Count -eq 1) 'FullAccess was not preserved during the additive pilot assignment.'
+    }
+    $expectedCount = if ($coordinatorAssignments.Count -eq 0) { $assignments.Count + 1 } else { $assignments.Count }
+    Require ($after.Count -eq $expectedCount) 'Unexpected application-role count after assignment; stop and inspect the account.'
+    foreach ($assignment in $assignments) {
+        Require (@($after | Where-Object { [string]$_.id -eq [string]$assignment.id }).Count -eq 1) 'An existing application-role assignment was not preserved.'
+    }
     Write-AssignmentSummary $after $applicationRoles
-    Write-Output 'Verified additive pilot assignment: Service Coordinator added and FullAccess preserved for live testing.'
+    Write-Output "Verified additive pilot assignment: Service Coordinator added for $PilotUpn and all existing assignments were preserved."
 }
