@@ -35,6 +35,9 @@ import JobLocationSummary from '../jobs/components/JobLocationSummary'
 import { isPersistedEquipmentId } from '../equipment/services/equipmentLocationWorkflow'
 import JobCustomerField from '../jobs/components/JobCustomerField'
 import SearchableMechanicSelect from '../jobs/components/SearchableMechanicSelect'
+import JobScheduleFields from '../jobs/components/JobScheduleFields'
+import { createJobScheduleOption } from '../jobs/services/jobScheduleApi'
+import type { JobScheduleOptionDraft } from '../jobs/types/jobSchedule.types'
 import { useOperationalQuery } from '../shared/data/useOperationalQuery'
 import { STAFF_DIRECTORY_QUERY_KEY } from '../shared/data/operationalCollectionKeys'
 import { STANDARD_JOB_TYPE_OPTIONS, type JobType } from '../jobs/types/jobType.types'
@@ -234,6 +237,7 @@ export default function JobBookPrototypeScreen({
     const requireIntakeLocation = !editingIntakeRow && draft.equipmentReviewRequired
     const intakeLocationErrors = requireIntakeLocation ? jobCreationLocationErrors({ ...draft, equipmentId: '' }) : {}
     const [intakeError, setIntakeError] = useState('')
+    const [scheduleDrafts, setScheduleDrafts] = useState<JobScheduleOptionDraft[]>([])
     const [filters, setFilters] = useState<JobBookFilters>(EMPTY_FILTERS)
     const searchGeneration = useRef(0)
     const [searchRecentRows, setSearchRecentRows] = useState<JobBookRow[]>([])
@@ -562,10 +566,19 @@ export default function JobBookPrototypeScreen({
         observer.observe(sentinel)
         return () => observer.disconnect()
     }, [filtersActive, hasMoreRows, loadMoreRows])
-    const finishRegistration = async (result: { book: JobBookKey; ledgerId: string; jobNumber: string }) => {
-        const saved = await fetchJobBookIntakeRow(await getAccessToken(), { jobBookKey: result.book, intakeRecordId: result.ledgerId })
+    const finishRegistration = async (result: { book: JobBookKey; ledgerId: string; jobNumber: string; jobId: string }) => {
+        const token = await getAccessToken()
+        const saved = await fetchJobBookIntakeRow(token, { jobBookKey: result.book, intakeRecordId: result.ledgerId })
         if (result.book === selectedJobBookKey) reconcileIntakeRow(saved)
+        await Promise.all(scheduleDrafts.map((option) => createJobScheduleOption(token, {
+            jobId: result.jobId,
+            scheduleType: option.scheduleType,
+            scheduleDate: option.scheduleDate,
+            scheduleTime: option.scheduleTime,
+            confirmed: option.confirmed,
+        })))
         registration.complete()
+        setScheduleDrafts([])
         setIntakeDrawerOpen(false)
         setSaveError('')
         setIntakeError('')
@@ -574,7 +587,7 @@ export default function JobBookPrototypeScreen({
         const result = await registration.submit()
         if (result) {
             try { await finishRegistration(result) }
-            catch { setSaveError(`Job ${result.jobNumber} was saved, but its details could not be loaded. Resume the same request to recover it.`) }
+            catch { setSaveError(`Job ${result.jobNumber} was saved, but its details or schedule could not be confirmed. Resume the same request to recover it.`) }
         }
     }
     const submitPrototypeJob = async () => {
@@ -637,6 +650,7 @@ export default function JobBookPrototypeScreen({
         setEditingIntakeRow(null)
         setIntakeValidationAttempted(false)
         setIntakeError('')
+        setScheduleDrafts([])
     }
     const openNewIntakeEntry = () => {
         setEditingEntryLocation(false)
@@ -645,6 +659,7 @@ export default function JobBookPrototypeScreen({
         setIntakeError('')
         setIntakeValidationAttempted(false)
         setDraft(createBlankJobBookRow(0, selectedJobBookKey))
+        setScheduleDrafts([])
         setIntakeDrawerOpen(true)
     }
     const openManageJob = (row: JobBookRow) => {
@@ -662,6 +677,7 @@ export default function JobBookPrototypeScreen({
         setCreatedEntryLocation(false)
         setIntakeError('')
         setIntakeValidationAttempted(false)
+        setScheduleDrafts([])
         setDraft({ ...row })
         setIntakeDrawerOpen(true)
     }
@@ -1029,6 +1045,9 @@ export default function JobBookPrototypeScreen({
                     onChange={(mechanicId, mechanicName) => setDraft((current) => ({ ...current, mechanicId, mechanicName }))} /></div> : <div className="job-edit-field"><span>Technician</span><span>{draft.mechanicName || 'Not assigned'}</span></div>}
                 <label className="job-book-intake-field"><span>Customer PO <small>(optional)</small></span><input aria-label="Customer purchase order" placeholder="Enter a PO number if supplied" value={draft.customerPo} onChange={(event) => setDraft((current) => ({ ...current, customerPo: event.target.value }))} /></label>
             </fieldset>
+            {!editingIntakeRow && <fieldset className="job-book-intake-section" disabled={savingIntake || Boolean(registration.pending)}>
+                <JobScheduleFields draftOptions={scheduleDrafts} onDraftOptionsChange={setScheduleDrafts} />
+            </fieldset>}
         </JobDrawerShell>}
 
         {canCorrectJobDetails && correctingJobId && <JobCorrectionsDrawer key={correctingJobId} jobId={correctingJobId} jobBookLabel={selectedJobBook.label} mechanics={mechanics} canAssignTechnician={canAssignInitialTechnician}

@@ -228,14 +228,6 @@ export default function JobCreateDrawer({
             </>}
         >
             <fieldset className="job-edit-grid job-create-fields" disabled={isSaving || locationSaving}>
-                <JobCoreFields stagingOnly={stagingOnly} draft={draft} setDraft={setDraft} mechanics={mechanics} mechanicsLoading={mechanicsLoading} mechanicsError={mechanicsError} onRetryMechanics={onRetryMechanics} equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)} allowEmptyJobType jobTypeError={jobTypeError} jobTypeOptions={jobTypeOptions} />
-                {jobRequiresMaintenance(draft.jobType) && <JobMaintenanceSummary
-                    equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)}
-                    servicePlans={servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === draft.equipmentId.toLowerCase())}
-                    loadStatus={equipmentDependencyStatus}
-                    loadError={equipmentDependencyError}
-                    onRetry={() => setEquipmentDependencyAttempt((current) => current + 1)}
-                />}
                 <JobRelationshipFields
                     manageEquipmentLocation
                     locationRequired={!draft.equipmentId}
@@ -258,6 +250,18 @@ export default function JobCreateDrawer({
                     onLoadCustomerSites={onLoadCustomerSites}
                     onLoadSiteContacts={onLoadSiteContacts}
                 />
+                <div className="job-edit-divider job-edit-field-wide">
+                    <h3>Job details</h3>
+                    <p>Record what is required and who should attend.</p>
+                </div>
+                <JobCoreFields stagingOnly={stagingOnly} draft={draft} setDraft={setDraft} mechanics={mechanics} mechanicsLoading={mechanicsLoading} mechanicsError={mechanicsError} onRetryMechanics={onRetryMechanics} equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)} allowEmptyJobType jobTypeError={jobTypeError} jobTypeOptions={jobTypeOptions} />
+                {jobRequiresMaintenance(draft.jobType) && <JobMaintenanceSummary
+                    equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)}
+                    servicePlans={servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === draft.equipmentId.toLowerCase())}
+                    loadStatus={equipmentDependencyStatus}
+                    loadError={equipmentDependencyError}
+                    onRetry={() => setEquipmentDependencyAttempt((current) => current + 1)}
+                />}
                 {!stagingOnly && <JobScheduleFields
                     draftOptions={scheduleDrafts}
                     onDraftOptionsChange={setScheduleDrafts}

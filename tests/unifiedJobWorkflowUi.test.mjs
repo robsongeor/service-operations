@@ -52,13 +52,13 @@ test('numbered and Void Jobs cannot start another allocation; Manage does not cr
     assert.match(html, /Add to Operational/)
     assert.doesNotMatch(html, /<select/)
 })
-test('Staging reuses the create drawer but removes editable numbering and scheduling', () => {
+test('Staging reuses the create drawer without exposing numbering or scheduling', () => {
     const html = renderToStaticMarkup(createElement(Provider, { scope: 'unified-qa' }, createElement(Create, {
         stagingOnly: true, mechanics: [], equipmentList: [], sites: [], customers: [], siteContacts: [], servicePlans: [],
         onCreateJob: unavailable, onCreateCustomer: unavailable, onCreateSite: unavailable, onCreateContact: unavailable, onCreateEquipment: unavailable, onCreateScheduleOption: unavailable, onClose: unavailable,
     })))
     assert.match(html, /Save to Staging. No number is allocated and no email is sent/)
-    assert.match(html, /readOnly="" value=""/)
+    assert.doesNotMatch(html, /Job number|name="jobNumber"/)
     assert.doesNotMatch(html, /Add schedule|Schedule date|Time window/)
 })
 test('unified Void rows have no allocation, management, spreadsheet-export or sending actions', () => {

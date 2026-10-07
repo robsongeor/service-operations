@@ -113,12 +113,20 @@ test('Jobs table supports copying selected visible Job Book rows in sorted order
     assert.match(jobsTable, /Select Job \$\{job\.gr_jobnumber \|\| 'row'\} for job book export/)
 })
 
-test('Job drawer shows Job numbers read-only without clipboard allocation actions', () => {
+test('Job drawer omits Job number controls and clipboard allocation actions', () => {
     const coreFields = readFileSync(new URL('../src/alpha/jobs/components/JobCoreFields.tsx', import.meta.url), 'utf8')
     const editDrawer = readFileSync(new URL('../src/alpha/jobs/components/JobEditDrawer.tsx', import.meta.url), 'utf8')
-    assert.match(coreFields, /<input\s+readOnly\s+value=\{draft\.jobNumber\}/)
+    assert.doesNotMatch(coreFields, /draft\.jobNumber|<span>Job number<\/span>/)
     assert.doesNotMatch(coreFields, /copyJobBookSpreadsheetRow|Copy for Job Book/)
     assert.match(editDrawer, /jobBookJob=\{job\}/)
+})
+
+test('Service Coordination and Job Book creation both expose the shared scheduler', () => {
+    const jobsScreen = readFileSync(new URL('../src/alpha/jobs/JobsScreen.tsx', import.meta.url), 'utf8')
+    const jobBook = readFileSync(new URL('../src/alpha/job-book/JobBookPrototypeScreen.tsx', import.meta.url), 'utf8')
+    assert.doesNotMatch(jobsScreen, /<JobCreateDrawer\s+stagingOnly=/)
+    assert.match(jobBook, /<JobScheduleFields draftOptions=\{scheduleDrafts\} onDraftOptionsChange=\{setScheduleDrafts\}/)
+    assert.match(jobBook, /createJobScheduleOption\(token/)
 })
 
 test('Job number paste is rejected before any network request', async () => {

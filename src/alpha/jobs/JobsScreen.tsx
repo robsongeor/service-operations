@@ -404,7 +404,6 @@ export default function JobsScreen() {
 
             {isCreatingJob && (
                 <JobCreateDrawer
-                    stagingOnly={UNIFIED_JOB_RUNTIME}
                     {...sharedDrawerProps}
                     existingJobs={jobs}
                     onCreateJob={createJob}

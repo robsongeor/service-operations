@@ -75,7 +75,7 @@ test('normal coordinator editor retains operational controls but protects alloca
     const html = render({ correctionsOnly: false })
     assert.match(html, />Scheduling/)
     assert.doesNotMatch(html, /Delete job/)
-    assert.match(html, /readOnly="" value="WJ1234567"/)
+    assert.doesNotMatch(html, /<span>Job number<\/span>|value="WJ1234567"/)
     assert.doesNotMatch(html, /Copy for Job Book/)
     assert.doesNotMatch(html, /Job type<\/span><select disabled/)
 })
@@ -83,5 +83,5 @@ test('normal coordinator editor retains operational controls but protects alloca
 test('coordinator can still delete an unnumbered draft', () => {
     const html = render({ correctionsOnly: false, job: { ...job, gr_jobnumber: null } })
     assert.match(html, /Delete job/)
-    assert.match(html, /No number allocated/)
+    assert.doesNotMatch(html, /<span>Job number<\/span>|No number allocated/)
 })

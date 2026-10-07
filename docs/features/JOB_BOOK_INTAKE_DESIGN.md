@@ -438,6 +438,9 @@ Implemented in this mode:
   Coordination; its table displays existing numbers as immutable text. The regional allocation
   system remains the only number writer. **Manage job** independently adds that same record to Operational.
   Neither sends email or marks GreenTree/Timecloud. New basic Jobs have no invented Job Type.
+- Create and edit drawers do not render a Job-number input. Service Coordination and Job Book
+  creation both use the shared scheduling fields; Job Book retains its guarded atomic regional
+  registration path while Service Coordination retains the standard Job save path.
 - Service coordination uses one tab row: Operational, Breakdown, Service, Workshop, WOF,
   Site Check, Unconfirmed and All jobs. Operational uses explicit coordinator membership;
   Unconfirmed retains its status meaning. All jobs includes read-only unlinked ledger history

@@ -71,18 +71,6 @@ export default function JobCoreFields({ draft, setDraft, mechanics, mechanicsLoa
             </label>
 
             <label className="job-edit-field">
-                <span>Job number</span>
-                <input
-                    readOnly
-                    value={draft.jobNumber}
-                />
-                {!jobBookJob?.gr_jobnumber?.trim() && <small>Not allocated. Save the Job, then use the regional allocation system.</small>}
-                {jobBookJob && <small>{jobBookJob.gr_jobnumber?.trim()
-                    ? 'Allocated Job numbers cannot be changed.'
-                    : 'No number allocated. Use the regional allocation system.'}</small>}
-            </label>
-
-            <label className="job-edit-field">
                 <span>Order number</span>
                 <input
                     value={draft.orderNumber}
