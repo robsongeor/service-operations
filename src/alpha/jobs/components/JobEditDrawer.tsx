@@ -45,8 +45,6 @@ import { usesAzureJobCards } from '../types/jobCardWorkflow'
 import { jobEmailSendingAllowedForHostname, LOCAL_JOB_EMAIL_DISABLED_MESSAGE } from '../services/jobEmail'
 import { hasAllocatedJobNumber } from '../domain/jobNumberPolicy'
 import { UNIFIED_JOB_WALKTHROUGH } from '../domain/unifiedJobWorkflow'
-import SearchableMechanicSelect from './SearchableMechanicSelect'
-import { JOB_DESCRIPTION_MAX_LENGTH } from '../domain/jobDescription'
 
 type ProgressiveLoadStatus = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -208,7 +206,6 @@ export default function JobEditDrawer({
     const [deleteError, setDeleteError] = useState('')
     const [isEmailing, setIsEmailing] = useState(false)
     const [showEmailLinkConfirm, setShowEmailLinkConfirm] = useState(false)
-    const [correctionMechanicOpen, setCorrectionMechanicOpen] = useState(false)
     const [activeTab, setActiveTab] = useState<'details' | 'office' | 'scheduling' | 'jobcard' | 'quotes'>(correctionsOnly ? 'details' : initialTab)
     const [officeAction, setOfficeAction] = useState(job.gr_currentofficeaction ?? OFFICE_ACTIONS.NONE)
     const [officeActionOwner, setOfficeActionOwner] = useState(job.gr_officeactionowner ?? '')
@@ -589,31 +586,11 @@ export default function JobEditDrawer({
                                     onLoadSiteContacts={onLoadSiteContacts} onLoadEquipment={onLoadEquipment} onLoadEquipmentServicePlans={onLoadEquipmentServicePlans} />}
                     </fieldset>
                     <fieldset className="job-book-intake-section" disabled={coreStatus !== 'ready' || isSaving}>
-                        <div className="job-book-intake-section-heading"><h3>Job details</h3><p>Record what is required and who should attend.</p></div>
-                        <label className="job-book-intake-field"><span>Description of the job <span className="job-book-required-mark">*</span></span><textarea required maxLength={JOB_DESCRIPTION_MAX_LENGTH} aria-label="Job description (required)" placeholder="Describe the fault or work required" rows={4} value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} /></label>
-                        <div className="job-edit-field job-edit-field-wide"><span>Mechanic</span>{canCorrectMechanic
-                            ? <SearchableMechanicSelect mechanics={mechanics} selectedId={draft.mechanicId} selectedName={job.gr_Mechanic?.gr_name ?? ''} isOpen={correctionMechanicOpen} isSaving={isSaving} variant="drawer" onOpen={() => setCorrectionMechanicOpen(true)} onClose={() => setCorrectionMechanicOpen(false)} onSelect={(mechanicId) => { setDraft((current) => ({ ...current, mechanicId })); setCorrectionMechanicOpen(false) }} />
-                            : <span>{job.gr_Mechanic?.gr_name || 'Not assigned'}</span>}</div>
-                        <label className="job-book-intake-field"><span>Customer PO <small>(optional)</small></span><input aria-label="Customer purchase order" placeholder="Enter a PO number if supplied" value={draft.orderNumber} onChange={(event) => setDraft((current) => ({ ...current, orderNumber: event.target.value }))} /></label>
+                        <JobCoreFields showWorkflowFields={false} mechanicEditable={canCorrectMechanic} correctionsOnly draft={draft} setDraft={setDraft} mechanics={mechanics} jobBookJob={job} />
                     </fieldset>
                 </>}
                 {activeTab === 'details' && !correctionsOnly && (
                     <div className="job-edit-grid">
-                        <fieldset className="job-progressive-fieldset" disabled={coreStatus !== 'ready'}>
-                            <JobCoreFields
-                                allowEmptyJobType={UNIFIED_JOB_WALKTHROUGH && !job.gr_jobtype}
-                                correctionsOnly={correctionsOnly}
-                                jobTypeOptions={job.gr_jobtype === JOB_TYPES.WOF || job.gr_jobtype === JOB_TYPES.SITE_CHECK
-                                    ? JOB_TYPE_OPTIONS.filter((option) => option.value === job.gr_jobtype)
-                                    : STANDARD_JOB_TYPE_OPTIONS}
-                                draft={draft}
-                                setDraft={setDraft}
-                                mechanics={mechanics}
-                                equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)}
-                                jobBookJob={job}
-                            />
-                        </fieldset>
-
                         {referenceDataStatus === 'loading' || referenceDataStatus === 'idle'
                             ? <div className="job-progressive-state job-edit-field-wide" role="status">
                                 <strong>Loading Equipment and customer choices…</strong>
@@ -626,11 +603,6 @@ export default function JobEditDrawer({
                                     {onPrepareReferenceData && <button type="button" onClick={() => { void onPrepareReferenceData().catch(() => undefined) }}>Try again</button>}
                                 </div>
                                 : <>
-                                    {!correctionsOnly && jobRequiresMaintenance(draft.jobType) && <JobMaintenanceSummary
-                                        equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)}
-                                        servicePlans={servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === draft.equipmentId.toLowerCase())}
-                                    />}
-
                                     <JobRelationshipFields
                                         correctionsOnly={correctionsOnly}
                                         editor={editor}
@@ -648,6 +620,24 @@ export default function JobEditDrawer({
                                         onLoadEquipmentServicePlans={onLoadEquipmentServicePlans}
                                     />
                                 </>}
+                        <fieldset className="job-progressive-fieldset" disabled={coreStatus !== 'ready'}>
+                            <JobCoreFields
+                                sectionDivider
+                                allowEmptyJobType={UNIFIED_JOB_WALKTHROUGH && !job.gr_jobtype}
+                                jobTypeOptions={job.gr_jobtype === JOB_TYPES.WOF || job.gr_jobtype === JOB_TYPES.SITE_CHECK
+                                    ? JOB_TYPE_OPTIONS.filter((option) => option.value === job.gr_jobtype)
+                                    : STANDARD_JOB_TYPE_OPTIONS}
+                                draft={draft}
+                                setDraft={setDraft}
+                                mechanics={mechanics}
+                                equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)}
+                                jobBookJob={job}
+                            />
+                        </fieldset>
+                        {jobRequiresMaintenance(draft.jobType) && <JobMaintenanceSummary
+                            equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)}
+                            servicePlans={servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === draft.equipmentId.toLowerCase())}
+                        />}
                         {!correctionsOnly && job.gr_status === JOB_STATUSES.COMPLETE && <div className="job-completion-history job-edit-field-wide">
                             <span>Hour Meter at Completion</span>
                             <strong>{job.gr_hourmeter == null ? 'Not recorded' : `${job.gr_hourmeter.toLocaleString('en-NZ')} hours${job.gr_hourmeterreadingtype === HOUR_METER_READING_TYPES.ESTIMATED ? ' · Estimated' : ''}`}</strong>

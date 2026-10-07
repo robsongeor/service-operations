@@ -74,6 +74,8 @@ test('conflicted save is blocked and offers explicit reload, not automatic overw
 test('normal coordinator editor retains operational controls but protects allocated numbers and deletion', () => {
     const html = render({ correctionsOnly: false })
     assert.match(html, />Scheduling/)
+    assert.ok(html.indexOf('Equipment and location') < html.indexOf('Job details'))
+    assert.ok(html.indexOf('Job details') < html.indexOf('Job type'))
     assert.doesNotMatch(html, /Delete job/)
     assert.doesNotMatch(html, /<span>Job number<\/span>|value="WJ1234567"/)
     assert.doesNotMatch(html, /Copy for Job Book/)

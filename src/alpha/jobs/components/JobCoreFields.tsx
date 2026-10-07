@@ -23,16 +23,18 @@ type Props = {
     equipment?: Equipment
     jobBookJob?: Job
     correctionsOnly?: boolean
+    showWorkflowFields?: boolean
+    mechanicEditable?: boolean
     stagingOnly?: boolean
     sectionDivider?: boolean
 }
 
-export default function JobCoreFields({ draft, setDraft, mechanics, mechanicsLoading = false, mechanicsError = '', onRetryMechanics, equipment, jobBookJob, allowEmptyJobType = false, jobTypeError = '', jobTypeOptions = JOB_TYPE_OPTIONS, correctionsOnly = false, sectionDivider = false }: Props) {
+export default function JobCoreFields({ draft, setDraft, mechanics, mechanicsLoading = false, mechanicsError = '', onRetryMechanics, equipment, jobBookJob, allowEmptyJobType = false, jobTypeError = '', jobTypeOptions = JOB_TYPE_OPTIONS, correctionsOnly = false, showWorkflowFields = true, mechanicEditable = !correctionsOnly, sectionDivider = false }: Props) {
     return (
         <>
             <JobDetailsFields
                 divided={sectionDivider}
-                additionalFields={<>
+                additionalFields={showWorkflowFields ? <>
                     <label className="job-edit-field">
                         <span>Job type</span>
                         <select disabled={correctionsOnly} value={draft.jobType} onChange={(event) => setDraft((current) => ({ ...current, jobType: event.target.value ? Number(event.target.value) as JobType : '' }))}>
@@ -47,14 +49,14 @@ export default function JobCoreFields({ draft, setDraft, mechanics, mechanicsLoa
                             {JOB_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                         </select>
                     </label>
-                </>}
+                </> : undefined}
                 description={draft.description}
                 onDescriptionChange={(description) => setDraft((current) => ({ ...current, description }))}
                 mechanics={mechanics}
                 mechanicId={draft.mechanicId}
                 mechanicName={jobBookJob?.gr_Mechanic?.gr_name ?? ''}
-                onMechanicChange={correctionsOnly ? undefined : (mechanicId) => setDraft((current) => ({ ...current, mechanicId }))}
-                mechanicDisabledMessage={draft.status === JOB_STATUSES.UNCONFIRMED ? UNCONFIRMED_OPERATION_MESSAGE : undefined}
+                onMechanicChange={mechanicEditable ? (mechanicId) => setDraft((current) => ({ ...current, mechanicId })) : undefined}
+                mechanicDisabledMessage={!correctionsOnly && draft.status === JOB_STATUSES.UNCONFIRMED ? UNCONFIRMED_OPERATION_MESSAGE : undefined}
                 mechanicsLoading={mechanicsLoading}
                 mechanicsError={mechanicsError}
                 onRetryMechanics={onRetryMechanics}
@@ -62,7 +64,7 @@ export default function JobCoreFields({ draft, setDraft, mechanics, mechanicsLoa
                 onCustomerPoChange={(orderNumber) => setDraft((current) => ({ ...current, orderNumber }))}
             />
 
-            {jobRequiresMaintenance(draft.jobType) && <>
+            {!correctionsOnly && jobRequiresMaintenance(draft.jobType) && <>
                 <div className="job-edit-divider job-edit-field-wide">
                     <h3>Maintenance</h3>
                     <p>Select the maintenance type to be carried out. The maintenance summary below shows the equipment's current service schedule.</p>
