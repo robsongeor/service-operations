@@ -1,5 +1,6 @@
 import type { JobEquipmentFieldProps } from './JobEquipmentField'
 import JobEquipmentField from './JobEquipmentField'
+import './JobIntakeFields.css'
 
 type Props = JobEquipmentFieldProps & {
     description?: string
@@ -10,7 +11,7 @@ export default function JobEquipmentAndLocationFields({
     ...equipmentProps
 }: Props) {
     return <>
-        <div className="job-book-intake-section-heading">
+        <div className="job-book-intake-section-heading job-edit-field-wide">
             <h3>Equipment and location</h3>
             <p>{description}</p>
         </div>

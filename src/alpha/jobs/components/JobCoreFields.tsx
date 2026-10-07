@@ -24,12 +24,14 @@ type Props = {
     jobBookJob?: Job
     correctionsOnly?: boolean
     stagingOnly?: boolean
+    sectionDivider?: boolean
 }
 
-export default function JobCoreFields({ draft, setDraft, mechanics, mechanicsLoading = false, mechanicsError = '', onRetryMechanics, equipment, jobBookJob, allowEmptyJobType = false, jobTypeError = '', jobTypeOptions = JOB_TYPE_OPTIONS, correctionsOnly = false }: Props) {
+export default function JobCoreFields({ draft, setDraft, mechanics, mechanicsLoading = false, mechanicsError = '', onRetryMechanics, equipment, jobBookJob, allowEmptyJobType = false, jobTypeError = '', jobTypeOptions = JOB_TYPE_OPTIONS, correctionsOnly = false, sectionDivider = false }: Props) {
     return (
         <>
             <JobDetailsFields
+                divided={sectionDivider}
                 additionalFields={<>
                     <label className="job-edit-field">
                         <span>Job type</span>

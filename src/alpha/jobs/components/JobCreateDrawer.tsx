@@ -262,7 +262,7 @@ export default function JobCreateDrawer({
                     onLoadCustomerSites={onLoadCustomerSites}
                     onLoadSiteContacts={onLoadSiteContacts}
                 />
-                <JobCoreFields stagingOnly={stagingOnly} draft={draft} setDraft={setDraft} mechanics={mechanics} mechanicsLoading={mechanicsLoading} mechanicsError={mechanicsError} onRetryMechanics={onRetryMechanics} equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)} allowEmptyJobType jobTypeError={jobTypeError} jobTypeOptions={jobTypeOptions} />
+                <JobCoreFields sectionDivider stagingOnly={stagingOnly} draft={draft} setDraft={setDraft} mechanics={mechanics} mechanicsLoading={mechanicsLoading} mechanicsError={mechanicsError} onRetryMechanics={onRetryMechanics} equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)} allowEmptyJobType jobTypeError={jobTypeError} jobTypeOptions={jobTypeOptions} />
                 {jobRequiresMaintenance(draft.jobType) && <JobMaintenanceSummary
                     equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)}
                     servicePlans={servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === draft.equipmentId.toLowerCase())}

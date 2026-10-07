@@ -1,0 +1,75 @@
+.job-book-intake-section-heading {
+    display: grid;
+    gap: 4px;
+}
+
+.job-book-intake-section-heading h3,
+.job-book-intake-section-heading p {
+    margin: 0;
+}
+
+.job-book-intake-section-heading h3 {
+    color: #1e2d26;
+    font-size: 0.92rem;
+}
+
+.job-book-intake-section-heading p {
+    color: #748078;
+    font-size: 0.72rem;
+    line-height: 1.45;
+}
+
+.job-book-intake-field {
+    display: grid;
+    min-width: 0;
+    gap: 7px;
+    color: #35443d;
+    font-size: 0.75rem;
+    font-weight: 750;
+}
+
+.job-book-intake-field > span small {
+    color: #77827c;
+    font-size: 0.68rem;
+    font-weight: 600;
+}
+
+.job-book-intake-field input,
+.job-book-intake-field textarea {
+    width: 100%;
+    min-height: 40px;
+    box-sizing: border-box;
+    padding: 0 11px;
+    border: 1px solid #d0d7d2;
+    border-radius: 8px;
+    background: #fff;
+    color: #26312c;
+    font: inherit;
+    font-weight: 450;
+}
+
+.job-book-intake-field textarea {
+    min-height: 100px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    line-height: 1.45;
+    resize: vertical;
+}
+
+.job-book-intake-field input:focus,
+.job-book-intake-field textarea:focus {
+    border-color: #43877a;
+    outline: 0;
+    box-shadow: 0 0 0 3px rgba(23, 111, 102, 0.12);
+}
+
+.job-book-intake-field.error input,
+.job-book-intake-field.error textarea {
+    border-color: #bd6868;
+}
+
+.job-book-intake-field-error {
+    color: #963e3e !important;
+    font-size: 0.7rem;
+    font-weight: 700;
+}

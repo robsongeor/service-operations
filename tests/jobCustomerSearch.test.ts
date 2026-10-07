@@ -89,7 +89,7 @@ test('Failed searches stay distinct from no matches, cancelled failures are igno
 test('Both drawers use the canonical field, existing picker and one search hook; Intake has no directory fan-out', () => {
     const relationships = read('../src/alpha/jobs/components/JobRelationshipFields.tsx')
     const book = read('../src/alpha/job-book/JobBookPrototypeScreen.tsx')
-    const adapter = book.slice(book.indexOf('function CustomerPicker('), book.indexOf('function MechanicPicker('))
+    const adapter = book.slice(book.indexOf('function CustomerPicker('), book.indexOf('export default function JobBookPrototypeScreen('))
     const field = read('../src/alpha/jobs/components/JobCustomerField.tsx')
     assert.match(relationships, /<JobCustomerField/)
     assert.match(adapter, /<JobCustomerField/)
