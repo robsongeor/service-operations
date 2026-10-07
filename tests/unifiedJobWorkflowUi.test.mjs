@@ -107,6 +107,7 @@ test('single coordination tab row separates membership from type and unconfirmed
     assert.doesNotMatch(operational, />All types</)
     const all = renderWorklist(rows, 'all')
     for (const row of rows) assert.ok(all.includes(row.gr_description))
+    assert.doesNotMatch(all, /jobs-table-muted">(?:Staging|Job Book)</)
     const unconfirmed = renderWorklist(rows, 'unconfirmed')
     assert.match(unconfirmed, /Unconfirmed work/)
     assert.doesNotMatch(unconfirmed, /Unnumbered staging|Historical ledger entry/)

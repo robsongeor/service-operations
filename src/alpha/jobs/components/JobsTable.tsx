@@ -30,7 +30,7 @@ import JobEmailComposer from './JobEmailComposer'
 import JobQuickActions from './JobQuickActions'
 import type { JobEmailDeliveryState, JobEmailDraft } from '../services/jobEmail'
 import { buildJobBookSpreadsheetRow, buildNumberedJobBookSpreadsheetRow } from '../utils/jobBookClipboard'
-import { isCoordinatorManaged, jobWorklistLabel } from '../domain/unifiedJobWorkflow'
+import { isCoordinatorManaged } from '../domain/unifiedJobWorkflow'
 
 type Props = {
     unifiedWorklist?: boolean
@@ -604,7 +604,7 @@ export default function JobsTable({
 
                                 <td className="jobs-table-actions-column">
                                     <div className="jobs-table-actions">
-                                        {unifiedWorklist && !isCoordinatorManaged(job) && <span className="jobs-table-muted">{jobWorklistLabel(job)}</span>}
+                                        {unifiedWorklist && job.gr_registrationvoid && <span className="jobs-table-muted">Void</span>}
                                         {onManageJob && !isCoordinatorManaged(job) && !job.gr_registrationvoid && <button type="button" className="job-quick-action job-quick-action-edit" onClick={() => onManageJob(job)}>Manage job</button>}
                                         {!unifiedWorklist && <input
                                             type="checkbox"
