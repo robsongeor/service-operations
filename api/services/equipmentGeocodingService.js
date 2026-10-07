@@ -6,6 +6,12 @@ const PROVIDER_REQUEST_INTERVAL_MS = 250
 const MAXIMUM_CACHE_ENTRIES = 2_000
 const MAXIMUM_AUTOCOMPLETE_RESULTS = 6
 const MAXIMUM_DATAVERSE_WRITE_CONCURRENCY = 4
+// This repository is dedicated to the Liftrucks Dataverse environment. Static
+// Web Apps does not expose Vite build variables to its managed API runtime, so
+// keep a non-secret, tenant-specific fallback for delegated-token validation.
+// An explicit server setting still takes precedence and an invalid configured
+// value remains a hard failure rather than silently falling back.
+const DEFAULT_DATAVERSE_ORIGIN = 'https://org0d4246d7.crm6.dynamics.com'
 const cache = new Map()
 const DATAVERSE_SITE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -30,7 +36,7 @@ function requestHeader(request, name) {
 
 function dataverseOrigin() {
     const configured = (process.env.DATAVERSE_URL || process.env.VITE_DATAVERSE_URL || '').trim()
-    if (!configured) return ''
+    if (!configured) return DEFAULT_DATAVERSE_ORIGIN
     try {
         const url = new URL(configured)
         return url.protocol === 'https:' ? url.origin : ''

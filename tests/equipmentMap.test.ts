@@ -12,6 +12,7 @@ const service = require('../api/services/equipmentGeocodingService.js') as {
     test: {
         addressSuggestionFromGeoapify: (value: unknown) => unknown
         coordinateFromGeoapify: (value: unknown) => unknown
+        dataverseOrigin: () => string
         geocodePersistencePayload: (result: { address: string; coordinate: { latitude: number; longitude: number; formattedAddress: string } | null }, resolvedOn: string) => Record<string, unknown>
         isDataverseSiteId: (value: unknown) => boolean
         normalizeAddressQuery: (value: unknown) => string
@@ -22,6 +23,27 @@ const service = require('../api/services/equipmentGeocodingService.js') as {
         ) => Promise<Array<{ siteId: string; coordinate: unknown; status: string }>>
     }
 }
+
+test('address verification uses the fixed app Dataverse origin when the managed API setting is absent', () => {
+    const previousDataverseUrl = process.env.DATAVERSE_URL
+    const previousViteDataverseUrl = process.env.VITE_DATAVERSE_URL
+    try {
+        delete process.env.DATAVERSE_URL
+        delete process.env.VITE_DATAVERSE_URL
+        assert.equal(service.test.dataverseOrigin(), 'https://org0d4246d7.crm6.dynamics.com')
+
+        process.env.DATAVERSE_URL = 'https://configured.crm6.dynamics.com/'
+        assert.equal(service.test.dataverseOrigin(), 'https://configured.crm6.dynamics.com')
+
+        process.env.DATAVERSE_URL = 'not-a-url'
+        assert.equal(service.test.dataverseOrigin(), '')
+    } finally {
+        if (previousDataverseUrl === undefined) delete process.env.DATAVERSE_URL
+        else process.env.DATAVERSE_URL = previousDataverseUrl
+        if (previousViteDataverseUrl === undefined) delete process.env.VITE_DATAVERSE_URL
+        else process.env.VITE_DATAVERSE_URL = previousViteDataverseUrl
+    }
+})
 
 test('Geoapify autocomplete input and results are bounded and sanitized', () => {
     assert.equal(service.test.normalizeAddressQuery({ query: '  12   Queen Street  ' }), '12 Queen Street')

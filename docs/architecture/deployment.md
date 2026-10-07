@@ -114,6 +114,12 @@ unavailable. Create and restrict the provider key separately; never expose it th
 variable. `VITE_EQUIPMENT_MAP_TILE_URL` may optionally select a different Leaflet raster-tile template;
 it is a public URL, not a credential.
 
+The managed address-search and Equipment Map APIs prefer the server-side `DATAVERSE_URL` setting.
+Because this repository is dedicated to the Liftrucks tenant and Azure Static Web Apps does not pass
+Vite build variables into its managed API runtime, those APIs use the fixed, non-secret Liftrucks
+Dataverse origin when the setting is absent. An explicitly configured but invalid URL still fails
+closed. `GEOAPIFY_API_KEY` has no fallback and must remain a server-only Static Web App setting.
+
 Chargeable Invoice File-write release gates are server-only and default to disabled:
 
 ```text
