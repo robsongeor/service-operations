@@ -476,7 +476,7 @@ export default function JobsTable({
                                     {job.gr_jobnumber?.trim()
                                         ? <span className="jobs-table-job-number" title="Allocated Job numbers cannot be changed.">{job.gr_jobnumber.trim()}</span>
                                         : onAllocateNumber && !job.gr_registrationvoid
-                                            ? <button type="button" className="jobs-table-allocate-number" onClick={() => onAllocateNumber(job)}>Allocate number</button>
+                                            ? <button type="button" className="jobs-table-allocate-number" onClick={() => onAllocateNumber(job)}>Allocate…</button>
                                             : <span className="jobs-table-job-number" title="Job number pending allocation.">—</span>}
                                 </td>
 
