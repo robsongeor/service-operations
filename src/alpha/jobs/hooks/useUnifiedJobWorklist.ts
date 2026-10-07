@@ -51,10 +51,6 @@ export function useUnifiedJobWorklist(scope: JobTypeFilter) {
     useEffect(() => {
         if (!UNIFIED_JOB_RUNTIME) return
         const requestGeneration = generation
-        setLoadedScope(null)
-        setJobs([])
-        setBusy(true)
-        setError('')
         const timer = setTimeout(() => void load(), 0)
         return () => { clearTimeout(timer); requestGeneration.current++ }
     }, [load])
