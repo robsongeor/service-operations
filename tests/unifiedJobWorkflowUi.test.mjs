@@ -28,11 +28,12 @@ test.after(async () => { globalThis.window = originalWindow; globalThis.fetch = 
 test.beforeEach(() => values.clear())
 const renderRegistration = (props = {}) => renderToStaticMarkup(createElement(Registration, { job, mode: 'allocate', getAccessToken: unavailable, onSaved: unavailable, onClose: unavailable, ...props }))
 
-test('coordination tabs filter one complete worklist without reloading Dataverse', () => {
+test('coordination tabs filter a progressively loaded worklist without becoming query dependencies', () => {
     const source = readFileSync(new URL('../src/alpha/jobs/hooks/useUnifiedJobWorklist.ts', import.meta.url), 'utf8')
-    assert.match(source, /export function useUnifiedJobWorklist\(\)/)
-    assert.match(source, /fetchUnifiedJobsPage\(token, 'all', cursor\)/)
-    assert.match(source, /\}, \[getAccessToken\]\)/)
+    assert.match(source, /export function useUnifiedJobWorklist\(loadCompletedArchive = false\)/)
+    assert.match(source, /fetchScope\(token, 'priority', current\)/)
+    assert.match(source, /Promise\.all\(\[\s*fetchScope\(token, 'deferred', current\),\s*fetchScope\(token, 'recent-complete', current\)/)
+    assert.match(source, /if \(loadCompletedArchive && !busy && !backgroundBusy\) void loadArchive\(\)/)
     assert.doesNotMatch(source, /scope: JobTypeFilter|\[getAccessToken, scope\]/)
 })
 

@@ -189,6 +189,12 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
 
 ## Priority 2 — Product improvements
 
+- [ ] Define an authoritative GreenTree-closed Job marker and retention policy, then use it as the
+  Service Coordination archive boundary. The progressive loader currently prioritises Unallocated,
+  Allocated, Waiting for parts and unnumbered Jobs; loads Completion Review, Unconfirmed and the most
+  recent 90 days of completed Jobs in the background; and loads older completed history only when the
+  user explicitly selects Complete. Preserve on-demand access to closed historical Jobs.
+
 - [ ] Retire the **Unconfirmed** Job workflow end to end after a production-data and V1 dependency
   audit. Remove its Service Coordination tab, filters, status transitions, scheduling/allocation
   exclusions, Dataverse/API/plugin handling and other backend branches together; migrate or preserve

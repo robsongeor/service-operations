@@ -87,6 +87,11 @@ test('production unified worklist is server-filtered, bounded and explicitly pag
 
 test('production worklist filters preserve tab meaning and reject untrusted paging', async () => {
     assert.equal(unifiedJobsServerFilter('all'), '')
+    assert.match(unifiedJobsServerFilter('priority'), /gr_status eq 122830001 or gr_status eq 122830000 or gr_status eq 122830002/)
+    assert.match(unifiedJobsServerFilter('priority'), /gr_jobnumber eq null/)
+    assert.match(unifiedJobsServerFilter('deferred'), /gr_status eq 122830004 or gr_status eq 122830005/)
+    assert.equal(unifiedJobsServerFilter('recent-complete', new Date('2026-10-07T00:00:00Z')), 'gr_status eq 122830003 and gr_completeddate ge 2026-07-09 and gr_registrationvoid ne true')
+    assert.equal(unifiedJobsServerFilter('complete-archive'), 'gr_status eq 122830003 and gr_registrationvoid ne true')
     assert.equal(unifiedJobsServerFilter('staging'), 'gr_jobnumber eq null and gr_registrationvoid ne true')
     assert.equal(unifiedJobsServerFilter('unnumbered'), 'gr_jobnumber eq null and gr_registrationvoid ne true')
     assert.match(unifiedJobsServerFilter('unconfirmed'), /gr_status eq 122830005/)

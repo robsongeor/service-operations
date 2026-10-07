@@ -30,9 +30,19 @@ const JOB_SELECT = `gr_jobid,createdon,gr_jobnumber,gr_status,gr_ordernumber,gr_
 const JOB_EXPAND = 'gr_Equipment($select=gr_equipmentid,gr_fleet,gr_alternatefleetnumbers,gr_make,gr_model,gr_serial,gr_currenthourmeter,gr_currenthourmeterrecordeddate,gr_servicetrackingenabled),gr_Mechanic($select=gr_mechanicid,gr_name,gr_phone,gr_email),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name,gr_phone,gr_email)'
 
 export const UNIFIED_JOBS_PAGE_SIZE = 100
+export const RECENT_COMPLETED_JOB_DAYS = 90
+export type UnifiedJobsServerScope = JobTypeFilter | 'staging' | 'priority' | 'deferred' | 'recent-complete' | 'complete-archive'
 
-export function unifiedJobsServerFilter(scope: JobTypeFilter | 'staging') {
+export function unifiedJobsServerFilter(scope: UnifiedJobsServerScope, now = new Date()) {
     if (scope === 'all') return ''
+    if (scope === 'priority') return `((gr_status eq ${JOB_STATUSES.UNALLOCATED} or gr_status eq ${JOB_STATUSES.ALLOCATED} or gr_status eq ${JOB_STATUSES.WAITING_FOR_PARTS}) or gr_jobnumber eq null) and gr_registrationvoid ne true`
+    if (scope === 'deferred') return `(gr_status eq ${JOB_STATUSES.COMPLETION_REVIEW} or gr_status eq ${JOB_STATUSES.UNCONFIRMED}) and gr_registrationvoid ne true`
+    if (scope === 'recent-complete') {
+        const cutoff = new Date(now)
+        cutoff.setUTCDate(cutoff.getUTCDate() - RECENT_COMPLETED_JOB_DAYS)
+        return `gr_status eq ${JOB_STATUSES.COMPLETE} and gr_completeddate ge ${cutoff.toISOString().slice(0, 10)} and gr_registrationvoid ne true`
+    }
+    if (scope === 'complete-archive') return `gr_status eq ${JOB_STATUSES.COMPLETE} and gr_registrationvoid ne true`
     if (scope === 'operational') return '(gr_coordinatormanaged eq true or gr_coordinatormanaged eq null) and gr_registrationvoid ne true'
     if (scope === 'staging' || scope === 'unnumbered') return 'gr_jobnumber eq null and gr_registrationvoid ne true'
     if (scope === 'unconfirmed') return `gr_status eq ${JOB_STATUSES.UNCONFIRMED} and gr_registrationvoid ne true`
@@ -52,7 +62,7 @@ function trustedUnifiedJobsNextLink(value?: string) {
 
 export async function fetchUnifiedJobsPage(
     accessToken: string,
-    scope: JobTypeFilter | 'staging',
+    scope: UnifiedJobsServerScope,
     continuationLink = '',
     signal?: AbortSignal,
 ): Promise<{ records: Job[]; next: string }> {
@@ -737,9 +747,11 @@ export async function updateJobFields(
 }
 
 export async function allocateJobNumbers(
-    _token: string,
-    _allocations: readonly { job: Job; jobNumber: string }[],
+    token: string,
+    allocations: readonly { job: Job; jobNumber: string }[],
 ) {
+    void token
+    void allocations
     throw new Error('Manual Job number entry is disabled. Use the regional allocation system.')
 }
 

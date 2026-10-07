@@ -39,7 +39,9 @@ export default function JobsScreen() {
     const [viewState, setViewState] = useState<JobsViewState>(() => UNIFIED_JOB_WALKTHROUGH ? { ...DEFAULT_JOBS_VIEW_STATE } : storageKey
         ? restoreJobsViewState(storageKey, true) ?? applyJobsDefaultView(defaultView)
         : DEFAULT_JOBS_VIEW_STATE)
-    const unifiedWorklist = useUnifiedJobWorklist()
+    const completedArchiveRequested = viewState.visibleStatuses.length === 1
+        && viewState.visibleStatuses[0] === JOB_STATUSES.COMPLETE
+    const unifiedWorklist = useUnifiedJobWorklist(completedArchiveRequested)
     const scopedData = useMemo(() => ({ jobs: unifiedWorklist.jobs, equipment: [], sites: [], servicePlans: [], scheduleOptions: [], officeUpdates: [] }), [unifiedWorklist.jobs])
     const [workflowJob, setWorkflowJob] = useState<Job | null>(null)
     const [allocationJob, setAllocationJob] = useState<Job | null>(null)
@@ -195,6 +197,7 @@ export default function JobsScreen() {
                 <h1>Jobs</h1>
                 <div className="jobs-page-header-actions">
                     <span>{jobs.length} records</span>
+                    {UNIFIED_JOB_RUNTIME && unifiedWorklist.backgroundBusy && <span className="jobs-cache-status">Loading additional jobs…</span>}
                     {jobsRealtimeStatus !== 'disabled' && (
                         <span className={`jobs-realtime-status ${jobsRealtimeStatus}`}>
                             {jobsRealtimeStatus === 'connected'
