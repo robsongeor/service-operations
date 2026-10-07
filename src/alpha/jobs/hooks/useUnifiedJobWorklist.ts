@@ -13,6 +13,7 @@ export function useUnifiedJobWorklist(scope: JobTypeFilter) {
     const account = useActiveMsalAccount()
     const getAccessToken = useCallback(() => acquireDataverseAccessToken(instance, account), [instance, account])
     const [jobs, setJobs] = useState<Job[]>([])
+    const [loadedScope, setLoadedScope] = useState<JobTypeFilter | null>(null)
     const [busy, setBusy] = useState(UNIFIED_JOB_RUNTIME)
     const [error, setError] = useState('')
     const generation = useRef(0)
@@ -41,6 +42,7 @@ export function useUnifiedJobWorklist(scope: JobTypeFilter) {
                 return
             }
             setJobs([...rows.values()])
+            setLoadedScope(scope)
         } catch (cause) {
             if (current === generation.current) setError(cause instanceof Error ? cause.message : 'Jobs could not be loaded.')
             if (requireConfirmation) throw cause
@@ -49,8 +51,13 @@ export function useUnifiedJobWorklist(scope: JobTypeFilter) {
     useEffect(() => {
         if (!UNIFIED_JOB_RUNTIME) return
         const requestGeneration = generation
+        setLoadedScope(null)
+        setJobs([])
+        setBusy(true)
+        setError('')
         const timer = setTimeout(() => void load(), 0)
         return () => { clearTimeout(timer); requestGeneration.current++ }
     }, [load])
-    return { jobs, busy, error, reload: load, getAccessToken }
+    const scopeIsCurrent = loadedScope === scope
+    return { jobs: scopeIsCurrent ? jobs : [], busy: busy || !scopeIsCurrent, error, reload: load, getAccessToken }
 }

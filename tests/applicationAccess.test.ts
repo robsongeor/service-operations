@@ -129,6 +129,8 @@ test('unified production Jobs uses the bounded worklist without changing the def
     assert.match(screen, /unifiedWorklist=\{UNIFIED_JOB_RUNTIME\}/)
     assert.match(worklist, /fetchUnifiedJobsPage\(token, scope, cursor\)/)
     assert.match(worklist, /pageNumber < 50/)
+    assert.match(worklist, /loadedScope === scope/)
+    assert.match(worklist, /jobs: scopeIsCurrent \? jobs : \[\]/)
     assert.doesNotMatch(screen, /Refresh Jobs|Load more Jobs/)
 })
 
