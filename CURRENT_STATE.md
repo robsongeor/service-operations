@@ -100,6 +100,9 @@ Branch: `v2-deployment`
 - The client recognizes `ServiceOperations.JobCardAdmin`, lands it on Job Card reviews, and exposes
   only Job Card reviews, Legacy Job Book, Quotes, Equipment, and Customers. Quotes, Equipment,
   Customers, Sites and Contacts remain read-only outside the approved Intake location exceptions.
+  Office Admins can open an existing Quote in a dedicated display-only popout containing text,
+  line details, notes and totals; it contains no inputs, add/remove controls, save/delete actions,
+  PDF generation or PO email action.
   Admin managed-Job corrections now use **Edit entry** within Job Book; Equipment,
   Customer/Site, Contact, description and PO are editable, and address follows Site. Factual
   managed-Job GT/Timecloud ticks are permitted. Coordinator controls, allocated number and original

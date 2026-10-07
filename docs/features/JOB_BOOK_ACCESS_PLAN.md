@@ -117,7 +117,8 @@ The precise Equipment field allowlist remains an implementation decision.
 - Assigned-technician email through the approved workflow; coordinator management and later
   reassignment/scheduling remain excluded. Initial assignment in unified registration follows the
   Job Book design and still requires real integration.
-- Read-only Quotes. Customer/Site creation, explicit Equipment movement and Equipment-detail
+- Read-only Quotes, including a display-only existing-Quote popout with no editing, deletion,
+  PDF-generation or PO-email actions. Customer/Site creation, explicit Equipment movement and Equipment-detail
   editing match Job Book Admin permissions above. Existing Customer/Site master-record editing
   remains outside the agreed scope.
 
@@ -137,8 +138,9 @@ and tested for the final approved reviewer roster.
 | Service coordination | No access | No access |
 
 These are intended navigation and action boundaries. They must also hold for direct links,
-related-record drawers and API requests. The profiles and restricted screens are now implemented
-locally; no live Microsoft assignments have changed. The draft server guard is not deployed.
+related-record drawers and API requests. The profiles and restricted screens are implemented;
+the Entra Service Coordinator role is assigned to Bruce for additive acceptance testing. The draft
+server guard is not enabled during the V1/V2 shared-Dataverse overlap.
 
 ## Agreed Service Coordinator navigation
 

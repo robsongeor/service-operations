@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import QuoteEditorDialog from './components/QuoteEditorDialog'
+import QuoteReadOnlyDialog from './components/QuoteReadOnlyDialog'
 import { useQuotes } from './hooks/useQuotes'
 import { QUOTE_STATUS_LABELS, QUOTE_STATUS_OPTIONS, type Quote, type QuoteInput, type QuoteLine, type QuoteStatus } from './types/quote.types'
 import { DEFAULT_QUOTES_VIEW_STATE, getQuotesViewStateKey, restoreQuotesViewState, type QuotesViewState } from './types/quotesViewState.types'
@@ -20,7 +21,7 @@ export default function QuotesScreen({ readOnly = false }: { readOnly?: boolean 
     const requestedNewJobId = !readOnly && searchParams.get('new') === '1'
         ? searchParams.get('jobId') ?? undefined
         : undefined
-    const requestedQuoteId = readOnly ? null : searchParams.get('quoteId')
+    const requestedQuoteId = searchParams.get('quoteId')
     const [editingQuote, setEditingQuote] = useState<Quote | null | undefined>(
         () => requestedNewJobId ? null : undefined,
     )
@@ -52,7 +53,7 @@ export default function QuotesScreen({ readOnly = false }: { readOnly?: boolean 
         save,
         deleteQuote,
         clearSaveError,
-    } = useQuotes({ loadEditorSupport: editorRequested })
+    } = useQuotes({ loadEditorSupport: editorRequested && !readOnly })
     const [editingLines, setEditingLines] = useState<QuoteLine[]>([])
     const [isOpening, setIsOpening] = useState(false)
     const [openError, setOpenError] = useState('')
@@ -246,7 +247,7 @@ export default function QuotesScreen({ readOnly = false }: { readOnly?: boolean 
                             {visibleQuotes.map((quote) => {
                                 const linkedEquipment = quote.gr_Equipment || quote.gr_Job?.gr_Equipment
                                 const equipmentMakeModel = [linkedEquipment?.gr_make, linkedEquipment?.gr_model].filter(Boolean).join(' ')
-                                return <tr key={quote.gr_quoteid} onClick={readOnly ? undefined : () => void openExisting(quote)}>
+                                return <tr key={quote.gr_quoteid} onClick={() => void openExisting(quote)}>
                                     <td><strong>{quote.gr_Customer?.gr_name || quote.gr_Job?.gr_Site?.gr_Customer?.gr_name || quote.gr_Equipment?.gr_Site?.gr_Customer?.gr_name || '—'}</strong></td>
                                     <td><strong className="quotes-job-value" title={quote.gr_Job?.gr_jobnumber || undefined}>{quote.gr_Job?.gr_jobnumber || '—'}</strong></td>
                                     <td><strong>{linkedEquipment?.gr_fleet || '—'}</strong><small>{equipmentMakeModel || linkedEquipment?.gr_serial || ''}</small></td>
@@ -265,11 +266,24 @@ export default function QuotesScreen({ readOnly = false }: { readOnly?: boolean 
                 </div>
             )}
 
-            {!readOnly && (isOpening || (editorRequested && isEditorLoading)) && (
-                <div className="quotes-opening" role="status">Loading quote editor…</div>
+            {(isOpening || (!readOnly && editorRequested && isEditorLoading)) && (
+                <div className="quotes-opening" role="status">Loading quote details…</div>
             )}
             {!readOnly && editorRequested && editorLoadError && (
                 <p className="quotes-page-error" role="alert">{editorLoadError}</p>
+            )}
+
+            {readOnly && editingQuote && !isOpening && (
+                <QuoteReadOnlyDialog
+                    quote={editingQuote}
+                    lines={editingLines}
+                    onClose={() => {
+                        setEditingQuote(undefined)
+                        setEditingLines([])
+                        setEditorRequested(false)
+                        setSearchParams({})
+                    }}
+                />
             )}
 
             {!readOnly && editingQuote !== undefined && !isEditorLoading && !editorLoadError && (
