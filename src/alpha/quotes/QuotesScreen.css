@@ -105,17 +105,25 @@
 .quote-dialog form { padding: 20px 22px; }
 .quote-read-only-content { padding: 20px 22px; }
 .quote-read-only-banner { margin-bottom: 16px; padding: 10px 12px; border: 1px solid #cfe0d9; border-radius: 8px; background: #f2f8f5; color: #285c4c; font-size: .74rem; font-weight: 750; }
-.quote-read-only-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 14px; margin: 0; }
+.quote-read-only-grid { display: grid; grid-template-columns: repeat(12,minmax(0,1fr)); column-gap: 18px; row-gap: 4px; margin: 0; }
 .quote-read-only-grid > div { min-width: 0; padding: 10px 11px; border-bottom: 1px solid #e0e6e2; }
-.quote-read-only-grid .quote-read-only-title { grid-column: span 3; }
+.quote-read-only-grid > div { grid-column: span 3; }
+.quote-read-only-grid .quote-read-only-title { grid-column: span 9; }
+.quote-read-only-grid .quote-read-only-date { grid-column: span 4; }
 .quote-read-only-grid dt, .quote-read-only-notes > span { margin-bottom: 5px; color: #526059; font-size: .68rem; font-weight: 750; }
 .quote-read-only-grid dd { min-width: 0; margin: 0; color: #26312b; font-size: .78rem; font-weight: 650; overflow-wrap: anywhere; }
 .quote-read-only-grid dd small { display: block; margin-top: 4px; color: #748079; font-size: .68rem; font-weight: 500; }
 .quote-read-only-lines { overflow-x: auto; border: 1px solid #dfe6e2; border-radius: 10px; }
-.quote-read-only-lines table { width: 100%; min-width: 820px; border-collapse: collapse; font-size: .73rem; }
+.quote-read-only-lines table { width: 100%; min-width: 720px; table-layout: fixed; border-collapse: collapse; font-size: .73rem; }
+.quote-read-only-lines .quote-line-number-column { width: 5%; }
+.quote-read-only-lines .quote-line-description-column { width: 29%; }
+.quote-read-only-lines .quote-line-category-column { width: 17%; }
+.quote-read-only-lines .quote-line-quantity-column { width: 8%; }
+.quote-read-only-lines .quote-line-unit-column { width: 10%; }
+.quote-read-only-lines .quote-line-money-column { width: 15.5%; }
 .quote-read-only-lines th, .quote-read-only-lines td { padding: 10px 11px; border-bottom: 1px solid #e6ebe8; text-align: left; }
 .quote-read-only-lines th { background: #f3f6f4; color: #6c7771; font-size: .61rem; letter-spacing: .04em; text-transform: uppercase; }
-.quote-read-only-lines td:nth-last-child(-n+3), .quote-read-only-lines th:nth-last-child(-n+3) { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.quote-read-only-lines .quote-line-number-cell, .quote-read-only-lines .quote-line-money-cell { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .quote-read-only-lines tbody tr:last-child td { border-bottom: 0; }
 .quote-read-only-lines > p { margin: 0; padding: 24px; color: #748079; text-align: center; }
 .quote-read-only-notes { min-height: 100px; padding: 12px; border: 1px solid #dfe6e2; border-radius: 10px; background: #fafcfb; }
@@ -203,7 +211,7 @@
 @media (max-width: 900px) {
     .quote-form-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
     .quote-read-only-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
-    .quote-read-only-grid .quote-read-only-title { grid-column: span 1; }
+    .quote-read-only-grid > div, .quote-read-only-grid .quote-read-only-title, .quote-read-only-grid .quote-read-only-date { grid-column: span 1; }
     .quote-title-field { grid-column: span 1; }
     .quote-bottom-grid { grid-template-columns: 1fr; }
 }

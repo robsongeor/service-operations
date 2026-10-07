@@ -47,15 +47,15 @@ export default function QuoteReadOnlyDialog({
                 <div className="quote-read-only-banner" role="status">Read only — quote information cannot be changed.</div>
 
                 <dl className="quote-read-only-grid">
-                    <div><dt>Author</dt><dd>{valueOrDash(quote.createdby?.fullname)}</dd></div>
+                    <div className="quote-read-only-author"><dt>Author</dt><dd>{valueOrDash(quote.createdby?.fullname)}</dd></div>
                     <div className="quote-read-only-title"><dt>Quote title</dt><dd>{valueOrDash(quote.gr_name)}</dd></div>
                     <div><dt>Job</dt><dd>{valueOrDash(quote.gr_Job?.gr_jobnumber)}{quote.gr_Job?.gr_description ? <small>{quote.gr_Job.gr_description}</small> : null}</dd></div>
                     <div><dt>Customer</dt><dd>{customer}</dd></div>
                     <div><dt>Equipment</dt><dd>{equipmentLabel}</dd></div>
                     <div><dt>Status</dt><dd><span className={`quote-status status-${quote.gr_quotestatus}`}>{QUOTE_STATUS_LABELS[quote.gr_quotestatus] ?? 'Unknown'}</span></dd></div>
-                    <div><dt>Revision</dt><dd>{quote.gr_revision}</dd></div>
-                    <div><dt>Quote date</dt><dd>{formatDate(quote.gr_quotedate)}</dd></div>
-                    <div><dt>Valid until</dt><dd>{formatDate(quote.gr_validuntil)}</dd></div>
+                    <div className="quote-read-only-date"><dt>Revision</dt><dd>{quote.gr_revision}</dd></div>
+                    <div className="quote-read-only-date"><dt>Quote date</dt><dd>{formatDate(quote.gr_quotedate)}</dd></div>
+                    <div className="quote-read-only-date"><dt>Valid until</dt><dd>{formatDate(quote.gr_validuntil)}</dd></div>
                 </dl>
 
                 <div className="quote-lines-heading">
@@ -63,16 +63,16 @@ export default function QuoteReadOnlyDialog({
                 </div>
                 <div className="quote-read-only-lines">
                     <table>
-                        <thead><tr><th>#</th><th>Description</th><th>Category</th><th>Qty</th><th>Unit</th><th>Unit price</th><th>Extended</th><th>GST</th></tr></thead>
+                        <colgroup><col className="quote-line-number-column" /><col className="quote-line-description-column" /><col className="quote-line-category-column" /><col className="quote-line-quantity-column" /><col className="quote-line-unit-column" /><col className="quote-line-money-column" /><col className="quote-line-money-column" /></colgroup>
+                        <thead><tr><th>#</th><th>Description</th><th>Category</th><th className="quote-line-number-cell">Qty</th><th>Unit</th><th className="quote-line-money-cell">Unit price</th><th className="quote-line-money-cell">Extended</th></tr></thead>
                         <tbody>{lines.map((line, index) => <tr key={line.gr_quotelineid}>
                             <td>{index + 1}</td>
                             <td>{valueOrDash(line.gr_description)}</td>
                             <td>{PRICING_CATEGORY_LABELS[line.gr_category] ?? 'Other'}</td>
-                            <td>{line.gr_quantity}</td>
+                            <td className="quote-line-number-cell">{line.gr_quantity}</td>
                             <td>{valueOrDash(line.gr_unitlabel)}</td>
-                            <td>{money.format(line.gr_unitprice)}</td>
-                            <td>{money.format(line.gr_extendedprice)}</td>
-                            <td>{line.gr_taxable ? 'Yes' : 'No'}</td>
+                            <td className="quote-line-money-cell">{money.format(line.gr_unitprice)}</td>
+                            <td className="quote-line-money-cell">{money.format(line.gr_extendedprice)}</td>
                         </tr>)}</tbody>
                     </table>
                     {!lines.length && <p>No quote lines recorded.</p>}
