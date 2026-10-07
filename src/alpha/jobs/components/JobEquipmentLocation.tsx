@@ -14,7 +14,7 @@ type Props = {
     onSavingChange: (saving: boolean) => void
 }
 
-// Shared creation-only workflow. Existing Job/Intake history editors keep their recorded location.
+// Shared workflow for explicitly reviewing and updating an Equipment's current location.
 export default function JobEquipmentLocation({ equipment, onLocationChange, onPendingChange, onSavingChange }: Props) {
     const location = useEquipmentLocation(equipment, onLocationChange)
     const id = useId()

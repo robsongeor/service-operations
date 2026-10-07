@@ -19,7 +19,7 @@ test.after(async () => { globalThis.fetch = originalFetch; globalThis.window = o
 
 const unavailable = () => { throw new Error('No mutation allowed during render.') }
 const site = { gr_siteid: 'site', gr_name: 'Historical Site', gr_address: 'Saved Site address', gr_Customer: { gr_customerid: 'customer', gr_name: 'Saved Customer' } }
-const equipment = { gr_equipmentid: 'equipment', gr_fleet: 'SAVED-EQUIPMENT', gr_make: 'Make', gr_model: 'Model', gr_serial: 'SERIAL' }
+const equipment = { gr_equipmentid: 'equipment', gr_fleet: 'SAVED-EQUIPMENT', gr_make: 'Make', gr_model: 'Model', gr_serial: 'SERIAL', gr_Site: site }
 const job = { gr_jobid: 'job', gr_jobnumber: 'WJ1234567', gr_jobtype: 122830000, gr_status: 122830003, gr_description: 'Saved description', gr_ordernumber: 'PO-1', gr_Equipment: equipment, gr_Site: site, gr_Mechanic: { gr_mechanicid: 'mechanic', gr_name: 'Saved Technician' } }
 const render = (props = {}) => renderToStaticMarkup(createElement(Provider, { scope: 'sample-corrections' }, createElement(Drawer, {
     job, correctionsOnly: true, jobBookLabel: 'Auckland', canCorrectMechanic: true, mechanics: [job.gr_Mechanic], equipmentList: [equipment], customers: [site.gr_Customer], sites: [site], siteContacts: [], scheduleOptions: [], servicePlans: [],

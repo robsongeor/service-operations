@@ -200,6 +200,8 @@ export default function JobEditDrawer({
     })
     const { draft, setDraft, resetDraft } = editor
     const [isSaving, setIsSaving] = useState(false)
+    const [locationPending, setLocationPending] = useState(false)
+    const [locationSaving, setLocationSaving] = useState(false)
     const [saveError, setSaveError] = useState('')
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
     const [isDeleting, setIsDeleting] = useState(false)
@@ -359,6 +361,7 @@ export default function JobEditDrawer({
     const canEmailJob = !localSendingDisabled && hasJobNumber && Boolean(job.gr_Mechanic) && (azureJobCards || jobCardStatus === JOB_CARD_STATUSES.NOT_SENT)
 
     const saveChanges = async () => {
+        if (locationPending || locationSaving || isSaving) return
         if (saveBlockedReason) return
         if (!editorReady) {
             setSaveError('Wait for the latest Job details and editor choices to finish loading before saving.')
@@ -467,7 +470,7 @@ export default function JobEditDrawer({
             eyebrow={correctionsOnly ? `${jobBookLabel} Job Book` : 'Edit job'}
             title={correctionsOnly ? `Edit ${jobBookLabel} Job Book entry` : job.gr_jobnumber || 'Unnumbered job'}
             className={correctionsOnly ? 'job-book-intake-drawer' : undefined}
-            busy={isSaving || isDeleting || isEmailing}
+            busy={isSaving || isDeleting || isEmailing || locationSaving}
             onClose={onClose}
             headerAction={!correctionsOnly &&
                 <button
@@ -496,16 +499,16 @@ export default function JobEditDrawer({
                         </button>}
                         {saveError || saveBlockedReason
                             ? <span className="job-edit-save-error" role="alert">{saveError || saveBlockedReason}</span>
-                            : <span>{correctionsOnly ? `Editing Job Book ${job.gr_jobnumber || 'entry'}.` : 'Save to update this job in Dataverse.'}</span>}
+                            : <span>{locationPending ? 'Save or cancel the equipment location change before saving the Job.' : correctionsOnly ? `Editing Job Book ${job.gr_jobnumber || 'entry'}.` : 'Save to update this job in Dataverse.'}</span>}
                         {correctionsOnly && saveBlockedReason && <button type="button" onClick={onReloadCorrections}>Reload latest details</button>}
                     </div>
                     <div className="job-edit-footer-actions">
-                        <button type="button" onClick={onClose} disabled={isSaving}>Cancel</button>
+                        <button type="button" onClick={onClose} disabled={isSaving || locationSaving}>Cancel</button>
                         <button
                             type="button"
                             className="primary"
                             onClick={saveChanges}
-                            disabled={isSaving || !editorReady || Boolean(saveBlockedReason)}
+                            disabled={isSaving || locationPending || locationSaving || !editorReady || Boolean(saveBlockedReason)}
                         >
                             {isSaving ? 'Saving...' : 'Save changes'}
                         </button>
@@ -605,7 +608,10 @@ export default function JobEditDrawer({
                                 : <>
                                     <JobRelationshipFields
                                         correctionsOnly={correctionsOnly}
+                                        manageEquipmentLocation
                                         useLocationSummary
+                                        onLocationPendingChange={setLocationPending}
+                                        onLocationSavingChange={setLocationSaving}
                                         editor={editor}
                                         equipmentList={equipmentList}
                                         customers={customers}
