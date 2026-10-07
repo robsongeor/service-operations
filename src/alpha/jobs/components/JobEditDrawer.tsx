@@ -605,6 +605,7 @@ export default function JobEditDrawer({
                                 : <>
                                     <JobRelationshipFields
                                         correctionsOnly={correctionsOnly}
+                                        useLocationSummary
                                         editor={editor}
                                         equipmentList={equipmentList}
                                         customers={customers}
