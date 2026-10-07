@@ -114,7 +114,7 @@ test('single coordination tab row separates membership from type and unconfirmed
     assert.doesNotMatch(unconfirmed, /Unnumbered staging|Historical ledger entry/)
     const unnumbered = renderWorklist(rows, 'unnumbered')
     assert.match(unnumbered, /Unnumbered staging/)
-    assert.match(unnumbered, />Allocate…<\/button>/)
+    assert.match(unnumbered, />Allocate<\/button>/)
     assert.doesNotMatch(unnumbered, /Registered book work|Historical ledger entry/)
     const legacy = renderWorklist([rows[4]], 'all')
     assert.match(legacy, /read-only/)
