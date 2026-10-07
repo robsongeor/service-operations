@@ -9,6 +9,7 @@ import {
 
 const dashboardSource = readFileSync(new URL('../src/alpha/customers/CustomerDashboardScreen.tsx', import.meta.url), 'utf8')
 const drawerSource = readFileSync(new URL('../src/alpha/customers/SiteSettingsDrawer.tsx', import.meta.url), 'utf8')
+const customerDrawerSource = readFileSync(new URL('../src/alpha/customers/CustomerDrawer.tsx', import.meta.url), 'utf8')
 const runDrawerSource = readFileSync(new URL('../src/alpha/site-checks/components/RunSiteCheckDrawer.tsx', import.meta.url), 'utf8')
 const siteCheckDetailsSource = readFileSync(new URL('../src/alpha/site-checks/components/SiteCheckDetailsDrawer.tsx', import.meta.url), 'utf8')
 const scheduleSettingsSource = readFileSync(new URL('../src/alpha/site-checks/components/SiteCheckScheduleSettings.tsx', import.meta.url), 'utf8')
@@ -66,13 +67,14 @@ test('Site Settings restores focus to the invoking Site action when it closes', 
     assert.match(dashboardSource, /window\.setTimeout\(\(\) => trigger\?\.focus\(\), 0\)/)
 })
 
-test('combined Site Settings drawer exposes the required state-preserving tabs', () => {
+test('combined Site Settings drawer exposes only the retained state-preserving tabs', () => {
     assert.match(drawerSource, /title="Site Settings"/)
     assert.match(drawerSource, /label: 'Details'/)
-    assert.match(drawerSource, /label: 'Settings'/)
     assert.match(drawerSource, /label: 'Bulk Add Equipment'/)
     assert.match(drawerSource, /hidden=\{activeTab !== 'details'\}/)
-    assert.match(drawerSource, /hidden=\{activeTab !== 'settings'\}/)
+    assert.doesNotMatch(drawerSource, /label: 'Settings'|drawer-tab-settings/)
+    assert.doesNotMatch(drawerSource, /label: 'PO Contacts'|drawer-tab-po-contacts/)
+    assert.doesNotMatch(customerDrawerSource, /PO Contacts|po-contacts|PurchaseOrderRecipientEditor/)
     assert.doesNotMatch(drawerSource, /\{ id: 'site-checks' as const, label: 'Site Checks'/)
 })
 
@@ -108,11 +110,11 @@ test('bulk import receives the selected Customer and Site context', () => {
     assert.match(dashboardSource, /setBulkImportSite\(siteSettingsSite\)/)
 })
 
-test('details and settings retain the existing service workflows', () => {
+test('details retain the existing Site workflow without the removed maintenance settings action', () => {
     assert.match(dashboardSource, /onSaveDetails=\{\(name, address\) => updateSites/)
-    assert.match(dashboardSource, /onSaveSettings=\{\(profile, equipmentIds\) => updateSiteMaintenanceSettings/)
     assert.match(drawerSource, /form="site-settings-details-form"/)
-    assert.match(drawerSource, /onClick=\{requestSettingsSave\}/)
+    assert.doesNotMatch(dashboardSource, /onSaveSettings=/)
+    assert.doesNotMatch(drawerSource, /requestSettingsSave|Default Maintenance Profile/)
 })
 
 test('Customer Dashboard leaves Site Check actions to the dedicated workspace', () => {

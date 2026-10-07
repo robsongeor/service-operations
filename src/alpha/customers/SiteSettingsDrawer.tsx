@@ -2,20 +2,12 @@ import { type ChangeEvent, type FormEvent, useCallback, useEffect, useMemo, useR
 import type { Equipment } from '../jobs/types/equipment.types'
 import { equipmentIdentifierSearchValues } from '../equipment/identifiers/alternateFleetNumbers'
 import type { Site, SiteInductionDocument } from '../jobs/types/site.types'
-import {
-    MAINTENANCE_PROFILES,
-    type MaintenanceProfile,
-} from '../equipment/servicePlans/maintenanceConfiguration'
 import DrawerTabs from '../shared/drawer/DrawerTabs'
 import EditDrawerConfirmation from '../shared/drawer/EditDrawerConfirmation'
 import EditDrawerSection from '../shared/drawer/EditDrawerSection'
 import EditDrawerShell from '../shared/drawer/EditDrawerShell'
 import SearchableSelect from '../shared/searchable-select/SearchableSelect'
 import FormSwitch from '../shared/form-switch/FormSwitch'
-import PurchaseOrderRecipientEditor from './PurchaseOrderRecipientEditor'
-import type { CustomerContact } from './customerContact.types'
-import type { PurchaseOrderRecipient, PurchaseOrderRecipientSaveInput } from './purchaseOrderRecipient.types'
-import type { NewPurchaseOrderContactInput } from './purchaseOrderContactRules'
 import {
     resolveSiteCheckEquipmentScope,
     SITE_CHECK_EQUIPMENT_SCOPE_OPTIONS,
@@ -34,7 +26,7 @@ import {
 import './SiteMaintenanceSettingsDrawer.css'
 import './SiteSettingsDrawer.css'
 
-export type SiteSettingsTab = 'details' | 'settings' | 'inductions' | 'po-contacts' | 'site-checks' | 'bulk-equipment'
+export type SiteSettingsTab = 'details' | 'inductions' | 'site-checks' | 'bulk-equipment'
 
 type Props = {
     site: Site
@@ -48,7 +40,6 @@ type Props = {
     siteChecksSaving: boolean
     siteChecksError: string
     onSaveDetails: (name: string, address: string) => Promise<void>
-    onSaveSettings: (profile: MaintenanceProfile, equipmentIds: string[]) => Promise<void>
     onSaveInductions: (required: boolean, requirements: string) => Promise<void>
     onLoadInductionDocuments: () => Promise<SiteInductionDocument[]>
     onUploadInductionDocuments: (files: File[]) => Promise<SiteInductionDocument[]>
@@ -56,27 +47,9 @@ type Props = {
     onDownloadInductionDocument: (documentId: string) => Promise<Blob>
     onSaveSiteChecks: (input: SiteCheckScheduleSaveInput) => Promise<void>
     onDetailsComplete: (name: string) => void
-    onSettingsComplete: () => void
     onOpenBulkImport: () => void
     onClose: () => void
-    customerId: string
-    contacts: CustomerContact[]
-    poRecipients: PurchaseOrderRecipient[]
-    poRecipientsBusy: boolean
-    poRecipientsError: string
-    onSavePoRecipients: (input: PurchaseOrderRecipientSaveInput, contacts: CustomerContact[]) => Promise<unknown>
-    onCreateContact: (input: NewPurchaseOrderContactInput) => Promise<string>
 }
-
-const profileOptions = [
-    { value: MAINTENANCE_PROFILES.HIGH_USAGE, label: 'High Usage' },
-    { value: MAINTENANCE_PROFILES.STANDARD, label: 'Standard' },
-    { value: MAINTENANCE_PROFILES.LOW_USAGE, label: 'Low Usage' },
-    { value: MAINTENANCE_PROFILES.CUSTOM, label: 'Custom' },
-] as const
-
-const profileLabel = (value?: number | null) =>
-    profileOptions.find((option) => option.value === value)?.label ?? 'Not set'
 
 const equipmentLabel = (item: Equipment) => item.gr_fleet || item.gr_serial || 'Unnamed Equipment'
 
@@ -92,7 +65,6 @@ export default function SiteSettingsDrawer({
     siteChecksSaving,
     siteChecksError,
     onSaveDetails,
-    onSaveSettings,
     onSaveInductions,
     onLoadInductionDocuments,
     onUploadInductionDocuments,
@@ -100,25 +72,13 @@ export default function SiteSettingsDrawer({
     onDownloadInductionDocument,
     onSaveSiteChecks,
     onDetailsComplete,
-    onSettingsComplete,
     onOpenBulkImport,
     onClose,
-    customerId,
-    contacts,
-    poRecipients,
-    poRecipientsBusy,
-    poRecipientsError,
-    onSavePoRecipients,
-    onCreateContact,
 }: Props) {
     const [activeTab, setActiveTab] = useState<SiteSettingsTab>('details')
     const [name, setName] = useState(site.gr_name)
     const [address, setAddress] = useState(site.gr_address ?? '')
     const [savedDetails, setSavedDetails] = useState({ name: site.gr_name, address: site.gr_address ?? '' })
-    const [profile, setProfile] = useState<MaintenanceProfile>(
-        site.gr_defaultmaintenanceprofile ?? MAINTENANCE_PROFILES.STANDARD,
-    )
-    const [selectedIds, setSelectedIds] = useState<string[]>([])
     const [inductionRequired, setInductionRequired] = useState(site.gr_inductionrequired ?? false)
     const [inductionRequirements, setInductionRequirements] = useState(site.gr_inductionrequirements ?? '')
     const [savedInductionState, setSavedInductionState] = useState({
@@ -128,7 +88,6 @@ export default function SiteSettingsDrawer({
     const [inductionDocuments, setInductionDocuments] = useState<SiteInductionDocument[]>([])
     const [isLoadingInductionDocuments, setIsLoadingInductionDocuments] = useState(false)
     const [isUploadingInductionDocuments, setIsUploadingInductionDocuments] = useState(false)
-    const [confirming, setConfirming] = useState(false)
     const [localError, setLocalError] = useState('')
     const [inductionDocumentError, setInductionDocumentError] = useState('')
     const [detailsSuccess, setDetailsSuccess] = useState('')
@@ -171,7 +130,6 @@ export default function SiteSettingsDrawer({
     const sortedEquipment = useMemo(() => [...equipment].sort((left, right) =>
         equipmentLabel(left).localeCompare(equipmentLabel(right), undefined, { numeric: true }),
     ), [equipment])
-    const selected = sortedEquipment.filter((item) => selectedIds.includes(item.gr_equipmentid))
     const detailsDirty = name.trim() !== savedDetails.name.trim() || address.trim() !== savedDetails.address.trim()
     const inductionDirty = inductionRequired !== savedInductionState.inductionRequired
         || inductionRequirements.trim() !== savedInductionState.inductionRequirements.trim()
@@ -287,22 +245,6 @@ export default function SiteSettingsDrawer({
         }
     }
 
-    const saveSettings = async () => {
-        setLocalError('')
-        try {
-            await onSaveSettings(profile, selectedIds)
-            setConfirming(false)
-            onSettingsComplete()
-        } catch (caught) {
-            setLocalError(caught instanceof Error ? caught.message : 'Site maintenance settings could not be saved.')
-        }
-    }
-
-    const requestSettingsSave = () => {
-        if (selectedIds.length) setConfirming(true)
-        else void saveSettings()
-    }
-
     const existingScheduleIsUnchanged = Boolean(
         siteCheckSchedule?.gr_nextduedate
         && siteChecksFrequency === initialSiteChecks.frequency
@@ -368,9 +310,7 @@ export default function SiteSettingsDrawer({
 
     const tabs = [
         { id: 'details' as const, label: 'Details', hasError: activeTab === 'details' && Boolean(localError) },
-        { id: 'settings' as const, label: 'Settings', hasError: activeTab === 'settings' && Boolean(localError || error) },
         { id: 'inductions' as const, label: 'Inductions', hasError: activeTab === 'inductions' && Boolean(inductionDirty || localError || inductionDocumentError) },
-        { id: 'po-contacts' as const, label: 'PO Contacts', hasError: activeTab === 'po-contacts' && Boolean(poRecipientsError) },
         ...(bulkImportAllowed ? [{ id: 'bulk-equipment' as const, label: 'Bulk Add Equipment' }] : []),
     ]
 
@@ -381,9 +321,7 @@ export default function SiteSettingsDrawer({
             busy={busy}
             onClose={requestClose}
             footer={<>
-                <span>{activeTab === 'settings'
-                    ? `${selectedIds.length} machine${selectedIds.length === 1 ? '' : 's'} selected for update`
-                    : activeTab === 'inductions'
+                <span>{activeTab === 'inductions'
                         ? `${inductionDocuments.length} induction document${inductionDocuments.length === 1 ? '' : 's'}`
                     : activeTab === 'bulk-equipment'
                         ? 'Customer and Site will be selected automatically.'
@@ -391,7 +329,6 @@ export default function SiteSettingsDrawer({
                 <div className="site-maintenance-footer-actions">
                     <button type="button" onClick={requestClose} disabled={busy}>Cancel</button>
                     {activeTab === 'details' && <button type="submit" form="site-settings-details-form" className="primary" disabled={busy || !detailsDirty}>Save changes</button>}
-                    {activeTab === 'settings' && <button type="button" className="primary" onClick={requestSettingsSave} disabled={busy}>Save settings</button>}
                     {activeTab === 'inductions' && <button type="button" className="primary" onClick={() => void saveInductions()} disabled={busy || !inductionDirty}>Save inductions</button>}
                     {activeTab === 'bulk-equipment' && <button type="button" className="primary" onClick={onOpenBulkImport}>Open bulk add</button>}
                 </div>
@@ -555,47 +492,6 @@ export default function SiteSettingsDrawer({
                 </EditDrawerSection>
             </div>
 
-            <div role="tabpanel" aria-labelledby="drawer-tab-settings" hidden={activeTab !== 'settings'}>
-                <section className="site-maintenance-setting">
-                    <label htmlFor="site-default-maintenance-profile">Default Maintenance Profile</label>
-                    <select id="site-default-maintenance-profile" value={profile} onChange={(event) => setProfile(Number(event.target.value) as MaintenanceProfile)} disabled={busy}>
-                        {profileOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                    </select>
-                    <p>New Equipment at this Site will inherit this profile. Existing Equipment is unchanged unless selected below.</p>
-                </section>
-                <section className="site-maintenance-bulk" aria-labelledby="site-maintenance-bulk-heading">
-                    <div className="site-maintenance-section-heading">
-                        <div><h3 id="site-maintenance-bulk-heading">Apply to existing Equipment</h3><p>Choose only the machines whose current profile should be replaced.</p></div>
-                        <div>
-                            <button type="button" onClick={() => setSelectedIds(sortedEquipment.map((item) => item.gr_equipmentid))} disabled={busy || !sortedEquipment.length}>Select all</button>
-                            <button type="button" onClick={() => setSelectedIds([])} disabled={busy || !selectedIds.length}>Clear all</button>
-                        </div>
-                    </div>
-                    <SearchableSelect
-                        id="site-maintenance-equipment"
-                        label="Equipment"
-                        value=""
-                        onChange={() => undefined}
-                        multiple
-                        values={selectedIds}
-                        onValuesChange={setSelectedIds}
-                        options={sortedEquipment.map((item) => ({
-                            value: item.gr_equipmentid,
-                            label: [equipmentLabel(item), item.gr_make, item.gr_model].filter(Boolean).join(' · '),
-                            secondary: `Current profile: ${profileLabel(item.gr_maintenanceprofile)}`,
-                            searchText: [...equipmentIdentifierSearchValues(item), item.gr_make, item.gr_model].filter(Boolean).join(' '),
-                        }))}
-                        placeholder="Select Equipment"
-                        searchPlaceholder="Search fleet, serial, make or model"
-                        emptyLabel="No Equipment at this Site"
-                    />
-                    {selected.length > 0 && <ul className="site-maintenance-selected">{selected.map((item) => <li key={item.gr_equipmentid}>
-                        <span><strong>{equipmentLabel(item)}</strong><small>{[item.gr_make, item.gr_model].filter(Boolean).join(' · ') || 'No machine details'} · Current: {profileLabel(item.gr_maintenanceprofile)}</small></span>
-                        <button type="button" onClick={() => setSelectedIds((current) => current.filter((id) => id !== item.gr_equipmentid))} disabled={busy}>Remove</button>
-                    </li>)}</ul>}
-                </section>
-            </div>
-
             <div role="tabpanel" aria-labelledby="drawer-tab-inductions" hidden={activeTab !== 'inductions'}>
                 <EditDrawerSection title="Induction and safety requirements">
                     <div className="site-maintenance-setting site-induction-required-details">
@@ -677,13 +573,6 @@ export default function SiteSettingsDrawer({
                 </EditDrawerSection>
             </div>
 
-            <div role="tabpanel" aria-labelledby="drawer-tab-po-contacts" hidden={activeTab !== 'po-contacts'}>
-                <EditDrawerSection title="Site PO contacts">
-                    <p>Use the Customer default, or replace it completely for this Site with a different primary recipient and CC list.</p>
-                    <PurchaseOrderRecipientEditor customerId={customerId} siteId={site.gr_siteid} contacts={contacts} recipients={poRecipients} busy={poRecipientsBusy} error={poRecipientsError} sites={[{ id: site.gr_siteid, name: site.gr_name }]} onSave={onSavePoRecipients} onCreateContact={onCreateContact} />
-                </EditDrawerSection>
-            </div>
-
             <div role="tabpanel" aria-labelledby="drawer-tab-bulk-equipment" hidden={activeTab !== 'bulk-equipment'} className="site-settings-bulk-launch">
                 <h3>Bulk Add Equipment</h3>
                 <p>Paste, validate, review, correct, and import Equipment using the existing bulk-add workflow. The destination is already set to <strong>{site.gr_name}</strong>.</p>
@@ -691,16 +580,6 @@ export default function SiteSettingsDrawer({
             {(localError || error || siteChecksError || inductionDocumentError) && <p className="site-maintenance-error" role="alert">{localError || error || siteChecksError || inductionDocumentError}</p>}
         </EditDrawerShell>
 
-        {confirming && <EditDrawerConfirmation
-            eyebrow="Confirm profile update"
-            title={`Apply ${profileLabel(profile)} to ${selected.length} machine${selected.length === 1 ? '' : 's'}?`}
-            message="This replaces the Maintenance Profile on the selected Equipment. Service plans, maintenance history, and all other Equipment settings remain unchanged."
-            error={localError || error}
-            isBusy={busy}
-            confirmLabel={busy ? 'Applying…' : 'Apply and save'}
-            onCancel={() => { if (!busy) setConfirming(false) }}
-            onConfirm={() => void saveSettings()}
-        />}
         {confirmingDisable && <EditDrawerConfirmation
             eyebrow="Disable Site Checks"
             title={`Disable Site Checks for ${site.gr_name}?`}

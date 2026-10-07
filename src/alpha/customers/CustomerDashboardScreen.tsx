@@ -112,7 +112,6 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
         reload,
         clearSaveError,
         updateSites,
-        updateSiteMaintenanceSettings,
         loadSiteInductionDocuments,
         uploadSiteInductionDocuments,
         deleteSiteInductionDocument,
@@ -1068,7 +1067,6 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
                 siteId: siteSettingsSite.gr_siteid,
                 input: { name, address },
             }])}
-            onSaveSettings={(profile, equipmentIds) => updateSiteMaintenanceSettings(siteSettingsSite, profile, equipmentIds)}
             onSaveSiteChecks={async (input) => { await siteChecks.saveSchedule(input) }}
             onDetailsComplete={(name) => {
                 setSiteSuccess(`${name} updated successfully.`)
@@ -1086,12 +1084,6 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
             onUploadInductionDocuments={(files) => uploadSiteInductionDocuments(siteSettingsSite, files)}
             onDeleteInductionDocument={(documentId) => deleteSiteInductionDocument(siteSettingsSite, documentId)}
             onDownloadInductionDocument={(documentId) => downloadSiteInductionDocument(documentId)}
-            onSettingsComplete={() => {
-                const trigger = siteSettingsTriggerRefs.current[siteSettingsSite.gr_siteid]
-                setSiteSuccess(`${siteSettingsSite.gr_name} maintenance settings updated.`)
-                setSiteSettingsSite(null)
-                window.setTimeout(() => trigger?.focus(), 0)
-            }}
             onOpenBulkImport={() => {
                 setSiteExpanded(siteSettingsSite.gr_siteid, true)
                 setBulkImportSuccess('')
@@ -1103,13 +1095,6 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
                 setSiteSettingsSite(null)
                 window.setTimeout(() => trigger?.focus(), 0)
             }}
-            customerId={selectedCustomer.gr_customerid}
-            contacts={customerContacts}
-            poRecipients={poRecipients.recipients}
-            poRecipientsBusy={poRecipients.isLoading || poRecipients.isSaving}
-            poRecipientsError={poRecipients.error}
-            onSavePoRecipients={poRecipients.save}
-            onCreateContact={createContactForSite}
         />}
 
         {!readOnly && creatingJobInitialValues && <JobCreateDrawer
@@ -1204,13 +1189,6 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
             initialTab={customerDrawerInitialTab}
             initialSiteId={editingSiteId || undefined}
             initialValue={customerDrawerMode === 'edit' ? customerDrawerInitialValue : undefined}
-            customerId={selectedCustomer?.gr_customerid}
-            contacts={customerContacts}
-            poRecipients={poRecipients.recipients}
-            poRecipientsBusy={poRecipients.isLoading || poRecipients.isSaving}
-            poRecipientsError={poRecipients.error}
-            onSavePoRecipients={poRecipients.save}
-            onCreateContact={createContactForSite}
             onClose={() => { setCustomerDrawerMode(null); setEditingSiteId('') }}
             onSave={async (draft) => {
                 const savedDraft = await saveCustomerDraft(draft)
