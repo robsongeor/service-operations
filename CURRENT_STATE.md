@@ -4,11 +4,11 @@ Branch: `v2-deployment`
 
 ## Mandatory V2 go-live blockers
 
-- The Entra application role `ServiceOperations.ServiceCoordinator` must be created on the Service
-  Operations enterprise application, assigned to Bruce, and verified with a real sign-in before the
-  coordinator profile is considered live-ready. George's current account cannot grant the required
-  Microsoft admin consent. Bruce's temporary FullAccess assignment must remain until the restricted
-  role passes acceptance testing, then be removed; Andy is assigned only when his rollout is approved.
+- On 7 October 2026 the enabled Entra application role
+  `ServiceOperations.ServiceCoordinator` was verified and assigned additively to Bruce. Bruce still
+  has temporary FullAccess. A real Bruce sign-in must verify the restricted coordinator experience;
+  after that passes, remove FullAccess so it cannot bypass the screen boundary. Andy is assigned only
+  when his rollout is approved.
 - Browser-based manual Job Number entry has been removed from ordinary Jobs, Site Checks, WOF and
   historical spreadsheet import. New/imported records are unnumbered until the regional allocation
   system assigns a permanent number. On 7 October 2026 George explicitly deferred activation of the
@@ -17,7 +17,7 @@ Branch: `v2-deployment`
   remain disabled until V1 is retired or migrated, then be enabled and verified as a separate cutover.
   This accepted transition does not authorize direct-number writes from V2 or integrations.
 
-## Local role implementation — not activated in Microsoft
+## Service Coordinator implementation
 
 - Frontend ServiceCoordinator now has a restricted screen boundary: Overview, Staff, Greentree
   Review, Equipment Map, Job Map, Site Checks, Chargeable Invoices and Checklist Admin are hidden
@@ -32,17 +32,18 @@ Branch: `v2-deployment`
   atomic linked Void and assigned-technician initial dispatch now have local transactional plugin
   contracts; Custom API/step registration and target authorization tests remain. Do not install the guard
   or grant broad roles as a substitute.
-- Sample role selector includes Job Book Admin, Office Admin and Service coordinator. No
-  Microsoft roles, users, reviewer settings or live data were changed by this implementation.
+- Sample role selector includes Job Book Admin, Office Admin and Service coordinator. The Entra
+  Service Coordinator role is live and assigned to Bruce for additive acceptance testing; Dataverse
+  restricted-access enforcement remains separate and the server guard is not enabled.
 
 ## Job Book Microsoft access audit (read-only)
 
 - [Live audit](docs/features/JOB_BOOK_ACCESS_AUDIT.md): the original ten Entra accounts exist/enabled.
   The 6 October recheck finds George, Bruce and newly added Office Admin pilot Pubudu in Dataverse;
   the other eight rollout users remain absent.
-- Entra has only FullAccess and JobBookOnly; Bruce currently has FullAccess. The dedicated
-  ServiceCoordinator role is a mandatory go-live blocker and is not yet provisioned. Existing assignments
-  for Paul and Pubudu were preserved; Pubudu is now in the rollout roster. No permission changed.
+- Entra now includes the dedicated ServiceCoordinator role. Bruce holds ServiceCoordinator plus
+  temporary FullAccess pending his named-user acceptance test. Existing assignments for Paul and
+  Pubudu were preserved; Pubudu remains in the rollout roster.
 - Existing Job Book Only Dataverse privileges include broad Job/Equipment/Customer writes;
   the new restricted roles require verified server enforcement before assignment.
 

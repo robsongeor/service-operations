@@ -151,11 +151,11 @@ fail closed. George's FullAccess profile remains unrestricted.
 
 ### Mandatory provisioning before live use
 
-The client profile alone is not sufficient. A Microsoft administrator must create the enabled Entra
-application role `ServiceOperations.ServiceCoordinator`, assign it to Bruce, and complete a named-user
-access test. Keep Bruce's current FullAccess assignment until that restricted test passes, then remove
-FullAccess so it cannot bypass the screen boundary. Andy is not assigned until his rollout is approved.
-This item is explicitly blocking V2 live usage, not deferred post-launch work.
+The enabled Entra application role `ServiceOperations.ServiceCoordinator` was verified and assigned
+additively to Bruce on 7 October 2026. Complete a named-user access test with Bruce. Keep his current
+FullAccess assignment until that restricted test passes, then remove FullAccess so it cannot bypass
+the screen boundary. Andy is not assigned until his rollout is approved. The Bruce acceptance test
+and subsequent FullAccess removal remain required before the restricted profile is considered complete.
 
 ## Decisions still needed
 

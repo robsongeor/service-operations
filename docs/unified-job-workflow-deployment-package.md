@@ -94,8 +94,9 @@ never delete or renumber records as generic rollback.
 
 ## Remaining approval blockers
 
-- Provision the Entra `ServiceOperations.ServiceCoordinator` application role, assign and test Bruce,
-  then remove his temporary FullAccess only after the restricted role passes acceptance testing.
+- The Entra `ServiceOperations.ServiceCoordinator` application role is provisioned and assigned
+  additively to Bruce. Complete his named-user acceptance test, then remove temporary FullAccess only
+  after the restricted role passes.
 - Keep the 15 shared Dataverse Job number/ledger invariant steps disabled while V1 still requires
   manual Job Number entry. V2 blocks manual entry in its frontend during this explicitly accepted
   overlap. When V1 is retired or migrated, enable and verify the invariant steps as a separate
