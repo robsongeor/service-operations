@@ -111,19 +111,22 @@ test('single coordination tab row separates membership from type and unconfirmed
     assert.doesNotMatch(legacy, /Allocate job number|Manage job|>Edit</)
 })
 
-test('restricted Equipment editor excludes maintenance, compliance, ownership and deletion', () => {
+test('restricted Equipment editor includes road compliance but excludes maintenance, ownership and deletion', () => {
     const html = renderToStaticMarkup(createElement(Provider, { scope: 'restricted-equipment-test' }, createElement(EquipmentDrawer, {
         mode: 'edit', detailsOnly: true, equipment: { gr_equipmentid: id(91), gr_fleet: 'F1', gr_make: 'Make', gr_model: 'Model', gr_serial: 'Serial', statecode: 0 },
         customers: [], sites: [], equipmentList: [], jobs: [], isSaving: false, saveError: '',
         onClose: unavailable, onSave: unavailable, onDelete: unavailable, onSaveMaintenanceHistory: unavailable,
     })))
     assert.match(html, /Serial number/)
-    assert.doesNotMatch(html, /Delete equipment|Road compliance|Equipment Ownership|Site Check Availability|>Maintenance<|>Job History</)
+    assert.match(html, /Road compliance/)
+    assert.doesNotMatch(html, /Delete equipment|Equipment Ownership|Site Check Availability|>Maintenance<|>Job History</)
 })
-test('Equipment correction payload excludes unrelated fields and rejects unsaved Sites', () => {
-    const input = { fleet: ' F1 ', alternateFleetNumbers: '', make: ' Make ', model: 'Model', serial: 'Serial', siteId: id(92), maintenanceProfile: 9, currentWofExpiry: '2030-01-01', ownershipType: 3 }
+test('Equipment correction payload includes road compliance, excludes unrelated fields and rejects unsaved Sites', () => {
+    const input = { fleet: ' F1 ', alternateFleetNumbers: '', make: ' Make ', model: 'Model', serial: 'Serial', siteId: id(92), registrationNumber: 'ABC123', complianceStatus: 122830000, wofRequired: true, currentWofExpiry: '2030-01-01', regoExpiry: '2029-12-01', maintenanceProfile: 9, ownershipType: 3 }
     const patch = detailsPatch(input)
-    assert.deepEqual(Object.keys(patch).sort(), ['gr_fleet','gr_alternatefleetnumbers','gr_make','gr_model','gr_serial','gr_Site@odata.bind'].sort())
+    assert.deepEqual(Object.keys(patch).sort(), ['gr_fleet','gr_alternatefleetnumbers','gr_make','gr_model','gr_serial','gr_registrationnumber','gr_compliancestatus','gr_wofrequired','gr_currentwofexpiry','gr_regoexpiry','gr_Site@odata.bind'].sort())
     assert.equal(patch.gr_fleet, 'F1')
+    assert.equal(patch.gr_registrationnumber, 'ABC123')
+    assert.equal(patch.gr_wofrequired, true)
     assert.throws(() => detailsPatch({ ...input, siteId: 'prototype-site' }), /saved Site/)
 })

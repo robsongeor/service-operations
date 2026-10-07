@@ -994,7 +994,7 @@ export default function EquipmentDrawer(props: Props) {
                         </div>
                     </EditDrawerSection>}
 
-                    {!props.detailsOnly && (isCreate || activeTab === 'details') && <EditDrawerSection
+                    {(isCreate || activeTab === 'details') && <EditDrawerSection
                         title="Road compliance"
                         meta={<FormSwitch
                             label="Road use"

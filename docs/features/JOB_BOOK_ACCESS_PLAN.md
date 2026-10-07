@@ -92,15 +92,16 @@ George confirmed that both Job Book Admins and Office Admins (Jess, Nargiza and 
 - Explicitly move Equipment between Sites/Customers. Persist the Equipment Site relationship;
   Customer follows Site. Preserve historical Job locations and evidence.
 - Update existing Equipment details, including the descriptive details discussed (make/model
-  and serial number). Reuse the canonical Equipment workflow, with concurrency protection.
+  and serial number) and Road compliance. Reuse the canonical Equipment workflow, with concurrency
+  protection.
 
 This extends the earlier narrow location-only exception for both Admin groups. Define and test the
 actual allowed Equipment fields before provisioning rather than reusing a broad editing capability
 that also unlocks unrelated actions. Permission to edit details is not permission to delete Equipment,
 rewrite historical meter/service evidence, change maintenance plans or perform bulk imports.
-The restricted Equipment screen therefore omits maintenance summaries, maintenance/data-quality
-columns, maintenance-plan loading and Job history; those remain available only through broader
-authorised operational roles.
+The restricted Equipment screen therefore includes Road compliance but omits maintenance summaries,
+maintenance/data-quality columns, maintenance-plan loading and Job history; those remain available
+only through broader authorised operational roles.
 General editing of existing Customer/Site master records has not been requested. Creating new
 records and selecting a destination do not authorize silently changing shared names/addresses.
 Job corrections remain distinct from explicit Equipment movement or master-record edits.

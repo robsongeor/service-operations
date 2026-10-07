@@ -2,7 +2,7 @@ import type { Equipment } from '../../jobs/types/equipment.types'
 import type { EquipmentUpdateInput } from '../types/equipmentManager.types'
 import { fetchEquipmentById, invalidateEquipmentCache } from '../../jobs/services/equipmentApi'
 
-// Deliberately excludes maintenance, compliance, ownership, state and historical readings.
+// Deliberately excludes maintenance, ownership, state and historical readings.
 export function equipmentDetailsPatch(input: EquipmentUpdateInput) {
     const id = input.siteId.trim()
     if (!/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(id)) throw new Error('Select a saved Site before moving Equipment.')
@@ -12,6 +12,11 @@ export function equipmentDetailsPatch(input: EquipmentUpdateInput) {
         gr_make: input.make.trim() || null,
         gr_model: input.model.trim() || null,
         gr_serial: input.serial.trim() || null,
+        gr_registrationnumber: input.registrationNumber.trim() || null,
+        gr_compliancestatus: input.complianceStatus,
+        gr_wofrequired: input.wofRequired,
+        gr_currentwofexpiry: input.currentWofExpiry.trim() || null,
+        gr_regoexpiry: input.regoExpiry.trim() || null,
         'gr_Site@odata.bind': `/gr_sites(${id})`,
     }
 }
