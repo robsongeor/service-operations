@@ -120,6 +120,10 @@
     gap: 16px;
 }
 
+.job-edit-grid.job-create-fields {
+    padding-top: 16px;
+}
+
 .job-equipment-field {
     display: grid;
     grid-column: span 2;

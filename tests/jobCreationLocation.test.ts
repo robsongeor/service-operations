@@ -197,6 +197,8 @@ test('both creation drawers use shared validation and required Customer/Site/add
     assert.match(core, /<JobDetailsFields/)
     assert.match(core, /divided=\{sectionDivider\}/)
     assert.match(create, /<JobCoreFields sectionDivider/)
+    assert.match(create, /This creates the Job only\. A Job Number is not allocated here\./)
+    assert.match(read('src/alpha/jobs/components/JobDrawer.css'), /\.job-edit-grid\.job-create-fields\s*\{[\s\S]*?padding-top: 16px/)
     assert.match(sharedDetails, /import '\.\/JobIntakeFields\.css'/)
     assert.match(sharedDetails, /job-book-intake-section-heading job-edit-field-wide/)
     assert.match(sharedDetails, /job-book-intake-field job-edit-field-wide/)

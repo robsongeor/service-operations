@@ -215,7 +215,7 @@ export default function JobCreateDrawer({
             footer={<>
                 {saveError
                     ? <span className="job-edit-save-error" role="alert">{saveError}</span>
-                    : <span>{locationPending ? 'Save or cancel the equipment location change before creating the job.' : stagingOnly ? 'Save to Staging. No number is allocated and no email is sent.' : 'Create this job in Dataverse.'}</span>}
+                    : <span>{locationPending ? 'Save or cancel the equipment location change before creating the job.' : stagingOnly ? 'Save to Staging. No number is allocated and no email is sent.' : 'This creates the Job only. A Job Number is not allocated here.'}</span>}
                 <div className="job-edit-footer-actions">
                     <button type="button" onClick={onClose} disabled={isSaving || locationSaving}>Cancel</button>
                     <button
