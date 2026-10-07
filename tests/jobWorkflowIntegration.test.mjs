@@ -88,6 +88,7 @@ test('production unified worklist is server-filtered, bounded and explicitly pag
 test('production worklist filters preserve tab meaning and reject untrusted paging', async () => {
     assert.equal(unifiedJobsServerFilter('all'), '')
     assert.equal(unifiedJobsServerFilter('staging'), 'gr_jobnumber eq null and gr_registrationvoid ne true')
+    assert.equal(unifiedJobsServerFilter('unnumbered'), 'gr_jobnumber eq null and gr_registrationvoid ne true')
     assert.match(unifiedJobsServerFilter('unconfirmed'), /gr_status eq 122830005/)
     assert.equal(unifiedJobsServerFilter(122830004), 'gr_jobtype eq 122830004 and gr_registrationvoid ne true')
     globalThis.fetch = async () => Response.json({ value: [], '@odata.nextLink': 'https://attacker.invalid/api/data/v9.2/gr_jobs?$skiptoken=x' })

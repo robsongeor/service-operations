@@ -15,7 +15,7 @@ export default function JobRegistrationDialog({ job: initial, mode, getAccessTok
     const account = useActiveMsalAccount()
     const registration = useJobRegistration(`${account?.homeAccountId}.allocation`, getAccessToken, mode === 'allocate')
     const [job, setJob] = useState(initial)
-    const [book, setBook] = useState<JobBookKey>(registration.pending?.book ?? 'auckland')
+    const [book, setBook] = useState<JobBookKey | ''>(registration.pending?.book ?? '')
     const [busy, setBusy] = useState(false)
     const [error, setError] = useState('')
     const [reloaded, setReloaded] = useState(false)
@@ -35,6 +35,7 @@ export default function JobRegistrationDialog({ job: initial, mode, getAccessTok
                 else await runJobWorkflow(token, { kind: 'manage', jobId: job.gr_jobid, jobEtag: job['@odata.etag'] ?? '' })
             }
             else {
+                if (!book) { setError('Select the regional Job Book before allocating a number.'); return }
                 const result = await registration.submit({ kind: 'allocate', requestId: crypto.randomUUID(), book, jobId: job.gr_jobid, etag: job['@odata.etag'] ?? '' })
                 if (!result) return
             }
@@ -44,14 +45,14 @@ export default function JobRegistrationDialog({ job: initial, mode, getAccessTok
         } catch (cause) { setError(cause instanceof Error ? cause.message : 'The change could not be confirmed. Reload or retry the same request.') }
         finally { setBusy(false) }
     }
-    return <EditDrawerFormDialog eyebrow="Job workflow" title={mode === 'allocate' ? 'Allocate job number' : 'Manage job'}
+    return <EditDrawerFormDialog eyebrow="Job workflow" title={mode === 'allocate' ? 'Confirm Job Number allocation' : 'Manage job'}
         isBusy={busy || registration.busy} error={error || registration.error} onCancel={onClose} onSubmit={() => void save()}
         submitLabel={mode === 'manage' ? 'Add to Operational' : registration.pending ? 'Retry same request' : 'Allocate number'}
-        submitDisabled={Boolean(job.gr_registrationvoid || (mode === 'allocate' && job.gr_jobnumber && !registration.pending) || (registration.pending?.kind === 'allocate' && registration.pending.jobId !== job.gr_jobid))}>
+        submitDisabled={Boolean(job.gr_registrationvoid || (mode === 'allocate' && (!book || (job.gr_jobnumber && !registration.pending))) || (registration.pending?.kind === 'allocate' && registration.pending.jobId !== job.gr_jobid))}>
         <p>{job.gr_description}</p>
         {mode === 'allocate' ? <>
-            <p>This allocates one permanent regional number to this existing Job. It does not send an email, enter GreenTree or add the Job to Operational.</p>
-            <label><span>Job Book</span><select value={book} disabled={busy || registration.busy || Boolean(registration.pending)} onChange={(event) => setBook(event.target.value as JobBookKey)}>{JOB_BOOK_KEYS.map((key) => <option key={key} value={key}>{JOB_BOOKS[key].label}</option>)}</select></label>
+            <p>You are about to allocate one permanent regional Job Number to this Job. Check the Job Book below before confirming. This does not send an email, enter GreenTree or add the Job to Operational.</p>
+            <label><span>Job Book</span><select value={book} disabled={busy || registration.busy || Boolean(registration.pending)} onChange={(event) => setBook(event.target.value as JobBookKey | '')}><option value="">Select regional Job Book</option>{JOB_BOOK_KEYS.map((key) => <option key={key} value={key}>{JOB_BOOKS[key].label}</option>)}</select></label>
             {job.gr_jobnumber && <p>Current number: <strong>{job.gr_jobnumber}</strong>. It cannot be replaced.</p>}
             {registration.pending && <p>The original request is retained across closing or reloading this tab.</p>}
             {registration.conflict && reloaded && <button type="button" disabled={busy} onClick={() => { registration.complete(); setReloaded(false) }}>Accept refreshed Job and discard rejected request</button>}

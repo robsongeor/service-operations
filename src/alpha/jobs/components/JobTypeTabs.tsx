@@ -6,6 +6,7 @@ type Props = {
     onChange: (jobType: JobTypeFilter) => void
     ariaLabel?: string
     includeUnconfirmed?: boolean
+    includeUnnumbered?: boolean
     includeOperational?: boolean
     jobTypeOptions?: typeof JOB_TYPE_OPTIONS
     allLabel?: string
@@ -16,6 +17,7 @@ export default function JobTypeTabs({
     onChange,
     ariaLabel = 'Filter jobs by type',
     includeUnconfirmed = false,
+    includeUnnumbered = false,
     includeOperational = true,
     jobTypeOptions = JOB_TYPE_OPTIONS,
     allLabel = 'All jobs',
@@ -30,6 +32,11 @@ export default function JobTypeTabs({
                     {jobType.label}
                 </button>
             ))}
+            {includeUnnumbered && (
+                <button type="button" role="tab" aria-selected={selectedJobType === 'unnumbered'} className={selectedJobType === 'unnumbered' ? 'job-type-tab job-status-tab active' : 'job-type-tab job-status-tab'} onClick={() => onChange('unnumbered')}>
+                    Unnumbered
+                </button>
+            )}
             {includeUnconfirmed && (
                 <button type="button" role="tab" aria-selected={selectedJobType === 'unconfirmed'} className={selectedJobType === 'unconfirmed' ? 'job-type-tab job-status-tab active' : 'job-type-tab job-status-tab'} onClick={() => onChange('unconfirmed')}>
                     Unconfirmed

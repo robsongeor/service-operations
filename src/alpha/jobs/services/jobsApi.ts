@@ -34,7 +34,7 @@ export const UNIFIED_JOBS_PAGE_SIZE = 100
 export function unifiedJobsServerFilter(scope: JobTypeFilter | 'staging') {
     if (scope === 'all') return ''
     if (scope === 'operational') return '(gr_coordinatormanaged eq true or gr_coordinatormanaged eq null) and gr_registrationvoid ne true'
-    if (scope === 'staging') return 'gr_jobnumber eq null and gr_registrationvoid ne true'
+    if (scope === 'staging' || scope === 'unnumbered') return 'gr_jobnumber eq null and gr_registrationvoid ne true'
     if (scope === 'unconfirmed') return `gr_status eq ${JOB_STATUSES.UNCONFIRMED} and gr_registrationvoid ne true`
     return `gr_jobtype eq ${scope} and gr_registrationvoid ne true`
 }

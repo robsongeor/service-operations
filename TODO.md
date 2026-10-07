@@ -189,6 +189,11 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
 
 ## Priority 2 — Product improvements
 
+- [ ] Retire the **Unconfirmed** Job workflow end to end after a production-data and V1 dependency
+  audit. Remove its Service Coordination tab, filters, status transitions, scheduling/allocation
+  exclusions, Dataverse/API/plugin handling and other backend branches together; migrate or preserve
+  historical Unconfirmed records explicitly rather than partially removing the workflow.
+
 - [x] Add office PDF export for Azure Job Card evidence and load historical Dataverse evidence only
   on demand. Do not remove Site Check dependencies or historical service records during cleanup.
 

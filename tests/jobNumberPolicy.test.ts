@@ -155,14 +155,16 @@ test('number guards require exact versions, never a wildcard or header injection
     }
 })
 
-test('canonical drawer/table never expose number edits and numbered deletion is hidden', () => {
+test('canonical drawer/table never expose number edits; allocation uses only the guarded regional dialog', () => {
     const read = (file: string) => readFileSync(new URL(`../src/alpha/jobs/${file}`, import.meta.url), 'utf8')
     assert.doesNotMatch(read('components/JobCoreFields.tsx'), /<span>Job number<\/span>|value=\{draft\.jobNumber\}/)
     assert.match(read('components/JobsTable.tsx'), /<span className="jobs-table-job-number"/)
     assert.doesNotMatch(read('components/JobsTable.tsx'), /onJobFieldsChange\(job.gr_jobid, \{ gr_jobnumber/)
-    assert.doesNotMatch(read('components/JobsTable.tsx'), /Paste Job numbers|onJobNumberAllocation|onAllocateNumber|Allocate job number/)
+    assert.doesNotMatch(read('components/JobsTable.tsx'), /Paste Job numbers|onJobNumberAllocation|gr_jobnumber:\s*event/)
+    assert.match(read('components/JobsTable.tsx'), /onAllocateNumber\(job\)/)
     assert.doesNotMatch(read('components/JobsTable.tsx'), /copyJobRow|Click the row to copy|data-selected=/)
-    assert.doesNotMatch(read('JobsScreen.tsx'), /onAllocateNumber|Resume number request|mode="allocate"/)
+    assert.match(read('JobsScreen.tsx'), /onAllocateNumber=\{UNIFIED_JOB_RUNTIME \? setAllocationJob/)
+    assert.match(read('JobsScreen.tsx'), /mode="allocate"/)
     assert.match(read('components/JobEditDrawer.tsx'), /!correctionsOnly && !hasAllocatedJobNumber\(job\) && <button/)
     assert.doesNotMatch(read('hooks/useJobs.ts'), /gr_jobnumber: job.jobNumber/)
 })

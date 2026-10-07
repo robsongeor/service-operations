@@ -42,6 +42,7 @@ export default function JobsScreen() {
     const unifiedWorklist = useUnifiedJobWorklist(viewState.selectedJobType)
     const scopedData = useMemo(() => ({ jobs: unifiedWorklist.jobs, equipment: [], sites: [], servicePlans: [], scheduleOptions: [], officeUpdates: [] }), [unifiedWorklist.jobs])
     const [workflowJob, setWorkflowJob] = useState<Job | null>(null)
+    const [allocationJob, setAllocationJob] = useState<Job | null>(null)
     const {
         jobs, equipmentList, mechanics, mechanicsLoading, mechanicsError, retryMechanics, sites, customers, siteContacts,
         scheduleOptions,
@@ -278,6 +279,7 @@ export default function JobsScreen() {
                 <JobsTable
                     unifiedWorklist={UNIFIED_JOB_RUNTIME}
                     onManageJob={UNIFIED_JOB_RUNTIME ? setWorkflowJob : undefined}
+                    onAllocateNumber={UNIFIED_JOB_RUNTIME ? setAllocationJob : undefined}
                     jobs={filteredJobs}
                     visibleStatuses={visibleStatuses}
                     viewState={viewState}
@@ -351,13 +353,14 @@ export default function JobsScreen() {
                             value={draftDefaultView.selectedJobType}
                             onChange={(event) => setDraftDefaultView((current) => ({
                                 ...current,
-                                selectedJobType: event.target.value === 'all' || event.target.value === 'operational' || event.target.value === 'unconfirmed'
+                                selectedJobType: event.target.value === 'all' || event.target.value === 'operational' || event.target.value === 'unconfirmed' || event.target.value === 'unnumbered'
                                     ? event.target.value
                                     : Number(event.target.value) as JobsDefaultView['selectedJobType'],
                             }))}
                         >
                             <option value="operational">Operational</option>
                             {JOB_TYPE_OPTIONS.map((jobType) => <option key={jobType.value} value={jobType.value}>{jobType.label}</option>)}
+                            <option value="unnumbered">Unnumbered</option>
                             <option value="unconfirmed">Unconfirmed</option>
                             <option value="all">All jobs (unfiltered)</option>
                         </select>
@@ -421,6 +424,7 @@ export default function JobsScreen() {
             )}
 
             {workflowJob && <JobRegistrationDialog job={workflowJob} mode="manage" getAccessToken={unifiedWorklist.getAccessToken} onSaved={async () => { await unifiedWorklist.reload(true); setEditingJob(null) }} onClose={() => setWorkflowJob(null)} />}
+            {allocationJob && <JobRegistrationDialog job={allocationJob} mode="allocate" getAccessToken={unifiedWorklist.getAccessToken} onSaved={() => unifiedWorklist.reload(true)} onClose={() => setAllocationJob(null)} />}
             {UNIFIED_JOB_RUNTIME && editingJob && !isCoordinatorManaged(editingJob) && <JobCorrectionsDrawer jobId={editingJob.gr_jobid} getAccessToken={unifiedWorklist.getAccessToken} onClose={() => setEditingJob(null)} onSaved={() => { void unifiedWorklist.reload() }} />}
             {editingJob && (!UNIFIED_JOB_RUNTIME || isCoordinatorManaged(editingJob)) && (
                 <JobEditDrawer

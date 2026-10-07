@@ -42,6 +42,7 @@ export function restoreJobsDefaultView(storageKey: string): JobsDefaultView | nu
         const selectedJobType = value.selectedJobType === 'all'
             || value.selectedJobType === 'operational'
             || value.selectedJobType === 'unconfirmed'
+            || value.selectedJobType === 'unnumbered'
             || (typeof value.selectedJobType === 'number' && validJobTypes.has(value.selectedJobType))
             ? value.selectedJobType as JobsDefaultView['selectedJobType']
             : APPLICATION_DEFAULT_JOBS_VIEW.selectedJobType

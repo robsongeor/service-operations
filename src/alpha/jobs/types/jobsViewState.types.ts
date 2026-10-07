@@ -48,6 +48,7 @@ function parseJobsViewState(raw: string | null): JobsViewState | null {
         const selectedJobType = value.selectedJobType === 'all'
             || value.selectedJobType === 'operational'
             || value.selectedJobType === 'unconfirmed'
+            || value.selectedJobType === 'unnumbered'
             || (typeof value.selectedJobType === 'number' && jobTypes.has(value.selectedJobType))
             ? value.selectedJobType as JobTypeFilter
             : DEFAULT_JOBS_VIEW_STATE.selectedJobType

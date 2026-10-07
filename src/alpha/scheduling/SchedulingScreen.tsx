@@ -337,7 +337,7 @@ export default function SchedulingScreen() {
                     includeOperational={false}
                     jobTypeOptions={SCHEDULER_JOB_TYPE_OPTIONS}
                     onChange={(jobType) => {
-                        if (jobType !== 'unconfirmed' && jobType !== 'operational') setSelectedJobType(jobType)
+                        if (jobType !== 'unconfirmed' && jobType !== 'operational' && jobType !== 'unnumbered') setSelectedJobType(jobType)
                     }}
                     ariaLabel="Filter scheduled jobs by type"
                 />

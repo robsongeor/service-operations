@@ -35,6 +35,7 @@ import { isCoordinatorManaged, jobWorklistLabel } from '../domain/unifiedJobWork
 type Props = {
     unifiedWorklist?: boolean
     onManageJob?: (job: Job) => void
+    onAllocateNumber?: (job: Job) => void
     jobs: Job[]
     visibleStatuses: JobStatus[]
     viewState: JobsViewState
@@ -70,7 +71,7 @@ const createdDateFormatter = new Intl.DateTimeFormat('en-NZ', {
 const JOBS_FEEDBACK_TIMEOUT_MS = 5000
 
 export default function JobsTable({
-    unifiedWorklist = false, onManageJob,
+    unifiedWorklist = false, onManageJob, onAllocateNumber,
     jobs,
     visibleStatuses,
     viewState,
@@ -151,9 +152,10 @@ export default function JobsTable({
 
     const jobsForSelectedType = useMemo(() => jobs.filter((job) => {
         if (selectedJobType === 'unconfirmed' && job.gr_status !== JOB_STATUSES.UNCONFIRMED) return false
+        if (selectedJobType === 'unnumbered' && (job.legacyBookEntry || job.gr_registrationvoid || job.gr_jobnumber?.trim())) return false
         if (job.legacyBookEntry) return selectedJobType === 'all'
         if (selectedJobType === 'operational' && (unifiedWorklist ? !isCoordinatorManaged(job) || job.gr_registrationvoid : job.gr_jobtype === JOB_TYPES.SITE_CHECK)) return false
-        if (selectedJobType !== 'all' && selectedJobType !== 'operational' && selectedJobType !== 'unconfirmed' && job.gr_jobtype !== selectedJobType) return false
+        if (selectedJobType !== 'all' && selectedJobType !== 'operational' && selectedJobType !== 'unconfirmed' && selectedJobType !== 'unnumbered' && job.gr_jobtype !== selectedJobType) return false
         if (!jobMatchesScheduledVisibility(job.gr_jobid, scheduleOptions, scheduledJobsVisibility)) return false
         const needsAttention = jobNeedsOfficeAttention(job)
         const matchesOfficeActionFilter = officeAttentionFilter === 'all'
@@ -315,6 +317,7 @@ export default function JobsTable({
                     includeOperational
                     allLabel="All jobs"
                     selectedJobType={selectedJobType}
+                    includeUnnumbered={unifiedWorklist}
                     includeUnconfirmed
                     onChange={(jobType) => onViewStateChange({
                         ...viewState,
@@ -470,9 +473,11 @@ export default function JobsTable({
                                     {jobNeedsOfficeAttention(job) && <span className="jobs-office-indicator" title="Office attention required" aria-label="Office attention required" />}
                                 </td>
                                 <td {...stickyProps('job')}>
-                                    <span className="jobs-table-job-number" title={job.gr_jobnumber?.trim() ? 'Allocated Job numbers cannot be changed.' : 'Job number pending allocation.'}>
-                                        {job.gr_jobnumber?.trim() || '—'}
-                                    </span>
+                                    {job.gr_jobnumber?.trim()
+                                        ? <span className="jobs-table-job-number" title="Allocated Job numbers cannot be changed.">{job.gr_jobnumber.trim()}</span>
+                                        : onAllocateNumber && !job.gr_registrationvoid
+                                            ? <button type="button" className="jobs-table-allocate-number" onClick={() => onAllocateNumber(job)}>Allocate number</button>
+                                            : <span className="jobs-table-job-number" title="Job number pending allocation.">—</span>}
                                 </td>
 
                                 <td {...stickyProps('created')} className={stickyProps('created').className ? `${stickyProps('created').className} jobs-table-date` : 'jobs-table-date'}>
