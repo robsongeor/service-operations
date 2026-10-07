@@ -528,3 +528,8 @@ test('Job Book keeps status in the page header without a duplicated workspace ti
     assert.match(screen, /<h1>\{selectedJobBook\.label\} Job Book<\/h1>/)
     assert.doesNotMatch(screen, /<h1>Job Book Legacy<\/h1>/)
 })
+
+test('Job Book create drawer does not double-divide the Scheduling section', () => {
+    const styles = readFileSync('src/alpha/job-book/JobBookPrototypeScreen.css', 'utf8')
+    assert.match(styles, /\.job-book-intake-section\s*>\s*\.job-schedule-section\s*\{[^}]*border-top:\s*0;/s)
+})
