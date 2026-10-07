@@ -67,7 +67,7 @@ test('Staging reuses the create drawer without exposing numbering or scheduling'
 test('unified Void rows have no allocation, management, spreadsheet-export or sending actions', () => {
     const html = renderToStaticMarkup(createElement(Table, {
         unifiedWorklist: true, jobs: [{ ...job, gr_jobnumber: '910001', gr_registrationvoid: true }], visibleStatuses: [122830001],
-        viewState: { searchText: '', selectedJobType: 'all', officeAttentionFilter: 'all', scheduledJobsVisibility: 'all', sort: { field: 'created', direction: 'desc' } },
+        viewState: { searchText: '', selectedJobType: 'all', officeAttentionFilter: 'all', scheduledJobsVisibility: 'all', sort: { column: 'created', direction: 'descending' } },
         onAllocateNumber: unavailable, onManageJob: unavailable, onViewStateChange: unavailable, onToggleStatus: unavailable, onResetToDefault: unavailable,
         onStatusChange: unavailable, onJobFieldsChange: unavailable, onJobNumberAllocation: unavailable, onEmailTechnician: unavailable, emailDeliveryStates: {},
         onEditJob: unavailable, onOpenJobCard: unavailable, onOpenEquipment: unavailable, mechanics: [], officeUpdates: [], scheduleOptions: [], stickyThroughColumnId: null,
@@ -81,7 +81,7 @@ test('unified Void rows have no allocation, management, spreadsheet-export or se
 function renderWorklist(rows, tab) {
     return renderToStaticMarkup(createElement(Table, {
         unifiedWorklist: true, jobs: rows, visibleStatuses: [122830001],
-        viewState: { searchText: '', selectedJobType: tab, officeAttentionFilter: 'all', scheduledJobsVisibility: 'all', sort: { field: 'created', direction: 'desc' } },
+        viewState: { searchText: '', selectedJobType: tab, officeAttentionFilter: 'all', scheduledJobsVisibility: 'all', sort: { column: 'created', direction: 'descending' } },
         onAllocateNumber: unavailable, onManageJob: unavailable, onViewStateChange: unavailable, onToggleStatus: unavailable, onResetToDefault: unavailable,
         onStatusChange: unavailable, onJobFieldsChange: unavailable, onJobNumberAllocation: unavailable, onEmailTechnician: unavailable, emailDeliveryStates: {},
         onEditJob: unavailable, onOpenJobCard: unavailable, onOpenEquipment: unavailable, mechanics: [], officeUpdates: [], scheduleOptions: [], stickyThroughColumnId: null,
@@ -128,6 +128,17 @@ test('restricted Equipment editor includes road compliance but excludes maintena
     assert.match(html, /Serial number/)
     assert.match(html, /WOF \/ REGO/)
     assert.doesNotMatch(html, /Delete equipment|Equipment Ownership|Site Check Availability|>Maintenance<|>Job History</)
+})
+
+test('unnumbered Jobs are shown before numbered Jobs while retaining the selected sort within each group', () => {
+    const rows = [
+        { ...job, gr_jobid: id(21), gr_jobnumber: '910001', gr_description: 'Newest numbered', createdon: '2026-10-07T00:00:00Z' },
+        { ...job, gr_jobid: id(22), gr_jobnumber: '', gr_description: 'Older unnumbered', createdon: '2026-10-05T00:00:00Z' },
+        { ...job, gr_jobid: id(23), gr_jobnumber: null, gr_description: 'Newest unnumbered', createdon: '2026-10-06T00:00:00Z' },
+    ]
+    const html = renderWorklist(rows, 'all')
+    assert.ok(html.indexOf('Newest unnumbered') < html.indexOf('Older unnumbered'))
+    assert.ok(html.indexOf('Older unnumbered') < html.indexOf('Newest numbered'))
 })
 test('Equipment correction payload includes road compliance, excludes unrelated fields and rejects unsaved Sites', () => {
     const input = { fleet: ' F1 ', alternateFleetNumbers: '', make: ' Make ', model: 'Model', serial: 'Serial', siteId: id(92), registrationNumber: 'ABC123', complianceStatus: 122830000, wofRequired: true, currentWofExpiry: '2030-01-01', regoExpiry: '2029-12-01', maintenanceProfile: 9, ownershipType: 3 }

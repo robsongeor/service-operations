@@ -216,6 +216,9 @@ export default function JobsTable({
             return sort.direction === 'ascending' ? difference : -difference
         }
         return [...matchingJobs].sort((firstJob, secondJob) => {
+            const firstIsUnnumbered = !firstJob.gr_jobnumber?.trim()
+            const secondIsUnnumbered = !secondJob.gr_jobnumber?.trim()
+            if (firstIsUnnumbered !== secondIsUnnumbered) return firstIsUnnumbered ? -1 : 1
             let primaryDifference: number
             if (sort.column === 'status') {
                 primaryDifference =
