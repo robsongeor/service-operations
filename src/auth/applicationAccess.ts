@@ -11,7 +11,6 @@ export const APPLICATION_ROLES = {
 export const SERVICE_COORDINATOR_NAVIGATION_PATHS = [
     '/customers',
     '/equipment',
-    '/maintenance-booking',
     '/wof',
     '/jobs',
     '/job-import',

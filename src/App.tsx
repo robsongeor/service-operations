@@ -96,7 +96,6 @@ function App() {
             <Route path="/" element={<Navigate to="/jobs" replace />} />
             <Route path="/customers" element={<CustomerDashboardScreen />} />
             <Route path="/equipment" element={<EquipmentScreen />} />
-            <Route path="/maintenance-booking" element={<MaintenanceBookingScreen />} />
             <Route path="/jobs" element={<JobsScreen key={signedInUser?.storageId || 'account-pending'} />} />
             <Route path="/job-import" element={<JobSpreadsheetImportScreen key={signedInUser?.storageId || 'account-pending'} />} />
             <Route path="/equipment-photos" element={<EquipmentPhotoUploadScreen key={signedInUser?.storageId || 'account-pending'} />} />
