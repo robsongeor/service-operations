@@ -269,7 +269,7 @@ test('screen and dialog reuse the workflow rules, retain Void evidence, and offe
     assert.match(screen, /disabled=\{!canUpdateEntryMarkers \|\| isVoid \|\| markerBusy\}/)
     assert.match(screen, /job-book-void-badge">VOID/)
     assert.match(screen, /row\.voidReason \|\| 'No reason recorded/)
-    assert.match(screen, /allowManagedJobNavigation && row\.linkedJobId/)
+    assert.match(screen, /allowManagedJobOpen && !UNIFIED_JOB_WALKTHROUGH/)
     assert.match(dialog, /<EditDrawerFormDialog/)
     assert.match(dialog, /submitDisabled=\{needsReload \|\| Boolean\(blocked \|\| jobBookVoidReasonError\(reason\)\)\}/)
     assert.match(dialog, /Reload latest entry/)

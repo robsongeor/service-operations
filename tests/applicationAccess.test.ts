@@ -196,9 +196,9 @@ test('App and Sidebar enforce the Job Book-only navigation boundary', () => {
     assert.match(app, /path="\/" element=\{<Navigate to="\/job-book" replace \/>\}/)
     assert.match(app, /path="\*" element=\{<AccessDeniedScreen/)
     assert.match(sidebar, /filter\(\(item\) => item\.path === '\/job-book'\)/)
-    assert.match(jobBook, /allowManagedJobNavigation/)
-    assert.match(app, /allowManagedJobNavigation=\{false\}/)
-    assert.match(jobBook, /allowManagedJobNavigation[\s\S]*Open Job[\s\S]*Managed Job/)
+    assert.match(jobBook, /allowManagedJobOpen/)
+    assert.match(app, /allowManagedJobOpen=\{false\}/)
+    assert.match(jobBook, /allowManagedJobOpen[\s\S]*Open Job[\s\S]*Managed Job/)
 })
 
 test('App and Sidebar enforce the Job Card Admin route and presentation boundary', () => {

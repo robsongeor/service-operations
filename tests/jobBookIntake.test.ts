@@ -352,7 +352,7 @@ test('unknown Equipment can be deferred without losing Customer and Site context
     assert.equal(deferred.address, '1 Example Road')
 })
 
-test('Intake entries edit through the shared drawer while managed Job navigation stays gated', () => {
+test('Intake and managed Job entries open their editors within the Job Book', () => {
     const screen = readFileSync(new URL('../src/alpha/job-book/JobBookPrototypeScreen.tsx', import.meta.url), 'utf8')
 
     assert.match(screen, /openIntakeEntryEditor/)
@@ -361,7 +361,8 @@ test('Intake entries edit through the shared drawer while managed Job navigation
     assert.match(screen, /editingIntakeRow \? 'Save changes' : 'Add to Job Book'/)
     assert.match(screen, /const saved = await updateJobBookIntakeRow\(token, draft, !canAssignInitialTechnician\)/)
     assert.match(screen, /editingIntakeRow \? draft\.jobNumber : 'Assigned after saving'/)
-    assert.match(screen, /allowManagedJobNavigation[\s\S]*Open Job[\s\S]*Managed Job/)
+    assert.match(screen, /onClick=\{\(\) => setCorrectingJobId\(row\.linkedJobId\)\}[\s\S]*Open Job/)
+    assert.doesNotMatch(screen, /navigate\(`\/jobs\?jobId=/)
 })
 
 test('unconfigured equipment reopens the existing Intake drawer without a second editor', () => {

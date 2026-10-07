@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
-import { useNavigate } from 'react-router-dom'
 import { acquireDataverseAccessToken } from '../../auth/dataverseAuthentication'
 import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
 import { applicationAccessFromEnvironment } from '../../auth/applicationAccess'
@@ -159,13 +158,12 @@ function CustomerPicker({ id, value, customerName, required, error, onSearchCust
 }
 
 export default function JobBookPrototypeScreen({
-    allowManagedJobNavigation = true,
+    allowManagedJobOpen = true,
     allowManagedJobMarkerUpdates = true,
 }: {
-    allowManagedJobNavigation?: boolean
+    allowManagedJobOpen?: boolean
     allowManagedJobMarkerUpdates?: boolean
 }) {
-    const navigate = useNavigate()
     const { instance } = useMsal()
     const account = useActiveMsalAccount()
     const { canManageJobs, canCorrectJobDetails, canEmailAssignedTechnician } = applicationAccessFromEnvironment(account)
@@ -846,11 +844,9 @@ export default function JobBookPrototypeScreen({
                             ? <button type="button" className="job-quick-action job-quick-action-edit" onClick={() => openIntakeEntryEditor(row)}>Edit entry</button>
                             : isVoid
                                 ? <span className="job-book-status-pill">Read-only</span>
-                            : allowManagedJobNavigation && row.linkedJobId && !UNIFIED_JOB_WALKTHROUGH
-                                ? <button type="button" className="job-quick-action job-quick-action-edit" onClick={() => navigate(`/jobs?jobId=${encodeURIComponent(row.linkedJobId)}`)}>Open Job</button>
-                                : canCorrectJobDetails && row.linkedJobId
-                                    ? <button type="button" className="job-quick-action job-quick-action-edit" onClick={() => setCorrectingJobId(row.linkedJobId)} disabled={markerBusy}>Edit entry</button>
-                                    : <span className="job-book-status-pill">{row.linkedJobId ? 'Managed Job' : 'Read-only'}</span>}
+                            : canCorrectJobDetails && row.linkedJobId
+                                ? <button type="button" className="job-quick-action job-quick-action-edit" onClick={() => setCorrectingJobId(row.linkedJobId)} disabled={markerBusy}>{allowManagedJobOpen && !UNIFIED_JOB_WALKTHROUGH ? 'Open Job' : 'Edit entry'}</button>
+                                : <span className="job-book-status-pill">{row.linkedJobId ? 'Managed Job' : 'Read-only'}</span>}
                         {!isVoid && <JobQuickActions
                             onCopy={() => void rowActions.copy(row)} copyBlockedReason={jobBookCopyBlockedReason(row)}
                             onEmail={canEmailAssignedTechnician ? () => { void rowActions.openEmail(row) } : undefined}

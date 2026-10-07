@@ -155,7 +155,7 @@ test('restricted host keeps five routes and projects only correction fields into
     const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
     const app = read('src/App.tsx').split("access.mode === 'job-card-admin' ? <Routes>")[1].split('</Routes>')[0]
     assert.doesNotMatch(app, /path="\/jobs/)
-    assert.match(app, /allowManagedJobNavigation=\{false\} allowManagedJobMarkerUpdates=\{access.canUpdateEntryMarkers\}/)
+    assert.match(app, /allowManagedJobOpen=\{false\} allowManagedJobMarkerUpdates=\{access.canUpdateEntryMarkers\}/)
     const screen = read('src/alpha/job-book/JobBookPrototypeScreen.tsx')
     assert.match(screen, /canCorrectJobDetails && correctingJobId && <JobCorrectionsDrawer/)
     const hook = read('src/alpha/jobs/hooks/useJobCorrections.ts')
