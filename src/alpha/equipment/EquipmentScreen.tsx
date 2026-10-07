@@ -40,6 +40,7 @@ export default function EquipmentScreen({ readOnly = false }: { readOnly?: boole
     const access = applicationAccessFromEnvironment(activeAccount)
     const detailsOnly = !access.canEditEquipment && access.canEditEquipmentDetails
     const canOpenEditor = !readOnly || detailsOnly
+    const maintenanceSummariesAllowed = !readOnly
     const signedInUser = getSignedInUserInfo(activeAccount)
     const csvToolsAllowed = !readOnly && canUseEquipmentCsvTools(signedInUser)
     const {
@@ -82,7 +83,7 @@ export default function EquipmentScreen({ readOnly = false }: { readOnly?: boole
     const [csvError, setCsvError] = useState('')
     const [csvImport, setCsvImport] = useState<{ filename: string; rows: EquipmentCsvReviewRow[] } | null>(null)
     const [page, setPage] = useState(1)
-    const equipmentJobHistory = useEquipmentJobHistory(editingEquipment?.gr_equipmentid)
+    const equipmentJobHistory = useEquipmentJobHistory(detailsOnly ? undefined : editingEquipment?.gr_equipmentid)
 
     const openEquipment = useCallback((record: Equipment) => {
         if (!canOpenEditor) return
@@ -170,13 +171,13 @@ export default function EquipmentScreen({ readOnly = false }: { readOnly?: boole
     )
     const servicePlanQuery = useOperationalQuery({
         key: servicePlanQueryKey,
-        enabled: servicePlanEquipmentIds.length > 0,
+        enabled: maintenanceSummariesAllowed && servicePlanEquipmentIds.length > 0,
         queryFn: ({ signal }) => loadEquipmentServicePlansForIds(servicePlanEquipmentIds, signal),
         staleTimeMs: 30_000,
         cacheTimeMs: 120_000,
     })
     const servicePlans = useMemo(() => servicePlanQuery.data ?? [], [servicePlanQuery.data])
-    const servicePlansLoading = servicePlanEquipmentIds.length > 0
+    const servicePlansLoading = maintenanceSummariesAllowed && servicePlanEquipmentIds.length > 0
         && servicePlanQuery.data === undefined
         && (servicePlanQuery.status === 'initial' || servicePlanQuery.status === 'loading')
     const servicePlansError = servicePlanQuery.data === undefined ? servicePlanQuery.error?.message ?? '' : ''
@@ -256,12 +257,12 @@ export default function EquipmentScreen({ readOnly = false }: { readOnly?: boole
                     <label>State<select value={stateFilter} onChange={(event) => { setStateFilter(event.target.value as StateFilter); setPage(1) }}><option value="all">All states</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
                 </div>
                 <div className="equipment-results-count">Showing {rows.length ? paged.start + 1 : 0}–{paged.end} of {rows.length}{rows.length !== equipment.length ? ` filtered (${equipment.length} total)` : ''}</div>
-                {servicePlansError && <div className="equipment-data-state error" role="alert"><div><strong>Maintenance summaries are temporarily unavailable.</strong><p>The Equipment list remains available.</p></div><button type="button" onClick={() => void servicePlanQuery.refetch()}>Try again</button></div>}
-                <EquipmentTable readOnly={!canOpenEditor} equipment={paged.rows} servicePlans={servicePlans} servicePlansLoading={servicePlansLoading} servicePlansUnavailable={Boolean(servicePlansError)} sortKey={sortKey} sortDirection={sortDirection} onSort={changeSort} onEdit={(item) => { clearSaveError(); void openEquipment(item) }} />
+                {maintenanceSummariesAllowed && servicePlansError && <div className="equipment-data-state error" role="alert"><div><strong>Maintenance summaries are temporarily unavailable.</strong><p>The Equipment list remains available.</p></div><button type="button" onClick={() => void servicePlanQuery.refetch()}>Try again</button></div>}
+                <EquipmentTable readOnly={!canOpenEditor} showMaintenanceSummaries={maintenanceSummariesAllowed} equipment={paged.rows} servicePlans={servicePlans} servicePlansLoading={servicePlansLoading} servicePlansUnavailable={Boolean(servicePlansError)} sortKey={sortKey} sortDirection={sortDirection} onSort={changeSort} onEdit={(item) => { clearSaveError(); void openEquipment(item) }} />
                 {paged.totalPages > 1 && <nav className="equipment-pagination" aria-label="Equipment pages"><button type="button" onClick={() => setPage(Math.max(1, paged.page - 1))} disabled={paged.page === 1}>Previous</button><span>Page <strong>{paged.page}</strong> of <strong>{paged.totalPages}</strong></span><button type="button" onClick={() => setPage(Math.min(paged.totalPages, paged.page + 1))} disabled={paged.page === paged.totalPages}>Next</button></nav>}
             </section>}
             {isCreatingEquipment && <EquipmentDrawer mode="create" customers={[]} sites={[]} equipmentList={equipment} jobs={[]} isSaving={isSaving} saveError={saveError} onSearchCustomers={searchEquipmentCustomers} onLoadCustomerSites={loadEquipmentCustomerSites} onClose={() => setIsCreatingEquipment(false)} onCreateCustomer={createCustomer} onCreateSite={createSite} onCreate={async (input, resolvedSite) => { await createEquipment(input, resolvedSite); setIsCreatingEquipment(false) }} />}
-            {editingEquipment && <EquipmentDrawer detailsOnly={detailsOnly} mode="edit" equipment={editingEquipment} equipmentList={equipment} onLoadServicePlans={loadEquipmentServicePlans} customers={editingEquipment.gr_Site?.gr_Customer ? [editingEquipment.gr_Site.gr_Customer] : []} sites={editingEquipment.gr_Site ? [{ ...editingEquipment.gr_Site, gr_address: editingEquipment.gr_Site.gr_address ?? '' }] : []} jobs={equipmentJobHistory.jobs} isSaving={isSaving} saveError={saveError} isJobHistoryLoading={equipmentJobHistory.isLoading} jobHistoryError={equipmentJobHistory.error} onRetryJobHistory={() => { void equipmentJobHistory.refetch().catch(() => undefined) }} onSearchCustomers={searchEquipmentCustomers} onLoadCustomerSites={loadEquipmentCustomerSites} onClose={() => setEditingEquipment(null)} onCreateCustomer={createCustomer} onCreateSite={createSite} onSave={async (input, resolvedSite) => { const updated = await updateEquipment(editingEquipment, input, resolvedSite); setEditingEquipment(updated) }} onSaveMaintenanceHistory={async (plans, input) => { const updated = await saveEquipmentMaintenanceHistory(editingEquipment, plans, input); setEditingEquipment(updated.equipment) }} onCreateJob={openJobCreateForEquipment} onDelete={async () => { await deleteEquipment(editingEquipment.gr_equipmentid); setEditingEquipment(null) }} />}
+            {editingEquipment && <EquipmentDrawer detailsOnly={detailsOnly} mode="edit" equipment={editingEquipment} equipmentList={equipment} onLoadServicePlans={detailsOnly ? undefined : loadEquipmentServicePlans} customers={editingEquipment.gr_Site?.gr_Customer ? [editingEquipment.gr_Site.gr_Customer] : []} sites={editingEquipment.gr_Site ? [{ ...editingEquipment.gr_Site, gr_address: editingEquipment.gr_Site.gr_address ?? '' }] : []} jobs={equipmentJobHistory.jobs} isSaving={isSaving} saveError={saveError} isJobHistoryLoading={equipmentJobHistory.isLoading} jobHistoryError={equipmentJobHistory.error} onRetryJobHistory={() => { void equipmentJobHistory.refetch().catch(() => undefined) }} onSearchCustomers={searchEquipmentCustomers} onLoadCustomerSites={loadEquipmentCustomerSites} onClose={() => setEditingEquipment(null)} onCreateCustomer={createCustomer} onCreateSite={createSite} onSave={async (input, resolvedSite) => { const updated = await updateEquipment(editingEquipment, input, resolvedSite); setEditingEquipment(updated) }} onSaveMaintenanceHistory={async (plans, input) => { const updated = await saveEquipmentMaintenanceHistory(editingEquipment, plans, input); setEditingEquipment(updated.equipment) }} onCreateJob={openJobCreateForEquipment} onDelete={async () => { await deleteEquipment(editingEquipment.gr_equipmentid); setEditingEquipment(null) }} />}
             {creatingJobForEquipment && <EquipmentJobCreateDrawer
                 equipment={creatingJobForEquipment}
                 onCreated={reload}

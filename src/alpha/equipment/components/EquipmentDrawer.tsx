@@ -342,7 +342,9 @@ export default function EquipmentDrawer(props: Props) {
     const equipmentName = equipment ? [equipment.gr_fleet, equipment.gr_make, equipment.gr_model].filter(Boolean).join(' - ') || 'this equipment' : ''
     const plans = isCreate ? [] : resolveEffectiveServicePlans(focusedServicePlans, equipment)
     const maintenanceConfiguration = resolveMaintenanceConfiguration(equipment)
-    const tabs: Array<{ id: EquipmentDrawerTab; label: string; count?: number }> = [
+    const tabs: Array<{ id: EquipmentDrawerTab; label: string; count?: number }> = props.detailsOnly ? [
+        { id: 'details', label: 'Details' },
+    ] : [
         { id: 'details', label: 'Details' },
         { id: 'maintenance', label: 'Maintenance' },
         { id: 'history', label: 'Job History', count: props.mode === 'edit' && props.isJobHistoryLoading ? undefined : history.length },

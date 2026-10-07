@@ -8,6 +8,7 @@ import { parseAlternateFleetNumbers } from '../identifiers/alternateFleetNumbers
 
 type Props = {
     readOnly?: boolean
+    showMaintenanceSummaries?: boolean
     equipment: Equipment[]
     servicePlans: EquipmentServicePlan[]
     servicePlansLoading?: boolean
@@ -31,7 +32,7 @@ function valueOrDash(value?: string | null) {
     return value?.trim() || '—'
 }
 
-export default function EquipmentTable({ readOnly = false, equipment, servicePlans, servicePlansLoading = false, servicePlansUnavailable = false, sortKey, sortDirection, onSort, onEdit }: Props) {
+export default function EquipmentTable({ readOnly = false, showMaintenanceSummaries = true, equipment, servicePlans, servicePlansLoading = false, servicePlansUnavailable = false, sortKey, sortDirection, onSort, onEdit }: Props) {
     return (
         <div className="equipment-table-scroll">
             <table className="equipment-table">
@@ -46,19 +47,19 @@ export default function EquipmentTable({ readOnly = false, equipment, servicePla
                             </th>
                         ))}
                         <th>State</th>
-                        <th>Next service</th>
-                        <th className="equipment-data-quality-heading" aria-sort={sortKey === 'dataStatus' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                        {showMaintenanceSummaries && <th>Next service</th>}
+                        {showMaintenanceSummaries && <th className="equipment-data-quality-heading" aria-sort={sortKey === 'dataStatus' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}>
                             <button type="button" onClick={() => onSort('dataStatus')} aria-label="Sort by Data status">
                                 <span className="equipment-visually-hidden">Data status</span>
                                 <span aria-hidden="true">{sortKey === 'dataStatus' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕'}</span>
                             </button>
-                        </th>
+                        </th>}
                         {!readOnly && <th><span className="equipment-visually-hidden">Actions</span></th>}
                     </tr>
                 </thead>
                 <tbody>
                     {equipment.length === 0 ? (
-                        <tr><td className="equipment-empty" colSpan={readOnly ? 9 : 10}>No equipment matches the current search and filters.</td></tr>
+                        <tr><td className="equipment-empty" colSpan={(showMaintenanceSummaries ? 9 : 7) + (readOnly ? 0 : 1)}>No equipment matches the current search and filters.</td></tr>
                     ) : equipment.map((item) => {
                         const itemServicePlans = servicePlans.filter((plan) => plan._gr_equipment_value?.toLowerCase() === item.gr_equipmentid.toLowerCase())
                         const primary = calculatePrimaryNextService(itemServicePlans, item)
@@ -83,8 +84,8 @@ export default function EquipmentTable({ readOnly = false, equipment, servicePla
                             <td>{valueOrDash(item.gr_model)}</td>
                             <td>{valueOrDash(item.gr_serial)}</td>
                             <td><span className={item.statecode === 0 ? 'equipment-state active' : 'equipment-state'}>{item.statecode === 0 ? 'Active' : 'Inactive'}</span></td>
-                            <td>{servicePlansLoading ? <span className="equipment-maintenance-summary"><small>Loading…</small></span> : servicePlansUnavailable ? <span title="Maintenance summaries could not be loaded.">Unavailable</span> : primary ? <span className="equipment-maintenance-summary"><strong>{label} @ {primary.gr_nextduehours}</strong><small>{remaining != null ? `${Math.abs(remaining)} hrs ${remaining < 0 ? 'overdue' : 'remaining'}` : 'Due hours unavailable'}</small></span> : 'Not Configured'}</td>
-                            <td className="equipment-data-quality-cell">{servicePlansLoading ? <span className="equipment-data-quality-loading" role="status">Loading…</span> : servicePlansUnavailable ? <span title="Maintenance data quality could not be calculated.">Unavailable</span> : <EquipmentDataQualityIndicator equipment={item} servicePlans={itemServicePlans} />}</td>
+                            {showMaintenanceSummaries && <td>{servicePlansLoading ? <span className="equipment-maintenance-summary"><small>Loading…</small></span> : servicePlansUnavailable ? <span title="Maintenance summaries could not be loaded.">Unavailable</span> : primary ? <span className="equipment-maintenance-summary"><strong>{label} @ {primary.gr_nextduehours}</strong><small>{remaining != null ? `${Math.abs(remaining)} hrs ${remaining < 0 ? 'overdue' : 'remaining'}` : 'Due hours unavailable'}</small></span> : 'Not Configured'}</td>}
+                            {showMaintenanceSummaries && <td className="equipment-data-quality-cell">{servicePlansLoading ? <span className="equipment-data-quality-loading" role="status">Loading…</span> : servicePlansUnavailable ? <span title="Maintenance data quality could not be calculated.">Unavailable</span> : <EquipmentDataQualityIndicator equipment={item} servicePlans={itemServicePlans} />}</td>}
                             {!readOnly && <td>
                                 <button
                                     className="equipment-edit-action"

@@ -27,6 +27,9 @@ Branch: `v2-deployment`
   are excluded. Both Admin profiles can create Customers/Sites through separate screens.
 - Equipment detail saves allow fleet/alternate fleets/make/model/serial/Site only, require an
   exact ETag, refresh the saved record and skip maintenance-plan synchronization.
+- Restricted Admin Equipment access does not request or display maintenance summaries, data-quality
+  status, maintenance plans or Job history. The permitted drawer is limited to Equipment details,
+  avoiding maintenance-table reads that Office Admin is not authorised to perform.
 - `dataverse/access/RestrictedAccessPlugin.cs` is a local, unregistered draft. Its offline
   policy tests do not constitute live enforcement. Registration plus exact-version Manage job
   atomic linked Void and assigned-technician initial dispatch now have local transactional plugin

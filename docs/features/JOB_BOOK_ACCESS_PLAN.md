@@ -98,6 +98,9 @@ This extends the earlier narrow location-only exception for both Admin groups. D
 actual allowed Equipment fields before provisioning rather than reusing a broad editing capability
 that also unlocks unrelated actions. Permission to edit details is not permission to delete Equipment,
 rewrite historical meter/service evidence, change maintenance plans or perform bulk imports.
+The restricted Equipment screen therefore omits maintenance summaries, maintenance/data-quality
+columns, maintenance-plan loading and Job history; those remain available only through broader
+authorised operational roles.
 General editing of existing Customer/Site master records has not been requested. Creating new
 records and selecting a destination do not authorize silently changing shared names/addresses.
 Job corrections remain distinct from explicit Equipment movement or master-record edits.
