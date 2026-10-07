@@ -38,7 +38,7 @@ All assignments below are planned, not performed. Everyone uses an individual wo
 | George — `georger@liftrucks.co.nz` | Full access | Existing project owner account; verify target identity |
 | `brucef@liftrucks.co.nz` | Service coordinator | Supplied by George |
 | `andyl@liftrucks.co.nz` | Service coordinator | Supplied by George |
-| `pubudu@liftrucks.co.nz` | Office Admin / live pilot | Supplied by George; Office Admin assigned and legacy Service Operations role removed with exact verification on 7 October 2026 |
+| `pubudu@liftrucks.co.nz` | Office Admin / live pilot | Supplied by George; Office Admin assigned. The broad Dataverse Service Operations role was removed, then temporarily restored on 7 October 2026 for permission-gap diagnosis; remove it again before production sign-off. |
 | Jess — `jessamynb@liftrucks.co.nz` | Office Admin | Name and email confirmed by George |
 | Nargiza — `nargiza@liftrucks.co.nz` | Office Admin | Name and email confirmed by George |
 | `martinh@liftrucks.co.nz` | Job Book Admin | Supplied by George |

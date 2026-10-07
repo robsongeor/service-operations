@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Verify', 'RemoveLegacyServiceOperations')]
+    [ValidateSet('Verify', 'AddLegacyServiceOperations', 'RemoveLegacyServiceOperations')]
     [string]$Mode = 'Verify',
     [string]$EnvironmentUrl = 'https://org0d4246d7.crm6.dynamics.com',
     [string]$PilotUpn = 'pubudu@liftrucks.co.nz',
@@ -82,7 +82,36 @@ try {
     $office = @($before | Where-Object { [string]$_['name'] -ceq 'Service Operations - Office Admin' })
     Require ($office.Count -eq 1) 'Refusing change because the replacement Office Admin role is not assigned exactly once.'
 
-    if ($Mode -eq 'RemoveLegacyServiceOperations') {
+    if ($Mode -eq 'AddLegacyServiceOperations') {
+        Require ($legacy.Count -le 1) 'Refusing change because duplicate legacy Service Operations roles are assigned.'
+        if ($legacy.Count -eq 0) {
+            $businessUnit = $office[0]['businessunitid']
+            Require ($null -ne $businessUnit -and $businessUnit.Id -ne [Guid]::Empty) 'Office Admin role has no verifiable business unit.'
+            $roleQuery = [Microsoft.Xrm.Sdk.Query.QueryExpression]::new('role')
+            $roleQuery.ColumnSet = [Microsoft.Xrm.Sdk.Query.ColumnSet]::new('roleid', 'name', 'businessunitid', 'ismanaged')
+            $roleQuery.Criteria.AddCondition('name', [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal, 'Service Operations')
+            $roleQuery.Criteria.AddCondition('businessunitid', [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal, $businessUnit.Id)
+            $roleQuery.Criteria.AddCondition('ismanaged', [Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal, $false)
+            $matchingRoles = @($service.RetrieveMultiple($roleQuery).Entities)
+            Require ($matchingRoles.Count -eq 1) "Expected exactly one unmanaged Service Operations role in business unit $($businessUnit.Id); found $($matchingRoles.Count)."
+            $references = [Microsoft.Xrm.Sdk.EntityReferenceCollection]::new()
+            $references.Add($matchingRoles[0].ToEntityReference())
+            $service.Associate(
+                'systemuser',
+                $user.Id,
+                [Microsoft.Xrm.Sdk.Relationship]::new('systemuserroles_association'),
+                $references
+            )
+        }
+
+        $after = @(Get-DirectRoles $service $user.Id)
+        Require (@($after | Where-Object { [string]$_['name'] -ceq 'Service Operations' }).Count -eq 1) 'Legacy Service Operations role assignment could not be verified.'
+        Require (@($after | Where-Object { [string]$_['name'] -ceq 'Service Operations - Office Admin' }).Count -eq 1) 'Office Admin role was not preserved.'
+        $expectedCount = if ($legacy.Count -eq 0) { $before.Count + 1 } else { $before.Count }
+        Require ($after.Count -eq $expectedCount) 'Unexpected direct-role count after assignment; stop and inspect the account.'
+        Write-RoleSummary "Direct roles after $Mode for $PilotUpn`:" $after
+        Write-Output 'Verified temporary diagnostic access: Service Operations added and Office Admin preserved.'
+    } elseif ($Mode -eq 'RemoveLegacyServiceOperations') {
         Require ($legacy.Count -eq 1) 'Refusing change because the legacy Service Operations role is not assigned exactly once.'
         $references = [Microsoft.Xrm.Sdk.EntityReferenceCollection]::new()
         $references.Add($legacy[0].ToEntityReference())
