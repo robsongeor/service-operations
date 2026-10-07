@@ -158,9 +158,10 @@ test('number guards require exact versions, never a wildcard or header injection
 test('canonical drawer/table never expose number edits and numbered deletion is hidden', () => {
     const read = (file: string) => readFileSync(new URL(`../src/alpha/jobs/${file}`, import.meta.url), 'utf8')
     assert.match(read('components/JobCoreFields.tsx'), /<input\s+readOnly\s+value=\{draft\.jobNumber\}/)
-    assert.match(read('components/JobsTable.tsx'), /aria-label="Job number"\s+readOnly/)
+    assert.match(read('components/JobsTable.tsx'), /<span className="jobs-table-job-number"/)
     assert.doesNotMatch(read('components/JobsTable.tsx'), /onJobFieldsChange\(job.gr_jobid, \{ gr_jobnumber/)
-    assert.doesNotMatch(read('components/JobsTable.tsx'), /Paste Job numbers|onJobNumberAllocation/)
+    assert.doesNotMatch(read('components/JobsTable.tsx'), /Paste Job numbers|onJobNumberAllocation|onAllocateNumber|Allocate job number/)
+    assert.doesNotMatch(read('JobsScreen.tsx'), /onAllocateNumber|Resume number request|mode="allocate"/)
     assert.match(read('components/JobEditDrawer.tsx'), /!correctionsOnly && !hasAllocatedJobNumber\(job\) && <button/)
     assert.doesNotMatch(read('hooks/useJobs.ts'), /gr_jobnumber: job.jobNumber/)
 })

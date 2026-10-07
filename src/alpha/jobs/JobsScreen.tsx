@@ -3,8 +3,6 @@ import { useUnifiedJobWorklist } from './hooks/useUnifiedJobWorklist'
 import { UNIFIED_JOB_RUNTIME, UNIFIED_JOB_WALKTHROUGH, isCoordinatorManaged } from './domain/unifiedJobWorkflow'
 import JobRegistrationDialog from './components/JobRegistrationDialog'
 import JobCorrectionsDrawer from './components/JobCorrectionsDrawer'
-import { useJobRegistration } from './hooks/useJobRegistration'
-import { fetchJobForCorrection } from './services/jobCorrectionsApi'
 import { useJobs } from './hooks/useJobs'
 import JobsTable from './components/JobsTable'
 import JobEditDrawer from './components/JobEditDrawer'
@@ -42,10 +40,8 @@ export default function JobsScreen() {
         ? restoreJobsViewState(storageKey, true) ?? applyJobsDefaultView(defaultView)
         : DEFAULT_JOBS_VIEW_STATE)
     const unifiedWorklist = useUnifiedJobWorklist(viewState.selectedJobType)
-    const allocationRecovery = useJobRegistration(`${activeAccount?.homeAccountId}.allocation`, unifiedWorklist.getAccessToken, UNIFIED_JOB_RUNTIME)
-    const [recoveryError, setRecoveryError] = useState('')
     const scopedData = useMemo(() => ({ jobs: unifiedWorklist.jobs, equipment: [], sites: [], servicePlans: [], scheduleOptions: [], officeUpdates: [] }), [unifiedWorklist.jobs])
-    const [workflowJob, setWorkflowJob] = useState<{ job: Job; mode: 'allocate' | 'manage' } | null>(null)
+    const [workflowJob, setWorkflowJob] = useState<Job | null>(null)
     const {
         jobs, equipmentList, mechanics, mechanicsLoading, mechanicsError, retryMechanics, sites, customers, siteContacts,
         scheduleOptions,
@@ -240,13 +236,7 @@ export default function JobsScreen() {
                     </button>
                 </div>
             </header>
-            {UNIFIED_JOB_RUNTIME && (allocationRecovery.pending?.kind === 'allocate' || recoveryError || allocationRecovery.error || unifiedWorklist.error) && <section className="jobs-filter-bar" aria-label="Job worklist notices">
-                {allocationRecovery.pending?.kind === 'allocate' && <p role="status">A number request needs confirmation. <button type="button" onClick={() => {
-                    const request = allocationRecovery.pending
-                    if (request?.kind !== 'allocate') return
-                    void unifiedWorklist.getAccessToken().then((token) => fetchJobForCorrection(token, request.jobId)).then((job) => setWorkflowJob({ job, mode: 'allocate' })).catch((cause) => setRecoveryError(cause instanceof Error ? cause.message : 'Could not recover this Job.'))
-                }}>Resume number request</button></p>}
-                {(recoveryError || allocationRecovery.error) && <p role="alert">{recoveryError || allocationRecovery.error}</p>}
+            {UNIFIED_JOB_RUNTIME && unifiedWorklist.error && <section className="jobs-filter-bar" aria-label="Job worklist notices">
                 {unifiedWorklist.error && <span role="alert">{unifiedWorklist.error}</span>}
             </section>}
 
@@ -287,8 +277,7 @@ export default function JobsScreen() {
             ) : (
                 <JobsTable
                     unifiedWorklist={UNIFIED_JOB_RUNTIME}
-                    onAllocateNumber={UNIFIED_JOB_RUNTIME ? (job) => setWorkflowJob({ job, mode: 'allocate' }) : undefined}
-                    onManageJob={UNIFIED_JOB_RUNTIME ? (job) => setWorkflowJob({ job, mode: 'manage' }) : undefined}
+                    onManageJob={UNIFIED_JOB_RUNTIME ? setWorkflowJob : undefined}
                     jobs={filteredJobs}
                     visibleStatuses={visibleStatuses}
                     viewState={viewState}
@@ -432,7 +421,7 @@ export default function JobsScreen() {
                 />
             )}
 
-            {workflowJob && <JobRegistrationDialog {...workflowJob} getAccessToken={unifiedWorklist.getAccessToken} onSaved={async () => { await unifiedWorklist.reload(true); setEditingJob(null) }} onClose={() => setWorkflowJob(null)} />}
+            {workflowJob && <JobRegistrationDialog job={workflowJob} mode="manage" getAccessToken={unifiedWorklist.getAccessToken} onSaved={async () => { await unifiedWorklist.reload(true); setEditingJob(null) }} onClose={() => setWorkflowJob(null)} />}
             {UNIFIED_JOB_RUNTIME && editingJob && !isCoordinatorManaged(editingJob) && <JobCorrectionsDrawer jobId={editingJob.gr_jobid} getAccessToken={unifiedWorklist.getAccessToken} onClose={() => setEditingJob(null)} onSaved={() => { void unifiedWorklist.reload() }} />}
             {editingJob && (!UNIFIED_JOB_RUNTIME || isCoordinatorManaged(editingJob)) && (
                 <JobEditDrawer

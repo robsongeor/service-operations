@@ -364,13 +364,14 @@
     box-shadow: 0 0 0 2px rgba(80, 90, 84, 0.1);
 }
 
-.jobs-table-job-number,
 .jobs-table-order {
     height: 30px;
     padding: 0 6px;
 }
 
 .jobs-table-job-number {
+    display: inline-block;
+    padding: 0 6px;
     font-weight: 750;
 }
 .jobs-attention-column { box-sizing: border-box; padding-right: 3px !important; padding-left: 7px !important; text-align: center !important; }

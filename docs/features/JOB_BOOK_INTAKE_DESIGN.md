@@ -300,8 +300,9 @@ does not automatically make a Job coordinator-managed or mark it entered in anot
    registration and target-environment transaction tests remain approval-gated.
 3. **Unified screens/local walkthrough (implemented only in the isolated fixture):** reuse the current simple entry drawer,
    canonical corrections/editor controls and assigned-technician email workflow. Jobs creation
-   saves staging without requiring a number; **Allocate job number** chooses a region and invokes
-   the atomic operation. **Manage job** changes coordinator membership on the same record, never
+   saves staging without requiring a number. Service Coordination displays Job numbers as immutable
+   text and does not expose allocation; numbering remains confined to the regional allocation
+   system. **Manage job** changes coordinator membership on the same record, never
    creates another Job or number. Job Book reconciles linked rows by authoritative IDs, displaying
    current details from Job and preserving ledger snapshots separately. Both queries remain bounded.
    See the sample-only walkthrough section below; this is not a production release switch.
@@ -433,8 +434,9 @@ Implemented in this mode:
   immutable allocation snapshot/link; it does not opt into coordinator management. Initial
   technician selection remains available to Admin. Newly created sample master records persist
   independently if the entry is cancelled, matching the shared location editor's warning.
-- Jobs creation saves an unnumbered staging Job. **Allocate job number** selects a regional book
-  and registers that same Job; **Manage job** independently adds that same record to Operational.
+- Jobs creation saves an unnumbered staging Job. Number allocation is not available from Service
+  Coordination; its table displays existing numbers as immutable text. The regional allocation
+  system remains the only number writer. **Manage job** independently adds that same record to Operational.
   Neither sends email or marks GreenTree/Timecloud. New basic Jobs have no invented Job Type.
 - Service coordination uses one tab row: Operational, Breakdown, Service, Workshop, WOF,
   Site Check, Unconfirmed and All jobs. Operational uses explicit coordinator membership;

@@ -34,7 +34,6 @@ import { isCoordinatorManaged, jobWorklistLabel } from '../domain/unifiedJobWork
 
 type Props = {
     unifiedWorklist?: boolean
-    onAllocateNumber?: (job: Job) => void
     onManageJob?: (job: Job) => void
     jobs: Job[]
     visibleStatuses: JobStatus[]
@@ -71,7 +70,7 @@ const createdDateFormatter = new Intl.DateTimeFormat('en-NZ', {
 const JOBS_FEEDBACK_TIMEOUT_MS = 5000
 
 export default function JobsTable({
-    unifiedWorklist = false, onAllocateNumber, onManageJob,
+    unifiedWorklist = false, onManageJob,
     jobs,
     visibleStatuses,
     viewState,
@@ -507,15 +506,9 @@ export default function JobsTable({
                                     {jobNeedsOfficeAttention(job) && <span className="jobs-office-indicator" title="Office attention required" aria-label="Office attention required" />}
                                 </td>
                                 <td {...stickyProps('job')}>
-                                    <input
-                                        key={`${job.gr_jobid}-number-${job.gr_jobnumber}`}
-                                        className="jobs-table-inline jobs-table-job-number"
-                                        type="text"
-                                        aria-label="Job number"
-                                        readOnly
-                                        title={job.gr_jobnumber?.trim() ? 'Allocated Job numbers cannot be changed.' : 'Select this Job and use the number-allocation action.'}
-                                        defaultValue={job.gr_jobnumber ?? ''}
-                                    />
+                                    <span className="jobs-table-job-number" title={job.gr_jobnumber?.trim() ? 'Allocated Job numbers cannot be changed.' : 'Job number pending allocation.'}>
+                                        {job.gr_jobnumber?.trim() || '—'}
+                                    </span>
                                 </td>
 
                                 <td {...stickyProps('created')} className={stickyProps('created').className ? `${stickyProps('created').className} jobs-table-date` : 'jobs-table-date'}>
@@ -640,7 +633,6 @@ export default function JobsTable({
                                 <td className="jobs-table-actions-column">
                                     <div className="jobs-table-actions">
                                         {unifiedWorklist && !isCoordinatorManaged(job) && <span className="jobs-table-muted">{jobWorklistLabel(job)}</span>}
-                                        {onAllocateNumber && !job.gr_jobnumber && !job.gr_registrationvoid && <button type="button" className="job-quick-action job-quick-action-edit" onClick={() => onAllocateNumber(job)}>Allocate job number</button>}
                                         {onManageJob && !isCoordinatorManaged(job) && !job.gr_registrationvoid && <button type="button" className="job-quick-action job-quick-action-edit" onClick={() => onManageJob(job)}>Manage job</button>}
                                         {!unifiedWorklist && <input
                                             type="checkbox"
