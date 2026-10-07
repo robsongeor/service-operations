@@ -103,6 +103,7 @@ export default function JobCreateDrawer({
     const [scheduleDrafts, setScheduleDrafts] = useState<JobScheduleOptionDraft[]>([])
     const [jobWasCreated, setJobWasCreated] = useState(false)
     const [jobTypeError, setJobTypeError] = useState('')
+    const [equipmentUnknown, setEquipmentUnknown] = useState(false)
     const [equipmentDependencyStatus, setEquipmentDependencyStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
     const [equipmentDependencyError, setEquipmentDependencyError] = useState('')
     const [equipmentDependencyAttempt, setEquipmentDependencyAttempt] = useState(0)
@@ -149,6 +150,7 @@ export default function JobCreateDrawer({
             return
         }
         if (!draft.description.trim()) return setSaveError('Enter a job description before creating the job.')
+        if (!draft.equipmentId && !equipmentUnknown) return setSaveError('Select Equipment or choose Equipment not known yet.')
         const locationError = locationErrors.customer || locationErrors.site || locationErrors.address
         if (locationError) return setSaveError(locationError)
         if (draft.customerId && !draft.siteId) return setSaveError('Select a site for the chosen customer.')
@@ -230,7 +232,17 @@ export default function JobCreateDrawer({
             <fieldset className="job-edit-grid job-create-fields" disabled={isSaving || locationSaving}>
                 <JobRelationshipFields
                     manageEquipmentLocation
-                    locationRequired={!draft.equipmentId}
+                    deferLocationUntilEquipmentChoice
+                    unknownEquipmentOption={{
+                        selected: equipmentUnknown,
+                        label: 'Equipment not known yet',
+                        description: 'Save now and match or add the Equipment later.',
+                        onChange: (selected) => {
+                            setEquipmentUnknown(selected)
+                            if (selected) setDraft((current) => ({ ...current, equipmentId: '' }))
+                        },
+                    }}
+                    locationRequired={equipmentUnknown}
                     locationErrors={locationValidationAttempted ? locationErrors : undefined}
                     onLocationPendingChange={setLocationPending}
                     onLocationSavingChange={setLocationSaving}
@@ -250,10 +262,6 @@ export default function JobCreateDrawer({
                     onLoadCustomerSites={onLoadCustomerSites}
                     onLoadSiteContacts={onLoadSiteContacts}
                 />
-                <div className="job-edit-divider job-edit-field-wide">
-                    <h3>Job details</h3>
-                    <p>Record what is required and who should attend.</p>
-                </div>
                 <JobCoreFields stagingOnly={stagingOnly} draft={draft} setDraft={setDraft} mechanics={mechanics} mechanicsLoading={mechanicsLoading} mechanicsError={mechanicsError} onRetryMechanics={onRetryMechanics} equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)} allowEmptyJobType jobTypeError={jobTypeError} jobTypeOptions={jobTypeOptions} />
                 {jobRequiresMaintenance(draft.jobType) && <JobMaintenanceSummary
                     equipment={equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)}

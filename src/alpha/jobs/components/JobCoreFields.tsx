@@ -1,15 +1,14 @@
-import { useState, type Dispatch, type SetStateAction } from 'react'
+import type { Dispatch, SetStateAction } from 'react'
 import type { Mechanic } from '../types/mechanic.types'
 import { JOB_TYPE_OPTIONS, type JobType } from '../types/jobType.types'
 import { jobRequiresMaintenance } from '../types/jobType.types'
 import type { JobEditorDraft } from '../hooks/useJobEditor'
 import { JOB_STATUSES, JOB_STATUS_OPTIONS, UNCONFIRMED_OPERATION_MESSAGE, type JobStatus } from '../types/jobStatus.types'
 import { SERVICE_TYPES, SERVICE_TYPE_OPTIONS, type ServiceType } from '../../equipment/servicePlans/equipmentServicePlan.types'
-import SearchableMechanicSelect from './SearchableMechanicSelect'
 import type { Equipment } from '../types/equipment.types'
 import { isServiceTypeEnabled, resolveMaintenanceConfiguration } from '../../equipment/servicePlans/maintenanceConfiguration'
-import { JOB_DESCRIPTION_MAX_LENGTH } from '../domain/jobDescription'
 import type { Job } from '../types/job.types'
+import JobDetailsFields from './JobDetailsFields'
 
 type Props = {
     draft: JobEditorDraft
@@ -28,94 +27,38 @@ type Props = {
 }
 
 export default function JobCoreFields({ draft, setDraft, mechanics, mechanicsLoading = false, mechanicsError = '', onRetryMechanics, equipment, jobBookJob, allowEmptyJobType = false, jobTypeError = '', jobTypeOptions = JOB_TYPE_OPTIONS, correctionsOnly = false }: Props) {
-    const [mechanicSelectOpen, setMechanicSelectOpen] = useState(false)
-
     return (
         <>
-            <label className="job-edit-field">
-                <span>Job type</span>
-                <select
-                    disabled={correctionsOnly}
-                    value={draft.jobType}
-                    onChange={(event) => setDraft((current) => ({
-                        ...current,
-                        jobType: event.target.value ? Number(event.target.value) as JobType : '',
-                    }))}
-                >
-                    {allowEmptyJobType && <option value="">{correctionsOnly ? 'Not configured' : 'Select job type'}</option>}
-                    {jobTypeOptions.map((option) => (
-                        <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                </select>
-                {jobTypeError && !draft.jobType && <small className="job-edit-field-error" role="alert">{jobTypeError}</small>}
-            </label>
-
-            <label className="job-edit-field">
-                <span>Status</span>
-                <select
-                    disabled={correctionsOnly}
-                    value={draft.status}
-                    onChange={(event) => {
-                        const status = Number(event.target.value) as JobStatus
-                        setDraft((current) => ({
-                            ...current,
-                            status,
-                            mechanicId: status === JOB_STATUSES.UNCONFIRMED ? '' : current.mechanicId,
-                        }))
-                    }}
-                >
-                    {JOB_STATUS_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                </select>
-            </label>
-
-            <label className="job-edit-field">
-                <span>Order number</span>
-                <input
-                    value={draft.orderNumber}
-                    onChange={(event) => setDraft((current) => ({
-                        ...current,
-                        orderNumber: event.target.value,
-                    }))}
-                />
-            </label>
-
-            <label className="job-edit-field job-edit-field-wide">
-                <span>Description</span>
-                <textarea
-                    rows={5}
-                    maxLength={JOB_DESCRIPTION_MAX_LENGTH}
-                    value={draft.description}
-                    onChange={(event) => setDraft((current) => ({
-                        ...current,
-                        description: event.target.value,
-                    }))}
-                />
-            </label>
-
-            <label className="job-edit-field job-edit-field-wide">
-                <span>Mechanic</span>
-                {correctionsOnly ? <input readOnly value={jobBookJob?.gr_Mechanic?.gr_name || 'Unassigned'} /> : draft.status === JOB_STATUSES.UNCONFIRMED ? (
-                    <span className="job-edit-field-note">{UNCONFIRMED_OPERATION_MESSAGE}</span>
-                ) : <SearchableMechanicSelect
-                    mechanics={mechanics}
-                    selectedId={draft.mechanicId}
-                    isOpen={mechanicSelectOpen}
-                    isSaving={false}
-                    variant="drawer"
-                    onOpen={() => setMechanicSelectOpen(true)}
-                    onClose={() => setMechanicSelectOpen(false)}
-                    onSelect={(mechanicId) => {
-                        setDraft((current) => ({ ...current, mechanicId }))
-                        setMechanicSelectOpen(false)
-                    }}
-                />}
-                {draft.status !== JOB_STATUSES.UNCONFIRMED && mechanicsLoading && <small>Loading Staff choices…</small>}
-                {draft.status !== JOB_STATUSES.UNCONFIRMED && mechanicsError && <small className="job-edit-field-error" role="alert">
-                    Staff choices are unavailable. {onRetryMechanics && <button type="button" onClick={onRetryMechanics}>Try again</button>}
-                </small>}
-            </label>
+            <JobDetailsFields
+                additionalFields={<>
+                    <label className="job-edit-field">
+                        <span>Job type</span>
+                        <select disabled={correctionsOnly} value={draft.jobType} onChange={(event) => setDraft((current) => ({ ...current, jobType: event.target.value ? Number(event.target.value) as JobType : '' }))}>
+                            {allowEmptyJobType && <option value="">{correctionsOnly ? 'Not configured' : 'Select job type'}</option>}
+                            {jobTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                        </select>
+                        {jobTypeError && !draft.jobType && <small className="job-edit-field-error" role="alert">{jobTypeError}</small>}
+                    </label>
+                    <label className="job-edit-field">
+                        <span>Status</span>
+                        <select disabled={correctionsOnly} value={draft.status} onChange={(event) => { const status = Number(event.target.value) as JobStatus; setDraft((current) => ({ ...current, status, mechanicId: status === JOB_STATUSES.UNCONFIRMED ? '' : current.mechanicId })) }}>
+                            {JOB_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                        </select>
+                    </label>
+                </>}
+                description={draft.description}
+                onDescriptionChange={(description) => setDraft((current) => ({ ...current, description }))}
+                mechanics={mechanics}
+                mechanicId={draft.mechanicId}
+                mechanicName={jobBookJob?.gr_Mechanic?.gr_name ?? ''}
+                onMechanicChange={correctionsOnly ? undefined : (mechanicId) => setDraft((current) => ({ ...current, mechanicId }))}
+                mechanicDisabledMessage={draft.status === JOB_STATUSES.UNCONFIRMED ? UNCONFIRMED_OPERATION_MESSAGE : undefined}
+                mechanicsLoading={mechanicsLoading}
+                mechanicsError={mechanicsError}
+                onRetryMechanics={onRetryMechanics}
+                customerPo={draft.orderNumber}
+                onCustomerPoChange={(orderNumber) => setDraft((current) => ({ ...current, orderNumber }))}
+            />
 
             {jobRequiresMaintenance(draft.jobType) && <>
                 <div className="job-edit-divider job-edit-field-wide">

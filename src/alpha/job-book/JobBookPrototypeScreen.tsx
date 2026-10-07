@@ -28,20 +28,20 @@ import JobEmailComposer from '../jobs/components/JobEmailComposer'
 import JobQuickActions from '../jobs/components/JobQuickActions'
 import { useJobBookActions } from './useJobBookActions'
 import { jobBookCopyBlockedReason, jobBookEmailBlockedReason } from './jobBookActions'
-import JobEquipmentField, { type NewJobEquipmentInput } from '../jobs/components/JobEquipmentField'
+import type { NewJobEquipmentInput } from '../jobs/components/JobEquipmentField'
+import JobEquipmentAndLocationFields from '../jobs/components/JobEquipmentAndLocationFields'
+import JobDetailsFields from '../jobs/components/JobDetailsFields'
 import JobSiteContactFields from '../jobs/components/JobSiteContactFields'
 import JobEquipmentLocation from '../jobs/components/JobEquipmentLocation'
 import JobLocationSummary from '../jobs/components/JobLocationSummary'
 import { isPersistedEquipmentId } from '../equipment/services/equipmentLocationWorkflow'
 import JobCustomerField from '../jobs/components/JobCustomerField'
-import SearchableMechanicSelect from '../jobs/components/SearchableMechanicSelect'
 import JobScheduleFields from '../jobs/components/JobScheduleFields'
 import { createJobScheduleOption } from '../jobs/services/jobScheduleApi'
 import type { JobScheduleOptionDraft } from '../jobs/types/jobSchedule.types'
 import { useOperationalQuery } from '../shared/data/useOperationalQuery'
 import { STAFF_DIRECTORY_QUERY_KEY } from '../shared/data/operationalCollectionKeys'
 import { STANDARD_JOB_TYPE_OPTIONS, type JobType } from '../jobs/types/jobType.types'
-import { JOB_DESCRIPTION_MAX_LENGTH } from '../jobs/domain/jobDescription'
 import { jobCreationLocationErrors } from '../jobs/domain/jobCreationLocation'
 import { createJobBookIntakeRow, fetchJobBookIntakeRows, fetchJobBookIntakeRow, fetchJobBookSearchBatch, fetchRecentJobBookRows, jobBookIntakeContactLookupIsAvailable, updateJobBookIntakeRow, updateJobBookIntakeMarker, updateManagedJobBookMarker, mapManagedJobBookRow } from './jobBookApi'
 import { canUpdateJobBookMarkers, isEditableJobBookIntake, jobBookVoidBlockedReason } from './jobBookEntryWorkflow'
@@ -155,32 +155,6 @@ function CustomerPicker({ id, value, customerName, required, error, onSearchCust
         onCreateCustomerAndSite={onCreateCustomerAndSite}
         createDescription={UNIFIED_JOB_RUNTIME ? 'Create a saved Customer and Site. These remain available if the entry is cancelled.' : 'Use this customer and site on the Job Book entry. This does not create master Dataverse records.'}
         createActionLabel="Create customer"
-    />
-}
-
-function MechanicPicker({
-    selectedId,
-    value,
-    mechanics,
-    onChange,
-}: {
-    selectedId: string
-    value: string
-    mechanics: Mechanic[]
-    onChange: (mechanicId: string, mechanicName: string) => void
-}) {
-    const [open, setOpen] = useState(false)
-    return <SearchableMechanicSelect
-        mechanics={mechanics}
-        selectedId={selectedId}
-        selectedName={value}
-        isOpen={open}
-        isSaving={false}
-        variant="drawer"
-        onOpen={() => setOpen(true)}
-        onClose={() => setOpen(false)}
-        onSelect={(mechanicId) => onChange(mechanicId, mechanics.find((item) => item.gr_mechanicid === mechanicId)?.gr_name ?? '')}
-        onSelectCustom={UNIFIED_JOB_WALKTHROUGH ? undefined : (name) => onChange('', name)}
     />
 }
 
@@ -935,8 +909,7 @@ export default function JobBookPrototypeScreen({
         >
             <div className="job-book-intake-meta"><div><span>Job number</span><strong>{editingIntakeRow ? draft.jobNumber : 'Assigned after saving'}</strong></div><div><span>Entry date</span><strong>{displayDate(draft.date)}</strong></div></div>
             <fieldset className="job-book-intake-section job-create-fields" disabled={savingIntake || locationSaving || Boolean(registration.pending)}>
-                <div className="job-book-intake-section-heading"><h3>Equipment and location</h3><p>Selecting Equipment fills its Customer, Site and address.</p></div>
-                <JobEquipmentField
+                <JobEquipmentAndLocationFields
                     showSelectedLocation={!locationEquipment && !editingIntakeRow}
                     value={draft.equipmentId}
                     equipmentList={sharedEquipmentList}
@@ -1038,12 +1011,18 @@ export default function JobBookPrototypeScreen({
                 </>}
             </fieldset>
             <fieldset className="job-book-intake-section" disabled={savingIntake || Boolean(registration.pending)}>
-                <div className="job-book-intake-section-heading"><h3>Job details</h3><p>Record what is required and who should attend.</p></div>
-                <label className={`job-book-intake-field${intakeValidationAttempted && !draft.description.trim() ? ' error' : ''}`}><span>Description of the job <span className="job-book-required-mark">*</span></span><textarea required maxLength={JOB_DESCRIPTION_MAX_LENGTH} aria-label="Job description (required)" placeholder="Describe the fault or work required" rows={4} value={draft.description} onChange={(event) => { setIntakeError(''); setDraft((current) => ({ ...current, description: event.target.value })) }} />
-                    {intakeValidationAttempted && !draft.description.trim() && <small className="job-book-intake-field-error">Enter a description of the job.</small>}</label>
-                {canAssignInitialTechnician ? <div className="job-edit-field job-edit-field-wide"><span>Mechanic</span><MechanicPicker key={draft.id} selectedId={draft.mechanicId} value={draft.mechanicName} mechanics={mechanics}
-                    onChange={(mechanicId, mechanicName) => setDraft((current) => ({ ...current, mechanicId, mechanicName }))} /></div> : <div className="job-edit-field"><span>Technician</span><span>{draft.mechanicName || 'Not assigned'}</span></div>}
-                <label className="job-book-intake-field"><span>Customer PO <small>(optional)</small></span><input aria-label="Customer purchase order" placeholder="Enter a PO number if supplied" value={draft.customerPo} onChange={(event) => setDraft((current) => ({ ...current, customerPo: event.target.value }))} /></label>
+                <JobDetailsFields
+                    description={draft.description}
+                    descriptionError={intakeValidationAttempted && !draft.description.trim() ? 'Enter a description of the job.' : ''}
+                    onDescriptionChange={(description) => { setIntakeError(''); setDraft((current) => ({ ...current, description })) }}
+                    mechanics={mechanics}
+                    mechanicId={draft.mechanicId}
+                    mechanicName={draft.mechanicName}
+                    onMechanicChange={canAssignInitialTechnician ? (mechanicId, mechanicName) => setDraft((current) => ({ ...current, mechanicId, mechanicName })) : undefined}
+                    allowCustomMechanic={!UNIFIED_JOB_WALKTHROUGH}
+                    customerPo={draft.customerPo}
+                    onCustomerPoChange={(customerPo) => setDraft((current) => ({ ...current, customerPo }))}
+                />
             </fieldset>
             {!editingIntakeRow && <fieldset className="job-book-intake-section" disabled={savingIntake || Boolean(registration.pending)}>
                 <JobScheduleFields draftOptions={scheduleDrafts} onDraftOptionsChange={setScheduleDrafts} />

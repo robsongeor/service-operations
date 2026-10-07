@@ -441,6 +441,9 @@ Implemented in this mode:
 - Create and edit drawers do not render a Job-number input. Service Coordination and Job Book
   creation both use the shared scheduling fields; Job Book retains its guarded atomic regional
   registration path while Service Coordination retains the standard Job save path.
+- Both creation drawers also use the canonical Equipment/location selector and Job details fields.
+  Customer, Site and Contact remain hidden until Equipment is selected or the user explicitly
+  chooses **Equipment not known yet**. Service Coordination adds only Job type and Status controls.
 - Service coordination uses one tab row: Operational, Breakdown, Service, Workshop, WOF,
   Site Check, Unconfirmed and All jobs. Operational uses explicit coordinator membership;
   Unconfirmed retains its status meaning. All jobs includes read-only unlinked ledger history

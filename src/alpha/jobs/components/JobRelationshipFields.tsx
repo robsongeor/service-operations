@@ -14,6 +14,8 @@ import JobEquipmentLocation from './JobEquipmentLocation'
 import { isPersistedEquipmentId } from '../../equipment/services/equipmentLocationWorkflow'
 import type { JobCreationLocationErrors } from '../domain/jobCreationLocation'
 import JobLocationSummary from './JobLocationSummary'
+import JobEquipmentAndLocationFields from './JobEquipmentAndLocationFields'
+import type { JobEquipmentFieldProps } from './JobEquipmentField'
 
 export type JobRelationshipLookupProps = {
     onSearchEquipment?: (query: string, context: { customerId?: string; siteId?: string }, signal?: AbortSignal) => Promise<Equipment[]>
@@ -32,6 +34,8 @@ type Props = JobRelationshipLookupProps & {
     allowCorrectionMasterCreation?: boolean
     hideHeading?: boolean
     useLocationSummary?: boolean
+    deferLocationUntilEquipmentChoice?: boolean
+    unknownEquipmentOption?: JobEquipmentFieldProps['unknownEquipmentOption']
     onLocationPendingChange?: (pending: boolean) => void
     onLocationSavingChange?: (saving: boolean) => void
     editor: ReturnType<typeof useJobEditor>
@@ -58,6 +62,8 @@ export default function JobRelationshipFields({
     allowCorrectionMasterCreation = false,
     hideHeading = false,
     useLocationSummary = false,
+    deferLocationUntilEquipmentChoice = false,
+    unknownEquipmentOption,
     onLocationPendingChange = ignoreLocationState,
     onLocationSavingChange = ignoreLocationState,
     editor,
@@ -90,6 +96,7 @@ export default function JobRelationshipFields({
     const selectedCustomer = customers.find((customer) => customer.gr_customerid === draft.customerId) ?? selectedSite?.gr_Customer
     const showLocationSummary = useLocationSummary && !editingLocation && Boolean(draft.customerId || draft.siteId)
     const hasEquipmentLocation = manageEquipmentLocation && selectedEquipment && isPersistedEquipmentId(selectedEquipment.gr_equipmentid)
+    const showRelationshipFields = !deferLocationUntilEquipmentChoice || Boolean(draft.equipmentId) || Boolean(unknownEquipmentOption?.selected)
     const [siteLoadStatus, setSiteLoadStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
     const [siteLoadError, setSiteLoadError] = useState('')
     const [siteLoadAttempt, setSiteLoadAttempt] = useState(0)
@@ -273,12 +280,7 @@ export default function JobRelationshipFields({
     )
 
     return <>
-        {!hideHeading && <div className="job-edit-divider job-edit-field-wide">
-            <h3>Equipment and location</h3>
-            <p>{manageEquipmentLocation ? 'Select equipment to use its current customer and site.' : 'Change which records this job references.'}</p>
-        </div>}
-
-        <JobEquipmentField
+        {hideHeading ? <JobEquipmentField
             showSelectedLocation={!hasEquipmentLocation}
             value={draft.equipmentId}
             equipmentList={equipmentList}
@@ -291,9 +293,25 @@ export default function JobRelationshipFields({
             onCreateEquipment={correctionsOnly && !allowCorrectionMasterCreation ? undefined : onCreateEquipment}
             onSearchEquipment={onSearchEquipment}
             onChange={(item) => item ? selectEquipment(item) : clearEquipment()}
-        />
+            unknownEquipmentOption={unknownEquipmentOption}
+        /> : <JobEquipmentAndLocationFields
+            description="Selecting Equipment fills its Customer, Site and address."
+            showSelectedLocation={!hasEquipmentLocation}
+            value={draft.equipmentId}
+            equipmentList={equipmentList}
+            customerId={draft.customerId}
+            siteId={draft.siteId}
+            initialEquipmentDraft={initialEquipmentDraft}
+            dependencyStatus={equipmentDependencyStatus}
+            dependencyError={equipmentDependencyError}
+            onRetryDependencies={onRetryEquipmentDependencies}
+            onCreateEquipment={correctionsOnly && !allowCorrectionMasterCreation ? undefined : onCreateEquipment}
+            onSearchEquipment={onSearchEquipment}
+            onChange={(item) => item ? selectEquipment(item) : clearEquipment()}
+            unknownEquipmentOption={unknownEquipmentOption}
+        />}
 
-        {showLocationSummary ? <section className="job-equipment-location job-edit-field-wide" aria-label="Job location">
+        {showRelationshipFields && (showLocationSummary ? <section className="job-equipment-location job-edit-field-wide" aria-label="Job location">
             <JobLocationSummary customer={selectedCustomer?.gr_name ?? customerSearch} site={selectedSite?.gr_name ?? ''} address={selectedSite?.gr_address ?? ''} onEdit={() => setEditingLocation(true)} />
         </section> : hasEquipmentLocation ? <JobEquipmentLocation key={selectedEquipment.gr_equipmentid}
             equipment={selectedEquipment}
@@ -326,9 +344,9 @@ export default function JobRelationshipFields({
                 }}
                 onCreateCustomerAndSite={correctionsOnly && !allowCorrectionMasterCreation ? undefined : createCustomerAndSite}
             />
-        </div>}
+        </div>)}
 
-        {!showLocationSummary && <JobSiteContactFields
+        {showRelationshipFields && !showLocationSummary && <JobSiteContactFields
             showSite={!hasEquipmentLocation}
             locationRequired={locationRequired}
             siteError={locationErrors?.site}
