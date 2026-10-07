@@ -223,6 +223,8 @@ test('App and Sidebar enforce the Job Card Admin route and presentation boundary
     assert.doesNotMatch(quoteReadOnly, /<input|<select|<textarea|onSave|onDelete|Generate and save PDF|Open PO request email/)
     assert.match(equipment, /readOnly/)
     assert.match(customers, /readOnly/)
+    assert.match(customers, /loadManagementData: !readOnly/)
+    assert.match(customers, /useSiteChecks\(readOnly \? \[\] : persistedCustomerSiteIds\)/)
 })
 
 test('coordinator retains operational capabilities without full-application navigation', () => {

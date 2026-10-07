@@ -103,7 +103,10 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
         ? restoreCustomerDashboardSelection(viewStorageKey)
         : '')
     const [activeTab, setActiveTab] = useState<'sites' | 'jobs' | 'quotes' | 'contacts' | 'info'>('sites')
-    const customerData = useCustomerDashboardData(selectedCustomerId, activeTab === 'quotes' && access.canViewQuotes)
+    const customerData = useCustomerDashboardData(selectedCustomerId, {
+        loadQuotes: activeTab === 'quotes' && access.canViewQuotes,
+        loadManagementData: !readOnly,
+    })
     const {
         customers,
         isLoading: isCustomerListLoading,
@@ -369,7 +372,7 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
     const persistedCustomerSiteIds = customerSites
         .filter((site) => !site.gr_siteid.startsWith('prototype-site-'))
         .map((site) => site.gr_siteid)
-    const siteChecks = useSiteChecks(persistedCustomerSiteIds)
+    const siteChecks = useSiteChecks(readOnly ? [] : persistedCustomerSiteIds)
     const siteCheckDashboard = buildSiteCheckDashboardProjection({
         schedules: siteChecks.schedules,
         siteChecks: siteChecks.siteChecks,
@@ -496,34 +499,31 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
         { label: 'Sites', value: customerSites.length },
         { label: 'Equipment', value: customerEquipment.length },
         { label: 'Open Jobs', value: openJobs.length },
-        {
+        ...(!readOnly ? [{
             label: 'Checks Up to date',
             value: siteCheckDashboard.summary['up-to-date'],
             active: siteCheckFilter === 'up-to-date',
             onActivate: () => applySiteCheckFilter('up-to-date'),
-        },
-        {
+        }, {
             label: 'Checks Due',
             value: siteCheckDashboard.summary.due,
-            tone: 'warning',
+            tone: 'warning' as const,
             active: siteCheckFilter === 'due',
             onActivate: () => applySiteCheckFilter('due'),
-        },
-        {
+        }, {
             label: 'Checks Overdue',
             value: siteCheckDashboard.summary.overdue,
-            tone: 'danger',
+            tone: 'danger' as const,
             active: siteCheckFilter === 'overdue',
             onActivate: () => applySiteCheckFilter('overdue'),
-        },
-        {
+        }, {
             label: 'Checks In progress',
             value: siteCheckDashboard.summary['in-progress'],
             active: siteCheckFilter === 'in-progress',
             onActivate: () => applySiteCheckFilter('in-progress'),
         },
-        { label: 'Services Due Soon', value: maintenanceCounts.dueSoon, tone: 'warning' },
-        { label: 'Overdue Services', value: maintenanceCounts.overdue, tone: 'danger' },
+        { label: 'Services Due Soon', value: maintenanceCounts.dueSoon, tone: 'warning' as const },
+        { label: 'Overdue Services', value: maintenanceCounts.overdue, tone: 'danger' as const }] : []),
         { label: 'WOF Current', value: roadComplianceCounts.current },
         { label: 'WOF Due Soon', value: roadComplianceCounts.dueSoon, tone: 'warning' },
         { label: 'WOF Expired', value: roadComplianceCounts.expired, tone: 'danger' },
@@ -802,7 +802,7 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
                     </div>
                 </div>
 
-                <div className="customer-site-check-feedback" aria-live="polite">
+                {!readOnly && <div className="customer-site-check-feedback" aria-live="polite">
                     {siteChecks.isLoading
                         ? 'Loading Site Check status…'
                         : siteChecks.loadError
@@ -812,7 +812,7 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
                                 : siteCheckDashboard.invalidCount > 0
                                     ? `${siteCheckDashboard.invalidCount} enabled Site Check Schedule${siteCheckDashboard.invalidCount === 1 ? ' is' : 's are'} incomplete and excluded from the summary.`
                                     : ''}
-                </div>
+                </div>}
 
                 {customerSites.length === 0 ? <div className="customer-dashboard-empty compact">No sites have been recorded for this customer yet.</div>
                     : visibleCustomerSites.length === 0 ? <div className="customer-dashboard-empty compact">No Sites match this Site Check filter.</div>
@@ -929,16 +929,16 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
                                     <th aria-sort={equipmentSort.key === 'wofExpiry' ? (equipmentSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
                                         <button type="button" className="customer-equipment-sort" onClick={() => changeEquipmentSort(site.gr_siteid, 'wofExpiry')}>WOF Expiry <span aria-hidden="true">{equipmentSort.key === 'wofExpiry' ? (equipmentSort.direction === 'asc' ? '↑' : '↓') : ''}</span></button>
                                     </th>
-                                    <th>Last Known Hour Meter</th><th>Next Service</th><th>Maintenance Status</th>
+                                    <th>Last Known Hour Meter</th>{!readOnly && <><th>Next Service</th><th>Maintenance Status</th>
                                     <th className="customer-equipment-data-quality-heading" aria-sort={equipmentSort.key === 'dataStatus' ? (equipmentSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
                                         <button type="button" className="customer-equipment-sort" onClick={() => changeEquipmentSort(site.gr_siteid, 'dataStatus')} aria-label="Sort by Data status">
                                             <span className="customer-visually-hidden">Data status</span>
                                             <span aria-hidden="true">{equipmentSort.key === 'dataStatus' ? (equipmentSort.direction === 'asc' ? '↑' : '↓') : '↕'}</span>
                                         </button>
-                                    </th>
+                                    </th></>}
                                 </tr></thead>
                                 <tbody>
-                                    {rows.length === 0 ? <tr><td colSpan={9}>No equipment recorded for this site.</td></tr> : rows.map((item) => {
+                                    {rows.length === 0 ? <tr><td colSpan={readOnly ? 6 : 9}>No equipment recorded for this site.</td></tr> : rows.map((item) => {
                                         const maintenance = maintenanceByEquipment.get(item.gr_equipmentid)
                                         const plans = maintenance?.plans ?? []
                                         const primary = maintenance?.primary?.plan ?? null
@@ -960,9 +960,9 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
                                             <td>{display(item.gr_currenthourmeter)}
                                                 {item.gr_currenthourmeterrecordeddate && <small>Recorded {formatWofDateOnly(item.gr_currenthourmeterrecordeddate)}</small>}
                                             </td>
-                                            <td>{primary ? `${serviceLabel} @ ${primary.gr_nextduehours}` : 'Not Configured'}{remaining != null && <small>{Math.abs(remaining)} hrs {remaining < 0 ? 'overdue' : 'remaining'}</small>}</td>
+                                            {!readOnly && <><td>{primary ? `${serviceLabel} @ ${primary.gr_nextduehours}` : 'Not Configured'}{remaining != null && <small>{Math.abs(remaining)} hrs {remaining < 0 ? 'overdue' : 'remaining'}</small>}</td>
                                             <td><span className={`customer-maintenance-status status-${status?.toLowerCase().replace(' ', '-') ?? 'unknown'}`}>{status ?? 'Unknown'}</span></td>
-                                            <td className="customer-equipment-data-quality"><EquipmentDataQualityIndicator equipment={item} servicePlans={plans} /></td>
+                                            <td className="customer-equipment-data-quality"><EquipmentDataQualityIndicator equipment={item} servicePlans={plans} /></td></>}
                                         </tr>
                                     })}
                                 </tbody>

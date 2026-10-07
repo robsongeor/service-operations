@@ -36,7 +36,11 @@ const EMPTY_QUOTES: Quote[] = []
 const EMPTY_SCHEDULE_OPTIONS: JobScheduleOption[] = []
 const EMPTY_OFFICE_UPDATES: JobOfficeUpdate[] = []
 
-export function useCustomerDashboardData(customerId: string, loadQuotes = false) {
+export function useCustomerDashboardData(
+    customerId: string,
+    options: { loadQuotes?: boolean; loadManagementData?: boolean } = {},
+) {
+    const { loadQuotes = false, loadManagementData = true } = options
     const { instance } = useMsal()
     const account = useActiveMsalAccount()
     const persistedCustomerId = customerId.startsWith('prototype-customer-') ? '' : customerId
@@ -102,7 +106,7 @@ export function useCustomerDashboardData(customerId: string, loadQuotes = false)
         ),
         [jobFingerprint, persistedCustomerId],
     )
-    const jobChildrenEnabled = childQueriesEnabled
+    const jobChildrenEnabled = loadManagementData && childQueriesEnabled
         && jobsQuery.status !== 'initial'
         && jobsQuery.status !== 'loading'
     const scheduleOptionsQuery = useOperationalQuery<JobScheduleOption[]>({
@@ -125,7 +129,7 @@ export function useCustomerDashboardData(customerId: string, loadQuotes = false)
         () => customerDashboardServicePlansQueryKey(persistedCustomerId || 'none', equipmentFingerprint),
         [equipmentFingerprint, persistedCustomerId],
     )
-    const plansEnabled = childQueriesEnabled
+    const plansEnabled = loadManagementData && childQueriesEnabled
         && equipmentQuery.status !== 'initial'
         && equipmentQuery.status !== 'loading'
     const servicePlansQuery = useOperationalQuery<EquipmentServicePlan[]>({
@@ -151,17 +155,19 @@ export function useCustomerDashboardData(customerId: string, loadQuotes = false)
         if (!enabled) return
         await sitesQuery.refetch()
         await Promise.all([equipmentQuery.refetch(), jobsQuery.refetch()])
-        await Promise.all([
+        if (loadManagementData) await Promise.all([
             servicePlansQuery.refetch(),
             scheduleOptionsQuery.refetch(),
             officeUpdatesQuery.refetch(),
         ])
         if (loadQuotes) await quotesQuery.refetch()
-    }, [enabled, equipmentQuery, jobsQuery, loadQuotes, officeUpdatesQuery, quotesQuery, scheduleOptionsQuery, servicePlansQuery, sitesQuery])
+    }, [enabled, equipmentQuery, jobsQuery, loadManagementData, loadQuotes, officeUpdatesQuery, quotesQuery, scheduleOptionsQuery, servicePlansQuery, sitesQuery])
 
-    const statuses = [sitesQuery.status, equipmentQuery.status, jobsQuery.status, servicePlansQuery.status]
+    const statuses = [sitesQuery.status, equipmentQuery.status, jobsQuery.status]
+    if (loadManagementData) statuses.push(servicePlansQuery.status)
     const isLoading = enabled && statuses.some((status) => status === 'initial' || status === 'loading')
-    const error = sitesQuery.error ?? equipmentQuery.error ?? jobsQuery.error ?? servicePlansQuery.error
+    const error = sitesQuery.error ?? equipmentQuery.error ?? jobsQuery.error
+        ?? (loadManagementData ? servicePlansQuery.error : undefined)
 
     return {
         sites,

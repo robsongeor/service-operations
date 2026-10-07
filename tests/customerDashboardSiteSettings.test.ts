@@ -77,7 +77,7 @@ test('combined Site Settings drawer exposes the required state-preserving tabs',
 })
 
 test('Site Checks settings use the focused hook and preserve the existing drawer workflows', () => {
-    assert.match(dashboardSource, /useSiteChecks\(persistedCustomerSiteIds\)/)
+    assert.match(dashboardSource, /useSiteChecks\(readOnly \? \[\] : persistedCustomerSiteIds\)/)
     assert.match(dashboardSource, /buildSiteCheckDashboardProjection/)
     assert.match(dashboardSource, /aria-live="polite"/)
     assert.match(dashboardSource, /sitesHeadingRef\.current\?\.focus/)
@@ -147,13 +147,15 @@ test('Site Check history opens from cached data and retains an exact-Job fallbac
 })
 
 test('Customer Dashboard loads selected-customer collections without starting global Jobs or Equipment reads', () => {
-    assert.match(dashboardSource, /useCustomerDashboardData\(selectedCustomerId, activeTab === 'quotes' && access\.canViewQuotes\)/)
+    assert.match(dashboardSource, /useCustomerDashboardData\(selectedCustomerId, \{[\s\S]*?loadQuotes: activeTab === 'quotes' && access\.canViewQuotes,[\s\S]*?loadManagementData: !readOnly/)
     assert.match(dashboardSource, /useEquipmentManager\(\{[\s\S]*?loadGlobalOperationalData: false/)
     assert.match(dashboardSource, /useJobs\(\{[\s\S]*?loadGlobalOperationalData: false/)
     assert.match(customerDataSource, /fetchCustomerSites/)
     assert.match(customerDataSource, /fetchEquipmentForSites/)
     assert.match(customerDataSource, /fetchJobsForSites/)
     assert.match(customerDataSource, /fetchEquipmentServicePlansForEquipment/)
+    assert.match(customerDataSource, /const plansEnabled = loadManagementData && childQueriesEnabled/)
+    assert.match(dashboardSource, /!readOnly && <><th>Next Service<\/th><th>Maintenance Status<\/th>/)
 })
 
 test('Customer Dashboard scoped reads retain bounded cache and explicit mutation reconciliation', () => {
