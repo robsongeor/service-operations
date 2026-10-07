@@ -205,7 +205,7 @@ test('read/write failures preserve the original equipment and do not fake succes
     }
 })
 
-test('both creation flows reuse location, Customer and Site components; existing history is not auto-moved', () => {
+test('creation and edit flows reuse the location, Customer and Site components; history is moved only explicitly', () => {
     const book = read('src/alpha/job-book/JobBookPrototypeScreen.tsx')
     const fields = read('src/alpha/jobs/components/JobRelationshipFields.tsx')
     const create = read('src/alpha/jobs/components/JobCreateDrawer.tsx')
@@ -217,6 +217,7 @@ test('both creation flows reuse location, Customer and Site components; existing
     assert.match(fields, /manageEquipmentLocation = false/)
     assert.match(create, /manageEquipmentLocation/)
     assert.match(edit, /manageEquipmentLocation/)
+    assert.match(edit, /correctionsOnly allowCorrectionMasterCreation=\{allowCorrectionMasterCreation\} hideHeading manageEquipmentLocation useLocationSummary/)
     assert.match(edit, /onLocationPendingChange=\{setLocationPending\}/)
     assert.match(edit, /disabled=\{isSaving \|\| locationPending \|\| locationSaving/)
     assert.match(shared, /<JobCustomerField/)

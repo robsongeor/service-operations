@@ -583,7 +583,9 @@ export default function JobEditDrawer({
                             ? <div className="job-progressive-state job-edit-field-wide" role="status"><strong>Loading Equipment and customer choices…</strong></div>
                             : referenceDataStatus === 'error'
                                 ? <div className="job-progressive-state error job-edit-field-wide" role="alert"><strong>Editor choices could not be loaded</strong><span>{referenceDataError}</span></div>
-                                : <JobRelationshipFields correctionsOnly allowCorrectionMasterCreation={allowCorrectionMasterCreation} hideHeading useLocationSummary editor={editor} equipmentList={equipmentList} customers={customers}
+                                : <JobRelationshipFields correctionsOnly allowCorrectionMasterCreation={allowCorrectionMasterCreation} hideHeading manageEquipmentLocation useLocationSummary
+                                    onLocationPendingChange={setLocationPending} onLocationSavingChange={setLocationSaving}
+                                    editor={editor} equipmentList={equipmentList} customers={customers}
                                     onCreateCustomer={onCreateCustomer} onCreateSite={onCreateSite} onCreateContact={onCreateContact} onCreateEquipment={onCreateEquipment}
                                     onSearchEquipment={onSearchEquipment} onSearchCustomers={onSearchCustomers} onLoadCustomerSites={onLoadCustomerSites}
                                     onLoadSiteContacts={onLoadSiteContacts} onLoadEquipment={onLoadEquipment} onLoadEquipmentServicePlans={onLoadEquipmentServicePlans} />}

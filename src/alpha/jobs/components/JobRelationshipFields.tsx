@@ -311,9 +311,7 @@ export default function JobRelationshipFields({
             unknownEquipmentOption={unknownEquipmentOption}
         />}
 
-        {showRelationshipFields && (showLocationSummary ? <section className="job-equipment-location job-edit-field-wide" aria-label="Job location">
-            <JobLocationSummary customer={selectedCustomer?.gr_name ?? customerSearch} site={selectedSite?.gr_name ?? ''} address={selectedSite?.gr_address ?? ''} onEdit={() => setEditingLocation(true)} />
-        </section> : hasEquipmentLocation ? <JobEquipmentLocation key={selectedEquipment.gr_equipmentid}
+        {showRelationshipFields && (hasEquipmentLocation ? <JobEquipmentLocation key={selectedEquipment.gr_equipmentid}
             equipment={selectedEquipment}
             onPendingChange={onLocationPendingChange}
             onSavingChange={onLocationSavingChange}
@@ -325,7 +323,9 @@ export default function JobRelationshipFields({
                     ...current, customerId: customer?.gr_customerid ?? '', siteId: site?.gr_siteid ?? '',
                     contactId: current.siteId === site?.gr_siteid ? current.contactId : '',
                 }))
-            }} /> : <div className="job-edit-field-wide">
+            }} /> : showLocationSummary ? <section className="job-equipment-location job-edit-field-wide" aria-label="Job location">
+            <JobLocationSummary customer={selectedCustomer?.gr_name ?? customerSearch} site={selectedSite?.gr_name ?? ''} address={selectedSite?.gr_address ?? ''} onEdit={() => setEditingLocation(true)} />
+        </section> : <div className="job-edit-field-wide">
             <JobCustomerField
                 id="job-editor-customer"
                 required={locationRequired}
@@ -370,7 +370,7 @@ export default function JobRelationshipFields({
             onRetrySites={() => setSiteLoadAttempt((current) => current + 1)}
             onRetryContacts={() => setContactLoadAttempt((current) => current + 1)}
         />}
-        {correctionsOnly && !showLocationSummary && draft.siteId && <label className="job-edit-field job-edit-field-wide"><span>Site address</span><input readOnly value={filteredSites.find((site) => site.gr_siteid === draft.siteId)?.gr_address ?? ''} /><small>The address comes from the selected Site. Correcting this Job does not edit the shared Site record or move Equipment.</small></label>}
+        {correctionsOnly && !showLocationSummary && !hasEquipmentLocation && draft.siteId && <label className="job-edit-field job-edit-field-wide"><span>Site address</span><input readOnly value={filteredSites.find((site) => site.gr_siteid === draft.siteId)?.gr_address ?? ''} /><small>The address comes from the selected Site. Correcting this Job does not edit the shared Site record or move Equipment.</small></label>}
         {panel === 'site' && <JobSiteCreatePanel key={draft.customerId} customerName={customerSearch}
             description="Create and select this Site for the job." onCreate={createSite} onCancel={() => setPanel('')} />}
 

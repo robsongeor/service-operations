@@ -19,7 +19,7 @@ test.after(async () => { globalThis.fetch = originalFetch; globalThis.window = o
 
 const unavailable = () => { throw new Error('No mutation allowed during render.') }
 const site = { gr_siteid: 'site', gr_name: 'Historical Site', gr_address: 'Saved Site address', gr_Customer: { gr_customerid: 'customer', gr_name: 'Saved Customer' } }
-const equipment = { gr_equipmentid: 'equipment', gr_fleet: 'SAVED-EQUIPMENT', gr_make: 'Make', gr_model: 'Model', gr_serial: 'SERIAL', gr_Site: site }
+const equipment = { gr_equipmentid: '11111111-1111-4111-8111-111111111111', gr_fleet: 'SAVED-EQUIPMENT', gr_make: 'Make', gr_model: 'Model', gr_serial: 'SERIAL', gr_Site: site }
 const job = { gr_jobid: 'job', gr_jobnumber: 'WJ1234567', gr_jobtype: 122830000, gr_status: 122830003, gr_description: 'Saved description', gr_ordernumber: 'PO-1', gr_Equipment: equipment, gr_Site: site, gr_Mechanic: { gr_mechanicid: 'mechanic', gr_name: 'Saved Technician' } }
 const render = (props = {}) => renderToStaticMarkup(createElement(Provider, { scope: 'sample-corrections' }, createElement(Drawer, {
     job, correctionsOnly: true, jobBookLabel: 'Auckland', canCorrectMechanic: true, mechanics: [job.gr_Mechanic], equipmentList: [equipment], customers: [site.gr_Customer], sites: [site], siteContacts: [], scheduleOptions: [], servicePlans: [],
@@ -40,8 +40,13 @@ test('corrections drawer matches the new Job Book entry layout and functions', (
     assert.match(html, /SAVED-EQUIPMENT/)
     assert.match(html, /Saved Site address/)
     assert.match(html, /aria-label="Edit location"/)
+    assert.match(html, /aria-label="Equipment location"/)
     assert.doesNotMatch(html, /<span>Customer<\/span><input|<span>Site<\/span><select/)
     assert.match(html, /Saved Technician/)
+
+    const drawer = readFileSync(new URL('../src/alpha/jobs/components/JobEditDrawer.tsx', import.meta.url), 'utf8')
+    assert.match(drawer, /correctionsOnly allowCorrectionMasterCreation=\{allowCorrectionMasterCreation\} hideHeading manageEquipmentLocation useLocationSummary/)
+    assert.match(drawer, /onLocationPendingChange=\{setLocationPending\} onLocationSavingChange=\{setLocationSaving\}/)
 })
 
 test('corrections drawer has no scheduling, dispatch, deletion, master creation or evidence editing actions', () => {
