@@ -584,6 +584,14 @@ export default function JobEditDrawer({
                                 ? <div className="job-progressive-state error job-edit-field-wide" role="alert"><strong>Editor choices could not be loaded</strong><span>{referenceDataError}</span></div>
                                 : <JobRelationshipFields correctionsOnly allowCorrectionMasterCreation={allowCorrectionMasterCreation} manageEquipmentLocation useLocationSummary deferLocationUntilEquipmentChoice
                                     onLocationPendingChange={setLocationPending} onLocationSavingChange={setLocationSaving}
+                                    unknownEquipmentOption={{
+                                        selected: !draft.equipmentId,
+                                        label: 'Equipment not known yet',
+                                        description: 'Match or add the Equipment later.',
+                                        onChange: (selected) => {
+                                            if (selected) setDraft((current) => ({ ...current, equipmentId: '' }))
+                                        },
+                                    }}
                                     editor={editor} equipmentList={equipmentList} customers={customers}
                                     onCreateCustomer={onCreateCustomer} onCreateSite={onCreateSite} onCreateContact={onCreateContact} onCreateEquipment={onCreateEquipment}
                                     onSearchEquipment={onSearchEquipment} onSearchCustomers={onSearchCustomers} onLoadCustomerSites={onLoadCustomerSites}

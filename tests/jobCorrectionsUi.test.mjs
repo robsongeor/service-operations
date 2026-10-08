@@ -55,10 +55,15 @@ test('corrections drawer has no scheduling, dispatch, deletion, master creation 
     assert.match(html, /Edit Auckland Job Book entry/)
 })
 
-test('unconfigured Job Book entries defer location editing until Equipment is selected', () => {
-    const html = render({ allowCorrectionMasterCreation: true, job: { ...job, gr_Equipment: undefined, gr_Site: undefined }, equipmentList: [], customers: [], sites: [] })
-    assert.match(html, /Search primary or alternate fleet/)
-    assert.doesNotMatch(html, /Search customers|Site address|job-editor-customer/)
+test('unconfigured Job Book entries restore the unknown Equipment and saved location', () => {
+    const html = render({ allowCorrectionMasterCreation: true, job: { ...job, gr_Equipment: undefined }, equipmentList: [] })
+    assert.match(html, /Equipment not known yet/)
+    assert.match(html, /Match or add the Equipment later/)
+    assert.match(html, /Saved Customer/)
+    assert.match(html, /Historical Site/)
+    assert.match(html, /Saved Site address/)
+    assert.match(html, /aria-label="Edit location"/)
+    assert.doesNotMatch(html, /Search primary or alternate fleet/)
     const relationships = readFileSync(new URL('../src/alpha/jobs/components/JobRelationshipFields.tsx', import.meta.url), 'utf8')
     assert.match(relationships, /correctionsOnly && !allowCorrectionMasterCreation \? undefined : onCreateEquipment/)
     assert.match(relationships, /correctionsOnly && !allowCorrectionMasterCreation \? undefined : createCustomerAndSite/)
