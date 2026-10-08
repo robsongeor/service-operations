@@ -217,7 +217,7 @@ test('creation and edit flows reuse the location, Customer and Site components; 
     assert.match(fields, /manageEquipmentLocation = false/)
     assert.match(create, /manageEquipmentLocation/)
     assert.match(edit, /manageEquipmentLocation/)
-    assert.match(edit, /correctionsOnly allowCorrectionMasterCreation=\{allowCorrectionMasterCreation\} hideHeading manageEquipmentLocation useLocationSummary/)
+    assert.match(edit, /correctionsOnly allowCorrectionMasterCreation=\{allowCorrectionMasterCreation\} manageEquipmentLocation useLocationSummary deferLocationUntilEquipmentChoice/)
     assert.match(edit, /onLocationPendingChange=\{setLocationPending\}/)
     assert.match(edit, /disabled=\{isSaving \|\| locationPending \|\| locationSaving/)
     assert.match(shared, /<JobCustomerField/)

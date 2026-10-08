@@ -578,12 +578,11 @@ export default function JobEditDrawer({
                 {activeTab === 'details' && correctionsOnly && <>
                     <div className="job-book-intake-meta"><div><span>Job number</span><strong>{job.gr_jobnumber || 'Unnumbered'}</strong></div><div><span>Entry date</span><strong>{job.createdon ? new Date(job.createdon).toLocaleDateString('en-NZ') : '—'}</strong></div></div>
                     <fieldset className="job-book-intake-section job-create-fields" disabled={coreStatus !== 'ready' || isSaving}>
-                        <div className="job-book-intake-section-heading"><h3>Equipment and location</h3><p>Selecting Equipment fills its Customer, Site and address.</p></div>
                         {referenceDataStatus === 'loading' || referenceDataStatus === 'idle'
                             ? <div className="job-progressive-state job-edit-field-wide" role="status"><strong>Loading Equipment and customer choices…</strong></div>
                             : referenceDataStatus === 'error'
                                 ? <div className="job-progressive-state error job-edit-field-wide" role="alert"><strong>Editor choices could not be loaded</strong><span>{referenceDataError}</span></div>
-                                : <JobRelationshipFields correctionsOnly allowCorrectionMasterCreation={allowCorrectionMasterCreation} hideHeading manageEquipmentLocation useLocationSummary
+                                : <JobRelationshipFields correctionsOnly allowCorrectionMasterCreation={allowCorrectionMasterCreation} manageEquipmentLocation useLocationSummary deferLocationUntilEquipmentChoice
                                     onLocationPendingChange={setLocationPending} onLocationSavingChange={setLocationSaving}
                                     editor={editor} equipmentList={equipmentList} customers={customers}
                                     onCreateCustomer={onCreateCustomer} onCreateSite={onCreateSite} onCreateContact={onCreateContact} onCreateEquipment={onCreateEquipment}

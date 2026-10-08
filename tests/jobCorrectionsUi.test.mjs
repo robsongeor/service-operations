@@ -45,7 +45,7 @@ test('corrections drawer matches the new Job Book entry layout and functions', (
     assert.match(html, /Saved Technician/)
 
     const drawer = readFileSync(new URL('../src/alpha/jobs/components/JobEditDrawer.tsx', import.meta.url), 'utf8')
-    assert.match(drawer, /correctionsOnly allowCorrectionMasterCreation=\{allowCorrectionMasterCreation\} hideHeading manageEquipmentLocation useLocationSummary/)
+    assert.match(drawer, /correctionsOnly allowCorrectionMasterCreation=\{allowCorrectionMasterCreation\} manageEquipmentLocation useLocationSummary deferLocationUntilEquipmentChoice/)
     assert.match(drawer, /onLocationPendingChange=\{setLocationPending\} onLocationSavingChange=\{setLocationSaving\}/)
 })
 
@@ -55,10 +55,10 @@ test('corrections drawer has no scheduling, dispatch, deletion, master creation 
     assert.match(html, /Edit Auckland Job Book entry/)
 })
 
-test('Job Book corrections can expose the same Equipment and Customer creation actions as new entry', () => {
+test('unconfigured Job Book entries defer location editing until Equipment is selected', () => {
     const html = render({ allowCorrectionMasterCreation: true, job: { ...job, gr_Equipment: undefined, gr_Site: undefined }, equipmentList: [], customers: [], sites: [] })
     assert.match(html, /Search primary or alternate fleet/)
-    assert.match(html, /Search customers/)
+    assert.doesNotMatch(html, /Search customers|Site address|job-editor-customer/)
     const relationships = readFileSync(new URL('../src/alpha/jobs/components/JobRelationshipFields.tsx', import.meta.url), 'utf8')
     assert.match(relationships, /correctionsOnly && !allowCorrectionMasterCreation \? undefined : onCreateEquipment/)
     assert.match(relationships, /correctionsOnly && !allowCorrectionMasterCreation \? undefined : createCustomerAndSite/)
