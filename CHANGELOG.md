@@ -6,7 +6,8 @@
   layout, spacing, metadata row, and field sizing no longer depend on first visiting Job Book.
 - Added a bounded server-side retry of submitted Job Card status transitions to the existing
   15-minute GreenTree scheduler, allowing eligible Allocated Jobs to recover into Completion Review
-  after a transient submission-time failure without requiring the technician to submit again.
+  after a transient submission-time failure without requiring the technician to submit again. The
+  Job Card retry still runs when the independent GreenTree poll is skipped by its API cooldown.
 - Automated the operational Job lifecycle around technician dispatch and Job Cards. Successful
   dispatch keeps moving only Unallocated Jobs to Allocated; an Allocated Job now moves to Completion
   Review only after every current non-withdrawn technician assignment has submitted its Job Card;

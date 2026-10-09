@@ -219,6 +219,41 @@ test('scheduled POST rejects a missing or incorrect scheduler secret', { concurr
     assert.equal(calls, 0)
 })
 
+test('scheduled POST reconciles submitted job cards even when the GreenTree poll is on cooldown', { concurrency: false }, async () => {
+    process.env.DATAVERSE_URL = 'https://example.crm.dynamics.com'
+    const context = {}
+    let reconciliations = 0
+    await endpoint._test.greenTreeJobChanges(context, {
+        method: 'POST', headers: {}, query: {}, body: {},
+    }, {
+        authenticate: async () => 'Bearer application-token',
+        getCheckpointStore: () => ({ begin: async () => ({ skipped: true, reason: 'cooldown' }) }),
+        getJobCardStore: () => ({ name: 'job-card-store' }),
+        reconcilePendingCompletionReviews: async ({ store, authorization }) => {
+            reconciliations += 1
+            assert.deepEqual(store, { name: 'job-card-store' })
+            assert.equal(authorization, 'Bearer application-token')
+            return { pendingRecords: 1, jobsChecked: 1, eligible: 1, movedToCompletionReview: 1, unchanged: 0, failed: 0, truncated: false }
+        },
+    })
+    assert.equal(context.res.status, 200)
+    assert.equal(reconciliations, 1)
+    assert.deepEqual(JSON.parse(context.res.body), {
+        skipped: true,
+        reason: 'cooldown',
+        checkedAt: JSON.parse(context.res.body).checkedAt,
+        jobCardStatusReconciliation: {
+            pendingRecords: 1,
+            jobsChecked: 1,
+            eligible: 1,
+            movedToCompletionReview: 1,
+            unchanged: 0,
+            failed: 0,
+            truncated: false,
+        },
+    })
+})
+
 test('authenticated POST reconciles a GreenTree change into Dataverse', { concurrency: false }, async () => {
     process.env.DATAVERSE_URL = 'https://example.crm.dynamics.com'
     process.env.LIFTTRUCKS_API_USERNAME = 'server-user'

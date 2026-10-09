@@ -107,24 +107,6 @@ async function greenTreeJobChanges(context, request, options = {}) {
     const checkpointStore = request.method === 'POST'
         ? (options.getCheckpointStore || getGreenTreeSyncCheckpointStore)()
         : null
-    if (request.method === 'POST') {
-        if (checkpointStore) {
-            try { syncRun = await checkpointStore.begin() }
-            catch { context.res = jsonResponse(503, { error: 'The GreenTree synchronization checkpoint is unavailable.' }); return }
-            if (syncRun.skipped) {
-                context.res = jsonResponse(200, { skipped: true, reason: syncRun.reason, checkedAt: new Date().toISOString() })
-                return
-            }
-        }
-    }
-    const modifiedSince = syncRun
-        ? formatGreenTreeModifiedSince(Date.parse(syncRun.modifiedSince))
-        : parseModifiedSince(suppliedModifiedSince)
-    if (!modifiedSince) {
-        context.res = jsonResponse(400, { error: 'modifiedSince must be a valid timestamp within the previous 24 hours.' })
-        return
-    }
-
     let jobCardStatusReconciliation = null
     if (request.method === 'POST') {
         try {
@@ -136,6 +118,28 @@ async function greenTreeJobChanges(context, request, options = {}) {
         } catch {
             jobCardStatusReconciliation = { failed: true }
         }
+    }
+    if (request.method === 'POST') {
+        if (checkpointStore) {
+            try { syncRun = await checkpointStore.begin() }
+            catch { context.res = jsonResponse(503, { error: 'The GreenTree synchronization checkpoint is unavailable.' }); return }
+            if (syncRun.skipped) {
+                context.res = jsonResponse(200, {
+                    skipped: true,
+                    reason: syncRun.reason,
+                    checkedAt: new Date().toISOString(),
+                    jobCardStatusReconciliation,
+                })
+                return
+            }
+        }
+    }
+    const modifiedSince = syncRun
+        ? formatGreenTreeModifiedSince(Date.parse(syncRun.modifiedSince))
+        : parseModifiedSince(suppliedModifiedSince)
+    if (!modifiedSince) {
+        context.res = jsonResponse(400, { error: 'modifiedSince must be a valid timestamp within the previous 24 hours.' })
+        return
     }
 
     try {
@@ -178,6 +182,7 @@ module.exports._test = {
     requestHeader,
     validateAuthenticatedUser,
     acceptDelegatedBearerForLocalDevelopment,
+    greenTreeJobChanges,
     secretsMatch,
     scheduledAuthorization,
 }
