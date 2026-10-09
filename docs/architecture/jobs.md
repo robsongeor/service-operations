@@ -16,6 +16,11 @@ Job Status, Office Action, technician assignment, scheduling, Job Card progress,
 linkage are separate concerns. A change in one must not implicitly rewrite another unless a
 documented workflow coordinates them.
 
+Scheduling is an operational capability. Only Full Access and Service Coordinator users may
+view or create schedule options. Job Book Admin, Office Admin/Job Card Admin, Job Book Only, and
+denied modes must not render scheduling controls or submit schedule-option writes from Job Book.
+Route visibility and drawer visibility use the same `canScheduleJobs` access capability.
+
 ## Admin corrections (3 October 2026, local implementation)
 
 `canCorrectJobDetails` is separate from `canManageJobs`. `JobCorrectionsDrawer` adapts the canonical

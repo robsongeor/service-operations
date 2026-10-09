@@ -34,6 +34,7 @@ test('Job Book-only role cannot use the rest of the management application', () 
         canUseFullApplication: false,
         canUseJobBook: true,
         canManageJobs: false,
+        canScheduleJobs: false,
         canCorrectJobDetails: false,
         canEmailAssignedTechnician: false,
         canReviewJobCards: false,
@@ -62,6 +63,7 @@ test('Job Card Admin has the five-area capability set with corrections but no co
         canUseFullApplication: false,
         canUseJobBook: true,
         canManageJobs: false,
+        canScheduleJobs: false,
         canCorrectJobDetails: true,
         canEmailAssignedTechnician: true,
         canReviewJobCards: true,
@@ -110,7 +112,7 @@ test('only Full Access coordinators can manage Jobs, including development simul
 
 test('Job Book guards Manage job presentation and entry point while retaining Intake editing', () => {
     const screen = readFileSync(new URL('../src/alpha/job-book/JobBookPrototypeScreen.tsx', import.meta.url), 'utf8')
-    assert.match(screen, /const \{ canManageJobs, canCorrectJobDetails, canEmailAssignedTechnician \} = applicationAccessFromEnvironment\(account\)/)
+    assert.match(screen, /const \{ canManageJobs, canScheduleJobs, canCorrectJobDetails, canEmailAssignedTechnician \} = applicationAccessFromEnvironment\(account\)/)
     assert.match(screen, /const openManageJob = \(row: JobBookRow\) => \{\s*if \(!canManageJobs \|\| \(!isEditableJobBookIntake\(row\) && !row\.registeredLedgerId\)\) return/)
     assert.match(screen, /if \(UNIFIED_JOB_RUNTIME && row\.registeredLedgerId\) \{[\s\S]*?fetchJobForCorrection[\s\S]*?setManagingJob[\s\S]*?return\s*\}\s*setPromotionRow\(row\)/)
     assert.match(screen, /\{canManageJobs && row\.coordinatorManaged !== true && <button[^>]*onClick=\{\(\) => openManageJob\(row\)\}>Manage job<\/button>\}/)
@@ -240,6 +242,22 @@ test('coordinator retains operational capabilities without full-application navi
     for (const key of Object.keys(full).filter((key) => key.startsWith('can') && key !== 'canUseFullApplication')) assert.equal(coordinator[key as keyof typeof coordinator], full[key as keyof typeof full], key)
 })
 
+test('only operational roles can create Job schedule options', () => {
+    const options = { enforceAccessControl: true, isDevelopment: false }
+    assert.equal(resolveApplicationAccess(accountWithRoles([APPLICATION_ROLES.FULL_ACCESS]), options).canScheduleJobs, true)
+    assert.equal(resolveApplicationAccess(accountWithRoles([APPLICATION_ROLES.SERVICE_COORDINATOR]), options).canScheduleJobs, true)
+    assert.equal(resolveApplicationAccess(accountWithRoles([APPLICATION_ROLES.JOB_BOOK_ADMIN]), options).canScheduleJobs, false)
+    assert.equal(resolveApplicationAccess(accountWithRoles([APPLICATION_ROLES.JOB_CARD_ADMIN]), options).canScheduleJobs, false)
+    assert.equal(resolveApplicationAccess(accountWithRoles([APPLICATION_ROLES.JOB_BOOK_ONLY]), options).canScheduleJobs, false)
+})
+
+test('Job Book hides and suppresses schedule creation outside operational access', () => {
+    const screen = readFileSync(new URL('../src/alpha/job-book/JobBookPrototypeScreen.tsx', import.meta.url), 'utf8')
+    assert.match(screen, /canManageJobs, canScheduleJobs, canCorrectJobDetails/)
+    assert.match(screen, /\(canScheduleJobs \? scheduleDrafts : \[\]\)\.map/)
+    assert.match(screen, /\{canScheduleJobs && !editingIntakeRow && <fieldset[\s\S]*?<JobScheduleFields/)
+})
+
 test('App and Sidebar enforce the Service Coordinator screen boundary', () => {
     const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
     const sidebar = readFileSync(new URL('../src/Sidebar.tsx', import.meta.url), 'utf8')
@@ -265,7 +283,7 @@ test('Job Book Admin separates corrections and master data from dispatch, marker
     const book = resolveApplicationAccess(accountWithRoles([APPLICATION_ROLES.JOB_BOOK_ADMIN]), options)
     assert.equal(book.mode, 'job-book-admin')
     for (const key of ['canCorrectJobDetails','canEditEquipmentDetails','canMoveEquipment','canCreateEquipmentDestination','canViewCustomers','canViewEquipment'] as const) assert.equal(book[key], true, key)
-    for (const key of ['canManageJobs','canAssignInitialTechnician','canUpdateEntryMarkers','canEmailAssignedTechnician','canReviewJobCards','canViewQuotes','canEditEquipment','canEditCustomers'] as const) assert.equal(book[key], false, key)
+    for (const key of ['canManageJobs','canScheduleJobs','canAssignInitialTechnician','canUpdateEntryMarkers','canEmailAssignedTechnician','canReviewJobCards','canViewQuotes','canEditEquipment','canEditCustomers'] as const) assert.equal(book[key], false, key)
     const office = resolveApplicationAccess(accountWithRoles([APPLICATION_ROLES.JOB_CARD_ADMIN]), options)
     assert.equal(office.canEditEquipmentDetails, true)
     assert.equal(office.canAssignInitialTechnician, true)

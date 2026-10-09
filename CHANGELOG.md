@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Restricted Job Book scheduling controls and schedule-option submission to operational users.
+  Job Book Admin, Office Admin/Job Card Admin and Job Book Only users no longer see the Scheduling
+  section or create schedules while adding a Job Book entry.
 - Standardised the Equipment drawer Customer and Site selectors on the shared searchable dropdown.
   Customer selection now has the same arrow-key navigation, Enter selection, Escape handling,
   loading/error presentation and menu behaviour while retaining Customer/Site creation.

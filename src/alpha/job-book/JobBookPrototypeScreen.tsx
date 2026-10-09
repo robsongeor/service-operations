@@ -167,7 +167,7 @@ export default function JobBookPrototypeScreen({
 }) {
     const { instance } = useMsal()
     const account = useActiveMsalAccount()
-    const { canManageJobs, canCorrectJobDetails, canEmailAssignedTechnician } = applicationAccessFromEnvironment(account)
+    const { canManageJobs, canScheduleJobs, canCorrectJobDetails, canEmailAssignedTechnician } = applicationAccessFromEnvironment(account)
     const { canUpdateEntryMarkers: canWriteMarkers, canAssignInitialTechnician } = applicationAccessFromEnvironment(account)
     const jobBooks = useMemo(() => availableJobBooks(), [])
     const [selectedJobBookKey, setSelectedJobBookKey] = useState<JobBookKey>('auckland')
@@ -562,7 +562,7 @@ export default function JobBookPrototypeScreen({
         const token = await getAccessToken()
         const saved = await fetchJobBookIntakeRow(token, { jobBookKey: result.book, intakeRecordId: result.ledgerId })
         if (result.book === selectedJobBookKey) reconcileIntakeRow(saved)
-        await Promise.all(scheduleDrafts.map((option) => createJobScheduleOption(token, {
+        await Promise.all((canScheduleJobs ? scheduleDrafts : []).map((option) => createJobScheduleOption(token, {
             jobId: result.jobId,
             scheduleType: option.scheduleType,
             scheduleDate: option.scheduleDate,
@@ -1042,7 +1042,7 @@ export default function JobBookPrototypeScreen({
                     onCustomerPoChange={(customerPo) => setDraft((current) => ({ ...current, customerPo }))}
                 />
             </fieldset>
-            {!editingIntakeRow && <fieldset className="job-book-intake-section" disabled={savingIntake || Boolean(registration.pending)}>
+            {canScheduleJobs && !editingIntakeRow && <fieldset className="job-book-intake-section" disabled={savingIntake || Boolean(registration.pending)}>
                 <JobScheduleFields draftOptions={scheduleDrafts} onDraftOptionsChange={setScheduleDrafts} />
             </fieldset>}
         </JobDrawerShell>}

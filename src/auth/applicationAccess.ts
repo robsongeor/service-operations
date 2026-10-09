@@ -28,6 +28,7 @@ export type ApplicationAccess = {
     canUseFullApplication: boolean
     canUseJobBook: boolean
     canManageJobs: boolean
+    canScheduleJobs: boolean
     canUpdateEntryMarkers: boolean
     canAssignInitialTechnician: boolean
     canEditEquipmentDetails: boolean
@@ -75,6 +76,7 @@ function accessForMode(mode: ApplicationAccessMode, isSimulated = false): Applic
         canUseFullApplication: mode === 'full',
         canUseJobBook: mode !== 'denied',
         canManageJobs: coordinator,
+        canScheduleJobs: coordinator,
         canCorrectJobDetails: coordinator || admin,
         canUpdateEntryMarkers: coordinator || office || mode === 'job-book-only',
         canAssignInitialTechnician: coordinator || office || mode === 'job-book-only',
