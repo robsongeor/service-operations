@@ -12,6 +12,8 @@ export type JobEditorDraft = {
     description: string
     jobType: JobType | ''
     mechanicId: string
+    externalSupplierDetails: string
+    externalSupplierSelected: boolean
     status: JobStatus
     equipmentId: string
     customerId: string

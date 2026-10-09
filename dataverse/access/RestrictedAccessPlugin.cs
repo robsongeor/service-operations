@@ -72,6 +72,8 @@ namespace ServiceOperations.Access
                     var expected = new HashSet<string>(new[] { "gr_description", "gr_ordernumber", "gr_site", "gr_status", "gr_coordinatormanaged" });
                     foreach (var pair in new[] { new[] { "EquipmentId", "gr_equipment", "gr_equipment" }, new[] { "ContactId", "gr_contact", "gr_contact" }, new[] { "MechanicId", "gr_mechanic", "gr_mechanic" } })
                         if (parent.InputParameters.Contains(pair[0]) && parent.InputParameters[pair[0]] is Guid && (Guid)parent.InputParameters[pair[0]] != Guid.Empty) expected.Add(pair[1]);
+                    string externalSupplier = parent.InputParameters.Contains("ExternalSupplierDetails") ? parent.InputParameters["ExternalSupplierDetails"] as string : null;
+                    if (!String.IsNullOrWhiteSpace(externalSupplier)) expected.Add("gr_externalsupplierdetails");
                     Guid siteId;
                     bool unknown = parent.InputParameters.Contains("EquipmentUnknown") && parent.InputParameters["EquipmentUnknown"] is bool && (bool)parent.InputParameters["EquipmentUnknown"];
                     var status = target.GetAttributeValue<OptionSetValue>("gr_status");
@@ -80,10 +82,11 @@ namespace ServiceOperations.Access
                         SameOptionalReference(parent.InputParameters, target, "EquipmentId", "gr_equipment", "gr_equipment") &&
                         SameOptionalReference(parent.InputParameters, target, "ContactId", "gr_contact", "gr_contact") &&
                         SameOptionalReference(parent.InputParameters, target, "MechanicId", "gr_mechanic", "gr_mechanic") &&
-                        unknown != target.Contains("gr_equipment") && status != null && status.Value == (target.Contains("gr_mechanic") ? 122830000 : 122830001) &&
+                        unknown != target.Contains("gr_equipment") && status != null && status.Value == (target.Contains("gr_mechanic") || target.Contains("gr_externalsupplierdetails") ? 122830000 : 122830001) &&
                         !target.GetAttributeValue<bool>("gr_coordinatormanaged") &&
                         SameText(parent.InputParameters, "Description", target.GetAttributeValue<string>("gr_description")) &&
-                        SameText(parent.InputParameters, "OrderNumber", target.GetAttributeValue<string>("gr_ordernumber"));
+                        SameText(parent.InputParameters, "OrderNumber", target.GetAttributeValue<string>("gr_ordernumber")) &&
+                        SameText(parent.InputParameters, "ExternalSupplierDetails", target.GetAttributeValue<string>("gr_externalsupplierdetails"));
                 }
                 if (target.LogicalName == "gr_job" && context.MessageName == "Update")
                 {
@@ -100,7 +103,10 @@ namespace ServiceOperations.Access
                     bool equipmentReview = target.GetAttributeValue<bool>("gr_equipmentreviewrequired");
                     bool equipmentComplete = new[] { "gr_equipment", "gr_fleetsnapshot", "gr_serialsnapshot", "gr_makesnapshot", "gr_modelsnapshot" }.All(target.Contains);
                     bool equipmentAbsent = new[] { "gr_equipment", "gr_fleetsnapshot", "gr_serialsnapshot", "gr_makesnapshot", "gr_modelsnapshot" }.All(key => !target.Contains(key));
-                    bool mechanicComplete = target.Contains("gr_mechanic") == target.Contains("gr_mechanictext");
+                    bool externalSupplier = parent.InputParameters.Contains("ExternalSupplierDetails") && !String.IsNullOrWhiteSpace(parent.InputParameters["ExternalSupplierDetails"] as string);
+                    bool mechanicComplete = externalSupplier
+                        ? !target.Contains("gr_mechanic") && target.Contains("gr_mechanictext")
+                        : target.Contains("gr_mechanic") == target.Contains("gr_mechanictext");
                     string number = target.GetAttributeValue<string>("gr_jobnumber");
                     return target.Id == requestId && target.Attributes.Keys.All(allowed.Contains) && required.All(target.Contains) &&
                         stage != null && stage.Value == 122830004 && Reference(target, "gr_registeredjob", "gr_job", jobId) &&

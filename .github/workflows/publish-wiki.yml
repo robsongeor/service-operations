@@ -1,0 +1,51 @@
+name: Publish user guides to GitHub Wiki
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - v2-deployment
+    paths:
+      - docs/wiki/**
+      - .github/workflows/publish-wiki.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: service-operations-wiki
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Publish version-controlled wiki pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          authenticated_url="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git"
+          if ! git clone "$authenticated_url" wiki; then
+            echo "The GitHub Wiki is not enabled or initialized. Enable Wiki in repository Settings, create its first page, then rerun this workflow." >&2
+            exit 1
+          fi
+
+          rsync --archive --delete --exclude='.git/' docs/wiki/ wiki/
+          cd wiki
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all
+
+          if git diff --cached --quiet; then
+            echo "Wiki is already current."
+            exit 0
+          fi
+
+          git commit -m "Update Service Operations user guides from ${GITHUB_SHA::7}"
+          git push origin HEAD

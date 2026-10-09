@@ -23,10 +23,12 @@ import { usesAzureJobCards } from '../types/jobCardWorkflow.ts'
 import { UNIFIED_JOB_RUNTIME, UNIFIED_JOB_SELECT } from '../domain/unifiedJobWorkflow.ts'
 import { JOB_STATUSES } from '../types/jobStatus.types.ts'
 import type { JobTypeFilter } from '../types/jobType.types.ts'
+import { EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED } from '../domain/externalSupplierAssignment.ts'
 
 const DATAVERSE_URL = import.meta.env?.VITE_DATAVERSE_URL ?? ''
 const HOUR_METER_READING_SELECT = HOUR_METER_CLASSIFICATION_ENABLED ? ',gr_hourmeterreadingtype,gr_hourmeterrecordeddate' : ''
-const JOB_SELECT = `gr_jobid,createdon,gr_jobnumber,gr_status,gr_ordernumber,gr_description,gr_jobtype,gr_jobcardstatus,gr_jobcardsenton,gr_jobcardsubmittedon,gr_jobcardclosedon,gr_hourmeter${HOUR_METER_READING_SELECT},gr_completeddate,gr_servicetype,gr_currentofficeaction,gr_officeactionowner,gr_officeattentionrequired,gr_techniciansubmissiontokenhash,gr_techniciansubmissiontokencreatedon,gr_techniciansubmissiontokenexpireson,gr_techniciansubmissiontokenused,gr_techniciansubmissionsubmittedon,gr_techniciansubmissionhourmeter,gr_techniciansubmissionstory,gr_techniciansubmissionfurtherworkrequired,gr_techniciansubmissionfurtherworkdetails,gr_techniciansubmissionsafetyissueidentified,gr_techniciansubmissionsafetyissuedetails,_gr_sitecheck_value${UNIFIED_JOB_RUNTIME ? UNIFIED_JOB_SELECT : ''}`
+const EXTERNAL_SUPPLIER_SELECT = EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED ? ',gr_externalsupplierdetails' : ''
+const JOB_SELECT = `gr_jobid,createdon,gr_jobnumber,gr_status,gr_ordernumber,gr_description${EXTERNAL_SUPPLIER_SELECT},gr_jobtype,gr_jobcardstatus,gr_jobcardsenton,gr_jobcardsubmittedon,gr_jobcardclosedon,gr_hourmeter${HOUR_METER_READING_SELECT},gr_completeddate,gr_servicetype,gr_currentofficeaction,gr_officeactionowner,gr_officeattentionrequired,gr_techniciansubmissiontokenhash,gr_techniciansubmissiontokencreatedon,gr_techniciansubmissiontokenexpireson,gr_techniciansubmissiontokenused,gr_techniciansubmissionsubmittedon,gr_techniciansubmissionhourmeter,gr_techniciansubmissionstory,gr_techniciansubmissionfurtherworkrequired,gr_techniciansubmissionfurtherworkdetails,gr_techniciansubmissionsafetyissueidentified,gr_techniciansubmissionsafetyissuedetails,_gr_sitecheck_value${UNIFIED_JOB_RUNTIME ? UNIFIED_JOB_SELECT : ''}`
 const JOB_EXPAND = 'gr_Equipment($select=gr_equipmentid,gr_fleet,gr_alternatefleetnumbers,gr_make,gr_model,gr_serial,gr_currenthourmeter,gr_currenthourmeterrecordeddate,gr_servicetrackingenabled),gr_Mechanic($select=gr_mechanicid,gr_name,gr_phone,gr_email),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name,gr_phone,gr_email)'
 
 export const UNIFIED_JOBS_PAGE_SIZE = 100
@@ -485,6 +487,8 @@ export function buildJobCreatePayload(
 ) {
     assertJobTypeAllowedForCreation(job.jobType, source)
     assertJobDescriptionLength(job.description)
+    if ((job.externalSupplierDetails?.trim().length ?? 0) > 1000) throw new Error('Other supplier details must be 1,000 characters or fewer.')
+    if (job.mechanicId && job.externalSupplierDetails?.trim()) throw new Error('Choose either a Staff member or another supplier, not both.')
     const newJob: Record<string, string | number> = {
         gr_ordernumber: job.orderNumber,
         gr_description: job.description,
@@ -500,6 +504,7 @@ export function buildJobCreatePayload(
     if (job.mechanicId) {
         newJob['gr_Mechanic@odata.bind'] = `/gr_mechanics(${job.mechanicId})`
     }
+    if (EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED && job.externalSupplierDetails?.trim()) newJob.gr_externalsupplierdetails = job.externalSupplierDetails.trim()
 
     if (job.siteId) {
         newJob['gr_Site@odata.bind'] = `/gr_sites(${job.siteId})`
@@ -758,6 +763,7 @@ export async function updateJobFields(
     fields: {
         gr_description?: string
         gr_ordernumber?: string
+        gr_externalsupplierdetails?: string | null
         'gr_Mechanic@odata.bind'?: string | null
     }
 ) {
@@ -844,6 +850,8 @@ export async function updateJob(
 
 export function buildJobUpdateFields(job: JobSaveInput): Record<string, string | number | boolean | null> {
     assertJobDescriptionLength(job.description)
+    if ((job.externalSupplierDetails?.trim().length ?? 0) > 1000) throw new Error('Other supplier details must be 1,000 characters or fewer.')
+    if (job.mechanicId && job.externalSupplierDetails?.trim()) throw new Error('Choose either a Staff member or another supplier, not both.')
     const fields: Record<string, string | number | boolean | null> = {
         gr_ordernumber: job.orderNumber,
         gr_description: job.description,
@@ -867,6 +875,7 @@ export function buildJobUpdateFields(job: JobSaveInput): Record<string, string |
             ? `/gr_contacts(${job.contactId})`
             : null,
     }
+    if (EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED) fields.gr_externalsupplierdetails = job.externalSupplierDetails?.trim() || null
     if (job.completedDate) fields.gr_completeddate = job.completedDate
     if (HOUR_METER_CLASSIFICATION_ENABLED && job.hourMeterReadingType != null) fields.gr_hourmeterreadingtype = job.hourMeterReadingType
     if (HOUR_METER_CLASSIFICATION_ENABLED && job.hourMeterRecordedDate) fields.gr_hourmeterrecordeddate = job.hourMeterRecordedDate

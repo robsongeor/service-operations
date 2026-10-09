@@ -41,6 +41,8 @@ export type JobBookRow = {
     date: string
     mechanicId: string
     mechanicName: string
+    externalSupplierDetails: string
+    externalSupplierSelected: boolean
     equipmentId: string
     fleet: string
     /** Managed rows may display Serial as a fallback; export must retain the actual Fleet value. */
@@ -130,6 +132,8 @@ export function createBlankJobBookRow(jobNumber: number, jobBookKey: JobBookKey 
         date: new Date().toLocaleDateString('en-CA'),
         mechanicId: '',
         mechanicName: '',
+        externalSupplierDetails: '',
+        externalSupplierSelected: false,
         equipmentId: '',
         fleet: '',
         serial: '',

@@ -66,7 +66,7 @@ completion workflows.
 - Existing Site geocode fields: `gr_geocodelatitude`, `gr_geocodelongitude`,
   `gr_geocodesourceaddress`, `gr_geocodeformattedaddress`, and `gr_geocoderesolvedon`.
 - Existing authenticated endpoint: `POST /api/equipmentgeocode`.
-- Existing Geoapify and OpenStreetMap configuration described by Equipment Map.
+- Shared Geoapify tile proxy, attribution, and geocoding configuration described by Equipment Map.
 
 No schema or security-role change is required.
 

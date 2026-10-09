@@ -75,7 +75,7 @@ export function useJobCorrections(jobId: string, getAccessToken: () => Promise<s
             // Explicit projection: the shared editor's coordinator fields never reach the corrections API.
             const saved = await saveJobCorrections(token, job, {
                 description: input.description, orderNumber: input.orderNumber,
-                equipmentId: input.equipmentId || '', mechanicId: input.mechanicId || '', customerId: input.customerId || '',
+                equipmentId: input.equipmentId || '', mechanicId: input.mechanicId || '', externalSupplierDetails: input.externalSupplierDetails || '', customerId: input.customerId || '',
                 siteId: input.siteId || '', contactId: input.contactId || '',
             })
             invalidateJobsCache(token)

@@ -9,6 +9,8 @@
 .jobs-mechanic-results { display: grid; min-height: 0; max-height: 260px; overflow-y: auto; border-top: 1px solid #e5e9e7; }
 .jobs-mechanic-results button { display: grid; gap: 2px; min-height: 45px; padding: 7px 10px; border: 0; border-bottom: 1px solid #edf0ee; background: #fff; color: #354039; text-align: left; cursor: pointer; }
 .jobs-mechanic-results button:hover, .jobs-mechanic-results button.active { background: #eef5f2; }
+.jobs-mechanic-results button.external { border-bottom-color: #ead9ae; background: #fffaf0; color: #6f4d00; }
+.jobs-mechanic-results button.external:hover, .jobs-mechanic-results button.external.active { background: #fff2cf; }
 .jobs-mechanic-results strong { font-size: .7rem; }
 .jobs-mechanic-results small, .jobs-mechanic-results > span { color: #748079; font-size: .62rem; }
 .jobs-mechanic-results > span { padding: 12px 10px; }

@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { Buffer } from 'node:buffer'
 import { createRequire } from 'node:module'
+import { resolve } from 'node:path'
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -25,6 +26,9 @@ const equipmentPhotoService = require('./api/services/equipmentPhotoService') as
   searchJobs: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
   upload: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
   jsonResponse: (status: number, body: object, headers?: Record<string, string>) => LocalFunctionResponse
+}
+const mapTileService = require('./api/services/mapTileService') as {
+  getTile: (request: LocalFunctionRequest & { params: Record<string, string> }) => Promise<LocalFunctionResponse>
 }
 type GreenTreeJobChangesEndpoint = (
   context: { res?: LocalFunctionResponse },
@@ -565,6 +569,37 @@ function liftTrucksProxy(env: Record<string, string | undefined>): Plugin {
   }
 }
 
+function mapTileProxy(env: Record<string, string | undefined>): Plugin {
+  process.env.GEOAPIFY_API_KEY ||= env.GEOAPIFY_API_KEY
+  const tilePath = /^\/api\/maptile\/(\d+)\/(\d+)\/(\d+)$/
+
+  const installMiddleware = (middlewares: { use: (handler: (request: IncomingMessage, response: ServerResponse, next: () => void) => void) => void }) => {
+    middlewares.use((request, response, next) => {
+      if (!request.url) return next()
+      const requestUrl = new URL(request.url, 'http://localhost')
+      const match = tilePath.exec(requestUrl.pathname)
+      if (!match) return next()
+      void mapTileService.getTile({
+        method: request.method,
+        headers: request.headers,
+        params: { z: match[1], x: match[2], y: match[3] },
+      }).then((result) => sendFunctionResponse(response, result)).catch(() => {
+        sendFunctionResponse(response, {
+          status: 503,
+          headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
+          body: 'Map tiles are temporarily unavailable.',
+        })
+      })
+    })
+  }
+
+  return {
+    name: 'map-tile-api-proxy',
+    configureServer(server) { installMiddleware(server.middlewares) },
+    configurePreviewServer(server) { installMiddleware(server.middlewares) },
+  }
+}
+
 function greenTreeJobChangesProxy(env: Record<string, string | undefined>): Plugin {
   for (const name of [
     'DATAVERSE_URL',
@@ -640,6 +675,14 @@ export default defineConfig(({ mode }) => {
 
   return {
     root: import.meta.dirname,
+    build: {
+      rollupOptions: {
+        input: {
+          app: resolve(import.meta.dirname, 'index.html'),
+          authCallback: resolve(import.meta.dirname, 'auth/silent.html'),
+        },
+      },
+    },
     plugins: [
       react(),
       liftTrucksProxy(env),
@@ -649,6 +692,7 @@ export default defineConfig(({ mode }) => {
       chargeableInvoicePreviewProxy(env),
       chargeableInvoiceApprovalProxy(env),
       equipmentGeocodingProxy(env),
+      mapTileProxy(env),
       equipmentPhotoProxy(env),
     ],
   }

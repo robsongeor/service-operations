@@ -2,10 +2,12 @@ import type { Job } from '../types/job.types.ts'
 import type { Site } from '../types/site.types.ts'
 import { assertJobDescriptionLength } from '../domain/jobDescription.ts'
 import { UNIFIED_JOB_WALKTHROUGH, UNIFIED_JOB_SELECT } from '../domain/unifiedJobWorkflow.ts'
+import { EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED } from '../domain/externalSupplierAssignment.ts'
 
 const DATAVERSE_URL = import.meta.env?.VITE_DATAVERSE_URL ?? ''
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const SELECT = `gr_jobid,createdon,gr_jobnumber,gr_status,gr_ordernumber,gr_description,gr_jobtype,gr_servicetype,gr_gtentered,gr_timecloudentered,_gr_sitecheck_value${UNIFIED_JOB_WALKTHROUGH ? UNIFIED_JOB_SELECT : ''}`
+const EXTERNAL_SUPPLIER_SELECT = EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED ? ',gr_externalsupplierdetails' : ''
+const SELECT = `gr_jobid,createdon,gr_jobnumber,gr_status,gr_ordernumber,gr_description${EXTERNAL_SUPPLIER_SELECT},gr_jobtype,gr_servicetype,gr_gtentered,gr_timecloudentered,_gr_sitecheck_value${UNIFIED_JOB_WALKTHROUGH ? UNIFIED_JOB_SELECT : ''}`
 const EXPAND = 'gr_Equipment($select=gr_equipmentid,gr_fleet,gr_alternatefleetnumbers,gr_serial,gr_make,gr_model),gr_Mechanic($select=gr_mechanicid,gr_name,gr_email),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name,gr_phone,gr_email)'
 
 export type CorrectableJob = Job & { gr_gtentered: boolean | null; gr_timecloudentered: boolean | null }
@@ -14,11 +16,12 @@ export type JobCorrectionsInput = {
     orderNumber: string
     equipmentId: string
     mechanicId: string
+    externalSupplierDetails?: string
     customerId: string
     siteId: string
     contactId: string
 }
-const INPUT_FIELDS = new Set(['description', 'orderNumber', 'equipmentId', 'mechanicId', 'customerId', 'siteId', 'contactId'])
+const INPUT_FIELDS = new Set(['description', 'orderNumber', 'equipmentId', 'mechanicId', 'externalSupplierDetails', 'customerId', 'siteId', 'contactId'])
 
 export class JobCorrectionConflictError extends Error {
     constructor() {
@@ -60,19 +63,28 @@ export async function fetchJobForCorrection(token: string, jobId: string, signal
 }
 
 /** Deliberately separate from updateJob: never write coordinator fields or submission evidence. */
-export function buildJobCorrectionsPatch(original: Job, input: JobCorrectionsInput): Record<string, string | null> {
+export function buildJobCorrectionsPatch(
+    original: Job,
+    input: JobCorrectionsInput,
+    externalSupplierEnabled = EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED,
+): Record<string, string | null> {
     if (original.gr_registrationvoid) throw new Error('Void entries are read-only.')
     if (Object.keys(input).some((key) => !INPUT_FIELDS.has(key))) throw new Error('Only recorded Job details can be corrected here.')
-    if ([...INPUT_FIELDS].some((key) => typeof input[key as keyof JobCorrectionsInput] !== 'string')) throw new Error('Complete the correction details before saving.')
+    if ([...INPUT_FIELDS].some((key) => key !== 'externalSupplierDetails' && typeof input[key as keyof JobCorrectionsInput] !== 'string') ||
+        (input.externalSupplierDetails != null && typeof input.externalSupplierDetails !== 'string')) throw new Error('Complete the correction details before saving.')
     const description = input.description.trim()
     if (!description) throw new Error('Enter a Job description before saving.')
     assertJobDescriptionLength(description)
     for (const id of [input.equipmentId, input.mechanicId, input.customerId, input.siteId, input.contactId]) if (id) requiredId(id)
+    const externalSupplierDetails = input.externalSupplierDetails?.trim() ?? ''
+    if (externalSupplierDetails.length > 1000) throw new Error('Other supplier details must be 1,000 characters or fewer.')
+    if (input.mechanicId && externalSupplierDetails) throw new Error('Choose either a Staff member or another supplier, not both.')
     if (Boolean(input.customerId) !== Boolean(input.siteId)) throw new Error('Select both a Customer and its Site before saving.')
     if (input.contactId && !input.siteId) throw new Error('Select a Site for the Contact before saving.')
     const patch: Record<string, string | null> = {}
     if (description !== (original.gr_description ?? '').trim()) patch.gr_description = description
     if (input.orderNumber.trim() !== (original.gr_ordernumber ?? '').trim()) patch.gr_ordernumber = input.orderNumber.trim() || null
+    if (externalSupplierEnabled && externalSupplierDetails !== (original.gr_externalsupplierdetails ?? '').trim()) patch.gr_externalsupplierdetails = externalSupplierDetails || null
     for (const [name, collection, value, previous] of [
         ['gr_Equipment', 'gr_equipments', input.equipmentId, original.gr_Equipment?.gr_equipmentid],
         ['gr_Mechanic', 'gr_mechanics', input.mechanicId, original.gr_Mechanic?.gr_mechanicid],

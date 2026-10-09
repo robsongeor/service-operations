@@ -3,6 +3,11 @@
 Read-only audit performed 3 October 2026 using George's existing Azure sign-in.
 No role definitions, grants, assignments, environment settings or business data were changed.
 
+Post-audit update: on 9 October 2026 Pubudu was switched from Office Admin to Job Book Admin in
+Entra and Dataverse with unrelated assignments preserved. The shared Job Card reviewer allowlist
+still requires a Contributor to remove Pubudu and verify denial; this historical audit table remains
+the 3 October snapshot.
+
 ## Target verified
 
 - Tenant: `a348f38c-33d0-4ce9-a0df-6a66cc0562a1`.

@@ -199,7 +199,7 @@ test('dry-run deployment package is complete, ordered and cannot deploy', () => 
     const plan = JSON.parse(readFileSync(new URL('../dataverse/job-registration/deployment-plan.json', import.meta.url), 'utf8'))
     const planner = readFileSync(new URL('../scripts/plan-unified-job-workflow-deployment.ps1', import.meta.url), 'utf8')
     const builder = readFileSync(new URL('../scripts/build-unified-job-workflow-plugin.ps1', import.meta.url), 'utf8')
-    assert.equal(readiness.columns.length, 12)
+    assert.equal(readiness.columns.length, 13)
     assert.equal(readiness.regionalTables.length, 4)
     assert.equal(readiness.customApis.length, 5)
     assert.equal(plan.featureFlagDuringDeployment, false)
@@ -236,7 +236,7 @@ test('assignment plan preserves the agreed roster and cannot change access', () 
     assert.equal(assignments.removalIncluded, false)
     assert.equal(assignments.intendedUsers.length, 11)
     assert.deepEqual(Object.fromEntries(['full', 'coordinator', 'office', 'book'].map((profile) => [profile, assignments.intendedUsers.filter((user: { profile: string }) => user.profile === profile).length])), {
-        full: 1, coordinator: 2, office: 3, book: 5,
+        full: 1, coordinator: 2, office: 2, book: 6,
     })
     assert.equal(assignments.intendedUsers.filter((user: { dataverseAdmission: string }) => user.dataverseAdmission !== 'present').length, 8)
     assert.ok(assignments.gates.some((gate: string) => /direct and team-derived/.test(gate)))

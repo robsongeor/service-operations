@@ -79,6 +79,8 @@ export default function JobCreateDrawer({
             jobType: initialValues?.jobType ?? '',
             status: initialValues?.status ?? JOB_STATUSES.UNALLOCATED,
             mechanicId: '',
+            externalSupplierDetails: '',
+            externalSupplierSelected: false,
             equipmentId: initialValues?.equipmentId ?? '',
             customerId: initialValues?.customerId ?? '',
             siteId: initialValues?.siteId ?? '',
@@ -150,6 +152,7 @@ export default function JobCreateDrawer({
             return
         }
         if (!draft.description.trim()) return setSaveError('Enter a job description before creating the job.')
+        if (draft.externalSupplierSelected && !draft.externalSupplierDetails.trim()) return setSaveError('Enter the other supplier details before creating the job.')
         if (!draft.equipmentId && !equipmentUnknown) return setSaveError('Select Equipment or choose Equipment not known yet.')
         const locationError = locationErrors.customer || locationErrors.site || locationErrors.address
         if (locationError) return setSaveError(locationError)
@@ -175,6 +178,7 @@ export default function JobCreateDrawer({
                 equipmentId: draft.equipmentId || undefined,
                 equipmentLocationHandled: true,
                 mechanicId: draft.mechanicId || undefined,
+                externalSupplierDetails: draft.externalSupplierSelected ? draft.externalSupplierDetails.trim() : undefined,
                 siteId: draft.siteId || undefined,
                 contactId: draft.contactId || undefined,
                 serviceType: draft.serviceType,

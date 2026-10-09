@@ -14,7 +14,7 @@
     { "upn": "georger@liftrucks.co.nz", "profile": "full", "currentAppAssignment": "FullAccess plus default access", "dataverseAdmission": "present" },
     { "upn": "brucef@liftrucks.co.nz", "profile": "coordinator", "currentAppAssignment": "FullAccess", "dataverseAdmission": "present" },
     { "upn": "andyl@liftrucks.co.nz", "profile": "coordinator", "currentAppAssignment": "none returned", "dataverseAdmission": "missing-review-required" },
-    { "upn": "pubudu@liftrucks.co.nz", "profile": "office", "currentAppAssignment": "review-required", "dataverseAdmission": "present" },
+    { "upn": "pubudu@liftrucks.co.nz", "profile": "book", "currentAppAssignment": "JobBookAdmin plus retained JobBookOnly", "dataverseAdmission": "present" },
     { "upn": "jessamynb@liftrucks.co.nz", "profile": "office", "currentAppAssignment": "JobBookOnly", "dataverseAdmission": "missing-review-required" },
     { "upn": "nargiza@liftrucks.co.nz", "profile": "office", "currentAppAssignment": "JobBookOnly", "dataverseAdmission": "missing-review-required" },
     { "upn": "martinh@liftrucks.co.nz", "profile": "book", "currentAppAssignment": "JobBookOnly", "dataverseAdmission": "missing-review-required" },
@@ -26,15 +26,16 @@
   "roleTestPilots": [
     {
       "upn": "pubudu@liftrucks.co.nz",
-      "purpose": "Live Office Admin pilot and denial verification account.",
-      "homeProfile": "office",
-      "currentDirectRoles": ["Dataverse as a Cluster App Role", "Dataverse Intelligence Learning Management Role", "Dataverse Search Role", "Service Operations - Office Admin"],
+      "purpose": "Live Job Book Admin guide and denial verification account.",
+      "homeProfile": "book",
+      "currentDirectRoles": ["Dataverse as a Cluster App Role", "Dataverse Intelligence Learning Management Role", "Dataverse Search Role", "Service Operations - Job Book Admin"],
       "currentTeamRoles": [],
       "constraints": [
         "Export current Entra and direct/team Dataverse assignments before any approved test change.",
-        "The legacy Service Operations role was removed on 7 October 2026 after Office Admin assignment verification.",
+        "The legacy Service Operations role was removed on 7 October 2026 after Office Admin assignment verification; Office Admin was replaced by Job Book Admin on 9 October 2026.",
         "Reject any remaining overlap with Full or Coordinator workflow roles during the final pilot.",
-        "Preserve unrelated platform roles; Office Admin is the permanent rollout profile after a successful pilot.",
+        "Preserve unrelated platform roles; Job Book Admin is the current rollout profile.",
+        "Remove Pubudu from the separate shared Job Card reviewer allowlist and verify denial before treating the transition as complete.",
         "The account owner performs sign-in and MFA; credentials are never shared or stored."
       ]
     }
@@ -45,7 +46,7 @@
     "Export current Entra app assignments plus direct and team-derived Dataverse roles immediately before change.",
     "Create missing Entra role definitions and Dataverse roles before assigning users; preserve existing stable definitions.",
     "Deploy the compatible flag-off application, APIs and guards before changing any user assignment.",
-    "Add and test the target role before removing an old role; Bruce keeps FullAccess until coordinator access passes, and Pubudu keeps Service Operations until Office Admin basic access passes.",
+    "Add and test the target role before removing an old role; Bruce keeps FullAccess until coordinator access passes.",
     "Preserve unrelated assignments and users outside this eleven-account manifest.",
     "Reconcile the separate Job Card reviewer service allowlist and prove Job Book Admin denial.",
     "Stop on any unexpected direct/team grant that restores a denied capability."

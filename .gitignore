@@ -13,6 +13,7 @@ dist-ssr
 *.local
 /output/
 .tmp/
+/tmp/
 
 # Editor directories and files
 .vscode/*

@@ -14,7 +14,7 @@
       "allowedCustomProcessingStepType": "None",
       "requiredPrivilegeSource": { "table": "gr_jobbookentry", "operation": "Create" },
       "privilegeGate": "Resolve ExecutePrivilegeName from published metadata during approved preflight; require caller regional Create plus Job Create/Write privileges. Never leave ExecutePrivilegeName empty.",
-      "parameters": { "RequestId": "Guid required", "Book": "String required", "Description": "String required, max 4000", "OrderNumber": "String optional, max 100", "SiteId": "Guid required", "EquipmentId": "Guid optional", "EquipmentUnknown": "Boolean required", "ContactId": "Guid optional", "MechanicId": "Guid optional" }
+      "parameters": { "RequestId": "Guid required", "Book": "String required", "Description": "String required, max 4000", "OrderNumber": "String optional, max 100", "SiteId": "Guid required", "EquipmentId": "Guid optional", "EquipmentUnknown": "Boolean required", "ContactId": "Guid optional", "MechanicId": "Guid optional", "ExternalSupplierDetails": "String optional, max 1000" }
     },
     {
       "name": "gr_AllocateJobBookNumber",
@@ -62,7 +62,7 @@
   ],
   "response": { "JobId": "Guid", "LedgerId": "Guid", "Book": "String", "JobNumber": "String", "JobRowVersion": "String", "WasReplay": "Boolean" },
   "proposedSchema": {
-    "gr_job": { "gr_coordinatormanaged": "Boolean; new registration explicitly false; existing records require reviewed migration and legacy fallback", "gr_registrationvoid": "Boolean; set only by the atomic registered-entry Void API", "gr_registrationvoidreason": "String max 1000; set with gr_registrationvoid by the same transaction" },
+    "gr_job": { "gr_coordinatormanaged": "Boolean; new registration explicitly false; existing records require reviewed migration and legacy fallback", "gr_registrationvoid": "Boolean; set only by the atomic registered-entry Void API", "gr_registrationvoidreason": "String max 1000; set with gr_registrationvoid by the same transaction", "gr_externalsupplierdetails": "Multiline text max 1000; mutually exclusive with gr_mechanic" },
     "gr_emaildispatch": { "gr_jobdispatchfingerprint": "String max 64; canonical SHA-256 replay identity for guarded initial dispatch" },
     "regionalTables": ["gr_jobbookentry", "gr_waikatojobbookentry", "gr_hastingsjobbookentry", "gr_christchurchjobbookentry"],
     "regionalColumns": { "gr_registeredjob": "Optional Lookup to gr_job; independent of historical gr_promotedjob", "gr_registrationfingerprint": "Optional String max 64; canonical SHA-256 replay identity" },

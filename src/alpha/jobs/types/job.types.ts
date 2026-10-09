@@ -20,6 +20,7 @@ export type Job = {
     gr_status: JobStatus
     gr_ordernumber: string | null
     gr_description: string | null
+    gr_externalsupplierdetails?: string | null
     gr_jobtype?: JobType
     gr_jobcardstatus?: JobCardStatus | null
     gr_jobcardsenton?: string | null

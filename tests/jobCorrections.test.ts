@@ -47,6 +47,14 @@ test('relationship corrections use only Job bindings, never mutate master record
     assert.equal(buildJobCorrectionsPatch(job, { ...input, equipmentId: '' })['gr_Equipment@odata.bind'], null)
 })
 
+test('external supplier corrections are separate from and exclusive with Staff', () => {
+    assert.deepEqual(buildJobCorrectionsPatch(job, { ...input, description: 'Original', externalSupplierDetails: 'AutoTreads' }, true), {
+        gr_externalsupplierdetails: 'AutoTreads',
+    })
+    assert.throws(() => buildJobCorrectionsPatch(job, { ...input, mechanicId: id(9), externalSupplierDetails: 'AutoTreads' }), /either a Staff member or another supplier/)
+    assert.throws(() => buildJobCorrectionsPatch(job, { ...input, externalSupplierDetails: 'x'.repeat(1001) }), /1,000/)
+})
+
 for (const field of ['jobNumber', 'jobType', 'status', 'serviceType', 'hourMeter', 'currentOfficeAction', 'gr_gtentered', 'gr_techniciansubmissionstory', 'address']) {
     test(`rejects unexpected correction field: ${field}`, () => {
         assert.throws(() => buildJobCorrectionsPatch(job, { ...input, [field]: 'tampered' }), /Only recorded Job details/)

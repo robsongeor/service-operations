@@ -24,6 +24,16 @@ test('registration accepts only simple initial data, preserving a stable explici
     }
 })
 
+test('registration accepts bounded external supplier details instead of a Staff lookup', () => {
+    const external = { ...command, mechanicId: undefined, externalSupplierDetails: ' AutoTreads — 09 000 0000 ' }
+    assert.deepEqual(buildJobRegistrationAction(external).parameters, {
+        RequestId: id(1), Book: 'waikato', Description: 'Sample work', OrderNumber: '', SiteId: id(2),
+        EquipmentUnknown: true, ExternalSupplierDetails: 'AutoTreads — 09 000 0000',
+    })
+    assert.throws(() => buildJobRegistrationAction({ ...command, externalSupplierDetails: 'AutoTreads' }), /either a Staff member or another supplier/)
+    assert.throws(() => buildJobRegistrationAction({ ...external, externalSupplierDetails: 'x'.repeat(1001) }), /1,000/)
+})
+
 test('number allocation carries no corrections or reassignment, and requires an exact version', () => {
     const allocate = { kind: 'allocate', requestId: id(4), book: 'hastings', jobId: id(5), etag: 'W/"987"' } as const
     assert.deepEqual(buildJobRegistrationAction(allocate).parameters, { RequestId: id(4), Book: 'hastings', JobId: id(5), ExpectedRowVersion: '987' })

@@ -30,6 +30,7 @@ import { jobBookCopyBlockedReason, jobBookEmailBlockedReason } from './jobBookAc
 import type { NewJobEquipmentInput } from '../jobs/components/JobEquipmentField'
 import JobEquipmentAndLocationFields from '../jobs/components/JobEquipmentAndLocationFields'
 import JobDetailsFields from '../jobs/components/JobDetailsFields'
+import { EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED } from '../jobs/domain/externalSupplierAssignment'
 import JobSiteContactFields from '../jobs/components/JobSiteContactFields'
 import JobEquipmentLocation from '../jobs/components/JobEquipmentLocation'
 import JobLocationSummary from '../jobs/components/JobLocationSummary'
@@ -593,6 +594,10 @@ export default function JobBookPrototypeScreen({
             setIntakeError('Enter a description of the job before saving.')
             return
         }
+        if (draft.externalSupplierSelected && !draft.externalSupplierDetails.trim()) {
+            setIntakeError('Enter the other supplier details before saving.')
+            return
+        }
         const locationError = intakeLocationErrors.customer || intakeLocationErrors.site || intakeLocationErrors.address
         if (locationError) {
             setIntakeError(locationError)
@@ -619,7 +624,8 @@ export default function JobBookPrototypeScreen({
                 const result = await registration.submit({ kind: 'register', requestId: crypto.randomUUID(), book: selectedJobBookKey,
                     description: draft.description, orderNumber: draft.customerPo, siteId: draft.siteId,
                     equipmentId: draft.equipmentId || undefined, equipmentUnknown: draft.equipmentReviewRequired,
-                    contactId: draft.contactId || undefined, mechanicId: canAssignInitialTechnician ? draft.mechanicId || undefined : undefined })
+                    contactId: draft.contactId || undefined, mechanicId: canAssignInitialTechnician ? draft.mechanicId || undefined : undefined,
+                    externalSupplierDetails: EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED && canAssignInitialTechnician && draft.externalSupplierSelected ? draft.externalSupplierDetails.trim() : undefined })
                 if (!result) return
                 await finishRegistration(result)
             } else {
@@ -1037,7 +1043,11 @@ export default function JobBookPrototypeScreen({
                     mechanicId={draft.mechanicId}
                     mechanicName={draft.mechanicName}
                     onMechanicChange={canAssignInitialTechnician ? (mechanicId, mechanicName) => setDraft((current) => ({ ...current, mechanicId, mechanicName })) : undefined}
-                    allowCustomMechanic={!UNIFIED_JOB_WALKTHROUGH}
+                    allowExternalSupplier={canAssignInitialTechnician && EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED}
+                    externalSupplierDetails={draft.externalSupplierDetails}
+                    externalSupplierSelected={draft.externalSupplierSelected}
+                    onExternalSupplierDetailsChange={canAssignInitialTechnician ? (externalSupplierDetails) => setDraft((current) => ({ ...current, externalSupplierDetails })) : undefined}
+                    onExternalSupplierSelectedChange={canAssignInitialTechnician ? (externalSupplierSelected) => setDraft((current) => ({ ...current, externalSupplierSelected })) : undefined}
                     customerPo={draft.customerPo}
                     onCustomerPoChange={(customerPo) => setDraft((current) => ({ ...current, customerPo }))}
                 />

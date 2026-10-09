@@ -35,6 +35,7 @@ VITE_MSAL_TENANT_ID
 VITE_DATAVERSE_URL
 VITE_MSAL_SILENT_REDIRECT_URI (optional)
 VITE_HOUR_METER_CLASSIFICATION_ENABLED (optional; default false)
+VITE_EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED (optional; default false)
 ```
 
 When `VITE_MSAL_SILENT_REDIRECT_URI` is configured, its exact
@@ -46,6 +47,13 @@ provisioned and structurally verified in the target Dataverse environment on 14 
 development may set `VITE_HOUR_METER_CLASSIFICATION_ENABLED=true`; keep deployed settings unchanged
 until manager read/write and Actual/Estimated completion smoke testing passes. A build with the flag
 disabled continues to omit both columns.
+
+Keep `VITE_EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED=false` until the
+`gr_job.gr_externalsupplierdetails` Memo column, `ExternalSupplierDetails` input on
+`gr_RegisterJobBookJob`, and the matching signed registration and restricted-access plugins have
+all been deployed and verified. The disabled build hides Other supplier and omits the new field
+from Dataverse selects, filters and writes, so frontend deployment may safely precede the backend
+release. Enabling the flag is the final cutover step and requires a new frontend build.
 
 New job-level Job Cards use the resources/settings templates documented in
 [Azure Job Card Storage](../azure-job-card-storage.md). Deploy resources and backend
@@ -109,10 +117,11 @@ Equipment Map geocoding uses one additional server-only setting:
 GEOAPIFY_API_KEY
 ```
 
-Without this setting, the page shows a safe configuration warning and address markers remain
-unavailable. Create and restrict the provider key separately; never expose it through a `VITE_`
-variable. `VITE_EQUIPMENT_MAP_TILE_URL` may optionally select a different Leaflet raster-tile template;
-it is a public URL, not a credential.
+Without this setting, the page shows a safe configuration warning, address markers remain
+unavailable, and the default same-origin map-tile proxy returns a safe configuration error. Create
+and restrict the provider key separately; never expose it through a `VITE_` variable.
+`VITE_EQUIPMENT_MAP_TILE_URL` may optionally select a different public Leaflet raster-tile template;
+never put a provider credential in that browser-visible value.
 
 The managed address-search and Equipment Map APIs prefer the server-side `DATAVERSE_URL` setting.
 Because this repository is dedicated to the Liftrucks tenant and Azure Static Web Apps does not pass

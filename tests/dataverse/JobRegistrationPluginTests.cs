@@ -85,6 +85,16 @@ namespace ServiceOperations.JobRegistration.Tests
                 db.Invoke(JobRegistrationPlugin.RegisterMessage, request);
                 Check(db.Get("gr_job", Id(1)).GetAttributeValue<OptionSetValue>("gr_status").Value == 122830001, "Unexpected status");
             });
+            Test("external supplier is stored without a Staff lookup", () => {
+                var db = Fixture(); var request = NewRequest(); request.Remove("MechanicId"); request["ExternalSupplierDetails"] = "AutoTreads - large tyres";
+                db.Invoke(JobRegistrationPlugin.RegisterMessage, request);
+                var job = db.Get("gr_job", Id(1)); var ledger = db.Get("gr_jobbookentry", Id(1));
+                Check(!job.Contains("gr_mechanic") && job.GetAttributeValue<string>("gr_externalsupplierdetails") == "AutoTreads - large tyres", "External supplier was not stored separately");
+                Check(ledger.GetAttributeValue<string>("gr_mechanictext") == "AutoTreads - large tyres", "External supplier snapshot missing");
+                Check(job.GetAttributeValue<OptionSetValue>("gr_status").Value == 122830000, "Assigned external work should be Allocated");
+                var invalid = NewRequest(2); invalid["ExternalSupplierDetails"] = "AutoTreads";
+                Reject(() => db.Invoke(JobRegistrationPlugin.RegisterMessage, invalid), "INVALID");
+            });
             Test("lost-response replay returns the same number without writes or directory reads", () => {
                 var db = Fixture(); var first = db.Invoke(JobRegistrationPlugin.RegisterMessage, NewRequest());
                 db.Records.Remove(Key("gr_site", Site));

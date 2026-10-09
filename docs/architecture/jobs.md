@@ -26,6 +26,37 @@ Every role admitted to Job Book may select a mechanic while creating or correcti
 denied users may not. Selecting the mechanic does not grant access to Scheduling, technician
 email dispatch, Job Card review, or the Service Coordination worklist.
 
+## External supplier assignment
+
+Jobs may be assigned to an ad-hoc outside supplier without creating a fake Staff record. The
+canonical `JobDetailsFields` mechanic selector exposes **Other supplier** in both Job Book and
+Service Coordination drawers. Selecting it clears the internal `gr_Mechanic` lookup and requires
+`gr_externalsupplierdetails` (up to 1,000 characters); selecting Staff or Unassigned clears the
+external details. The API and registration plugin enforce the same mutual-exclusion rule.
+
+The UI and every Dataverse query/write are guarded by
+`VITE_EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED`. It defaults off so a frontend release cannot query a
+missing Dataverse column. Enable it only after `gr_externalsupplierdetails`, the registration action
+parameter, and the matching signed registration/restricted-access plugins have been deployed as one
+compatible backend release.
+
+External suppliers are deliberately outside the technician workflow: they do not appear in Staff
+workload, cannot receive an Azure technician Job Card, do not create Job Assignment or submission
+rows, and do not participate in the “all technician submissions received” transition. The saved
+details remain visible and searchable in Job Book and in the canonical operational editor. Saving
+an external supplier is treated as allocation because there is no in-app technician dispatch; users
+should select it only after the supplier has been arranged, and use Action Required while booking or
+follow-up is still outstanding. GreenTree closure remains the automatic route to Complete. Repeated
+suppliers can later be promoted to a dedicated
+supplier directory without reinterpreting them as employees.
+
+The server contract adds the optional `ExternalSupplierDetails` registration parameter and
+`gr_job.gr_externalsupplierdetails` multiline text column. The regional ledger continues using its
+existing `gr_mechanictext` snapshot for either the internal technician name or a bounded external
+supplier snapshot. Schema, Custom API parameter, plugin assembly, guard and frontend must be
+verified as one compatible release; the frontend flag must not be enabled before the column and
+action parameter exist.
+
 ## Admin corrections (3 October 2026, local implementation)
 
 `canCorrectJobDetails` is separate from `canManageJobs`. `JobCorrectionsDrawer` adapts the canonical

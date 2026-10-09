@@ -4,6 +4,7 @@ import 'leaflet.markercluster'
 import 'leaflet/dist/leaflet.css'
 import 'leaflet.markercluster/dist/MarkerCluster.css'
 import type { JobMapSite } from './jobMap.types'
+import { MAP_TILE_OPTIONS, MAP_TILE_URL } from '../shared/mapTiles'
 
 type Props = {
     sites: JobMapSite[]
@@ -13,7 +14,6 @@ type Props = {
 }
 
 type SiteMarker = { siteId: string; marker: LeafletMarker }
-const DEFAULT_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
 const NEW_ZEALAND_CENTER: [number, number] = [-41, 172.5]
 
 function markerIcon(site: JobMapSite, selected: boolean) {
@@ -44,10 +44,7 @@ export default function JobLocationMap({ sites, viewportKey, selectedSiteId, onS
         let resizeFrame = 0
         try {
             map = L.map(container, { center: NEW_ZEALAND_CENTER, zoom: 5, zoomControl: true, attributionControl: true })
-            L.tileLayer(import.meta.env.VITE_EQUIPMENT_MAP_TILE_URL || DEFAULT_TILE_URL, {
-                maxZoom: 19,
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
-            }).addTo(map)
+            L.tileLayer(MAP_TILE_URL, MAP_TILE_OPTIONS).addTo(map)
             map.attributionControl.setPrefix(false)
             map.attributionControl.setPosition('bottomleft')
             mapRef.current = map

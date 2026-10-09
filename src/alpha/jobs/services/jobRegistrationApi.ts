@@ -12,6 +12,7 @@ export type RegisterJobBookCommand = Readonly<{
     equipmentUnknown: boolean
     contactId?: string
     mechanicId?: string
+    externalSupplierDetails?: string
 }>
 export type AllocateJobBookNumberCommand = Readonly<{
     kind: 'allocate'
@@ -59,7 +60,7 @@ function text(value: string | undefined, maximum: number, required = false) {
 export function buildJobRegistrationAction(command: JobRegistrationCommand) {
     if (!command || (command.kind !== 'register' && command.kind !== 'allocate')) throw new JobRegistrationError('invalid', 'Select a supported registration action.')
     const allowed = command.kind === 'register'
-        ? ['kind', 'requestId', 'book', 'description', 'orderNumber', 'siteId', 'equipmentId', 'equipmentUnknown', 'contactId', 'mechanicId']
+        ? ['kind', 'requestId', 'book', 'description', 'orderNumber', 'siteId', 'equipmentId', 'equipmentUnknown', 'contactId', 'mechanicId', 'externalSupplierDetails']
         : ['kind', 'requestId', 'book', 'jobId', 'etag']
     if (Object.keys(command).some((field) => !allowed.includes(field))) throw new JobRegistrationError('invalid', 'Registration cannot change operational controls or accept additional fields.')
     if (!Object.hasOwn(JOB_BOOKS, command.book)) throw new JobRegistrationError('invalid', 'Select a supported regional Job Book.')
@@ -78,6 +79,9 @@ export function buildJobRegistrationAction(command: JobRegistrationCommand) {
         if (command.equipmentId) parameters.EquipmentId = id(command.equipmentId)
         if (command.contactId) parameters.ContactId = id(command.contactId)
         if (command.mechanicId) parameters.MechanicId = id(command.mechanicId)
+        const externalSupplierDetails = text(command.externalSupplierDetails, 1000)
+        if (command.mechanicId && externalSupplierDetails) throw new JobRegistrationError('invalid', 'Choose either a Staff member or another supplier, not both.')
+        if (externalSupplierDetails) parameters.ExternalSupplierDetails = externalSupplierDetails
     }
     return {
         action: command.kind === 'register' ? 'gr_RegisterJobBookJob' : 'gr_AllocateJobBookNumber',

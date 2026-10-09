@@ -39,17 +39,17 @@ test('Only active assignable staff can be selected; legacy assignment flags rema
     assert.deepEqual(mechanicSelectOptions(mechanics, '').map((option) => option.id), ['', 'legacy', 'null'])
 })
 
-test('Custom outwork values are opt-in, trimmed, and never synthesize Staff lookup IDs', () => {
+test('Other supplier is opt-in and never synthesizes a Staff lookup ID', () => {
     assert.equal(mechanicSelectOptions([], 'Outwork').length, 1)
-    assert.equal(mechanicSelectOptions([], '   ', true).length, 1)
-    assert.deepEqual(mechanicSelectOptions([], ' Outwork ', true).at(-1), {
-        kind: 'custom', id: '', name: 'Outwork', secondary: 'Custom entry, for example outwork',
+    assert.equal(mechanicSelectOptions([], '   ', true).length, 2)
+    assert.deepEqual(mechanicSelectOptions([], ' Outwork ', true).at(0), {
+        kind: 'external', id: '', name: 'Other supplier', secondary: 'Enter supplier and booking details manually',
     })
     const options = mechanicSelectOptions([staff('real-id', 'Outwork')], 'Outwork', true)
-    assert.equal(options[1].kind, 'mechanic')
-    assert.equal(options[1].id, 'real-id')
-    assert.equal(options[2].kind, 'custom')
-    assert.equal(options[2].id, '')
+    assert.equal(options[0].kind, 'external')
+    assert.equal(options[0].id, '')
+    assert.equal(options[2].kind, 'mechanic')
+    assert.equal(options[2].id, 'real-id')
 })
 
 test('Job Book and Job drawers reuse one mechanic selector and its existing drawer styling', () => {
@@ -61,10 +61,10 @@ test('Job Book and Job drawers reuse one mechanic selector and its existing draw
     assert.match(core, /<JobDetailsFields/)
     assert.match(details, /<SearchableMechanicSelect/)
     assert.match(details, /variant="drawer"/)
-    assert.match(details, /selectedName=\{mechanicName\}/)
-    assert.match(details, /allowCustomMechanic \? \(name\)/)
-    assert.match(book, /allowCustomMechanic=\{!UNIFIED_JOB_WALKTHROUGH\}/)
-    assert.doesNotMatch(core, /allowCustomMechanic/)
+    assert.match(details, /selectedName=\{externalSupplierSelected \? 'Other supplier' : mechanicName\}/)
+    assert.match(details, /onSelectExternal=\{allowExternalSupplier/)
+    assert.match(book, /allowExternalSupplier=\{canAssignInitialTechnician && EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED\}/)
+    assert.match(core, /allowExternalSupplier=\{mechanicEditable && EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED\}/)
     assert.match(selector, /selected\?\.gr_name \|\| selectedName \|\| 'Unassigned'/)
     assert.doesNotMatch(read('../src/alpha/job-book/JobBookPrototypeScreen.css'), /job-book-mechanic-/)
 })

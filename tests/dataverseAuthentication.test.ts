@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import type { AccountInfo, IPublicClientApplication } from '@azure/msal-browser'
 import { acquireDataverseAccessToken } from '../src/auth/dataverseAuthentication.ts'
@@ -40,4 +41,19 @@ test('forced and ordinary delegated token reads do not share request intent', as
         acquireDataverseAccessToken(instance, account, true),
     ]), ['cached', 'forced'])
     assert.deepEqual(calls, [false, true])
+})
+
+test('popup and silent callbacks execute the MSAL v5 redirect bridge', async () => {
+    const [bootstrap, bridge, callbackPage, viteConfig] = await Promise.all([
+        readFile(new URL('../src/main.tsx', import.meta.url), 'utf8'),
+        readFile(new URL('../src/auth/redirectBridge.ts', import.meta.url), 'utf8'),
+        readFile(new URL('../auth/silent.html', import.meta.url), 'utf8'),
+        readFile(new URL('../vite.config.ts', import.meta.url), 'utf8'),
+    ])
+
+    assert.match(bootstrap, /isEmbeddedAuthResponse[\s\S]*completeEmbeddedAuthenticationResponse\(\)/)
+    assert.match(bridge, /@azure\/msal-browser\/redirect-bridge/)
+    assert.match(bridge, /broadcastResponseToMainFrame\(\)/)
+    assert.match(callbackPage, /redirectBridgeEntry\.ts/)
+    assert.match(viteConfig, /authCallback:\s*resolve\(import\.meta\.dirname, 'auth\/silent\.html'\)/)
 })

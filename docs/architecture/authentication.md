@@ -87,8 +87,10 @@ VITE_MSAL_SILENT_REDIRECT_URI=https://<application-origin>/auth/silent.html
 ```
 
 The variable is optional. When it is absent, MSAL uses the already-registered application
-origin and `main.tsx` prevents the React application from booting inside an iframe or popup
-that contains an MSAL authorization response.
+origin. Both the application-origin callback and the lightweight callback run the MSAL v5
+redirect bridge, which returns the authorization response to the page that opened the popup
+or iframe before closing the callback window. Do not replace the lightweight callback with a
+blank HTML page: MSAL v5 requires the redirect bridge to complete popup and silent renewal.
 
 ### Token acquisition and interaction rules
 

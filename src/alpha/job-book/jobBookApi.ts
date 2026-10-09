@@ -5,8 +5,11 @@ import { isEditableJobBookIntake, jobBookVoidBlockedReason, jobBookVoidReasonErr
 import { UNIFIED_JOB_RUNTIME, UNIFIED_JOB_WALKTHROUGH, UNIFIED_JOB_SELECT } from '../jobs/domain/unifiedJobWorkflow.ts'
 import { walkthroughJobAction } from '../jobs/services/unifiedJobWalkthroughApi.ts'
 import { runJobWorkflow } from '../jobs/services/jobWorkflowApi.ts'
+import { EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED } from '../jobs/domain/externalSupplierAssignment.ts'
 
 const DATAVERSE_URL = import.meta.env?.VITE_DATAVERSE_URL ?? ''
+const EXTERNAL_SUPPLIER_SELECT = EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED ? ',gr_externalsupplierdetails' : ''
+const EXTERNAL_SUPPLIER_SEARCH_FIELDS = EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED ? ['gr_externalsupplierdetails'] : []
 
 function trustedNextLink(value?: string) {
     if (!value) return undefined
@@ -22,6 +25,7 @@ type JobBookApiRow = {
     gr_jobnumber: string | null
     gr_ordernumber: string | null
     gr_description: string | null
+    gr_externalsupplierdetails?: string | null
     gr_gtentered: boolean | null
     gr_timecloudentered: boolean | null
     gr_coordinatormanaged?: boolean | null
@@ -174,11 +178,11 @@ export function managedJobBookSearchFilter(book: JobBookConfig, filters?: JobBoo
     return combinedFilter([
         managedJobNumberFilter(book),
         createdOnDayFilter(filters.date),
-        containsAny(filters.mechanic, ['gr_Mechanic/gr_name']),
+        containsAny(filters.mechanic, ['gr_Mechanic/gr_name', ...EXTERNAL_SUPPLIER_SEARCH_FIELDS]),
         containsAny(filters.equipment, ['gr_Equipment/gr_fleet', 'gr_Equipment/gr_alternatefleetnumbers', 'gr_Equipment/gr_serial', 'gr_Equipment/gr_make', 'gr_Equipment/gr_model']),
         containsAny(filters.customerSite, ['gr_Site/gr_Customer/gr_name', 'gr_Site/gr_name', 'gr_Site/gr_address']),
         containsAny(filters.search, [
-            'gr_jobnumber', 'gr_ordernumber', 'gr_description', 'gr_Mechanic/gr_name',
+            'gr_jobnumber', 'gr_ordernumber', 'gr_description', 'gr_Mechanic/gr_name', ...EXTERNAL_SUPPLIER_SEARCH_FIELDS,
             'gr_Equipment/gr_fleet', 'gr_Equipment/gr_alternatefleetnumbers', 'gr_Equipment/gr_serial', 'gr_Equipment/gr_make', 'gr_Equipment/gr_model',
             'gr_Site/gr_Customer/gr_name', 'gr_Site/gr_name', 'gr_Site/gr_address', 'gr_Contact/gr_name',
         ]),
@@ -201,7 +205,7 @@ export function intakeJobBookSearchFilter(filters?: JobBookSearchFilters) {
 }
 
 export async function fetchRecentJobBookRows(accessToken: string, book: JobBookConfig = JOB_BOOKS.auckland, continuationLink?: string, options: JobBookPageOptions = {}): Promise<JobBookPage> {
-    const select = `gr_jobid,createdon,gr_jobnumber,gr_ordernumber,gr_description,gr_gtentered,gr_timecloudentered${UNIFIED_JOB_RUNTIME ? UNIFIED_JOB_SELECT : ''}`
+    const select = `gr_jobid,createdon,gr_jobnumber,gr_ordernumber,gr_description${EXTERNAL_SUPPLIER_SELECT},gr_gtentered,gr_timecloudentered${UNIFIED_JOB_RUNTIME ? UNIFIED_JOB_SELECT : ''}`
     const expand = 'gr_Equipment($select=gr_equipmentid,gr_fleet,gr_alternatefleetnumbers,gr_serial,gr_make,gr_model),gr_Mechanic($select=gr_mechanicid,gr_name),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name)'
     const filter = managedJobBookSearchFilter(book, options.filters)
     const nextUrl = continuationLink
@@ -225,7 +229,9 @@ export function mapManagedJobBookRow(job: JobBookApiRow, book: JobBookConfig): J
         jobNumber: job.gr_jobnumber?.trim() ?? '',
         date: localDate(job.createdon),
         mechanicId: job.gr_Mechanic?.gr_mechanicid ?? '',
-        mechanicName: job.gr_Mechanic?.gr_name ?? '',
+        mechanicName: job.gr_Mechanic?.gr_name ?? (job.gr_externalsupplierdetails ? 'Other supplier' : ''),
+        externalSupplierDetails: job.gr_externalsupplierdetails ?? '',
+        externalSupplierSelected: Boolean(job.gr_externalsupplierdetails),
         equipmentId: job.gr_Equipment?.gr_equipmentid ?? '',
         fleet: job.gr_Equipment?.gr_fleet?.trim() || job.gr_Equipment?.gr_serial?.trim() || '',
         alternateFleetNumbers: job.gr_Equipment?.gr_alternatefleetnumbers?.trim() || '',
@@ -326,7 +332,9 @@ function mapIntakeRow(row: IntakeApiRow, book: JobBookConfig): JobBookRow {
         jobNumber: row.gr_jobnumber,
         date: localDate(row.createdon),
         mechanicId: row.gr_Mechanic?.gr_mechanicid ?? '',
-        mechanicName: row.gr_Mechanic?.gr_name ?? row.gr_mechanictext ?? '',
+        mechanicName: row.gr_Mechanic?.gr_name ?? (row.gr_mechanictext ? 'Other supplier' : ''),
+        externalSupplierDetails: row.gr_Mechanic ? '' : row.gr_mechanictext ?? '',
+        externalSupplierSelected: !row.gr_Mechanic && Boolean(row.gr_mechanictext),
         equipmentId: row.gr_Equipment?.gr_equipmentid ?? '',
         fleet: row.gr_fleetsnapshot ?? '',
         serial: row.gr_serialsnapshot ?? '',
@@ -367,7 +375,7 @@ export function jobBookIntakeContactLookupIsAvailable() {
 
 function intakeExpand() {
     const expanded = INTAKE_CONTACT_LOOKUP_ENABLED ? INTAKE_EXPAND : INTAKE_EXPAND_WITHOUT_CONTACT
-    return UNIFIED_JOB_RUNTIME ? `${expanded},gr_registeredjob($select=gr_jobid,createdon,gr_jobnumber,gr_ordernumber,gr_description,gr_gtentered,gr_timecloudentered${UNIFIED_JOB_SELECT};$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_serial,gr_make,gr_model),gr_Mechanic($select=gr_mechanicid,gr_name),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name))` : expanded
+    return UNIFIED_JOB_RUNTIME ? `${expanded},gr_registeredjob($select=gr_jobid,createdon,gr_jobnumber,gr_ordernumber,gr_description${EXTERNAL_SUPPLIER_SELECT},gr_gtentered,gr_timecloudentered${UNIFIED_JOB_SELECT};$expand=gr_Equipment($select=gr_equipmentid,gr_fleet,gr_serial,gr_make,gr_model),gr_Mechanic($select=gr_mechanicid,gr_name),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name))` : expanded
 }
 
 export async function fetchJobBookIntakeRows(accessToken: string, book: JobBookConfig = JOB_BOOKS.auckland, continuationLink?: string, options: JobBookPageOptions = {}): Promise<JobBookPage> {
@@ -452,7 +460,7 @@ function appendSearchRecords(current: JobBookRow[], incoming: JobBookRow[]) {
 
 function intakePayload(row: JobBookRow) {
     return {
-        gr_mechanictext: row.mechanicName || null,
+        gr_mechanictext: row.externalSupplierSelected ? row.externalSupplierDetails || null : row.mechanicName || null,
         gr_fleetsnapshot: row.fleet || null,
         gr_serialsnapshot: row.serial || null,
         gr_makesnapshot: row.make || null,

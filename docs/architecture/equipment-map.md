@@ -30,9 +30,11 @@ storage or shared persistence failure remains non-fatal and falls back to resolv
 Job Map reuses this same Site coordinate persistence and authenticated geocoding workflow; it does
 not introduce another provider or cache.
 
-Leaflet renders an interactive raster-tile map from configurable
-`VITE_EQUIPMENT_MAP_TILE_URL`, defaulting to the standard OpenStreetMap tile endpoint for normal,
-low-volume interactive viewing. Selecting a marker updates its style without rebuilding or refitting
+Leaflet renders an interactive raster-tile map through the same-origin `GET /api/maptile/{z}/{x}/{y}`
+endpoint. That bounded server route validates every coordinate, keeps `GEOAPIFY_API_KEY` out of the
+browser, retrieves Geoapify's `osm-bright` raster tiles, and returns cacheable PNG responses. An
+optional public `VITE_EQUIPMENT_MAP_TILE_URL` can still override the template for development or a
+separately approved provider. Selecting a marker updates its style without rebuilding or refitting
 the map. Nearby Site markers cluster by screen distance and split as users zoom; maximum-zoom clusters
 spiderfy overlapping locations so dense areas remain selectable. Selecting a Site opens a closable
 details window over the map; keyboard-enabled markers retain the same selection workflow. Selecting
@@ -56,10 +58,11 @@ Geoapify receives Site address text only after an authenticated office user open
 key is never returned to the browser. Errors omit upstream bodies, credentials, and addresses. The
 page shows a safe warning when geocoding is unavailable or unconfigured.
 
-OpenStreetMap supplies best-effort public tiles without a credential for normal interactive use;
-visible attribution is retained and the browser honours provider caching. Leaflet remains
-provider-independent; production can replace the public tile URL through deployment
-configuration without changing feature code.
+Geoapify supplies the raster tiles through the server boundary instead of having every browser call
+OpenStreetMap's volunteer-run tile servers directly. Responses are restricted to valid PNG tiles and
+carry browser/cache revalidation headers; upstream errors never expose the provider key or response.
+The shared tile configuration displays Geoapify, OpenMapTiles, and OpenStreetMap attribution on both
+Equipment Map and Job Map.
 
 ## Dataverse and API Contracts
 
@@ -70,6 +73,7 @@ configuration without changing feature code.
   `gr_geocodesourceaddress`, `gr_geocodeformattedaddress`, and `gr_geocoderesolvedon`.
 - Read-only derived Customer: `gr_Site.gr_Customer`.
 - Authenticated server route: `POST /api/equipmentgeocode`, maximum 200 distinct locations.
+- Same-origin raster route: `GET /api/maptile/{z}/{x}/{y}`, zoom 0–20 with valid XYZ coordinates.
 
 No relationship or new table is required. Existing Site read/update permission protects the derived
 cache fields; the endpoint writes with the authenticated office user's delegated Dataverse token.

@@ -21,6 +21,15 @@ by scanning the repository.
 | Deployment and environment configuration | [`architecture/deployment.md`](architecture/deployment.md) |
 | Sanitized PDF development templates | [`templates/README.md`](templates/README.md) |
 
+## User guides
+
+End-user tutorials are authored under [`wiki/`](wiki/) and published to the GitHub Wiki. The Wiki
+is intentionally task-focused; this knowledge base remains authoritative for architecture, schema,
+security, rollout and operational controls.
+
+- [`wiki/Getting-Started-and-Signing-In.md`](wiki/Getting-Started-and-Signing-In.md)
+- [`wiki/Job-Book-Admin-Guide.md`](wiki/Job-Book-Admin-Guide.md)
+
 ## Job Book rollout
 
 For replacing the Excel job books, use the owner-facing [rollout plan](features/JOB_BOOK_ROLLOUT_PLAN.md):

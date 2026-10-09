@@ -58,7 +58,7 @@ namespace ServiceOperations.JobRegistration
         {
             bool creating = context.MessageName == RegisterMessage;
             var allowed = creating
-                ? new[] { "RequestId", "Book", "Description", "OrderNumber", "SiteId", "EquipmentId", "EquipmentUnknown", "ContactId", "MechanicId" }
+                ? new[] { "RequestId", "Book", "Description", "OrderNumber", "SiteId", "EquipmentId", "EquipmentUnknown", "ContactId", "MechanicId", "ExternalSupplierDetails" }
                 : new[] { "RequestId", "Book", "JobId", "ExpectedRowVersion" };
             if (context.InputParameters.Keys.Any(key => !allowed.Contains(key)))
                 throw Failure("INVALID", "This operation cannot change operational controls or accept additional fields.");
@@ -80,12 +80,15 @@ namespace ServiceOperations.JobRegistration
                 AddReference(job, context.InputParameters, "EquipmentId", "gr_equipment", "gr_equipment");
                 AddReference(job, context.InputParameters, "ContactId", "gr_contact", "gr_contact");
                 AddReference(job, context.InputParameters, "MechanicId", "gr_mechanic", "gr_mechanic");
+                string externalSupplier = Text(context.InputParameters, "ExternalSupplierDetails", 1000, false);
+                if (job.Contains("gr_mechanic") && !string.IsNullOrWhiteSpace(externalSupplier)) throw Failure("INVALID", "Choose either a Staff member or another supplier, not both.");
+                if (!string.IsNullOrWhiteSpace(externalSupplier)) job["gr_externalsupplierdetails"] = externalSupplier;
                 bool unknown = RequiredBool(context.InputParameters, "EquipmentUnknown");
                 if (unknown == job.Contains("gr_equipment")) throw Failure("INVALID", "Select Equipment or explicitly confirm it is not known yet.");
-                job["gr_status"] = new OptionSetValue(job.Contains("gr_mechanic") ? Allocated : Unallocated);
+                job["gr_status"] = new OptionSetValue(job.Contains("gr_mechanic") || job.Contains("gr_externalsupplierdetails") ? Allocated : Unallocated);
                 job[CoordinatorManaged] = false;
                 // Deliberately no Job type, number, scheduling, service/completion, marker or evidence input.
-                foreach (string name in new[] { "gr_description", "gr_ordernumber", "gr_site", "gr_equipment", "gr_contact", "gr_mechanic" })
+                foreach (string name in new[] { "gr_description", "gr_ordernumber", "gr_site", "gr_equipment", "gr_contact", "gr_mechanic", "gr_externalsupplierdetails" })
                     values.Add(CanonicalValue(job, name));
                 values.Add(unknown.ToString());
             }
@@ -114,7 +117,7 @@ namespace ServiceOperations.JobRegistration
                 return;
             }
 
-            var current = Find(service, "gr_job", jobId, "gr_jobnumber", "gr_description", "gr_ordernumber", "gr_site", "gr_equipment", "gr_contact", "gr_mechanic", "gr_jobtype", "gr_gtentered", "gr_timecloudentered");
+            var current = Find(service, "gr_job", jobId, "gr_jobnumber", "gr_description", "gr_ordernumber", "gr_site", "gr_equipment", "gr_contact", "gr_mechanic", "gr_externalsupplierdetails", "gr_jobtype", "gr_gtentered", "gr_timecloudentered");
             if (creating && current != null) throw Failure("REQUEST_REUSED", "A Job already uses this request identifier. Reload before continuing.");
             if (!creating)
             {
@@ -194,6 +197,8 @@ namespace ServiceOperations.JobRegistration
                 ledger["gr_contact"] = contactRef;
             }
             var mechanicRef = job.GetAttributeValue<EntityReference>("gr_mechanic");
+            string externalSupplier = job.GetAttributeValue<string>("gr_externalsupplierdetails");
+            if (mechanicRef != null && !string.IsNullOrWhiteSpace(externalSupplier)) throw Failure("INVALID", "A Job cannot have both a Staff member and another supplier.");
             if (mechanicRef != null)
             {
                 var mechanic = service.Retrieve("gr_mechanic", mechanicRef.Id, new ColumnSet("gr_name", "statecode", "gr_jobassignmentenabled"));
@@ -202,6 +207,7 @@ namespace ServiceOperations.JobRegistration
                 ledger["gr_mechanic"] = mechanicRef;
                 ledger["gr_mechanictext"] = Snapshot(mechanic, "gr_name", 200);
             }
+            else if (!string.IsNullOrWhiteSpace(externalSupplier)) ledger["gr_mechanictext"] = externalSupplier.Length <= 200 ? externalSupplier : externalSupplier.Substring(0, 200);
             return ledger;
         }
 

@@ -14,6 +14,7 @@ export type JobSaveInput = {
     /** Creation drawer has explicitly managed the asset location; never move it again on Job save. */
     equipmentLocationHandled?: boolean
     mechanicId?: string
+    externalSupplierDetails?: string
     siteId?: string
     /** Consistency check for corrections; the Job's Customer is stored through its Site. */
     customerId?: string

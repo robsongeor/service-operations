@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added ad-hoc **Other supplier** assignment to the shared Job Book and Service Coordination Job
+  drawers. Supplier details are stored separately from Staff, are mutually exclusive with the
+  internal mechanic lookup, remain searchable/displayable, and do not create staff workload,
+  technician email, Job Card assignment, or submission records. Added the matching guarded Job
+  registration contract and documented the coordinated Dataverse/plugin/frontend rollout.
 - Allowed every Job Book role, including Job Book Admin, to select the initial mechanic while
   creating or correcting an entry. Scheduling, technician email and operational-management
   permissions remain independently restricted.

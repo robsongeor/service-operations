@@ -14,11 +14,11 @@ type Props = {
     onOpen: () => void
     onClose: () => void
     onSelect: (mechanicId: string) => void
-    onSelectCustom?: (name: string) => void
+    onSelectExternal?: () => void
     variant?: 'table' | 'drawer'
 }
 
-export default function SearchableMechanicSelect({ mechanics, selectedId, selectedName, isOpen, isSaving, onOpen, onClose, onSelect, onSelectCustom, variant = 'table' }: Props) {
+export default function SearchableMechanicSelect({ mechanics, selectedId, selectedName, isOpen, isSaving, onOpen, onClose, onSelect, onSelectExternal, variant = 'table' }: Props) {
     const resultsId = useId()
     const rootRef = useRef<HTMLDivElement>(null)
     const menuRef = useRef<HTMLDivElement>(null)
@@ -28,8 +28,8 @@ export default function SearchableMechanicSelect({ mechanics, selectedId, select
     const [activeIndex, setActiveIndex] = useState(0)
     const [position, setPosition] = useState({ top: 0, left: 0, width: 220, maxHeight: 320 })
     const selected = mechanics.find((mechanic) => mechanic.gr_mechanicid === selectedId)
-    const allowCustom = Boolean(onSelectCustom)
-    const options = useMemo(() => mechanicSelectOptions(mechanics, query, allowCustom), [mechanics, query, allowCustom])
+    const allowExternal = Boolean(onSelectExternal)
+    const options = useMemo(() => mechanicSelectOptions(mechanics, query, allowExternal), [mechanics, query, allowExternal])
     const activeOptionIndex = Math.min(activeIndex, options.length - 1)
 
     const updatePosition = useCallback(() => {
@@ -89,7 +89,7 @@ export default function SearchableMechanicSelect({ mechanics, selectedId, select
 
     const choose = (option: MechanicSelectOption) => {
         rootRef.current?.querySelector('button')?.focus()
-        if (option.kind === 'custom') onSelectCustom?.(option.name)
+        if (option.kind === 'external') onSelectExternal?.()
         else onSelect(option.id)
         onClose()
     }
@@ -117,7 +117,7 @@ export default function SearchableMechanicSelect({ mechanics, selectedId, select
                 if (event.key === 'Enter') { event.preventDefault(); choose(options[activeOptionIndex]) }
             }} />
             <div id={resultsId} className="jobs-mechanic-results" role="listbox" aria-label="Technicians">
-                {options.map((option, index) => <button key={`${option.kind}-${option.id}`} id={`${resultsId}-${index}`} type="button" role="option" aria-selected={activeOptionIndex === index} className={activeOptionIndex === index ? 'active' : ''} onMouseEnter={() => setActiveIndex(index)} onClick={() => choose(option)}><strong>{option.kind === 'custom' ? `Use “${option.name}”` : option.name}</strong>{option.secondary && <small>{option.secondary}</small>}</button>)}
+                {options.map((option, index) => <button key={`${option.kind}-${option.id || option.name}`} id={`${resultsId}-${index}`} type="button" role="option" aria-selected={activeOptionIndex === index} className={`${activeOptionIndex === index ? 'active ' : ''}${option.kind === 'external' ? 'external' : ''}`.trim()} onMouseEnter={() => setActiveIndex(index)} onClick={() => choose(option)}><strong>{option.name}</strong>{option.secondary && <small>{option.secondary}</small>}</button>)}
                 {!options.some((option) => option.kind === 'mechanic') && <span>No technicians found</span>}
             </div>
         </div>, document.body)}

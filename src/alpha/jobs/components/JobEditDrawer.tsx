@@ -63,6 +63,8 @@ function createJobEditorDraft(job: Job) {
         description: job.gr_description ?? '',
         jobType: job.gr_jobtype ?? (UNIFIED_JOB_WALKTHROUGH ? '' as const : JOB_TYPES.BREAKDOWN),
         mechanicId: job.gr_Mechanic?.gr_mechanicid ?? '',
+        externalSupplierDetails: job.gr_externalsupplierdetails ?? '',
+        externalSupplierSelected: Boolean(job.gr_externalsupplierdetails),
         status: job.gr_status,
         equipmentId: job.gr_Equipment?.gr_equipmentid ?? '',
         customerId: job.gr_Site?.gr_Customer?.gr_customerid ?? '',
@@ -354,12 +356,14 @@ export default function JobEditDrawer({
                 : 'Closed'
     const emailTitle = localSendingDisabled ? LOCAL_JOB_EMAIL_DISABLED_MESSAGE : !hasJobNumber
         ? JOB_NUMBER_REQUIRED_EMAIL_MESSAGE
+        : job.gr_externalsupplierdetails
+            ? 'Other suppliers are recorded manually and do not receive technician Job Cards from this app.'
         : !job.gr_Mechanic
             ? 'Assign a technician before emailing this job.'
             : azureJobCards || jobCardStatus === JOB_CARD_STATUSES.NOT_SENT
                 ? `Email job to ${job.gr_Mechanic.gr_name}`
                 : 'Job card has already been emailed.'
-    const canEmailJob = !localSendingDisabled && hasJobNumber && Boolean(job.gr_Mechanic) && (azureJobCards || jobCardStatus === JOB_CARD_STATUSES.NOT_SENT)
+    const canEmailJob = !localSendingDisabled && hasJobNumber && !job.gr_externalsupplierdetails && Boolean(job.gr_Mechanic) && (azureJobCards || jobCardStatus === JOB_CARD_STATUSES.NOT_SENT)
 
     const saveChanges = async () => {
         if (locationPending || locationSaving || isSaving) return
@@ -374,6 +378,10 @@ export default function JobEditDrawer({
         }
         if (!draft.description.trim()) {
             setSaveError('Enter a job description before saving.')
+            return
+        }
+        if (draft.externalSupplierSelected && !draft.externalSupplierDetails.trim()) {
+            setSaveError('Enter the other supplier details before saving.')
             return
         }
 
@@ -404,6 +412,7 @@ export default function JobEditDrawer({
                 status: draft.status,
                 equipmentId: draft.equipmentId,
                 mechanicId: draft.mechanicId,
+                externalSupplierDetails: draft.externalSupplierSelected ? draft.externalSupplierDetails.trim() : '',
                 siteId: draft.siteId,
                 customerId: draft.customerId,
                 contactId: draft.contactId,

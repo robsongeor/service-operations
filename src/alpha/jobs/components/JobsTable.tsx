@@ -30,6 +30,7 @@ import JobEmailComposer from './JobEmailComposer'
 import JobQuickActions from './JobQuickActions'
 import type { JobEmailDeliveryState, JobEmailDraft } from '../services/jobEmail'
 import { buildJobBookSpreadsheetRow, buildNumberedJobBookSpreadsheetRow } from '../utils/jobBookClipboard'
+import { EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED } from '../domain/externalSupplierAssignment'
 
 type Props = {
     unifiedWorklist?: boolean
@@ -47,6 +48,7 @@ type Props = {
         fields: {
             gr_description?: string
             gr_ordernumber?: string
+            gr_externalsupplierdetails?: string | null
             'gr_Mechanic@odata.bind'?: string | null
         }
     ) => Promise<void>
@@ -544,6 +546,7 @@ export default function JobsTable({
                                     ) : <SearchableMechanicSelect
                                         mechanics={mechanics}
                                         selectedId={job.gr_Mechanic?.gr_mechanicid ?? ''}
+                                        selectedName={job.gr_externalsupplierdetails ? 'Other supplier' : ''}
                                         isOpen={openMechanicJobId === job.gr_jobid}
                                         isSaving={savingMechanicJobId === job.gr_jobid}
                                         onOpen={() => setOpenMechanicJobId(job.gr_jobid)}
@@ -552,9 +555,11 @@ export default function JobsTable({
                                             if (savingMechanicJobId || mechanicId === (job.gr_Mechanic?.gr_mechanicid ?? '')) { setOpenMechanicJobId(null); return }
                                             setOpenMechanicJobId(null)
                                             setSavingMechanicJobId(job.gr_jobid)
-                                            void onJobFieldsChange(job.gr_jobid, {
+                                            const fields: Parameters<Props['onJobFieldsChange']>[1] = {
                                                 'gr_Mechanic@odata.bind': mechanicId ? `/gr_mechanics(${mechanicId})` : null,
-                                            }).catch((error) => window.alert(error instanceof Error ? error.message : 'The technician could not be updated.')).finally(() => setSavingMechanicJobId(null))
+                                            }
+                                            if (EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED) fields.gr_externalsupplierdetails = null
+                                            void onJobFieldsChange(job.gr_jobid, fields).catch((error) => window.alert(error instanceof Error ? error.message : 'The technician could not be updated.')).finally(() => setSavingMechanicJobId(null))
                                         }}
                                     />}
                                 </td>

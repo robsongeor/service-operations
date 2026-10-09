@@ -4,6 +4,7 @@ import { PublicClientApplication } from '@azure/msal-browser'
 import { MsalProvider } from '@azure/msal-react'
 import App from './App'
 import { msalConfig } from './auth/authConfig'
+import { completeEmbeddedAuthenticationResponse, showAuthenticationCallbackError } from './auth/redirectBridge'
 import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 
@@ -14,7 +15,9 @@ const authResponse = `${window.location.hash}&${window.location.search}`
 const isEmbeddedAuthResponse = (window.self !== window.top || Boolean(window.opener))
   && /(?:^|[&#?])(code|error|state)=/.test(authResponse)
 
-if (!isEmbeddedAuthResponse) {
+if (isEmbeddedAuthResponse) {
+  void completeEmbeddedAuthenticationResponse().catch(showAuthenticationCallbackError)
+} else {
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
       <MsalProvider instance={msalInstance}>

@@ -23,6 +23,18 @@ const service = require('../api/services/equipmentGeocodingService.js') as {
         ) => Promise<Array<{ siteId: string; coordinate: unknown; status: string }>>
     }
 }
+const tileService = require('../api/services/mapTileService.js') as {
+    getTile: (request: { method: string; params: Record<string, string> }) => Promise<{ status: number; headers: Record<string, string>; body: unknown }>
+    test: { normalizedCoordinates: (params: unknown) => unknown }
+}
+
+test('map tile proxy rejects invalid and out-of-range coordinates before provider access', async () => {
+    assert.deepEqual(tileService.test.normalizedCoordinates({ z: '5', x: '17', y: '11' }), { z: 5, x: 17, y: 11 })
+    assert.equal(tileService.test.normalizedCoordinates({ z: '21', x: '0', y: '0' }), null)
+    assert.equal(tileService.test.normalizedCoordinates({ z: '3', x: '8', y: '0' }), null)
+    assert.equal(tileService.test.normalizedCoordinates({ z: '3', x: '../1', y: '0' }), null)
+    assert.equal((await tileService.getTile({ method: 'POST', params: { z: '0', x: '0', y: '0' } })).status, 405)
+})
 
 test('address verification uses the fixed app Dataverse origin when the managed API setting is absent', () => {
     const previousDataverseUrl = process.env.DATAVERSE_URL
@@ -148,9 +160,18 @@ test('Equipment Map keeps Geoapify credentials out of client code and uses canon
     const screen = readFileSync(new URL('../src/alpha/equipment-map/EquipmentMapScreen.tsx', import.meta.url), 'utf8')
     const clientApi = readFileSync(new URL('../src/alpha/equipment-map/equipmentGeocodingApi.ts', import.meta.url), 'utf8')
     const locationMap = readFileSync(new URL('../src/alpha/equipment-map/EquipmentLocationMap.tsx', import.meta.url), 'utf8')
+    const jobLocationMap = readFileSync(new URL('../src/alpha/job-map/JobLocationMap.tsx', import.meta.url), 'utf8')
+    const mapTiles = readFileSync(new URL('../src/alpha/shared/mapTiles.ts', import.meta.url), 'utf8')
+    const tileProxy = readFileSync(new URL('../api/services/mapTileService.js', import.meta.url), 'utf8')
     const mapCache = readFileSync(new URL('../src/alpha/equipment-map/equipmentMapCache.ts', import.meta.url), 'utf8')
     const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
-    assert.doesNotMatch(screen + clientApi, /GEOAPIFY_API_KEY/)
+    assert.doesNotMatch(screen + clientApi + locationMap + jobLocationMap + mapTiles, /GEOAPIFY_API_KEY/)
+    assert.doesNotMatch(locationMap + jobLocationMap, /tile\.openstreetmap\.org/)
+    assert.match(locationMap, /MAP_TILE_URL/)
+    assert.match(jobLocationMap, /MAP_TILE_URL/)
+    assert.match(mapTiles, /\/api\/maptile\/\{z\}\/\{x\}\/\{y\}/)
+    assert.match(tileProxy, /process\.env\.GEOAPIFY_API_KEY/)
+    assert.match(tileProxy, /stale-while-revalidate/)
     assert.match(clientApi, /'X-Dataverse-Authorization': `Bearer \$\{accessToken\}`/)
     assert.match(screen, /navigate\(`\/equipment\?equipmentId=/)
     assert.match(screen, /\.slice\(0, 20\)/)
