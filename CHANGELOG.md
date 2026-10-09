@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Automated the operational Job lifecycle around technician dispatch and Job Cards. Successful
+  dispatch keeps moving only Unallocated Jobs to Allocated; an Allocated Job now moves to Completion
+  Review only after every current non-withdrawn technician assignment has submitted its Job Card;
+  and GreenTree closure remains the sole automatic route to Complete. Renamed the existing
+  Waiting-for-parts status in the UI to **Action Required** without changing its Dataverse value.
 - Reused the Job Book intake drawer for editing existing Intake entries, with read-only Job Number,
   entry date, and regional ownership plus ETag-protected Dataverse updates. Job Book-only users keep
   a locked `Managed Job` status after promotion, while Full Access users retain `Open Job` routing

@@ -15,7 +15,7 @@ management shell and a public portal shell.
 | `/mechanics` | Legacy redirect to `/staff` |
 | `/equipment` | Equipment Management |
 | `/equipment-map` | Equipment assigned-Site map |
-| `/job-map` | Allocated, Unallocated, and Waiting for parts Jobs grouped by recorded Site |
+| `/job-map` | Allocated, Unallocated, and Action Required Jobs grouped by recorded Site |
 | `/jobs` | Jobs |
 | `/job-import` | Spreadsheet Job paste, validation, matching, and atomic import |
 | `/equipment-photos` | Mobile office Equipment Photo upload |

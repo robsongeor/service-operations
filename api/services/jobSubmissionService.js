@@ -2,9 +2,14 @@ const { createHash, randomBytes, randomUUID } = require('node:crypto')
 const { getJobCardStore, resetJobCardStore } = require('./jobCardStorage')
 const { sendReviewNotification } = require('./jobCardNotification')
 const { isLocalDevelopment } = require('./jobCardEnvironment')
+const { getGreenTreeDataverseApplicationToken } = require('./dataverseApplicationToken')
 const { applyOfficeTransition, officeProjection } = require('./jobCardOfficeReview')
 const { listOpenJobs } = require('./jobCardOpenJobs')
-const { returnJobToUnallocatedAfterFinalWithdrawal } = require('./jobOperationalStatusAutomation')
+const {
+    allRequiredTechnicianSubmissionsReceived,
+    moveJobToCompletionReviewAfterAllRequiredSubmissions,
+    returnJobToUnallocatedAfterFinalWithdrawal,
+} = require('./jobOperationalStatusAutomation')
 
 const SERVICE_JOB = 122830001
 const DEFAULT_EXPIRY_HOURS = 168
@@ -312,6 +317,21 @@ async function notifyReview(record) {
     }
 }
 
+async function reconcileCompletionReview(record) {
+    if (isLocalDevelopment()) return false
+    const origin = dataverseOrigin()
+    if (!origin) throw new Error('Dataverse is unavailable for Job status automation.')
+    const records = await getJobCardStore().listByJobId(record.sourceJobId, 501)
+    if (!allRequiredTechnicianSubmissionsReceived(records)) return false
+    const token = await getGreenTreeDataverseApplicationToken()
+    return moveJobToCompletionReviewAfterAllRequiredSubmissions({
+        jobId: record.sourceJobId,
+        records,
+        dataverseOrigin: origin,
+        authorization: `Bearer ${token}`,
+    })
+}
+
 async function handlePublicPost(request) {
     if (request.body?.action === 'uploadPhoto') return uploadPhoto(request)
     const found = await findRequest(request.body?.token)
@@ -339,6 +359,8 @@ async function handlePublicPost(request) {
         throw error
     }
     try { await notifyReview(saved) } catch { /* Saved evidence is authoritative even if email status cannot be saved. */ }
+    try { await reconcileCompletionReview(saved) }
+    catch { console.error('Job Card evidence was saved, but operational status automation failed.') }
     return jsonResponse(200, { submitted: true })
 }
 
@@ -456,14 +478,16 @@ async function handleReviewRequest(request) {
             let operationalStatusWarning
             try {
                 const records = await getJobCardStore().listByJobId(record.sourceJobId, 501)
-                await returnJobToUnallocatedAfterFinalWithdrawal({
+                const transition = {
                     jobId: record.sourceJobId,
                     records,
                     dataverseOrigin: dataverseOrigin(),
                     authorization: identity.authorization,
-                })
+                }
+                const movedToReview = await moveJobToCompletionReviewAfterAllRequiredSubmissions(transition)
+                if (!movedToReview) await returnJobToUnallocatedAfterFinalWithdrawal(transition)
             } catch {
-                operationalStatusWarning = 'The technician was withdrawn, but the Job status could not be updated automatically. Check whether it should be Unallocated.'
+                operationalStatusWarning = 'The technician was withdrawn, but the Job status could not be updated automatically. Check whether it should be Unallocated or in Completion Review.'
             }
             return jsonResponse(200, { ...historySummary(updated), operationalStatusWarning })
         } catch (error) {

@@ -351,6 +351,26 @@ dialog loads Sites only after a Customer record is selected, cancels superseded 
 and exposes independent retries. Free-text Customer details remain permitted for unconfigured legacy
 intake, but Site suggestions require a linked Customer.
 
+## Operational Job Status Lifecycle
+
+| Status | Meaning | Automatic entry rule |
+| --- | --- | --- |
+| Unallocated | The Job has not yet been successfully dispatched to a technician. | New operational Jobs begin here. A final technician withdrawal may return an Allocated Job here when no current technician assignment remains. |
+| Allocated | At least one technician has been successfully sent the Job. | A confirmed email dispatch moves only an Unallocated Job to Allocated. Selecting a mechanic without dispatching does not allocate the Job. |
+| Action Required | Office or coordinator action is needed before work can progress. | This is the user-facing name of the existing `Waiting for parts` Dataverse option. It remains coordinator-controlled and its numeric option-set value is unchanged. |
+| Completion Review | All current, non-withdrawn technician assignments have submitted Job Cards, but the Job is not yet complete. | The final required submission moves only an Allocated Job here. Active or expired links, replacement lifecycles, incomplete histories, and any other outstanding technician assignment prevent the transition. |
+| Complete | GreenTree has closed the Job. | The shared GreenTree reconciliation scheduler sets this when the matching GreenTree Job reports `IsClosed=true`. Technician responses and Job Card submission never set Complete. |
+
+These automatic transitions are intentionally narrow and never overwrite another status selected by
+a coordinator. Technician answers such as further work or safety responses remain evidence for office
+review; they do not decide operational status.
+
+Job Number allocation and GreenTree confirmation are separate events. Admin may need time to create
+the newly numbered Job in GreenTree, so allocation must not immediately interpret a GreenTree `404`
+as a meaningful failure. GreenTree delta reconciliation is shared by Job Book and Service
+Coordination. A future delayed direct-lookup/retry policy will provide an explicit grace period;
+absence from a `modifiedSince` delta response is never evidence that a Job does not exist.
+
 ## Important Business Rules
 
 - Job descriptions support up to 4,000 characters across managed Jobs and Job Book Intake. The
@@ -385,8 +405,11 @@ intake, but Site suggestions require a linked Customer.
   append-only.
 - Assignment instructions, dispatch state, and Job Card state are assignment-specific.
 - Dispatch state changes only after successful dispatch.
-- Technician submission does not close the operational Job; office completion is
-  authoritative.
+- Successful dispatch moves only an Unallocated Job to Allocated. When the latest lifecycle for
+  every non-withdrawn technician assignment has submitted evidence, an Allocated Job moves to
+  Completion Review. Active, expired, replacement and truncated lifecycle histories block that
+  transition conservatively. Technician answers never determine the operational outcome, and a
+  technician submission never marks the Job Complete; GreenTree closure is authoritative.
 - Generated Site Check Job status changes from both the Jobs table and Job drawer route
   through `siteCheckCompletionApi`. It reloads the parent and every sibling, blocks progress
   on expected-count mismatch, and atomically completes the final Job, occurrence, and

@@ -192,16 +192,17 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
 
 - [ ] Define an authoritative GreenTree-closed Job marker and retention policy, then use it as the
   Service Coordination archive boundary. The progressive loader currently prioritises Unallocated,
-  Allocated, Waiting for parts and unnumbered Jobs; loads Completion Review, Unconfirmed and the most
+  Allocated, Action Required and unnumbered Jobs; loads Completion Review, Unconfirmed and the most
   recent 90 days of completed Jobs in the background; and loads older completed history only when the
   user explicitly selects Complete. Preserve on-demand access to closed historical Jobs.
 
 - [ ] Finish the GreenTree Job reconciliation rollout. The bounded, paginated delta client,
   shared checkpoint/lease with overlap, automatic GT Entry reconciliation (managed Jobs and Job
-  Book intake), and GreenTree-closed to Completion Review transition are implemented. Configure the
-  production credentials/storage, add an independent scheduled trigger so reconciliation does not
-  depend on a Job Book visit, and add one direct lookup for newly allocated numbers so a 404 can
-  establish "not yet in GreenTree". Absence from a delta response is not evidence of a 404.
+  Book intake), and GreenTree-closed to Complete transition are implemented. Production credentials,
+  least-privilege application identity and the independent 15-minute scheduled trigger are live.
+  Design a delayed direct lookup or retry policy for newly allocated numbers so normal administrative
+  entry time is allowed before a 404 establishes "not yet in GreenTree". Absence from a delta response
+  is not evidence of a 404.
 
 - [ ] Retire the **Unconfirmed** Job workflow end to end after a production-data and V1 dependency
   audit. Remove its Service Coordination tab, filters, status transitions, scheduling/allocation

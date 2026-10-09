@@ -19,7 +19,7 @@ const normalized = (value?: string | null) => value?.trim().toLocaleLowerCase() 
 const statusFilters: Array<{ value: JobStatus; label: string; tone: string }> = [
     { value: JOB_STATUSES.ALLOCATED, label: 'Allocated', tone: 'allocated' },
     { value: JOB_STATUSES.UNALLOCATED, label: 'Unallocated', tone: 'unallocated' },
-    { value: JOB_STATUSES.WAITING_FOR_PARTS, label: 'Waiting for parts', tone: 'waiting' },
+    { value: JOB_STATUSES.WAITING_FOR_PARTS, label: 'Action Required', tone: 'waiting' },
 ]
 
 function jobEquipmentIdentity(job: ReturnType<typeof jobsWithoutSite>[number]) {

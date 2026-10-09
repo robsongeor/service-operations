@@ -12,7 +12,7 @@ export type JobStatus = typeof JOB_STATUSES[keyof typeof JOB_STATUSES]
 export const JOB_STATUS_OPTIONS: { label: string; value: JobStatus }[] = [
     { label: 'Unallocated', value: JOB_STATUSES.UNALLOCATED },
     { label: 'Allocated', value: JOB_STATUSES.ALLOCATED },
-    { label: 'Waiting for parts', value: JOB_STATUSES.WAITING_FOR_PARTS },
+    { label: 'Action Required', value: JOB_STATUSES.WAITING_FOR_PARTS },
     { label: 'Complete', value: JOB_STATUSES.COMPLETE },
     { label: 'Completion Review', value: JOB_STATUSES.COMPLETION_REVIEW },
     { label: 'Unconfirmed', value: JOB_STATUSES.UNCONFIRMED },

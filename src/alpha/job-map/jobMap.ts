@@ -15,7 +15,7 @@ export function isJobMapStatus(status: JobStatus) {
 export function jobMapStatusLabel(status: JobStatus) {
     if (status === JOB_STATUSES.ALLOCATED) return 'Allocated'
     if (status === JOB_STATUSES.UNALLOCATED) return 'Unallocated'
-    if (status === JOB_STATUSES.WAITING_FOR_PARTS) return 'Waiting for parts'
+    if (status === JOB_STATUSES.WAITING_FOR_PARTS) return 'Action Required'
     return 'Other'
 }
 

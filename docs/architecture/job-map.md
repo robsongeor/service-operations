@@ -3,7 +3,7 @@
 ## Purpose
 
 Job Map provides an authenticated geographic view of current operational Jobs at their recorded
-Site. It shows Allocated, Unallocated, and Waiting for parts Jobs and does not represent live
+Site. It shows Allocated, Unallocated, and Action Required Jobs and does not represent live
 technician, vehicle, or Equipment positions.
 
 ## Architecture
@@ -48,7 +48,7 @@ completion workflows.
 
 ## Business Rules
 
-- Only Allocated, Unallocated, and Waiting for parts Jobs are in scope; all three are enabled by
+- Only Allocated, Unallocated, and Action Required Jobs are in scope; all three are enabled by
   default and can be filtered independently.
 - Location is the Job's recorded Site, not the Equipment's current Site. This preserves historical
   accuracy when Equipment moves.

@@ -2,6 +2,15 @@
 
 Branch: `v2-deployment`
 
+Operational Job status automation is implemented locally. Successful technician dispatch changes
+only Unallocated Jobs to Allocated. When every current non-withdrawn technician assignment has
+submitted a Job Card, an Allocated Job changes to Completion Review; technician answers do not drive
+that decision. The shared GreenTree scheduler changes a Job to Complete only when GreenTree reports
+`IsClosed=true`. The existing Waiting for parts option is displayed as Action Required without a
+Dataverse value migration. Newly allocated Job Numbers are not checked immediately because admin
+requires time to enter them in GreenTree; a delayed lookup/grace-period policy remains recorded in
+`TODO.md`.
+
 ## Mandatory V2 go-live blockers
 
 - On 7 October 2026 the enabled Entra application role
@@ -484,7 +493,7 @@ Branch: `v2-deployment`
   clearing reference data already loaded by an open canonical Job drawer. A dedicated cross-client
   Schedule Option event remains future work.
 - Job Map no longer starts the global Jobs or Sites collections. It loads only the selected
-  Allocated, Unallocated, and Waiting for parts statuses through a minimal Job/Site-location
+  Allocated, Unallocated, and Action Required statuses through a minimal Job/Site-location
   projection, reuses a complete cached status result while an exact subset revalidates, and follows
   Dataverse continuation links. Job mutations and realtime recovery refresh the active status key;
   application Site and Equipment mutations invalidate affected map projections. The app-shell
@@ -777,7 +786,7 @@ Branch: `v2-deployment`
 
 ## Job Map (deployed feature; scoped loading implemented locally)
 
-- `/job-map` displays Allocated, Unallocated, and Waiting for parts Jobs at each Job's recorded Site.
+- `/job-map` displays Allocated, Unallocated, and Action Required Jobs at each Job's recorded Site.
 - Independent status, Customer, Site, and text filters reuse shared status-scoped queries and the
   existing Site coordinate/geocoding cache. Unmapped Jobs remain explicitly counted.
 - Selecting a Job opens the canonical Job drawer. No Dataverse schema, security, provider, or cloud

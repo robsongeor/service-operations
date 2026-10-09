@@ -200,6 +200,42 @@ test('successful submission creates a pending review and replay is rejected', as
     for (const key of ['tokenHash', 'technicianEmail', 'story', 'photos', 'equipmentId', 'technicianId']) assert.equal(items[0][key], undefined, key)
 })
 
+test('final required public submission moves an Allocated Job to Completion Review with the server identity', async () => {
+    const created = await generate()
+    delete process.env.JOB_CARD_LOCAL_DEVELOPMENT
+    process.env.DATAVERSE_URL = 'https://example.crm.dynamics.com'
+    process.env.GREENTREE_DATAVERSE_TENANT_ID = 'tenant-id'
+    process.env.GREENTREE_DATAVERSE_CLIENT_ID = 'client-id'
+    process.env.GREENTREE_DATAVERSE_CLIENT_SECRET = 'client-secret'
+    const calls = []
+    global.fetch = async (url, options = {}) => {
+        calls.push({ url: String(url), options })
+        if (String(url).includes('login.microsoftonline.com')) return Response.json({ access_token: 'application-token' })
+        if (!options.method) return Response.json({
+            gr_jobid: '00000000-0000-4000-8000-000000000001',
+            gr_status: statusAutomation._test.JOB_STATUS_ALLOCATED,
+            '@odata.etag': 'W/"10"',
+        })
+        if (options.method === 'PATCH') return new Response(null, { status: 204 })
+        throw new Error(`Unexpected request ${url}`)
+    }
+
+    const response = await invoke({ method: 'POST', headers: {}, body: {
+        token: created.body.token, story: 'Completed service', hourMeter: 2510,
+        timeEntries: [{ date: '2026-10-09', hours: 1, kilometres: 0 }], parts: [],
+        furtherWorkRequired: false, safetyIssueIdentified: false, photos: [],
+    } })
+
+    assert.equal(response.status, 200)
+    const patchCall = calls.find((call) => call.options.method === 'PATCH')
+    assert.ok(patchCall)
+    assert.equal(patchCall.options.headers.Authorization, 'Bearer application-token')
+    assert.equal(patchCall.options.headers['If-Match'], 'W/"10"')
+    assert.deepEqual(JSON.parse(patchCall.options.body), {
+        gr_status: statusAutomation._test.JOB_STATUS_COMPLETION_REVIEW,
+    })
+})
+
 test('pending queue is bounded, reports overflow and only reads its saved snapshot', async () => {
     const store = require('../api/services/jobCardStorage').getJobCardStore()
     for (let index = 0; index < 101; index++) await store.create({
@@ -471,6 +507,50 @@ test('withdrawal preserves allocation while another technician still owns the Jo
     })
     assert.equal(updated, false)
     assert.equal(calls, 0)
+})
+
+test('Completion Review waits for every current technician lifecycle', () => {
+    const submittedPrimary = { tokenHash: 'primary-submitted', assignmentId: '', status: 'pendingReview', createdOn: '2026-10-09T01:00:00Z' }
+    const activeAdditional = { tokenHash: 'additional-active', assignmentId: 'assignment-1', status: 'active', createdOn: '2026-10-09T01:01:00Z', expiresOn: '2026-10-16T01:01:00Z' }
+    assert.equal(statusAutomation.allRequiredTechnicianSubmissionsReceived([submittedPrimary, activeAdditional]), false)
+
+    const submittedAdditional = { ...activeAdditional, status: 'pendingReview' }
+    assert.equal(statusAutomation.allRequiredTechnicianSubmissionsReceived([submittedPrimary, submittedAdditional]), true)
+    assert.equal(statusAutomation.allRequiredTechnicianSubmissionsReceived([
+        submittedPrimary,
+        { ...submittedAdditional, status: 'withdrawn' },
+    ]), true)
+
+    const replacement = { ...submittedPrimary, tokenHash: 'primary-replacement', status: 'active', createdOn: '2026-10-09T02:00:00Z', expiresOn: '2026-10-16T02:00:00Z' }
+    assert.equal(statusAutomation.allRequiredTechnicianSubmissionsReceived([submittedPrimary, replacement]), false)
+    assert.equal(statusAutomation.allRequiredTechnicianSubmissionsReceived(Array.from({ length: 501 }, (_, index) => ({
+        tokenHash: String(index), assignmentId: String(index), status: 'pendingReview', createdOn: '2026-10-09T01:00:00Z',
+    }))), false)
+})
+
+test('all required submissions move only an Allocated Job to Completion Review', async () => {
+    const calls = []
+    const updated = await statusAutomation.moveJobToCompletionReviewAfterAllRequiredSubmissions({
+        jobId: '00000000-0000-4000-8000-000000000001',
+        records: [
+            { tokenHash: 'primary', assignmentId: '', status: 'pendingReview', createdOn: '2026-10-09T01:00:00Z' },
+            { tokenHash: 'additional', assignmentId: 'assignment-1', status: 'reviewed', createdOn: '2026-10-09T01:01:00Z' },
+        ],
+        dataverseOrigin: 'https://example.crm.dynamics.com',
+        authorization: 'Bearer application-token',
+        fetchImpl: async (url, options = {}) => {
+            calls.push({ url: String(url), options })
+            if (!options.method) return Response.json({
+                gr_jobid: '00000000-0000-4000-8000-000000000001',
+                gr_status: statusAutomation._test.JOB_STATUS_ALLOCATED,
+                '@odata.etag': 'W/"8"',
+            })
+            return new Response(null, { status: 204 })
+        },
+    })
+    assert.equal(updated, true)
+    assert.deepEqual(JSON.parse(calls[1].options.body), { gr_status: statusAutomation._test.JOB_STATUS_COMPLETION_REVIEW })
+    assert.equal(calls[1].options.headers['If-Match'], 'W/"8"')
 })
 
 test('authenticated per-Job history includes Azure lifecycle states without exposing tokens or evidence', async () => {
