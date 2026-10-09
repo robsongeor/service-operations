@@ -79,7 +79,9 @@ function accessForMode(mode: ApplicationAccessMode, isSimulated = false): Applic
         canScheduleJobs: coordinator,
         canCorrectJobDetails: coordinator || admin,
         canUpdateEntryMarkers: coordinator || office || mode === 'job-book-only',
-        canAssignInitialTechnician: coordinator || office || mode === 'job-book-only',
+        // Every admitted Job Book role can select the initial technician. Dispatch,
+        // scheduling and broader operational management remain separate capabilities.
+        canAssignInitialTechnician: mode !== 'denied',
         canEmailAssignedTechnician: coordinator || office,
         canReviewJobCards: coordinator || office,
         canViewQuotes: coordinator || office,

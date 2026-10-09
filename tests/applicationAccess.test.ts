@@ -251,6 +251,20 @@ test('only operational roles can create Job schedule options', () => {
     assert.equal(resolveApplicationAccess(accountWithRoles([APPLICATION_ROLES.JOB_BOOK_ONLY]), options).canScheduleJobs, false)
 })
 
+test('every Job Book role can assign the initial technician', () => {
+    const options = { enforceAccessControl: true, isDevelopment: false }
+    for (const role of [
+        APPLICATION_ROLES.FULL_ACCESS,
+        APPLICATION_ROLES.SERVICE_COORDINATOR,
+        APPLICATION_ROLES.JOB_BOOK_ADMIN,
+        APPLICATION_ROLES.JOB_CARD_ADMIN,
+        APPLICATION_ROLES.JOB_BOOK_ONLY,
+    ]) {
+        assert.equal(resolveApplicationAccess(accountWithRoles([role]), options).canAssignInitialTechnician, true, role)
+    }
+    assert.equal(resolveApplicationAccess(accountWithRoles([]), options).canAssignInitialTechnician, false)
+})
+
 test('Job Book hides and suppresses schedule creation outside operational access', () => {
     const screen = readFileSync(new URL('../src/alpha/job-book/JobBookPrototypeScreen.tsx', import.meta.url), 'utf8')
     assert.match(screen, /canManageJobs, canScheduleJobs, canCorrectJobDetails/)
@@ -283,7 +297,8 @@ test('Job Book Admin separates corrections and master data from dispatch, marker
     const book = resolveApplicationAccess(accountWithRoles([APPLICATION_ROLES.JOB_BOOK_ADMIN]), options)
     assert.equal(book.mode, 'job-book-admin')
     for (const key of ['canCorrectJobDetails','canEditEquipmentDetails','canMoveEquipment','canCreateEquipmentDestination','canViewCustomers','canViewEquipment'] as const) assert.equal(book[key], true, key)
-    for (const key of ['canManageJobs','canScheduleJobs','canAssignInitialTechnician','canUpdateEntryMarkers','canEmailAssignedTechnician','canReviewJobCards','canViewQuotes','canEditEquipment','canEditCustomers'] as const) assert.equal(book[key], false, key)
+    assert.equal(book.canAssignInitialTechnician, true)
+    for (const key of ['canManageJobs','canScheduleJobs','canUpdateEntryMarkers','canEmailAssignedTechnician','canReviewJobCards','canViewQuotes','canEditEquipment','canEditCustomers'] as const) assert.equal(book[key], false, key)
     const office = resolveApplicationAccess(accountWithRoles([APPLICATION_ROLES.JOB_CARD_ADMIN]), options)
     assert.equal(office.canEditEquipmentDetails, true)
     assert.equal(office.canAssignInitialTechnician, true)

@@ -21,6 +21,11 @@ view or create schedule options. Job Book Admin, Office Admin/Job Card Admin, Jo
 denied modes must not render scheduling controls or submit schedule-option writes from Job Book.
 Route visibility and drawer visibility use the same `canScheduleJobs` access capability.
 
+Initial technician selection is a Job Book capability, not a scheduling or dispatch capability.
+Every role admitted to Job Book may select a mechanic while creating or correcting an entry;
+denied users may not. Selecting the mechanic does not grant access to Scheduling, technician
+email dispatch, Job Card review, or the Service Coordination worklist.
+
 ## Admin corrections (3 October 2026, local implementation)
 
 `canCorrectJobDetails` is separate from `canManageJobs`. `JobCorrectionsDrawer` adapts the canonical

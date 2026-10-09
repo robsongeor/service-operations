@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Allowed every Job Book role, including Job Book Admin, to select the initial mechanic while
+  creating or correcting an entry. Scheduling, technician email and operational-management
+  permissions remain independently restricted.
 - Restricted Job Book scheduling controls and schedule-option submission to operational users.
   Job Book Admin, Office Admin/Job Card Admin and Job Book Only users no longer see the Scheduling
   section or create schedules while adding a Job Book entry.
