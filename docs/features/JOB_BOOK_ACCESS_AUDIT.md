@@ -3,10 +3,11 @@
 Read-only audit performed 3 October 2026 using George's existing Azure sign-in.
 No role definitions, grants, assignments, environment settings or business data were changed.
 
-Post-audit update: on 9 October 2026 Pubudu was switched from Office Admin to Job Book Admin in
-Entra and Dataverse with unrelated assignments preserved. The shared Job Card reviewer allowlist
-still requires a Contributor to remove Pubudu and verify denial; this historical audit table remains
-the 3 October snapshot.
+Post-audit update: on 9 October 2026 Pubudu was briefly switched from Office Admin to Job Book Admin,
+then returned to Office Admin in both Entra and Dataverse by explicit owner request. Each change used
+replacement-first exact verification and preserved unrelated assignments. The shared Job Card
+reviewer allowlist already includes Pubudu, consistent with the final Office Admin role. This
+historical audit table remains the 3 October snapshot.
 
 ## Target verified
 
@@ -75,7 +76,7 @@ write. That enforcement must be inspected and tested before claiming effective f
 ## Required change package and order
 
 1. Implement the distinct ServiceCoordinator and JobBookAdmin client profiles and route/capability
-   tests locally; retain the existing JobCardAdmin value for Jess/Nargiza. Coordinators initially
+   tests locally; retain the existing JobCardAdmin value for Jess/Nargiza/Pubudu. Coordinators initially
    have FullAccess-equivalent application capabilities but keep a distinct assignment.
 2. Specify the permitted Equipment fields and inspect existing server enforcement. Implement
    authoritative allowlists for Job corrections, Equipment edits/moves, markers, initial technician
@@ -92,8 +93,8 @@ write. That enforcement must be inspected and tested before claiming effective f
    version is available for testing. Move Bruce off FullAccess as part of the verified coordinator
    transition, not before his current work is protected. Replace the five relevant JobBookOnly
    assignments with the appropriate new roles; keep George FullAccess.
-7. Separately inspect/reconcile the Job Card API reviewer allowlist for George, Bruce, Andy, Jess
-   and Nargiza. Its current deployed contents were not inspected in this audit. Preserve unrelated
+7. Separately inspect/reconcile the Job Card API reviewer allowlist for George, Bruce, Andy, Jess,
+   Nargiza and Pubudu. Its current deployed contents were not inspected in this audit. Preserve unrelated
    existing access pending review; verify the five Job Book Admins cannot use review/private evidence APIs.
 8. Test sign-in, each permitted action, direct API denial, multi-user conflicts and existing
    coordinator workflows. Decide and verify Entra assignment-required and client role enforcement

@@ -1,6 +1,5 @@
 import { applicationAccessFromEnvironment } from '../../auth/applicationAccess'
 import CustomerRelationshipPicker from '../shared/customer-relationship/CustomerRelationshipPicker'
-import JobSiteCreatePanel from '../jobs/components/JobSiteCreatePanel'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
@@ -12,6 +11,7 @@ import EquipmentDataQualityIndicator from '../equipment/components/EquipmentData
 import { compareEquipmentDataQuality } from '../equipment/dataQuality/equipmentDataQuality'
 import BulkEquipmentImportDrawer from '../equipment/components/BulkEquipmentImportDrawer'
 import SiteSettingsDrawer from './SiteSettingsDrawer'
+import EquipmentTransferDrawer from './EquipmentTransferDrawer'
 import { canUseBulkEquipmentImport } from '../equipment/utils/bulkEquipmentImport'
 import { isRoadRegistered } from '../equipment/compliance/equipmentCompliance'
 import { useJobs } from '../jobs/hooks/useJobs'
@@ -90,7 +90,6 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
     const access = applicationAccessFromEnvironment(activeAccount)
     const canCreateRestricted = readOnly && access.canCreateEquipmentDestination
     const [relationshipQuery, setRelationshipQuery] = useState('')
-    const [addingRestrictedSite, setAddingRestrictedSite] = useState(false)
     const retainedCreatedCustomer = useRef<Customer | null>(null)
     const signedInUser = getSignedInUserInfo(activeAccount)
     const viewStorageKey = signedInUser ? getCustomerDashboardViewStateKey(signedInUser.storageId) : null
@@ -123,6 +122,7 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
         createSite: createDashboardSite,
         saveEquipmentMaintenanceHistory,
         deleteEquipment,
+        transferEquipment,
     } = useEquipmentManager({
         loadGlobalOperationalData: false,
         scopedData: {
@@ -209,6 +209,8 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
     const [bulkImportSite, setBulkImportSite] = useState<Site | null>(null)
     const [bulkImportSuccess, setBulkImportSuccess] = useState('')
     const [siteSettingsSite, setSiteSettingsSite] = useState<Site | null>(null)
+    const [transferSite, setTransferSite] = useState<Site | null>(null)
+    const [transferSuccess, setTransferSuccess] = useState('')
     const [expandedSitesByCustomer, setExpandedSitesByCustomer] = useState<Record<string, Record<string, boolean>>>({})
     const [equipmentSortBySite, setEquipmentSortBySite] = useState<Record<string, SiteEquipmentSort>>({})
     const [creatingJobInitialValues, setCreatingJobInitialValues] = useState<JobCreateInitialValues | null>(null)
@@ -659,19 +661,23 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
             title="Customer Dashboard"
             subtitle="Manage customer sites, equipment, jobs, and service activity from one workspace."
             actions={<div className="customer-dashboard-header-actions">
-                <SearchableSelect
+                {canCreateRestricted ? <CustomerRelationshipPicker
                     id="customer-dashboard-customer"
-                    label="Customer"
-                    value={selectedCustomer?.gr_customerid ?? ''}
-                    options={customerOptions}
-                    onChange={(customerId) => { initialiseCustomerSiteState(customerId); setSelectedCustomerId(customerId); setActiveTab('sites'); setSiteSuccess('') }}
                     autoFocus
-                    placeholder="Select a customer"
-                    searchPlaceholder="Search customers"
-                    emptyLabel="No matching customers"
-                />
-                {canCreateRestricted && <CustomerRelationshipPicker id="restricted-customer-create" query={relationshipQuery}
-                    options={[]} onQueryChange={setRelationshipQuery} onClearSelection={() => setRelationshipQuery('')} onSelect={() => undefined}
+                    query={relationshipQuery}
+                    selectedId={selectedCustomer?.gr_customerid ?? ''}
+                    options={customerOptions.map((option) => ({ id: option.value, label: option.label }))}
+                    onQueryChange={setRelationshipQuery}
+                    onClearSelection={() => {
+                        setRelationshipQuery('')
+                        setSelectedCustomerId('')
+                    }}
+                    onSelect={(customerId) => {
+                        initialiseCustomerSiteState(customerId)
+                        setSelectedCustomerId(customerId)
+                        setActiveTab('sites')
+                        setSiteSuccess('')
+                    }}
                     createDescription="Create a Customer and its first Site. Saved records remain if you leave this screen."
                     onCreateCustomerAndSite={async (input) => {
                         const name = input.customerName.trim().toLowerCase()
@@ -685,10 +691,21 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
                         setRelationshipQuery('')
                         retainedCreatedCustomer.current = null
                         setSiteSuccess('Customer and Site saved.')
-                    }} />}
-                {readOnly
-                    ? <span className="customer-dashboard-read-only">{canCreateRestricted ? 'Customer / Site creation enabled' : 'Read only'}</span>
-                    : <button className="page-header-primary-action" type="button" onClick={() => setCustomerDrawerMode('create')}>+ Create Customer</button>}
+                    }}
+                /> : <SearchableSelect
+                    id="customer-dashboard-customer"
+                    label="Customer"
+                    value={selectedCustomer?.gr_customerid ?? ''}
+                    options={customerOptions}
+                    onChange={(customerId) => { initialiseCustomerSiteState(customerId); setSelectedCustomerId(customerId); setActiveTab('sites'); setSiteSuccess('') }}
+                    autoFocus
+                    placeholder="Select a customer"
+                    searchPlaceholder="Search customers"
+                    emptyLabel="No matching customers"
+                />}
+                {readOnly && !canCreateRestricted
+                    ? <span className="customer-dashboard-read-only">Read only</span>
+                    : !readOnly && <button className="page-header-primary-action" type="button" onClick={() => setCustomerDrawerMode('create')}>+ Create Customer</button>}
             </div>}
         />
 
@@ -703,25 +720,16 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
                 <p>Choose a customer above to view sites, equipment, jobs, and the dashboard foundation for future service history and reporting.</p>
             </section>
         ) : <>
-            {(bulkImportSuccess || siteSuccess) && <div className="customer-dashboard-success" role="status">{siteSuccess || bulkImportSuccess}</div>}
+            {(bulkImportSuccess || siteSuccess || transferSuccess) && <div className="customer-dashboard-success" role="status">{transferSuccess || siteSuccess || bulkImportSuccess}</div>}
             <section className="customer-dashboard-header">
                 <div>
                     <span>Customer account</span>
                     <h2>{selectedCustomer.gr_name}</h2>
                 </div>
-                {canCreateRestricted && <button type="button" onClick={() => setAddingRestrictedSite(true)}>Add Site</button>}
                 {!readOnly && <div className="customer-dashboard-actions">
-                    <button type="button" onClick={() => { setCustomerDrawerInitialTab('sites'); setCustomerDrawerMode('edit') }}>Add Site</button>
                     <button type="button" onClick={() => { setCustomerDrawerInitialTab('info'); setCustomerDrawerMode('edit') }}>Edit Customer</button>
                 </div>}
             </section>
-
-            {canCreateRestricted && addingRestrictedSite && <JobSiteCreatePanel customerName={selectedCustomer.gr_name}
-                onCancel={() => setAddingRestrictedSite(false)} onCreate={async (input) => {
-                    await createDashboardSite({ customerId: selectedCustomer.gr_customerid, ...input }, selectedCustomer)
-                    setAddingRestrictedSite(false)
-                    setSiteSuccess('Site saved.')
-                }} />}
             <MetricStrip items={summaryMetrics} ariaLabel="Customer summary" />
 
             <nav className="customer-dashboard-tabs" aria-label="Customer sections" role="tablist">
@@ -790,6 +798,10 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
                                 </span>
                                 <span className="customer-site-heading"><span><strong>{site.gr_name || 'Unnamed Site'}</strong><small>{site.gr_address || 'No address recorded'}</small></span></span>
                                 <span className="customer-site-header-summary">
+                                    <span className="customer-site-greentree-summary">
+                                        <small>GreenTree account</small>
+                                        <strong>{site.gr_greentreecustomername || 'Not mapped'}</strong>
+                                    </span>
                                     <span><small>Operating hours</small><strong>{operatingHours || 'Not recorded'}</strong></span>
                                     {siteCheck?.schedule.gr_enabled && <span className="customer-site-check-summary" data-state={siteCheck.state}>
                                         <small>Site Check</small>
@@ -806,6 +818,18 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
                                 </span>
                             </button>
                             <div className="customer-site-meta" onClick={(event) => event.stopPropagation()}>
+                                {access.canMoveEquipment && <button
+                                    type="button"
+                                    disabled={site.gr_siteid.startsWith('prototype-site-') || selectedCustomer.gr_customerid.startsWith('prototype-customer-')}
+                                    title={site.gr_siteid.startsWith('prototype-site-') ? 'Save this Site to Dataverse before transferring Equipment.' : `Transfer existing Equipment to ${site.gr_name}`}
+                                    onClick={() => {
+                                        clearSaveError()
+                                        setTransferSuccess('')
+                                        setTransferSite(site)
+                                    }}
+                                >
+                                    Transfer Equipment
+                                </button>}
                                 <button
                                     type="button"
                                     disabled={rows.length === 0}
@@ -1024,6 +1048,21 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
             }}
         />}
 
+        {transferSite && selectedCustomer && access.canMoveEquipment && <EquipmentTransferDrawer
+            key={transferSite.gr_siteid}
+            customer={selectedCustomer}
+            site={transferSite}
+            equipment={equipment}
+            busy={isSaving}
+            onSearchEquipment={(query, signal) => searchEquipmentForEditor(query, {}, signal)}
+            onTransfer={transferEquipment}
+            onComplete={(count) => {
+                setTransferSuccess(`${count} Equipment record${count === 1 ? '' : 's'} transferred to ${transferSite.gr_name}.`)
+                setTransferSite(null)
+            }}
+            onClose={() => setTransferSite(null)}
+        />}
+
         {!readOnly && bulkImportSite && bulkImportAllowed && selectedCustomer && <BulkEquipmentImportDrawer
             key={bulkImportSite.gr_siteid}
             user={signedInUser}
@@ -1063,9 +1102,9 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
             siteChecksLoading={siteChecks.isLoading}
             siteChecksSaving={siteChecks.isSaving}
             siteChecksError={siteChecks.loadError || siteChecks.saveError}
-            onSaveDetails={(name, address) => updateSites([{
+            onSaveDetails={(name, address, greenTreeCustomerCode, greenTreeCustomerName) => updateSites([{
                 siteId: siteSettingsSite.gr_siteid,
-                input: { name, address },
+                input: { name, address, greenTreeCustomerCode, greenTreeCustomerName },
             }])}
             onSaveSiteChecks={async (input) => { await siteChecks.saveSchedule(input) }}
             onDetailsComplete={(name) => {

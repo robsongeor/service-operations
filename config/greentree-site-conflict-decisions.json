@@ -1,0 +1,22 @@
+[
+  { "siteId": "118d13a2-4483-f111-ab0f-0022489917ff", "customerName": "Bapcor", "siteName": "Māngere", "code": "110670", "name": "Bapcor New Zealand Ltd", "decision": "confirmed" },
+  { "siteId": "11180388-fa89-f111-ab10-0022489917ff", "customerName": "Camson", "siteName": "Company Car", "code": "101407", "name": "Camson Company Car", "decision": "confirmed" },
+  { "siteId": "5fb99f0b-fb83-f111-ab0e-7c1e52627ad8", "customerName": "Camson", "siteName": "CSR Workshop", "code": "101405", "name": "Camson Workshop Auckland", "decision": "confirmed" },
+  { "siteId": "6653032e-4a83-f111-ab0f-0022489917ff", "customerName": "Cardinal", "siteName": "Drury", "code": "101739", "name": "Cardinal Logistics Ltd", "decision": "confirmed" },
+  { "siteId": "9d142279-3883-f111-ab0f-0022489917ff", "customerName": "Godfrey Hirst", "siteName": "Kerrs Road", "code": "100524", "name": "Godfrey Hirst Carpets Ltd", "decision": "confirmed" },
+  { "siteId": "4c5be9e7-a2ac-f111-aaac-6045bde57026", "customerName": "Mainfreight", "siteName": "Mainfreight", "code": "", "name": "", "decision": "skip" },
+  { "siteId": "82231f54-4a83-f111-ab0f-0022489917ff", "customerName": "Mitre 10", "siteName": "Mount Wellington", "code": "101440", "name": "Mega Mitre 10 Botany", "decision": "confirmed" },
+  { "siteId": "1e510ddb-c383-f111-ab0f-0022489917ff", "customerName": "Mitre 10", "siteName": "Papamoa", "code": "110700", "name": "Mitre 10 Mega Papamoa", "decision": "confirmed" },
+  { "siteId": "87793f7f-4a83-f111-ab0f-0022489917ff", "customerName": "Mulcahy", "siteName": "5 Charann Place", "code": "100829", "name": "Mulcahy Engineering Ltd", "decision": "confirmed" },
+  { "siteId": "094e4a06-d6a7-f111-b8dd-6045bde57026", "customerName": "New World Hillcrest", "siteName": "Hillcrest", "code": "110714", "name": "New World Hillcrest * Cash Account", "decision": "confirmed" },
+  { "siteId": "7655ec98-e986-f111-ab10-0022489917ff", "customerName": "Post Haste", "siteName": "Penrose", "code": "100989", "name": "Post Haste Ltd", "decision": "confirmed" },
+  { "siteId": "021c1319-5889-f111-ab10-0022489917ff", "customerName": "SLS Scaffolds", "siteName": "Papatoetoe", "code": "101405", "name": "Camson Workshop Auckland", "decision": "confirmed" },
+  { "siteId": "2ba7b2cb-a496-f111-8075-6045bde57026", "customerName": "Speed Queen NZ", "siteName": "Penrose", "code": "110244", "name": "Speed Queen NZ * 7 Day Account", "decision": "confirmed" },
+  { "siteId": "4b98b1d4-4483-f111-ab0f-0022489917ff", "customerName": "Suntory", "siteName": "10 Orb Avenue", "code": "110633P", "name": "Suntory Beverage & Food NZ Ltd – Production", "decision": "confirmed" },
+  { "siteId": "36124c70-4483-f111-ab0f-0022489917ff", "customerName": "Suntory", "siteName": "Genesis Outbound", "code": "110633E", "name": "Suntory Beverage & Food NZ Ltd – Export Logistics", "decision": "confirmed" },
+  { "siteId": "396b1cef-f795-f111-8075-6045bde57026", "customerName": "Swanson Transport", "siteName": "Ranui", "code": "101602", "name": "Swansons Transport Ltd", "decision": "confirmed" },
+  { "siteId": "dcb6b84a-c583-f111-ab0f-0022489917ff", "customerName": "The Homegrown Juice Co", "siteName": "Hastings", "code": "101405", "name": "Camson Workshop Auckland", "decision": "confirmed" },
+  { "siteId": "5e3c8cbe-749a-f111-b8db-6045bde57026", "customerName": "TigerTurf NZ Ltd", "siteName": "Onehunga", "code": "100091", "name": "TigerTurf NZ Ltd", "decision": "confirmed" },
+  { "siteId": "005ba5ec-4183-f111-ab0f-0022489917ff", "customerName": "Visy", "siteName": "Recycle", "code": "109265", "name": "Build Run Repair - Service", "decision": "confirmed" },
+  { "siteId": "2f69cd83-4690-f111-8076-6045bde57026", "customerName": "Visy", "siteName": "Visy Global - Patrick Street", "code": "110342", "name": "Visy Global Logistics NZ", "decision": "confirmed" }
+]

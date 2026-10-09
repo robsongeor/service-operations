@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Verify', 'SwitchPilot')]
+    [ValidateSet('Verify', 'SwitchPilot', 'SwitchToOfficeAdmin')]
     [string]$Mode = 'Verify',
     [string]$EnvironmentUrl = 'https://org0d4246d7.crm6.dynamics.com',
     [string]$PilotUpn = 'pubudu@liftrucks.co.nz',
@@ -112,6 +112,32 @@ try {
         }
         Write-RoleSummary "Direct roles after $Mode" $after
         Write-Output "Verified: $PilotUpn switched from Office Admin to Job Book Admin; unrelated direct roles remain."
+    } elseif ($Mode -eq 'SwitchToOfficeAdmin') {
+        Require ($book.Count -eq 1) 'Refusing change because Job Book Admin is not assigned exactly once.'
+        if ($office.Count -eq 0) {
+            $references = [Microsoft.Xrm.Sdk.EntityReferenceCollection]::new()
+            $references.Add($officeDefinitions[0].ToEntityReference())
+            $service.Associate('systemuser', $user.Id, [Microsoft.Xrm.Sdk.Relationship]::new('systemuserroles_association'), $references)
+        }
+
+        $withReplacement = @(Get-DirectRoles $service $user.Id)
+        Require (@($withReplacement | Where-Object { $_.Id -eq $officeDefinitions[0].Id }).Count -eq 1) 'Office Admin could not be verified before removing Job Book Admin.'
+        Require (@($withReplacement | Where-Object { $_.Id -eq $bookDefinitions[0].Id }).Count -eq 1) 'Job Book Admin disappeared before the verified replacement was ready.'
+
+        $references = [Microsoft.Xrm.Sdk.EntityReferenceCollection]::new()
+        $references.Add($bookDefinitions[0].ToEntityReference())
+        $service.Disassociate('systemuser', $user.Id, [Microsoft.Xrm.Sdk.Relationship]::new('systemuserroles_association'), $references)
+
+        $after = @(Get-DirectRoles $service $user.Id)
+        Require (@($after | Where-Object { $_.Id -eq $officeDefinitions[0].Id }).Count -eq 1) 'Office Admin is missing after the switch.'
+        Require (@($after | Where-Object { $_.Id -eq $bookDefinitions[0].Id }).Count -eq 0) 'Job Book Admin is still assigned after the switch.'
+        Require (@($after | Where-Object { [string]$_['name'] -ceq 'Service Operations' }).Count -eq 0) 'The broader legacy Service Operations role appeared during the switch.'
+        Require ($after.Count -eq $before.Count) 'Unexpected direct-role count after the switch; stop and inspect the account.'
+        foreach ($role in @($before | Where-Object { $_.Id -ne $bookDefinitions[0].Id })) {
+            Require (@($after | Where-Object { $_.Id -eq $role.Id }).Count -eq 1) 'An unrelated Dataverse role was not preserved.'
+        }
+        Write-RoleSummary "Direct roles after $Mode" $after
+        Write-Output "Verified: $PilotUpn switched from Job Book Admin to Office Admin; unrelated direct roles remain."
     } else {
         $profile = if ($book.Count -eq 1) { 'Job Book Admin' } else { 'Office Admin' }
         Write-Output "Verified current state: exactly one restricted Admin profile is assigned ($profile)."

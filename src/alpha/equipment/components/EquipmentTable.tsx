@@ -22,6 +22,7 @@ type Props = {
 const columns: { key: EquipmentSortKey; label: string }[] = [
     { key: 'fleet', label: 'Fleet number' },
     { key: 'customer', label: 'Customer' },
+    { key: 'gtCustomer', label: 'GT Customer' },
     { key: 'site', label: 'Site' },
     { key: 'make', label: 'Make' },
     { key: 'model', label: 'Model' },
@@ -46,7 +47,6 @@ export default function EquipmentTable({ readOnly = false, showMaintenanceSummar
                                 </button>
                             </th>
                         ))}
-                        <th>State</th>
                         {showMaintenanceSummaries && <th>Next service</th>}
                         {showMaintenanceSummaries && <th className="equipment-data-quality-heading" aria-sort={sortKey === 'dataStatus' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}>
                             <button type="button" onClick={() => onSort('dataStatus')} aria-label="Sort by Data status">
@@ -79,11 +79,11 @@ export default function EquipmentTable({ readOnly = false, showMaintenanceSummar
                         >
                             <td><span className="equipment-fleet-identity"><strong>{valueOrDash(item.gr_fleet)}</strong>{parseAlternateFleetNumbers(item.gr_alternatefleetnumbers).length > 0 && <small>Also {parseAlternateFleetNumbers(item.gr_alternatefleetnumbers).join(' · ')}</small>}</span></td>
                             <td>{valueOrDash(item.gr_Site?.gr_Customer?.gr_name)}</td>
+                            <td>{valueOrDash(item.gr_Site?.gr_greentreecustomername)}</td>
                             <td>{valueOrDash(item.gr_Site?.gr_name)}</td>
                             <td>{valueOrDash(item.gr_make)}</td>
                             <td>{valueOrDash(item.gr_model)}</td>
                             <td>{valueOrDash(item.gr_serial)}</td>
-                            <td><span className={item.statecode === 0 ? 'equipment-state active' : 'equipment-state'}>{item.statecode === 0 ? 'Active' : 'Inactive'}</span></td>
                             {showMaintenanceSummaries && <td>{servicePlansLoading ? <span className="equipment-maintenance-summary"><small>Loading…</small></span> : servicePlansUnavailable ? <span title="Maintenance summaries could not be loaded.">Unavailable</span> : primary ? <span className="equipment-maintenance-summary"><strong>{label} @ {primary.gr_nextduehours}</strong><small>{remaining != null ? `${Math.abs(remaining)} hrs ${remaining < 0 ? 'overdue' : 'remaining'}` : 'Due hours unavailable'}</small></span> : 'Not Configured'}</td>}
                             {showMaintenanceSummaries && <td className="equipment-data-quality-cell">{servicePlansLoading ? <span className="equipment-data-quality-loading" role="status">Loading…</span> : servicePlansUnavailable ? <span title="Maintenance data quality could not be calculated.">Unavailable</span> : <EquipmentDataQualityIndicator equipment={item} servicePlans={itemServicePlans} />}</td>}
                             {!readOnly && <td>

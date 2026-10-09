@@ -259,6 +259,33 @@ test('Equipment table omits the temporary linked Job count column', () => {
     assert.doesNotMatch(types, /'jobs'/)
 })
 
+test('Equipment register omits the redundant State column and selector', () => {
+    const screen = readFileSync(new URL('../src/alpha/equipment/EquipmentScreen.tsx', import.meta.url), 'utf8')
+    const table = readFileSync(new URL('../src/alpha/equipment/components/EquipmentTable.tsx', import.meta.url), 'utf8')
+    assert.doesNotMatch(table, /<th>State<\/th>/)
+    assert.doesNotMatch(table, /item\.statecode === 0 \? 'Active' : 'Inactive'/)
+    assert.doesNotMatch(screen, /StateFilter|stateFilter|<label>State<select/)
+})
+
+test('Equipment register reuses searchable Customer filtering and scopes Site selection', () => {
+    const screen = readFileSync(new URL('../src/alpha/equipment/EquipmentScreen.tsx', import.meta.url), 'utf8')
+    const table = readFileSync(new URL('../src/alpha/equipment/components/EquipmentTable.tsx', import.meta.url), 'utf8')
+    const api = readFileSync(new URL('../src/alpha/jobs/services/equipmentApi.ts', import.meta.url), 'utf8')
+    assert.match(screen, /<SearchableSelect[\s\S]*?id="equipment-customer-filter"/)
+    assert.doesNotMatch(screen, /const filterCustomers = useMemo/)
+    assert.match(screen, /customerFilterQuery\.trim\(\)[\s\S]*?query\.length < 2/)
+    assert.match(screen, /searchEquipmentCustomers\(query, controller\.signal\)/)
+    assert.match(screen, /setCustomerFilterResults\(rows\.slice\(0, 8\)\)/)
+    assert.match(screen, /resultLimit=\{8\}/)
+    assert.match(screen, /onSearchChange=\{setCustomerFilterQuery\}/)
+    assert.match(screen, /setCustomerId\(nextCustomerId\)[\s\S]*?setSiteId\(''\)/)
+    assert.match(screen, /<label>Site<select disabled=\{!customerId\}/)
+    assert.match(screen, /Select a Customer first/)
+    assert.match(table, /\{ key: 'gtCustomer', label: 'GT Customer' \}/)
+    assert.match(table, /item\.gr_Site\?\.gr_greentreecustomername/)
+    assert.match(api, /gr_greentreecustomername/)
+})
+
 test('Equipment lazily loads focused Job history in the background and unloads it on close', () => {
     const manager = readFileSync(new URL('../src/alpha/equipment/hooks/useEquipmentManager.ts', import.meta.url), 'utf8')
     const jobsApi = readFileSync(new URL('../src/alpha/jobs/services/jobsApi.ts', import.meta.url), 'utf8')

@@ -2,6 +2,17 @@
 
 Branch: `v2-deployment`
 
+GreenTree customer mapping is implemented locally as two optional Site-level default fields. The
+mapping is deliberately separate from the operational Customer/Site/Equipment model, and historical
+GreenTree Jobs may use legitimate job-level overrides. Schema provisioning and an audit-first
+backfill use the reviewed conflict decisions; they write only the two Site mapping fields and never
+modify GreenTree or operational relationships.
+
+The Customer Dashboard no longer exposes a direct Add Site action. Existing Equipment can be
+transferred into a Site through the reused Equipment transfer drawer; its shared searchable selector
+uses bounded Dataverse lookup and the transfer changes only the Equipment's current Site (plus the
+destination maintenance default when explicitly selected), never historical Jobs.
+
 Operational Job status automation is implemented locally. Successful technician dispatch changes
 only Unallocated Jobs to Allocated. When every current non-withdrawn technician assignment has
 submitted a Job Card, an Allocated Job changes to Completion Review; technician answers do not drive
@@ -69,9 +80,9 @@ requires time to enter them in GreenTree; a delayed lookup/grace-period policy r
   responsibilities, role selection, acceptance evidence, migration, one-writer cutover and rollback.
 - The [access plan](docs/features/JOB_BOOK_ACCESS_PLAN.md) records George as sole FullAccess,
   Bruce/Andy as distinct Service coordinators with an approved restricted screen set,
-  Jess/Nargiza as Office Admins, and Pubudu plus five other Job Book Admins. JobBookOnly is not planned.
-  The restricted profiles are implemented and provisioned; Pubudu is the first assigned Job Book
-  Admin, while the remaining planned assignments are gated. Job Book Admins may
+  Jess/Nargiza/Pubudu as Office Admins, and five planned Job Book Admins. JobBookOnly is not planned.
+  The restricted profiles are implemented and provisioned; Pubudu was returned to Office Admin on
+  9 October 2026, while the remaining planned assignments are gated. Job Book Admins may
   correct factual details after handoff and Void eligible entries under existing safeguards,
   but cannot assign/email technicians, change GT/Timecloud
   ticks or review Job Cards.
@@ -79,10 +90,8 @@ requires time to enter them in GreenTree; a delayed lookup/grace-period policy r
   Equipment and update Equipment details. Separate Customers and Equipment screens are agreed for both Admin groups.
   Field-level enforcement and screen wiring remain implementation work; general existing
   Customer/Site editing and unrelated Equipment actions are not included in this decision.
-- Job Card review/Processed in GreenTree access is limited to George, Bruce, Andy, Jess and Nargiza.
-  The shared V1 backend reviewer allowlist still contains Pubudu from the earlier Office Admin pilot;
-  the current operator has Reader-only Azure access, so a Contributor must remove Pubudu and verify
-  review/private-evidence denial before the role transition is security-complete.
+- Job Card review/Processed in GreenTree access is limited to George, Bruce, Andy, Jess, Nargiza and
+  Pubudu. The shared V1 backend reviewer allowlist already includes this approved reviewer set.
 - Office Admin access across all four regions is confirmed, without regional restrictions.
 - On 7 October 2026 Pubudu's legacy broad `Service Operations` Dataverse role was removed after an
   exact pre-check confirmed the replacement `Service Operations - Office Admin` assignment. A
@@ -93,7 +102,10 @@ requires time to enter them in GreenTree; a delayed lookup/grace-period policy r
   and the unrelated pre-existing `JobBookOnly` assignment remained.
   On 9 October 2026 Pubudu was switched from `JobCardAdmin` / `Service Operations - Office Admin`
   to `JobBookAdmin` / `Service Operations - Job Book Admin` with exact before/after verification.
-  The three unrelated Dataverse platform roles and pre-existing `JobBookOnly` app assignment were preserved.
+  Later that day, the owner approved returning Pubudu to `JobCardAdmin` /
+  `Service Operations - Office Admin`; the replacement was assigned and verified before Job Book
+  Admin was removed. The three unrelated Dataverse platform roles and pre-existing `JobBookOnly`
+  app assignment were preserved in both switches.
   Pilot waves and source spreadsheets remain to be confirmed. Production integration
   and named-user denial verification remain prerequisites; no broader rollout has been performed.
 - Visible navigation and screen labels now say Job Book; historical Legacy record stages stay intact.
@@ -252,9 +264,10 @@ requires time to enter them in GreenTree; a delayed lookup/grace-period policy r
   A post-provision admission check confirmed `pubudu@liftrucks.co.nz` present with no returned
   team roles and, at that time, `Service Operations - Office Admin` alongside three unrelated
   Dataverse platform roles. On 7 October 2026 the legacy broad `Service Operations` role was removed
-  with exact before/after verification. On 9 October Pubudu was switched to
-  `Service Operations - Job Book Admin`; the unrelated platform roles were preserved. Pubudu is the
-  live Job Book Admin guide/denial pilot. The other eight intended accounts remain absent.
+  with exact before/after verification. On 9 October Pubudu was briefly switched to
+  `Service Operations - Job Book Admin`, then returned to `Service Operations - Office Admin` by
+  explicit owner request; the unrelated platform roles were preserved. The other eight intended
+  accounts remain absent.
   The restricted guard previously blocked the trusted registration/allocation child writes as well
   as direct writes. It now recognizes only exact synchronous API children bound to the matching
   request, Job, regional ledger, field set, status, links, fingerprint and number format. Direct,

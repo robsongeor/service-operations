@@ -39,7 +39,7 @@ type Props = {
     siteChecksLoading: boolean
     siteChecksSaving: boolean
     siteChecksError: string
-    onSaveDetails: (name: string, address: string) => Promise<void>
+    onSaveDetails: (name: string, address: string, greenTreeCustomerCode: string, greenTreeCustomerName: string) => Promise<void>
     onSaveInductions: (required: boolean, requirements: string) => Promise<void>
     onLoadInductionDocuments: () => Promise<SiteInductionDocument[]>
     onUploadInductionDocuments: (files: File[]) => Promise<SiteInductionDocument[]>
@@ -78,7 +78,14 @@ export default function SiteSettingsDrawer({
     const [activeTab, setActiveTab] = useState<SiteSettingsTab>('details')
     const [name, setName] = useState(site.gr_name)
     const [address, setAddress] = useState(site.gr_address ?? '')
-    const [savedDetails, setSavedDetails] = useState({ name: site.gr_name, address: site.gr_address ?? '' })
+    const [greenTreeCustomerCode, setGreenTreeCustomerCode] = useState(site.gr_greentreecustomercode ?? '')
+    const [greenTreeCustomerName, setGreenTreeCustomerName] = useState(site.gr_greentreecustomername ?? '')
+    const [savedDetails, setSavedDetails] = useState({
+        name: site.gr_name,
+        address: site.gr_address ?? '',
+        greenTreeCustomerCode: site.gr_greentreecustomercode ?? '',
+        greenTreeCustomerName: site.gr_greentreecustomername ?? '',
+    })
     const [inductionRequired, setInductionRequired] = useState(site.gr_inductionrequired ?? false)
     const [inductionRequirements, setInductionRequirements] = useState(site.gr_inductionrequirements ?? '')
     const [savedInductionState, setSavedInductionState] = useState({
@@ -130,7 +137,10 @@ export default function SiteSettingsDrawer({
     const sortedEquipment = useMemo(() => [...equipment].sort((left, right) =>
         equipmentLabel(left).localeCompare(equipmentLabel(right), undefined, { numeric: true }),
     ), [equipment])
-    const detailsDirty = name.trim() !== savedDetails.name.trim() || address.trim() !== savedDetails.address.trim()
+    const detailsDirty = name.trim() !== savedDetails.name.trim()
+        || address.trim() !== savedDetails.address.trim()
+        || greenTreeCustomerCode.trim() !== savedDetails.greenTreeCustomerCode.trim()
+        || greenTreeCustomerName.trim() !== savedDetails.greenTreeCustomerName.trim()
     const inductionDirty = inductionRequired !== savedInductionState.inductionRequired
         || inductionRequirements.trim() !== savedInductionState.inductionRequirements.trim()
     const siteChecksDirty = siteChecksEnabled !== savedSiteChecks.enabled
@@ -236,8 +246,18 @@ export default function SiteSettingsDrawer({
         setLocalError('')
         setDetailsSuccess('')
         try {
-            await onSaveDetails(normalizedName, address.trim())
-            setSavedDetails({ name: normalizedName, address: address.trim() })
+            await onSaveDetails(
+                normalizedName,
+                address.trim(),
+                greenTreeCustomerCode.trim(),
+                greenTreeCustomerName.trim(),
+            )
+            setSavedDetails({
+                name: normalizedName,
+                address: address.trim(),
+                greenTreeCustomerCode: greenTreeCustomerCode.trim(),
+                greenTreeCustomerName: greenTreeCustomerName.trim(),
+            })
             setDetailsSuccess('Site changes saved to Dataverse.')
             onDetailsComplete(normalizedName)
         } catch (caught) {
@@ -342,6 +362,16 @@ export default function SiteSettingsDrawer({
                         <div className="site-settings-fields">
                             <label>Site name<input autoFocus value={name} aria-invalid={!name.trim()} onChange={(event) => { setName(event.target.value); setDetailsSuccess(''); setLocalError('') }} /></label>
                             <label>Address<input value={address} onChange={(event) => { setAddress(event.target.value); setDetailsSuccess('') }} /></label>
+                        </div>
+                    </EditDrawerSection>
+                    <EditDrawerSection title="Default GreenTree customer">
+                        <p className="site-settings-help">
+                            Used as the default account when this Site is entered in GreenTree. This does not change the
+                            Service Operations Customer, Site, Equipment location, or any historical GreenTree Job.
+                        </p>
+                        <div className="site-settings-fields">
+                            <label>Customer code<input value={greenTreeCustomerCode} onChange={(event) => { setGreenTreeCustomerCode(event.target.value); setDetailsSuccess('') }} /></label>
+                            <label>Customer name<input value={greenTreeCustomerName} onChange={(event) => { setGreenTreeCustomerName(event.target.value); setDetailsSuccess('') }} /></label>
                         </div>
                     </EditDrawerSection>
                 </form>

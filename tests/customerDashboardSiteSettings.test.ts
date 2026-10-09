@@ -8,6 +8,7 @@ import {
 } from '../src/alpha/customers/customerDashboardViewState.ts'
 
 const dashboardSource = readFileSync(new URL('../src/alpha/customers/CustomerDashboardScreen.tsx', import.meta.url), 'utf8')
+const transferDrawerSource = readFileSync(new URL('../src/alpha/customers/EquipmentTransferDrawer.tsx', import.meta.url), 'utf8')
 const drawerSource = readFileSync(new URL('../src/alpha/customers/SiteSettingsDrawer.tsx', import.meta.url), 'utf8')
 const customerDrawerSource = readFileSync(new URL('../src/alpha/customers/CustomerDrawer.tsx', import.meta.url), 'utf8')
 const runDrawerSource = readFileSync(new URL('../src/alpha/site-checks/components/RunSiteCheckDrawer.tsx', import.meta.url), 'utf8')
@@ -15,6 +16,9 @@ const siteCheckDetailsSource = readFileSync(new URL('../src/alpha/site-checks/co
 const scheduleSettingsSource = readFileSync(new URL('../src/alpha/site-checks/components/SiteCheckScheduleSettings.tsx', import.meta.url), 'utf8')
 const searchableSelectSource = readFileSync(new URL('../src/alpha/shared/searchable-select/SearchableSelect.tsx', import.meta.url), 'utf8')
 const customerDataSource = readFileSync(new URL('../src/alpha/customers/useCustomerDashboardData.ts', import.meta.url), 'utf8')
+const sitesApiSource = readFileSync(new URL('../src/alpha/jobs/services/sitesApi.ts', import.meta.url), 'utf8')
+const mappingPlannerSource = readFileSync(new URL('../scripts/backfill-greentree-site-customers.mjs', import.meta.url), 'utf8')
+const mappingApplySource = readFileSync(new URL('../scripts/apply-greentree-site-customer-backfill.ps1', import.meta.url), 'utf8')
 
 function createStorage() {
     const values = new Map<string, string>()
@@ -53,13 +57,26 @@ test('Customer Dashboard opens and focuses the Customer search when the page mou
     assert.match(searchableSelectSource, /requestAnimationFrame\(\(\) => inputRef\.current\?\.focus\(\)\)/)
 })
 
+test('restricted Customer Dashboard uses one shared Customer picker without exposing capability text', () => {
+    assert.match(dashboardSource, /canCreateRestricted \? <CustomerRelationshipPicker[\s\S]*?id="customer-dashboard-customer"/)
+    assert.match(dashboardSource, /options=\{customerOptions\.map\(\(option\) => \(\{ id: option\.value, label: option\.label \}\)\)\}/)
+    assert.doesNotMatch(dashboardSource, /restricted-customer-create|Customer \/ Site creation enabled/)
+})
+
 test('Sites tab uses one accessible settings-icon entry point', () => {
     assert.match(dashboardSource, /<PageSettingsButton/)
     assert.match(dashboardSource, /siteSettingsTriggerRefs\.current\[site\.gr_siteid\] = element/)
     assert.match(dashboardSource, /ariaLabel=\{`Site settings for \$\{site\.gr_name\}`\}/)
     assert.doesNotMatch(dashboardSource, />\s*Bulk Add Equipment\s*<\/button>/)
     assert.doesNotMatch(dashboardSource, />\s*Edit Site\s*<\/button>/)
-    assert.doesNotMatch(dashboardSource, /Transfer Equipment|EquipmentTransferDrawer|transferSite/)
+    assert.match(dashboardSource, /<EquipmentTransferDrawer/)
+    assert.match(dashboardSource, />\s*Transfer Equipment\s*<\/button>/)
+    assert.match(transferDrawerSource, /<SearchableSelect/)
+    assert.match(transferDrawerSource, /onSearchChange=\{setSearchQuery\}/)
+})
+
+test('Customer Dashboard does not expose a direct Add Site action', () => {
+    assert.doesNotMatch(dashboardSource, />\s*Add Site\s*<\/button>/)
 })
 
 test('Site Settings restores focus to the invoking Site action when it closes', () => {
@@ -111,10 +128,28 @@ test('bulk import receives the selected Customer and Site context', () => {
 })
 
 test('details retain the existing Site workflow without the removed maintenance settings action', () => {
-    assert.match(dashboardSource, /onSaveDetails=\{\(name, address\) => updateSites/)
+    assert.match(dashboardSource, /onSaveDetails=\{\(name, address, greenTreeCustomerCode, greenTreeCustomerName\) => updateSites/)
     assert.match(drawerSource, /form="site-settings-details-form"/)
+    assert.match(drawerSource, /title="Default GreenTree customer"/)
+    assert.match(drawerSource, /does not change the[\s\S]*Service Operations Customer/)
     assert.doesNotMatch(dashboardSource, /onSaveSettings=/)
     assert.doesNotMatch(drawerSource, /requestSettingsSave|Default Maintenance Profile/)
+})
+
+test('GreenTree Site defaults stay separate from operational Customer and Site relationships', () => {
+    assert.match(dashboardSource, /<small>GreenTree account<\/small>/)
+    assert.match(dashboardSource, /site\.gr_greentreecustomername/)
+    assert.doesNotMatch(dashboardSource, /`\$\{site\.gr_greentreecustomercode\}/)
+    assert.match(dashboardSource, /'Not mapped'/)
+    assert.match(sitesApiSource, /payload\.gr_greentreecustomercode/)
+    assert.match(sitesApiSource, /payload\.gr_greentreecustomername/)
+    assert.doesNotMatch(mappingPlannerSource, /webview\.liftrucks|\/api\/01\/JCJob/)
+    assert.doesNotMatch(mappingPlannerSource, /method:\s*['"]PATCH['"]/)
+    assert.match(mappingPlannerSource, /application identity is read-only/)
+    assert.match(mappingApplySource, /if \(-not \$Apply\)/)
+    assert.match(mappingApplySource, /gr_greentreecustomercode/)
+    assert.match(mappingApplySource, /gr_greentreecustomername/)
+    assert.doesNotMatch(mappingApplySource, /gr_Customer|gr_address|gr_name'\]/)
 })
 
 test('Customer Dashboard leaves Site Check actions to the dedicated workspace', () => {

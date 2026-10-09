@@ -1,6 +1,6 @@
 const EQUIPMENT_SELECT = 'gr_equipmentid,gr_fleet,gr_alternatefleetnumbers,gr_serial,gr_make,gr_model,statecode,statuscode,gr_currenthourmeter,gr_currenthourmeterrecordeddate,gr_servicetrackingenabled,gr_registrationnumber,gr_compliancestatus,gr_wofrequired,gr_currentwofexpiry,gr_lastwofcompleted,gr_regoexpiry,gr_powertype,gr_serviceprogramme,gr_maintenanceprofile,gr_ownershiptype,gr_sitecheckavailability,gr_customaenabled,gr_custombenabled,gr_customcenabled,gr_customaintervaldays,gr_custombintervaldays,gr_customcintervaldays'
-const EQUIPMENT_EXPAND = 'gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name))'
-const SITE_SELECT = 'gr_siteid,gr_name,gr_address,gr_defaultmaintenanceprofile,gr_inductionrequired,gr_inductionrequirements,gr_geocodelatitude,gr_geocodelongitude,gr_geocodesourceaddress,gr_geocodeformattedaddress,gr_geocoderesolvedon,_gr_customer_value'
+const EQUIPMENT_EXPAND = 'gr_Site($select=gr_siteid,gr_name,gr_address,gr_greentreecustomercode,gr_greentreecustomername;$expand=gr_Customer($select=gr_customerid,gr_name))'
+const SITE_SELECT = 'gr_siteid,gr_name,gr_address,gr_defaultmaintenanceprofile,gr_inductionrequired,gr_inductionrequirements,gr_greentreecustomercode,gr_greentreecustomername,gr_geocodelatitude,gr_geocodelongitude,gr_geocodesourceaddress,gr_geocodeformattedaddress,gr_geocoderesolvedon,_gr_customer_value'
 const SITE_EXPAND = 'gr_Customer($select=gr_customerid,gr_name)'
 const SITE_CONTACT_EXPAND = 'gr_Site($select=gr_siteid,gr_name),gr_Contact($select=gr_contactid,gr_name,gr_phone,gr_email)'
 

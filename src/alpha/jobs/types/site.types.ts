@@ -12,6 +12,8 @@ export type Site = {
     gr_defaultmaintenanceprofile?: MaintenanceProfile | null
     gr_inductionrequired?: boolean | null
     gr_inductionrequirements?: string | null
+    gr_greentreecustomercode?: string | null
+    gr_greentreecustomername?: string | null
     gr_Customer?: {
         gr_customerid: string
         gr_name: string
@@ -33,4 +35,6 @@ export type SiteUpdateInput = {
     defaultMaintenanceProfile?: MaintenanceProfile | null
     inductionRequired?: boolean | null
     inductionRequirements?: string | null
+    greenTreeCustomerCode?: string | null
+    greenTreeCustomerName?: string | null
 }

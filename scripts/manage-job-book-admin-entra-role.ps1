@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Verify', 'ProvisionRole', 'SwitchPilot')]
+    [ValidateSet('Verify', 'ProvisionRole', 'SwitchPilot', 'SwitchToOfficeAdmin')]
     [string]$Mode = 'Verify',
     [string]$TenantId = 'a348f38c-33d0-4ce9-a0df-6a66cc0562a1',
     [string]$ApplicationClientId = '9e9edbea-dfee-4995-aa1f-e9d10d16e093',
@@ -145,4 +145,36 @@ if ($Mode -eq 'SwitchPilot') {
     }
     Write-AssignmentSummary $after $applicationRoles "Application assignments after $Mode"
     Write-Output "Verified: $PilotUpn switched from Office Admin to Job Book Admin; unrelated application assignments remain."
+}
+
+if ($Mode -eq 'SwitchToOfficeAdmin') {
+    Require ($bookRoles.Count -eq 1) 'The Job Book Admin application role must exist before switching the pilot.'
+    $officeAssignments = @($assignments | Where-Object { [string]$_.appRoleId -eq [string]$officeRoles[0].id })
+    $bookAssignments = @($assignments | Where-Object { [string]$_.appRoleId -eq [string]$bookRoles[0].id })
+    Require ($bookAssignments.Count -eq 1) "Refusing change because $PilotUpn does not have exactly one Job Book Admin assignment."
+    Require ($officeAssignments.Count -le 1) "Duplicate Office Admin assignments found for $PilotUpn."
+
+    if ($officeAssignments.Count -eq 0) {
+        $body = @{
+            principalId = [string]$user.id
+            resourceId = $EnterpriseApplicationId
+            appRoleId = [string]$officeRoles[0].id
+        } | ConvertTo-Json
+        Invoke-MgGraphRequest -Method POST -Uri "https://graph.microsoft.com/v1.0/users/$($user.id)/appRoleAssignments" -Body $body -ContentType 'application/json' | Out-Null
+    }
+
+    $withReplacement = @(Get-Assignments ([string]$user.id))
+    Require (@($withReplacement | Where-Object { [string]$_.appRoleId -eq [string]$officeRoles[0].id }).Count -eq 1) 'Office Admin assignment could not be verified before removing Job Book Admin.'
+    Require (@($withReplacement | Where-Object { [string]$_.appRoleId -eq [string]$bookRoles[0].id }).Count -eq 1) 'Job Book Admin disappeared before the verified replacement was ready.'
+
+    Invoke-MgGraphRequest -Method DELETE -Uri "https://graph.microsoft.com/v1.0/users/$($user.id)/appRoleAssignments/$($bookAssignments[0].id)" | Out-Null
+    $after = @(Get-Assignments ([string]$user.id))
+    Require (@($after | Where-Object { [string]$_.appRoleId -eq [string]$officeRoles[0].id }).Count -eq 1) 'Office Admin assignment is missing after the switch.'
+    Require (@($after | Where-Object { [string]$_.appRoleId -eq [string]$bookRoles[0].id }).Count -eq 0) 'Job Book Admin assignment is still present after the switch.'
+    Require ($after.Count -eq $assignments.Count) 'Unexpected application-role count after the switch; stop and inspect the account.'
+    foreach ($assignment in @($assignments | Where-Object { [string]$_.id -ne [string]$bookAssignments[0].id })) {
+        Require (@($after | Where-Object { [string]$_.id -eq [string]$assignment.id }).Count -eq 1) 'An unrelated application-role assignment was not preserved.'
+    }
+    Write-AssignmentSummary $after $applicationRoles "Application assignments after $Mode"
+    Write-Output "Verified: $PilotUpn switched from Job Book Admin to Office Admin; unrelated application assignments remain."
 }

@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Elevated Pubudu from Job Book Admin back to Office Admin in both Entra and Dataverse using
+  replacement-first, exact before/after verification. Unrelated Dataverse roles and the existing
+  legacy JobBookOnly application assignment were preserved.
+- Added the Site's **GT Customer** to the Equipment register and search. Replaced its Customer filter
+  with the shared searchable selector backed by a debounced, abortable, eight-result Dataverse
+  search rather than rendering every Customer. Site filtering depends on first selecting a Customer,
+  and the redundant State column and selector were removed while retaining the Equipment drawer's
+  current-state indicator.
+- Renamed the canonical Equipment drawer's **Primary Fleet Number** label to **GT Equipment No.**
+  without changing the underlying Dataverse field, stored values, or alternate-number behaviour.
+- Removed the direct Customer Dashboard **Add Site** action for now. Restored the canonical
+  Site-level Equipment transfer drawer and connected its shared searchable selector to bounded
+  Dataverse search, allowing existing Equipment from outside the selected Customer to be assigned
+  to the destination Site without loading the full fleet or rewriting historical Jobs.
+- Added an optional Site-level default GreenTree customer code/name, editable in the existing Site
+  Settings drawer without changing operational Customer/Site/Equipment relationships. Added
+  idempotent schema provisioning and an audit-first reviewed backfill; historical GreenTree Jobs and
+  GreenTree itself remain unchanged.
 - Added ad-hoc **Other supplier** assignment to the shared Job Book and Service Coordination Job
   drawers. Supplier details are stored separately from Staff, are mutually exclusive with the
   internal mechanic lookup, remain searchable/displayable, and do not create staff workload,

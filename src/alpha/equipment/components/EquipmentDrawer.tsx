@@ -801,7 +801,7 @@ export default function EquipmentDrawer(props: Props) {
                     {(isCreate || activeTab === 'details') && <EditDrawerSection title={isCreate ? 'Equipment details' : 'Current master record'} meta={!isCreate && <span className={equipment?.statecode === 0 ? 'equipment-state active' : 'equipment-state'}>{equipment?.statecode === 0 ? 'Active' : 'Inactive'}</span>}>
                         {!isCreate && <p className="equipment-state-note">State is read-only until Equipment status reason values are confirmed.</p>}
                         <div className="equipment-form-grid">
-                            <label>Primary Fleet Number<input value={form.fleet} onChange={(event) => updateField('fleet', event.target.value)} /></label>
+                            <label>GT Equipment No.<input value={form.fleet} onChange={(event) => updateField('fleet', event.target.value)} /></label>
                             <label>Serial number<input value={form.serial} onChange={(event) => updateField('serial', event.target.value)} /></label>
                             <label className="equipment-alternate-fleet-field">
                                 Alternate Fleet Numbers
@@ -812,7 +812,7 @@ export default function EquipmentDrawer(props: Props) {
                                     onChange={(event) => updateField('alternateFleetNumbers', event.target.value)}
                                 />
                                 <small>
-                                    Searchable former, customer, or Site-specific codes. Changing the primary Fleet Number automatically keeps its previous value here.
+                                    Searchable former, customer, or Site-specific codes. Changing the GT Equipment No. automatically keeps its previous value here.
                                     {parseAlternateFleetNumbers(form.alternateFleetNumbers).length > 0 && ` ${parseAlternateFleetNumbers(form.alternateFleetNumbers).length} recorded.`}
                                 </small>
                             </label>

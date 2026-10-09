@@ -63,7 +63,7 @@ assembly/source hashes in the package manifest.
 ## Role and assignment readiness
 
 The review-only assignment plan preserves the agreed eleven-account roster: one Full, two
-Coordinator, two Office Admin and six Job Book Admin users. Eight accounts still require Dataverse admission and
+Coordinator, three Office Admin and five Job Book Admin users. Eight accounts still require Dataverse admission and
 licensing review. Existing unrelated assignments are explicitly preserved. Bruce retains current
 FullAccess until the added Coordinator path passes with his real account; old access is removed only
 after the replacement succeeds.
@@ -76,15 +76,17 @@ assigned for the restricted Service Operations Manager test. Both temporary addi
 with exact before/after verification on 7 October 2026; the Office Admin assignments and unrelated
 roles were preserved. On 9 October 2026 Pubudu was switched from Office Admin to Job Book Admin in
 both Entra and Dataverse; unrelated roles and the legacy JobBookOnly app assignment were preserved.
-The shared backend reviewer allowlist still requires a Contributor to remove Pubudu and verify denial.
-Repeat the Job Book Admin denial tests before production sign-off. The
+Later that day, the owner approved returning Pubudu to Office Admin. The Office Admin replacement was
+verified before Job Book Admin was removed in both systems; unrelated roles and JobBookOnly were
+again preserved. The shared backend reviewer allowlist already includes Pubudu and agrees with this
+final Office Admin state. The
 cutover requires a fresh assignment export, one workflow role at a time, preservation of
 unrelated platform roles and explicit approval. Pubudu performs the account sign-in and MFA; no
 credential is collected.
 
 The approved live read-only admission recheck on 6 October 2026 found George, Bruce and Pubudu present.
 George currently holds Basic User, Site Check Checklist Administrator and System Administrator;
-Bruce holds Service Operations. Pubudu now holds Service Operations - Job Book Admin. Andy, Jess, Nargiza, Martin, Lance, Ranjani, Ashneel and Kaizer are
+Bruce holds Service Operations. Pubudu now holds Service Operations - Office Admin. Andy, Jess, Nargiza, Martin, Lance, Ranjani, Ashneel and Kaizer are
 still absent from Dataverse. No intended account had a returned team-derived role in this audit.
 
 The secure plugin configuration requires the exact business-unit Dataverse role IDs for Full,

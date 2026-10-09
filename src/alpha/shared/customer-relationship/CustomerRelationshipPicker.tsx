@@ -13,6 +13,7 @@ export type CustomerRelationshipOption = {
 
 type Props = {
     id: string
+    autoFocus?: boolean
     required?: boolean
     error?: string
     query: string
@@ -34,6 +35,7 @@ type Props = {
 
 export default function CustomerRelationshipPicker({
     id,
+    autoFocus = false,
     required = false,
     error,
     query,
@@ -102,6 +104,7 @@ export default function CustomerRelationshipPicker({
     return <div className="customer-relationship-picker">
         <SearchableSelect
             id={id}
+            autoFocus={autoFocus}
             label="Customer"
             required={required}
             error={error}

@@ -48,7 +48,11 @@ empty, and populated states. Closing the drawer clears those focused rows and in
 request so a late Dataverse response cannot appear against a subsequently opened Equipment record.
 The Equipment Manager register does not wait for complete Customer, Site, or Equipment Service Plan
 directories. Customer and Site filters are derived from the Site/Customer relationships already
-expanded on the shared Equipment projection. Maintenance summaries use a shared query for only the
+expanded on the shared Equipment projection. The Customer filter uses the shared searchable selector
+with a 250 ms debounce, cancellation, a two-character minimum and at most eight server results;
+Site filtering remains disabled until a Customer is selected and then offers only that Customer's
+Sites. The Site's optional GT Customer is included in the projection, register, sorting, and free-text
+search without changing the operational Customer relationship. Maintenance summaries use a shared query for only the
 visible page; choosing Data Status sorting intentionally expands that query to the filtered result so
 the sort remains authoritative. A failed maintenance-summary query is labelled Unavailable rather
 than being mistaken for Not Configured. Create/edit drawers use abortable, eight-result Customer

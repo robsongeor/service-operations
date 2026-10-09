@@ -5,6 +5,7 @@ import EquipmentDrawer from './components/EquipmentDrawer'
 import EquipmentTable from './components/EquipmentTable'
 import { useEquipmentManager } from './hooks/useEquipmentManager'
 import type { Equipment } from '../jobs/types/equipment.types'
+import type { Customer } from '../jobs/types/customer.types'
 import type { EquipmentSortKey, SortDirection } from './types/equipmentManager.types'
 import './EquipmentScreen.css'
 import { compareEquipmentDataQuality } from './dataQuality/equipmentDataQuality'
@@ -29,8 +30,7 @@ import {
     operationalIdFingerprint,
 } from '../shared/data/operationalCollectionKeys'
 import { useOperationalScreenReady } from '../shared/data/OperationalScreenPerformanceContext'
-
-type StateFilter = 'all' | 'active' | 'inactive'
+import SearchableSelect from '../shared/searchable-select/SearchableSelect'
 
 const text = (value?: string | null) => value?.trim().toLocaleLowerCase() ?? ''
 
@@ -75,8 +75,11 @@ export default function EquipmentScreen({ readOnly = false }: { readOnly?: boole
     const [isCreatingEquipment, setIsCreatingEquipment] = useState(false)
     const [search, setSearch] = useState('')
     const [customerId, setCustomerId] = useState('')
+    const [selectedFilterCustomer, setSelectedFilterCustomer] = useState<Customer | null>(null)
+    const [customerFilterQuery, setCustomerFilterQuery] = useState('')
+    const [customerFilterResults, setCustomerFilterResults] = useState<Customer[]>([])
+    const [customerFilterSearchStatus, setCustomerFilterSearchStatus] = useState<'idle' | 'loading' | 'error'>('idle')
     const [siteId, setSiteId] = useState('')
-    const [stateFilter, setStateFilter] = useState<StateFilter>('all')
     const [sortKey, setSortKey] = useState<EquipmentSortKey>('fleet')
     const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
     const [settingsOpen, setSettingsOpen] = useState(false)
@@ -111,15 +114,37 @@ export default function EquipmentScreen({ readOnly = false }: { readOnly?: boole
         return () => window.clearTimeout(timer)
     }, [editingEquipment, equipment, isLoading, openEquipment, canOpenEditor, searchParams, setSearchParams])
 
-    const filterCustomers = useMemo(() => {
-        const byId = new Map<string, NonNullable<Equipment['gr_Site']>['gr_Customer']>()
-        equipment.forEach((item) => {
-            const customer = item.gr_Site?.gr_Customer
-            if (customer) byId.set(customer.gr_customerid.toLowerCase(), customer)
-        })
-        return [...byId.values()].filter((customer): customer is NonNullable<typeof customer> => Boolean(customer))
-            .sort((a, b) => a.gr_name.localeCompare(b.gr_name))
-    }, [equipment])
+    useEffect(() => {
+        const query = customerFilterQuery.trim()
+        if (query.length < 2) {
+            setCustomerFilterResults([])
+            setCustomerFilterSearchStatus('idle')
+            return
+        }
+        const controller = new AbortController()
+        const timer = window.setTimeout(() => {
+            setCustomerFilterSearchStatus('loading')
+            void searchEquipmentCustomers(query, controller.signal)
+                .then((rows) => {
+                    setCustomerFilterResults(rows.slice(0, 8))
+                    setCustomerFilterSearchStatus('idle')
+                })
+                .catch((error) => {
+                    if ((error as { name?: string }).name !== 'AbortError') setCustomerFilterSearchStatus('error')
+                })
+        }, 250)
+        return () => {
+            window.clearTimeout(timer)
+            controller.abort()
+        }
+    }, [customerFilterQuery, searchEquipmentCustomers])
+
+    const customerFilterOptions = useMemo(() => {
+        const byId = new Map<string, Customer>()
+        if (selectedFilterCustomer) byId.set(selectedFilterCustomer.gr_customerid.toLowerCase(), selectedFilterCustomer)
+        customerFilterResults.forEach((customer) => byId.set(customer.gr_customerid.toLowerCase(), customer))
+        return [...byId.values()].map((customer) => ({ value: customer.gr_customerid, label: customer.gr_name }))
+    }, [customerFilterResults, selectedFilterCustomer])
     const filterSites = useMemo(() => {
         const byId = new Map<string, NonNullable<Equipment['gr_Site']>>()
         equipment.forEach((item) => {
@@ -127,12 +152,15 @@ export default function EquipmentScreen({ readOnly = false }: { readOnly?: boole
         })
         return [...byId.values()].sort((a, b) => a.gr_name.localeCompare(b.gr_name))
     }, [equipment])
-    const siteOptions = filterSites.filter((site) => !customerId || site.gr_Customer?.gr_customerid === customerId)
+    const siteOptions = customerId
+        ? filterSites.filter((site) => site.gr_Customer?.gr_customerid.toLowerCase() === customerId.toLowerCase())
+        : []
     const preliminaryRows = useMemo(() => {
         const query = search.trim().toLocaleLowerCase()
         const sortValue = (item: Equipment) => {
             if (sortKey === 'fleet') return item.gr_fleet
             if (sortKey === 'customer') return item.gr_Site?.gr_Customer?.gr_name
+            if (sortKey === 'gtCustomer') return item.gr_Site?.gr_greentreecustomername
             if (sortKey === 'site') return item.gr_Site?.gr_name
             if (sortKey === 'make') return item.gr_make
             if (sortKey === 'model') return item.gr_model
@@ -142,20 +170,19 @@ export default function EquipmentScreen({ readOnly = false }: { readOnly?: boole
         return equipment.filter((item) => {
             if (customerId && item.gr_Site?.gr_Customer?.gr_customerid !== customerId) return false
             if (siteId && item.gr_Site?.gr_siteid !== siteId) return false
-            if (stateFilter === 'active' && item.statecode !== 0) return false
-            if (stateFilter === 'inactive' && item.statecode === 0) return false
             return !query || [
                 ...equipmentIdentifierSearchValues(item),
                 item.gr_make,
                 item.gr_model,
                 item.gr_Site?.gr_name,
                 item.gr_Site?.gr_Customer?.gr_name,
+                item.gr_Site?.gr_greentreecustomername,
             ].some((value) => text(value).includes(query))
         }).sort((a, b) => {
             if (sortKey === 'dataStatus') return text(a.gr_fleet).localeCompare(text(b.gr_fleet), undefined, { numeric: true })
             return text(sortValue(a)).localeCompare(text(sortValue(b)), undefined, { numeric: true }) * (sortDirection === 'asc' ? 1 : -1)
         })
-    }, [customerId, equipment, search, siteId, sortDirection, sortKey, stateFilter])
+    }, [customerId, equipment, search, siteId, sortDirection, sortKey])
 
     const preliminaryPage = useMemo(() => paginateEquipmentRows(preliminaryRows, page), [page, preliminaryRows])
     const servicePlanEquipmentIds = useMemo(() => (
@@ -251,10 +278,27 @@ export default function EquipmentScreen({ readOnly = false }: { readOnly?: boole
                 <div className="equipment-data-state error"><div><strong>Equipment could not be loaded.</strong><p>{loadError}</p></div><button type="button" onClick={() => void reload()}>Try again</button></div>
             ) : <section className="equipment-list-card">
                 <div className="equipment-toolbar">
-                    <label className="equipment-search"><span className="equipment-visually-hidden">Search equipment</span><input type="search" placeholder="Search primary or alternate fleet, serial, make, model, Site or Customer" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1) }} /></label>
-                    <label>Customer<select value={customerId} onChange={(event) => { const next = event.target.value; setCustomerId(next); setPage(1); if (siteId && !filterSites.some((site) => site.gr_siteid === siteId && (!next || site.gr_Customer?.gr_customerid === next))) setSiteId('') }}><option value="">All Customers</option>{filterCustomers.map((customer) => <option key={customer.gr_customerid} value={customer.gr_customerid}>{customer.gr_name}</option>)}</select></label>
-                    <label>Site<select value={siteId} onChange={(event) => { setSiteId(event.target.value); setPage(1) }}><option value="">All Sites</option>{siteOptions.map((site) => <option key={site.gr_siteid} value={site.gr_siteid}>{site.gr_name || 'Unnamed Site'}</option>)}</select></label>
-                    <label>State<select value={stateFilter} onChange={(event) => { setStateFilter(event.target.value as StateFilter); setPage(1) }}><option value="all">All states</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
+                    <label className="equipment-search"><span className="equipment-visually-hidden">Search equipment</span><input type="search" placeholder="Search equipment number, serial, make, model, Site, Customer or GT Customer" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1) }} /></label>
+                    <SearchableSelect
+                        id="equipment-customer-filter"
+                        label="Customer"
+                        value={customerId}
+                        options={customerFilterOptions}
+                        onChange={(nextCustomerId) => {
+                            setSelectedFilterCustomer(customerFilterResults.find((customer) => customer.gr_customerid === nextCustomerId) ?? null)
+                            setCustomerId(nextCustomerId)
+                            setSiteId('')
+                            setPage(1)
+                        }}
+                        placeholder="All Customers"
+                        searchPlaceholder="Search customers"
+                        emptyLabel={customerFilterQuery.trim().length < 2 ? 'Enter at least 2 characters' : 'No matching Customers'}
+                        resultLimit={8}
+                        onSearchChange={setCustomerFilterQuery}
+                        isSearching={customerFilterSearchStatus === 'loading'}
+                        searchError={customerFilterSearchStatus === 'error' ? 'Customer search is temporarily unavailable.' : ''}
+                    />
+                    <label>Site<select disabled={!customerId} value={siteId} onChange={(event) => { setSiteId(event.target.value); setPage(1) }}><option value="">{customerId ? 'All Sites' : 'Select a Customer first'}</option>{siteOptions.map((site) => <option key={site.gr_siteid} value={site.gr_siteid}>{site.gr_name || 'Unnamed Site'}</option>)}</select></label>
                 </div>
                 <div className="equipment-results-count">Showing {rows.length ? paged.start + 1 : 0}–{paged.end} of {rows.length}{rows.length !== equipment.length ? ` filtered (${equipment.length} total)` : ''}</div>
                 {maintenanceSummariesAllowed && servicePlansError && <div className="equipment-data-state error" role="alert"><div><strong>Maintenance summaries are temporarily unavailable.</strong><p>The Equipment list remains available.</p></div><button type="button" onClick={() => void servicePlanQuery.refetch()}>Try again</button></div>}

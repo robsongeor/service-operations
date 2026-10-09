@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { Equipment } from '../jobs/types/equipment.types'
 import { equipmentIdentifierSearchValues } from '../equipment/identifiers/alternateFleetNumbers'
 import type { Customer } from '../jobs/types/customer.types'
@@ -18,6 +18,7 @@ type Props = {
     site: Site
     equipment: Equipment[]
     busy: boolean
+    onSearchEquipment?: (query: string, signal?: AbortSignal) => Promise<Equipment[]>
     onTransfer: (equipmentIds: string[], destinationSiteId: string, adoptDestinationProfile: boolean) => Promise<TransferResult>
     onComplete: (count: number) => void
     onClose: () => void
@@ -26,20 +27,56 @@ type Props = {
 const normalize = (value?: string | null) => value?.trim().toLowerCase() ?? ''
 const equipmentLabel = (item: Equipment) => item.gr_fleet || item.gr_serial || 'Unnamed equipment'
 
-export default function EquipmentTransferDrawer({ customer, site, equipment, busy, onTransfer, onComplete, onClose }: Props) {
+export default function EquipmentTransferDrawer({ customer, site, equipment, busy, onSearchEquipment, onTransfer, onComplete, onClose }: Props) {
     const [selectedIds, setSelectedIds] = useState<string[]>([])
     const [confirming, setConfirming] = useState(false)
     const [failures, setFailures] = useState<Array<{ equipmentId: string; message: string }>>([])
     const [transferredCount, setTransferredCount] = useState(0)
     const [submitError, setSubmitError] = useState('')
     const [adoptDestinationProfile, setAdoptDestinationProfile] = useState(site.gr_defaultmaintenanceprofile != null)
+    const [searchQuery, setSearchQuery] = useState('')
+    const [remoteEquipment, setRemoteEquipment] = useState<Equipment[]>([])
+    const [searchStatus, setSearchStatus] = useState<'idle' | 'loading' | 'error'>('idle')
 
-    const candidates = useMemo(() => equipment
+    useEffect(() => {
+        if (!onSearchEquipment || searchQuery.trim().length < 2) {
+            setSearchStatus('idle')
+            return
+        }
+        const controller = new AbortController()
+        const timer = window.setTimeout(() => {
+            setSearchStatus('loading')
+            void onSearchEquipment(searchQuery.trim(), controller.signal)
+                .then((rows) => {
+                    setRemoteEquipment((current) => {
+                        const merged = new Map(current.map((item) => [item.gr_equipmentid, item]))
+                        rows.forEach((item) => merged.set(item.gr_equipmentid, item))
+                        return [...merged.values()]
+                    })
+                    setSearchStatus('idle')
+                })
+                .catch((error) => {
+                    if ((error as { name?: string }).name !== 'AbortError') setSearchStatus('error')
+                })
+        }, 250)
+        return () => {
+            window.clearTimeout(timer)
+            controller.abort()
+        }
+    }, [onSearchEquipment, searchQuery])
+
+    const allEquipment = useMemo(() => {
+        const merged = new Map(equipment.map((item) => [item.gr_equipmentid, item]))
+        remoteEquipment.forEach((item) => merged.set(item.gr_equipmentid, item))
+        return [...merged.values()]
+    }, [equipment, remoteEquipment])
+
+    const candidates = useMemo(() => allEquipment
         .filter((item) => item.gr_Site?.gr_siteid !== site.gr_siteid)
         .sort((left, right) => equipmentLabel(left).localeCompare(equipmentLabel(right), undefined, { numeric: true })),
-    [equipment, site.gr_siteid])
+    [allEquipment, site.gr_siteid])
     const selected = selectedIds
-        .map((equipmentId) => equipment.find((item) => item.gr_equipmentid === equipmentId))
+        .map((equipmentId) => allEquipment.find((item) => item.gr_equipmentid === equipmentId))
         .filter((item): item is Equipment => Boolean(item))
 
     const changeSelection = (nextIds: string[]) => {
@@ -92,7 +129,7 @@ export default function EquipmentTransferDrawer({ customer, site, equipment, bus
             {failures.length > 0 && <div className="equipment-transfer-failures" role="alert">
                 <strong>{failures.length} transfer{failures.length === 1 ? '' : 's'} failed</strong>
                 <ul>{failures.map((failure) => {
-                    const item = equipment.find((record) => record.gr_equipmentid === failure.equipmentId)
+                    const item = allEquipment.find((record) => record.gr_equipmentid === failure.equipmentId)
                     return <li key={failure.equipmentId}><b>{item ? equipmentLabel(item) : failure.equipmentId}</b><span>{failure.message}</span></li>
                 })}</ul>
             </div>}
@@ -108,6 +145,9 @@ export default function EquipmentTransferDrawer({ customer, site, equipment, bus
                 placeholder="Select Equipment"
                 searchPlaceholder="Search fleet, serial, make or model…"
                 emptyLabel="No other Equipment matches this search"
+                onSearchChange={setSearchQuery}
+                isSearching={searchStatus === 'loading'}
+                searchError={searchStatus === 'error' ? 'Equipment search is temporarily unavailable.' : ''}
                 options={candidates.map((item) => ({
                     value: item.gr_equipmentid,
                     label: [equipmentLabel(item), item.gr_make, item.gr_model].filter(Boolean).join(' · '),

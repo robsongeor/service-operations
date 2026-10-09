@@ -6,7 +6,7 @@ import { buildCustomerSitesUrl } from './jobRelationshipLookupUrls.ts'
 const DATAVERSE_URL = import.meta.env?.VITE_DATAVERSE_URL ?? ''
 
 export async function fetchLocationSite(accessToken: string, siteId: string): Promise<Site> {
-    const result = await fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_sites(${siteId})?$select=gr_siteid,gr_name,gr_address&$expand=gr_Customer($select=gr_customerid,gr_name)`, {
+    const result = await fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_sites(${siteId})?$select=gr_siteid,gr_name,gr_address,gr_greentreecustomercode,gr_greentreecustomername&$expand=gr_Customer($select=gr_customerid,gr_name)`, {
         cache: 'no-store',
         headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
     })
@@ -27,7 +27,7 @@ async function dataverseErrorMessage(response: Response, fallback: string) {
 
 export async function fetchSites(accessToken: string): Promise<Site[]> {
     return fetchAllDataversePages<Site>(
-        `${DATAVERSE_URL}/api/data/v9.2/gr_sites?$select=gr_siteid,gr_name,gr_address,gr_defaultmaintenanceprofile,gr_inductionrequired,gr_inductionrequirements,gr_geocodelatitude,gr_geocodelongitude,gr_geocodesourceaddress,gr_geocodeformattedaddress,gr_geocoderesolvedon,_gr_customer_value&$expand=gr_Customer($select=gr_customerid,gr_name)`,
+        `${DATAVERSE_URL}/api/data/v9.2/gr_sites?$select=gr_siteid,gr_name,gr_address,gr_defaultmaintenanceprofile,gr_inductionrequired,gr_inductionrequirements,gr_greentreecustomercode,gr_greentreecustomername,gr_geocodelatitude,gr_geocodelongitude,gr_geocodesourceaddress,gr_geocodeformattedaddress,gr_geocoderesolvedon,_gr_customer_value&$expand=gr_Customer($select=gr_customerid,gr_name)`,
         {
             headers: {
                 Authorization: `Bearer ${accessToken}`,
@@ -128,6 +128,14 @@ export async function updateSite(
     if (site.inductionRequirements !== undefined) {
         payload.gr_inductionrequirements = site.inductionRequirements == null || !site.inductionRequirements.trim().length
             ? null : site.inductionRequirements.trim()
+    }
+    if (site.greenTreeCustomerCode !== undefined) {
+        payload.gr_greentreecustomercode = site.greenTreeCustomerCode == null || !site.greenTreeCustomerCode.trim().length
+            ? null : site.greenTreeCustomerCode.trim()
+    }
+    if (site.greenTreeCustomerName !== undefined) {
+        payload.gr_greentreecustomername = site.greenTreeCustomerName == null || !site.greenTreeCustomerName.trim().length
+            ? null : site.greenTreeCustomerName.trim()
     }
     const result = await fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_sites(${siteId})`, {
         method: 'PATCH',

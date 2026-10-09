@@ -22,6 +22,13 @@
     font: inherit;
 }
 
+.site-settings-help {
+    margin: 0 0 12px;
+    color: #5f6d66;
+    font-size: .78rem;
+    line-height: 1.5;
+}
+
 .site-settings-bulk-launch {
     padding: 8px 0;
 }

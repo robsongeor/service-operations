@@ -37,6 +37,8 @@ export type Equipment = {
         gr_siteid: string
         gr_name: string
         gr_address?: string
+        gr_greentreecustomercode?: string | null
+        gr_greentreecustomername?: string | null
         gr_Customer?: {
             gr_customerid: string
             gr_name: string

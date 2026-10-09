@@ -378,6 +378,12 @@ export function useEquipmentManager(options: UseEquipmentManagerOptions = {}) {
                         ...(input.inductionRequirements !== undefined
                             ? { gr_inductionrequirements: input.inductionRequirements }
                             : {}),
+                        ...(input.greenTreeCustomerCode !== undefined
+                            ? { gr_greentreecustomercode: input.greenTreeCustomerCode?.trim() || null }
+                            : {}),
+                        ...(input.greenTreeCustomerName !== undefined
+                            ? { gr_greentreecustomername: input.greenTreeCustomerName?.trim() || null }
+                            : {}),
                     }
                     : site
             }))
@@ -391,9 +397,10 @@ export function useEquipmentManager(options: UseEquipmentManagerOptions = {}) {
     }
 
     const transferEquipment = async (equipmentIds: string[], destinationSiteId: string, adoptDestinationProfile = false) => {
-        const uniqueIds = [...new Set(equipmentIds)].filter((equipmentId) =>
-            equipment.some((item) => item.gr_equipmentid === equipmentId && item.gr_Site?.gr_siteid !== destinationSiteId),
-        )
+        const uniqueIds = [...new Set(equipmentIds)].filter((equipmentId) => {
+            const localRecord = equipment.find((item) => item.gr_equipmentid === equipmentId)
+            return !localRecord || localRecord.gr_Site?.gr_siteid !== destinationSiteId
+        })
         if (uniqueIds.length === 0) return { succeeded: [] as string[], failures: [] as Array<{ equipmentId: string; message: string }> }
 
         setIsSaving(true)
@@ -433,6 +440,7 @@ export function useEquipmentManager(options: UseEquipmentManagerOptions = {}) {
                             : {}),
                     } : item,
                 ))
+                await Promise.resolve(onScopedDataChangedRef.current?.()).catch(() => undefined)
             }
             return { succeeded, failures }
         } finally {

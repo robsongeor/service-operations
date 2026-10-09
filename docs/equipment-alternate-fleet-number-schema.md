@@ -6,6 +6,9 @@ Equipment retains one primary Fleet Number in `gr_fleet` while also recording id
 the physical machine, by a Customer or Site, or by an earlier ownership arrangement. Alternate
 identifiers improve lookup without changing the current primary/Greentree Fleet Number.
 
+The canonical Equipment drawer labels `gr_fleet` as **GT Equipment No.** so users can distinguish
+the GreenTree-facing identifier from searchable former, Customer, or Site-specific numbers.
+
 ## Equipment column
 
 | Display name | Logical name | Type | Required | Purpose |

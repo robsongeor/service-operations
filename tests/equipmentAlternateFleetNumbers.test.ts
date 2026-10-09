@@ -50,6 +50,8 @@ test('Equipment projections and canonical editor include the alternate Fleet Num
     assert.match(jobBookApi, /gr_fleet,gr_alternatefleetnumbers,gr_serial/)
     assert.match(managerApi, /gr_alternatefleetnumbers: normalized\.alternateFleetNumbers \|\| null/)
     assert.match(drawer, /Alternate Fleet Numbers/)
+    assert.match(drawer, /GT Equipment No\./)
+    assert.doesNotMatch(drawer, />Primary Fleet Number</)
     assert.match(drawer, /preservePreviousFleetNumber/)
 })
 
