@@ -7,14 +7,11 @@ function dataverseOrigin() {
     }
 }
 
-async function getDataverseApplicationToken(options = {}) {
-    const tenantId = (process.env.DATAVERSE_TENANT_ID || '').trim()
-    const clientId = (process.env.DATAVERSE_CLIENT_ID || '').trim()
-    const clientSecret = (process.env.DATAVERSE_CLIENT_SECRET || '').trim()
+async function acquireDataverseApplicationToken({ tenantId, clientId, clientSecret, fetchImpl = fetch }) {
     const origin = dataverseOrigin()
     if (!tenantId || !clientId || !clientSecret || !origin) throw new Error('Server identity is unavailable.')
 
-    const response = await (options.fetchImpl || fetch)(
+    const response = await fetchImpl(
         `https://login.microsoftonline.com/${encodeURIComponent(tenantId)}/oauth2/v2.0/token`,
         {
             method: 'POST',
@@ -33,4 +30,22 @@ async function getDataverseApplicationToken(options = {}) {
     return body.access_token
 }
 
-module.exports = { dataverseOrigin, getDataverseApplicationToken }
+async function getDataverseApplicationToken(options = {}) {
+    return acquireDataverseApplicationToken({
+        tenantId: (process.env.DATAVERSE_TENANT_ID || '').trim(),
+        clientId: (process.env.DATAVERSE_CLIENT_ID || '').trim(),
+        clientSecret: (process.env.DATAVERSE_CLIENT_SECRET || '').trim(),
+        fetchImpl: options.fetchImpl,
+    })
+}
+
+async function getGreenTreeDataverseApplicationToken(options = {}) {
+    return acquireDataverseApplicationToken({
+        tenantId: (process.env.GREENTREE_DATAVERSE_TENANT_ID || '').trim(),
+        clientId: (process.env.GREENTREE_DATAVERSE_CLIENT_ID || '').trim(),
+        clientSecret: (process.env.GREENTREE_DATAVERSE_CLIENT_SECRET || '').trim(),
+        fetchImpl: options.fetchImpl,
+    })
+}
+
+module.exports = { dataverseOrigin, getDataverseApplicationToken, getGreenTreeDataverseApplicationToken }

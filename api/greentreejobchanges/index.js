@@ -2,7 +2,7 @@ const { createHash, timingSafeEqual } = require('node:crypto')
 const { fetchGreenTreeJobsModifiedSince } = require('../services/greenTreeJobs')
 const { reconcileGreenTreeJobs } = require('../services/greenTreeJobReconciliation')
 const { getGreenTreeSyncCheckpointStore } = require('../services/greenTreeSyncCheckpoint')
-const { getDataverseApplicationToken } = require('../services/dataverseApplicationToken')
+const { getGreenTreeDataverseApplicationToken } = require('../services/dataverseApplicationToken')
 
 const MAX_LOOKBACK_MS = 24 * 60 * 60 * 1000
 
@@ -31,7 +31,7 @@ async function scheduledAuthorization(request) {
     const receivedSecret = requestHeader(request, 'x-greentree-sync-secret')
     const expectedSecret = (process.env.GREENTREE_SYNC_SECRET || '').trim()
     if (!secretsMatch(receivedSecret, expectedSecret)) return null
-    return `Bearer ${await getDataverseApplicationToken()}`
+    return `Bearer ${await getGreenTreeDataverseApplicationToken()}`
 }
 
 function dataverseOrigin() {

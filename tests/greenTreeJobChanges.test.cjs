@@ -19,9 +19,9 @@ const originalEnvironment = {
     AZURE_STORAGE_CONNECTION_STRING: process.env.AZURE_STORAGE_CONNECTION_STRING,
     GREENTREE_SYNC_TABLE_NAME: process.env.GREENTREE_SYNC_TABLE_NAME,
     GREENTREE_SYNC_SECRET: process.env.GREENTREE_SYNC_SECRET,
-    DATAVERSE_TENANT_ID: process.env.DATAVERSE_TENANT_ID,
-    DATAVERSE_CLIENT_ID: process.env.DATAVERSE_CLIENT_ID,
-    DATAVERSE_CLIENT_SECRET: process.env.DATAVERSE_CLIENT_SECRET,
+    GREENTREE_DATAVERSE_TENANT_ID: process.env.GREENTREE_DATAVERSE_TENANT_ID,
+    GREENTREE_DATAVERSE_CLIENT_ID: process.env.GREENTREE_DATAVERSE_CLIENT_ID,
+    GREENTREE_DATAVERSE_CLIENT_SECRET: process.env.GREENTREE_DATAVERSE_CLIENT_SECRET,
 }
 
 function restore() {
@@ -183,9 +183,9 @@ test('accepts the delegated Dataverse token from the application header', { conc
 
 test('scheduled POST uses a protected application identity without a user session', { concurrency: false }, async () => {
     process.env.DATAVERSE_URL = 'https://example.crm.dynamics.com'
-    process.env.DATAVERSE_TENANT_ID = 'tenant-id'
-    process.env.DATAVERSE_CLIENT_ID = 'client-id'
-    process.env.DATAVERSE_CLIENT_SECRET = 'client-secret'
+    process.env.GREENTREE_DATAVERSE_TENANT_ID = 'tenant-id'
+    process.env.GREENTREE_DATAVERSE_CLIENT_ID = 'client-id'
+    process.env.GREENTREE_DATAVERSE_CLIENT_SECRET = 'client-secret'
     process.env.GREENTREE_SYNC_SECRET = 'scheduler-secret'
     process.env.LIFTTRUCKS_API_USERNAME = 'server-user'
     process.env.LIFTTRUCKS_API_PASSWORD = 'server-password'
