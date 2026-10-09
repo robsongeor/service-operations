@@ -26,6 +26,10 @@ const equipmentPhotoService = require('./api/services/equipmentPhotoService') as
   upload: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
   jsonResponse: (status: number, body: object, headers?: Record<string, string>) => LocalFunctionResponse
 }
+const greenTreeJobChangesEndpoint = require('./api/greentreejobchanges/index') as (
+  context: { res?: LocalFunctionResponse },
+  request: LocalFunctionRequest,
+) => Promise<void>
 
 const LIFTTRUCKS_API_ORIGIN = 'https://webview.liftrucks.co.nz'
 const LIFTTRUCKS_API_KEY = '500256'
@@ -558,6 +562,58 @@ function liftTrucksProxy(env: Record<string, string | undefined>): Plugin {
   }
 }
 
+function greenTreeJobChangesProxy(env: Record<string, string | undefined>): Plugin {
+  for (const name of [
+    'DATAVERSE_URL',
+    'LIFTTRUCKS_API_ORIGIN',
+    'LIFTTRUCKS_API_USERNAME',
+    'LIFTTRUCKS_API_PASSWORD',
+    'LIFTTRUCKS_API_KEY',
+    'AZURE_STORAGE_CONNECTION_STRING',
+    'GREENTREE_SYNC_TABLE_NAME',
+  ]) {
+    process.env[name] ||= env[name]
+  }
+  process.env.DATAVERSE_URL ||= env.VITE_DATAVERSE_URL
+
+  const installMiddleware = (middlewares: { use: (handler: (request: IncomingMessage, response: ServerResponse, next: () => void) => void) => void }) => {
+    middlewares.use((request, response, next) => {
+      if (!request.url) return next()
+      const requestUrl = new URL(request.url, 'http://localhost')
+      if (requestUrl.pathname !== '/api/greentreejobchanges') return next()
+
+      void (async () => {
+        const body = request.method === 'POST' ? await readJsonBody(request) : {}
+        if (body === null) {
+          sendJson(response, 400, { error: 'The request body is invalid.' })
+          return
+        }
+        const context: { res?: LocalFunctionResponse } = {}
+        await greenTreeJobChangesEndpoint(context, {
+          method: request.method,
+          headers: request.headers,
+          query: Object.fromEntries(requestUrl.searchParams),
+          body,
+        })
+        if (!context.res) {
+          sendJson(response, 503, { error: 'Automatic GreenTree reconciliation is temporarily unavailable.' })
+          return
+        }
+        sendFunctionResponse(response, context.res)
+      })().catch((error) => {
+        console.error('Local GreenTree reconciliation request failed.', error)
+        sendJson(response, 503, { error: 'Automatic GreenTree reconciliation is temporarily unavailable.' })
+      })
+    })
+  }
+
+  return {
+    name: 'greentree-job-changes-api-proxy',
+    configureServer(server) { installMiddleware(server.middlewares) },
+    configurePreviewServer(server) { installMiddleware(server.middlewares) },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = { ...loadEnv(mode, import.meta.dirname, ''), ...process.env }
@@ -567,6 +623,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       liftTrucksProxy(env),
+      greenTreeJobChangesProxy(env),
       jobSubmissionProxy(env),
       siteCheckAssignmentProxy(env),
       chargeableInvoicePreviewProxy(env),
