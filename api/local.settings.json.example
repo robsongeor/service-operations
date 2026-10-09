@@ -9,6 +9,7 @@
     "DATAVERSE_CLIENT_SECRET": "your-application-client-secret",
     "AZURE_STORAGE_CONNECTION_STRING": "your-server-only-storage-connection-string",
     "GREENTREE_SYNC_TABLE_NAME": "GreenTreeSyncState",
+    "GREENTREE_SYNC_SECRET": "a-long-random-secret-shared-only-with-the-scheduler",
     "JOB_CARD_STORAGE_MODE": "azure",
     "JOB_CARD_LOCAL_DEVELOPMENT": "false",
     "JOB_CARD_TABLE_NAME": "JobCardRequests",

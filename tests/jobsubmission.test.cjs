@@ -2,6 +2,7 @@ const assert = require('node:assert/strict')
 const test = require('node:test')
 const submission = require('../api/jobsubmission/index')
 const service = require('../api/services/jobSubmissionService')
+const statusAutomation = require('../api/services/jobOperationalStatusAutomation')
 
 const originalEnvironment = { ...process.env }
 const originalFetch = global.fetch
@@ -435,6 +436,41 @@ test('withdrawing an active technician link requires a reason, revokes access an
     const history = JSON.parse((await service.handleReviewRequest({ method: 'GET', headers: { authorization: 'Bearer office' }, query: { jobId: record.sourceJobId } })).body)
     assert.equal(history.items[0].status, 'withdrawn')
     assert.equal(history.items[0].withdrawnReason, 'Technician is no longer available')
+})
+
+test('final technician withdrawal returns only an Allocated Job to Unallocated', async () => {
+    const calls = []
+    const updated = await statusAutomation.returnJobToUnallocatedAfterFinalWithdrawal({
+        jobId: '00000000-0000-4000-8000-000000000001',
+        records: [{ status: 'withdrawn' }, { status: 'superseded' }],
+        dataverseOrigin: 'https://example.crm.dynamics.com',
+        authorization: 'Bearer office-token',
+        fetchImpl: async (url, options = {}) => {
+            calls.push({ url: String(url), options })
+            if (!options.method) return Response.json({
+                gr_jobid: '00000000-0000-4000-8000-000000000001',
+                gr_status: statusAutomation._test.JOB_STATUS_ALLOCATED,
+                '@odata.etag': 'W/"4"',
+            })
+            return new Response(null, { status: 204 })
+        },
+    })
+    assert.equal(updated, true)
+    assert.deepEqual(JSON.parse(calls[1].options.body), { gr_status: statusAutomation._test.JOB_STATUS_UNALLOCATED })
+    assert.equal(calls[1].options.headers['If-Match'], 'W/"4"')
+})
+
+test('withdrawal preserves allocation while another technician still owns the Job', async () => {
+    let calls = 0
+    const updated = await statusAutomation.returnJobToUnallocatedAfterFinalWithdrawal({
+        jobId: '00000000-0000-4000-8000-000000000001',
+        records: [{ status: 'withdrawn' }, { status: 'active', expiresOn: '2999-01-01T00:00:00Z' }],
+        dataverseOrigin: 'https://example.crm.dynamics.com',
+        authorization: 'Bearer office-token',
+        fetchImpl: async () => { calls += 1; throw new Error('must not read Dataverse') },
+    })
+    assert.equal(updated, false)
+    assert.equal(calls, 0)
 })
 
 test('authenticated per-Job history includes Azure lifecycle states without exposing tokens or evidence', async () => {

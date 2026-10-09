@@ -9,7 +9,7 @@ export type GreenTreeJobReconciliationResult = {
     matched: number
     updated: number
     markedEntered: number
-    movedToCompletionReview: number
+    movedToComplete: number
     alreadyComplete: number
     intakeMatched: number
     intakeUpdated: number

@@ -23,7 +23,7 @@ test('requests one background reconciliation and applies the browser cooldown', 
         assert.ok(age > 22 * 60 * 60_000 && age < 24 * 60 * 60_000)
         return Response.json({
             checkedAt: new Date().toISOString(), received: 1, matched: 1, updated: 1,
-            markedEntered: 1, movedToCompletionReview: 0, alreadyComplete: 0,
+            markedEntered: 1, movedToComplete: 0, alreadyComplete: 0,
             unmatched: [], conflicts: [],
         })
     }

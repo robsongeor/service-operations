@@ -14,6 +14,7 @@ export type JobCardRequestSummary = {
     withdrawnOn?: string
     withdrawnReason?: string
     withdrawnByDisplayName?: string
+    operationalStatusWarning?: string
 }
 
 export type JobCardHistory = { items: JobCardRequestSummary[]; truncated: boolean }

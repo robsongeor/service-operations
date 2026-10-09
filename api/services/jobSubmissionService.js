@@ -4,6 +4,7 @@ const { sendReviewNotification } = require('./jobCardNotification')
 const { isLocalDevelopment } = require('./jobCardEnvironment')
 const { applyOfficeTransition, officeProjection } = require('./jobCardOfficeReview')
 const { listOpenJobs } = require('./jobCardOpenJobs')
+const { returnJobToUnallocatedAfterFinalWithdrawal } = require('./jobOperationalStatusAutomation')
 
 const SERVICE_JOB = 122830001
 const DEFAULT_EXPIRY_HOURS = 168
@@ -452,7 +453,19 @@ async function handleReviewRequest(request) {
                 withdrawnByUserId: reviewer.userId, withdrawnByDisplayName: reviewer.displayName,
                 withdrawnByEmail: reviewer.email || '',
             }, record.etag)
-            return jsonResponse(200, historySummary(updated))
+            let operationalStatusWarning
+            try {
+                const records = await getJobCardStore().listByJobId(record.sourceJobId, 501)
+                await returnJobToUnallocatedAfterFinalWithdrawal({
+                    jobId: record.sourceJobId,
+                    records,
+                    dataverseOrigin: dataverseOrigin(),
+                    authorization: identity.authorization,
+                })
+            } catch {
+                operationalStatusWarning = 'The technician was withdrawn, but the Job status could not be updated automatically. Check whether it should be Unallocated.'
+            }
+            return jsonResponse(200, { ...historySummary(updated), operationalStatusWarning })
         } catch (error) {
             if (error?.statusCode === 412) return jsonResponse(409, { code: 'conflict', error: 'This Job Card changed. Refresh it before retrying.' })
             throw error

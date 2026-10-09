@@ -12,6 +12,7 @@ import {
     fetchJobPhotoBody as fetchJobPhotoBodyApi,
     createJob as createJobApi,
     updateJobStatus as updateJobStatusApi,
+    markJobAllocatedAfterConfirmedDelivery,
     updateJobCardStatus as updateJobCardStatusApi,
     updateJobFields as updateJobFieldsApi,
     updateJobOfficeAttention as updateJobOfficeAttentionApi,
@@ -949,6 +950,7 @@ export function useJobs(options: UseJobsOptions = {}) {
             ...email,
         })
         await waitForEmailDispatch(token, dispatchId)
+        await markJobAllocatedAfterConfirmedDelivery(token, job.gr_jobid)
         if (!usesAzureJobCards(job)) await updateJobCardStatusApi(token, job.gr_jobid, JOB_CARD_STATUSES.SENT)
         await fetchJobs()
     }
@@ -978,6 +980,7 @@ export function useJobs(options: UseJobsOptions = {}) {
             ...email,
         })
         await waitForEmailDispatch(token, dispatchId)
+        await markJobAllocatedAfterConfirmedDelivery(token, job.gr_jobid)
         if (!usesAzureJobCards(job)) await updateJobAssignmentStatusApi(
             token,
             assignment.gr_jobassignmentid,

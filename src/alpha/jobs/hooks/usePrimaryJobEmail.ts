@@ -4,6 +4,7 @@ import { assertJobEmailSendingAllowed, type JobEmailDeliveryState, type JobEmail
 import { queuePrimaryJobDispatch, type InitialDispatchAttempt } from '../services/primaryJobEmailWorkflow'
 import { invalidateJobsCache } from '../services/jobsApi'
 import { JOB_WORKFLOW_ENABLED } from '../services/jobWorkflowApi'
+import { ConfirmedDeliveryStatusError } from '../services/jobsApi'
 
 type Options = {
     getAccessToken: () => Promise<string>
@@ -43,7 +44,7 @@ export function usePrimaryJobEmail({ getAccessToken, enabled = true, assignedRec
                     // A failed display refresh must not relabel confirmed delivery as failed.
                     try { await onDelivered?.() } catch { /* Consumers already present their scoped load errors. */ }
                 } catch (error) {
-                    state('failed', error instanceof Error ? error.message : 'Delivery was not confirmed. Check the dispatch history before sending again.')
+                    state(error instanceof ConfirmedDeliveryStatusError ? 'sent' : 'failed', error instanceof Error ? error.message : 'Delivery was not confirmed. Check the dispatch history before sending again.')
                 } finally { pending.current.delete(job.gr_jobid) }
             })()
         } catch (error) {

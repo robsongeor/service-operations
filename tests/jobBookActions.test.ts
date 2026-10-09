@@ -92,7 +92,7 @@ test('missing version and invalid message fail before any writes', async () => {
     for (const invalid of [{ ...draft, subject: '' }, { ...draft, subject: 'x'.repeat(501) }, { ...draft, technicianComments: 'x'.repeat(2001) }]) await assert.rejects(queuePrimaryJobDispatch('sample-token', job, invalid, { hostname: 'sample.example.invalid' }), /characters/)
 })
 
-test('confirmed ordinary delivery creates only Email Dispatch, without changing Job state, assignment or evidence', async () => {
+test('confirmed ordinary delivery verifies operational status without changing an already Allocated Job, assignment or evidence', async () => {
     const original = structuredClone(job)
     const requests: { url: string; method: string }[] = []
     globalThis.fetch = async (url, options) => {
@@ -112,7 +112,7 @@ test('confirmed ordinary delivery creates only Email Dispatch, without changing 
     const queued = await queuePrimaryJobDispatch('sample-token', job, draft, { hostname: 'sample.example.invalid', assignedRecipientOnly: true })
     assert.equal(requests.length, 2, 'queue returns before delivery polling')
     await queued.confirmDelivery()
-    assert.equal(requests.length, 3)
+    assert.equal(requests.length, 4)
     assert.equal(requests.filter((request) => request.method === 'POST').length, 1)
     assert.equal(requests.some((request) => request.method === 'PATCH'), false)
     assert.deepEqual(job, original)

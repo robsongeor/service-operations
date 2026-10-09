@@ -1,6 +1,8 @@
+const { createHash, timingSafeEqual } = require('node:crypto')
 const { fetchGreenTreeJobsModifiedSince } = require('../services/greenTreeJobs')
 const { reconcileGreenTreeJobs } = require('../services/greenTreeJobReconciliation')
 const { getGreenTreeSyncCheckpointStore } = require('../services/greenTreeSyncCheckpoint')
+const { getDataverseApplicationToken } = require('../services/dataverseApplicationToken')
 
 const MAX_LOOKBACK_MS = 24 * 60 * 60 * 1000
 
@@ -16,6 +18,20 @@ function requestHeader(request, name) {
     const target = name.toLowerCase()
     const entry = Object.entries(request.headers || {}).find(([key]) => key.toLowerCase() === target)
     return typeof entry?.[1] === 'string' ? entry[1].trim() : ''
+}
+
+function secretsMatch(received, expected) {
+    if (!received || !expected) return false
+    const receivedHash = createHash('sha256').update(received, 'utf8').digest()
+    const expectedHash = createHash('sha256').update(expected, 'utf8').digest()
+    return timingSafeEqual(receivedHash, expectedHash)
+}
+
+async function scheduledAuthorization(request) {
+    const receivedSecret = requestHeader(request, 'x-greentree-sync-secret')
+    const expectedSecret = (process.env.GREENTREE_SYNC_SECRET || '').trim()
+    if (!secretsMatch(receivedSecret, expectedSecret)) return null
+    return `Bearer ${await getDataverseApplicationToken()}`
 }
 
 function dataverseOrigin() {
@@ -71,7 +87,14 @@ async function greenTreeJobChanges(context, request, options = {}) {
         context.res = jsonResponse(405, { error: 'Method not allowed.' }, { Allow: 'GET, POST' })
         return
     }
-    const authorization = await (options.authenticate || validateAuthenticatedUser)(request)
+    let authorization
+    try {
+        authorization = await (options.authenticate || validateAuthenticatedUser)(request)
+        if (!authorization && request.method === 'POST') authorization = await (options.authenticateScheduler || scheduledAuthorization)(request)
+    } catch {
+        context.res = jsonResponse(503, { error: 'The scheduled synchronization identity is unavailable.' })
+        return
+    }
     if (!authorization) {
         context.res = jsonResponse(401, { error: 'Authentication is required.' }, { 'WWW-Authenticate': 'Bearer' })
         return
@@ -140,4 +163,6 @@ module.exports._test = {
     requestHeader,
     validateAuthenticatedUser,
     acceptDelegatedBearerForLocalDevelopment,
+    secretsMatch,
+    scheduledAuthorization,
 }

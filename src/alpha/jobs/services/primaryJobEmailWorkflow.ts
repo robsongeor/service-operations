@@ -7,7 +7,7 @@ import { JOB_STATUSES } from '../types/jobStatus.types.ts'
 import { JOB_CARD_STATUSES } from '../types/jobCardStatus.types.ts'
 import { createEmailDispatch, waitForEmailDispatch } from './emailDispatchApi.ts'
 import { generateJobSubmissionLink } from './jobSubmissionLinkApi.ts'
-import { updateJobCardStatus } from './jobsApi.ts'
+import { markJobAllocatedAfterConfirmedDelivery, updateJobCardStatus } from './jobsApi.ts'
 import { fetchJobForCorrection } from './jobCorrectionsApi.ts'
 import { JOB_WORKFLOW_ENABLED, runJobWorkflow } from './jobWorkflowApi.ts'
 
@@ -65,7 +65,8 @@ export async function queuePrimaryJobDispatch(token: string, original: Job, draf
         dispatchId,
         confirmDelivery: async () => {
             await waitForEmailDispatch(token, dispatchId)
-            // Ordinary Azure Job Cards never mutate operational or historical Job fields.
+            await markJobAllocatedAfterConfirmedDelivery(token, job.gr_jobid)
+            // Legacy Job Card status is separate from the operational allocation transition above.
             if (!usesAzureJobCards(job)) await updateJobCardStatus(token, job.gr_jobid, JOB_CARD_STATUSES.SENT)
         },
     }

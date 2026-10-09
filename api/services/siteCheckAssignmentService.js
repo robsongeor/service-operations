@@ -1,5 +1,6 @@
 const { createHash, randomBytes } = require('node:crypto')
 const { persistPhotos } = require('./siteCheckPhotoStorage')
+const { getDataverseApplicationToken } = require('./dataverseApplicationToken')
 
 const IN_PROGRESS = 122830000
 const JOB_CARD_SUBMITTED = 122830002
@@ -42,28 +43,6 @@ const generateToken = () => randomBytes(32).toString('base64url')
 const validGuid = (value) => /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value)
 const validEmail = (value) => typeof value === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())
 const escapeOData = (value) => value.replaceAll("'", "''")
-
-async function applicationToken() {
-    const tenantId = process.env.DATAVERSE_TENANT_ID
-    const clientId = process.env.DATAVERSE_CLIENT_ID
-    const clientSecret = process.env.DATAVERSE_CLIENT_SECRET
-    const origin = dataverseOrigin()
-    if (!tenantId || !clientId || !clientSecret || !origin) throw new Error('Server identity is unavailable.')
-    const response = await fetch(`https://login.microsoftonline.com/${encodeURIComponent(tenantId)}/oauth2/v2.0/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-            grant_type: 'client_credentials',
-            client_id: clientId,
-            client_secret: clientSecret,
-            scope: `${origin}/.default`,
-        }),
-    })
-    if (!response.ok) throw new Error('Server identity could not be authenticated.')
-    const body = await response.json()
-    if (typeof body.access_token !== 'string') throw new Error('Server identity response was invalid.')
-    return body.access_token
-}
 
 async function validateAuthenticatedUser(request) {
     const authorization = requestHeader(request, 'authorization')
@@ -484,7 +463,7 @@ function checklistSubmissionBatch(
 }
 
 async function submitJob(request) {
-    const bearer = `Bearer ${await applicationToken()}`
+    const bearer = `Bearer ${await getDataverseApplicationToken()}`
     const found = await findOccurrence(request.body?.token, bearer)
     if (found.error) return found.error
     const jobId = typeof request.body?.jobId === 'string'
@@ -553,7 +532,7 @@ async function submitJob(request) {
 }
 
 async function handlePublicGet(request) {
-    const bearer = `Bearer ${await applicationToken()}`
+    const bearer = `Bearer ${await getDataverseApplicationToken()}`
     const found = await findOccurrence(request.query?.token, bearer)
     if (found.error) return found.error
     const [jobs, snapshots] = await Promise.all([

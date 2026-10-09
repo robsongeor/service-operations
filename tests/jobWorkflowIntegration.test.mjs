@@ -13,16 +13,16 @@ const draft = { recipientEmail: 'tech@example.invalid', subject: 'Job details', 
 const originalWindow = globalThis.window
 const originalFetch = globalThis.fetch
 let server, queuePrimaryJobDispatch, fetchUnifiedJobsPage, unifiedJobsServerFilter
-let buildJobCreatePayload, createJob, createJobsAtomically, allocateJobNumbers, allocateSiteCheckJobNumbers, clearSiteCheckJobNumber, deleteSiteCheckOccurrence, updateWof
+let buildJobCreatePayload, createJob, createJobsAtomically, allocateJobNumbers, markJobAllocatedAfterConfirmedDelivery, allocateSiteCheckJobNumbers, clearSiteCheckJobNumber, deleteSiteCheckOccurrence, updateWof
 
 test.before(async () => {
-    globalThis.window = { location: { hostname: 'app.example.invalid', origin: 'https://app.example.invalid' }, setTimeout }
+    globalThis.window = { location: { hostname: 'app.example.invalid', origin: 'https://app.example.invalid' }, setTimeout, dispatchEvent() {} }
     server = await createServer({ configFile: false, envDir: false, define: {
         'import.meta.env.VITE_UNIFIED_JOB_WORKFLOW_ENABLED': '"true"',
         'import.meta.env.VITE_DATAVERSE_URL': '"https://dataverse.example.invalid"',
     }, server: { middlewareMode: true, watch: null, hmr: false }, appType: 'custom' })
     queuePrimaryJobDispatch = (await server.ssrLoadModule('/src/alpha/jobs/services/primaryJobEmailWorkflow.ts')).queuePrimaryJobDispatch
-    ;({ fetchUnifiedJobsPage, unifiedJobsServerFilter, buildJobCreatePayload, createJob, createJobsAtomically, allocateJobNumbers } = await server.ssrLoadModule('/src/alpha/jobs/services/jobsApi.ts'))
+    ;({ fetchUnifiedJobsPage, unifiedJobsServerFilter, buildJobCreatePayload, createJob, createJobsAtomically, allocateJobNumbers, markJobAllocatedAfterConfirmedDelivery } = await server.ssrLoadModule('/src/alpha/jobs/services/jobsApi.ts'))
     ;({ allocateSiteCheckJobNumbers, clearSiteCheckJobNumber, deleteSiteCheckOccurrence } = await server.ssrLoadModule('/src/alpha/site-checks/services/siteChecksApi.ts'))
     ;({ updateWof } = await server.ssrLoadModule('/src/alpha/wof/services/wofApi.ts'))
 })
@@ -64,6 +64,22 @@ test('uncertain guarded dispatch retry reuses the same request and rendered body
     await queuePrimaryJobDispatch('token', job, draft, { hostname: 'app.example.invalid', assignedRecipientOnly: true, verifyCurrentJob: true, dispatchAttempt: attempt })
     assert.equal(bodies.length, 2)
     assert.equal(bodies[0], bodies[1])
+})
+
+test('confirmed delivery moves only an Unallocated Job to Allocated', async () => {
+    const patches = []
+    globalThis.fetch = async (url, options = {}) => {
+        if ((options.method || 'GET') === 'GET') return Response.json({ gr_jobid: id(1), gr_status: 122830001, '@odata.etag': 'W/"11"' })
+        patches.push({ url: String(url), options })
+        return new Response(null, { status: 204 })
+    }
+    assert.equal(await markJobAllocatedAfterConfirmedDelivery('token', id(1)), true)
+    assert.equal(patches.length, 1)
+    assert.equal(patches[0].options.headers['If-Match'], 'W/"11"')
+    assert.deepEqual(JSON.parse(String(patches[0].options.body)), { gr_status: 122830000 })
+
+    globalThis.fetch = async () => Response.json({ gr_jobid: id(1), gr_status: 122830002, '@odata.etag': 'W/"12"' })
+    assert.equal(await markJobAllocatedAfterConfirmedDelivery('token', id(1)), false)
 })
 
 test('production unified worklist is server-filtered, bounded and explicitly paged', async () => {

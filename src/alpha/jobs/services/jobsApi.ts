@@ -681,6 +681,44 @@ export async function updateJobStatus(
     invalidateJobsCache(token)
 }
 
+export class ConfirmedDeliveryStatusError extends Error {
+    constructor() {
+        super('The Job Card email was sent, but the Job could not be moved to Allocated. Refresh the Job and update its status if it is still Unallocated; do not resend the email.')
+        this.name = 'ConfirmedDeliveryStatusError'
+    }
+}
+
+/** A confirmed email owns this transition. It never overwrites a coordinator-selected status. */
+export async function markJobAllocatedAfterConfirmedDelivery(token: string, jobId: string) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+        const currentResponse = await fetch(
+            `${DATAVERSE_URL}/api/data/v9.2/gr_jobs(${jobId})?$select=gr_jobid,gr_status`,
+            { cache: 'no-store', headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } },
+        )
+        if (!currentResponse.ok) throw new ConfirmedDeliveryStatusError()
+        const current = await currentResponse.json() as Pick<Job, 'gr_jobid' | 'gr_status' | '@odata.etag'>
+        if (current.gr_jobid?.toLowerCase() !== jobId.toLowerCase()) throw new ConfirmedDeliveryStatusError()
+        if (current.gr_status !== JOB_STATUSES.UNALLOCATED) return false
+        const etag = current['@odata.etag'] || currentResponse.headers.get('ETag') || ''
+        if (!/^(W\/)?"[^"\r\n]+"$/.test(etag)) throw new ConfirmedDeliveryStatusError()
+        const updateResponse = await fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobs(${jobId})`, {
+            method: 'PATCH',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'If-Match': etag,
+            },
+            body: JSON.stringify({ gr_status: JOB_STATUSES.ALLOCATED }),
+        })
+        if (updateResponse.status === 412) continue
+        if (!updateResponse.ok) throw new ConfirmedDeliveryStatusError()
+        invalidateJobsCache(token)
+        return true
+    }
+    throw new ConfirmedDeliveryStatusError()
+}
+
 export async function updateJobCardStatus(
     token: string,
     jobId: string,

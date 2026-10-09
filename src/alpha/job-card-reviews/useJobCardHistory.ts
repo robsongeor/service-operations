@@ -31,8 +31,9 @@ export function useJobCardHistory(jobId?: string) {
         setWithdrawingId(reviewId)
         try {
             const token = await acquireDataverseAccessToken(instance, account)
-            await withdrawJobCard(token, reviewId, etag, reason)
+            const result = await withdrawJobCard(token, reviewId, etag, reason)
             refresh()
+            if (result.operationalStatusWarning) throw new Error(result.operationalStatusWarning)
         } finally { setWithdrawingId('') }
     }, [instance, account, refresh])
     return { data: visible?.data, error: visible?.error, busy: Boolean(jobId) && !visible, refresh, withdraw, withdrawingId }

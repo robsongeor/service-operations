@@ -1,0 +1,38 @@
+name: GreenTree Job Status Sync
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: greentree-job-status-sync-v2
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Reconcile GreenTree job changes
+        env:
+          SYNC_SECRET: ${{ secrets.GREENTREE_SYNC_SECRET }}
+        run: |
+          if [ -z "$SYNC_SECRET" ]; then
+            echo "GREENTREE_SYNC_SECRET is not configured in GitHub Actions."
+            exit 1
+          fi
+
+          MODIFIED_SINCE=$(date -u -d '2 hours ago' '+%Y-%m-%dT%H:%M:%SZ')
+
+          curl --fail-with-body \
+            --silent \
+            --show-error \
+            --retry 2 \
+            --retry-all-errors \
+            --max-time 240 \
+            --request POST \
+            --header "Content-Type: application/json" \
+            --header "X-GreenTree-Sync-Secret: $SYNC_SECRET" \
+            --data "{\"modifiedSince\":\"$MODIFIED_SINCE\"}" \
+            "https://kind-wave-0cdea2200.2.azurestaticapps.net/api/greentreejobchanges"

@@ -18,6 +18,10 @@ const originalEnvironment = {
     LIFTTRUCKS_API_KEY: process.env.LIFTTRUCKS_API_KEY,
     AZURE_STORAGE_CONNECTION_STRING: process.env.AZURE_STORAGE_CONNECTION_STRING,
     GREENTREE_SYNC_TABLE_NAME: process.env.GREENTREE_SYNC_TABLE_NAME,
+    GREENTREE_SYNC_SECRET: process.env.GREENTREE_SYNC_SECRET,
+    DATAVERSE_TENANT_ID: process.env.DATAVERSE_TENANT_ID,
+    DATAVERSE_CLIENT_ID: process.env.DATAVERSE_CLIENT_ID,
+    DATAVERSE_CLIENT_SECRET: process.env.DATAVERSE_CLIENT_SECRET,
 }
 
 function restore() {
@@ -177,6 +181,44 @@ test('accepts the delegated Dataverse token from the application header', { conc
     assert.equal(context.res.status, 200)
 })
 
+test('scheduled POST uses a protected application identity without a user session', { concurrency: false }, async () => {
+    process.env.DATAVERSE_URL = 'https://example.crm.dynamics.com'
+    process.env.DATAVERSE_TENANT_ID = 'tenant-id'
+    process.env.DATAVERSE_CLIENT_ID = 'client-id'
+    process.env.DATAVERSE_CLIENT_SECRET = 'client-secret'
+    process.env.GREENTREE_SYNC_SECRET = 'scheduler-secret'
+    process.env.LIFTTRUCKS_API_USERNAME = 'server-user'
+    process.env.LIFTTRUCKS_API_PASSWORD = 'server-password'
+    process.env.LIFTTRUCKS_API_KEY = 'server-key'
+    const calls = []
+    global.fetch = async (url, options = {}) => {
+        calls.push({ url: String(url), options })
+        if (String(url).includes('/oauth2/v2.0/token')) return Response.json({ access_token: 'application-token' })
+        if (String(url).startsWith('https://webview.liftrucks.co.nz/')) return Response.json([{ JCJobs: [] }])
+        throw new Error(`Unexpected request: ${url}`)
+    }
+    const context = {}
+    await endpoint(context, {
+        method: 'POST',
+        headers: { 'X-GreenTree-Sync-Secret': 'scheduler-secret' },
+        query: {},
+        body: { modifiedSince: new Date().toISOString() },
+    })
+    assert.equal(context.res.status, 200)
+    assert.equal(calls.filter((call) => call.url.includes('/oauth2/v2.0/token')).length, 1)
+    assert.equal(calls.some((call) => call.options.headers?.Authorization === 'Bearer application-token'), false)
+})
+
+test('scheduled POST rejects a missing or incorrect scheduler secret', { concurrency: false }, async () => {
+    process.env.GREENTREE_SYNC_SECRET = 'scheduler-secret'
+    let calls = 0
+    global.fetch = async () => { calls += 1; throw new Error('unexpected request') }
+    const context = {}
+    await endpoint(context, { method: 'POST', headers: { 'X-GreenTree-Sync-Secret': 'wrong-secret' }, query: {}, body: {} })
+    assert.equal(context.res.status, 401)
+    assert.equal(calls, 0)
+})
+
 test('authenticated POST reconciles a GreenTree change into Dataverse', { concurrency: false }, async () => {
     process.env.DATAVERSE_URL = 'https://example.crm.dynamics.com'
     process.env.LIFTTRUCKS_API_USERNAME = 'server-user'
@@ -204,9 +246,9 @@ test('authenticated POST reconciles a GreenTree change into Dataverse', { concur
     assert.equal(context.res.status, 200)
     const body = JSON.parse(context.res.body)
     assert.equal(body.updated, 1)
-    assert.equal(body.movedToCompletionReview, 1)
+    assert.equal(body.movedToComplete, 1)
     const patch = calls.find((call) => call.options.method === 'PATCH')
-    assert.deepEqual(JSON.parse(patch.options.body), { gr_gtentered: true, gr_status: 122830004 })
+    assert.deepEqual(JSON.parse(patch.options.body), { gr_gtentered: true, gr_status: 122830003 })
 })
 
 test('limits diagnostic lookback to 24 hours', () => {
@@ -220,11 +262,11 @@ test('formats persistent UTC checkpoints as GreenTree Auckland wall time', () =>
     assert.equal(endpoint._test.formatGreenTreeModifiedSince(Date.parse('2026-07-09T08:00:00Z')), '2026-07-09T20:00:00')
 })
 
-test('reconciliation marks matched jobs entered and sends closed jobs to completion review', async () => {
+test('reconciliation marks matched jobs entered and completes GreenTree-closed jobs', async () => {
     const patches = []
     const result = await reconcileGreenTreeJobs({
         jobs: [
-            { code: '147223', isClosed: true },
+            { code: '147223', isClosed: true, completeDate: '2026-10-09' },
             { code: '147224', isClosed: false },
             { code: 'MISSING', isClosed: true },
         ],
@@ -243,9 +285,9 @@ test('reconciliation marks matched jobs entered and sends closed jobs to complet
     assert.equal(result.matched, 2)
     assert.equal(result.updated, 2)
     assert.equal(result.markedEntered, 2)
-    assert.equal(result.movedToCompletionReview, 1)
+    assert.equal(result.movedToComplete, 1)
     assert.deepEqual(result.unmatched, ['MISSING'])
-    assert.deepEqual(JSON.parse(patches[0].options.body), { gr_gtentered: true, gr_status: 122830004 })
+    assert.deepEqual(JSON.parse(patches[0].options.body), { gr_gtentered: true, gr_status: 122830003, gr_completeddate: '2026-10-09' })
     assert.deepEqual(JSON.parse(patches[1].options.body), { gr_gtentered: true })
 })
 
