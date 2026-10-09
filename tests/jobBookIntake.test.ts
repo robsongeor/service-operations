@@ -459,6 +459,14 @@ test('Job Book rows use bounded Dataverse pages, server search and infinite scro
     assert.match(api, /remaining = JOB_BOOK_PAGE_SIZE/)
 })
 
+test('GreenTree entry is automated while Timecloud remains an explicit office marker', () => {
+    const screen = readFileSync(new URL('../src/alpha/job-book/JobBookPrototypeScreen.tsx', import.meta.url), 'utf8')
+    assert.match(screen, /requestGreenTreeJobReconciliation\(token\)/)
+    assert.match(screen, /row\.entered \? 'In GreenTree' : 'Not confirmed'/)
+    assert.doesNotMatch(screen, /onChange=\{\(event\) => void updateRowField\(row, 'entered'/)
+    assert.match(screen, /onChange=\{\(event\) => void updateRowField\(row, 'timecloudEntered'/)
+})
+
 test('Job Book server filters cover visible columns, escape input and use Auckland dates', () => {
     const filters = { search: "Godfrey's", date: '2026-10-07', mechanic: 'Ricardo', equipment: 'FN2131', customerSite: 'Kerrs' }
     const managed = managedJobBookSearchFilter(JOB_BOOKS.auckland, filters)

@@ -196,6 +196,13 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
   recent 90 days of completed Jobs in the background; and loads older completed history only when the
   user explicitly selects Complete. Preserve on-demand access to closed historical Jobs.
 
+- [ ] Finish the GreenTree Job reconciliation rollout. The bounded, paginated delta client,
+  shared checkpoint/lease with overlap, automatic GT Entry reconciliation (managed Jobs and Job
+  Book intake), and GreenTree-closed to Completion Review transition are implemented. Configure the
+  production credentials/storage, add an independent scheduled trigger so reconciliation does not
+  depend on a Job Book visit, and add one direct lookup for newly allocated numbers so a 404 can
+  establish "not yet in GreenTree". Absence from a delta response is not evidence of a 404.
+
 - [ ] Retire the **Unconfirmed** Job workflow end to end after a production-data and V1 dependency
   audit. Remove its Service Coordination tab, filters, status transitions, scheduling/allocation
   exclusions, Dataverse/API/plugin handling and other backend branches together; migrate or preserve

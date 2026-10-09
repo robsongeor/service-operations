@@ -144,6 +144,6 @@ test('both tables reuse action controls, composer, clipboard contract and queue 
     assert.match(read('jobs/hooks/usePrimaryJobEmail.ts'), /enabled\) throw new Error/)
     const jobBook = read('job-book/JobBookPrototypeScreen.tsx')
     assert.doesNotMatch(jobBook, /<JobQuickActions labels|>Correct details</)
-    assert.match(jobBook, /canCorrectJobDetails && row.linkedJobId[\s\S]*>Edit entry</)
-    assert.match(jobBook, /aria-label="Mark as void" disabled=\{Boolean\(voidBlocked\) \|\| markerBusy \|\| loading\}/)
+    assert.match(jobBook, /canCorrectJobDetails && row.linkedJobId[\s\S]*allowManagedJobOpen && !UNIFIED_JOB_WALKTHROUGH \? 'Open Job' : 'Edit entry'/)
+    assert.match(jobBook, /aria-label="Mark as void" disabled=\{Boolean\(voidBlocked\) \|\| markerBusy \|\| loading \|\| greenTreeSyncStatus === 'syncing'\}/)
 })

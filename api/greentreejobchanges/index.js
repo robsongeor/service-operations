@@ -1,0 +1,123 @@
+const { fetchGreenTreeJobsModifiedSince } = require('../services/greenTreeJobs')
+const { reconcileGreenTreeJobs } = require('../services/greenTreeJobReconciliation')
+const { getGreenTreeSyncCheckpointStore } = require('../services/greenTreeSyncCheckpoint')
+
+const MAX_LOOKBACK_MS = 24 * 60 * 60 * 1000
+
+function jsonResponse(status, body, headers = {}) {
+    return {
+        status,
+        headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers },
+        body: JSON.stringify(body),
+    }
+}
+
+function requestHeader(request, name) {
+    const target = name.toLowerCase()
+    const entry = Object.entries(request.headers || {}).find(([key]) => key.toLowerCase() === target)
+    return typeof entry?.[1] === 'string' ? entry[1].trim() : ''
+}
+
+function dataverseOrigin() {
+    try {
+        const url = new URL((process.env.DATAVERSE_URL || process.env.VITE_DATAVERSE_URL || '').trim())
+        return url.protocol === 'https:' ? url.origin : ''
+    } catch {
+        return ''
+    }
+}
+
+function formatGreenTreeModifiedSince(timestamp) {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Pacific/Auckland',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+    }).formatToParts(new Date(timestamp)).map((part) => [part.type, part.value]))
+    return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}`
+}
+
+async function validateAuthenticatedUser(request) {
+    const authorization = requestHeader(request, 'authorization')
+    const origin = dataverseOrigin()
+    if (!/^Bearer\s+\S+$/i.test(authorization) || !origin) return null
+    try {
+        const response = await fetch(`${origin}/api/data/v9.2/WhoAmI`, {
+            headers: { Authorization: authorization, Accept: 'application/json' },
+        })
+        if (!response.ok) return null
+        const identity = await response.json()
+        return typeof identity.UserId === 'string' && identity.UserId ? authorization : null
+    } catch {
+        return null
+    }
+}
+
+function parseModifiedSince(value, now = Date.now()) {
+    if (typeof value !== 'string' || !value.trim()) return null
+    const timestamp = Date.parse(value)
+    if (!Number.isFinite(timestamp) || timestamp > now + 60_000 || timestamp < now - MAX_LOOKBACK_MS) return null
+    return formatGreenTreeModifiedSince(timestamp)
+}
+
+module.exports = async function greenTreeJobChanges(context, request) {
+    if (request.method !== 'GET' && request.method !== 'POST') {
+        context.res = jsonResponse(405, { error: 'Method not allowed.' }, { Allow: 'GET, POST' })
+        return
+    }
+    const authorization = await validateAuthenticatedUser(request)
+    if (!authorization) {
+        context.res = jsonResponse(401, { error: 'Authentication is required.' }, { 'WWW-Authenticate': 'Bearer' })
+        return
+    }
+
+    const suppliedModifiedSince = request.method === 'POST' ? request.body?.modifiedSince : request.query?.modifiedSince
+    let syncRun = null
+    if (request.method === 'POST') {
+        const checkpointStore = getGreenTreeSyncCheckpointStore()
+        if (checkpointStore) {
+            try { syncRun = await checkpointStore.begin() }
+            catch { context.res = jsonResponse(503, { error: 'The GreenTree synchronization checkpoint is unavailable.' }); return }
+            if (syncRun.skipped) {
+                context.res = jsonResponse(200, { skipped: true, reason: syncRun.reason, checkedAt: new Date().toISOString() })
+                return
+            }
+        }
+    }
+    const modifiedSince = syncRun
+        ? formatGreenTreeModifiedSince(Date.parse(syncRun.modifiedSince))
+        : parseModifiedSince(suppliedModifiedSince)
+    if (!modifiedSince) {
+        context.res = jsonResponse(400, { error: 'modifiedSince must be a valid timestamp within the previous 24 hours.' })
+        return
+    }
+
+    try {
+        const jobs = await fetchGreenTreeJobsModifiedSince(modifiedSince)
+        if (request.method === 'POST') {
+            const reconciliation = await reconcileGreenTreeJobs({
+                jobs,
+                dataverseOrigin: dataverseOrigin(),
+                authorization,
+            })
+            const checkpointStore = getGreenTreeSyncCheckpointStore()
+            if (checkpointStore && syncRun) await checkpointStore.complete(syncRun)
+            context.res = jsonResponse(200, { modifiedSince, checkedAt: new Date().toISOString(), ...reconciliation })
+            return
+        }
+        context.res = jsonResponse(200, {
+            modifiedSince,
+            checkedAt: new Date().toISOString(),
+            count: jobs.length,
+            jobs,
+        })
+    } catch (error) {
+        const checkpointStore = request.method === 'POST' ? getGreenTreeSyncCheckpointStore() : null
+        if (checkpointStore && syncRun) await checkpointStore.fail(syncRun).catch(() => undefined)
+        const timedOut = error instanceof Error && error.name === 'AbortError'
+        context.res = jsonResponse(timedOut ? 504 : 502, {
+            error: timedOut ? 'The Lift Trucks API request timed out.' : 'The Lift Trucks API could not complete the request.',
+        })
+    }
+}
+
+module.exports._test = { dataverseOrigin, formatGreenTreeModifiedSince, parseModifiedSince, requestHeader, validateAuthenticatedUser }

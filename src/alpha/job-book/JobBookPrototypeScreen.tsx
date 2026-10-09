@@ -48,6 +48,7 @@ import { useJobBookVoid } from './useJobBookVoid'
 import JobBookVoidDialog from './JobBookVoidDialog'
 import { availableJobBooks, JOB_BOOKS, jobNumberSequence, REGIONAL_JOB_BOOK_ALLOCATION_ENABLED, type JobBookKey } from './jobBookConfig'
 import { fetchJobBookEquipmentIndex } from './jobBookEquipmentIndexApi'
+import { requestGreenTreeJobReconciliation } from './greenTreeJobSyncApi'
 import {
     applyEquipmentToRow,
     applyIntakeCustomerToRow,
@@ -227,6 +228,7 @@ export default function JobBookPrototypeScreen({
     const [locationSaving, setLocationSaving] = useState(false)
     const [savingEntryMarkers, setSavingEntryMarkers] = useState<Set<string>>(() => new Set())
     const [saveError, setSaveError] = useState('')
+    const [greenTreeSyncStatus, setGreenTreeSyncStatus] = useState<'idle' | 'syncing' | 'error'>('idle')
     const [intakeSites, setIntakeSites] = useState<Site[]>([])
     const [intakeContacts, setIntakeContacts] = useState<SiteContact[]>([])
     const [intakeSiteLoadStatus, setIntakeSiteLoadStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
@@ -317,6 +319,24 @@ export default function JobBookPrototypeScreen({
                     setRecentNextLink(jobPage.nextLink)
                     setIntakeNextLink(intakePage.nextLink)
                     setIntakeContactLookupAvailable(jobBookIntakeContactLookupIsAvailable())
+                }
+                if (!cancelled) {
+                    setGreenTreeSyncStatus('syncing')
+                    void requestGreenTreeJobReconciliation(token).then(async (result) => {
+                        if (cancelled) return
+                        if (result?.updated) {
+                            const [refreshedJobPage, refreshedIntakePage] = await Promise.all([
+                                fetchRecentJobBookRows(token, selectedJobBook),
+                                fetchJobBookIntakeRows(token, selectedJobBook),
+                            ])
+                            if (cancelled) return
+                            setRecentRows(refreshedJobPage.records)
+                            setIntakeRows(refreshedIntakePage.records)
+                            setRecentNextLink(refreshedJobPage.nextLink)
+                            setIntakeNextLink(refreshedIntakePage.nextLink)
+                        }
+                        if (!cancelled) setGreenTreeSyncStatus('idle')
+                    }).catch(() => { if (!cancelled) setGreenTreeSyncStatus('error') })
                 }
             } catch (error) {
                 if (!cancelled) setLoadError(error instanceof Error ? error.message : 'Reference data could not be loaded.')
@@ -727,9 +747,9 @@ export default function JobBookPrototypeScreen({
             contactName: selected?.gr_Contact?.gr_name ?? '',
         }))
     }
-    const updateRowField = async (row: JobBookRow, field: 'entered' | 'timecloudEntered', value: boolean) => {
+    const updateRowField = async (row: JobBookRow, field: 'timecloudEntered', value: boolean) => {
         if (!canWriteMarkers || !canUpdateJobBookMarkers(row, allowManagedJobMarkerUpdates) || voidEntry.row?.id === row.id) return
-        const isEntryMarker = field === 'entered' || field === 'timecloudEntered'
+        const isEntryMarker = field === 'timecloudEntered'
         if (isEntryMarker && savingEntryMarkers.has(row.id)) return
         if (isEntryMarker) setSavingEntryMarkers((current) => new Set(current).add(row.id))
         try {
@@ -739,7 +759,7 @@ export default function JobBookPrototypeScreen({
                 catch (error) { setSaveError(error instanceof Error ? error.message : 'The Intake changes were not saved.') }
                 return
             }
-            if (row.entrySource === 'dataverse-job' && (field === 'entered' || field === 'timecloudEntered')) {
+            if (row.entrySource === 'dataverse-job' && field === 'timecloudEntered') {
                 if (!account) { setSaveError('Sign in before saving Job entry markers.'); return }
                 setSaveError('')
                 try {
@@ -776,6 +796,8 @@ export default function JobBookPrototypeScreen({
                     : `${displayedRows.length} shown · ${allRows.length} loaded`}</span>
                 <span>{equipment.length.toLocaleString()} equipment</span>
                 {loading && <span>Refreshing…</span>}
+                {greenTreeSyncStatus === 'syncing' && <span>Checking GreenTree…</span>}
+                {greenTreeSyncStatus === 'error' && <span className="job-book-error">GT sync warning</span>}
                 {loadError && <span className="job-book-error" title={loadError}>Load warning</span>}
                 {staffDirectoryQuery.data === undefined && (staffDirectoryQuery.status === 'initial' || staffDirectoryQuery.status === 'loading') && <span>Loading Staff…</span>}
                 {staffDirectoryQuery.data === undefined && staffDirectoryQuery.error && <button type="button" className="job-book-inline-retry" title={staffDirectoryQuery.error.message} onClick={() => void staffDirectoryQuery.refetch().catch(() => undefined)}>Retry Staff</button>}
@@ -838,7 +860,7 @@ export default function JobBookPrototypeScreen({
                             ? <span className="job-book-table-value job-book-address-value"><strong>{splitSiteAddress(row.address).street}</strong>{splitSiteAddress(row.address).locality && <small>{splitSiteAddress(row.address).locality}</small>}</span>
                             : <span className="job-book-table-value">—</span>}</td>
                         <td><span className="job-book-table-value">{row.customerPo || '—'}</span></td>
-                        <td className="gt-entry-column">{canUpdateEntryMarkers || isVoid || !canWriteMarkers ? <label className={`job-book-table-check ${row.entered ? 'complete' : ''}`}><input type="checkbox" aria-label={`GT Entry completed for Job ${row.jobNumber}`} disabled={!canUpdateEntryMarkers || isVoid || markerBusy} checked={row.entered} onChange={(event) => void updateRowField(row, 'entered', event.target.checked)} />{savingEntryMarkers.has(row.id) ? <span>Saving</span> : row.entered ? <span>Done</span> : null}</label> : <span className="job-book-status-pill">Unavailable</span>}</td>
+                        <td className="gt-entry-column"><span className={`job-book-status-pill ${row.entered ? 'complete' : ''}`} title={row.entered ? 'This Job Number has been found in GreenTree.' : 'GreenTree has not confirmed this Job Number yet.'}>{row.entered ? 'In GreenTree' : 'Not confirmed'}</span></td>
                         <td className="timecloud-entry-column">{canUpdateEntryMarkers || isVoid || !canWriteMarkers ? <label className={`job-book-table-check ${row.timecloudEntered ? 'complete' : ''}`}><input type="checkbox" aria-label={`Timecloud Entry completed for Job ${row.jobNumber}`} disabled={!canUpdateEntryMarkers || isVoid || markerBusy} checked={row.timecloudEntered} onChange={(event) => void updateRowField(row, 'timecloudEntered', event.target.checked)} />{savingEntryMarkers.has(row.id) ? <span>Saving</span> : row.timecloudEntered ? <span>Done</span> : null}</label> : <span className="job-book-status-pill">Unavailable</span>}</td>
                         <td><div className="job-book-row-actions">{canEditIntake
                             ? <button type="button" className="job-quick-action job-quick-action-edit" onClick={() => openIntakeEntryEditor(row)}>Edit entry</button>
@@ -856,7 +878,7 @@ export default function JobBookPrototypeScreen({
                         />}
                         {(canEditIntake || (row.registeredLedgerId && !isVoid)) && <>
                             {canManageJobs && row.coordinatorManaged !== true && <button type="button" className="job-quick-action job-quick-action-edit" onClick={() => openManageJob(row)}>Manage job</button>}
-                            <button type="button" className="job-quick-action job-book-void-action" aria-label="Mark as void" disabled={Boolean(voidBlocked) || markerBusy || loading} title={voidBlocked || 'Mark as void — keep this allocated number with a required reason.'} onClick={() => voidEntry.open(row)}>
+                            <button type="button" className="job-quick-action job-book-void-action" aria-label="Mark as void" disabled={Boolean(voidBlocked) || markerBusy || loading || greenTreeSyncStatus === 'syncing'} title={greenTreeSyncStatus === 'syncing' ? 'Wait for the GreenTree check to finish before voiding this entry.' : voidBlocked || 'Mark as void — keep this allocated number with a required reason.'} onClick={() => voidEntry.open(row)}>
                                 <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="m6.5 6.5 11 11" /></svg>
                             </button>
                         </>}</div></td>

@@ -8,6 +8,7 @@
     "DATAVERSE_CLIENT_ID": "your-application-client-id",
     "DATAVERSE_CLIENT_SECRET": "your-application-client-secret",
     "AZURE_STORAGE_CONNECTION_STRING": "your-server-only-storage-connection-string",
+    "GREENTREE_SYNC_TABLE_NAME": "GreenTreeSyncState",
     "JOB_CARD_STORAGE_MODE": "azure",
     "JOB_CARD_LOCAL_DEVELOPMENT": "false",
     "JOB_CARD_TABLE_NAME": "JobCardRequests",
@@ -20,6 +21,7 @@
     "APP_PUBLIC_URL": "https://yellow-cliff-068680700.7.azurestaticapps.net",
     "LIFTTRUCKS_API_USERNAME": "your-lifttrucks-api-username",
     "LIFTTRUCKS_API_PASSWORD": "your-lifttrucks-api-password",
+    "LIFTTRUCKS_API_KEY": "your-lifttrucks-api-key",
     "CHARGEABLE_INVOICE_PREVIEW_ENABLED": "false",
     "CHARGEABLE_INVOICE_APPROVAL_ENABLED": "false",
     "GEOAPIFY_API_KEY": "your-geoapify-api-key"
