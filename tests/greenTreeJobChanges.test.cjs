@@ -40,6 +40,19 @@ test('normalises the GreenTree modified-job collection', () => {
     assert.deepEqual(jobs, [{ code: '146123', isClosed: true, isFinalised: false, completeDate: '2026-09-23', modifiedTimeStamp: '2026-09-23T08:36:40', status: 'Finished & Invoiced' }])
 })
 
+test('normalises the GreenTree XML collection returned by the live API', () => {
+    const jobs = client.greenTreeJobsFromXml(`<?xml version="1.0" encoding="UTF-8"?>
+        <JCJobs collection="true" count="1"><JCJob>
+            <Code>144835</Code><IsClosed>true</IsClosed><IsFinalised>false</IsFinalised>
+            <CompleteDate>2026-10-09</CompleteDate><ModifiedTimeStamp>2026-10-09T09:49:23</ModifiedTimeStamp>
+            <Status>Finished &amp; Invoiced</Status>
+        </JCJob></JCJobs>`).map(client.greenTreeJobSummary)
+    assert.deepEqual(jobs, [{
+        code: '144835', isClosed: true, isFinalised: false, completeDate: '2026-10-09',
+        modifiedTimeStamp: '2026-10-09T09:49:23', status: 'Finished & Invoiced',
+    }])
+})
+
 test('requests modified jobs with server-only credentials', async () => {
     process.env.LIFTTRUCKS_API_USERNAME = 'server-user'
     process.env.LIFTTRUCKS_API_PASSWORD = 'server-password'

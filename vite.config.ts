@@ -585,7 +585,13 @@ function greenTreeJobChangesProxy(env: Record<string, string | undefined>): Plug
   process.env.AZURE_STORAGE_CONNECTION_STRING = validStorageConnection ? storageConnection : ''
   process.env.DATAVERSE_URL ||= env.VITE_DATAVERSE_URL
   const endpointPath = require.resolve('./api/greentreejobchanges/index')
+  const localEndpointDependencies = [
+    require.resolve('./api/services/greenTreeJobs'),
+    require.resolve('./api/services/greenTreeJobReconciliation'),
+    require.resolve('./api/services/greenTreeSyncCheckpoint'),
+  ]
   const loadEndpoint = () => {
+    localEndpointDependencies.forEach((dependencyPath) => delete require.cache[dependencyPath])
     delete require.cache[endpointPath]
     return require('./api/greentreejobchanges/index') as GreenTreeJobChangesModule
   }

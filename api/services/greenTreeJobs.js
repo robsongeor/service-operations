@@ -25,6 +25,35 @@ function greenTreeJobsFromPayload(payload) {
     return jobs.filter((job) => job && typeof job === 'object')
 }
 
+function decodeXmlText(value) {
+    return String(value || '')
+        .replace(/^<!\[CDATA\[([\s\S]*)\]\]>$/, '$1')
+        .replace(/&#x([0-9a-f]+);/gi, (_match, code) => String.fromCodePoint(Number.parseInt(code, 16)))
+        .replace(/&#([0-9]+);/g, (_match, code) => String.fromCodePoint(Number.parseInt(code, 10)))
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&apos;', "'")
+        .replaceAll('&amp;', '&')
+        .trim()
+}
+
+function xmlElementText(block, name) {
+    const match = block.match(new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${name}>`, 'i'))
+    return match ? decodeXmlText(match[1]) : ''
+}
+
+function greenTreeJobsFromXml(xml) {
+    return [...String(xml || '').matchAll(/<JCJob(?:\s[^>]*)?>([\s\S]*?)<\/JCJob>/gi)].map((match) => ({
+        Code: xmlElementText(match[1], 'Code'),
+        IsClosed: xmlElementText(match[1], 'IsClosed'),
+        IsFinalised: xmlElementText(match[1], 'IsFinalised'),
+        CompleteDate: xmlElementText(match[1], 'CompleteDate'),
+        ModifiedTimeStamp: xmlElementText(match[1], 'ModifiedTimeStamp'),
+        Status: xmlElementText(match[1], 'Status'),
+    }))
+}
+
 function greenTreeJobSummary(job) {
     return {
         code: typeof job.Code === 'string' ? job.Code.trim() : String(job.Code || '').trim(),
@@ -62,8 +91,11 @@ async function fetchGreenTreeJobsModifiedSince(modifiedSince, options = {}) {
                 error.status = response.status
                 throw error
             }
-            const payload = await response.json()
-            const pageJobs = greenTreeJobsFromPayload(payload).map(greenTreeJobSummary).filter((job) => job.code)
+            const responseBody = await response.text()
+            const upstreamJobs = responseBody.trimStart().startsWith('<')
+                ? greenTreeJobsFromXml(responseBody)
+                : greenTreeJobsFromPayload(JSON.parse(responseBody))
+            const pageJobs = upstreamJobs.map(greenTreeJobSummary).filter((job) => job.code)
             pageJobs.forEach((job) => {
                 const existing = jobsByCode.get(job.code)
                 if (!existing || String(job.modifiedTimeStamp || '') >= String(existing.modifiedTimeStamp || '')) jobsByCode.set(job.code, job)
@@ -79,6 +111,7 @@ async function fetchGreenTreeJobsModifiedSince(modifiedSince, options = {}) {
 module.exports = {
     fetchGreenTreeJobsModifiedSince,
     greenTreeJobsFromPayload,
+    greenTreeJobsFromXml,
     greenTreeJobSummary,
-    _test: { configuredOrigin, credentials, PAGE_SIZE, MAX_PAGES },
+    _test: { configuredOrigin, credentials, decodeXmlText, xmlElementText, PAGE_SIZE, MAX_PAGES },
 }
