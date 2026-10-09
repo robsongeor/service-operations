@@ -363,7 +363,9 @@ intake, but Site suggestions require a linked Customer.
 
 These automatic transitions are intentionally narrow and never overwrite another status selected by
 a coordinator. Technician answers such as further work or safety responses remain evidence for office
-review; they do not decide operational status.
+review; they do not decide operational status. Submission attempts the Completion Review transition
+immediately, and the shared 15-minute server scheduler re-evaluates a bounded pending-card queue so a
+temporary Dataverse or credential failure cannot leave an eligible Job Allocated indefinitely.
 
 Job Number allocation and GreenTree confirmation are separate events. Admin may need time to create
 the newly numbered Job in GreenTree, so allocation must not immediately interpret a GreenTree `404`

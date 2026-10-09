@@ -553,6 +553,47 @@ test('all required submissions move only an Allocated Job to Completion Review',
     assert.equal(calls[1].options.headers['If-Match'], 'W/"8"')
 })
 
+test('scheduled reconciliation retries submitted Job Cards and reports blocked Jobs without exposing identifiers', async () => {
+    const histories = new Map([
+        ['00000000-0000-4000-8000-000000000001', [
+            { tokenHash: 'submitted', assignmentId: '', status: 'pendingReview', createdOn: '2026-10-09T01:00:00Z' },
+        ]],
+        ['00000000-0000-4000-8000-000000000002', [
+            { tokenHash: 'submitted', assignmentId: '', status: 'pendingReview', createdOn: '2026-10-09T01:00:00Z' },
+            { tokenHash: 'outstanding', assignmentId: 'assignment-1', status: 'active', createdOn: '2026-10-09T01:01:00Z' },
+        ]],
+    ])
+    const patches = []
+    const result = await statusAutomation.reconcilePendingCompletionReviews({
+        store: {
+            listPending: async () => [...histories].map(([sourceJobId, records]) => ({ sourceJobId, ...records[0] })),
+            listByJobId: async (jobId) => histories.get(jobId),
+        },
+        dataverseOrigin: 'https://example.crm.dynamics.com',
+        authorization: 'Bearer application-token',
+        fetchImpl: async (url, options = {}) => {
+            if (!options.method) return Response.json({
+                gr_jobid: '00000000-0000-4000-8000-000000000001',
+                gr_status: statusAutomation._test.JOB_STATUS_ALLOCATED,
+                '@odata.etag': 'W/"12"',
+            })
+            patches.push({ url: String(url), options })
+            return new Response(null, { status: 204 })
+        },
+    })
+    assert.deepEqual(result, {
+        pendingRecords: 2,
+        jobsChecked: 2,
+        eligible: 1,
+        movedToCompletionReview: 1,
+        unchanged: 1,
+        failed: 0,
+        truncated: false,
+    })
+    assert.equal(patches.length, 1)
+    assert.doesNotMatch(JSON.stringify(result), /00000000|submitted|outstanding/)
+})
+
 test('authenticated per-Job history includes Azure lifecycle states without exposing tokens or evidence', async () => {
     const jobId = '00000000-0000-4000-8000-000000000001'
     const headers = { authorization: 'Bearer office' }

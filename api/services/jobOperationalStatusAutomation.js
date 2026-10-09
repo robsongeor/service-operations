@@ -1,6 +1,7 @@
 const JOB_STATUS_ALLOCATED = 122830000
 const JOB_STATUS_UNALLOCATED = 122830001
 const JOB_STATUS_COMPLETION_REVIEW = 122830004
+const MAX_PENDING_RECONCILIATION_JOBS = 100
 
 function lifecycleKey(record) {
     const assignmentId = String(record.assignmentId || '').trim().toLowerCase()
@@ -74,6 +75,50 @@ async function moveJobToCompletionReviewAfterAllRequiredSubmissions(options) {
     return transitionAllocatedJob({ ...options, targetStatus: JOB_STATUS_COMPLETION_REVIEW })
 }
 
+async function reconcilePendingCompletionReviews({
+    store,
+    dataverseOrigin,
+    authorization,
+    fetchImpl = fetch,
+    maxJobs = MAX_PENDING_RECONCILIATION_JOBS,
+}) {
+    const pending = await store.listPending(maxJobs + 1)
+    const jobIds = [...new Set(pending.map((record) => String(record.sourceJobId || '').trim().toLowerCase()).filter(Boolean))]
+    const boundedJobIds = jobIds.slice(0, maxJobs)
+    const result = {
+        pendingRecords: pending.length,
+        jobsChecked: 0,
+        eligible: 0,
+        movedToCompletionReview: 0,
+        unchanged: 0,
+        failed: 0,
+        truncated: pending.length > maxJobs || jobIds.length > maxJobs,
+    }
+    for (const jobId of boundedJobIds) {
+        result.jobsChecked += 1
+        try {
+            const records = await store.listByJobId(jobId, 501)
+            if (!allRequiredTechnicianSubmissionsReceived(records)) {
+                result.unchanged += 1
+                continue
+            }
+            result.eligible += 1
+            const updated = await moveJobToCompletionReviewAfterAllRequiredSubmissions({
+                jobId,
+                records,
+                dataverseOrigin,
+                authorization,
+                fetchImpl,
+            })
+            if (updated) result.movedToCompletionReview += 1
+            else result.unchanged += 1
+        } catch {
+            result.failed += 1
+        }
+    }
+    return result
+}
+
 async function returnJobToUnallocatedAfterFinalWithdrawal({ jobId, records, dataverseOrigin, authorization, fetchImpl = fetch }) {
     if (hasCurrentTechnicianOwnership(records)) return false
     return transitionAllocatedJob({ jobId, targetStatus: JOB_STATUS_UNALLOCATED, dataverseOrigin, authorization, fetchImpl })
@@ -82,6 +127,7 @@ async function returnJobToUnallocatedAfterFinalWithdrawal({ jobId, records, data
 module.exports = {
     allRequiredTechnicianSubmissionsReceived,
     moveJobToCompletionReviewAfterAllRequiredSubmissions,
+    reconcilePendingCompletionReviews,
     returnJobToUnallocatedAfterFinalWithdrawal,
     _test: {
         allRequiredTechnicianSubmissionsReceived,
@@ -90,5 +136,6 @@ module.exports = {
         JOB_STATUS_ALLOCATED,
         JOB_STATUS_UNALLOCATED,
         JOB_STATUS_COMPLETION_REVIEW,
+        MAX_PENDING_RECONCILIATION_JOBS,
     },
 }

@@ -1,10 +1,64 @@
+.job-book-intake-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 0 -24px;
+    padding: 12px 24px;
+    border-bottom: 1px solid #e2e7e4;
+    background: #f7faf8;
+    color: #6a7770;
+    font-size: 0.72rem;
+}
+
+.job-book-intake-meta strong {
+    color: #26352e;
+    font-variant-numeric: tabular-nums;
+}
+
+.job-book-intake-meta > div {
+    display: grid;
+    gap: 2px;
+}
+
+.job-book-intake-meta > div:last-child {
+    text-align: right;
+}
+
+.job-book-intake-section {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+    min-width: 0;
+    margin: 0;
+    padding: 20px 0 0;
+    border: 0;
+}
+
+.job-book-intake-section + .job-book-intake-section {
+    margin-top: 20px;
+    border-top: 1px solid #dde5e1;
+}
+
+.job-book-intake-section > .job-schedule-section {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+}
+
+.job-book-intake-section > .job-edit-field-wide,
+.job-book-intake-section > .job-equipment-field {
+    grid-column: 1;
+}
+
 .job-book-intake-section-heading {
     display: grid;
     gap: 4px;
 }
 
 .job-book-intake-section-heading h3,
-.job-book-intake-section-heading p {
+.job-book-intake-section-heading p,
+.job-book-entry-location-note {
     margin: 0;
 }
 
@@ -13,10 +67,15 @@
     font-size: 0.92rem;
 }
 
-.job-book-intake-section-heading p {
+.job-book-intake-section-heading p,
+.job-book-entry-location-note {
     color: #748078;
     font-size: 0.72rem;
     line-height: 1.45;
+}
+
+.job-book-entry-location-note {
+    margin: 0 0 10px;
 }
 
 .job-book-intake-field {

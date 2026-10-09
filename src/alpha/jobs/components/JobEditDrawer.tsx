@@ -17,6 +17,7 @@ import JobQuotesSection from './JobQuotesSection'
 import JobCardFields from './JobCardFields'
 import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation'
 import './JobDrawer.css'
+import './JobIntakeFields.css'
 import type {
     JobScheduleOption,
     JobScheduleOptionInput,

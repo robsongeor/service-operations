@@ -3,6 +3,8 @@ const { fetchGreenTreeJobsModifiedSince } = require('../services/greenTreeJobs')
 const { reconcileGreenTreeJobs } = require('../services/greenTreeJobReconciliation')
 const { getGreenTreeSyncCheckpointStore } = require('../services/greenTreeSyncCheckpoint')
 const { getGreenTreeDataverseApplicationToken } = require('../services/dataverseApplicationToken')
+const { getJobCardStore } = require('../services/jobCardStorage')
+const { reconcilePendingCompletionReviews } = require('../services/jobOperationalStatusAutomation')
 
 const MAX_LOOKBACK_MS = 24 * 60 * 60 * 1000
 
@@ -123,6 +125,19 @@ async function greenTreeJobChanges(context, request, options = {}) {
         return
     }
 
+    let jobCardStatusReconciliation = null
+    if (request.method === 'POST') {
+        try {
+            jobCardStatusReconciliation = await (options.reconcilePendingCompletionReviews || reconcilePendingCompletionReviews)({
+                store: (options.getJobCardStore || getJobCardStore)(),
+                dataverseOrigin: dataverseOrigin(),
+                authorization,
+            })
+        } catch {
+            jobCardStatusReconciliation = { failed: true }
+        }
+    }
+
     try {
         const jobs = await fetchGreenTreeJobsModifiedSince(modifiedSince)
         if (request.method === 'POST') {
@@ -132,7 +147,7 @@ async function greenTreeJobChanges(context, request, options = {}) {
                 authorization,
             })
             if (checkpointStore && syncRun) await checkpointStore.complete(syncRun)
-            context.res = jsonResponse(200, { modifiedSince, checkedAt: new Date().toISOString(), ...reconciliation })
+            context.res = jsonResponse(200, { modifiedSince, checkedAt: new Date().toISOString(), jobCardStatusReconciliation, ...reconciliation })
             return
         }
         context.res = jsonResponse(200, {
