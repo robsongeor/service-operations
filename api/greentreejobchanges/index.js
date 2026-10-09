@@ -53,6 +53,12 @@ async function validateAuthenticatedUser(request) {
     }
 }
 
+function acceptDelegatedBearerForLocalDevelopment(request) {
+    const authorization = requestHeader(request, 'x-dataverse-authorization')
+        || requestHeader(request, 'authorization')
+    return /^Bearer\s+\S+$/i.test(authorization) ? authorization : null
+}
+
 function parseModifiedSince(value, now = Date.now()) {
     if (typeof value !== 'string' || !value.trim()) return null
     const timestamp = Date.parse(value)
@@ -60,12 +66,12 @@ function parseModifiedSince(value, now = Date.now()) {
     return formatGreenTreeModifiedSince(timestamp)
 }
 
-module.exports = async function greenTreeJobChanges(context, request) {
+async function greenTreeJobChanges(context, request, options = {}) {
     if (request.method !== 'GET' && request.method !== 'POST') {
         context.res = jsonResponse(405, { error: 'Method not allowed.' }, { Allow: 'GET, POST' })
         return
     }
-    const authorization = await validateAuthenticatedUser(request)
+    const authorization = await (options.authenticate || validateAuthenticatedUser)(request)
     if (!authorization) {
         context.res = jsonResponse(401, { error: 'Authentication is required.' }, { 'WWW-Authenticate': 'Bearer' })
         return
@@ -73,8 +79,10 @@ module.exports = async function greenTreeJobChanges(context, request) {
 
     const suppliedModifiedSince = request.method === 'POST' ? request.body?.modifiedSince : request.query?.modifiedSince
     let syncRun = null
+    const checkpointStore = request.method === 'POST'
+        ? (options.getCheckpointStore || getGreenTreeSyncCheckpointStore)()
+        : null
     if (request.method === 'POST') {
-        const checkpointStore = getGreenTreeSyncCheckpointStore()
         if (checkpointStore) {
             try { syncRun = await checkpointStore.begin() }
             catch { context.res = jsonResponse(503, { error: 'The GreenTree synchronization checkpoint is unavailable.' }); return }
@@ -100,7 +108,6 @@ module.exports = async function greenTreeJobChanges(context, request) {
                 dataverseOrigin: dataverseOrigin(),
                 authorization,
             })
-            const checkpointStore = getGreenTreeSyncCheckpointStore()
             if (checkpointStore && syncRun) await checkpointStore.complete(syncRun)
             context.res = jsonResponse(200, { modifiedSince, checkedAt: new Date().toISOString(), ...reconciliation })
             return
@@ -112,7 +119,6 @@ module.exports = async function greenTreeJobChanges(context, request) {
             jobs,
         })
     } catch (error) {
-        const checkpointStore = request.method === 'POST' ? getGreenTreeSyncCheckpointStore() : null
         if (checkpointStore && syncRun) await checkpointStore.fail(syncRun).catch(() => undefined)
         const timedOut = error instanceof Error && error.name === 'AbortError'
         context.res = jsonResponse(timedOut ? 504 : 502, {
@@ -121,4 +127,17 @@ module.exports = async function greenTreeJobChanges(context, request) {
     }
 }
 
-module.exports._test = { dataverseOrigin, formatGreenTreeModifiedSince, parseModifiedSince, requestHeader, validateAuthenticatedUser }
+module.exports = (context, request) => greenTreeJobChanges(context, request)
+module.exports.localDevelopment = (context, request) => greenTreeJobChanges(context, request, {
+    authenticate: acceptDelegatedBearerForLocalDevelopment,
+    getCheckpointStore: () => null,
+})
+
+module.exports._test = {
+    dataverseOrigin,
+    formatGreenTreeModifiedSince,
+    parseModifiedSince,
+    requestHeader,
+    validateAuthenticatedUser,
+    acceptDelegatedBearerForLocalDevelopment,
+}

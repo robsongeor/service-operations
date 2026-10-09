@@ -105,6 +105,29 @@ test('rejects anonymous delta requests before calling GreenTree', { concurrency:
     assert.equal(calls, 0)
 })
 
+test('localhost accepts only a delegated bearer token and leaves Dataverse to enforce it', () => {
+    assert.equal(endpoint._test.acceptDelegatedBearerForLocalDevelopment({ headers: {} }), null)
+    assert.equal(endpoint._test.acceptDelegatedBearerForLocalDevelopment({
+        headers: { 'x-dataverse-authorization': 'Bearer local-token' },
+    }), 'Bearer local-token')
+})
+
+test('localhost synchronization does not open the shared production checkpoint store', { concurrency: false }, async () => {
+    process.env.DATAVERSE_URL = 'https://example.crm.dynamics.com'
+    process.env.LIFTTRUCKS_API_USERNAME = 'server-user'
+    process.env.LIFTTRUCKS_API_PASSWORD = 'server-password'
+    process.env.LIFTTRUCKS_API_KEY = 'server-key'
+    process.env.AZURE_STORAGE_CONNECTION_STRING = 'not-a-connection-string'
+    global.fetch = async () => Response.json([{ JCJobs: [] }])
+    const context = {}
+    await endpoint.localDevelopment(context, {
+        method: 'POST',
+        headers: { 'X-Dataverse-Authorization': 'Bearer local-token' },
+        body: { modifiedSince: new Date().toISOString() },
+    })
+    assert.equal(context.res.status, 200)
+})
+
 test('returns a summary-only delta response to an authenticated user', { concurrency: false }, async () => {
     process.env.DATAVERSE_URL = 'https://example.crm.dynamics.com'
     process.env.LIFTTRUCKS_API_USERNAME = 'server-user'

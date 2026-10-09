@@ -30,6 +30,9 @@ type GreenTreeJobChangesEndpoint = (
   context: { res?: LocalFunctionResponse },
   request: LocalFunctionRequest,
 ) => Promise<void>
+type GreenTreeJobChangesModule = GreenTreeJobChangesEndpoint & {
+  localDevelopment: GreenTreeJobChangesEndpoint
+}
 
 const LIFTTRUCKS_API_ORIGIN = 'https://webview.liftrucks.co.nz'
 const LIFTTRUCKS_API_KEY = '500256'
@@ -572,13 +575,19 @@ function greenTreeJobChangesProxy(env: Record<string, string | undefined>): Plug
     'AZURE_STORAGE_CONNECTION_STRING',
     'GREENTREE_SYNC_TABLE_NAME',
   ]) {
-    process.env[name] ||= env[name]
+    const value = env[name]
+    if (value && value !== 'undefined') process.env[name] ||= value
+    else if (process.env[name] === 'undefined') delete process.env[name]
   }
+  const storageConnection = (env.AZURE_STORAGE_CONNECTION_STRING || '').trim()
+  const validStorageConnection = storageConnection === 'UseDevelopmentStorage=true'
+    || (storageConnection.includes('AccountName=') && storageConnection.includes('AccountKey='))
+  process.env.AZURE_STORAGE_CONNECTION_STRING = validStorageConnection ? storageConnection : ''
   process.env.DATAVERSE_URL ||= env.VITE_DATAVERSE_URL
   const endpointPath = require.resolve('./api/greentreejobchanges/index')
   const loadEndpoint = () => {
     delete require.cache[endpointPath]
-    return require('./api/greentreejobchanges/index') as GreenTreeJobChangesEndpoint
+    return require('./api/greentreejobchanges/index') as GreenTreeJobChangesModule
   }
 
   const installMiddleware = (middlewares: { use: (handler: (request: IncomingMessage, response: ServerResponse, next: () => void) => void) => void }) => {
@@ -594,7 +603,7 @@ function greenTreeJobChangesProxy(env: Record<string, string | undefined>): Plug
           return
         }
         const context: { res?: LocalFunctionResponse } = {}
-        await loadEndpoint()(context, {
+        await loadEndpoint().localDevelopment(context, {
           method: request.method,
           headers: request.headers,
           query: Object.fromEntries(requestUrl.searchParams),
