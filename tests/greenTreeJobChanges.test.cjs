@@ -123,6 +123,24 @@ test('returns a summary-only delta response to an authenticated user', { concurr
     assert.deepEqual(body.jobs[0], { code: '147223', isClosed: true, isFinalised: false, completeDate: '2026-10-09', modifiedTimeStamp: '2026-10-09T08:00:00', status: 'Finished' })
 })
 
+test('accepts the delegated Dataverse token from the application header', { concurrency: false }, async () => {
+    process.env.DATAVERSE_URL = 'https://example.crm.dynamics.com'
+    process.env.LIFTTRUCKS_API_USERNAME = 'server-user'
+    process.env.LIFTTRUCKS_API_PASSWORD = 'server-password'
+    process.env.LIFTTRUCKS_API_KEY = 'server-key'
+    global.fetch = async (url) => {
+        if (String(url).endsWith('/WhoAmI')) return Response.json({ UserId: '00000000-0000-4000-8000-000000000001' })
+        return Response.json([{ JCJobs: [] }])
+    }
+    const context = {}
+    await endpoint(context, {
+        method: 'GET',
+        headers: { 'X-Dataverse-Authorization': 'Bearer valid-token' },
+        query: { modifiedSince: new Date().toISOString() },
+    })
+    assert.equal(context.res.status, 200)
+})
+
 test('authenticated POST reconciles a GreenTree change into Dataverse', { concurrency: false }, async () => {
     process.env.DATAVERSE_URL = 'https://example.crm.dynamics.com'
     process.env.LIFTTRUCKS_API_USERNAME = 'server-user'

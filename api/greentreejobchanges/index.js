@@ -37,7 +37,8 @@ function formatGreenTreeModifiedSince(timestamp) {
 }
 
 async function validateAuthenticatedUser(request) {
-    const authorization = requestHeader(request, 'authorization')
+    const authorization = requestHeader(request, 'x-dataverse-authorization')
+        || requestHeader(request, 'authorization')
     const origin = dataverseOrigin()
     if (!/^Bearer\s+\S+$/i.test(authorization) || !origin) return null
     try {

@@ -26,7 +26,7 @@ const equipmentPhotoService = require('./api/services/equipmentPhotoService') as
   upload: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
   jsonResponse: (status: number, body: object, headers?: Record<string, string>) => LocalFunctionResponse
 }
-const greenTreeJobChangesEndpoint = require('./api/greentreejobchanges/index') as (
+type GreenTreeJobChangesEndpoint = (
   context: { res?: LocalFunctionResponse },
   request: LocalFunctionRequest,
 ) => Promise<void>
@@ -575,6 +575,11 @@ function greenTreeJobChangesProxy(env: Record<string, string | undefined>): Plug
     process.env[name] ||= env[name]
   }
   process.env.DATAVERSE_URL ||= env.VITE_DATAVERSE_URL
+  const endpointPath = require.resolve('./api/greentreejobchanges/index')
+  const loadEndpoint = () => {
+    delete require.cache[endpointPath]
+    return require('./api/greentreejobchanges/index') as GreenTreeJobChangesEndpoint
+  }
 
   const installMiddleware = (middlewares: { use: (handler: (request: IncomingMessage, response: ServerResponse, next: () => void) => void) => void }) => {
     middlewares.use((request, response, next) => {
@@ -589,7 +594,7 @@ function greenTreeJobChangesProxy(env: Record<string, string | undefined>): Plug
           return
         }
         const context: { res?: LocalFunctionResponse } = {}
-        await greenTreeJobChangesEndpoint(context, {
+        await loadEndpoint()(context, {
           method: request.method,
           headers: request.headers,
           query: Object.fromEntries(requestUrl.searchParams),

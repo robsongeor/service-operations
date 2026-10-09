@@ -28,7 +28,7 @@ export function requestGreenTreeJobReconciliation(accessToken: string) {
     activeRequest = fetch('/api/greentreejobchanges', {
         method: 'POST',
         headers: {
-            Authorization: `Bearer ${accessToken}`,
+            'X-Dataverse-Authorization': `Bearer ${accessToken}`,
             Accept: 'application/json',
             'Content-Type': 'application/json',
         },

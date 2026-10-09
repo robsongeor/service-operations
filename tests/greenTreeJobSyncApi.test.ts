@@ -17,7 +17,7 @@ test('requests one background reconciliation and applies the browser cooldown', 
     global.fetch = async (_url, options) => {
         calls += 1
         assert.equal(options?.method, 'POST')
-        assert.equal(new Headers(options?.headers).get('Authorization'), 'Bearer sample-token')
+        assert.equal(new Headers(options?.headers).get('X-Dataverse-Authorization'), 'Bearer sample-token')
         const body = JSON.parse(String(options?.body))
         const age = Date.now() - Date.parse(body.modifiedSince)
         assert.ok(age > 22 * 60 * 60_000 && age < 24 * 60 * 60_000)
