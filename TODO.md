@@ -249,6 +249,10 @@ temporary release readiness belongs in `CURRENT_STATE.md`; completed work belong
 
 ## Priority 3 — Quality and maintainability
 
+- [ ] Audit remaining feature-owned searchable dropdown implementations and migrate them to
+  the shared `SearchableSelect` primitive or a typed adapter around it. Preserve each workflow's
+  business rules while standardising arrow-key navigation, Enter selection, Escape handling,
+  loading/error states, focus behaviour and menu styling.
 - [ ] Add production-oriented end-to-end coverage for the highest-risk Job, WOF,
   maintenance, Equipment transfer, CSV import, and technician portal workflows.
 - [ ] Review the current production bundle-size warning and introduce code splitting only

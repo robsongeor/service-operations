@@ -1,8 +1,8 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useState } from 'react'
 import { deriveSiteNameFromAddress } from '../siteName'
 import VerifiedAddressField from '../../jobs/components/VerifiedAddressField'
 import type { VerifiedAddressSuggestion } from '../../jobs/services/addressSearchApi'
-import { announceExclusiveDropdownOpen, closeWhenAnotherDropdownOpens } from '../dropdown/exclusiveDropdown'
+import SearchableSelect from '../searchable-select/SearchableSelect'
 import './CustomerRelationshipPicker.css'
 
 export type CustomerRelationshipOption = {
@@ -52,44 +52,17 @@ export default function CustomerRelationshipPicker({
     onRetrySearch,
     emptyLabel = 'No customers found',
 }: Props) {
-    const resultsId = useId()
-    const rootRef = useRef<HTMLDivElement>(null)
-    const [open, setOpen] = useState(false)
     const [creating, setCreating] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
     const [createError, setCreateError] = useState('')
     const [draft, setDraft] = useState({ customerName: '', siteName: '', address: '' })
     const [addressSelection, setAddressSelection] = useState<VerifiedAddressSuggestion | null>(null)
-    const setDropdownOpen = (nextOpen: boolean) => {
-        if (nextOpen) announceExclusiveDropdownOpen(resultsId)
-        setOpen(nextOpen)
-        onOpenChange?.(nextOpen)
-    }
-
-    useEffect(() => {
-        if (!open) return
-        const closeOnOutsideClick = (event: MouseEvent) => {
-            if (!rootRef.current?.contains(event.target as Node)) {
-                setOpen(false)
-                onOpenChange?.(false)
-            }
-        }
-        document.addEventListener('mousedown', closeOnOutsideClick, true)
-        return () => document.removeEventListener('mousedown', closeOnOutsideClick, true)
-    }, [onOpenChange, open])
-
-    useEffect(() => closeWhenAnotherDropdownOpens(resultsId, () => {
-        setOpen(false)
-        onOpenChange?.(false)
-    }), [onOpenChange, resultsId])
-
     const openCreate = () => {
         setDraft({ customerName: query.trim(), siteName: '', address: '' })
         setAddressSelection(null)
         setCreateError('')
         setCreating(true)
         onCreateOpenChange?.(true)
-        setDropdownOpen(false)
     }
 
     const cancelCreate = () => {
@@ -124,56 +97,42 @@ export default function CustomerRelationshipPicker({
         }
     }
 
-    return <div className="customer-relationship-picker" ref={rootRef}>
-        <label className="customer-relationship-search" htmlFor={id}>
-            <span>Customer{required && ' *'}</span>
-            <input
-                id={id}
-                role="combobox"
-                aria-required={required || undefined}
-                aria-invalid={Boolean(error) || undefined}
-                aria-describedby={error ? `${id}-error` : undefined}
-                aria-expanded={open}
-                aria-controls={resultsId}
-                aria-autocomplete="list"
-                autoComplete="off"
-                placeholder="Search customers"
-                value={query}
-                onFocus={() => setDropdownOpen(true)}
-                onChange={(event) => {
-                    onQueryChange(event.target.value)
+    const selectedOption = options.find((option) => option.id === selectedId)
+
+    return <div className="customer-relationship-picker">
+        <SearchableSelect
+            id={id}
+            label="Customer"
+            required={required}
+            error={error}
+            value={selectedId}
+            options={options.map((option) => ({ value: option.id, label: option.label, secondary: option.secondary }))}
+            onChange={(nextId) => {
+                if (!nextId) {
                     onClearSelection()
-                    setDropdownOpen(true)
-                }}
-                onKeyDown={(event) => {
-                    if (event.key === 'Escape') setDropdownOpen(false)
-                    if (event.key === 'Enter' && options[0]) {
-                        event.preventDefault()
-                        onSelect(options[0].id)
-                        setDropdownOpen(false)
-                    }
-                }}
-            />
-            {open && <div className="customer-relationship-results" id={resultsId} role="listbox">
-                {onCreateCustomerAndSite && <button type="button" className="customer-relationship-add" onMouseDown={(event) => event.preventDefault()} onClick={openCreate}>+ Add new customer</button>}
-                {options.map((option) => <button
-                    key={option.id}
-                    type="button"
-                    role="option"
-                    aria-selected={option.id === selectedId}
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => { onSelect(option.id); setDropdownOpen(false) }}
-                >
-                    <strong>{option.label}</strong>
-                    {option.secondary && <small>{option.secondary}</small>}
-                </button>)}
-                {searchStatus === 'loading' && <span>Searching customers…</span>}
-                {searchStatus === 'error' && <span>{searchError}</span>}
-                {searchStatus === 'error' && onRetrySearch && <button type="button" onClick={onRetrySearch}>Retry customer search</button>}
-                {searchStatus !== 'loading' && searchStatus !== 'error' && options.length === 0 && <span>{emptyLabel}</span>}
-            </div>}
-        </label>
-        {error && <small className="customer-relationship-error" id={`${id}-error`} role="alert">{error}</small>}
+                    onQueryChange('')
+                    return
+                }
+                const option = options.find((candidate) => candidate.id === nextId)
+                onSelect(nextId)
+                if (option) onQueryChange(option.label)
+            }}
+            placeholder="No customer selected"
+            searchPlaceholder="Search customers"
+            emptyLabel={emptyLabel}
+            isSearching={searchStatus === 'loading'}
+            searchError={searchStatus === 'error' ? searchError : ''}
+            onRetrySearch={onRetrySearch}
+            onSearchChange={(nextQuery) => {
+                onQueryChange(nextQuery)
+                if (nextQuery && selectedId) onClearSelection()
+            }}
+            onOpenChange={(nextOpen) => {
+                onOpenChange?.(nextOpen)
+                if (!nextOpen && selectedOption) onQueryChange(selectedOption.label)
+            }}
+            menuAction={onCreateCustomerAndSite ? { label: '+ Add new customer', onSelect: openCreate } : undefined}
+        />
 
         {creating && <section className="customer-relationship-create">
             <div><h4>New customer and site</h4><p>{createDescription}</p></div>

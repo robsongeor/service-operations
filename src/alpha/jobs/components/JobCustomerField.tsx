@@ -24,12 +24,16 @@ type Props = {
 export default function JobCustomerField({ customers, onSearchCustomers, onSelect, ...props }: Props) {
     const [open, setOpen] = useState(false)
     const search = useCustomerSearch({ query: props.query, open, customers, onSearchCustomers })
+    const selected = customers.find((customer) => customer.gr_customerid === props.selectedId)
+    const results = selected && !search.results.some((customer) => customer.gr_customerid === selected.gr_customerid)
+        ? [selected, ...search.results]
+        : search.results
     return <CustomerRelationshipPicker
         {...props}
-        options={search.results.map((customer) => ({ id: customer.gr_customerid, label: customer.gr_name }))}
+        options={results.map((customer) => ({ id: customer.gr_customerid, label: customer.gr_name }))}
         onOpenChange={setOpen}
         onSelect={(id) => {
-            const customer = search.results.find((item) => item.gr_customerid === id)
+            const customer = results.find((item) => item.gr_customerid === id)
             if (customer) onSelect(customer)
         }}
         searchStatus={search.status}

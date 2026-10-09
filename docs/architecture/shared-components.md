@@ -23,7 +23,9 @@ Feature-specific forms, mappings, and workflows remain with their owning feature
   panel and modal presentation.
 - `SearchableSelect` combines search and selection for related records. Its optional
   backward-compatible multi-select mode adds unique values while consumers retain ownership
-  of selected-item summaries and removal controls.
+  of selected-item summaries and removal controls. All searchable dropdowns must compose this
+  shared control (through a typed feature adapter where required) so arrow-key navigation,
+  Enter selection, Escape handling, loading/error states, and menu styling remain consistent.
 - Account helpers provide one source of truth for signed-in identity and preference keys.
 - Domain calculation, Date Only, validation, and compliance helpers are reused wherever the
   same rule appears.

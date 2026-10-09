@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Standardised the Equipment drawer Customer and Site selectors on the shared searchable dropdown.
+  Customer selection now has the same arrow-key navigation, Enter selection, Escape handling,
+  loading/error presentation and menu behaviour while retaining Customer/Site creation.
 - Removed the obsolete **Manage job** split from Service Coordination. Every non-Void Dataverse Job
   is now treated as operational there, every type tab opens the canonical operational Job editor,
   and the Operational tab no longer depends on the migration-era coordinator-membership flag.

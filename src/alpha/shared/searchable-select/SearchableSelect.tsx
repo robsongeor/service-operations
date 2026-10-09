@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { announceExclusiveDropdownOpen, closeWhenAnotherDropdownOpens } from '../dropdown/exclusiveDropdown'
 import './SearchableSelect.css'
 
 export type SearchableSelectOption = {
@@ -7,6 +8,12 @@ export type SearchableSelectOption = {
     secondary?: string
     searchText?: string
     emphasized?: boolean
+}
+
+export type SearchableSelectAction = {
+    label: string
+    secondary?: string
+    onSelect: () => void
 }
 
 type Props = {
@@ -27,8 +34,11 @@ type Props = {
     onValuesChange?: (values: string[]) => void
     resultLimit?: number
     onSearchChange?: (query: string) => void
+    onOpenChange?: (open: boolean) => void
     isSearching?: boolean
     searchError?: string
+    onRetrySearch?: () => void
+    menuAction?: SearchableSelectAction
 }
 
 const normalize = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase()
@@ -51,11 +61,15 @@ export default function SearchableSelect({
     onValuesChange,
     resultLimit,
     onSearchChange,
+    onOpenChange,
     isSearching = false,
     searchError = '',
+    onRetrySearch,
+    menuAction,
 }: Props) {
     const rootRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLInputElement>(null)
+    const onOpenChangeRef = useRef(onOpenChange)
     const [open, setOpen] = useState(autoFocus && !disabled)
     const [query, setQuery] = useState('')
     const [activeIndex, setActiveIndex] = useState(0)
@@ -68,8 +82,10 @@ export default function SearchableSelect({
             .filter((option) => !search || normalize(`${option.label} ${option.secondary ?? ''} ${option.searchText ?? ''}`).includes(search))
         return typeof resultLimit === 'number' ? matching.slice(0, resultLimit) : matching
     }, [multiple, options, query, resultLimit, selectedValueSet])
-    const optionOffset = multiple ? 0 : 1
-    const optionCount = results.length + optionOffset
+    const clearOptionCount = multiple ? 0 : 1
+    const actionOptionCount = menuAction ? 1 : 0
+    const resultOffset = clearOptionCount + actionOptionCount
+    const optionCount = results.length + resultOffset
     const listboxId = `${id}-results`
     const errorId = `${id}-error`
 
@@ -82,6 +98,12 @@ export default function SearchableSelect({
         requestAnimationFrame(() => inputRef.current?.focus())
         return () => document.removeEventListener('mousedown', close)
     }, [open])
+
+    useEffect(() => { onOpenChangeRef.current = onOpenChange }, [onOpenChange])
+
+    useEffect(() => onOpenChangeRef.current?.(open), [open])
+
+    useEffect(() => closeWhenAnotherDropdownOpens(listboxId, () => setOpen(false)), [listboxId])
 
     const choose = (nextValue: string) => {
         if (multiple) {
@@ -98,7 +120,12 @@ export default function SearchableSelect({
 
     const chooseActive = () => {
         if (!multiple && activeIndex === 0) choose('')
-        else if (results[activeIndex - optionOffset]) choose(results[activeIndex - optionOffset].value)
+        else if (menuAction && activeIndex === clearOptionCount) {
+            menuAction.onSelect()
+            setOpen(false)
+            setQuery('')
+            setActiveIndex(0)
+        } else if (results[activeIndex - resultOffset]) choose(results[activeIndex - resultOffset].value)
     }
 
     return (
@@ -149,6 +176,7 @@ export default function SearchableSelect({
                 title={!multiple ? selected?.label : undefined}
                 disabled={disabled}
                 onClick={() => {
+                    announceExclusiveDropdownOpen(listboxId)
                     setOpen(true)
                     setQuery('')
                     onSearchChange?.('')
@@ -163,13 +191,17 @@ export default function SearchableSelect({
                         {!multiple && <button id={`${listboxId}-0`} type="button" role="option" aria-selected={activeIndex === 0} className={activeIndex === 0 ? 'active' : ''} onMouseEnter={() => setActiveIndex(0)} onClick={() => choose('')}>
                             <strong>{placeholder}</strong><small>Clear selection</small>
                         </button>}
+                        {menuAction && <button id={`${listboxId}-${clearOptionCount}`} type="button" role="option" aria-selected={activeIndex === clearOptionCount} className={activeIndex === clearOptionCount ? 'active searchable-select-menu-action' : 'searchable-select-menu-action'} onMouseEnter={() => setActiveIndex(clearOptionCount)} onClick={() => { menuAction.onSelect(); setOpen(false); setQuery(''); setActiveIndex(0) }}>
+                            <strong>{menuAction.label}</strong>{menuAction.secondary && <small>{menuAction.secondary}</small>}
+                        </button>}
                         {results.map((option, index) => (
-                            <button id={`${listboxId}-${index + optionOffset}`} key={option.value} type="button" role="option" aria-selected={activeIndex === index + optionOffset} className={[activeIndex === index + optionOffset ? 'active' : '', option.emphasized ? 'emphasized' : ''].filter(Boolean).join(' ')} onMouseEnter={() => setActiveIndex(index + optionOffset)} onClick={() => choose(option.value)}>
+                            <button id={`${listboxId}-${index + resultOffset}`} key={option.value} type="button" role="option" aria-selected={activeIndex === index + resultOffset} className={[activeIndex === index + resultOffset ? 'active' : '', option.emphasized ? 'emphasized' : ''].filter(Boolean).join(' ')} onMouseEnter={() => setActiveIndex(index + resultOffset)} onClick={() => choose(option.value)}>
                                 <strong>{option.label}</strong>{option.secondary && <small>{option.secondary}</small>}
                             </button>
                         ))}
                         {isSearching && <span>Searching…</span>}
                         {!isSearching && searchError && <span role="alert">{searchError}</span>}
+                        {!isSearching && searchError && onRetrySearch && <button type="button" onClick={onRetrySearch}>Retry search</button>}
                         {!isSearching && !searchError && results.length === 0 && <span>{emptyLabel}</span>}
                     </div>
                 </div>
