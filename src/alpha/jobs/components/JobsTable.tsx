@@ -30,11 +30,9 @@ import JobEmailComposer from './JobEmailComposer'
 import JobQuickActions from './JobQuickActions'
 import type { JobEmailDeliveryState, JobEmailDraft } from '../services/jobEmail'
 import { buildJobBookSpreadsheetRow, buildNumberedJobBookSpreadsheetRow } from '../utils/jobBookClipboard'
-import { isCoordinatorManaged } from '../domain/unifiedJobWorkflow'
 
 type Props = {
     unifiedWorklist?: boolean
-    onManageJob?: (job: Job) => void
     onAllocateNumber?: (job: Job) => void
     jobs: Job[]
     visibleStatuses: JobStatus[]
@@ -71,7 +69,7 @@ const createdDateFormatter = new Intl.DateTimeFormat('en-NZ', {
 const JOBS_FEEDBACK_TIMEOUT_MS = 5000
 
 export default function JobsTable({
-    unifiedWorklist = false, onManageJob, onAllocateNumber,
+    unifiedWorklist = false, onAllocateNumber,
     jobs,
     visibleStatuses,
     viewState,
@@ -154,7 +152,7 @@ export default function JobsTable({
         if (selectedJobType === 'unconfirmed' && job.gr_status !== JOB_STATUSES.UNCONFIRMED) return false
         if (selectedJobType === 'unnumbered' && (job.legacyBookEntry || job.gr_registrationvoid || job.gr_jobnumber?.trim())) return false
         if (job.legacyBookEntry) return selectedJobType === 'all'
-        if (selectedJobType === 'operational' && (unifiedWorklist ? !isCoordinatorManaged(job) || job.gr_registrationvoid : job.gr_jobtype === JOB_TYPES.SITE_CHECK)) return false
+        if (selectedJobType === 'operational' && (unifiedWorklist ? job.gr_registrationvoid : job.gr_jobtype === JOB_TYPES.SITE_CHECK)) return false
         if (selectedJobType !== 'all' && selectedJobType !== 'operational' && selectedJobType !== 'unconfirmed' && selectedJobType !== 'unnumbered' && job.gr_jobtype !== selectedJobType) return false
         if (!jobMatchesScheduledVisibility(job.gr_jobid, scheduleOptions, scheduledJobsVisibility)) return false
         const needsAttention = jobNeedsOfficeAttention(job)
@@ -563,7 +561,7 @@ export default function JobsTable({
 
                                 <td {...stickyProps('status')}>
                                     <select
-                                        disabled={Boolean(job.gr_registrationvoid || (unifiedWorklist && !isCoordinatorManaged(job)))}
+                                        disabled={Boolean(job.gr_registrationvoid)}
                                         className="jobs-table-select jobs-table-status"
                                         data-status={job.gr_status}
                                         aria-label="Job status"
@@ -602,7 +600,6 @@ export default function JobsTable({
                                 <td className="jobs-table-actions-column">
                                     <div className="jobs-table-actions">
                                         {unifiedWorklist && job.gr_registrationvoid && <span className="jobs-table-muted">Void</span>}
-                                        {onManageJob && !isCoordinatorManaged(job) && !job.gr_registrationvoid && <button type="button" className="job-quick-action job-quick-action-edit" onClick={() => onManageJob(job)}>Manage job</button>}
                                         {!unifiedWorklist && <input
                                             type="checkbox"
                                             checked={selectedJobIds.has(job.gr_jobid)}

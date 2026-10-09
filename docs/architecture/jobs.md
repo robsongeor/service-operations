@@ -38,6 +38,11 @@ Technician snapshots/evidence, completion/maintenance history and operational ch
 The ordinary coordinator editor retains its existing controls and save path. Dataverse write
 authority and column-level enforcement remain separately approval-gated, not provided by UI roles.
 
+Service Coordination treats every non-Void Dataverse Job in its worklist as operational. Its
+Operational and specialist type tabs are client-side views of the same Jobs and always open the
+canonical `JobEditDrawer`; they never invoke `JobCorrectionsDrawer` or require a **Manage job**
+membership transition. The corrections-only adapter remains a restricted Job Book capability.
+
 ## Job Book quick actions (3 October 2026, local implementation)
 
 Jobs and Legacy Job Book share `JobQuickActions`, `JobEmailComposer`, `usePrimaryJobEmail` and
@@ -48,9 +53,10 @@ copying does not fetch a directory, allocate a number, promote Intake or write a
 
 Job Book presents one compact horizontal action row: **Edit entry** (including restricted managed-
 Job corrections), icon-only copy/email controls and a permission-gated Void icon with a confirmation
-dialog. Icons retain accessible labels and explanatory tooltips. Coordinator Open Job/Manage job
-actions retain their existing scope. The edit button styling is shared with Jobs. This label/layout
-change does not unify Intake and managed-Job persistence or grant additional editing authority.
+dialog. Icons retain accessible labels and explanatory tooltips. Job Book retains its explicitly
+permission-gated Intake handoff actions. The edit button styling is shared with Jobs. This
+label/layout change does not unify Intake and managed-Job persistence or grant additional editing
+authority.
 
 `canEmailAssignedTechnician` grants FullAccess and JobCardAdmin the separate Job Book row action.
 JobBookOnly cannot email. It requires a numbered managed Job, a linked technician with a valid

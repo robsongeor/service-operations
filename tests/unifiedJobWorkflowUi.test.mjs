@@ -98,7 +98,7 @@ function renderWorklist(rows, tab) {
     }))
 }
 
-test('single coordination tab row separates membership from type and unconfirmed status', () => {
+test('Service Coordination treats every Dataverse Job as operational while retaining type and status filters', () => {
     const rows = [
         { ...job, gr_jobid: id(10), gr_description: 'Managed site check', gr_coordinatormanaged: true, gr_jobtype: 122830004 },
         { ...job, gr_jobid: id(11), gr_description: 'Unnumbered staging' },
@@ -107,9 +107,9 @@ test('single coordination tab row separates membership from type and unconfirmed
         { ...job, gr_jobid: id(14), gr_description: 'Historical ledger entry', legacyBookEntry: { void: false } },
     ]
     const operational = renderWorklist(rows, 'operational')
-    assert.match(operational, /Managed site check/)
+    for (const text of ['Managed site check', 'Unnumbered staging', 'Registered book work']) assert.match(operational, new RegExp(text))
     assert.doesNotMatch(operational, /jobs-table-muted">Managed</)
-    for (const text of ['Unnumbered staging', 'Registered book work', 'Historical ledger entry']) assert.ok(!operational.includes(text))
+    assert.doesNotMatch(operational, /Historical ledger entry/)
     assert.equal((operational.match(/role="tablist"/g) ?? []).length, 1)
     assert.match(operational, />Unconfirmed</)
     assert.match(operational, />Unnumbered</)
@@ -129,6 +129,15 @@ test('single coordination tab row separates membership from type and unconfirmed
     const legacy = renderWorklist([rows[4]], 'all')
     assert.match(legacy, /read-only/)
     assert.doesNotMatch(legacy, /Allocate job number|Manage job|>Edit</)
+})
+
+test('Service Coordination has one operational edit path and no Manage job action', () => {
+    const screen = readFileSync(new URL('../src/alpha/jobs/JobsScreen.tsx', import.meta.url), 'utf8')
+    const table = readFileSync(new URL('../src/alpha/jobs/components/JobsTable.tsx', import.meta.url), 'utf8')
+    assert.doesNotMatch(screen, /JobCorrectionsDrawer|workflowJob|mode="manage"/)
+    assert.match(screen, /\{editingJob && \(\s*<JobEditDrawer/)
+    assert.doesNotMatch(table, /Manage job|onManageJob|!isCoordinatorManaged/)
+    assert.doesNotMatch(table, /unifiedWorklist && !isCoordinatorManaged/)
 })
 
 test('restricted Equipment editor includes road compliance but excludes maintenance, ownership and deletion', () => {

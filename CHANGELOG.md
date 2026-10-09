@@ -2,7 +2,10 @@
 
 ## Unreleased
 
-- Fixed the Job Book correction drawer opened from Service Coordination so its shared intake
+- Removed the obsolete **Manage job** split from Service Coordination. Every non-Void Dataverse Job
+  is now treated as operational there, every type tab opens the canonical operational Job editor,
+  and the Operational tab no longer depends on the migration-era coordinator-membership flag.
+- Fixed the restricted Job Book correction drawer so its shared intake
   layout, spacing, metadata row, and field sizing no longer depend on first visiting Job Book.
 - Added a bounded server-side retry of submitted Job Card status transitions to the existing
   15-minute GreenTree scheduler, allowing eligible Allocated Jobs to recover into Completion Review
