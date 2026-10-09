@@ -22,7 +22,7 @@ function Same-Set([object[]]$Left, [object[]]$Right) {
 Require ($plan.status -eq 'dry-run-review-only-not-approved-for-provisioning') 'Deployment plan status is unsafe.'
 Require (-not $plan.provisioningIncluded -and -not $plan.deploymentIncluded -and -not $plan.assignmentIncluded -and -not $plan.featureEnableIncluded) 'Dry-run plan must exclude all mutations.'
 Require (-not $plan.featureFlagDuringDeployment) 'Feature flag must remain disabled.'
-Require (@($readiness.columns).Count -eq 12) 'Expected exactly 12 proposed columns.'
+Require (@($readiness.columns).Count -eq 13) 'Expected exactly 13 proposed columns.'
 Require (@($readiness.regionalTables).Count -eq 4) 'Expected four regional ledgers.'
 Require (@($readiness.customApis).Count -eq 5) 'Expected five Custom APIs.'
 Require (@($readiness.customApis | Group-Object name | Where-Object Count -ne 1).Count -eq 0) 'Custom API names must be unique.'

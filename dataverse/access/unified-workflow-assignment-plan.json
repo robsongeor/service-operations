@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "status": "review-only-not-approved-for-assignment",
-  "sourceAuditDate": "2026-10-03",
+  "status": "live-roster-verified-assignment-operator-excluded",
+  "sourceAuditDate": "2026-10-09",
   "assignmentIncluded": false,
   "removalIncluded": false,
   "profiles": {
@@ -13,29 +13,29 @@
   "intendedUsers": [
     { "upn": "georger@liftrucks.co.nz", "profile": "full", "currentAppAssignment": "FullAccess plus default access", "dataverseAdmission": "present" },
     { "upn": "brucef@liftrucks.co.nz", "profile": "coordinator", "currentAppAssignment": "FullAccess", "dataverseAdmission": "present" },
-    { "upn": "andyl@liftrucks.co.nz", "profile": "coordinator", "currentAppAssignment": "none returned", "dataverseAdmission": "missing-review-required" },
-    { "upn": "pubudu@liftrucks.co.nz", "profile": "book", "currentAppAssignment": "JobBookAdmin plus retained JobBookOnly", "dataverseAdmission": "present" },
-    { "upn": "jessamynb@liftrucks.co.nz", "profile": "office", "currentAppAssignment": "JobBookOnly", "dataverseAdmission": "missing-review-required" },
-    { "upn": "nargiza@liftrucks.co.nz", "profile": "office", "currentAppAssignment": "JobBookOnly", "dataverseAdmission": "missing-review-required" },
-    { "upn": "martinh@liftrucks.co.nz", "profile": "book", "currentAppAssignment": "JobBookOnly", "dataverseAdmission": "missing-review-required" },
-    { "upn": "lancec@liftrucks.co.nz", "profile": "book", "currentAppAssignment": "JobBookOnly", "dataverseAdmission": "missing-review-required" },
-    { "upn": "ranjani@liftrucks.co.nz", "profile": "book", "currentAppAssignment": "none returned", "dataverseAdmission": "missing-review-required" },
-    { "upn": "ashneelk@liftrucks.co.nz", "profile": "book", "currentAppAssignment": "none returned", "dataverseAdmission": "missing-review-required" },
-    { "upn": "kaizerg@liftrucks.co.nz", "profile": "book", "currentAppAssignment": "JobBookOnly", "dataverseAdmission": "missing-review-required" }
+    { "upn": "andyl@liftrucks.co.nz", "profile": "coordinator", "currentAppAssignment": "ServiceCoordinator", "dataverseAdmission": "present" },
+    { "upn": "pubudu@liftrucks.co.nz", "profile": "office", "currentAppAssignment": "JobCardAdmin", "dataverseAdmission": "present" },
+    { "upn": "jessamynb@liftrucks.co.nz", "profile": "office", "currentAppAssignment": "JobCardAdmin", "dataverseAdmission": "present" },
+    { "upn": "nargiza@liftrucks.co.nz", "profile": "office", "currentAppAssignment": "JobCardAdmin", "dataverseAdmission": "present" },
+    { "upn": "martinh@liftrucks.co.nz", "profile": "book", "currentAppAssignment": "JobBookAdmin", "dataverseAdmission": "present" },
+    { "upn": "lancec@liftrucks.co.nz", "profile": "book", "currentAppAssignment": "JobBookAdmin", "dataverseAdmission": "present" },
+    { "upn": "ranjani@liftrucks.co.nz", "profile": "book", "currentAppAssignment": "JobBookAdmin", "dataverseAdmission": "present" },
+    { "upn": "ashneelk@liftrucks.co.nz", "profile": "book", "currentAppAssignment": "JobBookAdmin", "dataverseAdmission": "present" },
+    { "upn": "kaizerg@liftrucks.co.nz", "profile": "book", "currentAppAssignment": "JobBookAdmin", "dataverseAdmission": "present" }
   ],
   "roleTestPilots": [
     {
       "upn": "pubudu@liftrucks.co.nz",
-      "purpose": "Live Job Book Admin guide and denial verification account.",
-      "homeProfile": "book",
-      "currentDirectRoles": ["Dataverse as a Cluster App Role", "Dataverse Intelligence Learning Management Role", "Dataverse Search Role", "Service Operations - Job Book Admin"],
+      "purpose": "Live Office Admin guide and denial verification account.",
+      "homeProfile": "office",
+      "currentDirectRoles": ["Dataverse as a Cluster App Role", "Dataverse Intelligence Learning Management Role", "Dataverse Search Role", "Service Operations - Office Admin"],
       "currentTeamRoles": [],
       "constraints": [
         "Export current Entra and direct/team Dataverse assignments before any approved test change.",
-        "The legacy Service Operations role was removed on 7 October 2026 after Office Admin assignment verification; Office Admin was replaced by Job Book Admin on 9 October 2026.",
+        "The legacy Service Operations role was removed on 7 October 2026 after Office Admin assignment verification; Pubudu was returned to Office Admin on 9 October 2026.",
         "Reject any remaining overlap with Full or Coordinator workflow roles during the final pilot.",
-        "Preserve unrelated platform roles; Job Book Admin is the current rollout profile.",
-        "Remove Pubudu from the separate shared Job Card reviewer allowlist and verify denial before treating the transition as complete.",
+        "Preserve unrelated platform roles; Office Admin is the current rollout profile.",
+        "Keep Pubudu in the separate shared Job Card reviewer allowlist while Office Admin remains assigned.",
         "The account owner performs sign-in and MFA; credentials are never shared or stored."
       ]
     }

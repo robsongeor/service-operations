@@ -1,7 +1,14 @@
 # Unified Job workflow — Dataverse readiness and rollout
 
-Status: local readiness package only. No schema, API, plugin, role, assignment, setting, migration,
-or deployment change has been approved or performed.
+Status: production restricted-access guard deployed 9 October 2026. Unified workflow feature flag,
+data migration and number-invariant activation remain off.
+
+## Live deployment — 9 October 2026
+
+The `1.0.1.0` signed assembly, complete Custom API contracts, 13 schema columns and 14 restricted-
+access PreOperation steps are live. The deployment verifier confirmed exact role IDs, pre-images,
+bindings, enabled state, deployment scope and empty filtering attributes. All 15 number-invariant
+steps are registered but disabled. Existing role assignments and business data were preserved.
 
 ## Read-only target audit — 6 October 2026
 
@@ -26,8 +33,9 @@ Confirmed absent:
 - the Registered `122830004` stage option on all four regional ledgers;
 - `Service Operations - Office Admin` and `Service Operations - Job Book Admin` roles.
 
-The audit initially recorded six activation blockers. The local reviewed specialist allocation
-adapter now closes one code blocker; the five blockers in the current manifest remain open. This
+The audit initially recorded six activation blockers. The 9 October deployment closed the package,
+schema, API, role-ID and admission blockers. This historical section records the pre-deployment
+baseline; the remaining live gates are listed below. This
 result is the exact metadata delta for review; it is not authorization to create the missing items. No user/role assignment, business data, feature
 flag, plugin registration, schema, solution, or application deployment was changed.
 
@@ -76,23 +84,20 @@ Provisioning must be reviewed and executed as one compatible unit:
 6. A compatible application/backend release before any feature flag or user assignment changes.
 
 The exact offline expansion is now captured in the validated
-[deployment package review](unified-job-workflow-deployment-package.md): 12 columns, four Choice
-additions, one four-type `1.0.0.0` assembly, five APIs, 29 guard steps, four default-deny profiles
-and the eleven-account review-only assignment plan. It is not a provisioning script.
+[deployment package review](unified-job-workflow-deployment-package.md): 13 columns, four Choice
+additions, one four-type `1.0.1.0` assembly, five APIs, 29 registered guard steps, four default-deny
+profiles and the eleven-account assignment plan.
 
-## Stop gates before provisioning
+## Remaining gates before unified-workflow enablement
 
-Provisioning is not currently safe. The following remain open:
+The access guard is provisioned. The following remain open:
 
 - approve migration/backfill, regional sequence ownership and rollback, preserving historical rows;
-- review and sign the plugin assembly and exact registration metadata;
-- approve the least-privilege privilege matrix and intended Dataverse role names/IDs;
-- complete target-environment admission/licensing for pilot accounts;
+- complete real named-user allowed/denied tests for the restricted profiles;
+- complete signing-key recovery backup and prove a recovery build;
 - define controlled target records, evidence capture and rollback ownership.
 
-The read-only audit may be run before these decisions to establish the exact metadata delta. A
-Provision mode must not be added or run until the blockers are closed and the user approves the
-specific environment and change package.
+Keep the 15 number-invariant steps disabled until the separate cutover is approved.
 
 The separate [migration and role review](unified-job-workflow-migration-and-security.md) now defines
 the aggregate-only historical classifier, no-auto-link rule, backfill evidence/rollback gates and

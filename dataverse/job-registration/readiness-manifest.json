@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "status": "read-only-preflight-not-approved-for-provisioning",
+  "status": "access-guard-live-unified-registration-flag-off",
   "target": {
     "environmentUrl": "https://org0d4246d7.crm6.dynamics.com",
     "solutionUniqueName": "ServiceOperationsNew"
@@ -41,16 +41,14 @@
     { "name": "gr_QueueInitialJobDispatch", "pluginType": "ServiceOperations.JobRegistration.JobWorkflowPlugin", "executePrivilege": "prvCreategr_EmailDispatch", "requests": ["RequestId", "JobId", "ExpectedJobRowVersion", "RecipientEmail", "Subject", "Body"], "responses": ["DispatchId", "WasReplay"] }
   ],
   "roles": [
-    { "profile": "full", "name": "System Administrator", "state": "existing-review-required", "allowedApis": ["gr_RegisterJobBookJob", "gr_AllocateJobBookNumber", "gr_ManageJobBookJob", "gr_VoidRegisteredJobBookEntry", "gr_QueueInitialJobDispatch"] },
-    { "profile": "coordinator", "name": "Service Operations", "state": "existing-review-required", "allowedApis": ["gr_RegisterJobBookJob", "gr_AllocateJobBookNumber", "gr_ManageJobBookJob", "gr_VoidRegisteredJobBookEntry", "gr_QueueInitialJobDispatch"] },
-    { "profile": "office", "name": "Service Operations - Office Admin", "state": "proposed-not-created", "allowedApis": ["gr_RegisterJobBookJob", "gr_VoidRegisteredJobBookEntry", "gr_QueueInitialJobDispatch"] },
-    { "profile": "book", "name": "Service Operations - Job Book Admin", "state": "proposed-not-created", "allowedApis": ["gr_RegisterJobBookJob", "gr_VoidRegisteredJobBookEntry"] }
+    { "profile": "full", "name": "System Administrator", "state": "live", "allowedApis": ["gr_RegisterJobBookJob", "gr_AllocateJobBookNumber", "gr_ManageJobBookJob", "gr_VoidRegisteredJobBookEntry", "gr_QueueInitialJobDispatch"] },
+    { "profile": "coordinator", "name": "Service Operations", "state": "live", "allowedApis": ["gr_RegisterJobBookJob", "gr_AllocateJobBookNumber", "gr_ManageJobBookJob", "gr_VoidRegisteredJobBookEntry", "gr_QueueInitialJobDispatch"] },
+    { "profile": "office", "name": "Service Operations - Office Admin", "state": "live", "allowedApis": ["gr_RegisterJobBookJob", "gr_VoidRegisteredJobBookEntry", "gr_QueueInitialJobDispatch"] },
+    { "profile": "book", "name": "Service Operations - Job Book Admin", "state": "live", "allowedApis": ["gr_RegisterJobBookJob", "gr_VoidRegisteredJobBookEntry"] }
   ],
   "activationBlockers": [
-    "Approve the historical migration/backfill and regional cutover sequence; never infer links from matching number text.",
-    "Package and sign the plugin assembly, then review every Custom API and step registration as one compatible unit.",
-    "Approve the least-privilege role manifest and secure Dataverse role-ID configuration after checking broader direct/team grants.",
-    "Admit and license intended pilot users in the target environment before assigning or testing roles.",
-    "Deploy a compatible application build before enabling VITE_UNIFIED_JOB_WORKFLOW_ENABLED or changing user assignments."
+    "Complete named-user allowed/denied acceptance tests for Job Book Admin and Office Admin across all four regional ledgers.",
+    "Complete the protected signing-key recovery backup and prove a recovery build.",
+    "Keep all 15 number-invariant steps disabled until V1/manual numbering is retired and the separate migration cutover is approved."
   ]
 }

@@ -9,6 +9,12 @@ replacement-first exact verification and preserved unrelated assignments. The sh
 reviewer allowlist already includes Pubudu, consistent with the final Office Admin role. This
 historical audit table remains the 3 October snapshot.
 
+On 9 October 2026 all eleven intended users were confirmed present in Dataverse. The obsolete
+`ServiceOperations.JobBookOnly` assignment was removed from Pubudu, Jess, Nargiza, Martin, Lance
+and Kaizer after exact replacement verification; Ranjani and Ashneel never held it. The final eight
+restricted Admin assignments are three `JobCardAdmin` and five `JobBookAdmin`, with no retained
+`JobBookOnly` assignment.
+
 ## Target verified
 
 - Tenant: `a348f38c-33d0-4ce9-a0df-6a66cc0562a1`.

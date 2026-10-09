@@ -6,6 +6,8 @@ param(
     [string]$PackageDirectory = '',
     [string]$PilotUpn = 'pubudu@liftrucks.co.nz',
     [string]$UserName = '',
+    [ValidateSet('AccessOnly', 'All')]
+    [string]$GuardScope = 'AccessOnly',
     [ValidateSet('Never', 'Auto')]
     [string]$LoginPrompt = 'Never'
 )
@@ -136,12 +138,15 @@ function Ensure-Lookup($Service, $Definition) {
 function Ensure-Choice($Service, [string]$Table, [string]$Name, [string]$Label, [int]$Value) {
     $metadata = Get-Attribute $Service $Table $Name
     Require ($null -ne $metadata -and [string]$metadata.AttributeType -eq 'Picklist' -and -not $metadata.OptionSet.IsGlobal) "Conflict: $Table.$Name must be a local Choice."
-    $byValue = @($metadata.OptionSet.Options | Where-Object Value -eq $Value)
-    if ($byValue.Count) { Require ($byValue.Count -eq 1 -and [string]$byValue[0].Label.UserLocalizedLabel.Label -eq $Label) "Conflict: $Table.$Name option $Value."; return }
+    $byValue = @($metadata.OptionSet.Options | Where-Object { $_.Value -eq $Value })
+    if ($byValue.Count) { Require ($byValue.Count -eq 1 -and [string]$byValue[0].Label.UserLocalizedLabel.Label -eq $Label) "Conflict: $Table.$Name option $Value."; Write-Host "Verified Choice option $Table.$Name $Label=$Value"; return }
     if (-not $provision) { throw "Missing Choice option: $Table.$Name $Label=$Value" }
     $request = [Microsoft.Xrm.Sdk.Messages.InsertOptionValueRequest]::new(); $request.EntityLogicalName=$Table; $request.AttributeLogicalName=$Name; $request.Label=New-Label $Label; $request.Value=$Value; $request.SolutionUniqueName=$SolutionUniqueName
     $Service.Execute($request) | Out-Null
-    Write-Host "Created Choice option $Table.$Name $Label=$Value"
+    $verified = Get-Attribute $Service $Table $Name
+    $created = @($verified.OptionSet.Options | Where-Object { $_.Value -eq $Value })
+    Require ($created.Count -eq 1 -and [string]$created[0].Label.UserLocalizedLabel.Label -eq $Label) "Choice creation verification failed: $Table.$Name $Label=$Value"
+    Write-Host "Created and verified Choice option $Table.$Name $Label=$Value"
 }
 function Publish-Metadata($Service) {
     $tables = @($readiness.columns.table + $readiness.regionalTables | Sort-Object -Unique)
@@ -185,21 +190,31 @@ function Ensure-Role($Service, $Definition, $AllPrivileges) {
     $customHeld=@($current|ForEach-Object{$id=$_.PrivilegeId;$AllPrivileges|Where-Object Id -eq $id|Select-Object -First 1}|Where-Object{[string]$_['name']-match '^prv[A-Za-z]+gr_'})
     $extras=@($customHeld|Where-Object{$desiredNames -inotcontains [string]$_['name']})
     Require ($extras.Count -eq 0) "$($Definition.name) has unapproved custom privileges: $(@($extras|ForEach-Object{$_['name']}) -join ', ')."
-    foreach($junction in 'systemuserroles','teamroles'){$query=[Microsoft.Xrm.Sdk.Query.QueryExpression]::new($junction);$query.ColumnSet=[Microsoft.Xrm.Sdk.Query.ColumnSet]::new($false);$query.Criteria.AddCondition('roleid',[Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,$role.Id);if($Mode -ne 'AssignPilot'){Require ($Service.RetrieveMultiple($query).Entities.Count -eq 0) "$($Definition.name) unexpectedly has assignments before pilot mode."}}
+    foreach($junction in 'systemuserroles','teamroles'){$query=[Microsoft.Xrm.Sdk.Query.QueryExpression]::new($junction);$query.ColumnSet=[Microsoft.Xrm.Sdk.Query.ColumnSet]::new($false);$query.Criteria.AddCondition('roleid',[Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,$role.Id);$count=$Service.RetrieveMultiple($query).Entities.Count;Write-Host "$($Definition.name): $count existing $junction assignment(s) preserved."}
     $role
 }
 function Get-PackageManifest {
     Require ($PackageDirectory -and (Test-Path -LiteralPath $assemblyPath -PathType Leaf) -and (Test-Path -LiteralPath $packageManifestPath -PathType Leaf)) 'A reviewed signed package directory is required.'
     $manifest=Get-Content -LiteralPath $packageManifestPath -Raw|ConvertFrom-Json
-    Require ($manifest.publicKeyToken -eq '0edea2881bb8578c' -and $manifest.version -eq '1.0.0.0' -and @($manifest.pluginTypes).Count -eq 4) 'Signed package identity mismatch.'
+    Require ($manifest.publicKeyToken -eq '0edea2881bb8578c' -and $manifest.version -eq '1.0.1.0' -and @($manifest.pluginTypes).Count -eq 4) 'Signed package identity mismatch.'
     Require ((Get-FileHash -LiteralPath $assemblyPath -Algorithm SHA256).Hash.ToLowerInvariant() -eq $manifest.sha256) 'Signed package hash mismatch.'
     $manifest
 }
 function Ensure-Assembly($Service, $Manifest) {
-    $rows=@(Find-Exactly $Service 'pluginassembly' 'name' ([string]$Manifest.assembly) @('pluginassemblyid','name','version','publickeytoken','isolationmode','sourcetype'))
+    $rows=@(Find-Exactly $Service 'pluginassembly' 'name' ([string]$Manifest.assembly) @('pluginassemblyid','name','version','publickeytoken','isolationmode','sourcetype','content'))
     Require ($rows.Count -le 1) 'Multiple unified plugin assemblies exist.'
     if(-not $rows.Count){if(-not $provision){throw 'Signed plugin assembly is missing.'};$entity=[Microsoft.Xrm.Sdk.Entity]::new('pluginassembly');$entity['name']=[string]$Manifest.assembly;$entity['content']=[Convert]::ToBase64String([IO.File]::ReadAllBytes($assemblyPath));$entity['isolationmode']=[Microsoft.Xrm.Sdk.OptionSetValue]::new(2);$entity['sourcetype']=[Microsoft.Xrm.Sdk.OptionSetValue]::new(0);$entity['version']=[string]$Manifest.version;$entity['culture']='neutral';$entity['publickeytoken']=[string]$Manifest.publicKeyToken;$id=$Service.Create($entity);$rows=@($Service.Retrieve('pluginassembly',$id,[Microsoft.Xrm.Sdk.Query.ColumnSet]::new('pluginassemblyid','name','version','publickeytoken','isolationmode','sourcetype')));Write-Host 'Registered signed unified plugin assembly.'}
-    $row=$rows[0];Require ([string]$row['version'] -eq [string]$Manifest.version -and [string]$row['publickeytoken'] -eq [string]$Manifest.publicKeyToken -and [int]$row['isolationmode'].Value -eq 2) 'Existing plugin assembly identity/configuration conflict.'
+    $row=$rows[0]
+    Require ([string]$row['publickeytoken'] -eq [string]$Manifest.publicKeyToken -and [int]$row['isolationmode'].Value -eq 2) 'Existing plugin assembly identity/configuration conflict.'
+    $currentHash=''
+    if($row.Attributes.ContainsKey('content') -and [string]$row['content']){$bytes=[Convert]::FromBase64String([string]$row['content']);$sha=[Security.Cryptography.SHA256]::Create();try{$currentHash=([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-','').ToLowerInvariant()}finally{$sha.Dispose()}}
+    if($currentHash -ne [string]$Manifest.sha256){
+        if(-not $provision){throw "Plugin assembly content differs from the reviewed package (live $currentHash; package $($Manifest.sha256))."}
+        $update=[Microsoft.Xrm.Sdk.Entity]::new('pluginassembly',$row.Id);$update['content']=[Convert]::ToBase64String([IO.File]::ReadAllBytes($assemblyPath));$Service.Update($update);Write-Host "Updated signed unified plugin assembly to $($Manifest.version)."
+        $row=$Service.Retrieve('pluginassembly',$row.Id,[Microsoft.Xrm.Sdk.Query.ColumnSet]::new('pluginassemblyid','name','version','publickeytoken','isolationmode','sourcetype','content'))
+        $bytes=[Convert]::FromBase64String([string]$row['content']);$sha=[Security.Cryptography.SHA256]::Create();try{$currentHash=([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-','').ToLowerInvariant()}finally{$sha.Dispose()}
+    }
+    Require ([string]$row['version'] -eq [string]$Manifest.version -and $currentHash -eq [string]$Manifest.sha256) 'Deployed plugin assembly version/hash does not match the reviewed package.'
     $row
 }
 function Ensure-PluginTypes($Service, $Assembly, $Manifest) {
@@ -221,13 +236,60 @@ function Ensure-CustomApis($Service, $PluginTypes) {
 function Get-Message($Service,[string]$Name){$rows=@(Find-Exactly $Service 'sdkmessage' 'name' $Name @('sdkmessageid','name'));Require($rows.Count -eq 1) "Expected one SDK message $Name";$rows[0]}
 function Get-Filter($Service,[guid]$MessageId,[string]$Table){$query=[Microsoft.Xrm.Sdk.Query.QueryExpression]::new('sdkmessagefilter');$query.ColumnSet=[Microsoft.Xrm.Sdk.Query.ColumnSet]::new('sdkmessagefilterid','primaryobjecttypecode','sdkmessageid');$query.Criteria.AddCondition('primaryobjecttypecode',[Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,$Table);$query.Criteria.AddCondition('sdkmessageid',[Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,$MessageId);$rows=@($Service.RetrieveMultiple($query).Entities);Require($rows.Count -eq 1) "Expected one $Table message filter.";$rows[0]}
 function Expand-Steps {
-    $steps=[Collections.Generic.List[object]]::new();$invariant=$plan.guardSteps[0];foreach($table in $invariant.tables){foreach($message in $invariant.messages){$image=$invariant.images.$message;$columns=@();if($image){$columns=if($table -eq 'gr_job'){@($image.jobColumns)}else{@($image.ledgerColumns)}};$steps.Add([pscustomobject]@{pluginType=$invariant.pluginType;message=$message;table=$table;order=10;image=$image;columns=$columns})}}
+    $steps=[Collections.Generic.List[object]]::new();if($GuardScope -eq 'All'){$invariant=$plan.guardSteps[0];foreach($table in $invariant.tables){foreach($message in $invariant.messages){$image=$invariant.images.$message;$columns=@();if($image){$columns=if($table -eq 'gr_job'){@($image.jobColumns)}else{@($image.ledgerColumns)}};$steps.Add([pscustomobject]@{pluginType=$invariant.pluginType;message=$message;table=$table;order=10;image=$image;columns=$columns})}}}
     $access=$plan.guardSteps[1];foreach($registration in $access.registrations){foreach($table in $registration.tables){$steps.Add([pscustomobject]@{pluginType=$access.pluginType;message=$registration.message;table=$table;order=20;image=$registration.image;columns=if($registration.image){@($registration.image.columns)}else{@()}})}}
     @($steps)
 }
 function Ensure-SecureConfig($Service,[string]$Value){$rows=@(Find-Exactly $Service 'sdkmessageprocessingstepsecureconfig' 'secureconfig' $Value @('sdkmessageprocessingstepsecureconfigid','secureconfig'));Require($rows.Count -le 1) 'Duplicate unified secure configuration.';if(-not$rows.Count){if(-not$provision){throw 'Missing unified secure configuration.'};$entity=[Microsoft.Xrm.Sdk.Entity]::new('sdkmessageprocessingstepsecureconfig');$entity['secureconfig']=$Value;$id=$Service.Create($entity);$rows=@($Service.Retrieve('sdkmessageprocessingstepsecureconfig',$id,[Microsoft.Xrm.Sdk.Query.ColumnSet]::new('sdkmessageprocessingstepsecureconfigid','secureconfig')));Write-Host 'Created encrypted restricted-role configuration.'};$rows[0]}
-function Ensure-Steps($Service,$PluginTypes,$Roles){$full=@(Find-Exactly $Service 'role' 'name' 'System Administrator' @('roleid','name'));$coordinator=@(Find-Exactly $Service 'role' 'name' 'Service Operations' @('roleid','name'));Require($full.Count-eq1 -and $coordinator.Count-eq1) 'Full/coordinator role resolution failed.';$secureValue="full=$($full[0].Id);coordinator=$($coordinator[0].Id);office=$($Roles['office'].Id);book=$($Roles['book'].Id)";$secure=Ensure-SecureConfig $Service $secureValue
-    foreach($definition in @(Expand-Steps)){$name="Service Operations Unified | $($definition.pluginType.Split('.')[-1]) | $($definition.message) | $($definition.table)";$rows=@(Find-Exactly $Service 'sdkmessageprocessingstep' 'name' $name @('sdkmessageprocessingstepid','name','stage','mode','rank','plugintypeid','sdkmessageid','sdkmessagefilterid','sdkmessageprocessingstepsecureconfigid'));Require($rows.Count-le1) "Duplicate step $name";if(-not$rows.Count){if(-not$provision){throw "Missing step $name"};$message=Get-Message $Service $definition.message;$filter=Get-Filter $Service $message.Id $definition.table;$entity=[Microsoft.Xrm.Sdk.Entity]::new('sdkmessageprocessingstep');$entity['name']=$name;$entity['description']='Service Operations unified Job workflow guard';$entity['stage']=[Microsoft.Xrm.Sdk.OptionSetValue]::new(20);$entity['mode']=[Microsoft.Xrm.Sdk.OptionSetValue]::new(0);$entity['rank']=[int]$definition.order;$entity['supporteddeployment']=[Microsoft.Xrm.Sdk.OptionSetValue]::new(0);$entity['sdkmessageid']=$message.ToEntityReference();$entity['sdkmessagefilterid']=$filter.ToEntityReference();$entity['plugintypeid']=$PluginTypes[[string]$definition.pluginType].ToEntityReference();if($definition.order-eq20){$entity['sdkmessageprocessingstepsecureconfigid']=$secure.ToEntityReference()};$id=$Service.Create($entity);$rows=@($Service.Retrieve('sdkmessageprocessingstep',$id,[Microsoft.Xrm.Sdk.Query.ColumnSet]::new('sdkmessageprocessingstepid','name','stage','mode','rank','plugintypeid','sdkmessageid','sdkmessagefilterid','sdkmessageprocessingstepsecureconfigid')));Write-Host "Created guard step $name"};$step=$rows[0];Require([int]$step['stage'].Value-eq20 -and [int]$step['mode'].Value-eq0 -and [int]$step['rank']-eq[int]$definition.order) "Step conflict: $name";if($definition.image){$images=@(Find-Exactly $Service 'sdkmessageprocessingstepimage' 'sdkmessageprocessingstepid' $step.Id @('sdkmessageprocessingstepimageid','name','entityalias','imagetype','attributes'));Require($images.Count-le1) "Duplicate image for $name";$attributes=@($definition.columns)-join ',';if(-not$images.Count){if(-not$provision){throw "Missing image for $name"};$image=[Microsoft.Xrm.Sdk.Entity]::new('sdkmessageprocessingstepimage');$image['name']='Before';$image['entityalias']='Before';$image['imagetype']=[Microsoft.Xrm.Sdk.OptionSetValue]::new(0);$image['messagepropertyname']='Target';$image['attributes']=$attributes;$image['sdkmessageprocessingstepid']=$step.ToEntityReference();$Service.Create($image)|Out-Null;Write-Host "Created pre-image for $name"}else{$actualAttributes=if($images[0].Attributes.Contains('attributes')){[string]$images[0]['attributes']}else{''};Require([string]$images[0]['entityalias']-eq'Before' -and $actualAttributes-eq$attributes) "Image conflict: $name"}}}
+function Ensure-Steps($Service,$PluginTypes,$Roles){
+    $full=@(Find-Exactly $Service 'role' 'name' 'System Administrator' @('roleid','name'))
+    $coordinator=@(Find-Exactly $Service 'role' 'name' 'Service Operations' @('roleid','name'))
+    Require($full.Count-eq1 -and $coordinator.Count-eq1) 'Full/coordinator role resolution failed.'
+    $secureValue="full=$($full[0].Id);coordinator=$($coordinator[0].Id);office=$($Roles['office'].Id);book=$($Roles['book'].Id)"
+    $secure=Ensure-SecureConfig $Service $secureValue
+    $verified=0
+    $stepsToEnable=[Collections.Generic.List[Microsoft.Xrm.Sdk.EntityReference]]::new()
+    foreach($definition in @(Expand-Steps)){
+        $name="Service Operations Unified | $($definition.pluginType.Split('.')[-1]) | $($definition.message) | $($definition.table)"
+        $columns=@('sdkmessageprocessingstepid','name','stage','mode','rank','supporteddeployment','statecode','filteringattributes','plugintypeid','sdkmessageid','sdkmessagefilterid','sdkmessageprocessingstepsecureconfigid')
+        $rows=@(Find-Exactly $Service 'sdkmessageprocessingstep' 'name' $name $columns)
+        Require($rows.Count-le1) "Duplicate step $name"
+        $message=Get-Message $Service $definition.message
+        $filter=Get-Filter $Service $message.Id $definition.table
+        if(-not$rows.Count){
+            if(-not$provision){throw "Missing step $name"}
+            $entity=[Microsoft.Xrm.Sdk.Entity]::new('sdkmessageprocessingstep')
+            $entity['name']=$name;$entity['description']='Service Operations unified Job workflow guard'
+            $entity['stage']=[Microsoft.Xrm.Sdk.OptionSetValue]::new(20);$entity['mode']=[Microsoft.Xrm.Sdk.OptionSetValue]::new(0);$entity['rank']=[int]$definition.order
+            $entity['supporteddeployment']=[Microsoft.Xrm.Sdk.OptionSetValue]::new(0);$entity['sdkmessageid']=$message.ToEntityReference();$entity['sdkmessagefilterid']=$filter.ToEntityReference();$entity['plugintypeid']=$PluginTypes[[string]$definition.pluginType].ToEntityReference()
+            if($definition.order-eq20){$entity['sdkmessageprocessingstepsecureconfigid']=$secure.ToEntityReference()}
+            $id=$Service.Create($entity);$rows=@($Service.Retrieve('sdkmessageprocessingstep',$id,[Microsoft.Xrm.Sdk.Query.ColumnSet]::new($columns)));Write-Host "Created guard step $name"
+        }
+        $step=$rows[0]
+        $pluginReference=[Microsoft.Xrm.Sdk.EntityReference]$step['plugintypeid'];$messageReference=[Microsoft.Xrm.Sdk.EntityReference]$step['sdkmessageid'];$filterReference=[Microsoft.Xrm.Sdk.EntityReference]$step['sdkmessagefilterid']
+        $secureReference=if($step.Attributes.ContainsKey('sdkmessageprocessingstepsecureconfigid')){[Microsoft.Xrm.Sdk.EntityReference]$step['sdkmessageprocessingstepsecureconfigid']}else{$null}
+        $filtering=if($step.Attributes.ContainsKey('filteringattributes')){[string]$step['filteringattributes']}else{''}
+        $actualStage=[int]$step['stage'].Value;$actualMode=[int]$step['mode'].Value;$actualRank=[int]$step['rank'];$actualDeployment=[int]$step['supporteddeployment'].Value;$actualState=[int]$step['statecode'].Value
+        Require($actualStage-eq20 -and $actualMode-eq0 -and $actualRank-eq[int]$definition.order -and $actualDeployment-eq0 -and $actualState-in@(0,1) -and -not$filtering) "Step execution conflict: $name (stage=$actualStage mode=$actualMode rank=$actualRank deployment=$actualDeployment state=$actualState filtering='$filtering')"
+        if($actualState-eq1){if(-not$provision){throw "Guard step is disabled: $name"};$stepsToEnable.Add($step.ToEntityReference())}
+        Require($pluginReference.Id-eq$PluginTypes[[string]$definition.pluginType].Id -and $messageReference.Id-eq$message.Id -and $filterReference.Id-eq$filter.Id) "Step binding conflict: $name"
+        if($definition.order-eq20){Require($secureReference -and $secureReference.Id-eq$secure.Id) "Secure configuration conflict: $name"}
+        if($definition.image){
+            $images=@(Find-Exactly $Service 'sdkmessageprocessingstepimage' 'sdkmessageprocessingstepid' $step.Id @('sdkmessageprocessingstepimageid','name','entityalias','imagetype','attributes'))
+            Require($images.Count-le1) "Duplicate image for $name";$attributes=@($definition.columns)-join ','
+            if(-not$images.Count){if(-not$provision){throw "Missing image for $name"};$image=[Microsoft.Xrm.Sdk.Entity]::new('sdkmessageprocessingstepimage');$image['name']='Before';$image['entityalias']='Before';$image['imagetype']=[Microsoft.Xrm.Sdk.OptionSetValue]::new(0);$image['messagepropertyname']='Target';$image['attributes']=$attributes;$image['sdkmessageprocessingstepid']=$step.ToEntityReference();$Service.Create($image)|Out-Null;Write-Host "Created pre-image for $name"}
+            else{$actualAttributes=if($images[0].Attributes.Contains('attributes')){[string]$images[0]['attributes']}else{''};Require([string]$images[0]['entityalias']-eq'Before' -and [int]$images[0]['imagetype'].Value-eq0 -and $actualAttributes-eq$attributes) "Image conflict: $name"}
+        }
+        $verified++
+    }
+    foreach($stepReference in $stepsToEnable){$request=[Microsoft.Crm.Sdk.Messages.SetStateRequest]::new();$request.EntityMoniker=$stepReference;$request.State=[Microsoft.Xrm.Sdk.OptionSetValue]::new(0);$request.Status=[Microsoft.Xrm.Sdk.OptionSetValue]::new(1);$Service.Execute($request)|Out-Null}
+    if($stepsToEnable.Count){Write-Host "Enabled $($stepsToEnable.Count) fully verified restricted-access step(s)."}
+    if($GuardScope-eq'AccessOnly'){
+        $enabledInvariant=0;$registeredInvariant=0;$invariant=$plan.guardSteps[0]
+        foreach($table in $invariant.tables){foreach($messageName in $invariant.messages){$name="Service Operations Unified | $($invariant.pluginType.Split('.')[-1]) | $messageName | $table";$rows=@(Find-Exactly $Service 'sdkmessageprocessingstep' 'name' $name @('sdkmessageprocessingstepid','statecode'));$registeredInvariant+=$rows.Count;foreach($row in $rows){if([int]$row['statecode'].Value-eq0){$enabledInvariant++}}}}
+        Require($enabledInvariant-eq0) "$enabledInvariant legacy number-invariant step(s) are enabled."
+        Write-Host "Verified $verified enabled restricted-access steps; $registeredInvariant legacy number-invariant steps registered, 0 enabled."
+    }else{Write-Host "Verified $verified enabled unified workflow steps."}
 }
 function Find-User($Service,[string]$Upn){$query=[Microsoft.Xrm.Sdk.Query.QueryExpression]::new('systemuser');$query.ColumnSet=[Microsoft.Xrm.Sdk.Query.ColumnSet]::new('systemuserid','domainname','internalemailaddress','isdisabled');$query.Criteria.FilterOperator=[Microsoft.Xrm.Sdk.Query.LogicalOperator]::Or;$query.Criteria.AddCondition('domainname',[Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,$Upn);$query.Criteria.AddCondition('internalemailaddress',[Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,$Upn);@($Service.RetrieveMultiple($query).Entities|Group-Object Id|ForEach-Object{$_.Group[0]})}
 
@@ -247,5 +309,5 @@ try {
     if($Mode -eq 'AssignPilot'){
         $users=@(Find-User $service $PilotUpn);Require($users.Count-eq1 -and -not[bool]$users[0]['isdisabled']) "Pilot $PilotUpn is not one enabled user.";$office=$roles['office'];$query=[Microsoft.Xrm.Sdk.Query.QueryExpression]::new('systemuserroles');$query.ColumnSet=[Microsoft.Xrm.Sdk.Query.ColumnSet]::new($false);$query.Criteria.AddCondition('systemuserid',[Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,$users[0].Id);$query.Criteria.AddCondition('roleid',[Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,$office.Id);if(-not$service.RetrieveMultiple($query).Entities.Count){$references=[Microsoft.Xrm.Sdk.EntityReferenceCollection]::new();$references.Add($office.ToEntityReference());$service.Associate('systemuser',$users[0].Id,[Microsoft.Xrm.Sdk.Relationship]::new('systemuserroles_association'),$references);Write-Output "Assigned Office Admin additively to $PilotUpn; existing roles were retained."}else{Write-Output "$PilotUpn already has Office Admin."}
     }
-    Write-Output "Unified workflow $Mode completed. Migration/seeds/application deployment/feature enablement: NONE."
+    Write-Output "Unified workflow $Mode completed with guard scope $GuardScope. Migration/seeds/application deployment/feature enablement: NONE."
 } finally { if($service -is[IDisposable]){$service.Dispose()} }

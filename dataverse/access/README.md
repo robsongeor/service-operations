@@ -1,18 +1,20 @@
-# Restricted access guard — local draft
+# Restricted access guard
 
-**Not deployed and not ready to register.** This source is an initial field-write
-policy, not a complete Dataverse security solution. Do not assign the existing
-Job Book Only data role to the new Admin cohorts: its broad write privileges do
-not match the agreed policy.
+**Live in production from 9 October 2026.** The signed `1.0.1.0` assembly and 14
+synchronous PreOperation restricted-access steps are enabled with exact secure
+Dataverse role IDs, required `Before` images and no filtering attributes. The 15
+legacy number-invariant steps remain registered but disabled while V1/manual
+numbering is still in use. Do not assign the obsolete Job Book Only role to the
+new Admin cohorts.
 
-## Implemented locally
+## Implemented
 
 - Distinct frontend FullAccess, ServiceCoordinator, JobCardAdmin (Office Admin),
-  JobBookAdmin and retained legacy JobBookOnly profiles.
+  JobBookAdmin and an unassigned legacy JobBookOnly compatibility profile.
 - Admin Equipment writes allow fleet, alternate fleet numbers, make, model,
   serial and Site only. The client requires an exact ETag and reloads the saved
   record. Moving Equipment does not rewrite historical Jobs.
-- The draft plugin resolves configured Dataverse role IDs from direct/team
+- The plugin resolves configured Dataverse role IDs from direct/team
   membership. Unknown roles fail closed; Full and coordinator bypass this
   field guard, while ordinary data privileges and other plugins still apply.
 - Office and Book profiles have separate marker permissions. Customer/Site
@@ -32,36 +34,18 @@ scripts/test-restricted-access-plugin.ps1` from the repository root. The offline
 checks exercise configuration and policy with the locally installed Power Apps
 SDK. They do not prove real role resolution or deployment behavior.
 
-## Required before registration or user assignment
+## Remaining acceptance work
 
-1. Registration, Manage job/linked Void and initial assigned-technician dispatch
-   now have local transactional plugin contracts, but their Custom APIs, privileges,
-   columns and steps are not provisioned or target-tested. Verify the Azure
-   link/Dataverse dispatch boundary and recovery with approved pilot accounts.
-   This draft deliberately blocks generic
-   Job/ledger/dispatch creation and linked-ledger updates. Do not bypass it by
-   trusting a browser flag, arbitrary parent context or unverified shared variable.
-2. Review every write path, including bulk messages, relationship operations,
-   reassignment, status changes, imports, automation and application users.
-   Define separate least-privilege data roles and remove overlapping broader
-   grants for the intended users. Preserve unrelated users and integrations.
-3. Register synchronous PreOperation, caller-context steps only after that
-   integration is complete. Update steps require a `Before` pre-image with the
-   record identity and every field consulted by policy: Job registration Void;
-   ledger stage, registered/promoted Job and both entry markers. Do not use
-   filtering attributes that allow forbidden field updates to bypass the guard.
-4. Secure configuration must supply actual Dataverse role IDs, including
-   approved business-unit copies: `full=GUID;coordinator=GUID;office=GUID;book=GUID`.
-   Comma-separated IDs are supported per profile; IDs must be distinct and
-   nonzero. These are **not Entra app-role IDs**. Verify role-query permissions,
-   team membership and caller behavior in the acceptance environment.
-5. Test all four regional ledgers with real licensed pilot accounts. Cover
+1. Test all four regional ledgers with real licensed pilot accounts. Cover
    direct HTTP denial, before/after handoff corrections, stale saves, atomic
    number allocation and Void, markers, email and reviewer authorization.
-6. Deploy compatible application/backend versions before assigning the new
-   Entra and Dataverse roles. Then remove Bruce's old FullAccess assignment
+2. Review remaining write paths, including bulk messages, relationship operations,
+   imports, automation and application users, and reconcile broader direct/team grants.
+3. Remove Bruce's old FullAccess assignment
    after verifying coordinator access, leaving George as the sole FullAccess
    user in the agreed roster. No other assignments are implicitly removed.
+4. Keep the number-invariant steps disabled until V1/manual numbering is retired;
+   activation is a separate migration and cutover decision.
 
 The authoritative roster and remaining acceptance gates are in
 [the access plan](../../docs/features/JOB_BOOK_ACCESS_PLAN.md) and

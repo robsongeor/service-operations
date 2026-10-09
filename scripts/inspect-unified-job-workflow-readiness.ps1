@@ -25,6 +25,10 @@ function Same-Set([object[]]$Left, [object[]]$Right) {
     (@($Left | ForEach-Object { [string]$_ } | Sort-Object -Unique) -join '|') -eq
         (@($Right | ForEach-Object { [string]$_ } | Sort-Object -Unique) -join '|')
 }
+function Read-OptionValue($Value) {
+    if ($Value -is [Microsoft.Xrm.Sdk.OptionSetValue]) { return [int]$Value.Value }
+    return [int]$Value
+}
 function Get-ToolsPath {
     $root = Join-Path $env:LOCALAPPDATA 'Microsoft\PowerAppsCLI'
     $path = Get-ChildItem -LiteralPath $root -Directory -Filter 'Microsoft.PowerApps.CLI.*' |
@@ -89,6 +93,19 @@ try {
     if ($solutions.Count -eq 1 -and -not [bool]$solutions[0]['ismanaged']) { Add-Finding 'Solution' $SolutionUniqueName 'Pass' 'One unmanaged solution found.' }
     else { Add-Finding 'Solution' $SolutionUniqueName 'Fail' "Expected one unmanaged solution; found $($solutions.Count)." }
 
+    $assemblies = @(Find-Exactly $service 'pluginassembly' 'name' 'ServiceOperations.UnifiedJobWorkflow' @('pluginassemblyid','name','version','publickeytoken','isolationmode','content'))
+    if ($assemblies.Count -eq 1) {
+        $content = if ($assemblies[0].Attributes.ContainsKey('content')) { [string]$assemblies[0]['content'] } else { '' }
+        $hash = if ($content) {
+            $sha = [Security.Cryptography.SHA256]::Create()
+            try { ([BitConverter]::ToString($sha.ComputeHash([Convert]::FromBase64String($content)))).Replace('-', '').ToLowerInvariant() }
+            finally { $sha.Dispose() }
+        } else { '(content unavailable)' }
+        Add-Finding 'Plugin assembly' 'ServiceOperations.UnifiedJobWorkflow' 'Review' "Version $($assemblies[0]['version']); token $($assemblies[0]['publickeytoken']); SHA-256 $hash."
+    } else {
+        Add-Finding 'Plugin assembly' 'ServiceOperations.UnifiedJobWorkflow' 'Missing' "Expected one assembly; found $($assemblies.Count)."
+    }
+
     foreach ($column in $manifest.columns) {
         $attribute = Get-AttributeMetadata $service $column.table $column.name
         $item = "$($column.table).$($column.name)"
@@ -109,7 +126,8 @@ try {
         if ($metadata -and [bool]$metadata.IsOptimisticConcurrencyEnabled) { Add-Finding 'Invariant' "$table optimistic concurrency" 'Pass' 'Enabled.' }
         else { Add-Finding 'Invariant' "$table optimistic concurrency" 'Fail' 'Required by atomic registered-entry Void; not enabled or table unavailable.' }
         $stage = Get-AttributeMetadata $service $table 'gr_stage'
-        $option = @(if ($stage -and $stage.OptionSet) { $stage.OptionSet.Options | Where-Object Value -eq [int]$manifest.registeredStage })
+        $registeredStage = [int]$manifest.registeredStage
+        $option = @(if ($stage -and $stage.OptionSet) { $stage.OptionSet.Options | Where-Object { $_.Value -eq $registeredStage } })
         if ($option.Count -eq 1) { Add-Finding 'Schema' "$table.gr_stage Registered" 'Pass' "Choice $($manifest.registeredStage) exists." }
         else { Add-Finding 'Schema' "$table.gr_stage Registered" 'Missing' "Choice $($manifest.registeredStage) is absent." }
     }
@@ -143,8 +161,8 @@ try {
         $row = $rows[0]
         $problems = [Collections.Generic.List[string]]::new()
         if ([bool]$row['isfunction']) { $problems.Add('isfunction must be false') }
-        if ([int]$row['bindingtype'] -ne 0) { $problems.Add('binding must be Global') }
-        if ([int]$row['allowedcustomprocessingsteptype'] -ne 0) { $problems.Add('custom processing steps must be disabled') }
+        if ((Read-OptionValue $row['bindingtype']) -ne 0) { $problems.Add('binding must be Global') }
+        if ((Read-OptionValue $row['allowedcustomprocessingsteptype']) -ne 0) { $problems.Add('custom processing steps must be disabled') }
         if ([string]$row['executeprivilegename'] -ne [string]$api.executePrivilege) { $problems.Add('ExecutePrivilegeName mismatch') }
         $pluginReference = if ($row.Attributes.ContainsKey('plugintypeid')) { [Microsoft.Xrm.Sdk.EntityReference]$row['plugintypeid'] } else { $null }
         if (-not $pluginReference) { $problems.Add('plugin type is missing') }
@@ -154,8 +172,14 @@ try {
         }
         $requestNames = Read-ChildNames $service 'customapirequestparameter' $row.Id
         $responseNames = Read-ChildNames $service 'customapiresponseproperty' $row.Id
-        if (($requestNames -join ',') -ne (@($api.requests | Sort-Object) -join ',')) { $problems.Add('request parameter set mismatch') }
-        if (($responseNames -join ',') -ne (@($api.responses | Sort-Object) -join ',')) { $problems.Add('response property set mismatch') }
+        $expectedRequestNames = @($api.requests | Sort-Object)
+        $expectedResponseNames = @($api.responses | Sort-Object)
+        if (($requestNames -join ',') -ne ($expectedRequestNames -join ',')) {
+            $problems.Add("request parameter set mismatch (actual: $($requestNames -join ', '); expected: $($expectedRequestNames -join ', '))")
+        }
+        if (($responseNames -join ',') -ne ($expectedResponseNames -join ',')) {
+            $problems.Add("response property set mismatch (actual: $($responseNames -join ', '); expected: $($expectedResponseNames -join ', '))")
+        }
         if ($problems.Count) { Add-Finding 'Custom API' $api.name 'Conflict' ($problems -join '; ') }
         else { Add-Finding 'Custom API' $api.name 'Pass' 'API, privilege, plugin and parameter sets match.' }
     }

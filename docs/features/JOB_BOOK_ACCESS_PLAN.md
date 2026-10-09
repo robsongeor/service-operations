@@ -1,16 +1,14 @@
 # Job Book user access plan
 
-Status: agreed role direction and eleven-account roster, updated 9 October 2026.
-Pubudu's Office Admin assignment is live; other unmarked assignments remain planned. This is the rollout access manifest;
-account identities and effective permissions must be verified before assignment.
+Status: eleven-account Entra and Dataverse roster is live, updated 9 October 2026.
+The restricted-access server guard is deployed; named-user end-to-end acceptance remains required.
 
 ## Live audit
 
 The [3 October read-only audit](JOB_BOOK_ACCESS_AUDIT.md) confirms the original ten Entra accounts.
-A 6 October read-only check also confirms Pubudu is present in Dataverse alongside George and Bruce;
-the other eight rollout users remain absent. The old Job Book
-Only role has broad writes and must not be reused unchanged. See the audit for exact current
-assignments, missing role definitions and the proposed implementation/onboarding order.
+A 9 October recheck confirms all eleven intended users are present in Dataverse. The obsolete
+JobBookOnly Entra assignment was removed from all eight restricted Admin accounts after each
+replacement role was verified. See the audit for the original snapshot and rollout history.
 
 ## Role decisions
 
@@ -18,9 +16,9 @@ assignments, missing role definitions and the proposed implementation/onboarding
 | --- | --- | --- |
 | Full access | George only; unrestricted application access | Existing `ServiceOperations.FullAccess` profile |
 | Service coordinator | Bruce and Andy; operational management with the approved restricted screen set | Separate frontend profile implemented as `ServiceOperations.ServiceCoordinator`; Microsoft provisioning, Bruce assignment and named-user verification are mandatory go-live blockers |
-| Office Admin | Jess, Nargiza and Pubudu; entry, corrections, technician assignment/email, markers and review | Existing `ServiceOperations.JobCardAdmin` client profile; Pubudu is assigned in Entra and Dataverse |
-| Job Book Admin | Five entry/correction users; eligible-entry Void allowed; corrections remain allowed after coordinator handoff; no technician assignment/email, review or GT/Timecloud marker changes | Distinct `ServiceOperations.JobBookAdmin` client, Entra and Dataverse profiles are provisioned; named-user assignments remain planned |
-| Job Book only | Not planned for this rollout | Keep existing implementation; do not assign it as part of rollout |
+| Office Admin | Jess, Nargiza and Pubudu; entry, corrections, technician assignment/email, markers and review | `ServiceOperations.JobCardAdmin` is assigned in Entra and Dataverse |
+| Job Book Admin | Five entry/correction users; eligible-entry Void allowed; corrections remain allowed after coordinator handoff; no technician assignment/email, review or GT/Timecloud marker changes | `ServiceOperations.JobBookAdmin` is assigned in Entra and Dataverse |
+| Job Book only | Obsolete | No restricted Admin account retains this Entra assignment |
 
 Keep Service coordinator distinct from Full access. Do not assign Bruce or Andy FullAccess: a
 remaining FullAccess claim would bypass the coordinator screen restrictions. Future changes must cover both UI capabilities and
@@ -31,15 +29,14 @@ tenant administration, bypassing data-integrity rules or authority to rewrite pe
 
 ## Intended users
 
-Unmarked assignments below remain planned. Pubudu's Office Admin assignment was verified on
-9 October 2026. Everyone uses an individual work account.
+Assignments below were verified on 9 October 2026. Everyone uses an individual work account.
 
 | Person/account | Intended role | Identity basis |
 | --- | --- | --- |
 | George — `georger@liftrucks.co.nz` | Full access | Existing project owner account; verify target identity |
 | `brucef@liftrucks.co.nz` | Service coordinator | Supplied by George |
 | `andyl@liftrucks.co.nz` | Service coordinator | Supplied by George |
-| `pubudu@liftrucks.co.nz` | Office Admin | Returned from Job Book Admin to Office Admin in Entra and Dataverse with exact before/after verification on 9 October 2026. Three unrelated Dataverse platform roles and the pre-existing JobBookOnly app assignment were preserved. |
+| `pubudu@liftrucks.co.nz` | Office Admin | Returned from Job Book Admin to Office Admin in Entra and Dataverse; obsolete JobBookOnly removed after replacement verification. |
 | Jess — `jessamynb@liftrucks.co.nz` | Office Admin | Name and email confirmed by George |
 | Nargiza — `nargiza@liftrucks.co.nz` | Office Admin | Name and email confirmed by George |
 | `martinh@liftrucks.co.nz` | Job Book Admin | Supplied by George |

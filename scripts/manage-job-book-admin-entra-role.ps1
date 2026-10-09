@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Verify', 'ProvisionRole', 'SwitchPilot', 'SwitchToOfficeAdmin')]
+    [ValidateSet('Verify', 'ProvisionRole', 'SwitchPilot', 'SwitchToOfficeAdmin', 'RemoveLegacy')]
     [string]$Mode = 'Verify',
     [string]$TenantId = 'a348f38c-33d0-4ce9-a0df-6a66cc0562a1',
     [string]$ApplicationClientId = '9e9edbea-dfee-4995-aa1f-e9d10d16e093',
@@ -177,4 +177,23 @@ if ($Mode -eq 'SwitchToOfficeAdmin') {
     }
     Write-AssignmentSummary $after $applicationRoles "Application assignments after $Mode"
     Write-Output "Verified: $PilotUpn switched from Job Book Admin to Office Admin; unrelated application assignments remain."
+}
+
+if ($Mode -eq 'RemoveLegacy') {
+    Require ($bookRoles.Count -eq 1) 'The Job Book Admin application role must exist before removing legacy access.'
+    $legacyAssignments = @($assignments | Where-Object { [string]$_.appRoleId -eq [string]$legacyRoles[0].id })
+    $replacementAssignments = @($assignments | Where-Object { [string]$_.appRoleId -in @([string]$bookRoles[0].id, [string]$officeRoles[0].id) })
+    Require ($legacyAssignments.Count -eq 1) "Refusing change because $PilotUpn does not have exactly one legacy Job Book Only assignment."
+    Require ($replacementAssignments.Count -eq 1) "Refusing change because $PilotUpn does not have exactly one approved Job Book Admin or Office Admin replacement."
+
+    Invoke-MgGraphRequest -Method DELETE -Uri "https://graph.microsoft.com/v1.0/users/$($user.id)/appRoleAssignments/$($legacyAssignments[0].id)" | Out-Null
+    $after = @(Get-Assignments ([string]$user.id))
+    Require (@($after | Where-Object { [string]$_.appRoleId -eq [string]$legacyRoles[0].id }).Count -eq 0) 'Legacy Job Book Only assignment is still present.'
+    Require (@($after | Where-Object { [string]$_.id -eq [string]$replacementAssignments[0].id }).Count -eq 1) 'Approved replacement assignment was not preserved.'
+    Require ($after.Count -eq $assignments.Count - 1) 'Unexpected application-role count after legacy removal.'
+    foreach ($assignment in @($assignments | Where-Object { [string]$_.id -ne [string]$legacyAssignments[0].id })) {
+        Require (@($after | Where-Object { [string]$_.id -eq [string]$assignment.id }).Count -eq 1) 'An unrelated application-role assignment was not preserved.'
+    }
+    Write-AssignmentSummary $after $applicationRoles "Application assignments after $Mode"
+    Write-Output "Verified: removed only $legacyBookValue from $PilotUpn; the approved replacement and unrelated assignments remain."
 }

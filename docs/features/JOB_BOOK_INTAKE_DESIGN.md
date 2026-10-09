@@ -291,13 +291,14 @@ does not automatically make a Job coordinator-managed or mark it entered in anot
    automatic allocator. Normal Job deletion rejects numbered records and uses a current ETag for
    unnumbered deletion, protecting a concurrent allocation. Shared owners and tests are documented
    in [Jobs architecture](../architecture/jobs.md#job-number-safety-foundation-3-october-2026).
-2. **Atomic registration/allocation (local source and tests; not deployed/integrated):**
+2. **Atomic registration/allocation (server package deployed; feature flag remains off):**
    `dataverse/job-registration/JobRegistrationPlugin.cs` implements new basic Job registration and
    allocation to an existing unnumbered ordinary Job in an ambient Dataverse transaction. The
    guarded client adapter, replay/concurrency tests and number-invariant plugin are described below.
    The browser never calculates max+1 or performs independent ledger-create/Job-update writes.
-   No migration seed is inferred or changed. Metadata, privileges, signing/packaging, plugin/API
-   registration and target-environment transaction tests remain approval-gated.
+   No migration seed is inferred or changed. Metadata, privileges, the signed `1.0.1.0` assembly,
+   APIs and restricted-access steps are deployed. Unified feature enablement, named-user transaction
+   tests and number-invariant activation remain approval-gated.
 3. **Unified screens/local walkthrough (implemented only in the isolated fixture):** reuse the current simple entry drawer,
    canonical corrections/editor controls and assigned-technician email workflow. Jobs creation
    saves staging without requiring a number. Service Coordination displays Job numbers as immutable

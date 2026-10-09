@@ -1,7 +1,7 @@
 # Unified Job workflow — signing-key custody
 
-Status: primary local key and signed package created 6 October 2026; recovery backup remains required
-before production deployment.
+Status: primary local key used for the production `1.0.1.0` deployment on 9 October 2026; recovery
+backup remains required.
 
 ## Current custody record
 
@@ -10,12 +10,12 @@ before production deployment.
 - Access: George's Windows account and `SYSTEM`, Full Control, inheritance disabled.
 - Generation: 2,048-bit Microsoft Strong Cryptographic Provider signature key, created locally with
   `scripts/new-unified-job-workflow-signing-key.ps1`.
-- Assembly identity: `ServiceOperations.UnifiedJobWorkflow`, version `1.0.0.0`, public key token
+- Assembly identity: `ServiceOperations.UnifiedJobWorkflow`, version `1.0.1.0`, public key token
   `0edea2881bb8578c`.
-- Reviewed package: `%LOCALAPPDATA%\ServiceOperations\Packages\ServiceOperations.UnifiedJobWorkflow-1.0.0-20261006-r2`.
-- Assembly SHA-256: `621a914b204f0c1bef8243924212fe3533c6ef4f7cf8e558cbae0351b10af45f`.
-- The original non-`r2` package predates the guarded registration-child fix and is superseded.
-- Deployment performed: no.
+- Deployed package: `%LOCALAPPDATA%\ServiceOperations\Packages\ServiceOperations.UnifiedJobWorkflow-1.0.1-20261009-r1`.
+- Assembly SHA-256: `764da41e5866517c6536343bde1834c7debd1ff8de77abe49fc564870728a505`.
+- All `1.0.0.0` packages are superseded.
+- Deployment performed: restricted-access guard live; number-invariant steps remain disabled.
 - Open custody gate: nominate a backup owner, create protected recovery storage and prove recovery with
   a test build. The PC-local copy alone is not sufficient production recovery.
 
@@ -55,7 +55,7 @@ reviewed Dataverse replacement path.
 
 - requires an existing `.snk` path outside the repository;
 - refuses to overwrite an existing DLL or manifest;
-- compiles the exact five reviewed source files as assembly version `1.0.0.0`;
+- compiles the exact five reviewed source files as assembly version `1.0.1.0`;
 - requires a non-empty public key token;
 - writes the signed DLL and a companion JSON manifest containing the public token, assembly hash,
   source hashes and plugin type list;
@@ -67,7 +67,7 @@ Example for a future reviewed package:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-unified-job-workflow-plugin.ps1 `
   -Mode Package `
   -SigningKeyPath D:\SecureBuildKeys\ServiceOperations.UnifiedJobWorkflow.snk `
-  -OutputDirectory D:\ReviewedPackages\ServiceOperations.UnifiedJobWorkflow-1.0.0
+  -OutputDirectory D:\ReviewedPackages\ServiceOperations.UnifiedJobWorkflow-1.0.1
 ```
 
 Those paths are examples, not approved locations. The output manifest may be retained with release

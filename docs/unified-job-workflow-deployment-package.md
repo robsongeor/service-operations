@@ -1,15 +1,29 @@
 # Unified Job workflow — deployment package review
 
-Status: validated signed local package. No Dataverse provisioning, plugin/API registration, role
-assignment, application deployment or feature enablement has occurred.
+Status: restricted-access production deployment completed 9 October 2026. Unified registration
+feature enablement, data migration and number-invariant activation remain separate future work.
+
+## Production access-guard deployment — 9 October 2026
+
+- Added and published `gr_job.gr_externalsupplierdetails`; verified all 13 schema columns and the
+  Registered `122830004` option on all four regional ledgers.
+- Reconciled `gr_RegisterJobBookJob` by adding the optional `ExternalSupplierDetails` request.
+- Deployed signed `ServiceOperations.UnifiedJobWorkflow` `1.0.1.0`, public key token
+  `0edea2881bb8578c`, SHA-256
+  `764da41e5866517c6536343bde1834c7debd1ff8de77abe49fc564870728a505`.
+- Enabled and independently verified all 14 restricted-access steps: synchronous PreOperation,
+  order 20, caller context, exact secure role map, required pre-images and no filtering attributes.
+- Verified the 15 number-invariant steps remain disabled for the V1/manual-numbering overlap.
+- Preserved the existing three Office Admin and five Job Book Admin Dataverse assignments. No
+  migration, business-record mutation, seed change, app deployment or feature-flag change occurred.
 
 ## Dry-run result — 6 October 2026
 
 The offline planner validates one ordered compatible deployment unit:
 
 1. Preflight and export current schema, app assignments, direct/team Dataverse roles and settings.
-2. Add 12 nullable columns and Registered `122830004` to four regional ledger Choice definitions.
-3. Upload one owner-approved strong-name-signed `ServiceOperations.UnifiedJobWorkflow` `1.0.0.0`
+2. Add 13 nullable columns and Registered `122830004` to four regional ledger Choice definitions.
+3. Upload one owner-approved strong-name-signed `ServiceOperations.UnifiedJobWorkflow` `1.0.1.0`
    sandbox assembly containing four plugin types.
 4. Create five synchronous global Custom APIs with exact request/response contracts and non-empty
    `ExecutePrivilegeName` values.
@@ -44,27 +58,24 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/plan-unified-job
 ## Assembly readiness
 
 `scripts/build-unified-job-workflow-plugin.ps1 -Mode Verify` compiles all four plugin types to a
-temporary assembly, verifies the `1.0.0.0` identity and plugin type set, emits assembly/source hashes,
+temporary assembly, verifies the `1.0.1.0` identity and plugin type set, emits assembly/source hashes,
 then removes the temporary output. Verification passed.
 
 `-Mode Package` refuses to run without both an existing owner-approved strong-name key and an output
-directory. It never creates a key, connects to Dataverse or deploys the result. The reviewed local
-package was produced on 6 October 2026 with assembly version `1.0.0.0`, public key token
+directory. It never creates a key, connects to Dataverse or deploys the result. The deployed package
+was produced on 9 October 2026 with assembly version `1.0.1.0`, public key token
 `0edea2881bb8578c` and assembly SHA-256
-`621a914b204f0c1bef8243924212fe3533c6ef4f7cf8e558cbae0351b10af45f`. Its manifest hash and token
-match the DLL, and all four plugin types load with the Dataverse SDK. Production use remains blocked
-until key recovery is proven and the separate provisioning gates are approved.
-The reviewed `r2` package adds the exact registration/allocation child-write boundary required by
-the restricted roles. The original non-`r2` package is superseded and must not be deployed.
+`764da41e5866517c6536343bde1834c7debd1ff8de77abe49fc564870728a505`. Its manifest hash and token
+match the DLL, and all four plugin types load with the Dataverse SDK. Earlier `1.0.0.0` packages are
+superseded and must not be deployed.
 The [signing-key custody policy](unified-job-workflow-signing-key.md) requires the private `.snk` to
 remain outside the repository, prevents artifact overwrite, and retains only the public token plus
 assembly/source hashes in the package manifest.
 
 ## Role and assignment readiness
 
-The review-only assignment plan preserves the agreed eleven-account roster: one Full, two
-Coordinator, three Office Admin and five Job Book Admin users. Eight accounts still require Dataverse admission and
-licensing review. Existing unrelated assignments are explicitly preserved. Bruce retains current
+The agreed eleven-account roster is present: one Full, two Coordinator, three Office Admin and five
+Job Book Admin users. Existing unrelated assignments are explicitly preserved. Bruce retains current
 FullAccess until the added Coordinator path passes with his real account; old access is removed only
 after the replacement succeeds.
 
@@ -77,17 +88,16 @@ with exact before/after verification on 7 October 2026; the Office Admin assignm
 roles were preserved. On 9 October 2026 Pubudu was switched from Office Admin to Job Book Admin in
 both Entra and Dataverse; unrelated roles and the legacy JobBookOnly app assignment were preserved.
 Later that day, the owner approved returning Pubudu to Office Admin. The Office Admin replacement was
-verified before Job Book Admin was removed in both systems; unrelated roles and JobBookOnly were
-again preserved. The shared backend reviewer allowlist already includes Pubudu and agrees with this
+verified before Job Book Admin was removed in both systems; unrelated roles were preserved. The
+obsolete JobBookOnly assignment was subsequently removed from Pubudu, Jess and Nargiza after exact
+Office Admin replacement verification. The shared backend reviewer allowlist already includes Pubudu and agrees with this
 final Office Admin state. The
 cutover requires a fresh assignment export, one workflow role at a time, preservation of
 unrelated platform roles and explicit approval. Pubudu performs the account sign-in and MFA; no
 credential is collected.
 
-The approved live read-only admission recheck on 6 October 2026 found George, Bruce and Pubudu present.
-George currently holds Basic User, Site Check Checklist Administrator and System Administrator;
-Bruce holds Service Operations. Pubudu now holds Service Operations - Office Admin. Andy, Jess, Nargiza, Martin, Lance, Ranjani, Ashneel and Kaizer are
-still absent from Dataverse. No intended account had a returned team-derived role in this audit.
+The live admission recheck on 9 October 2026 found all eleven intended accounts present. The five
+Job Book Admin and three Office Admin assignments were preserved during guard deployment.
 
 The secure plugin configuration requires the exact business-unit Dataverse role IDs for Full,
 Coordinator, Office and Book profiles. Any overlapping direct/team grant that restores a denied
@@ -110,12 +120,10 @@ never delete or renumber records as generic rollback.
   manual Job Number entry. V2 blocks manual entry in its frontend during this explicitly accepted
   overlap. When V1 is retired or migrated, enable and verify the invariant steps as a separate
   cutover so direct Dataverse, integration and stale-client writes are also rejected.
-- Complete signing-key recovery backup; the owner-approved key and corrected `r2` package exist.
-- Capture secure restricted-role IDs after role creation; the exact 29 registrations are validated offline.
-- Admit/license the eight missing Dataverse users and select controlled pilot accounts.
+- Complete signing-key recovery backup; the owner-approved key and deployed `1.0.1.0` package exist.
+- Complete named-user allowed/denied tests for Job Book Admin and Office Admin across all four books.
 - Approve AutoNumber cutover ownership and recalculate the verified provisional sequence evidence.
-- Approve package output, provisioning window, backup/export owner and rollback operator.
-- Approve provisioning separately; later approve feature enablement separately again.
+- Approve the later migration/number-invariant activation and feature enablement separately.
 
 ## Validation
 
@@ -125,8 +133,8 @@ and processing policy, unique API names, exact authorized-profile sets for every
 required pre-image column. The strengthened plan and all 46 compiled plugin tests pass. The refreshed
 read-only target audit confirmed all four proposed privilege names exist and every current
 `System Administrator` and `Service Operations` business-unit role record passes its intended API
-privilege gate. The Office Admin and Job Book Admin roles do not yet exist, so their final role IDs
-and privilege sets can only be captured after separately approved role provisioning.
+privilege gate. The live verifier confirms all four role API gates, the exact secure role map,
+14 enabled restricted-access steps and zero enabled number-invariant steps.
 
 - dry-run planner: passed;
 - temporary assembly compilation/type/version verification: passed;

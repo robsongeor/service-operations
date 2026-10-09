@@ -54,10 +54,10 @@ These are application roles, not Microsoft tenant administrator privileges.
 | User group | Agreed direction | Application role |
 | --- | --- | --- |
 | George only | Unrestricted application access | Existing `ServiceOperations.FullAccess` |
-| Bruce and Andy | Same application capabilities initially; restrict separately later | Proposed distinct `ServiceOperations.ServiceCoordinator`, not implemented/provisioned |
-| Jess, Nargiza and Pubudu | Office Admin: corrections, assignment/email, GT/Timecloud markers and review; same Customer/Site creation and Equipment move/detail-edit scope as Job Book Admin | Existing `ServiceOperations.JobCardAdmin` client profile; Pubudu assigned in Entra and Dataverse on 9 October 2026 |
-| Martin, Lance, Ranjani, Ashneel and Kaizer | Job Book Admin: entry, eligible-entry Void, factual corrections after handoff, Customer/Site creation, Equipment moves and detail edits; no assignment/email, markers or review | Distinct `ServiceOperations.JobBookAdmin`; assignments remain planned |
-| Job Book only | Not planned for this rollout | Retain existing implementation without rollout assignments |
+| Bruce and Andy | Same application capabilities initially; restrict separately later | `ServiceOperations.ServiceCoordinator` is provisioned and assigned |
+| Jess, Nargiza and Pubudu | Office Admin: corrections, assignment/email, GT/Timecloud markers and review; same Customer/Site creation and Equipment move/detail-edit scope as Job Book Admin | `ServiceOperations.JobCardAdmin` is assigned in Entra and Dataverse |
+| Martin, Lance, Ranjani, Ashneel and Kaizer | Job Book Admin: entry, eligible-entry Void, factual corrections after handoff, Customer/Site creation, Equipment moves and detail edits; no assignment/email, markers or review | `ServiceOperations.JobBookAdmin` is assigned in Entra and Dataverse |
+| Job Book only | Obsolete | No restricted Admin account retains this Entra assignment |
 
 ServiceCoordinator must remain a distinct role even while capabilities match FullAccess.
 Do not give coordinators an additional FullAccess claim that would bypass later restrictions.
