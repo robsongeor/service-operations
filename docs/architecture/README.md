@@ -5,17 +5,22 @@ Dataverse. Its modules share the Customer → Site → Equipment → Job operati
 
 ## System boundaries
 
-```text
-Authenticated office browser
-    ├── React management UI
-    ├── MSAL delegated Dataverse access
-    └── authenticated server API calls
+~~~text
+Office browser (MSAL delegated token)
+    ├── Dataverse operational records and guarded mutations
+    └── authenticated APIs (review, dispatch, maps, invoices)
 
-Anonymous technician browser
-    └── /portal/job/:token
-          └── server JobSubmissionService
-                └── least-privilege Dataverse Application User
-```
+Anonymous Job Card browser → API → private Azure Table snapshots / Blob evidence
+Anonymous Site Check browser → separate API → Dataverse Application User
+
+Scheduled reconciliation → API → application identity → guarded Dataverse updates
+V2 Job Card APIs → temporary V1 shared-backend bridge
+~~~
+
+GreenTree is a separate external source; its account references must not overwrite operational
+Customer/Site relationships. Job equipment is optional, and the Job's recorded Site need not be
+the Equipment's current Site. See [current state](../../CURRENT_STATE.md) for configuration and
+known gaps, and the [audit](../reviews/2026-10-10-application-audit.md) for release blockers.
 
 Feature components render state and raise actions. Feature hooks coordinate workflows.
 Feature services own Dataverse requests. Pure domain helpers own reusable calculations and
@@ -36,6 +41,7 @@ validation. Shared UI provides presentation contracts without owning feature wri
 - [Security](security.md)
 - [Deployment](deployment.md)
 - [Development workflow](development-workflow.md)
+- [Retirement and compatibility checks](retirement-plan.md)
 
 ### Features
 

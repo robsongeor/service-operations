@@ -1,6 +1,6 @@
 # Job Book rollout — replacing Excel
 
-Owner: George. Status: planning and local development; not approved for production rollout.
+Owner: George. Status: V2 implementation and recorded provisioning exist; broad rollout acceptance is not complete.
 Prepared 3 October 2026. This plan covers Job Book and its connection to Service coordination.
 
 ## Outcome and release rule
@@ -16,17 +16,16 @@ read-only when the app takes over; do not run two live number allocators in para
 
 ## Current position
 
-| Area | Recorded position | Still required |
-| --- | --- | --- |
-| Job Book interface | Local entry, correction, markers, copy and Void workflows exist | User acceptance on the final connected version |
-| Unified working Job | Works in the isolated sample; registration/allocation server source has offline tests | Real integration, deployment contract validation and target-environment tests |
-| Manage job and registered-entry Void | Sample implementations | Production atomic operations and authorization |
-| Regional books | Documentation records four tables and verified regional schema/keys | Fresh read-only verification, migration, reconciliation and number cutover |
-| Restricted access | Local role/capability presentation exists | Verify/provision authoritative permissions, assign named accounts and test access |
-| Recovery and scale | Sample has tab-session retry and bounded paging | Durable recovery, full-register filtering and cache/reconnect verification |
+Use [current state](../../CURRENT_STATE.md) for configuration/evidence and
+[release readiness](../../RELEASE_READINESS.md) for the current gate checklist. The previous
+sample-only description is obsolete: V2 builds unified registration/workflow and role enforcement
+enabled, and plugin/role deployment is recorded. That does not prove restricted-role acceptance,
+migration completion or V1 compatibility.
 
-This is a repository-based status, not a fresh production audit. The existing normal application
-and the sample walkthrough have different capabilities. Do not enable a sample flag in production.
+Critical gaps are client/server write-policy disagreement, premature Allocated status at
+registration, GreenTree completion bypass, reconciliation backlog/identity verification and
+unified worklist freshness. This rollout remains blocked on those checks. Regional migration
+and number cutover retain their independent gates below.
 
 ## 1. George's preparation checklist
 
@@ -43,7 +42,7 @@ and the sample walkthrough have different capabilities. Do not enable a sample f
   duplicate/cancelled number, existing managed Job and a job already entered into GreenTree/Timecloud.
 - [ ] Nominate pilot users, the support contact, a cutover window and the person allowed to halt rollout.
 
-The agreed ten-user roster and role decisions are maintained in the
+The agreed eleven-user roster and role decisions are maintained in the
 [user access plan](JOB_BOOK_ACCESS_PLAN.md). Office Admins have access across all regions; pilot waves remain to be confirmed.
 
 ## 2. User access and controls
@@ -54,16 +53,16 @@ These are application roles, not Microsoft tenant administrator privileges.
 | User group | Agreed direction | Application role |
 | --- | --- | --- |
 | George only | Unrestricted application access | Existing `ServiceOperations.FullAccess` |
-| Bruce and Andy | Same application capabilities initially; restrict separately later | `ServiceOperations.ServiceCoordinator` is provisioned and assigned |
+| Bruce and Andy | Operational management through a distinct restricted route set | `ServiceOperations.ServiceCoordinator` is provisioned and assigned |
 | Jess, Nargiza and Pubudu | Office Admin: corrections, assignment/email, GT/Timecloud markers and review; same Customer/Site creation and Equipment move/detail-edit scope as Job Book Admin | `ServiceOperations.JobCardAdmin` is assigned in Entra and Dataverse |
-| Martin, Lance, Ranjani, Ashneel and Kaizer | Job Book Admin: entry, eligible-entry Void, factual corrections after handoff, Customer/Site creation, Equipment moves and detail edits; no assignment/email, markers or review | `ServiceOperations.JobBookAdmin` is assigned in Entra and Dataverse |
+| Martin, Lance, Ranjani, Ashneel and Kaizer | Job Book Admin: entry, eligible-entry Void, factual corrections after handoff, Customer/Site creation, Equipment moves and detail edits; mechanic selection permitted; no email, markers or review | `ServiceOperations.JobBookAdmin` is assigned in Entra and Dataverse |
 | Job Book only | Obsolete | No restricted Admin account retains this Entra assignment |
 
-ServiceCoordinator must remain a distinct role even while capabilities match FullAccess.
+ServiceCoordinator has a distinct route set and must remain separate from FullAccess.
 Do not give coordinators an additional FullAccess claim that would bypass later restrictions.
 Job Card review is limited to George, both Service coordinators, Jess, Nargiza and Pubudu. The five
-planned Job Book Admins retain entry and correction duties without assignment/email, marker writes
-or review access. Implementing this distinct profile is required before rollout.
+planned Job Book Admins retain entry and correction duties with mechanic selection but without email, marker writes
+or review access. The profile exists; live operation-level acceptance is required before rollout.
 Both Admin groups have separate Customers and Equipment screens under the agreed creation,
 movement and detail-edit permissions. Job Book Admins do not gain review or coordination access.
 See the access plan for intended users, unresolved decisions and implementation checks.
@@ -76,7 +75,7 @@ Before assigning users, the implementation owner and Microsoft environment admin
   route does not prevent a direct API write.
 - [ ] Enforce narrow allowed Job corrections and markers without granting unrestricted Job editing.
 - [ ] Enforce any approved Equipment Site-only move and Customer/Site creation exceptions.
-- [ ] Restrict coordinator membership, later technician changes, scheduling, number operations and Void.
+- [ ] Restrict coordinator membership, scheduling, number operations and Void; allow reviewed mechanic-selection operations without unlocking broader coordination.
 - [ ] Review users' existing roles/team membership for broader grants that would defeat restrictions.
 - [ ] Configure the separate Job Card reviewer allowlist only for users who need review access,
   preserving existing authorized reviewers. An app role or Staff record alone is insufficient.
@@ -92,8 +91,9 @@ Implementation owner completes these locally, then uses a separately authorized 
 - [ ] Connect registration/number allocation to the real transactional server operations.
   A new entry creates one working Job and its ledger link, not two editable copies.
 - [ ] Implement authorized coordinator membership and atomic registered-entry Void.
-- [ ] Ensure initial technician assignment/dispatch follows the agreed Admin scope while later
-  reassignment and scheduling stay coordinator-only. The ordinary runtime still blocks unlinked Intake dispatch.
+- [ ] Verify mechanic selection/reselection for all admitted Job Book roles, Office assigned-tech
+  dispatch, and denial of scheduling/broader coordination for restricted admins. Ordinary unlinked
+  Intake dispatch remains distinct and blocked.
 - [ ] Reconcile Site Check numbering, clearing and deletion, historical imports and ordinary
   creation before installing the number-invariant guard. Do not install that guard early.
 - [ ] Implement durable lost-response recovery: retrying confirmed or uncertain work must never
@@ -124,7 +124,7 @@ Mark each check Pass / Fail / Not run; a unit test alone does not close a live i
 | Simultaneous allocation | Two people allocate at once without duplicate numbers; gaps are acceptable, number reuse is not |
 | Double click / connection loss | Refresh/retry confirms the same operation and number, without duplicate work or lost corrections |
 | Edit collision | Two people edit one record; the later stale save prompts recovery instead of silently overwriting the first |
-| Coordinator handoff | Manage job moves the same record into Operational without another Job/number; type, scheduling and assignments work afterward |
+| Operational access | All non-void Jobs shown in Service Coordination open the canonical operational drawer across type tabs; no duplicate Job/number or separate Manage job step is required in that screen |
 | Views and search | Operational contains managed work; Unconfirmed is status-based; All jobs and Job Book find the expected records across all pages/history |
 | GT / Timecloud markers | Values persist, audit identities are correct and stale updates cannot clear another person's work; ticks do not claim automated external entry |
 | Void | Reason required; number and history retained; already-entered or otherwise protected work is blocked; no ordinary delete/reuse escape |

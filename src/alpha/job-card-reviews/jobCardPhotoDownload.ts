@@ -21,13 +21,34 @@ export async function buildJobCardPhotoArchive(
     onProgress: (completed: number) => void = () => undefined,
     signal?: AbortSignal,
 ) {
-    if (!photos.length || photos.length > 20) throw new Error('Choose a submission with 1 to 20 photos.')
+    if (!photos.length) throw new Error('Choose a submission with 1 to 20 photos.')
+    return buildJobCardArchive(photos, load, onProgress, signal)
+}
+
+/** Complete archive only: no output is offered if any required document/photo fails. */
+export async function buildJobCardArchive(
+    photos: JobCardReview['photos'],
+    load: (id: string) => Promise<Blob>,
+    onProgress: (completed: number) => void = () => undefined,
+    signal?: AbortSignal,
+    jobCard?: { filename: string; blob: Blob },
+) {
+    if ((!photos.length && !jobCard) || photos.length > 20) throw new Error('Choose a submission with 1 to 20 photos.')
+    signal?.throwIfAborted()
     const chunks: BlobPart[] = []
     const zip = new Zip((error, chunk) => {
         if (error) throw error
         chunks.push(new Uint8Array(chunk))
     })
     try {
+        if (jobCard) {
+            if (jobCard.blob.type !== 'application/pdf' || !jobCard.blob.size || jobCard.blob.size > 20 * 1024 * 1024 || await jobCard.blob.slice(0, 5).text() !== '%PDF-') throw new Error('The completed Job card PDF is invalid.')
+            const file = new ZipPassThrough(`${safePhotoFilename(jobCard.filename.replace(/\.pdf$/i, ''), 'Job card')}.pdf`)
+            zip.add(file)
+            const bytes = new Uint8Array(await jobCard.blob.arrayBuffer())
+            signal?.throwIfAborted()
+            file.push(bytes, true)
+        }
         for (const [index, photo] of photos.entries()) {
             signal?.throwIfAborted()
             const blob = await load(photo.id)
@@ -52,10 +73,10 @@ type SaveHandle = { createWritable: () => Promise<{ write: (data: Blob) => Promi
 type SaveWindow = Window & { showSaveFilePicker?: (options: { id: string; suggestedName: string; startIn: 'downloads'; types: { description: string; accept: Record<string, string[]> }[] }) => Promise<SaveHandle> }
 
 /** Call directly from the Save click, before token acquisition, to retain browser user activation. */
-export async function saveJobCardPhotos(filename: string, build: () => Promise<Blob>, signal?: AbortSignal) {
+export async function saveJobCardArchive(filename: string, build: () => Promise<Blob>, signal?: AbortSignal, documentation = false) {
     const name = `${safePhotoFilename(filename.replace(/\.zip$/i, ''))}.zip`
     const picker = (window as SaveWindow).showSaveFilePicker
-    const handle = picker ? await picker.call(window, { id: 'job-card-photos', suggestedName: name, startIn: 'downloads', types: [{ description: 'Photo ZIP archive', accept: { 'application/zip': ['.zip'] } }] }) : undefined
+    const handle = picker ? await picker.call(window, { id: documentation ? 'job-card-documentation' : 'job-card-photos', suggestedName: name, startIn: 'downloads', types: [{ description: documentation ? 'Job card and photos ZIP' : 'Photo ZIP archive', accept: { 'application/zip': ['.zip'] } }] }) : undefined
     signal?.throwIfAborted()
     const archive = await build()
     signal?.throwIfAborted()
@@ -63,7 +84,7 @@ export async function saveJobCardPhotos(filename: string, build: () => Promise<B
         const writable = await handle.createWritable()
         try { await writable.write(archive); signal?.throwIfAborted(); await writable.close() }
         catch (error) { await writable.abort().catch(() => undefined); throw error }
-        return 'Photos saved to your selected location.'
+        return documentation ? 'Job card and photos saved to your selected location.' : 'Photos saved to your selected location.'
     }
     const url = URL.createObjectURL(archive)
     const anchor = document.createElement('a')
@@ -71,5 +92,7 @@ export async function saveJobCardPhotos(filename: string, build: () => Promise<B
     anchor.download = name
     anchor.click()
     setTimeout(() => URL.revokeObjectURL(url), 1000)
-    return 'Photo ZIP sent to your browser downloads.'
+    return documentation ? 'Documentation ZIP sent to your browser downloads.' : 'Photo ZIP sent to your browser downloads.'
 }
+
+export const saveJobCardPhotos = (filename: string, build: () => Promise<Blob>, signal?: AbortSignal) => saveJobCardArchive(filename, build, signal)

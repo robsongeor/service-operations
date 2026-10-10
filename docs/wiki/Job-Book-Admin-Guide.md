@@ -2,6 +2,11 @@
 
 This guide is for people assigned the **Job Book Admin** role.
 
+Rollout note (10 October 2026): mechanic selection and approved Equipment editing are intended
+capabilities, but a known server-policy mismatch can currently reject these saves. Report the
+failure rather than creating replacement records or asking for broader access. Wider rollout
+still requires named-user acceptance.
+
 ## What this role can do
 
 Job Book Admins can:

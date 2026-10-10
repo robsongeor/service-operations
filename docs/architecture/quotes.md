@@ -1,5 +1,14 @@
 # Quotes Architecture
 
+## Save-integrity caveat — 10 October 2026
+
+Quote deletion uses an atomic changeset, but header/line **save** does not. Create performs a
+header write followed by lines and best-effort rollback; updates perform separate child/header
+writes without consistent ETag protection. Partial failure and concurrent editors can leave
+inconsistent saved data. Do not describe Quote saving as atomic until the workflow is changed
+and failure-injection tests pass. See audit A08 in the
+[application audit](../reviews/2026-10-10-application-audit.md).
+
 ## Purpose
 
 Quotes represent commercial proposals and revisions associated with Customers, Equipment,

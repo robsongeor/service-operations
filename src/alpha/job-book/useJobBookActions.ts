@@ -8,7 +8,7 @@ import { copyNumberedJobBookSpreadsheetRow } from '../jobs/utils/jobBookClipboar
 import { usePrimaryJobEmail } from '../jobs/hooks/usePrimaryJobEmail'
 import { jobBookClipboardSource, jobBookCopyBlockedReason, jobBookEmailBlockedReason } from './jobBookActions'
 
-export function useJobBookActions(getAccessToken: () => Promise<string>, canEmail: boolean, assignedRecipientOnly: boolean) {
+export function useJobBookActions(getAccessToken: () => Promise<string>, canEmail: boolean, assignedRecipientOnly: boolean, signedInUserName: string) {
     const [emailJob, setEmailJob] = useState<CorrectableJob | null>(null)
     const [loadingJobId, setLoadingJobId] = useState('')
     const [feedback, setFeedback] = useState<{ message: string; error: boolean } | null>(null)
@@ -20,10 +20,10 @@ export function useJobBookActions(getAccessToken: () => Promise<string>, canEmai
         try {
             const blocked = jobBookCopyBlockedReason(row)
             if (blocked) throw new Error(blocked)
-            await copyNumberedJobBookSpreadsheetRow(jobBookClipboardSource(row))
+            await copyNumberedJobBookSpreadsheetRow(jobBookClipboardSource(row), signedInUserName)
             setFeedback({ message: `Job ${row.jobNumber} copied — paste into the order number book.`, error: false })
-        } catch {
-            setFeedback({ message: 'The row could not be copied. Check the entry and clipboard permission, then try again.', error: true })
+        } catch (error) {
+            setFeedback({ message: error instanceof Error ? error.message : 'The row could not be copied. Check the entry and clipboard permission, then try again.', error: true })
         }
     }
     const close = () => {

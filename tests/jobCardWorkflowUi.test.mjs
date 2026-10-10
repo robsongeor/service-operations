@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
@@ -17,6 +18,7 @@ let contactApi
 let quotesApi
 const originalWindow = globalThis.window
 const originalFetch = globalThis.fetch
+const reviewScreenSource = readFileSync(new URL('../src/alpha/job-card-reviews/JobCardReviewsScreen.tsx', import.meta.url), 'utf8')
 
 test.before(async () => {
     // Compile/render synthetic fixtures only: never listen, sign in or call a backend.
@@ -102,8 +104,8 @@ const reviewFixture = (overrides = {}) => ({
     photos: [{ id: 'photo-1', fileName: 'Evidence.jpg', mimeType: 'image/jpeg', size: 3 }],
     notificationStatus: 'sent', officeStatus: 'pending', officeActivities: [], isTerminal: false, ...overrides,
 })
-const renderReview = (overrides = {}, state = {}) => renderToStaticMarkup(createElement(MemoryRouter, null, createElement(ReviewDetail, {
-    review: reviewFixture(overrides), state: { busy: false, error: '', photoUrls: {}, photoLoading: {},
+const renderReview = (overrides = {}, state = {}, embedded = false) => renderToStaticMarkup(createElement(MemoryRouter, null, createElement(ReviewDetail, {
+    embedded, review: reviewFixture(overrides), state: { busy: false, error: '', photoUrls: {}, photoLoading: {},
         contact: { data: { name: 'Fixture contact', phone: '021 000 000', email: 'contact@example.test' } },
         refresh: noAction, markReviewed: noAction, downloadPdf: noAction, retryNotification: noAction,
         loadPhoto: noAction, downloadPhotos: noAction, ...state },
@@ -113,17 +115,49 @@ const renderQueue = (props = {}, path = '/job-card-reviews') => renderToStaticMa
     items: [reviewFixture({ jobType: 122830001, photoCount: 1, technicianName: 'Fixture technician' })], busy: false, error: '', truncated: false, refresh: noAction, ...props,
 })))
 
+test('legacy backend keeps supported office actions but hides unadvertised recovery controls', () => {
+    for (const officeRecoveryAvailable of [undefined, false, 'true']) {
+        const markup = renderReview({ officeRecoveryAvailable, officeStatus: 'needsClarification' })
+        assert.doesNotMatch(markup, /Technician returns|Refresh returns|>Resume entry<|>Record office correction</)
+        for (const label of ['Mark complete', 'Needs follow-up', 'Save all documentation', 'Download job card PDF']) assert.ok(markup.includes(label))
+    }
+    const current = renderReview({ officeRecoveryAvailable: true, officeStatus: 'needsClarification' })
+    for (const label of ['Technician returns', 'Refresh returns', 'Resume entry', 'Record office correction']) assert.ok(current.includes(label))
+    const filed = renderReview({ officeRecoveryAvailable: true, officeStatus: 'processedInGreenTree', isTerminal: true })
+    assert.match(filed, />Record office correction</)
+    assert.doesNotMatch(filed, />Resume entry<|>Mark complete</)
+})
+
+test('meter date rendering, validation and submission require backend support', () => {
+    const source = readFileSync(new URL('../src/alpha/portal/TechnicianJobSubmissionPage.tsx', import.meta.url), 'utf8')
+    assert.match(source, /job\.meterRecordedDateAvailable === true && hourMeter\.trim\(\) && <label>Meter reading date/)
+    assert.match(source, /if \(job\?\.meterRecordedDateAvailable === true && hourMeter\.trim\(\)/)
+    assert.match(source, /hourMeterRecordedDate: job\?\.meterRecordedDateAvailable === true && parsedHourMeter != null \? hourMeterRecordedDate : undefined/)
+})
+
 test('queue reuses shared table controls and exposes only review navigation, not operational actions', () => {
     const markup = renderQueue()
     for (const value of ['operations-table-panel', 'operations-table-toolbar', 'operations-filter-pills', 'operations-table-sort', 'searchable-select', 'drawer-tabs', 'Sort by photos', 'Reported attention', 'Repair hydraulics', '1 of 1 shown']) assert.ok(markup.includes(value), value)
     assert.equal((markup.match(/role="tab"/g) || []).length, 4)
-    for (const label of ['Open jobs', 'Submitted', 'Review', 'Completed']) assert.ok(markup.includes(`role="tab">${label}</button>`))
+    for (const label of ['Open jobs', 'Submitted', 'Needs follow-up', 'Completed']) assert.ok(markup.includes(`role="tab">${label}</button>`))
     assert.match(markup, /label="Job Card workflow"/)
     assert.match(markup, /review-type-filter-label">Job type/)
     assert.doesNotMatch(markup, /job-type-tabs|>Active<|>History</)
     assert.match(markup, /aria-sort="descending"/)
-    assert.match(markup, /aria-label="Review Job 142314 submitted by Fixture technician"/)
+    assert.match(markup, /aria-label="Open Job 142314 submitted by Fixture technician"/)
+    assert.match(markup, /href="\/job-card-reviews\?review=review-1"/)
     assert.doesNotMatch(markup, /Mark reviewed|Send email|Office status|Schedule|Site Check|Operational jobs/)
+})
+
+test('selected reviews open in a contained modal while preserving the queue URL state', () => {
+    assert.match(reviewScreenSource, /className="job-card-review-dialog-backdrop"/)
+    assert.match(reviewScreenSource, /role="dialog" aria-modal="true"/)
+    assert.match(reviewScreenSource, /document\.body\.style\.overflow = 'hidden'/)
+    assert.match(reviewScreenSource, /event\.key === 'Escape'/)
+    assert.match(reviewScreenSource, /`Job \$\{review\.jobNumber/)
+    assert.match(reviewScreenSource, /review\.fleetNumber[\s\S]*review\.workRequired[\s\S]*\.join\('\s-\s'\)/)
+    assert.match(reviewScreenSource, /job-card-review-dialog-submitted[\s\S]*Submitted \{formatReviewDate\(review\.submittedOn\)\}/)
+    assert.doesNotMatch(reviewScreenSource, /job-card-review-drawer|<EditDrawerShell/)
 })
 
 test('queue loading, failure, empty, no matches and bounded results stay distinct', () => {
@@ -155,9 +189,14 @@ test('Open jobs shows sent progress, not fabricated submission evidence or edita
 
 test('Review explains notes-only clarification; Completed never relabels legacy outcomes as GreenTree processing', () => {
     const reviewing = renderQueue({ queueView: 'review', items: [reviewFixture({ officeStatus: 'needsClarification' })] })
-    assert.match(reviewing, /Clarification records status and notes only; no message is sent/)
-    assert.match(reviewing, /Needs clarification/)
+    assert.match(reviewing, /Job Cards needing follow-up/)
+    assert.match(reviewing, /Cards awaiting information or resolution before GreenTree entry can be completed/)
+    assert.match(reviewing, /Includes entry already started/)
+    assert.doesNotMatch(reviewing, /In progress|GreenTree entry in progress/)
+    assert.match(reviewing, /Follow-up records status and notes only; no message is sent/)
+    assert.match(reviewing, /Needs follow-up/)
     assert.match(reviewing, /review-office-status-filter/)
+    assert.match(renderQueue({ queueView: 'review', items: [] }), /No Job Cards need follow-up in the loaded records/)
     const completed = renderQueue({ queueView: 'completed', items: [reviewFixture({ officeStatus: 'legacyReviewed', isTerminal: true })] })
     assert.match(completed, /Reviewed \(legacy outcome not recorded\)/)
     assert.doesNotMatch(completed, /class="review-office-status processedInGreenTree"/)
@@ -201,11 +240,20 @@ test('review return link only accepts the review queue and preserves its filters
 test('review places Job, equipment/customer/contact/address, and prominent hour meter/story in order', () => {
     const markup = renderReview()
     const jobIndex = markup.indexOf('<h1>Job 142314</h1>')
-    const equipmentIndex = markup.indexOf('Equipment and customer details')
+    const equipmentIndex = markup.indexOf('Job details')
     const storyIndex = markup.indexOf('id="review-story-heading"')
     assert.ok(jobIndex >= 0 && jobIndex < equipmentIndex && equipmentIndex < storyIndex)
-    for (const text of ['Fixture customer', '123 Example Road', 'Current Job contact', 'Fixture contact', '021 000 000', 'contact@example.test', 'Inspected pump', 'Order seal kit', 'Damaged guard']) assert.ok(markup.includes(text), text)
+    assert.match(markup, /Saved equipment<\/p><h2>123<\/h2>/)
+    assert.match(markup, /class="review-equipment-identity"><strong>Fixture make · Fixture model<\/strong><span>Serial Fixture serial<\/span>/)
+    assert.match(markup, /Saved customer &amp; site<\/p><h2>Fixture customer<\/h2><div class="review-customer-location"><strong>Warehouse<\/strong><address>123 Example Road/)
+    for (const text of ['Fixture customer', '123 Example Road', 'Site contact', 'Fixture contact', '021 000 000', 'contact@example.test', 'Inspected pump', 'Order seal kit', 'Damaged guard']) assert.ok(markup.includes(text), text)
     assert.match(markup, /Submitted hour meter<\/span><strong>0<\/strong>/)
+    assert.match(markup, /class="review-scan-strip"/)
+    assert.match(markup, /class="review-overview-bar"/)
+    const scanStrip = markup.match(/<section class="review-scan-strip"[\s\S]*?<\/section>/)?.[0] || ''
+    for (const text of ['Technician', 'Submitted', 'Order number']) assert.ok(scanStrip.includes(text), text)
+    assert.doesNotMatch(scanStrip, /Labour|1.25 h|Travel|12 km|Evidence|Reported attention|Safety issue|Further work/)
+    assert.doesNotMatch(markup, /Office reference|Current Job contact/)
     assert.match(markup, /has-further-work/)
     assert.match(markup, /has-safety-issue/)
     assert.match(markup, />Associated quotes<\/button>/)
@@ -223,6 +271,17 @@ test('review handles missing photos, hour reading and failed current contact wit
     assert.doesNotMatch(markup, /Fixture contact|No contact assigned/)
 })
 
+test('embedded report keeps document access, evidence and audit exceptions without duplicate controls', () => {
+    const markup = renderReview({ technicianName: 'Alex', orderNumber: 'PO-123', notificationStatus: 'failed', reviewedOn: '2026-10-02T01:00:00Z' }, { readOnly: true }, true)
+    for (const value of ['Alex', 'PO-123', 'Fixture customer', 'Fixture serial', 'Inspected pump', 'Order seal kit', 'Damaged guard', 'Review email: failed', 'Reviewed 2 Oct']) assert.ok(markup.includes(value), value)
+    for (const label of ['Save all documentation', 'Associated quotes', 'Download job card PDF', 'Start GreenTree entry', 'Mark complete']) assert.equal(markup.split(`>${label}</button>`).length - 1, 1, label)
+    assert.match(markup, /disabled="">Start GreenTree entry<\/button>/)
+    assert.match(markup, /disabled="">Retry notification<\/button>/)
+    const terminal = renderReview({ officeStatus: 'processedInGreenTree', isTerminal: true }, {}, true)
+    assert.match(terminal, />Download job card PDF<\/button>/)
+    assert.doesNotMatch(terminal, />Start GreenTree entry<\/button>|>Mark complete<\/button>/)
+})
+
 test('review groups the story beside evidence and retains every long submission entry', () => {
     const story = Array.from({ length: 30 }, (_, index) => `Inspection step ${index + 1}: retained original evidence.`).join('\n')
     const photos = Array.from({ length: 20 }, (_, index) => ({ id: `photo-${index}`, fileName: `Original ${index + 1}.jpg`, mimeType: 'image/jpeg', size: 1024 }))
@@ -231,23 +290,51 @@ test('review groups the story beside evidence and retains every long submission 
     assert.ok(markup.indexOf('class="review-workspace"') < markup.indexOf('id="review-story-heading"'))
     assert.ok(markup.indexOf('class="review-evidence-rail"') < markup.indexOf('id="review-photos-heading"'))
     assert.match(markup, /class="review-summary review-card"/)
+    assert.match(markup, /class="review-context-workflow-grid"/)
     assert.ok(markup.includes(story), 'Full story including line breaks is retained')
     for (const photo of photos) assert.ok(markup.includes(photo.fileName))
-    for (const part of parts) assert.ok(markup.includes(`<td>${part.description}</td>`))
-    assert.match(markup, /table aria-labelledby="review-time-heading"/)
-    assert.match(markup, /table aria-labelledby="review-parts-heading"/)
+    for (const part of parts) assert.ok(markup.includes(`<td>${part.description}</td><td class="review-number">${part.quantity}</td>`))
+    assert.match(markup, /table class="review-resource-table" aria-labelledby="review-time-heading"/)
+    assert.match(markup, /table class="review-resource-table review-parts-table" aria-labelledby="review-parts-heading"/)
     assert.equal((markup.match(/<figure>/g) || []).length, 20)
+})
+
+test('compact evidence tables preserve dated entries, totals and zero readings without inventing missing evidence', () => {
+    const single = renderReview({ timeEntries: [{ date: '2026-10-09', hours: 0, kilometres: 0 }] }, {}, true)
+    assert.match(single, /dateTime="2026-10-09">09\/10\/2026<\/time>/i)
+    assert.match(single, /<td class="review-number">0 h<\/td><td class="review-number">0 km<\/td>/)
+    assert.match(single, /<th scope="col" class="review-number">Labour<\/th>/)
+    assert.match(single, /<th scope="row">Total<\/th>/)
+    assert.doesNotMatch(single, /No time or travel recorded/)
+    const multiple = renderReview({ timeEntries: [{ date: '2026-10-08', hours: 1.25, kilometres: 12 }, { date: '2026-10-09', hours: 2.5, kilometres: 20 }] }, {}, true)
+    for (const value of ['08/10/2026', '09/10/2026', '<td class="review-number">1.25 h</td><td class="review-number">12 km</td>', '<td class="review-number">2.5 h</td><td class="review-number">20 km</td>', '<tfoot><tr><th scope="row">Total</th><td class="review-number">3.75 h</td><td class="review-number">32 km</td>']) assert.ok(multiple.includes(value), value)
+    const empty = renderReview({ timeEntries: [], parts: [] }, {}, true)
+    assert.match(empty, /No time or travel recorded/)
+    assert.match(empty, /No parts recorded/)
+    assert.doesNotMatch(empty, /<table|<tfoot>/)
 })
 
 test('read-only local reviews disable review updates and email retries but retain read/download controls', () => {
     const markup = renderReview({ notificationStatus: 'failed' }, { readOnly: true })
-    for (const label of ['Start review', 'Needs clarification', 'On hold', 'Processed in GreenTree']) {
+    for (const label of ['Start GreenTree entry', 'Needs follow-up', 'Mark complete']) {
         assert.match(markup, new RegExp(`disabled="">${label}<\\/button>`))
     }
     assert.match(markup, /disabled="">Retry notification<\/button>/)
     assert.match(markup, /<button type="button">Associated quotes<\/button>/)
-    assert.match(markup, /<button type="button">Download submission PDF<\/button>/)
+    assert.match(markup, /<button type="button">Download job card PDF<\/button>/)
     assert.doesNotMatch(markup, /No invoice required/)
+})
+
+test('one follow-up action replaces clarification/hold buttons while preserving existing hold notes', () => {
+    for (const officeStatus of ['pending', 'inReview', 'needsClarification', 'onHold']) {
+        const markup = renderReview({ officeStatus, officeNote: 'Waiting for technician hours.' }, {}, true)
+        assert.equal(markup.split('>Needs follow-up</button>').length - 1, 1)
+        assert.doesNotMatch(markup, />Needs clarification<\/button>|>On hold<\/button>/)
+        assert.match(markup, /Waiting for technician hours/)
+        if (officeStatus === 'onHold') assert.match(markup, />On hold<\/h2>/)
+    }
+    const terminal = renderReview({ officeStatus: 'processedInGreenTree', isTerminal: true }, {}, true)
+    assert.doesNotMatch(terminal, />Needs follow-up<\/button>/)
 })
 
 test('office workflow presents every explicit state and keeps terminal outcomes immutable', () => {
@@ -258,17 +345,17 @@ test('office workflow presents every explicit state and keeps terminal outcomes 
         officeActionOn: '2026-10-02T01:00:00Z',
         officeActivities: [{ action: 'setNeedsClarification', fromStatus: 'inReview', toStatus: 'needsClarification', occurredOn: '2026-10-02T01:00:00Z', actor: { userId: 'admin-1', displayName: 'Jess Admin' }, note: 'Please verify the order number.' }],
     })
-    for (const value of ['Needs clarification', 'Jess Admin', 'Please verify the order number.', 'Activity history', 'Opening this review does not change its state']) assert.match(active, new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
-    assert.match(active, />Processed in GreenTree<\/button>/)
+    for (const value of ['Needs follow-up', 'Jess Admin', 'Please verify the order number.', 'Activity history', 'Opening this review does not change its state']) assert.match(active, new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+    assert.match(active, />Mark complete<\/button>/)
     assert.doesNotMatch(active, /No invoice required/)
 
     const terminal = renderReview({ officeStatus: 'legacyReviewed', isTerminal: true, officeActivities: [] })
     assert.match(terminal, /Reviewed \(legacy outcome not recorded\)/)
-    assert.doesNotMatch(terminal, />Processed in GreenTree<\/button>|>No invoice required<\/button>/)
+    assert.doesNotMatch(terminal, />Mark complete<\/button>|>No invoice required<\/button>/)
     const retired = renderReview({ officeStatus: 'noInvoiceRequired', isTerminal: true, officeNote: 'Historical reason' })
     assert.match(retired, /No invoice required \(retired outcome\)/)
     assert.match(retired, /Historical reason/)
-    assert.doesNotMatch(retired, />Processed in GreenTree<\/button>|>No invoice required<\/button>/)
+    assert.doesNotMatch(retired, />Mark complete<\/button>|>No invoice required<\/button>/)
 })
 
 test('photo downloads stay on the authenticated private API and pass cancellation', async (t) => {

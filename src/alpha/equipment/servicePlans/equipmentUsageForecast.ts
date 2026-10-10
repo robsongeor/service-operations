@@ -93,10 +93,20 @@ export function shouldAdvanceCurrentHourMeter(
     return !currentDate || incomingDate >= currentDate
 }
 
+export function hasApprovedJobCardReading(job: Job): boolean {
+    const fields = job.gr_hourmeterapprovalreference?.split('|')
+    return fields?.length === 4
+        && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(fields[0])
+        && fields[1] === String(job.gr_hourmeter)
+        && fields[2] === job.gr_hourmeterrecordeddate?.slice(0, 10)
+        && fields[3].toLowerCase() === job.gr_Equipment?.gr_equipmentid.toLowerCase()
+        && job.gr_hourmeterreadingtype === HOUR_METER_READING_TYPES.ACTUAL
+}
+
 export function resolveLatestHourMeterReading(equipment: Equipment, jobs: readonly Job[]): LatestHourMeterReading | null {
     const equipmentId = equipment.gr_equipmentid.toLowerCase()
     const latestJobReading = jobs
-        .filter((job) => job.gr_status === JOB_STATUSES.COMPLETE
+        .filter((job) => (job.gr_status === JOB_STATUSES.COMPLETE || hasApprovedJobCardReading(job))
             && job.gr_hourmeter != null
             && Number.isFinite(job.gr_hourmeter)
             && job.gr_hourmeter >= 0
@@ -247,7 +257,7 @@ export function calculateEquipmentUsageForecast(
     now = new Date(),
 ): EquipmentUsageForecast {
     const points = jobs
-        .filter((job) => job.gr_status === JOB_STATUSES.COMPLETE
+        .filter((job) => (job.gr_status === JOB_STATUSES.COMPLETE || hasApprovedJobCardReading(job))
             && job.gr_Equipment?.gr_equipmentid.toLowerCase() === equipment.gr_equipmentid.toLowerCase())
         .map((job) => validPoint(
             job.gr_jobid,

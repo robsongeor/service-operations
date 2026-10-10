@@ -1,5 +1,15 @@
 # Equipment Architecture
 
+## Current implementation notes — 10 October 2026
+
+The State table column/filter have been removed; drawer state remains read-only. The register
+includes the Site's **GT Customer** name separately from operational Customer. The table still
+labels its identifier **Fleet number**; requested GT equipment terminology is not consistent everywhere.
+
+Restricted details saves include compliance fields outside the server guard allowlist, so even
+a basic edit may be rejected. This is a rollout blocker, not a reason to bypass the guard;
+see audit A01 in the [application audit](../reviews/2026-10-10-application-audit.md).
+
 ## Purpose
 
 Equipment is the durable asset record connecting a physical machine to its current operating
@@ -47,8 +57,8 @@ that Equipment's linked Jobs in the background. History exposes distinct loading
 empty, and populated states. Closing the drawer clears those focused rows and invalidates the active
 request so a late Dataverse response cannot appear against a subsequently opened Equipment record.
 The Equipment Manager register does not wait for complete Customer, Site, or Equipment Service Plan
-directories. Customer and Site filters are derived from the Site/Customer relationships already
-expanded on the shared Equipment projection. The Customer filter uses the shared searchable selector
+directories. Site filter choices derive from relationships in the Equipment projection.
+The Customer filter searches Dataverse through the shared searchable selector
 with a 250 ms debounce, cancellation, a two-character minimum and at most eight server results;
 Site filtering remains disabled until a Customer is selected and then offers only that Customer's
 Sites. The Site's optional GT Customer is included in the projection, register, sorting, and free-text
@@ -63,10 +73,9 @@ Equipment Map remains another explicit exception because it needs every addresse
 location projection, but it skips the global Service Plan collection.
 The operational Job Status badge reuses the established status palette while Job Type and Job Card
 status remain neutral, keeping the primary workflow state visually distinct.
-The Equipment Manager table derives a linked-Job count from the already loaded Jobs projection,
-matches relationships by case-insensitive Equipment GUID, and exposes that count as a sortable Jobs
-column. It includes all linked historical Jobs regardless of status, matching the drawer history
-count, without per-row Dataverse requests or new schema.
+The current register does not expose the former linked-Job-count column. Focused, paged Job
+history remains in the canonical Equipment drawer; do not reintroduce a global Job load just
+to calculate a per-row count.
 Equipment with linked Job history remains protected from deletion. The disabled Delete Equipment
 control exposes that preservation reason through a hover and keyboard-focus tooltip instead of
 occupying the drawer footer with persistent warning text.

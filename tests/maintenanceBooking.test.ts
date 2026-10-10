@@ -1,8 +1,50 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { readFileSync } from 'node:fs'
 
-import { filterMaintenanceExclusions, maintenanceExclusionId, matchMaintenanceRow, parseMaintenanceExport } from '../src/alpha/maintenance-booking/maintenanceBooking.ts'
+import { filterMaintenanceExclusions, maintenanceExclusionId, maintenanceSiteContactsKey, matchMaintenanceRow, parseMaintenanceExport, selectedMaintenanceRow } from '../src/alpha/maintenance-booking/maintenanceBooking.ts'
+import { OperationalDataClient } from '../src/alpha/shared/data/OperationalDataClient.ts'
 import type { Equipment } from '../src/alpha/jobs/types/equipment.types.ts'
+
+test('detail selection stays inside visible rows across queue, search and status changes', () => {
+    const first = { row: { id: 'first' } }
+    const second = { row: { id: 'second' } }
+    assert.equal(selectedMaintenanceRow([first, second], 'second'), second)
+    assert.equal(selectedMaintenanceRow([first], 'second'), first)
+    assert.equal(selectedMaintenanceRow([second], 'first'), second)
+    assert.equal(selectedMaintenanceRow([], 'first'), null)
+})
+
+test('a late site-contact response cannot replace the newly selected Site or account', async () => {
+    const client = new OperationalDataClient('environment:account-one')
+    const otherAccount = new OperationalDataClient('environment:account-two')
+    const oldKey = maintenanceSiteContactsKey('SITE-A')
+    const newKey = maintenanceSiteContactsKey('site-b')
+    assert.deepEqual(oldKey, maintenanceSiteContactsKey('site-a'))
+    let finishOld!: (value: string[]) => void
+    try {
+        const oldRequest = client.fetchQuery(oldKey, () => new Promise<string[]>((resolve) => { finishOld = resolve }))
+        await client.fetchQuery(newKey, async () => ['new-site-contact'])
+        finishOld(['old-site-contact'])
+        await oldRequest
+        assert.deepEqual(client.getState<string[]>(newKey).data, ['new-site-contact'])
+        assert.equal(otherAccount.getState(newKey).data, undefined)
+    } finally {
+        client.dispose()
+        otherAccount.dispose()
+    }
+})
+
+test('screen binds workspace state to account and contact failures are not empty-list success', () => {
+    const screen = readFileSync(new URL('../src/alpha/maintenance-booking/MaintenanceBookingScreen.tsx', import.meta.url), 'utf8')
+    assert.match(screen, /<MaintenanceBookingWorkspace key=\{storageKey\} storageKey=\{storageKey\}/)
+    assert.match(screen, /selectedMaintenanceRow\(visibleRows, selectedId\)/)
+    assert.match(screen, /maintenanceSiteContactsKey\(selectedSiteId\)/)
+    assert.match(screen, /useOperationalQuery<SiteContact\[\]>/)
+    assert.match(screen, /!contactsLoading && !contactsError && !contacts\.length/)
+    assert.match(screen, /Retry contacts/)
+    assert.doesNotMatch(screen, /setContactsRefresh|setContacts\(/)
+})
 
 test('Greentree maintenance paste imports the exact six-column export format', () => {
     const [row] = parseMaintenanceExport('Code\tDescription\tCustomer\tContact\tPhone\tPM Due Date\nFN1651\tFleet Number 1651\tNuzest New Zealand Ltd\tRosemary Qi\t09 448 2773\t9/03/2026')

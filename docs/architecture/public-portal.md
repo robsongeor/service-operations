@@ -56,7 +56,9 @@ The approved Site Checks design adds one occurrence-level bearer link at
 groups navigation but preserves one independently submitted Job Card per Equipment. Its
 token schema and Public Portal Service Organisation Read privilege are provisioned. The
 shared service, Azure Function wrapper, and equivalent Vite middleware implement secure
-generation/revocation and minimal anonymous lookup locally.
+generation/revocation, minimal anonymous lookup and per-machine submission. The routed
+`SiteCheckAssignmentPage` includes machine navigation, checklist responses and photo submission.
+These implemented paths still require the tracker’s content/security/release acceptance.
 
 Site Check service credentials and Dataverse File storage are intentionally unchanged by
 the job-level Azure cutover. Its delivery state is owned by the

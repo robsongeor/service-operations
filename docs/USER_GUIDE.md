@@ -4,6 +4,20 @@ Service Operations is the day-to-day workspace for forklift and materials-handli
 
 This guide is written for people who do not work with computer systems every day. It explains every area of the app, what it is for, and the normal steps to use it.
 
+## Current rollout cautions — 10 October 2026
+
+Available screens depend on your role and deployed feature switches. This guide describes
+workflows, not a guarantee that every feature is enabled or signed off for your account.
+
+- Do not rely on unfinished Customer Info fields to save notes/accounts details; some remain
+  browser-only. They are scheduled to be hidden until proper saving exists.
+- If a mechanic or Equipment save is rejected, report it; do not repeatedly create replacement
+  records. A known client/server permission mismatch is under review.
+- A GreenTree-driven Complete badge does not yet guarantee maintenance/WOF evidence was recorded.
+  The agreed correction is Completion Review until required evidence is present.
+
+The technical [release checklist](../RELEASE_READINESS.md) tracks these blockers.
+
 ## Contents
 
 1. [Getting started](#getting-started)
@@ -84,7 +98,7 @@ The app normally remembers the customer you were last viewing during your signed
 
 ### Customer details and contacts
 
-Use the customer information area to review or edit details such as accounts contact information, notes and purchase-order requirements. The Contacts tab shows customer-wide contacts and contacts linked to a particular site.
+Use the customer information area to review details. Do not rely on its unfinished general Info editor to persist accounts details or notes; see the rollout caution above. Purchase-order recipient settings have their own saved workflow. The Contacts tab shows customer-wide contacts and contacts linked to a particular site.
 
 Purchase-order contacts can be set at customer level or overridden for an individual site. Use a site-specific override only when that site has different people who should receive PO requests.
 

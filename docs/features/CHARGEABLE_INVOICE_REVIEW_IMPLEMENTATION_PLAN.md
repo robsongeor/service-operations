@@ -1,5 +1,15 @@
 # Chargeable Invoice Review implementation plan
 
+## Current interpretation — 10 October 2026
+
+This is a phased delivery/evidence tracker, not a statement that later implemented features are
+absent. The source includes the queue/workspace, private document/photo handling, approval PDF
+and PO-email-draft paths. Keep completed checklists and dated decisions below intact; server
+import/approval switches, dedicated-role authorization and release smoke remain independent gates.
+Use [operations](../chargeable-invoice-review-operations.md) for activation, and the
+[application audit](../reviews/2026-10-10-application-audit.md) for cross-cutting risks.
+A prepared email draft is not delivery, and invoice review never changes operational Job status.
+
 ## Planning status
 
 - [x] Repository, branch, architecture, schema, current file/email handling, and representative PDF inspected.

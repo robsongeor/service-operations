@@ -47,7 +47,8 @@ function cycleForDispatch(dispatch, records) {
 }
 
 function cycleIsOpen(record) {
-    return !record || (record.status === 'active' && Date.parse(record.expiresOn) > Date.now())
+    // Expiry is not a return: keep the office's outstanding paperwork visible.
+    return !record || ['active', 'expired'].includes(record.status)
 }
 
 function hasLegacySubmission(dispatch) {
@@ -92,9 +93,11 @@ async function listOpenJobs({ origin, authorization, store, offset, limit }) {
     }).map((row) => {
         const job = row.gr_Job
         const equipment = job.gr_Equipment
+        const cycle = cycleForDispatch(row, evidence)
         return {
             dispatchId: row.gr_emaildispatchid, sourceJobId: row._gr_job_value,
             jobNumber: job.gr_jobnumber.trim(), sentOn: row.gr_completedon,
+            linkExpired: Boolean(cycle && (cycle.status === 'expired' || Date.parse(cycle.expiresOn) <= Date.now())),
             technicianName: row.gr_recipientname || 'Technician', jobType: job.gr_jobtype,
             customerName: job.gr_Site?.gr_Customer?.gr_name, siteName: job.gr_Site?.gr_name,
             workRequired: job.gr_description, fleetNumber: equipment?.gr_fleet, equipmentSerial: equipment?.gr_serial,

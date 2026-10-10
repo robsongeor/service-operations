@@ -1,4 +1,4 @@
-import type { JobCardHistory, JobCardOfficeAction, JobCardRequestSummary, JobCardReview, JobCardReviewQueue, JobCardReviewApiView } from './jobCardReview.types'
+import type { JobCardHistory, JobCardOfficeAction, JobCardRequestSummary, JobCardReview, JobCardReviewQueue, JobCardReviewApiView, JobCardMeterApprovalInput } from './jobCardReview.types'
 
 export class JobCardReviewApiError extends Error {
     readonly status: number
@@ -31,8 +31,11 @@ export async function fetchPendingJobCardReviews(accessToken: string) {
     return fetchJobCardReviews(accessToken, 'active')
 }
 
-export async function fetchJobCardReviews(accessToken: string, view: JobCardReviewApiView, offset = 0, limit = 100) {
-    const query = view === 'active' && offset === 0 && limit === 100 ? '' : `?${new URLSearchParams({ view, offset: String(offset), limit: String(limit) })}`
+export const JOB_CARD_CURSOR_QUEUE_ENABLED = import.meta.env?.VITE_JOB_CARD_CURSOR_QUEUE_ENABLED === 'true'
+export async function fetchJobCardReviews(accessToken: string, view: JobCardReviewApiView, offset = 0, limit = 100, cursor?: string, jobNumber = '') {
+    const query = JOB_CARD_CURSOR_QUEUE_ENABLED && view !== 'open'
+        ? `?${new URLSearchParams({ view, paging: 'cursor', limit: String(limit), ...(cursor ? { cursor } : {}), ...(jobNumber ? { jobNumber } : {}) })}`
+        : view === 'active' && offset === 0 && limit === 100 ? '' : `?${new URLSearchParams({ view, offset: String(offset), limit: String(limit) })}`
     const response = await fetch(`/api/jobcardreviews${query}`, { cache: 'no-store', headers: headers(accessToken) })
     return readJson<JobCardReviewQueue>(response)
 }
@@ -40,6 +43,12 @@ export async function fetchJobCardReviews(accessToken: string, view: JobCardRevi
 export async function fetchJobCardHistory(accessToken: string, jobId: string) {
     const response = await fetch(`/api/jobcardreviews?jobId=${encodeURIComponent(jobId)}`, { cache: 'no-store', headers: headers(accessToken) })
     return readJson<JobCardHistory>(response)
+}
+
+export type TechnicianReturn = { assignmentId: string; technicianId: string; name: string; state: 'notSent' | 'withdrawn' | 'received' | 'expired' | 'awaiting' }
+export async function fetchJobCardExpectedReturns(accessToken: string, jobId: string) {
+    const response = await fetch(`/api/jobcardreviews?${new URLSearchParams({ jobId, returns: '1' })}`, { cache: 'no-store', headers: headers(accessToken) })
+    return readJson<{ items: TechnicianReturn[] }>(response)
 }
 
 export async function withdrawJobCard(accessToken: string, reviewId: string, etag: string, reason: string) {
@@ -55,7 +64,7 @@ export async function fetchJobCardReview(accessToken: string, reviewId: string) 
     return readJson<JobCardReview>(response)
 }
 
-export async function updateJobCardOfficeReview(accessToken: string, reviewId: string, payload: { action: JobCardOfficeAction; etag: string; note?: string; greentreeReference?: string }) {
+export async function updateJobCardOfficeReview(accessToken: string, reviewId: string, payload: { action: JobCardOfficeAction | 'retryMeterSync'; etag: string; note?: string; greentreeReference?: string; meterApproval?: JobCardMeterApprovalInput }) {
     const response = await fetch(`/api/jobcardreviews/${encodeURIComponent(reviewId)}`, {
         method: 'POST', headers: { ...headers(accessToken), 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
     })

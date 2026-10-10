@@ -273,9 +273,9 @@ test('Equipment register reuses searchable Customer filtering and scopes Site se
     const api = readFileSync(new URL('../src/alpha/jobs/services/equipmentApi.ts', import.meta.url), 'utf8')
     assert.match(screen, /<SearchableSelect[\s\S]*?id="equipment-customer-filter"/)
     assert.doesNotMatch(screen, /const filterCustomers = useMemo/)
-    assert.match(screen, /customerFilterQuery\.trim\(\)[\s\S]*?query\.length < 2/)
-    assert.match(screen, /searchEquipmentCustomers\(query, controller\.signal\)/)
-    assert.match(screen, /setCustomerFilterResults\(rows\.slice\(0, 8\)\)/)
+    // Debounce, bounds and aborted-response behavior are exercised in jobCustomerSearch.test.ts.
+    assert.match(screen, /useCustomerSearch\(\{\s*query: customerFilterQuery, open: true, customers: \[\], onSearchCustomers: searchEquipmentCustomers/)
+    assert.doesNotMatch(screen, /setCustomerFilterResults|searchEquipmentCustomers\(query/)
     assert.match(screen, /resultLimit=\{8\}/)
     assert.match(screen, /onSearchChange=\{setCustomerFilterQuery\}/)
     assert.match(screen, /setCustomerId\(nextCustomerId\)[\s\S]*?setSiteId\(''\)/)

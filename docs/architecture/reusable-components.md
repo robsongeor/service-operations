@@ -4,6 +4,18 @@ This is the first UI inventory to consult before implementing a component or wor
 Reuse or extend an existing contract when it fits; do not assume a generic component exists
 because a similar visual pattern appears in more than one feature.
 
+## Standard versus current coverage
+
+Use shared `SearchableSelect` for compatible searchable dropdowns. Customer and Site pickers
+already use it, but mechanic, equipment and verified-address controls still have custom
+interaction code. They are canonical feature controls, not proof that all dropdowns share one
+implementation. Extend shared portal/focus/action-row contracts before migrating them.
+
+Add rendered keyboard tests for async result replacement, active-item scrolling, Arrow keys,
+Enter, Escape and drawer focus trapping. Keep Other supplier / Unknown equipment actions
+reachable without a mouse. Reuse bounded search coordination rather than duplicating debounce
+and cancellation effects. See the [audit refactor plan](../reviews/2026-10-10-application-audit.md#refactor-and-efficiency-priorities).
+
 ## Shared Presentation Primitives
 
 Managed Job correction must reuse `JobEditDrawer` with `correctionsOnly`, through the
@@ -54,7 +66,7 @@ business workflow and should be embedded through thin feature adapters when need
 | `JobDrawerShell` | `src/alpha/jobs/components/JobDrawerShell.tsx` | Job-specific composition of the shared drawer shell. |
 | `EquipmentDrawer` | `src/alpha/equipment/components/EquipmentDrawer.tsx` | Primary Equipment create/edit workflow and related operational information. It renders the supplied editable Equipment core immediately, loads focused Service Plans only on Maintenance, and consumes the shared focused Job history for usage evidence and History. Optional abortable Customer-search and selected-Customer Site callbacks are the canonical bounded relationship contract; returned and inline-created records merge into the open drawer. Keep Customer/Site selection and inline creation here. |
 | `EquipmentDataQualityIndicator` | `src/alpha/equipment/components/EquipmentDataQualityIndicator.tsx` | Keyboard-accessible Critical/Warning Equipment data-quality disclosure used by Equipment lists. |
-| `CustomerDrawer` | `src/alpha/customers/CustomerDrawer.tsx` | Primary Customer editing workflow. |
+| `CustomerDrawer` | `src/alpha/customers/CustomerDrawer.tsx` | Customer draft editor; several Info fields remain nonpersistent. Owner decision is to hide unfinished editing until persistence is implemented. |
 | `WofEditorDrawer` | `src/alpha/wof/components/WofEditorDrawer.tsx` | WOF/REGO record editing. |
 | `WofJobDrawer` | `src/alpha/wof/components/WofJobDrawer.tsx` | Thin WOF adapter around the existing Job drawer and Job loading flow. |
 | `QuoteEditorDialog` / `QuoteEditorOverlayProvider` | `src/alpha/quotes/components/QuoteEditorDialog.tsx`, `src/alpha/quotes/QuoteEditorOverlayProvider.tsx` | Canonical Quote create/edit workflow plus a lazy app-shell overlay. Other screens request it through `useQuoteEditorOverlay`; they do not navigate away or build their own Quote editor. |

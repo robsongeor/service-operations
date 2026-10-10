@@ -281,6 +281,7 @@ export default function JobsScreen() {
                     unifiedWorklist={UNIFIED_JOB_RUNTIME}
                     onAllocateNumber={UNIFIED_JOB_RUNTIME ? setAllocationJob : undefined}
                     jobs={filteredJobs}
+                    signedInUserName={signedInUser?.displayName ?? ''}
                     visibleStatuses={visibleStatuses}
                     viewState={viewState}
                     onViewStateChange={setViewState}

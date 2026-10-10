@@ -29,13 +29,14 @@ import { JOB_DESCRIPTION_MAX_LENGTH } from '../domain/jobDescription'
 import JobEmailComposer from './JobEmailComposer'
 import JobQuickActions from './JobQuickActions'
 import type { JobEmailDeliveryState, JobEmailDraft } from '../services/jobEmail'
-import { buildJobBookSpreadsheetRow, buildNumberedJobBookSpreadsheetRow } from '../utils/jobBookClipboard'
+import { buildJobBookSpreadsheetRow, copyNumberedJobBookSpreadsheetRow } from '../utils/jobBookClipboard'
 import { EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED } from '../domain/externalSupplierAssignment'
 
 type Props = {
     unifiedWorklist?: boolean
     onAllocateNumber?: (job: Job) => void
     jobs: Job[]
+    signedInUserName: string
     visibleStatuses: JobStatus[]
     viewState: JobsViewState
     onViewStateChange: (state: JobsViewState) => void
@@ -73,6 +74,7 @@ const JOBS_FEEDBACK_TIMEOUT_MS = 5000
 export default function JobsTable({
     unifiedWorklist = false, onAllocateNumber,
     jobs,
+    signedInUserName,
     visibleStatuses,
     viewState,
     onViewStateChange,
@@ -287,11 +289,9 @@ export default function JobsTable({
 
     const copyJobForSpreadsheet = async (job: Job) => {
         if (job.gr_registrationvoid) return
-        const spreadsheetRow = buildNumberedJobBookSpreadsheetRow(job)
-        if (!spreadsheetRow) return
 
         try {
-            await navigator.clipboard.writeText(spreadsheetRow)
+            await copyNumberedJobBookSpreadsheetRow(job, signedInUserName)
             setCopyFeedback({
                 message: 'Copied Job to clipboard.',
                 isError: false,
@@ -299,7 +299,7 @@ export default function JobsTable({
         } catch (error) {
             console.error(error)
             setCopyFeedback({
-                message: 'Unable to copy Job.',
+                message: error instanceof Error ? error.message : 'Unable to copy Job.',
                 isError: true,
             })
         }

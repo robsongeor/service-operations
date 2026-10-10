@@ -22,6 +22,7 @@ public static class RestrictedAccessTests
     {
         Test("no secure configuration fails closed", () => Denied(() => new RestrictedAccessPlugin("full=ignored", null)));
         Test("role IDs cannot overlap", () => Denied(() => new RestrictedAccessPlugin(null, "full="+Id+";coordinator="+Id+";office="+Id+";book="+Id)));
+        MeterTests();
         foreach (string role in new[] { "office", "book" })
         {
             string r = role;
@@ -33,6 +34,17 @@ public static class RestrictedAccessTests
             foreach (string field in new[] { "gr_mechanic", "gr_status", "gr_jobtype", "gr_jobnumber", "gr_coordinatormanaged", "gr_techniciansubmissionstory" })
             {
                 string f=field; Test(r+" rejects Job field "+f, () => Denied(() => Change(r,"gr_job",f,"tampered")));
+            }
+            // Office approval is a backend operation, never a direct browser meter edit.
+            // A dedicated server-writer policy is still a release gate, not a broad Office grant.
+            foreach (var field in new Dictionary<string, object> {
+                { "gr_hourmeter", 1620 },
+                { "gr_hourmeterreadingtype", new OptionSetValue(122830000) },
+                { "gr_hourmeterrecordeddate", new DateTime(2026, 10, 9) },
+                { "gr_hourmeterapprovalreference", Id+"|1620|2026-10-09|"+OtherId }
+            })
+            {
+                var f=field; Test(r+" denies direct meter approval field "+f.Key, () => Denied(() => Change(r,"gr_job",f.Key,f.Value)));
             }
             foreach (string field in new[] { "gr_currenthourmeter", "gr_maintenanceprofile", "statecode", "gr_ownershiptype" })
             {
@@ -118,6 +130,84 @@ public static class RestrictedAccessTests
         Console.WriteLine(passed+" restricted-access tests passed (offline; no live security claim).");
     }
 
+    static readonly Guid FullRole = new Guid("00000000-0000-4000-8000-000000000011");
+    static readonly Guid CoordinatorRole = new Guid("00000000-0000-4000-8000-000000000012");
+    static readonly Guid OfficeRole = new Guid("00000000-0000-4000-8000-000000000013");
+    static readonly Guid BookRole = new Guid("00000000-0000-4000-8000-000000000014");
+    static readonly Guid MeterRole = new Guid("00000000-0000-4000-8000-000000000015");
+    static readonly Guid MeterApp = new Guid("00000000-0000-4000-8000-000000000016");
+    static string LegacyConfig { get { return "full="+FullRole+";coordinator="+CoordinatorRole+";office="+OfficeRole+";book="+BookRole; } }
+    static string MeterConfig { get { return LegacyConfig+";meterrole="+MeterRole+";meteruser="+Id+";meterapplication="+MeterApp; } }
+    static Entity MeterTarget()
+    {
+        var row=Row("gr_job"); row["gr_hourmeter"]=1620; row["gr_hourmeterreadingtype"]=new OptionSetValue(122830000);
+        row["gr_hourmeterrecordeddate"]=new DateTime(2026,10,9); row["gr_hourmeterapprovalreference"]=Id+"|1620|2026-10-09|"+OtherId;
+        return row;
+    }
+    static Entity MeterCurrent()
+    {
+        var row=Row("gr_job"); row["statecode"]=new OptionSetValue(0); row["gr_status"]=new OptionSetValue(122830004);
+        row["gr_registrationvoid"]=false; row["gr_equipment"]=new EntityReference("gr_equipment",OtherId); return row;
+    }
+    static Entity MeterCaller() { var row=Row("systemuser"); row["applicationid"]=MeterApp; row["isdisabled"]=false; return row; }
+    static void ValidateMeter(Entity target, Entity current) { MeterWritePolicy.Validate(target,current,new DateTime(2026,10,10)); }
+    static void MeterTests()
+    {
+        Test("legacy role configuration remains valid", () => new RestrictedAccessPlugin(null,LegacyConfig));
+        Test("dedicated meter configuration is opt in", () => new RestrictedAccessPlugin(null,MeterConfig));
+        Test("partial meter configuration fails closed", () => Denied(() => new RestrictedAccessPlugin(null,LegacyConfig+";meterrole="+MeterRole)));
+        Test("meter role cannot reuse a human profile", () => Denied(() => new RestrictedAccessPlugin(null,MeterConfig.Replace(MeterRole.ToString(),OfficeRole.ToString()))));
+        Test("duplicate meter setting fails closed", () => Denied(() => new RestrictedAccessPlugin(null,MeterConfig+";meteruser="+Id)));
+        Test("exact meter patch is allowed", () => ValidateMeter(MeterTarget(),MeterCurrent()));
+        foreach(var message in new[]{"Create","Delete","Upsert"}) { var m=message; Test("meter denies "+m,()=>Denied(()=>MeterWritePolicy.ValidateTarget(m,MeterTarget()))); }
+        foreach(var field in new[]{"gr_status","gr_equipment","gr_completeddate","gr_description"}) {
+            var f=field; Test("meter denies extra field "+f,()=>{var row=MeterTarget();row[f]="extra";Denied(()=>ValidateMeter(row,MeterCurrent()));});
+        }
+        foreach(var field in new[]{"gr_hourmeter","gr_hourmeterreadingtype","gr_hourmeterrecordeddate","gr_hourmeterapprovalreference"}) {
+            var f=field; Test("meter requires nonnull field "+f,()=>{var row=MeterTarget();row[f]=null;Denied(()=>ValidateMeter(row,MeterCurrent()));});
+        }
+        Test("meter cannot write Equipment",()=>{var row=MeterTarget();row.LogicalName="gr_equipment";Denied(()=>ValidateMeter(row,MeterCurrent()));});
+        Test("meter requires a nonnegative whole number",()=>{var row=MeterTarget();row["gr_hourmeter"]=-1;Denied(()=>ValidateMeter(row,MeterCurrent()));});
+        Test("meter rejects estimated readings",()=>{var row=MeterTarget();row["gr_hourmeterreadingtype"]=new OptionSetValue(122830001);Denied(()=>ValidateMeter(row,MeterCurrent()));});
+        Test("meter denies missing and future dates",()=>{var row=MeterTarget();row["gr_hourmeterrecordeddate"]=new DateTime(2999,1,1);Denied(()=>ValidateMeter(row,MeterCurrent()));});
+        Test("meter denies time component",()=>{var row=MeterTarget();row["gr_hourmeterrecordeddate"]=new DateTime(2026,10,9,1,0,0);Denied(()=>ValidateMeter(row,MeterCurrent()));});
+        foreach(var value in new[]{"bad",Id+"|1621|2026-10-09|"+OtherId,Id+"|1620|2026-10-08|"+OtherId,Id+"|1620|2026-10-09|"+Id,Guid.Empty+"|1620|2026-10-09|"+OtherId}) {
+            var v=value; Test("meter denies mismatched approval "+v,()=>{var row=MeterTarget();row["gr_hourmeterapprovalreference"]=v;Denied(()=>ValidateMeter(row,MeterCurrent()));});
+        }
+        Test("meter denies completed Job",()=>{var current=MeterCurrent();current["gr_status"]=new OptionSetValue(122830003);Denied(()=>ValidateMeter(MeterTarget(),current));});
+        Test("meter denies inactive Job",()=>{var current=MeterCurrent();current["statecode"]=new OptionSetValue(1);Denied(()=>ValidateMeter(MeterTarget(),current));});
+        Test("meter denies void Job",()=>{var current=MeterCurrent();current["gr_registrationvoid"]=true;Denied(()=>ValidateMeter(MeterTarget(),current));});
+        Test("meter denies missing equipment",()=>{var current=MeterCurrent();current.Attributes.Remove("gr_equipment");Denied(()=>ValidateMeter(MeterTarget(),current));});
+        Test("meter denies older or same-day conflicting readings",()=>{var current=MeterCurrent();current["gr_hourmeterrecordeddate"]=new DateTime(2026,10,10);Denied(()=>ValidateMeter(MeterTarget(),current));current["gr_hourmeterrecordeddate"]=new DateTime(2026,10,9);current["gr_hourmeter"]=1621;Denied(()=>ValidateMeter(MeterTarget(),current));});
+        Test("meter denies a manually edited approval replay",()=>{var current=MeterCurrent();current["gr_hourmeterapprovalreference"]=MeterTarget()["gr_hourmeterapprovalreference"];Denied(()=>ValidateMeter(MeterTarget(),current));});
+        Test("meter requires the exact application user and role",()=>MeterWritePolicy.ValidateCaller(Id,MeterCaller(),new[]{MeterRole},Id,MeterApp,MeterRole));
+        Test("human holding meter role is denied",()=>{var caller=MeterCaller();caller.Attributes.Remove("applicationid");Denied(()=>MeterWritePolicy.ValidateCaller(Id,caller,new[]{MeterRole},Id,MeterApp,MeterRole));});
+        Test("other application is denied",()=>{var caller=MeterCaller();caller["applicationid"]=OtherId;Denied(()=>MeterWritePolicy.ValidateCaller(Id,caller,new[]{MeterRole},Id,MeterApp,MeterRole));});
+        Test("disabled application is denied",()=>{var caller=MeterCaller();caller["isdisabled"]=true;Denied(()=>MeterWritePolicy.ValidateCaller(Id,caller,new[]{MeterRole},Id,MeterApp,MeterRole));});
+        Test("missing meter role is denied",()=>Denied(()=>MeterWritePolicy.ValidateCaller(Id,MeterCaller(),new[]{OfficeRole},Id,MeterApp,MeterRole)));
+        Test("different user is denied",()=>Denied(()=>MeterWritePolicy.ValidateCaller(OtherId,MeterCaller(),new[]{MeterRole},Id,MeterApp,MeterRole)));
+        Test("guard executes exact meter path",()=>ExecuteMeterGuard(MeterTarget(),new[]{MeterRole},MeterCaller()));
+        Test("Full role cannot bypass meter field guard",()=>{var row=MeterTarget();row["gr_status"]=new OptionSetValue(122830003);Denied(()=>ExecuteMeterGuard(row,new[]{MeterRole,FullRole},MeterCaller()));});
+        Test("configured meter user without meter role cannot use Full bypass",()=>Denied(()=>ExecuteMeterGuard(MeterTarget(),new[]{FullRole},MeterCaller())));
+    }
+    static void ExecuteMeterGuard(Entity target, Guid[] held, Entity caller)
+    {
+        var context=Proxy.For<IPluginExecutionContext>(new Dictionary<string,object>{
+            {"Stage",20},{"Mode",0},{"IsInTransaction",true},{"UserId",Id},{"InitiatingUserId",Id},{"MessageName","Update"},
+            {"InputParameters",new ParameterCollection{{"Target",target}}}
+        });
+        var service=Proxy.For<IOrganizationService>(new Dictionary<string,object>{
+            {"RetrieveMultiple",new Func<object[],object>(args=>{
+                var query=(Microsoft.Xrm.Sdk.Query.QueryExpression)args[0];var result=new EntityCollection();
+                if(query.EntityName=="systemuserroles") foreach(var id in held){var row=new Entity("systemuserroles");row["roleid"]=id;result.Entities.Add(row);} return result;
+            })},
+            {"Retrieve",new Func<object[],object>(args=>(string)args[0]=="systemuser"?caller:MeterCurrent())}
+        });
+        var factory=Proxy.For<IOrganizationServiceFactory>(new Dictionary<string,object>{{"CreateOrganizationService",new Func<object[],object>(args=>{if((Guid)args[0]!=Id)throw new Exception("Impersonation is forbidden");return service;})}});
+        var provider=Proxy.For<IServiceProvider>(new Dictionary<string,object>{{"GetService",new Func<object[],object>(args=>(Type)args[0]==typeof(IPluginExecutionContext)?(object)context:factory)}});
+        new RestrictedAccessPlugin(null,MeterConfig).Execute(provider);
+    }
+
     static Entity RegistrationLedger(string table, Guid ledgerId, Guid jobId)
     {
         var row = new Entity(table, ledgerId);
@@ -145,6 +235,8 @@ public static class RestrictedAccessTests
         public override IMessage Invoke(IMessage message)
         {
             var call = (IMethodCallMessage)message; object value;
+            if(values.TryGetValue(call.MethodName,out value) && value is Func<object[],object>)
+                return new ReturnMessage(((Func<object[],object>)value)(call.Args),null,0,call.LogicalCallContext,call);
             if (!call.MethodName.StartsWith("get_") || !values.TryGetValue(call.MethodName.Substring(4), out value)) throw new Exception("Unexpected context member: " + call.MethodName);
             return new ReturnMessage(value, null, 0, call.LogicalCallContext, call);
         }

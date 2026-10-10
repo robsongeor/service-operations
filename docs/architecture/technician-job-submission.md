@@ -5,8 +5,19 @@
 Job-level links at `/portal/job/:token` use Azure Table snapshots and private Blob evidence.
 Licensed office generation reads Dataverse using the caller's delegated token through
 `X-Dataverse-Authorization` and a `WhoAmI` check. Authenticated office review may separately read
-current contact/Quote context with the active account's delegated Dataverse token. Anonymous lookup,
-photo upload and final submission never acquire a Dataverse token or call Dataverse.
+current contact/Quote context with the active account's delegated Dataverse token. Anonymous lookup
+and photo upload do not call Dataverse. The technician browser receives no Dataverse credential.
+After saving final evidence, the server currently obtains its application token and attempts an
+Allocated → Completion Review update after checking both Azure lifecycles and the current primary/
+active-assignment roster. This is not evidence import or operational completion. Local recovery
+and office-approved meter changes are described in the [implementation report](../reviews/2026-10-10-job-card-implementation.md);
+deployment, assignment concurrency and durable monitoring still require acceptance.
+
+V2-only releases remain compatible with the older shared backend: detail responses must explicitly
+advertise `officeRecoveryAvailable: true` before Resume, correction or technician-return controls
+appear. Public lookup must advertise `meterRecordedDateAvailable: true` before the form displays,
+validates or sends a meter date. These are compatibility signals, not authorization; server checks
+remain mandatory. Original filing/follow-up and document exports do not require the new signals.
 
 Site Check occurrence links remain a separate existing workflow, using
 `siteCheckAssignmentService.js` and `siteCheckPhotoStorage.js`. Retain their credentials.
@@ -36,6 +47,11 @@ each, and 10,000 characters for each story/observation. At least one real date, 
 (up to 24) and non-negative whole kilometres is required. Lower meter readings require explicit
 technician confirmation, independently checked by the server.
 
+The form now captures the meter-reading date separately from submission time. Text, time and parts
+recover after same-tab reload using token-hashed session-storage keys. Drafts expire after seven
+days and are removed after submission; closing the tab loses them. Photos must be reattached.
+This is not offline or cross-device support. The personal-account assigned-jobs app is parked.
+
 JPEG, PNG, HEIC and HEIF signatures are checked; this is not a malware-scanning claim.
 Office photos load only on demand. HEIC/HEIF are downloadable even without browser image support.
 The adapter splits large Table string properties into bounded chunks.
@@ -50,17 +66,36 @@ matches `JOB_CARD_REVIEWER_EMAILS`. Missing configuration denies access. Blob re
 authenticated, private/no-store, attachment-only and nosniff; no credentials or Blob URLs are public.
 
 Azure submission/review does not change Dataverse Job Card Status, complete a Job, change Completed
-Date, Equipment hours, maintenance or assignments, or create follow-up work/Quotes.
+Date, Equipment hours, maintenance or assignments, or create follow-up work/Quotes. With the new
+meter gate enabled, explicit office completion/approval separately updates the Job's meter fields;
+technician submission alone never does so. Original evidence remains unchanged.
+The local meter writer uses only dedicated backend `JOB_CARD_METER_DATAVERSE_*` credentials,
+including in scheduled retry; it cannot fall back to the general/GreenTree token. Guard `1.0.2.0`
+binds its role, application and system user to the four-field Job patch. The human reviewer still
+authorizes the action and Azure records attribution. The [writer rollout checklist](../job-card-meter-writer-rollout.md)
+owns live schema, identity, configuration and acceptance gates; this path is not yet deployed.
+Submission's separate server-side Completion Review attempt can change `gr_status`; office review
+actions themselves do not. A failed attempt preserves the accepted submission. Local retry discovery
+now includes pending and filed cards and saves continuation progress; verify the actual scheduler,
+shared store, permissions, overlap behavior and alerts before claiming reliable production recovery.
 Ordinary Job dispatch records delivery through Email Dispatch and does not write legacy Job or
 assignment Card Status. Site Check dispatch retains its existing Sent updates. Future Dataverse
-import requires a separate explicit licensed-office action.
+import requires an explicit authorized office action and the schema/permission gates in the report.
 
 ## Office review workflow
 
-Opening a review does not mutate it. Submitted contains Pending; Review contains In review,
-Needs clarification, and On hold. Start review identifies the administrator but does not lock the
-shared queue. Needs clarification and On hold require notes and do not contact the technician or
-create a new link. Completed contains
+Opening a review does not mutate it. Submitted contains Pending, displayed as Ready for entry;
+Needs follow-up contains In review (displayed as GreenTree entry), Needs clarification (displayed as
+Needs follow-up), and existing On hold records.
+This is a display rename of In progress; the `review` route/API value and stage membership are unchanged.
+Start GreenTree entry identifies the administrator but does not lock the
+shared queue. One **Needs follow-up** button replaces the clarification/hold buttons and requires a
+note about missing information or blockers. It uses the existing `setNeedsClarification` action;
+no status migration is needed. It does not contact the technician or create a new link. Existing
+On hold records and activity remain intact; the API keeps `setOnHold` compatible with older clients.
+Resume entry returns either follow-up state to In review, retaining notes in history.
+Last handled by identifies the last office actor, not an exclusive owner. Office corrections append
+audited notes, including after filing; they do not edit technician evidence, PDFs or GreenTree. Completed contains
 Processed in GreenTree and legacy Reviewed. GreenTree is the data-entry system, and confirming
 completed data entry there is the sole final workflow action; its reference is optional. The retired
 No invoice required action is rejected by the server. Any existing records with that outcome remain
@@ -75,14 +110,29 @@ recorded)` and never imply GreenTree processing.
 ## Office screens after legacy-control retirement
 
 The review queue has four separately loaded workflow tabs: **Open jobs**, **Submitted** (default),
-**Review**, and **Completed**. Shared drawer tabs, table/toolbar, sort controls, attention pills and
+**Needs follow-up**, and **Completed**. Shared drawer tabs, table/toolbar, sort controls, attention pills and
 searchable selectors are reused. Job type is a secondary filter, not a main tab. Columns display saved Job number,
 NZ submission date/time, type, Equipment, Customer/Site, work required, Technician, reported flags
-and photo count. Job and Review links open the saved review. Filters and sort are query-state;
-returning via the queue link restores them. No operational status/scheduling filters, edits,
+and photo count. Job and Open links display the saved review in a centred, accessible review dialog while
+the queue stays mounted behind it. Job number leads the header, with fleet/description underneath
+and submission date alongside status. Technician/order metadata precede compact Customer/Site and
+Equipment details; the submitted meter sits with Equipment. Work performed, observations and compact
+time/parts tables are on the left; photos, document/quote actions and office workflow on the right.
+The live Site contact is grouped with saved Customer/Site and remains distinct from immutable evidence.
+Narrow screens stack the columns. Filters and sort remain
+query-state when the dialog closes. Direct legacy
+`/job-card-reviews/:reviewId` links remain supported. No operational status/scheduling filters, edits,
 bulk actions or emails are exposed in the queue. Reported attention is not Job office status.
 
-`GET /api/jobcardreviews` accepts allowlisted `view`, `offset`, and `limit` values, returns at most
+The optional `VITE_JOB_CARD_CURSOR_QUEUE_ENABLED` client flag selects the new `paging=cursor`
+protocol for submitted/review/completed queues. The backend returns at most 100 summaries plus
+`nextCursor`; exact `jobNumber` filtering runs on the server. Native Table continuation can reach
+past 500 records, but it is not an index or a global newest-first query. Other UI filters/sorts
+remain loaded-page-only. The flag stays off until the shared backend is upgraded and verified.
+Open jobs retains bounded dispatch paging. The queue refreshes on focus without replacing an open
+review form; full loaded-page/scroll retention remains to be improved.
+
+The compatible legacy `GET /api/jobcardreviews` protocol accepts `view`, `offset`, and `limit`, returns at most
 100 summaries per request, and exposes `hasMore`/`nextOffset` for visible incremental loading.
 Views are `open`, `submitted`, `review`, and `completed`. Legacy API `active`/`history` requests
 remain compatible; old UI `history` bookmarks open Completed and `active` opens Submitted.
@@ -110,6 +160,8 @@ per batch, overflow fails closed), matching Job/assignment/recipient and submiss
 send request. Missing old recipient values match conservatively. Recorded legacy primary or
 assignment submission timestamps also exclude already-returned cards; an earlier submission
 does not hide a later send cycle. No evidence or operational record is changed by this projection.
+Current lifecycle filtering retains expired unsubmitted links in Open jobs as **Expired link — resend
+needed**. Explicit withdrawal/replacement remains distinct. No email is sent by viewing the queue.
 
 Dispatch reads follow only same-origin/same-path continuation links and have finite page/row bounds.
 An access error or incomplete evidence check is an unavailable queue, not an empty queue. Open rows
@@ -174,14 +226,30 @@ after the in-app filename prompt. HEIC/HEIF originals remain downloadable withou
 when requested. It reuses existing bounded per-Job header/selected-Quote line reads and active-account
 authentication. No Quote editing or operational updates are available here; see [Quotes](quotes.md).
 
-The **Download submission PDF** action uses only the loaded Azure record, with no current
-Job reread or public-token request. A browser-local paginated report retains all structured evidence,
-individual time dates (including multiple weeks), quantities, observations and a photo filename
-manifest. Photos are not embedded or fetched by export; private photos remain separate actions.
-Missing snapshot values are labelled as unrecorded, not filled from mutable operational data.
-The existing one-page interactive technician/legacy Job sheet is unchanged. Unsupported PDF-font
-characters appear as explicit Unicode code points rather than disappearing. Review content is
-remounted on account/review changes so exports and photo URLs cannot follow the previous review.
+**Download job card PDF** fills `docs/templates/jobsheet-template.pdf` (the existing Field Service
+Inspection Report), using only the loaded Azure snapshot and submitted values. It does not reread
+the current Job/contact, request a public token, or use the current hour meter when the submission
+has no reading. Unrecorded fields and signatures remain blank. The PDF remains interactive; saving
+an edited local copy does not change the stored submission.
+
+The shared Job sheet renderer adds clearly linked continuation pages when a form box cannot fit
+the complete text. It preserves individual time entries when weekday/date slots collide instead
+of merging separate weeks under one date, corrects the template's reversed Saturday/Sunday date
+widgets, and uses the NZ submission date. Unsupported font characters are written as explicit
+Unicode code points, not dropped. These safeguards also apply to technician and legacy downloads.
+
+**Save all documentation** downloads one ZIP containing this filled Job card PDF and every original
+submitted photo, but no associated Quotes. It works with zero photos. It uses the same private,
+authenticated sequential photo reads, filename sanitisation, size checks and cancellation as
+photo-only downloads. A failed PDF or photo prevents saving an incomplete archive. It never marks
+the card complete. Review content is remounted on account/review changes so exports and photo URLs
+cannot follow the previous review.
+
+The primary **Mark complete** action confirms that the administrator has finished GreenTree entry.
+It records the existing `completeGreenTreeProcessing` outcome, actor and time and moves the card to
+Completed. Starting entry first is optional; follow-up still requires a note. Completion
+does not send data to GreenTree or close the operational Job, and final outcomes cannot be reopened
+in this UI. Saving documents remains available before and after completion.
 
 Site Check Type or occurrence-linked Jobs retain their existing office controls and service path.
 No old tables, columns, identities or historical evidence are deleted. Additional assignments with

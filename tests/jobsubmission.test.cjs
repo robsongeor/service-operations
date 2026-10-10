@@ -82,9 +82,10 @@ test('public lookup returns only the snapshotted minimum and performs no Dataver
     const body = JSON.parse(response.body)
     assert.deepEqual(Object.keys(body).sort(), [
         'currentHourMeter', 'customerName', 'equipmentDisplayName', 'fleetNumber', 'jobNumber',
-        'requiresHourMeter', 'siteName', 'technicianName', 'workRequired',
+        'meterRecordedDateAvailable', 'requiresHourMeter', 'siteName', 'technicianName', 'workRequired',
     ])
     assert.equal(body.technicianName, 'Test Technician')
+    assert.equal(body.meterRecordedDateAvailable, true)
 })
 
 test('production link generation reads a snapshot with the office token and makes no Dataverse write', async () => {
@@ -141,8 +142,11 @@ test('submission validation preserves strict story, meter, child, and photo-refe
     assert.match(service.test.validateSubmission(record, { story: '', hourMeter: 2500 }), /story/i)
     assert.match(service.test.validateSubmission(record, { story: 'Done' }), /hour meter/i)
     assert.match(service.test.validateSubmission(record, { story: 'Done', hourMeter: 2499 }), /lower/i)
+    for (const date of ['2026-02-30', '2999-01-01', 'not-a-date']) {
+        assert.match(service.test.validateSubmission(record, { story: 'Done', hourMeter: 2500, hourMeterRecordedDate: date }), /meter-reading date/)
+    }
     assert.equal(service.test.validateSubmission(record, {
-        story: 'Done', hourMeter: 2500,
+        story: 'Done', hourMeter: 2500, hourMeterRecordedDate: '2026-07-25',
         timeEntries: [{ date: '2026-07-25', hours: 1.25, kilometres: 12 }],
         parts: [{ description: 'Oil filter', quantity: 2 }], furtherWorkRequired: false, safetyIssueIdentified: false, photos: [],
     }), '')
@@ -211,8 +215,10 @@ test('final required public submission moves an Allocated Job to Completion Revi
     global.fetch = async (url, options = {}) => {
         calls.push({ url: String(url), options })
         if (String(url).includes('login.microsoftonline.com')) return Response.json({ access_token: 'application-token' })
+        if (String(url).includes('/gr_jobassignments?')) return Response.json({ value: [] })
         if (!options.method) return Response.json({
             gr_jobid: '00000000-0000-4000-8000-000000000001',
+            _gr_mechanic_value: '00000000-0000-4000-8000-000000000003',
             gr_status: statusAutomation._test.JOB_STATUS_ALLOCATED,
             '@odata.etag': 'W/"10"',
         })
@@ -533,15 +539,17 @@ test('all required submissions move only an Allocated Job to Completion Review',
     const updated = await statusAutomation.moveJobToCompletionReviewAfterAllRequiredSubmissions({
         jobId: '00000000-0000-4000-8000-000000000001',
         records: [
-            { tokenHash: 'primary', assignmentId: '', status: 'pendingReview', createdOn: '2026-10-09T01:00:00Z' },
+            { tokenHash: 'primary', technicianId: 'tech-1', assignmentId: '', status: 'pendingReview', createdOn: '2026-10-09T01:00:00Z' },
             { tokenHash: 'additional', assignmentId: 'assignment-1', status: 'reviewed', createdOn: '2026-10-09T01:01:00Z' },
         ],
         dataverseOrigin: 'https://example.crm.dynamics.com',
         authorization: 'Bearer application-token',
         fetchImpl: async (url, options = {}) => {
             calls.push({ url: String(url), options })
+            if (String(url).includes('/gr_jobassignments?')) return Response.json({ value: [] })
             if (!options.method) return Response.json({
                 gr_jobid: '00000000-0000-4000-8000-000000000001',
+                _gr_mechanic_value: 'tech-1',
                 gr_status: statusAutomation._test.JOB_STATUS_ALLOCATED,
                 '@odata.etag': 'W/"8"',
             })
@@ -549,14 +557,15 @@ test('all required submissions move only an Allocated Job to Completion Review',
         },
     })
     assert.equal(updated, true)
-    assert.deepEqual(JSON.parse(calls[1].options.body), { gr_status: statusAutomation._test.JOB_STATUS_COMPLETION_REVIEW })
-    assert.equal(calls[1].options.headers['If-Match'], 'W/"8"')
+    const patch = calls.find((call) => call.options.method === 'PATCH')
+    assert.deepEqual(JSON.parse(patch.options.body), { gr_status: statusAutomation._test.JOB_STATUS_COMPLETION_REVIEW })
+    assert.equal(patch.options.headers['If-Match'], 'W/"8"')
 })
 
 test('scheduled reconciliation retries submitted Job Cards and reports blocked Jobs without exposing identifiers', async () => {
     const histories = new Map([
         ['00000000-0000-4000-8000-000000000001', [
-            { tokenHash: 'submitted', assignmentId: '', status: 'pendingReview', createdOn: '2026-10-09T01:00:00Z' },
+            { tokenHash: 'submitted', technicianId: 'tech-1', assignmentId: '', status: 'pendingReview', createdOn: '2026-10-09T01:00:00Z' },
         ]],
         ['00000000-0000-4000-8000-000000000002', [
             { tokenHash: 'submitted', assignmentId: '', status: 'pendingReview', createdOn: '2026-10-09T01:00:00Z' },
@@ -572,8 +581,10 @@ test('scheduled reconciliation retries submitted Job Cards and reports blocked J
         dataverseOrigin: 'https://example.crm.dynamics.com',
         authorization: 'Bearer application-token',
         fetchImpl: async (url, options = {}) => {
+            if (String(url).includes('/gr_jobassignments?')) return Response.json({ value: [] })
             if (!options.method) return Response.json({
                 gr_jobid: '00000000-0000-4000-8000-000000000001',
+                _gr_mechanic_value: 'tech-1',
                 gr_status: statusAutomation._test.JOB_STATUS_ALLOCATED,
                 '@odata.etag': 'W/"12"',
             })
@@ -585,6 +596,8 @@ test('scheduled reconciliation retries submitted Job Cards and reports blocked J
         pendingRecords: 2,
         jobsChecked: 2,
         eligible: 1,
+        meterApplied: 0,
+        meterFailed: 0,
         movedToCompletionReview: 1,
         unchanged: 1,
         failed: 0,

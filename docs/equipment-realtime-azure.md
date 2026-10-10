@@ -2,6 +2,14 @@
 
 Dataverse remains the source of truth. This integration broadcasts invalidation events only; it does not create another Equipment, Jobs, or Staff database.
 
+## Current V2 limitation — 10 October 2026
+
+The V2 workflow leaves `VITE_EQUIPMENT_REALTIME_API_URL` empty pending its infrastructure/CORS
+repair. Separately, the unified Job worklist owns state outside shared invalidation, so restoring
+SignalR alone is insufficient. These instructions describe the integration, not proof it is active
+for V2. Follow audit A06 and the two-browser acceptance gate in
+[release readiness](../RELEASE_READINESS.md).
+
 ## Azure resources
 
 1. Create an Azure SignalR Service resource in **Serverless** mode.

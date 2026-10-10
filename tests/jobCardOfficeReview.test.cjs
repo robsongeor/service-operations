@@ -16,6 +16,19 @@ const evidence = () => ({
 })
 const at = '2026-10-02T01:02:03.000Z'
 
+test('follow-up resumes with an audit event; office corrections never overwrite evidence or final outcome', () => {
+    const held = applyOfficeTransition(evidence(), { action: 'setNeedsClarification', note: 'Check time' }, actor, at)
+    const resumed = applyOfficeTransition(held, { action: 'resumeReview' }, actor, at)
+    assert.equal(resumed.officeStatus, 'inReview')
+    assert.equal(JSON.parse(resumed.officeActivitiesJson)[0].note, 'Check time')
+    assert.throws(() => applyOfficeTransition(resumed, { action: 'resumeReview' }, actor, at), /Only a card/)
+    const complete = applyOfficeTransition(resumed, { action: 'completeGreenTreeProcessing' }, actor, at)
+    const corrected = applyOfficeTransition(complete, { action: 'recordCorrection', note: 'Technician confirmed labour was 2 hours.' }, actor, at)
+    for (const key of ['status', 'officeStatus', 'outcomeOn', 'outcomeByUserId', 'hourMeter', 'story', 'timeEntriesJson']) assert.deepEqual(corrected[key], complete[key])
+    assert.equal(officeProjection(corrected).officeCorrections.length, 1)
+    assert.throws(() => applyOfficeTransition(complete, { action: 'recordCorrection' }, actor, at), /required/)
+})
+
 test('new and legacy lifecycle rows derive distinct office states', () => {
     assert.equal(deriveOfficeStatus({ status: 'pendingReview' }), OFFICE_STATUSES.PENDING)
     assert.equal(deriveOfficeStatus({ status: 'reviewed' }), OFFICE_STATUSES.LEGACY_REVIEWED)
@@ -41,6 +54,21 @@ test('clarification and hold require bounded notes', () => {
         assert.throws(() => applyOfficeTransition(evidence(), { action, note: '   ' }, actor, at), /required/i)
     }
     assert.throws(() => applyOfficeTransition(evidence(), { action: 'setOnHold', note: 'x'.repeat(2001) }, actor, at), /too long/i)
+})
+
+test('unified follow-up reuses the note-required action and retains previous hold history and evidence', () => {
+    const held = applyOfficeTransition(evidence(), { action: 'setOnHold', note: 'Waiting for parts allocation' }, actor, at)
+    const before = structuredClone(held)
+    assert.throws(() => applyOfficeTransition(held, { action: 'setNeedsClarification', note: ' ' }, actor, at), /required/i)
+    const followedUp = applyOfficeTransition(held, { action: 'setNeedsClarification', note: 'Ask Parts to confirm the allocation' }, actor, at)
+    assert.equal(followedUp.officeStatus, 'needsClarification')
+    assert.equal(followedUp.status, 'pendingReview')
+    const history = JSON.parse(followedUp.officeActivitiesJson)
+    assert.deepEqual(history[0], JSON.parse(before.officeActivitiesJson)[0])
+    assert.equal(history[1].fromStatus, 'onHold')
+    assert.equal(history[1].note, 'Ask Parts to confirm the allocation')
+    for (const key of ['story', 'hourMeter', 'timeEntriesJson', 'partsJson', 'photosJson']) assert.deepEqual(followedUp[key], before[key])
+    assert.deepEqual(held, before)
 })
 
 test('retired no-invoice action is rejected while existing outcomes remain immutable history', () => {

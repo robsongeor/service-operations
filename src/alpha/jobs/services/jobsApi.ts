@@ -1,7 +1,7 @@
 import type { Job } from '../types/job.types.ts'
 import type { JobSaveInput } from '../types/jobSave.types.ts'
 import { assertJobTypeAllowedForCreation, type JobCreationSource } from '../types/jobType.types.ts'
-import { HOUR_METER_CLASSIFICATION_ENABLED, type HourMeterReadingType } from '../../equipment/hourMeter/hourMeterReading.types.ts'
+import { HOUR_METER_CLASSIFICATION_ENABLED, JOB_CARD_METER_APPROVAL_ENABLED, type HourMeterReadingType } from '../../equipment/hourMeter/hourMeterReading.types.ts'
 import {
     invalidateSharedJobsDataCache,
     jobsCacheScope,
@@ -26,7 +26,7 @@ import type { JobTypeFilter } from '../types/jobType.types.ts'
 import { EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED } from '../domain/externalSupplierAssignment.ts'
 
 const DATAVERSE_URL = import.meta.env?.VITE_DATAVERSE_URL ?? ''
-const HOUR_METER_READING_SELECT = HOUR_METER_CLASSIFICATION_ENABLED ? ',gr_hourmeterreadingtype,gr_hourmeterrecordeddate' : ''
+const HOUR_METER_READING_SELECT = (HOUR_METER_CLASSIFICATION_ENABLED ? ',gr_hourmeterreadingtype,gr_hourmeterrecordeddate' : '') + (JOB_CARD_METER_APPROVAL_ENABLED ? ',gr_hourmeterapprovalreference' : '')
 const EXTERNAL_SUPPLIER_SELECT = EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED ? ',gr_externalsupplierdetails' : ''
 const JOB_SELECT = `gr_jobid,createdon,gr_jobnumber,gr_status,gr_ordernumber,gr_description${EXTERNAL_SUPPLIER_SELECT},gr_jobtype,gr_jobcardstatus,gr_jobcardsenton,gr_jobcardsubmittedon,gr_jobcardclosedon,gr_hourmeter${HOUR_METER_READING_SELECT},gr_completeddate,gr_servicetype,gr_currentofficeaction,gr_officeactionowner,gr_officeattentionrequired,gr_techniciansubmissiontokenhash,gr_techniciansubmissiontokencreatedon,gr_techniciansubmissiontokenexpireson,gr_techniciansubmissiontokenused,gr_techniciansubmissionsubmittedon,gr_techniciansubmissionhourmeter,gr_techniciansubmissionstory,gr_techniciansubmissionfurtherworkrequired,gr_techniciansubmissionfurtherworkdetails,gr_techniciansubmissionsafetyissueidentified,gr_techniciansubmissionsafetyissuedetails,_gr_sitecheck_value${UNIFIED_JOB_RUNTIME ? UNIFIED_JOB_SELECT : ''}`
 const JOB_EXPAND = 'gr_Equipment($select=gr_equipmentid,gr_fleet,gr_alternatefleetnumbers,gr_make,gr_model,gr_serial,gr_currenthourmeter,gr_currenthourmeterrecordeddate,gr_servicetrackingenabled),gr_Mechanic($select=gr_mechanicid,gr_name,gr_phone,gr_email),gr_Site($select=gr_siteid,gr_name,gr_address;$expand=gr_Customer($select=gr_customerid,gr_name)),gr_Contact($select=gr_contactid,gr_name,gr_phone,gr_email)'

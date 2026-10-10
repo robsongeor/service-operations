@@ -14,6 +14,7 @@ export type PublicJobSubmissionDetails = {
     technicianName?: string
     workRequired?: string
     requiresHourMeter: boolean
+    meterRecordedDateAvailable?: boolean
     currentHourMeter?: number
 }
 
@@ -33,6 +34,7 @@ export type JobCardTimeEntryInput = {
 export type JobCardSubmissionInput = {
     story: string
     hourMeter?: number
+    hourMeterRecordedDate?: string
     lowerHourMeterConfirmed?: boolean
     timeEntries: JobCardTimeEntryInput[]
     parts: {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { acquireDataverseAccessToken } from '../../auth/dataverseAuthentication'
 import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
+import { getSignedInUserInfo } from '../../auth/signedInUser'
 import { applicationAccessFromEnvironment } from '../../auth/applicationAccess'
 import { searchCustomers, createCustomer, findCustomersByName } from '../jobs/services/customersApi'
 import { fetchCustomerSites, createSite } from '../jobs/services/sitesApi'
@@ -168,6 +169,7 @@ export default function JobBookPrototypeScreen({
 }) {
     const { instance } = useMsal()
     const account = useActiveMsalAccount()
+    const signedInUser = getSignedInUserInfo(account)
     const { canManageJobs, canScheduleJobs, canCorrectJobDetails, canEmailAssignedTechnician } = applicationAccessFromEnvironment(account)
     const { canUpdateEntryMarkers: canWriteMarkers, canAssignInitialTechnician } = applicationAccessFromEnvironment(account)
     const jobBooks = useMemo(() => availableJobBooks(), [])
@@ -245,7 +247,7 @@ export default function JobBookPrototypeScreen({
         if (UNIFIED_JOB_RUNTIME) invalidateJobsCache()
     }
     const voidEntry = useJobBookVoid(getAccessToken, reconcileIntakeRow)
-    const rowActions = useJobBookActions(getAccessToken, canEmailAssignedTechnician, !canManageJobs)
+    const rowActions = useJobBookActions(getAccessToken, canEmailAssignedTechnician, !canManageJobs, signedInUser?.displayName ?? '')
 
     const switchJobBook = (jobBookKey: JobBookKey) => {
         if (jobBookKey === selectedJobBookKey || voidEntry.busy || registration.busy || savingIntake) return

@@ -59,6 +59,8 @@ export type Job = {
     gr_hourmeter?: number | null
     gr_hourmeterreadingtype?: HourMeterReadingType | null
     gr_hourmeterrecordeddate?: string | null
+    /** Written only from the server's immutable office-approved Job Card evidence. */
+    gr_hourmeterapprovalreference?: string | null
     gr_completeddate?: string | null
     _gr_sitecheck_value?: string | null
     gr_servicetype?: ServiceType | null

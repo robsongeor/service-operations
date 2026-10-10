@@ -72,7 +72,9 @@ test('Sites tab uses one accessible settings-icon entry point', () => {
     assert.match(dashboardSource, /<EquipmentTransferDrawer/)
     assert.match(dashboardSource, />\s*Transfer Equipment\s*<\/button>/)
     assert.match(transferDrawerSource, /<SearchableSelect/)
-    assert.match(transferDrawerSource, /onSearchChange=\{setSearchQuery\}/)
+    assert.match(transferDrawerSource, /onSearchChange=\{\(query\) => \{\s*setSearchQuery\(query\)/)
+    assert.match(transferDrawerSource, /if \(controller\.signal\.aborted\) return\s*setRemoteEquipment/)
+    assert.match(transferDrawerSource, /!controller\.signal\.aborted &&/)
 })
 
 test('Customer Dashboard does not expose a direct Add Site action', () => {

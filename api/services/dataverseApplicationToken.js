@@ -48,4 +48,19 @@ async function getGreenTreeDataverseApplicationToken(options = {}) {
     })
 }
 
-module.exports = { dataverseOrigin, getDataverseApplicationToken, getGreenTreeDataverseApplicationToken }
+async function getJobCardMeterDataverseApplicationToken(options = {}) {
+    // No fallback to a human, general application or the shared GreenTree automation identity.
+    const clientId = (process.env.JOB_CARD_METER_DATAVERSE_CLIENT_ID || '').trim()
+    if (!clientId || [process.env.DATAVERSE_CLIENT_ID, process.env.GREENTREE_DATAVERSE_CLIENT_ID]
+        .some((other) => other?.trim().toLowerCase() === clientId.toLowerCase())) {
+        throw new Error('A dedicated Job Card meter identity is required.')
+    }
+    return acquireDataverseApplicationToken({
+        tenantId: (process.env.JOB_CARD_METER_DATAVERSE_TENANT_ID || '').trim(),
+        clientId,
+        clientSecret: (process.env.JOB_CARD_METER_DATAVERSE_CLIENT_SECRET || '').trim(),
+        fetchImpl: options.fetchImpl,
+    })
+}
+
+module.exports = { dataverseOrigin, getDataverseApplicationToken, getGreenTreeDataverseApplicationToken, getJobCardMeterDataverseApplicationToken }

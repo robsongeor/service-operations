@@ -8,7 +8,8 @@ server payloads, safe errors, and explicit confirmation for consequential operat
 ## Trust boundaries
 
 - Office users authenticate with delegated MSAL access.
-- Anonymous portal users possess only a bounded, one-time opaque token.
+- Anonymous portal users possess only a bounded opaque token; Job Card submission is one-time,
+  while a Site Check assignment link groups separately submitted machine cards.
 - Confidential Dataverse credentials exist only in the server process.
 - Dataverse remains authoritative for business records and relationship permissions.
 
@@ -25,26 +26,43 @@ server payloads, safe errors, and explicit confirmation for consequential operat
 
 ## Management application access modes
 
-Entra application-role claims control which management routes and navigation the client renders.
-They never replace Dataverse authorization. The Job Book-only mode permits `/job-book`, redirects
-the application root there, denies all other management routes, and removes managed-Job navigation
-from the Legacy Job Book. The paired Dataverse role must be separately approved and tested with the
-exact Job Book projection.
+Entra claims control client routes/capabilities; Dataverse roles and server plugins independently
+control data access. Current roles and routes are in [authentication](authentication.md) and
+[routing](routing.md), including ServiceCoordinator, Office Admin, JobBookAdmin and legacy JobBookOnly.
+Do not substitute an old JobBookOnly/Intake description for current unified V2 authorization.
 
-Within the Legacy Job Book, Intake entries remain editable through the shared Job Book drawer until
-promotion. Their Job Number, entry date, and regional register are immutable. After promotion, a
-Job Book-only user sees a locked `Managed Job` status and cannot open the operational editor; a Full
-Access user sees `Open Job` and is routed to the canonical Job drawer. GT and Timecloud entry markers
-remain the only managed-Job controls exposed in the restricted Job Book workflow.
+The restricted plugin checks caller context, resolves direct/team role IDs from its secure mapping
+and applies operation/column allowlists. Registration children have a special validation path.
+Those checks must be verified for delegated users **and** scheduled application identities.
 
-The current Legacy Job Book directly reads Job Book Entry plus bounded Job, Equipment, Customer,
-Site, and Staff reference data and writes approved entry markers. A dedicated role must grant only
-the minimum required table operations, with no Delete, Assign, or Share. If underlying reference-
-table visibility must also be prohibited, move the feature behind a fixed server-side projection
-rather than broadening the restricted user's Dataverse role.
+### Known security/reliability release gates
 
-`VITE_SIMULATED_ACCESS_MODE` is a development-only navigation test. It does not change the signed-in
-user's Dataverse privileges and must never be represented as an authorization test.
+The 10 October source audit found client/server-policy disagreement:
+
+- Normal restricted Job writes reject mechanic/supplier changes exposed by the UI.
+- Equipment detail saves include compliance fields outside the restricted allowlist, potentially
+  rejecting even an unrelated core-details edit.
+- Office confirmed-dispatch status updates are separate PATCH requests not permitted by the
+  normal restricted Job allowlist.
+- Registration and its guard special case currently allocate a Job merely because a mechanic
+  or supplier was selected, contrary to the agreed dispatch rule.
+- Scheduled reconciliation identity/effective roles and post-guard behavior require live proof.
+
+See A01–A04 in the [audit](../reviews/2026-10-10-application-audit.md). These are not reasons
+to disable guards or grant broad Write/System Administrator roles. Align narrow operations,
+payloads, contracts and tests, then run positive and negative named-user/direct-API tests.
+Passing offline policy tests is insufficient when their expected policy itself has drifted.
+
+`VITE_SIMULATED_ACCESS_MODE` tests UI behavior only. Recorded plugin/role deployment and a
+green workflow do not certify authorization. The V2 build already enables client role enforcement;
+see [release readiness](../../RELEASE_READINESS.md) before wider rollout.
+
+## Equipment CSV authority
+
+The current administrator-only CSV restriction is a client email predicate, including the save
+hook's repeated check. Ordinary delegated Dataverse privileges still govern the underlying writes;
+this is not a server-owned import permission. If administrator-only bulk import is a security
+requirement, enforce it authoritatively and test direct callers (audit A12).
 
 ## Job-level Azure portal
 
@@ -77,8 +95,10 @@ server `/api/equipmentgeocode` route. The server validates the office user's del
 token with `WhoAmI`, bounds and deduplicates the request, restricts lookup to New Zealand, rate
 limits provider calls, and returns only Site IDs, submitted addresses, coordinates, and bounded
 formatted addresses. `GEOAPIFY_API_KEY` is server-only and is never logged or returned. Safe errors
-contain neither upstream response bodies nor Site addresses. OpenStreetMap receives ordinary map-tile
-requests from the browser but no Dataverse token or Site address payload.
+contain neither upstream response bodies nor Site addresses. Map tiles now use `/api/maptile`, a server Geoapify proxy; the browser no longer directly
+requests the public OSM tile service. The key stays server-side. Unlike geocoding, the tile endpoint
+is anonymous and lacks equivalent caller/rate controls. Coordinate bounds and cache headers do
+not eliminate provider-quota abuse; add a usage budget, caching and monitoring (audit A10).
 
 Chargeable Invoice preview accepts only an authenticated manager's PDF with a `.pdf` filename,
 `application/pdf` media type, matching declared/decoded byte length, PDF signature, at most five

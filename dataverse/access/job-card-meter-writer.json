@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "status": "local-implementation-not-live-approved",
+  "roleName": "Service Operations - Job Card Meter Writer",
+  "minimumAssemblyVersion": "1.0.2.0",
+  "identity": "dedicated-application-user-only",
+  "baselineRole": null,
+  "privileges": [
+    { "name": "prvReadgr_Job", "depth": "Global" },
+    { "name": "prvWritegr_Job", "depth": "Global" },
+    { "name": "prvReadgr_Equipment", "depth": "Global" },
+    { "name": "prvReadSystemUser", "depth": "Global" },
+    { "name": "prvReadRole", "depth": "Global" },
+    { "name": "prvReadTeam", "depth": "Global" }
+  ],
+  "patchFields": ["gr_hourmeter", "gr_hourmeterreadingtype", "gr_hourmeterrecordeddate", "gr_hourmeterapprovalreference"],
+  "secureSettings": ["meterrole", "meteruser", "meterapplication"],
+  "prohibited": ["human-role-assignment", "shared-greentree-identity", "basic-user-baseline", "impersonation", "create", "delete", "assign", "share", "append", "appendto", "job-status", "equipment-write", "maintenance-write", "wof-write"],
+  "featureEnableIncluded": false
+}

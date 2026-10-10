@@ -1,7 +1,13 @@
 # Unified Job workflow — Dataverse readiness and rollout
 
-Status: production restricted-access guard deployed 9 October 2026. Unified workflow feature flag,
-data migration and number-invariant activation remain off.
+Recorded deployment: restricted-access guard deployed 9 October 2026. The 10 October source audit
+confirms V2 builds unified registration/workflow enabled; the older flag-off wording and readiness
+manifest are not current build configuration. Migration and number-invariant activation remain
+separate gates. No fresh cloud verification was performed in the documentation audit.
+
+Current blockers: [release readiness](../RELEASE_READINESS.md) and
+[source audit](reviews/2026-10-10-application-audit.md). Keep the dated preflight below as history;
+do not provision its historically missing items without checking current metadata.
 
 ## Live deployment — 9 October 2026
 

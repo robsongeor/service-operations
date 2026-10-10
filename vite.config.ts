@@ -108,6 +108,8 @@ function jobSubmissionProxy(env: Record<string, string | undefined>): Plugin {
   process.env.DATAVERSE_CLIENT_SECRET ||= env.DATAVERSE_CLIENT_SECRET
 
   const servicePath = require.resolve('./api/services/jobSubmissionService')
+  const sharedSubmissionProxyPath = require.resolve('./api/services/jobSubmissionProxy')
+  const sharedReviewProxyPath = require.resolve('./api/services/jobCardReviewsProxy')
   const loadService = () => {
     // The browser can hot-reload its API client while Vite otherwise retains the
     // CommonJS server module. Reload per request so delegated-auth header changes
@@ -145,7 +147,22 @@ function jobSubmissionProxy(env: Record<string, string | undefined>): Plugin {
             body,
           }
           let result: LocalFunctionResponse
-          if (reviewRoute) result = await jobSubmissionService.handleReviewRequest(localRequest)
+          const sharedBackend = require(sharedSubmissionProxyPath) as {
+            usesSharedBackend: (request: LocalFunctionRequest) => boolean
+            proxyJobSubmission: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
+          }
+          if (sharedBackend.usesSharedBackend(localRequest)) {
+            if (reviewRoute) {
+              const sharedReviews = require(sharedReviewProxyPath) as {
+                proxyJobCardReviews: (request: LocalFunctionRequest & { params: Record<string, string> }) => Promise<LocalFunctionResponse>
+              }
+              result = await sharedReviews.proxyJobCardReviews({
+                ...localRequest,
+                query: Object.fromEntries(requestUrl.searchParams),
+                params: { reviewId: reviewRoute[1] || '', photoId: reviewRoute[2] || '' },
+              })
+            } else result = await sharedBackend.proxyJobSubmission(localRequest)
+          } else if (reviewRoute) result = await jobSubmissionService.handleReviewRequest(localRequest)
           else if (request.method === 'GET') result = await jobSubmissionService.handlePublicGet(localRequest)
           else if (request.method === 'POST' && body.action === 'generate') result = await jobSubmissionService.generate(localRequest)
           else if (request.method === 'POST') result = await jobSubmissionService.handlePublicPost(localRequest)

@@ -12,6 +12,7 @@ import { JOB_TYPE_OPTIONS, JOB_TYPES, type JobType } from '../jobs/types/jobType
 import type { JobCardOfficeStatus, JobCardReviewQueueView, JobCardQueueItem } from './jobCardReview.types'
 import { DEFAULT_REVIEW_QUEUE_VIEW, REVIEW_STAGE_TABS, OFFICE_STATUS_LABELS, filterAndSortReviews, formatReviewDate, formatReviewTime, readReviewQueueView, reviewAdministratorOptions, reviewFilterOptions, reviewQueueParams, queueItemDate, queueItemId, type ReviewAttention, type ReviewQueueView, type ReviewSortColumn } from './jobCardReviewQueueModel'
 import './JobCardReviewQueue.css'
+import { JOB_CARD_CURSOR_QUEUE_ENABLED } from './jobCardReviewApi'
 
 type Props = { items: JobCardQueueItem[]; busy: boolean; error: string; truncated: boolean; canLoadMore?: boolean; refresh: () => void; loadMore?: () => void; queueView?: JobCardReviewQueueView }
 const types = JOB_TYPE_OPTIONS.filter((option) => option.value !== JOB_TYPES.SITE_CHECK).map((option) => ({ value: String(option.value), label: option.label }))
@@ -21,8 +22,8 @@ const attentionOptions: { value: ReviewAttention; label: string }[] = [
 ]
 const stageCopy = {
     open: { title: 'Open jobs', description: 'Numbered jobs sent to technicians and awaiting submission. Unsent and unnumbered jobs remain in staging.', empty: 'No jobs awaiting submission in the loaded dispatches.' },
-    submitted: { title: 'Submitted Job Cards', description: 'Technician submissions waiting for office review.', empty: 'No new technician submissions are waiting for review.' },
-    review: { title: 'Job Cards in review', description: 'In review, awaiting clarification or on hold. Clarification records status and notes only; no message is sent.', empty: 'No Job Cards are currently in review in the loaded records.' },
+    submitted: { title: 'Submitted Job Cards', description: 'Technician submissions ready for office entry into GreenTree.', empty: 'No new technician submissions are waiting for GreenTree entry.' },
+    review: { title: 'Job Cards needing follow-up', description: 'Cards awaiting information or resolution before GreenTree entry can be completed. Includes entry already started. Follow-up records status and notes only; no message is sent.', empty: 'No Job Cards need follow-up in the loaded records.' },
     completed: { title: 'Completed Job Cards', description: 'GreenTree data entry complete. Historical outcomes retain their original labels.', empty: 'No completed review history is loaded.' },
 }
 
@@ -45,6 +46,7 @@ export default function JobCardReviewQueue({ items, busy, error, truncated, canL
     const paramsFor = (next: ReviewQueueView, target = queueView) => {
         const result = reviewQueueParams(next)
         result.set('view', target)
+        if (params.get('jobNumber')) result.set('jobNumber', params.get('jobNumber')!)
         return result
     }
     const update = (patch: Partial<ReviewQueueView>) => setParams(paramsFor({ ...view, ...patch }), { replace: true })
@@ -53,6 +55,7 @@ export default function JobCardReviewQueue({ items, busy, error, truncated, canL
     const filtered = reviewQueueParams({ ...view, sort: DEFAULT_REVIEW_QUEUE_VIEW.sort }).size > 0
     const count = error ? 'Refresh needed' : busy && !items.length ? 'Loading…' : `${rows.length} of ${items.length}${truncated ? '+' : ''} shown`
     const returnTo = `/job-card-reviews${params.size ? `?${params.toString()}` : ''}`
+    const reviewTo = (reviewId: string) => `${returnTo}${returnTo.includes('?') ? '&' : '?'}review=${encodeURIComponent(reviewId)}`
     const statuses: JobCardOfficeStatus[] = completed ? ['processedInGreenTree', 'noInvoiceRequired', 'legacyReviewed'] : ['inReview', 'needsClarification', 'onHold']
     const setQueueView = (target: JobCardReviewQueueView) => {
         setParams(paramsFor({ ...view, officeStatus: 'all', administrator: '', attention: 'all' }, target), { replace: true, state: { reviewStageFocus: target } })
@@ -64,6 +67,7 @@ export default function JobCardReviewQueue({ items, busy, error, truncated, canL
         <PageHeader title="Job Card reviews" subtitle="Track sent jobs, technician submissions and office processing" actions={<button className="review-queue-refresh" type="button" onClick={refresh} disabled={busy}>{busy ? 'Refreshing…' : 'Refresh'}</button>} />
         <TablePanel className="review-queue-panel">
             <div className="review-queue-stage-tabs"><DrawerTabs tabs={REVIEW_STAGE_TABS} activeTab={queueView} onChange={setQueueView} ariaLabel="Job Card workflow" /></div>
+            {JOB_CARD_CURSOR_QUEUE_ENABLED && !open && <form className="review-exact-job-search" onSubmit={(event) => { event.preventDefault(); const value = String(new FormData(event.currentTarget).get('jobNumber') || '').trim().toUpperCase(); const next = paramsFor({ ...view, search: '' }); next.delete('review'); if (value) next.set('jobNumber', value); else next.delete('jobNumber'); setParams(next, { replace: true }) }}><label>Find exact Job in this queue (all saved records)<input key={params.get('jobNumber') || ''} name="jobNumber" defaultValue={params.get('jobNumber') || ''} placeholder="e.g. 147247" pattern="([A-Za-z]{1,2})?[0-9]{1,20}" /></label><button type="submit" disabled={busy}>Find Job</button></form>}
             <section role="tabpanel" id={`drawer-tab-panel-${queueView}`} aria-labelledby={`drawer-tab-${queueView}`}>
                 <TableToolbar eyebrow="Office workflow" title={copy.title} searchLabel="Search Job Card reviews" placeholder="Search Job, equipment or description…" search={view.search} onSearch={(search) => update({ search })} count={count} />
                 <p className="review-queue-stage-description">{copy.description}</p>
@@ -81,17 +85,17 @@ export default function JobCardReviewQueue({ items, busy, error, truncated, canL
                 <div className="review-queue-scroll" role="region" aria-label={`${copy.title} table`} tabIndex={0} aria-busy={busy}>
                     <table className={`operations-table review-queue-table${open ? ' review-queue-open-table' : ''}`}>
                         <caption className="operations-visually-hidden">{copy.description}</caption>
-                        <thead><tr>{sortHeading('job', 'Job')}{sortHeading('submitted', open ? 'Sent' : 'Submitted')}<th scope="col">Type</th><th scope="col">{open ? 'Progress' : 'Office state'}</th><th scope="col">Equipment</th>{sortHeading('customer', 'Customer / site')}<th scope="col">Work required</th>{sortHeading('technician', 'Technician')}{!open && <><th scope="col">{completed ? 'Outcome / administrator' : 'Current administrator'}</th><th scope="col">{completed ? 'GreenTree reference' : 'Reported attention'}</th>{sortHeading('photos', 'Photos')}<th scope="col"><span className="operations-visually-hidden">Open review</span></th></>}</tr></thead>
+                        <thead><tr>{sortHeading('job', 'Job')}{sortHeading('submitted', open ? 'Sent' : 'Submitted')}<th scope="col">Type</th><th scope="col">{open ? 'Progress' : 'Office state'}</th><th scope="col">Equipment</th>{sortHeading('customer', 'Customer / site')}<th scope="col">Work required</th>{sortHeading('technician', 'Technician')}{!open && <><th scope="col">{completed ? 'Outcome / administrator' : 'Last handled by'}</th><th scope="col">{completed ? 'GreenTree reference' : 'Reported attention'}</th>{sortHeading('photos', 'Photos')}<th scope="col"><span className="operations-visually-hidden">Open review</span></th></>}</tr></thead>
                         <tbody>
                             {rows.map((item) => <tr key={queueItemId(item)} data-attention={item.safetyIssueIdentified ? 'safety' : item.furtherWorkRequired ? 'further' : 'none'}>
-                                <td>{item.reviewId ? <Link className="review-queue-job-link" to={`/job-card-reviews/${item.reviewId}`} state={{ reviewQueueReturnTo: returnTo }}>{item.jobNumber}</Link> : <strong>{item.jobNumber}</strong>}</td>
+                                <td>{item.reviewId ? <Link className="review-queue-job-link" to={reviewTo(item.reviewId)} state={{ reviewQueueReturnTo: returnTo }}>{item.jobNumber}</Link> : <strong>{item.jobNumber}</strong>}</td>
                                 <td><time dateTime={queueItemDate(item)}>{formatReviewDate(queueItemDate(item))}</time><small>{formatReviewTime(queueItemDate(item))}</small></td>
-                                <td><JobTypeBadge jobType={item.jobType} /></td><td><span className={`review-office-status ${item.officeStatus || 'awaitingSubmission'}`}>{item.officeStatus ? OFFICE_STATUS_LABELS[item.officeStatus] : 'Awaiting submission'}</span></td>
+                                <td><JobTypeBadge jobType={item.jobType} /></td><td><span className={`review-office-status ${item.officeStatus || 'awaitingSubmission'}`}>{item.officeStatus ? OFFICE_STATUS_LABELS[item.officeStatus] : 'linkExpired' in item && item.linkExpired ? 'Expired link — resend needed' : 'Awaiting submission'}</span></td>
                                 <td><strong>{item.fleetNumber || item.equipmentSerial || 'Not recorded'}</strong><small>{item.equipmentDisplayName || 'Equipment not recorded'}</small></td>
                                 <td><strong>{item.customerName || 'Customer not recorded'}</strong><small>{item.siteName || 'Site not recorded'}</small></td><td><p className="review-queue-description" title={item.workRequired}>{item.workRequired || 'No description recorded'}</p></td><td>{item.technicianName || 'Not recorded'}</td>
                                 {!open && <><td><strong>{(completed ? item.outcomeBy : item.officeActionBy)?.displayName || 'Unassigned'}</strong>{completed && item.outcomeOn && <small>{formatReviewDate(item.outcomeOn)} {formatReviewTime(item.outcomeOn)}</small>}</td>
                                     <td>{completed ? item.greentreeReference || '—' : <div className="review-queue-flags">{item.safetyIssueIdentified && <span className="safety">Safety issue</span>}{item.furtherWorkRequired && <span className="further">Further work</span>}{!item.safetyIssueIdentified && !item.furtherWorkRequired && <span className="none">No flags</span>}</div>}</td><td>{item.photoCount}</td>
-                                    <td>{item.reviewId && <Link className="review-queue-open" to={`/job-card-reviews/${item.reviewId}`} state={{ reviewQueueReturnTo: returnTo }} aria-label={`Review Job ${item.jobNumber} submitted by ${item.technicianName || 'unknown technician'}`}>Review <span aria-hidden="true">→</span></Link>}</td></>}
+                                    <td>{item.reviewId && <Link className="review-queue-open" to={reviewTo(item.reviewId)} state={{ reviewQueueReturnTo: returnTo }} aria-label={`Open Job ${item.jobNumber} submitted by ${item.technicianName || 'unknown technician'}`}>Open <span aria-hidden="true">→</span></Link>}</td></>}
                             </tr>)}
                             {!rows.length && <tr><td className="review-queue-empty" colSpan={open ? 8 : 12}>{busy && !items.length ? <span role="status">Loading {copy.title.toLowerCase()}…</span> : error && !items.length ? 'The review queue is unavailable. Try again above.' : filtered ? <>No records match these filters. <button type="button" onClick={reset}>Clear filters</button></> : truncated ? 'No matching records in the pages checked so far. See the loading notice above.' : copy.empty}</td></tr>}
                         </tbody>

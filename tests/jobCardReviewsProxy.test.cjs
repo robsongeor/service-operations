@@ -27,6 +27,12 @@ test('review reads forward only the delegated token and bounded route data', asy
     assert.equal(response.headers['X-Job-Card-Backend'], 'shared-v1')
 })
 
+test('bridge preserves supported recovery and cursor queries without accepting arbitrary destinations', () => {
+    assert.equal(targetUrl({ query: { jobId: reviewId, returns: '1' } }), `${SHARED_JOB_CARD_ORIGIN}/api/jobcardreviews?jobId=${reviewId}&returns=1`)
+    assert.equal(targetUrl({ query: { view: 'submitted', paging: 'cursor', cursor: 'opaque+/=', jobNumber: '147230', limit: '100' } }), `${SHARED_JOB_CARD_ORIGIN}/api/jobcardreviews?view=submitted&paging=cursor&cursor=opaque%2B%2F%3D&jobNumber=147230&limit=100`)
+    assert.equal(targetUrl({ query: { returns: '1', destination: 'https://untrusted.invalid' } }), '')
+})
+
 test('review writes preserve the JSON body and upstream authorization result', async () => {
     const response = await proxyJobCardReviews({
         method: 'POST', params: { reviewId }, query: {}, headers: { 'x-dataverse-authorization': 'Bearer reviewer-token' },

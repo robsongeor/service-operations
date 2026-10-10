@@ -36,6 +36,7 @@ import {
     resolveCurrentHourMeterRecordedDate,
     resolveLatestHourMeterReading,
     shouldAdvanceCurrentHourMeter,
+    hasApprovedJobCardReading,
 } from '../src/alpha/equipment/servicePlans/equipmentUsageForecast.ts'
 import { JOB_STATUSES } from '../src/alpha/jobs/types/jobStatus.types.ts'
 import { JOB_TYPES, type JobType } from '../src/alpha/jobs/types/jobType.types.ts'
@@ -86,6 +87,24 @@ function meterJob(
         gr_Equipment: { gr_equipmentid: forecastEquipment.gr_equipmentid, gr_fleet: 'F1', gr_serial: null, gr_make: null, gr_model: null },
     }
 }
+
+test('office-approved open Job readings contribute to usage without marking a service complete', () => {
+    const approved = { ...meterJob(JOB_TYPES.SERVICE, '2026-01-21', 200, JOB_STATUSES.COMPLETION_REVIEW), gr_hourmeterrecordeddate: '2026-01-21', gr_completeddate: null, gr_hourmeterapprovalreference: '00000000-0000-4000-8000-000000000001|200|2026-01-21|equipment-1' }
+    const unapproved = { ...meterJob(JOB_TYPES.BREAKDOWN, '2026-01-22', 900, JOB_STATUSES.ALLOCATED), gr_completeddate: null }
+    const history = [meterJob(JOB_TYPES.SERVICE, '2026-01-01', 100), approved, unapproved]
+    const before = structuredClone(history)
+    const forecast = calculateEquipmentUsageForecast(forecastEquipment, history, new Date('2026-01-22T00:00:00Z'))
+    assert.equal(forecast.readingCount, 2)
+    assert.equal(forecast.averageHoursPerDay, 5)
+    assert.equal(resolveLatestHourMeterReading(forecastEquipment, history)?.hours, 200)
+    assert.deepEqual(history, before)
+    assert.equal(hasApprovedJobCardReading(approved), true)
+    for (const changed of [{ gr_hourmeter: 250 }, { gr_hourmeterrecordeddate: '2026-01-22' }, { gr_hourmeterreadingtype: HOUR_METER_READING_TYPES.ESTIMATED }, { gr_Equipment: { ...approved.gr_Equipment!, gr_equipmentid: 'another-machine' } }]) {
+        const edited = { ...approved, ...changed }
+        assert.equal(hasApprovedJobCardReading(edited), false)
+        assert.equal(calculateEquipmentUsageForecast(forecastEquipment, [edited], new Date('2026-01-22T00:00:00Z')).readingCount, 0)
+    }
+})
 
 test('usage forecast treats valid readings from every completed Job type equally', () => {
     const forecast = calculateEquipmentUsageForecast(forecastEquipment, [

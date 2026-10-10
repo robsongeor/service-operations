@@ -1,7 +1,11 @@
 # Job Book user access plan
 
-Status: eleven-account Entra and Dataverse roster is live, updated 9 October 2026.
-The restricted-access server guard is deployed; named-user end-to-end acceptance remains required.
+Recorded status: eleven-account Entra and Dataverse roster updated 9 October 2026; not re-audited live on 10 October.
+The restricted-access server guard is recorded deployed; named-user acceptance remains required.
+The 10 October source audit found the guard disagrees with approved mechanic and Equipment
+editing capabilities. See [release gates](../../RELEASE_READINESS.md) and
+[audit A01](../reviews/2026-10-10-application-audit.md#a01--client-permissions-and-server-allowlists-disagree).
+Do not treat the intended matrix below as proof that every operation succeeds.
 
 ## Live audit
 
@@ -17,7 +21,7 @@ replacement role was verified. See the audit for the original snapshot and rollo
 | Full access | George only; unrestricted application access | Existing `ServiceOperations.FullAccess` profile |
 | Service coordinator | Bruce and Andy; operational management with the approved restricted screen set | Separate frontend profile implemented as `ServiceOperations.ServiceCoordinator`; Microsoft provisioning, Bruce assignment and named-user verification are mandatory go-live blockers |
 | Office Admin | Jess, Nargiza and Pubudu; entry, corrections, technician assignment/email, markers and review | `ServiceOperations.JobCardAdmin` is assigned in Entra and Dataverse |
-| Job Book Admin | Five entry/correction users; eligible-entry Void allowed; corrections remain allowed after coordinator handoff; no technician assignment/email, review or GT/Timecloud marker changes | `ServiceOperations.JobBookAdmin` is assigned in Entra and Dataverse |
+| Job Book Admin | Five entry/correction users; eligible-entry Void allowed; corrections remain allowed after coordinator handoff; mechanic selection permitted; no technician email, review or GT/Timecloud marker changes | `ServiceOperations.JobBookAdmin` is assigned in Entra and Dataverse |
 | Job Book only | Obsolete | No restricted Admin account retains this Entra assignment |
 
 Keep Service coordinator distinct from Full access. Do not assign Bruce or Andy FullAccess: a
@@ -56,7 +60,7 @@ Job Card review, including marking a card Processed in GreenTree, is limited to:
 Martin, Lance, Ranjani, Ashneel and Kaizer are planned Job Book Admins. They do not receive Job Card
 review access. Both Admin groups may work across all four Job Books.
 
-The new JobBookAdmin profile must separate correction rights from technician assignment/email,
+The JobBookAdmin profile permits correction and mechanic selection but must separate these from technician email,
 GT/Timecloud marker writes and review access. The existing JobBookOnly profile cannot substitute:
 it does not permit corrections to managed Jobs. Keep Office Admin on the existing JobCardAdmin
 profile and implement the distinct restricted profile, including navigation, landing route and
@@ -75,7 +79,7 @@ when the permanent V2/shared backend replaces the temporary proxy.
   evidence and audit history. Existing eligibility rules still apply: coordinator-managed work and
   entries marked entered in GreenTree or Timecloud cannot use this Void action. Require current
   versions and atomic Job/ledger updates where linked; reject concurrent changes safely.
-- Do not change initial/later technician assignment, send technician emails, review Job Cards,
+- Mechanic selection is permitted through the shared approved workflow. Do not send technician emails, review Job Cards,
   mark Processed in GreenTree or change GreenTree/Timecloud entry ticks.
 - Do not change coordinator membership, scheduling, Job type, operational status, permanent
   numbers or original technician evidence through the correction workflow.
@@ -119,9 +123,9 @@ The precise Equipment field allowlist remains an implementation decision.
 - Job Book entry and permitted factual corrections, including GT/Timecloud entry markers.
 - Job Card reviews and office review actions only for Jess, Nargiza and Pubudu, as specified above;
   original technician evidence stays protected.
-- Assigned-technician email through the approved workflow; coordinator management and later
-  reassignment/scheduling remain excluded. Initial assignment in unified registration follows the
-  Job Book design and still requires real integration.
+- Mechanic selection/reselection through the shared approved workflow, plus assigned-technician
+  email. This does not grant broader coordination, scheduling or additional-assignment management.
+  Server enforcement and post-delivery allocation remain acceptance blockers.
 - Read-only Quotes, including a display-only existing-Quote popout with no editing, deletion,
   PDF-generation or PO-email actions. Customer/Site creation, explicit Equipment movement and Equipment-detail
   editing match Job Book Admin permissions above. Existing Customer/Site master-record editing
@@ -135,7 +139,7 @@ and tested for the final approved reviewer roster.
 
 | Screen | Job Book Admin | Office Admin (Jess, Nargiza and Pubudu) |
 | --- | --- | --- |
-| Job Book | Entry, factual corrections and eligible Void; no technician assignment/email or GT/Timecloud tick writes | Entry, corrections, eligible Void, approved initial assignment/email and GT/Timecloud tick writes |
+| Job Book | Entry, mechanic selection, factual corrections and eligible Void; no email or GT/Timecloud tick writes | Entry, mechanic selection, corrections, eligible Void, assigned-tech email and GT/Timecloud tick writes |
 | Customers | Separate screen; view and create Customers/Sites; no general editing of existing Customer/Site master records | Same |
 | Equipment | Separate screen; view, update agreed Equipment details and explicitly move Equipment between Sites | Same |
 | Job Card reviews | No access | Review and approved office processing actions |
@@ -144,8 +148,9 @@ and tested for the final approved reviewer roster.
 
 These are intended navigation and action boundaries. They must also hold for direct links,
 related-record drawers and API requests. The profiles and restricted screens are implemented;
-the Entra Service Coordinator role is assigned to Bruce for additive acceptance testing. The draft
-server guard is not enabled during the V1/V2 shared-Dataverse overlap.
+the restricted server guard is recorded enabled from 9 October. The distinct numbering invariant
+guards remain recorded disabled for V1 compatibility. Neither state proves the capabilities above
+work with real restricted accounts.
 
 ## Agreed Service Coordinator navigation
 
@@ -158,11 +163,11 @@ fail closed. George's FullAccess profile remains unrestricted.
 
 ### Mandatory provisioning before live use
 
-The enabled Entra application role `ServiceOperations.ServiceCoordinator` was verified and assigned
-additively to Bruce on 7 October 2026. Complete a named-user access test with Bruce. Keep his current
-FullAccess assignment until that restricted test passes, then remove FullAccess so it cannot bypass
-the screen boundary. Andy is not assigned until his rollout is approved. The Bruce acceptance test
-and subsequent FullAccess removal remain required before the restricted profile is considered complete.
+The 7 October record describes additive ServiceCoordinator testing for Bruce while retaining
+FullAccess. The later roster is the intended destination; a fresh effective-role check and named-user
+test are still needed before claiming both coordinators are restricted. Verify direct and team
+grants for Bruce and Andy, then remove any obsolete FullAccess assignment only after the coordinator
+path works. George remains the sole intended FullAccess user. This audit did not change assignments.
 
 ## Decisions still needed
 
@@ -175,18 +180,18 @@ and subsequent FullAccess removal remain required before the restricted profile 
 - [x] Office Admins Jess, Nargiza and Pubudu receive the same Equipment-detail editing permission as Job Book Admins.
 - [x] Job Book Admins have separate Customers and Equipment screens, with the agreed permissions;
   Office Admins retain those screens too.
-- [x] Define the local Equipment field allowlist: fleet, alternate fleet numbers, make, model,
-  serial and Site. Excludes maintenance, compliance, ownership and historical readings;
-  production enforcement still needs acceptance tests.
+- [ ] Reconcile the approved Equipment-detail scope with the server allowlist: fleet/aliases,
+  make/model, serial, Site and approved WOF/REGO edits. Current guard excludes compliance while the
+  client sends it. Maintenance plans, ownership changes and historical readings are not implied.
 - [x] Define the Service coordinator screen boundary and deny the eight excluded direct routes.
 - [ ] Select the pilot users from this roster and confirm the acceptance-test environment.
 
 ## Implementation and rollout checks
 
-- [x] Add and test the distinct ServiceCoordinator frontend profile and restricted screen boundary.
-  The matching Entra role is not yet created or assigned.
-- [ ] Implement JobBookAdmin separately from JobBookOnly and JobCardAdmin. Verify corrections
-  before/after handoff and eligible-entry Void; deny assignment/email, marker writes, review and coordinator operations
+- [x] Add the distinct ServiceCoordinator frontend profile and restricted screen boundary.
+  Entra provisioning is recorded; effective-role and real-user acceptance remain open.
+- [ ] Accept the implemented JobBookAdmin profile separately from JobBookOnly and JobCardAdmin.
+  Verify corrections, mechanic selection and eligible Void; deny email, marker writes, review and coordinator operations
   through both the UI and direct APIs.
 - [ ] Implement and verify the approved Customer/Site creation, Equipment movement and detail-edit
   permissions; test stale saves, historical preservation and denial of unrelated actions.
@@ -202,27 +207,13 @@ Related: [rollout plan](JOB_BOOK_ROLLOUT_PLAN.md),
 [Admin review design](JOB_CARD_ADMIN_REVIEW_IMPLEMENTATION_PLAN.md),
 [Job Book design](JOB_BOOK_INTAKE_DESIGN.md).
 
-## Local implementation status (3 October 2026)
+## Historical implementation evidence
 
-Frontend role/navigation checks and the sample walkthrough now distinguish Job Book Admin,
-Office Admin and Service coordinator. Job Book Admin cannot assign/email technicians, change
-entry markers, open reviews or use coordinator screens. Both Admin profiles have separate
-Customers and Equipment screens with creation and restricted Equipment editing. Equipment
-saves use an exact ETag and only the field allowlist above.
+The 3 October local/sample verification and earlier 785-test result are preserved in Git
+(`git show f73f3d6:docs/features/JOB_BOOK_ACCESS_PLAN.md`). They do not demonstrate current
+real-user authorization and their “guard not installable” and “no assignment” statements were
+superseded by later deployment and mechanic-selection decisions.
 
-The [draft Dataverse guard](../../dataverse/access/README.md) has offline policy tests but is
-not installable yet: registration, linked Void and initial dispatch must be integrated first.
-The open implementation checkboxes above intentionally include real API and actual-account
-verification, which local UI checks cannot satisfy. Microsoft user provisioning, licensing,
-role assignments and permanent V2 backend provisioning remain outstanding. The shared V1 reviewer
-allowlist is configured; named-user testing is still required.
-
-Latest local verification, including the bounded production-worklist, readiness, specialist-allocation, migration-policy and deployment-plan slices: all 785 tests in
-`npm test` pass, the
-production build passes, the transactional registration/workflow suite passes 46 checks and the
-separate offline guard suite passes 62 checks. Browser checks confirmed
-the Job Book Admin menu, disabled marker controls, successful restricted Equipment
-detail save and denial of a direct Job Card review link. The sample API returned
-403 for a marker update with the current ETag and for coordinator listing.
-These checks use synthetic identities/data. Full lint still reports the three
-pre-existing effect-state errors in EquipmentDrawer and MaintenanceBookingScreen.
+The current offline baseline is in the [10 October audit](../reviews/2026-10-10-application-audit.md):
+835/838 Node tests, 64 restricted-policy checks, 47 registration checks and six lint errors.
+The server-policy mismatch must be corrected before named-user acceptance can pass.

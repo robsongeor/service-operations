@@ -2,7 +2,7 @@ const { SHARED_JOB_CARD_ORIGIN, usesSharedBackend } = require('./jobSubmissionPr
 
 const GUID_PATTERN = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i
 const MAX_RESPONSE_BYTES = 16 * 1024 * 1024
-const ALLOWED_QUERY_KEYS = new Set(['jobId', 'view', 'offset', 'limit'])
+const ALLOWED_QUERY_KEYS = new Set(['jobId', 'view', 'offset', 'limit', 'returns', 'paging', 'cursor', 'jobNumber'])
 
 function requestHeader(request, name) {
     const target = name.toLowerCase()

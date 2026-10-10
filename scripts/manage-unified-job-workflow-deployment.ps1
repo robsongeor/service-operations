@@ -196,7 +196,7 @@ function Ensure-Role($Service, $Definition, $AllPrivileges) {
 function Get-PackageManifest {
     Require ($PackageDirectory -and (Test-Path -LiteralPath $assemblyPath -PathType Leaf) -and (Test-Path -LiteralPath $packageManifestPath -PathType Leaf)) 'A reviewed signed package directory is required.'
     $manifest=Get-Content -LiteralPath $packageManifestPath -Raw|ConvertFrom-Json
-    Require ($manifest.publicKeyToken -eq '0edea2881bb8578c' -and $manifest.version -eq '1.0.1.0' -and @($manifest.pluginTypes).Count -eq 4) 'Signed package identity mismatch.'
+    Require ($manifest.publicKeyToken -eq '0edea2881bb8578c' -and $manifest.version -eq $plan.assembly.version -and @($manifest.pluginTypes).Count -eq 4) 'Signed package identity mismatch.'
     Require ((Get-FileHash -LiteralPath $assemblyPath -Algorithm SHA256).Hash.ToLowerInvariant() -eq $manifest.sha256) 'Signed package hash mismatch.'
     $manifest
 }

@@ -171,18 +171,31 @@ test('Open lifecycle checks batch Job IDs and fail closed on incomplete evidence
     await azure.listByJobIds([id(101), id(102)])
 })
 
-test('withdrawn, replaced and expired technician cycles leave Open while a current cycle remains', async () => {
-    const rows = [dispatch(1), dispatch(2), dispatch(3), dispatch(4)]
+test('updated authenticated detail advertises office recovery independently of meter activation', async () => {
+    process.env.JOB_CARD_METER_APPROVAL_ENABLED = 'false'
+    await getJobCardStore().create(record(1))
+    const response = await service.handleReviewRequest({ method: 'GET', headers, query: { reviewId: id(1) } })
+    assert.equal(response.status, 200)
+    const detail = JSON.parse(response.body)
+    assert.equal(detail.officeRecoveryAvailable, true)
+    assert.equal(detail.meterApprovalAvailable, false)
+})
+
+test('withdrawn and replaced cycles leave Open, but expired unreturned cards remain visible', async () => {
+    const rows = [dispatch(1), dispatch(2), dispatch(3), dispatch(4), dispatch(5)]
     global.fetch = async () => Response.json({ value: rows })
     const store = getJobCardStore()
-    for (const [index, status] of ['withdrawn', 'superseded', 'active', 'active'].entries()) {
+    for (const [index, status] of ['withdrawn', 'superseded', 'active', 'active', 'expired'].entries()) {
         await store.create(record(30 + index, {
             sourceJobId: id(101 + index), status, submittedOn: undefined,
             createdOn: '2026-10-02T00:59:00Z', expiresOn: index === 2 ? '2000-01-01T00:00:00Z' : '2099-01-01T00:00:00Z',
         }))
     }
     const result = JSON.parse((await get('open')).body)
-    assert.deepEqual(result.items.map((item) => item.dispatchId), [id(4)])
+    assert.deepEqual(result.items.map((item) => item.dispatchId), [id(3), id(4), id(5)])
+    assert.equal(result.items[0].linkExpired, true)
+    assert.equal(result.items[1].linkExpired, false)
+    assert.equal(result.items[2].linkExpired, true)
 })
 
 test('Open requires reviewer authentication before reading dispatches', async () => {
@@ -190,4 +203,16 @@ test('Open requires reviewer authentication before reading dispatches', async ()
     global.fetch = async () => { calls++; throw new Error('Should not fetch') }
     assert.equal((await service.handleReviewRequest({ method: 'GET', headers: {}, query: { view: 'open' } })).status, 401)
     assert.equal(calls, 0)
+})
+
+test('disabled meter feature refuses retries without acquiring credentials or changing saved approval', async () => {
+    process.env.JOB_CARD_METER_APPROVAL_ENABLED = 'false'
+    const store = getJobCardStore()
+    const saved = await store.create(record(1, { meterSyncStatus: 'pending', meterApprovalJson: '{"hours":1620}' }))
+    let calls = 0
+    global.fetch = async () => { calls++; throw new Error('No token or Dataverse request permitted') }
+    const response = await service.handleReviewRequest({ method: 'POST', headers, query: { reviewId: id(1) }, body: { action: 'retryMeterSync', etag: saved.etag } })
+    assert.equal(response.status, 503)
+    assert.equal(calls, 0)
+    assert.deepEqual(await store.getByReviewId(id(1)), saved)
 })

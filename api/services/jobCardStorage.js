@@ -105,6 +105,20 @@ class MemoryJobCardStore {
         return this.listActive(limit)
     }
 
+    async listReconciliationPage(limit = 100) {
+        const rows = [...this.entities.values()].filter((r) => ['pendingReview', 'reviewed'].includes(r.status) && r.rowKey > (this.reconciliationCursor || ''))
+            .sort((a, b) => a.rowKey.localeCompare(b.rowKey)).slice(0, limit + 1)
+        return { records: rows.slice(0, limit).map(clone), next: rows.length > limit ? rows[limit - 1].rowKey : '' }
+    }
+
+    async saveReconciliationCursor(cursor) { this.reconciliationCursor = cursor }
+
+    async listReviewPage(status, limit, cursor = '', jobNumber = '') {
+        const rows = [...this.entities.values()].filter((r) => r.status === status && r.rowKey > cursor && (!jobNumber || r.jobNumber === jobNumber))
+            .sort((a, b) => a.rowKey < b.rowKey ? -1 : a.rowKey > b.rowKey ? 1 : 0).slice(0, limit + 1)
+        return { records: rows.slice(0, limit).map(clone), next: rows.length > limit ? rows[limit - 1].rowKey : undefined }
+    }
+
     async listSubmittedByJobIds(jobIds, limit = 501) {
         const ids = new Set(jobIds.map((id) => id.toLowerCase()))
         return [...this.entities.values()].filter((item) => ids.has(String(item.sourceJobId).toLowerCase())
@@ -227,6 +241,27 @@ class AzureJobCardStore {
 
     async listPending(limit = 100) {
         return this.listActive(limit)
+    }
+
+    async listReconciliationPage(limit = 100) {
+        let cursor = ''
+        try { cursor = (await this.table.getEntity('job-card-system', 'reconciliation')).cursor || '' }
+        catch (error) { if (error.statusCode !== 404) throw error }
+        const after = cursor ? ` and RowKey gt '${String(cursor).replaceAll("'", "''")}'` : ''
+        const rows = await this.collect(`PartitionKey eq '${PARTITION_KEY}' and (status eq 'pendingReview' or status eq 'reviewed')${after}`, limit + 1)
+        return { records: rows.slice(0, limit), next: rows.length > limit ? rows[limit - 1].rowKey : '' }
+    }
+
+    async saveReconciliationCursor(cursor) {
+        await this.table.upsertEntity({ partitionKey: 'job-card-system', rowKey: 'reconciliation', cursor }, 'Replace')
+    }
+
+    async listReviewPage(status, limit, cursor, jobNumber = '') {
+        const exactJob = jobNumber ? ` and jobNumber eq '${String(jobNumber).replaceAll("'", "''")}'` : ''
+        const pages = this.table.listEntities({ queryOptions: { filter: `PartitionKey eq '${PARTITION_KEY}' and status eq '${status}'${exactJob}` } })
+            .byPage({ maxPageSize: limit, continuationToken: cursor })
+        const { value } = await pages.next()
+        return { records: (value || []).map(deserializeEntity), next: value?.continuationToken }
     }
 
     async listSubmittedByJobIds(jobIds, limit = 501) {

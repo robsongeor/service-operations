@@ -1,5 +1,12 @@
 # WOF Architecture
 
+## Completion and release caveat
+
+GreenTree reconciliation changes Job status without applying WOF inspection/Equipment side
+effects. A Complete badge is not proof of a current WOF expiry. The owner decision is to keep
+missing-evidence jobs in Completion Review; that change remains unimplemented. See audit A03 in
+the [application audit](../reviews/2026-10-10-application-audit.md).
+
 ## Purpose
 
 WOF manages road-compliance work and inspection history for road-registered Equipment. Jobs
@@ -82,7 +89,7 @@ helpers parse, format, load, and save WOF and registration dates without timezon
   repairs the missing Inspection link against that active Job instead of creating a duplicate.
 - A completed Inspection remains ready for office administration until its new expiry is
   written to the Equipment record. The Equipment then returns to normal expiry monitoring.
-- Under the disabled unified Job workflow gate, WOF no longer supplies or edits `gr_jobnumber`.
+- When the unified Job workflow gate is enabled (as in the V2 workflow), WOF no longer supplies or edits `gr_jobnumber`.
   New WOF Jobs remain unnumbered Staging work and existing numbers are read-only. After creation,
   the Jobs **WOF** tab exposes the guarded regional allocation operation. It changes only the Job
   number and creates its linked ledger; target testing remains required before enablement.

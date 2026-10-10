@@ -1,7 +1,13 @@
 # Unified Job workflow — migration and role review
 
-Status: local read-only design. No backfill, role assignment, provisioning, feature enablement or
-business-data mutation is approved by this document.
+Status: historical migration policy and dated read-only evidence; not a live inventory.
+No backfill, role assignment, provisioning, flag change or data mutation is authorized by this
+document. The 6 October counts and absent-column observations below describe that audit only;
+later plugin/schema/role deployment is recorded in the rollout documents. Re-read current data
+before using counts, number maxima or matching rules for a migration.
+
+Current rollout/security gaps are in the [10 October audit](reviews/2026-10-10-application-audit.md)
+and [release checklist](../RELEASE_READINESS.md).
 
 ## Read-only target audit — 6 October 2026
 

@@ -1,4 +1,5 @@
 const JOB_STATUS_COMPLETE = 122830003
+const JOB_STATUS_COMPLETION_REVIEW = 122830004
 const JOB_BOOK_STAGE_VOID = 122830003
 const QUERY_CHUNK_SIZE = 20
 const JOB_BOOKS = [
@@ -94,6 +95,7 @@ async function reconcileGreenTreeJobs({ jobs, dataverseOrigin, authorization, fe
         updated: 0,
         markedEntered: 0,
         movedToComplete: 0,
+        movedToCompletionReview: 0,
         alreadyComplete: 0,
         intakeMatched: 0,
         intakeUpdated: 0,
@@ -131,15 +133,16 @@ async function reconcileGreenTreeJobs({ jobs, dataverseOrigin, authorization, fe
         const record = matches[0]
         const payload = {}
         const markEntered = record.gr_gtentered !== true
-        let moveToComplete = false
+        let moveToCompletionReview = false
         if (markEntered) payload.gr_gtentered = true
         if (greenTreeJob.isClosed) {
             if (record.gr_status === JOB_STATUS_COMPLETE) result.alreadyComplete += 1
-            else {
-                payload.gr_status = JOB_STATUS_COMPLETE
-                moveToComplete = true
+            else if (record.gr_status !== JOB_STATUS_COMPLETION_REVIEW) {
+                // GT closure confirms billing, not operational evidence or service/WOF side effects.
+                // Only the canonical completion workflow may mark the operational Job Complete.
+                payload.gr_status = JOB_STATUS_COMPLETION_REVIEW
+                moveToCompletionReview = true
             }
-            if (/^\d{4}-\d{2}-\d{2}$/.test(greenTreeJob.completeDate || '') && record.gr_completeddate !== greenTreeJob.completeDate) payload.gr_completeddate = greenTreeJob.completeDate
         }
         if (!Object.keys(payload).length) continue
         if (!/^W\/"[^"]+"$/.test(record['@odata.etag'] || '')) { result.conflicts.push(code); continue }
@@ -157,7 +160,7 @@ async function reconcileGreenTreeJobs({ jobs, dataverseOrigin, authorization, fe
         if (!response.ok) throw new Error('A matched Dataverse Job could not be reconciled.')
         result.updated += 1
         if (markEntered) result.markedEntered += 1
-        if (moveToComplete) result.movedToComplete += 1
+        if (moveToCompletionReview) result.movedToCompletionReview += 1
     }
 
     await reconcileIntakeRows({

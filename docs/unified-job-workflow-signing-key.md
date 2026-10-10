@@ -55,7 +55,7 @@ reviewed Dataverse replacement path.
 
 - requires an existing `.snk` path outside the repository;
 - refuses to overwrite an existing DLL or manifest;
-- compiles the exact five reviewed source files as assembly version `1.0.1.0`;
+- compiles the exact five reviewed source files (current local source version `1.0.2.0`, not deployed);
 - requires a non-empty public key token;
 - writes the signed DLL and a companion JSON manifest containing the public token, assembly hash,
   source hashes and plugin type list;
@@ -67,7 +67,7 @@ Example for a future reviewed package:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-unified-job-workflow-plugin.ps1 `
   -Mode Package `
   -SigningKeyPath D:\SecureBuildKeys\ServiceOperations.UnifiedJobWorkflow.snk `
-  -OutputDirectory D:\ReviewedPackages\ServiceOperations.UnifiedJobWorkflow-1.0.1
+  -OutputDirectory D:\ReviewedPackages\ServiceOperations.UnifiedJobWorkflow-1.0.2
 ```
 
 Those paths are examples, not approved locations. The output manifest may be retained with release

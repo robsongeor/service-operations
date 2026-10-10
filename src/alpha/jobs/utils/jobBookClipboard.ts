@@ -42,22 +42,24 @@ export const copyJobBookSpreadsheetRow = async (job: Job) => {
     await navigator.clipboard.writeText(buildJobBookSpreadsheetRow(job))
 }
 
-export const buildNumberedJobBookSpreadsheetRow = (job: NumberedJobBookClipboardSource) => {
+export const buildNumberedJobBookSpreadsheetRow = (job: NumberedJobBookClipboardSource, signedInUserName: string) => {
     const jobNumber = spreadsheetCell(job.gr_jobnumber)
     if (!jobNumber) return ''
     const mechanic = spreadsheetCell(job.gr_Mechanic?.gr_name)
+    const copiedBy = spreadsheetCell(signedInUserName)
+    if (!copiedBy) throw new Error('Sign in before copying to the order number book.')
     return [
         mechanic,
         jobNumber,
         jobBookFleetCell(job) || 'W/S',
         spreadsheetCell(job.gr_Site?.gr_Customer?.gr_name),
         '',
-        mechanic,
+        copiedBy,
     ].join('\t') + '\n'
 }
 
-export const copyNumberedJobBookSpreadsheetRow = async (job: NumberedJobBookClipboardSource) => {
-    const row = buildNumberedJobBookSpreadsheetRow(job)
+export const copyNumberedJobBookSpreadsheetRow = async (job: NumberedJobBookClipboardSource, signedInUserName: string) => {
+    const row = buildNumberedJobBookSpreadsheetRow(job, signedInUserName)
     if (!row) throw new Error('A Job Number is required before this Job can be copied.')
     if (!navigator.clipboard?.writeText) throw new Error('Clipboard access is unavailable.')
     await navigator.clipboard.writeText(row)

@@ -2,9 +2,12 @@ const { createHash, randomBytes, randomUUID } = require('node:crypto')
 const { getJobCardStore, resetJobCardStore } = require('./jobCardStorage')
 const { sendReviewNotification } = require('./jobCardNotification')
 const { isLocalDevelopment } = require('./jobCardEnvironment')
-const { getGreenTreeDataverseApplicationToken } = require('./dataverseApplicationToken')
+const { getGreenTreeDataverseApplicationToken, getJobCardMeterDataverseApplicationToken } = require('./dataverseApplicationToken')
 const { applyOfficeTransition, officeProjection } = require('./jobCardOfficeReview')
+const { enabled: meterApprovalEnabled, validReadingDate, meterProjection, syncApprovedMeter } = require('./jobCardMeterApproval')
 const { listOpenJobs } = require('./jobCardOpenJobs')
+const { reviewPage } = require('./jobCardReviewPaging')
+const { readExpectedReturns } = require('./jobCardExpectedReturns')
 const {
     allRequiredTechnicianSubmissionsReceived,
     moveJobToCompletionReviewAfterAllRequiredSubmissions,
@@ -162,6 +165,7 @@ function publicDetails(record) {
         technicianName: record.technicianName || undefined,
         workRequired: record.workRequired || undefined,
         requiresHourMeter: record.jobType === SERVICE_JOB && Boolean(record.equipmentId),
+        meterRecordedDateAvailable: true,
         currentHourMeter: record.currentHourMeter ?? undefined,
     }
 }
@@ -180,6 +184,7 @@ async function findRequest(token) {
 function normalizeSubmission(body) {
     return {
         story: typeof body.story === 'string' ? body.story.trim() : '', hourMeter: body.hourMeter,
+        hourMeterRecordedDate: body.hourMeterRecordedDate,
         lowerHourMeterConfirmed: body.lowerHourMeterConfirmed === true,
         timeEntries: body.timeEntries ?? [], parts: body.parts ?? [],
         furtherWorkRequired: body.furtherWorkRequired ?? false,
@@ -197,6 +202,7 @@ function validateSubmission(record, body) {
     const required = record.jobType === SERVICE_JOB && Boolean(record.equipmentId)
     if (required && body.hourMeter == null) return 'Enter the current hour meter.'
     if (body.hourMeter != null && (!Number.isSafeInteger(body.hourMeter) || body.hourMeter < 0)) return 'Hour meter must be a non-negative whole number.'
+    if (body.hourMeterRecordedDate != null && (body.hourMeter == null || !validReadingDate(body.hourMeterRecordedDate))) return 'Enter a valid meter-reading date that is not in the future.'
     if (body.hourMeter != null && record.currentHourMeter != null && body.hourMeter < record.currentHourMeter && !body.lowerHourMeterConfirmed) return 'Confirm the lower hour meter reading before submitting.'
     if (!Array.isArray(body.timeEntries) || body.timeEntries.length < 1 || body.timeEntries.length > MAX_TIME_ENTRIES) return 'Enter at least one valid Time & Travel entry.'
     for (const entry of body.timeEntries) {
@@ -345,6 +351,7 @@ async function handlePublicPost(request) {
     const submitted = {
         ...found.record, status: 'pendingReview', submittedOn: new Date().toISOString(), story: body.story,
         hourMeter: body.hourMeter ?? null, lowerHourMeterConfirmed: body.lowerHourMeterConfirmed,
+        hourMeterRecordedDate: body.hourMeterRecordedDate || '',
         timeEntriesJson: JSON.stringify(body.timeEntries.map(({ date, hours, kilometres }) => ({ date, hours, kilometres }))),
         partsJson: JSON.stringify(body.parts.map((part) => ({ description: part.description.trim(), quantity: part.quantity }))),
         furtherWorkRequired: body.furtherWorkRequired, furtherWorkDetails: body.furtherWorkRequired ? body.furtherWorkDetails : '',
@@ -379,6 +386,8 @@ function reviewSummary(record) {
 
 function reviewDetails(record) {
     return {
+        officeRecoveryAvailable: true,
+        ...meterProjection(record),
         ...reviewSummary(record), etag: record.etag, status: record.status, sourceJobId: record.sourceJobId, assignmentId: record.assignmentId || undefined,
         workRequired: record.workRequired || undefined, equipmentDisplayName: record.equipmentDisplayName || undefined,
         equipmentMake: record.equipmentMake || undefined, equipmentModel: record.equipmentModel || undefined,
@@ -426,11 +435,15 @@ async function handleReviewRequest(request) {
     const photoId = typeof request.query?.photoId === 'string' ? request.query.photoId.trim() : ''
     const jobId = typeof request.query?.jobId === 'string' ? request.query.jobId.trim() : ''
     const queryKeys = Object.keys(request.query || {})
-    const allowedQueryKeys = new Set(['reviewId', 'photoId', 'jobId', 'view', 'offset', 'limit'])
+    const allowedQueryKeys = new Set(['reviewId', 'photoId', 'jobId', 'view', 'offset', 'limit', 'paging', 'cursor', 'jobNumber', 'returns'])
     if (queryKeys.some((key) => !allowedQueryKeys.has(key))) return jsonResponse(400, { error: 'The review query contains unsupported fields.' })
     if (request.query?.jobId !== undefined) {
         if (request.method !== 'GET' || reviewId || photoId || !GUID_PATTERN.test(jobId)) return jsonResponse(400, { error: 'A valid Job history request is required.' })
         const records = await getJobCardStore().listByJobId(jobId, 501)
+        if (request.query.returns === '1') {
+            try { const expected = await readExpectedReturns({ jobId, records, origin: dataverseOrigin(), authorization: identity.authorization }); return jsonResponse(200, { items: expected.items }) }
+            catch { return jsonResponse(503, { error: 'The expected technician returns could not be verified. Check Job Assignment access and retry.' }) }
+        }
         const items = records.slice(0, 500).map(historySummary).sort((left, right) => right.createdOn.localeCompare(left.createdOn))
         return jsonResponse(200, { items, truncated: records.length > 500 })
     }
@@ -443,6 +456,15 @@ async function handleReviewRequest(request) {
         if (!['open', 'submitted', 'review', 'completed', 'active', 'history'].includes(view) || !/^\d+$/.test(String(offsetText)) || !/^\d+$/.test(String(limitText))) return jsonResponse(400, { error: 'The review query is invalid.' })
         const offset = Number(offsetText)
         const requestedLimit = Number(limitText)
+        if (request.query?.paging === 'cursor') {
+            const jobNumber = typeof request.query.jobNumber === 'string' ? request.query.jobNumber.trim().toUpperCase() : ''
+            if (view === 'open' || requestedLimit < 1 || requestedLimit > 100 || offset !== 0 || (jobNumber && !/^(?:[A-Z]{1,2})?\d{1,20}$/.test(jobNumber))) return jsonResponse(400, { error: 'The cursor queue query is invalid.' })
+            try {
+                const page = await reviewPage(getJobCardStore(), { view, limit: requestedLimit, cursor: request.query.cursor, jobNumber })
+                return jsonResponse(200, { items: page.records.map(reviewSummary), view, hasMore: Boolean(page.nextCursor), nextCursor: page.nextCursor, truncated: Boolean(page.nextCursor) })
+            } catch (error) { return jsonResponse(error.statusCode === 400 ? 400 : 503, { error: error.statusCode === 400 ? error.message : 'The review page could not be loaded. Retry this page.' }) }
+        }
+        if (request.query?.paging || request.query?.cursor || request.query?.jobNumber) return jsonResponse(400, { error: 'Cursor paging is required for this query.' })
         if (offset >= 500 || requestedLimit < 1 || requestedLimit > 100) return jsonResponse(400, { error: 'The review query is outside the supported range.' })
         const limit = Math.min(requestedLimit, 500 - offset)
         if (view === 'open') {
@@ -510,12 +532,19 @@ async function handleReviewRequest(request) {
     if (request.method === 'POST' && request.body?.action === 'markReviewed') {
         return jsonResponse(400, { error: 'Mark reviewed has been replaced by an explicit office outcome.' })
     }
+    if (request.method === 'POST' && request.body?.action === 'retryMeterSync') {
+        if (!meterApprovalEnabled()) return jsonResponse(503, { error: 'Hour-meter approval has not been enabled on this backend.' })
+        if (Object.keys(request.body).some((key) => !['action', 'etag'].includes(key)) || request.body.etag !== record.etag) return jsonResponse(409, { error: 'Refresh this card before retrying the meter update.' })
+        if (!record.meterApprovalJson || !['pending', 'failed'].includes(record.meterSyncStatus)) return jsonResponse(400, { error: 'No pending approved meter update is available.' })
+        return jsonResponse(200, reviewDetails(await synchronizeMeter(record)))
+    }
     if (request.method === 'POST') {
         if (typeof request.body?.etag !== 'string' || request.body.etag !== record.etag) return jsonResponse(409, { code: 'conflict', error: 'Another administrator changed this review. Refresh it before retrying.' })
         let updated
         try {
             const replacement = applyOfficeTransition(record, request.body, reviewer)
             updated = await getJobCardStore().replace(replacement, record.etag)
+            if (updated.meterSyncStatus === 'pending') updated = await synchronizeMeter(updated)
         } catch (error) {
             if (error?.statusCode === 412) return jsonResponse(409, { code: 'conflict', error: 'Another administrator changed this review. Refresh it before retrying.' })
             if (error?.statusCode) return jsonResponse(error.statusCode, { code: error.code, error: error.message })
@@ -524,6 +553,21 @@ async function handleReviewRequest(request) {
         return jsonResponse(200, reviewDetails(updated))
     }
     return jsonResponse(200, reviewDetails(record))
+}
+
+async function synchronizeMeter(record) {
+    if (!meterApprovalEnabled()) return record
+    let fields
+    try {
+        const token = await getJobCardMeterDataverseApplicationToken()
+        const status = await syncApprovedMeter({ record, origin: dataverseOrigin(), authorization: `Bearer ${token}` })
+        fields = { meterSyncStatus: status, meterSyncError: '', meterSyncedOn: new Date().toISOString() }
+    } catch (error) {
+        fields = { meterSyncStatus: 'failed', meterSyncError: error?.statusCode ? error.message : 'Meter update unavailable. Check the server configuration and retry.' }
+    }
+    // Approval is already durable. A failed status write must not undo it or invite double approval.
+    try { return await getJobCardStore().replace({ ...record, ...fields }, record.etag) }
+    catch { return { ...record, meterSyncStatus: 'pending', meterSyncError: 'Approval saved. Refresh and retry to confirm the Job meter update.' } }
 }
 
 module.exports = {

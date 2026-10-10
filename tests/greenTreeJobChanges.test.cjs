@@ -281,9 +281,10 @@ test('authenticated POST reconciles a GreenTree change into Dataverse', { concur
     assert.equal(context.res.status, 200)
     const body = JSON.parse(context.res.body)
     assert.equal(body.updated, 1)
-    assert.equal(body.movedToComplete, 1)
+    assert.equal(body.movedToComplete, 0)
+    assert.equal(body.movedToCompletionReview, 1)
     const patch = calls.find((call) => call.options.method === 'PATCH')
-    assert.deepEqual(JSON.parse(patch.options.body), { gr_gtentered: true, gr_status: 122830003 })
+    assert.deepEqual(JSON.parse(patch.options.body), { gr_gtentered: true, gr_status: 122830004 })
 })
 
 test('limits diagnostic lookback to 24 hours', () => {
@@ -297,7 +298,7 @@ test('formats persistent UTC checkpoints as GreenTree Auckland wall time', () =>
     assert.equal(endpoint._test.formatGreenTreeModifiedSince(Date.parse('2026-07-09T08:00:00Z')), '2026-07-09T20:00:00')
 })
 
-test('reconciliation marks matched jobs entered and completes GreenTree-closed jobs', async () => {
+test('reconciliation marks matched jobs entered but sends GreenTree-closed jobs to operational review without inventing completion evidence', async () => {
     const patches = []
     const result = await reconcileGreenTreeJobs({
         jobs: [
@@ -320,9 +321,10 @@ test('reconciliation marks matched jobs entered and completes GreenTree-closed j
     assert.equal(result.matched, 2)
     assert.equal(result.updated, 2)
     assert.equal(result.markedEntered, 2)
-    assert.equal(result.movedToComplete, 1)
+    assert.equal(result.movedToComplete, 0)
+    assert.equal(result.movedToCompletionReview, 1)
     assert.deepEqual(result.unmatched, ['MISSING'])
-    assert.deepEqual(JSON.parse(patches[0].options.body), { gr_gtentered: true, gr_status: 122830003, gr_completeddate: '2026-10-09' })
+    assert.deepEqual(JSON.parse(patches[0].options.body), { gr_gtentered: true, gr_status: 122830004 })
     assert.deepEqual(JSON.parse(patches[1].options.body), { gr_gtentered: true })
 })
 

@@ -7,6 +7,19 @@ Completed checklist items must remain visible. Future changes must mark only imp
 validated work complete, record deviations and discoveries in the relevant phase notes, and
 leave unfinished work unchecked.
 
+## Audit reconciliation — 10 October 2026
+
+The phase checklists below retain their original evidence; none are bulk-marked complete by this
+audit. The source now includes `SiteCheckAssignmentPage` with multi-machine selection, per-machine
+checklist responses, photos and submission, plus checklist administration. Phase 17 is therefore
+**In progress**, not Not started. Existing role/content/deployment and signed-in/non-admin release
+checks still apply; a routed implementation is not evidence those checks passed.
+
+GreenTree can currently mark linked Jobs Complete without executing Site Check completion effects.
+Audit A03 requires the agreed missing-evidence Completion Review gate; see
+[application audit](../reviews/2026-10-10-application-audit.md) and
+[operations checklist](../site-checks-operations.md).
+
 ## Status summary
 
 | Phase | Status | Approval gate |
@@ -28,7 +41,7 @@ leave unfinished work unchecked.
 | 14 — Cross-customer Site Checks workspace | Complete | Implemented, regression-tested, and target-smoked |
 | 15 — Bulk technician dispatch | In progress | Token schema/security ready; reuse Jobs-table mailto handoff |
 | 16 — Versioned checklist foundation | In progress | Schema/security ready; checklist content and application work remain |
-| 17 — Technician multi-machine workflow | Not started | Depends on Phases 15 and 16 |
+| 17 — Technician multi-machine workflow | In progress | Portal/checklist/photo/submission source exists; full acceptance and dependencies remain |
 | 18 — Findings, office review, and hardening | Not started | Findings actions require separate product approval |
 | 19 — Checklist administration | In progress | Implemented and security-provisioned; signed-in UI and non-admin denial smoke remain |
 

@@ -13,6 +13,7 @@ import { getSignedInUserInfo } from '../../auth/signedInUser'
 import { fetchSiteContactsForSite } from '../jobs/services/siteContactsApi'
 import { createContact, createSiteContact } from '../jobs/services/contactsApi'
 import type { SiteContact } from '../jobs/types/siteContact.types'
+import { useOperationalQuery } from '../shared/data/useOperationalQuery'
 import { getJobTypeLabel, JOB_TYPES } from '../jobs/types/jobType.types'
 import { isOpenJob } from '../jobs/types/jobOpen'
 import { JOB_STATUS_OPTIONS } from '../jobs/types/jobStatus.types'
@@ -23,9 +24,11 @@ import {
     filterMaintenanceExclusions,
     isMaintenanceRowExcluded,
     maintenanceExclusionId,
+    maintenanceSiteContactsKey,
     matchMaintenanceRow,
     parseMaintenanceExport,
     readMaintenanceWorkspace,
+    selectedMaintenanceRow,
     writeMaintenanceWorkspace,
     type MaintenanceAction,
     type MaintenanceActionStatus,
@@ -83,10 +86,15 @@ function matchesFilter(filter: QueueFilter, action: MaintenanceAction) {
 }
 
 export default function MaintenanceBookingScreen() {
-    const { instance } = useMsal()
     const account = useActiveMsalAccount()
     const signedInUser = getSignedInUserInfo(account)
     const storageKey = `service-operations:maintenance-booking:v1:${signedInUser?.storageId ?? 'account'}`
+    return <MaintenanceBookingWorkspace key={storageKey} storageKey={storageKey} />
+}
+
+function MaintenanceBookingWorkspace({ storageKey }: { storageKey: string }) {
+    const { instance } = useMsal()
+    const account = useActiveMsalAccount()
     const initialWorkspace = useMemo(() => readMaintenanceWorkspace(globalThis.localStorage, storageKey), [storageKey])
     const {
         equipment,
@@ -118,10 +126,6 @@ export default function MaintenanceBookingScreen() {
     const [importOpen, setImportOpen] = useState(initialWorkspace.rows.length === 0)
     const [pasteValue, setPasteValue] = useState('')
     const [importError, setImportError] = useState('')
-    const [contacts, setContacts] = useState<SiteContact[]>([])
-    const [contactsLoading, setContactsLoading] = useState(false)
-    const [contactsError, setContactsError] = useState('')
-    const [contactsRefresh, setContactsRefresh] = useState(0)
     const [bookingEquipment, setBookingEquipment] = useState<Equipment | null>(null)
     const [editingEquipment, setEditingEquipment] = useState<Equipment | null>(null)
     const [contactDialogOpen, setContactDialogOpen] = useState(false)
@@ -148,12 +152,7 @@ export default function MaintenanceBookingScreen() {
         .sort((left, right) => (left.row.dueDate || '9999').localeCompare(right.row.dueDate || '9999')),
     [actions, filter, matchedRows, normalizedSearch, workspaceView])
 
-    useEffect(() => {
-        if (!visibleRows.length) return
-        if (!visibleRows.some(({ row }) => row.id === selectedId)) setSelectedId(visibleRows[0].row.id)
-    }, [selectedId, visibleRows])
-
-    const selected = matchedRows.find(({ row }) => row.id === selectedId) ?? visibleRows[0] ?? null
+    const selected = useMemo(() => selectedMaintenanceRow(visibleRows, selectedId), [visibleRows, selectedId])
     const selectedAction = selected ? actions[selected.row.id] ?? defaultAction() : defaultAction()
     const history = useEquipmentJobHistory(
         workspaceView === 'todo' || editingEquipment
@@ -165,25 +164,21 @@ export default function MaintenanceBookingScreen() {
     const openJobs = history.jobs.filter(isOpenJob)
     const selectedSiteId = selected?.match.equipment?.gr_Site?.gr_siteid ?? ''
 
-    useEffect(() => {
-        let cancelled = false
-        if (!account || !selectedSiteId || workspaceView !== 'todo') {
-            setContacts([])
-            setContactsError('')
-            return
-        }
-        const controller = new AbortController()
-        setContactsLoading(true)
-        setContactsError('')
-        void acquireDataverseAccessToken(instance, account)
-            .then((token) => fetchSiteContactsForSite(token, selectedSiteId, controller.signal))
-            .then((result) => { if (!cancelled) setContacts(result) })
-            .catch((error) => {
-                if (!cancelled && !controller.signal.aborted) setContactsError(error instanceof Error ? error.message : 'Contacts could not be loaded.')
-            })
-            .finally(() => { if (!cancelled) setContactsLoading(false) })
-        return () => { cancelled = true; controller.abort() }
-    }, [account, contactsRefresh, instance, selectedSiteId, workspaceView])
+    const contactsEnabled = Boolean(account && selectedSiteId && workspaceView === 'todo')
+    const contactsKey = useMemo(() => maintenanceSiteContactsKey(selectedSiteId), [selectedSiteId])
+    const contactsQuery = useOperationalQuery<SiteContact[]>({
+        key: contactsKey,
+        enabled: contactsEnabled,
+        queryFn: async ({ signal }) => {
+            const token = await acquireDataverseAccessToken(instance, account)
+            return fetchSiteContactsForSite(token, selectedSiteId, signal)
+        },
+        staleTimeMs: 30_000,
+        cacheTimeMs: 60_000,
+    })
+    const contacts = contactsEnabled ? contactsQuery.data ?? [] : []
+    const contactsLoading = contactsEnabled && ['initial', 'loading', 'refreshing'].includes(contactsQuery.status)
+    const contactsError = contactsEnabled ? contactsQuery.error?.message ?? '' : ''
 
     const counts = useMemo(() => {
         const values = rows.map((row) => actions[row.id] ?? defaultAction())
@@ -300,7 +295,7 @@ export default function MaintenanceBookingScreen() {
             updateAction({ preferredContactId: contactId })
             setContactForm({ name: '', phone: '', email: '' })
             setContactDialogOpen(false)
-            setContactsRefresh((current) => current + 1)
+            void contactsQuery.refetch().catch(() => undefined)
         } catch (error) {
             setContactSaveError(error instanceof Error ? error.message : 'The contact could not be saved.')
         } finally {
@@ -481,14 +476,14 @@ export default function MaintenanceBookingScreen() {
                     <section className="maintenance-detail-section">
                         <div className="maintenance-section-heading"><div><span className="maintenance-step">Step 3</span><h3>Choose the job contact</h3></div><div className="maintenance-section-actions"><button type="button" className="text-button" onClick={() => { void copyContactSummary() }}>Copy details</button><button type="button" className="text-button" disabled={!selectedSiteId} onClick={() => { setContactSaveError(''); setContactDialogOpen(true) }}>Add contact</button></div></div>
                         {contactsLoading && <p className="maintenance-help">Finding site contacts…</p>}
-                        {contactsError && <p className="maintenance-error">{contactsError}</p>}
+                        {contactsError && <p className="maintenance-error" role="alert">{contactsError} <button type="button" onClick={() => { void contactsQuery.refetch().catch(() => undefined) }}>Retry contacts</button></p>}
                         {!contactsLoading && contacts.length > 0 && <div className="maintenance-contacts">{contacts.map((link) => {
                             const contact = link.gr_Contact
                             if (!contact) return null
                             const selectedContact = selectedAction.preferredContactId === contact.gr_contactid
                             return <div key={link.gr_sitecontactid} className={selectedContact ? 'selected' : ''}><strong>{contact.gr_name}</strong><span>{contact.gr_phone || 'No phone'}{contact.gr_email ? ` · ${contact.gr_email}` : ''}</span><div>{contact.gr_phone && <a href={`tel:${contact.gr_phone}`}>Call</a>}{contact.gr_email && <a href={`mailto:${contact.gr_email}`}>Email</a>}<button type="button" className="maintenance-contact-choice" onClick={() => updateAction({ preferredContactId: contact.gr_contactid })}>{selectedContact ? 'Selected' : 'Use for job'}</button></div></div>
                         })}</div>}
-                        {!contactsLoading && !contacts.length && <div className="maintenance-contact-fallback"><strong>{selected.row.contact || 'No contact in export'}</strong><span>{selected.row.phone || (selectedSiteId ? 'No contact is assigned to this site yet' : 'Assign a customer and site before adding a contact')}</span>{selected.row.phone && <a href={`tel:${selected.row.phone}`}>Call</a>}</div>}
+                        {!contactsLoading && !contactsError && !contacts.length && <div className="maintenance-contact-fallback"><strong>{selected.row.contact || 'No contact in export'}</strong><span>{selected.row.phone || (selectedSiteId ? 'No contact is assigned to this site yet' : 'Assign a customer and site before adding a contact')}</span>{selected.row.phone && <a href={`tel:${selected.row.phone}`}>Call</a>}</div>}
                     </section>
 
                     <section className="maintenance-detail-section maintenance-action-section">
@@ -541,7 +536,10 @@ export default function MaintenanceBookingScreen() {
             onSave={async (input, resolvedSite) => {
                 const updated = await updateEquipment(editingEquipment, input, resolvedSite)
                 setEditingEquipment(updated)
-                setContactsRefresh((current) => current + 1)
+                // A changed Site gets its own query key; refreshing the old Site is unnecessary.
+                if (updated.gr_Site?.gr_siteid === selectedSiteId && contactsEnabled) {
+                    void contactsQuery.refetch().catch(() => undefined)
+                }
             }}
             onSaveMaintenanceHistory={async (plans, input) => {
                 const updated = await saveEquipmentMaintenanceHistory(editingEquipment, plans, input)

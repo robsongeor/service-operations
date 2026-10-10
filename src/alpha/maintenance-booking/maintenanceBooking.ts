@@ -41,6 +41,15 @@ export type EquipmentMatch = {
     kind: 'exact' | 'likely' | 'none'
 }
 
+// Detail actions must never target a record hidden by the current queue/filter.
+export function selectedMaintenanceRow<T extends { row: { id: string } }>(visibleRows: readonly T[], selectedId: string): T | null {
+    return visibleRows.find(({ row }) => row.id === selectedId) ?? visibleRows[0] ?? null
+}
+
+export function maintenanceSiteContactsKey(siteId: string) {
+    return ['maintenance-booking', 'site-contacts', siteId.toLowerCase()] as const
+}
+
 export type MaintenanceExclusion = {
     id: string
     scope: 'customer' | 'equipment'

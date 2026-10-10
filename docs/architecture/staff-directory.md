@@ -40,7 +40,7 @@ deduplicated. The setting does not affect technician photo requests or amendment
 - Existing table: `gr_mechanic` / `gr_mechanics`.
 - Added columns: `gr_department`, `gr_jobassignmentenabled`, `gr_customeremailccenabled`.
 - UI mutations: `src/alpha/mechanics/services/mechanicsApi.ts`.
-- Read-only consumers load both columns and apply the shared assignment rule client-side. Until
+- Read-only consumers load the applicable Staff classification columns and apply the shared assignment rule client-side. Until
   those columns are provisioned, schema-level `400` responses fall back to the legacy Mechanics
   select so Jobs and other established workflows continue to load; legacy rows remain assignable.
 - Schema provisioning: `scripts/manage-staff-directory-schema.ps1`; it requires separate approval.

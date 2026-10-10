@@ -1,10 +1,42 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { unzipSync } from 'fflate'
-import { buildJobCardPhotoArchive, jobCardPhotoFilename, safePhotoFilename, saveJobCardPhotos } from '../src/alpha/job-card-reviews/jobCardPhotoDownload.ts'
+import { buildJobCardArchive, buildJobCardPhotoArchive, jobCardPhotoFilename, safePhotoFilename, saveJobCardArchive, saveJobCardPhotos } from '../src/alpha/job-card-reviews/jobCardPhotoDownload.ts'
 
 const photo = (overrides = {}) => ({ id: 'photo-1', fileName: 'Pump.jpg', mimeType: 'image/jpeg', size: 3, ...overrides })
 const bytes = new Uint8Array([1, 2, 3])
+const card = { filename: 'Job-42.pdf', blob: new Blob(['%PDF-fixture'], { type: 'application/pdf' }) }
+
+test('documentation ZIP includes the Job card and every original photo, including zero-photo submissions', async () => {
+    const empty = unzipSync(new Uint8Array(await (await buildJobCardArchive([], async () => assert.fail('No photo request'), undefined, undefined, card)).arrayBuffer()))
+    assert.deepEqual(Object.keys(empty), ['Job-42.pdf'])
+    const files = unzipSync(new Uint8Array(await (await buildJobCardArchive([photo()], async () => new Blob([bytes]), undefined, undefined, card)).arrayBuffer()))
+    assert.deepEqual(Object.keys(files), ['Job-42.pdf', '01 - Pump.jpg'])
+    assert.deepEqual(files['Job-42.pdf'], new TextEncoder().encode('%PDF-fixture'))
+    assert.deepEqual(files['01 - Pump.jpg'], bytes)
+})
+
+test('documentation ZIP fails entirely for missing photos, invalid PDF or cancellation', async () => {
+    await assert.rejects(buildJobCardArchive([photo()], async () => { throw new Error('403') }, undefined, undefined, card), /403/)
+    await assert.rejects(buildJobCardArchive([], async () => new Blob(), undefined, undefined, { ...card, blob: new Blob(['bad'], { type: 'application/pdf' }) }), /PDF is invalid/)
+    const controller = new AbortController()
+    controller.abort()
+    await assert.rejects(buildJobCardArchive([], async () => new Blob(), undefined, controller.signal, card), { name: 'AbortError' })
+})
+
+test('documentation picker is opened before loading and saves only the completed ZIP', async (t) => {
+    const original = globalThis.window
+    t.after(() => { if (original === undefined) delete globalThis.window; else globalThis.window = original })
+    const order = []
+    globalThis.window = { showSaveFilePicker: async options => {
+        order.push('picker')
+        assert.equal(options.id, 'job-card-documentation')
+        assert.equal(options.types[0].description, 'Job card and photos ZIP')
+        return { createWritable: async () => ({ write: async () => order.push('write'), close: async () => order.push('close'), abort: async () => assert.fail('No abort') }) }
+    } }
+    assert.match(await saveJobCardArchive('42 documents', async () => { order.push('load'); return new Blob(['zip']) }, undefined, true), /Job card and photos saved/)
+    assert.deepEqual(order, ['picker', 'load', 'write', 'close'])
+})
 
 test('ZIP name uses Job description and NZ submission date, not UTC or download date', () => {
     assert.equal(jobCardPhotoFilename({ jobNumber: '142314', workRequired: 'Repair hydraulic leak', submittedOn: '2026-10-01T12:00:00Z' }), '142314 - Repair hydraulic leak - 02-10-2026.zip')

@@ -7,23 +7,41 @@ Deployment is separate from Dataverse provisioning.
 
 ## Pipeline
 
-`.github/workflows/azure-static-web-apps-yellow-cliff-068680700.yml` builds and deploys pushes
-to `v1-deployment`.
+There are two frontend deployment workflows, not one:
 
-- Application build: explicit Node 20 `npm ci` followed by `npm run build`
-- Application artifact: `dist`, uploaded with Azure's application build disabled
-- API source: `api`
-- Client output: `dist`
-- Public Vite configuration: GitHub Actions repository variables
-- Server configuration: Static Web App / Function application settings
+| Branch | Workflow / destination |
+| --- | --- |
+| `v1-deployment` | `azure-static-web-apps-yellow-cliff-068680700.yml` / V1 |
+| `v2-deployment` | `azure-static-web-apps-kind-wave-0cdea2200.yml` / V2 |
 
-The workflow derives display version metadata from an exact Git tag or the current short
-commit SHA.
+Both explicitly build on Node 20 with `npm ci` and `npm run build`, upload `dist` with
+`skip_app_build: true`, and deploy managed API source from `api`. V1 version metadata uses
+a tag/SHA; V2 labels its short SHA as a V2 Pilot. Server settings remain separate from public build-time flags.
 
-The explicit client build is intentional. Azure Static Web Apps receives `dist` as the
-`app_location`, with `skip_app_build: true` and an empty `output_location`, so a successful workflow
-cannot publish the repository's development `index.html` or raw TypeScript entrypoint. The managed
-Functions API continues to build from `api` through the Azure deployment action.
+### V2 configuration in source (10 October 2026)
+
+| Setting | Workflow value |
+| --- | --- |
+| `VITE_APPLICATION_ACCESS_CONTROL_ENABLED` | `true` |
+| `VITE_UNIFIED_JOB_REGISTRATION_ENABLED` | `true` |
+| `VITE_UNIFIED_JOB_WORKFLOW_ENABLED` | `true` |
+| Regional-book and regional-allocation flags | `false` |
+| `VITE_JOB_CARD_SHARED_BACKEND` | `v1-production` |
+| `VITE_EQUIPMENT_REALTIME_API_URL` | Empty |
+| External-supplier / hour-meter classification flags | Not enabled by this workflow; default false |
+
+This table describes the workflow, **not a fresh observation of the deployed artifact**.
+Local `.env` values do not automatically change a hosted build. Rebuild when changing Vite flags.
+The readiness manifest's flag-off status is stale relative to these build settings; reconcile
+manifest/tests and deployed evidence before treating it as approval.
+
+The workflows currently build without enforcing the full test/lint/plugin policy gates.
+The initial audit failures have been repaired locally; see
+[release readiness](../../RELEASE_READINESS.md). Add CI gates before broader rollout.
+
+Do not enable registered numbering invariant guards, retire V1, or toggle all feature switches
+together: V1 and V2 share backend dependencies. Capture exact artifact/configuration and rollback
+before changing cloud resources. [Retirement checks](retirement-plan.md) cover those dependencies.
 
 ## Configuration
 
@@ -69,6 +87,14 @@ review queues and office review actions while the bridge is enabled. The bridge 
 delegated Dataverse bearer token and bounded request data; it does not forward browser cookies,
 standard authorization headers, origins or caller-selected destinations. Do not retire V1 or its
 Job Card resources during this period.
+
+The 11 October V2 release keeps this bridge and explicitly disables meter approval and cursor
+queue flags. New review controls require the authoritative detail response's boolean
+`officeRecoveryAvailable`; public meter-date entry requires `meterRecordedDateAvailable`.
+Missing/false capabilities hide the new actions/field, while existing completion, follow-up,
+PDF and photo downloads continue using the legacy contract. The proxy accepts the new bounded
+query keys for a future compatible shared-backend upgrade; it does not implement those operations
+itself. Publishing V2 does not publish the new services to V1 or deploy the Dataverse meter guard.
 
 This bridge is an interim rollout measure, not the permanent architecture. Before it can be
 removed, provision the equivalent settings on V2 or on a dedicated shared Job Card backend:

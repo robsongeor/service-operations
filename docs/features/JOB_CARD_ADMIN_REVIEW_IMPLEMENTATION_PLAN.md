@@ -2,6 +2,10 @@
 
 ## Planning status
 
+**10 October follow-up:** the [focused screens/functions review](../reviews/2026-10-10-job-card-review.md)
+records queue completeness, expired-link tracking, operational retry, multi-technician and Resume
+gaps. Its fixes are pending; the historical implemented phases below do not clear those findings.
+
 - [x] Existing technician dispatch, mobile submission, Azure evidence storage, authenticated
   review queue, photo/PDF download, and current `Mark reviewed` behaviour inspected.
 - [x] Product owner confirmed that the technician's original submission must remain unchanged.
@@ -18,14 +22,20 @@
 - [ ] Implement the phases and complete the separately approved identity, Dataverse, deployment,
   and production-smoke steps below.
 
-Local implementation status (2 October 2026): Phases 1–3 are implemented and validated locally.
-Phases 4–5 remain approval-gated and unperformed: no Entra or Dataverse role was provisioned or
-assigned, no production allowlist or environment setting was changed, and nothing was deployed.
+Historical implementation baseline (2 October): Phases 1–3 were locally implemented.
+Later access/rollout records document role assignments, reviewer configuration and plugin deployment;
+the earlier blanket “nothing provisioned/deployed” statement is obsolete. Phase completion is still
+not proof of named-user acceptance. Use the [current access plan](JOB_BOOK_ACCESS_PLAN.md) and
+[release gates](../../RELEASE_READINESS.md). The 10 October audit found restricted correction and
+post-delivery status writes that conflict with the server guard.
+
+The walkthrough/test counts below are dated evidence, not the current suite result; the current
+baseline is 835/838 Node tests and six lint errors. Original technician evidence must remain immutable.
 
 ### Repeatable local walkthrough
 
 **3 October Job Book quick-action decision:** Admins may email the already-assigned technician
-for a numbered managed Job; allocation remains coordinator-only. This is a separate Job Book row
+for a numbered managed Job; broader coordination remains restricted. Mechanic selection is now permitted to all admitted Job Book roles. This is a separate Job Book row
 action, not part of the corrections drawer or the clarification status workflow. Jobs and Job Book
 reuse the email composer, queue/delivery hook and six-column order-book clipboard builder. Admins
 cannot change the email recipient, and Intake/Void entries cannot be sent. Local sample sending

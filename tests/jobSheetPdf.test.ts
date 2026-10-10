@@ -6,7 +6,7 @@ import { buildJobSheetValues, renderJobSheetPdf } from '../src/alpha/portal/jobS
 import { buildSubmittedJobSheet } from '../src/alpha/jobs/services/submittedJobSheetPdf.ts'
 import type { Job } from '../src/alpha/jobs/types/job.types.ts'
 import type { JobCardSubmission } from '../src/alpha/jobs/types/jobCardSubmission.types.ts'
-import { renderJobCardReviewPdf } from '../src/alpha/job-card-reviews/jobCardReviewPdf.ts'
+import { buildReviewJobSheet, createJobCardReviewPdf, renderJobCardReviewPdf } from '../src/alpha/job-card-reviews/jobCardReviewPdf.ts'
 import type { JobCardReview } from '../src/alpha/job-card-reviews/jobCardReview.types.ts'
 import { mkdir, writeFile } from 'node:fs/promises'
 
@@ -39,7 +39,7 @@ const draft = {
     safetyIssueDetails: 'Machine was isolated while testing.',
 }
 
-test('Azure PDF renders long saved evidence across pages without network requests or mutation', async () => {
+test('Azure PDF fills the real template and retains long saved evidence on continuation pages without current data or mutation', async () => {
     const review: JobCardReview = {
         ...job, reviewId: 'synthetic-review-only', etag: 'test', status: 'pendingReview', sourceJobId: 'test-job',
         submittedOn: '2026-10-02T00:00:00Z', hourMeter: 3642, photoCount: 1,
@@ -54,17 +54,69 @@ test('Azure PDF renders long saved evidence across pages without network request
     const original = globalThis.fetch
     globalThis.fetch = async () => { throw new Error('Saved PDF must not access network or current Job data.') }
     try {
-        const blob = await renderJobCardReviewPdf(review)
+        const blob = await renderJobCardReviewPdf(review, await readFile('docs/templates/jobsheet-template.pdf'))
         const bytes = new Uint8Array(await blob.arrayBuffer())
         const pdf = await PDFDocument.load(bytes)
         assert.ok(pdf.getPageCount() >= 5)
-        assert.match(pdf.getTitle() || '', /145995.*saved technician submission/)
+        assert.match(pdf.getTitle() || '', /145995.*Field Service Inspection Report/)
+        assert.equal(pdf.getForm().getTextField('job').getText()?.trim(), '145995')
+        assert.equal(pdf.getForm().getTextField('description').getText(), 'See continuation')
+        assert.equal(pdf.getForm().getTextField('generated-parts').getText(), 'See continuation')
         assert.equal(JSON.stringify(review), before)
         if (process.env.JOB_CARD_PDF_QA === 'true') {
-            await mkdir('output/pdf', { recursive: true })
-            await writeFile('output/pdf/job-card-synthetic-qa.pdf', bytes)
+            await mkdir('tmp/pdfs', { recursive: true })
+            await writeFile('tmp/pdfs/job-card-long-qa.pdf', bytes)
         }
     } finally { globalThis.fetch = original }
+})
+
+test('saved Job card mapping does not substitute live contact or current meter; zero is retained', () => {
+    const review = { ...job, hourMeter: undefined, currentHourMeter: 9999, submittedOn: '2026-10-01T12:00:00Z', story: 'Saved story', timeEntries: [], parts: [], furtherWorkRequired: true, safetyIssueIdentified: true } as unknown as JobCardReview
+    const sheet = buildReviewJobSheet(review)
+    assert.equal(sheet.details.currentHourMeter, undefined)
+    assert.equal(sheet.details.siteContactName, undefined)
+    assert.equal(sheet.draft.hourMeter, '')
+    assert.equal(buildReviewJobSheet({ ...review, hourMeter: 0 }).draft.hourMeter, '0')
+    assert.match(sheet.draft.furtherWorkDetails || '', /Required - details not supplied/)
+    assert.match(sheet.draft.safetyIssueDetails || '', /Identified - details not supplied/)
+})
+
+test('PDF creation fetches only the bundled template, propagates abort and fails rather than inventing a fallback', async (t) => {
+    const signal = new AbortController().signal
+    t.mock.method(globalThis, 'fetch', async (url, options) => {
+        assert.match(String(url), /jobsheet-template\.pdf$/)
+        assert.equal(options?.signal, signal)
+        return new Response('', { status: 404 })
+    })
+    await assert.rejects(createJobCardReviewPdf({} as JobCardReview, signal), /template could not be loaded/)
+})
+
+test('weekday collisions retain separate dates instead of adding different weeks under one date', () => {
+    const values = buildJobSheetValues(job, { ...draft, timeEntries: [{ date: '2026-08-17', hours: 2, kilometres: 10 }, { date: '2026-08-24', hours: 3, kilometres: 20 }] })
+    assert.equal(values['date-1'], 'See cont.')
+    assert.equal(values['hours-1'], '')
+    assert.equal(values['mileage-1'], '')
+})
+
+test('normal saved card fills template fields and leaves signatures untouched with NZ submitted date', async () => {
+    const review = { ...job, hourMeter: 0, story: 'SAMPLE ONLY - Replaced headlight and tested operation.', timeEntries: [{ date: '2026-10-03', hours: 2, kilometres: 12 }, { date: '2026-10-04', hours: 1, kilometres: 8 }], parts: draft.parts, furtherWorkRequired: false, safetyIssueIdentified: false, submittedOn: '2026-10-01T12:00:00Z' } as unknown as JobCardReview
+    const blob = await renderJobCardReviewPdf(review, await readFile('docs/templates/jobsheet-template.pdf'))
+    const bytes = new Uint8Array(await blob.arrayBuffer())
+    const pdf = await PDFDocument.load(bytes)
+    const form = pdf.getForm()
+    assert.equal(pdf.getPageCount(), 1)
+    assert.equal(form.getTextField('hours').getText()?.trim(), '0')
+    assert.equal(form.getTextField('generated-date-footer').getText(), '02/10/2026')
+    assert.equal(form.getTextField('site-contact').getText() || '', '')
+    assert.equal(form.getTextField('CLIENTS NAME').getText() || '', '')
+    assert.equal(form.getTextField('date-6').getText(), '03/10')
+    assert.equal(form.getTextField('date-7').getText(), '04/10')
+    assert.equal(form.getTextField('date-6').acroField.getWidgets()[0].getRectangle().y, form.getTextField('hours-6').acroField.getWidgets()[0].getRectangle().y)
+    assert.equal(form.getTextField('date-7').acroField.getWidgets()[0].getRectangle().y, form.getTextField('hours-7').acroField.getWidgets()[0].getRectangle().y)
+    if (process.env.JOB_CARD_PDF_QA === 'true') {
+        await mkdir('tmp/pdfs', { recursive: true })
+        await writeFile('tmp/pdfs/job-card-normal-qa.pdf', bytes)
+    }
 })
 
 test('Job sheet values combine Job details and current technician form entries', () => {

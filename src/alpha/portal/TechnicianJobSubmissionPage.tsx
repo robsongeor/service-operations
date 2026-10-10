@@ -5,6 +5,7 @@ import type { JobCardTimeEntryInput, PublicJobSubmissionDetails, PublicSubmissio
 import './TechnicianJobSubmissionPage.css'
 import { MAX_JOB_PHOTOS, prepareJobPhoto, removePendingJobPhoto, type PendingJobPhoto } from './jobPhoto'
 import { downloadJobSheetPdf, type JobSheetDraft } from './jobSheetPdf'
+import { jobCardDraftKey, loadJobCardDraft, saveJobCardDraft } from './jobCardDraft'
 
 const errorMessages: Record<PublicSubmissionErrorCode, string> = {
     invalid: 'This job card link is invalid.',
@@ -27,10 +28,16 @@ const newPart = (): PartDraft => ({ description: '', quantity: '' })
 
 export default function TechnicianJobSubmissionPage() {
     const { token = '' } = useParams()
+    return <TechnicianJobSubmissionForm key={token} />
+}
+
+function TechnicianJobSubmissionForm() {
+    const { token = '' } = useParams()
     const [job, setJob] = useState<PublicJobSubmissionDetails | null>(null)
     const [loadError, setLoadError] = useState<PublicSubmissionErrorCode | null>(null)
     const [story, setStory] = useState('')
     const [hourMeter, setHourMeter] = useState('')
+    const [hourMeterRecordedDate, setHourMeterRecordedDate] = useState(today)
     const [timeEntries, setTimeEntries] = useState<TimeEntryDraft[]>([newTimeEntry()])
     const [parts, setParts] = useState<PartDraft[]>([])
     const [furtherWorkRequired, setFurtherWorkRequired] = useState(false)
@@ -45,6 +52,34 @@ export default function TechnicianJobSubmissionPage() {
     const [pdfBusy, setPdfBusy] = useState(false)
     const [pdfFeedback, setPdfFeedback] = useState('')
     const [confirmLowerHourMeter, setConfirmLowerHourMeter] = useState(false)
+    const [draftKey, setDraftKey] = useState('')
+    const [draftReady, setDraftReady] = useState(false)
+    const [draftMessage, setDraftMessage] = useState('')
+
+    useEffect(() => {
+        let current = true
+        void jobCardDraftKey(token).then((key) => {
+            if (!current) return
+            const draft = loadJobCardDraft(sessionStorage, key)
+            if (draft) {
+                setStory(draft.story); setHourMeter(draft.hourMeter); setHourMeterRecordedDate(draft.hourMeterRecordedDate)
+                setTimeEntries(draft.timeEntries); setParts(draft.parts)
+                setFurtherWorkRequired(draft.furtherWorkRequired); setFurtherWorkDetails(draft.furtherWorkDetails)
+                setSafetyIssueIdentified(draft.safetyIssueIdentified); setSafetyIssueDetails(draft.safetyIssueDetails)
+            }
+            setDraftKey(key); setDraftReady(true)
+            setDraftMessage(draft ? 'Draft restored. Please reattach any photos before submitting.' : 'Text is saved in this tab for reload recovery. Photos are not saved; closing the tab clears the draft.')
+        }).catch(() => { if (current) { setDraftReady(true); setDraftMessage('Draft recovery is unavailable in this browser. Keep this page open until submitted.') } })
+        return () => { current = false }
+    }, [token])
+    useEffect(() => {
+        if (!draftReady || !draftKey || submitted || !job) return
+        const timer = setTimeout(() => {
+            try { saveJobCardDraft(sessionStorage, draftKey, { story, hourMeter, hourMeterRecordedDate, timeEntries, parts, furtherWorkRequired, furtherWorkDetails, safetyIssueIdentified, safetyIssueDetails }) }
+            catch { setDraftMessage('Draft could not be saved. Keep this page open until submitted.') }
+        }, 300)
+        return () => clearTimeout(timer)
+    }, [draftReady, draftKey, submitted, job, story, hourMeter, hourMeterRecordedDate, timeEntries, parts, furtherWorkRequired, furtherWorkDetails, safetyIssueIdentified, safetyIssueDetails])
 
     useEffect(() => {
         let current = true
@@ -60,6 +95,7 @@ export default function TechnicianJobSubmissionPage() {
         const trimmedStory = story.trim()
         if (!trimmedStory) return setValidation('Enter the work completed or job story.')
         if (job?.requiresHourMeter && !hourMeter.trim()) return setValidation('Enter the current hour meter.')
+        if (job?.meterRecordedDateAvailable === true && hourMeter.trim() && (!hourMeterRecordedDate || hourMeterRecordedDate > today())) return setValidation('Enter the date the meter was read, not a future date.')
         if (hourMeter && !/^\d+$/.test(hourMeter)) {
             return setValidation('Hour meter must be a non-negative whole number.')
         }
@@ -94,6 +130,7 @@ export default function TechnicianJobSubmissionPage() {
         const submission = {
             story: trimmedStory,
             hourMeter: parsedHourMeter,
+            hourMeterRecordedDate: job?.meterRecordedDateAvailable === true && parsedHourMeter != null ? hourMeterRecordedDate : undefined,
             lowerHourMeterConfirmed: isLowerHourMeter && lowerHourMeterConfirmed,
             timeEntries: parsedTimeEntries,
             parts: parts.map((part) => ({ description: part.description.trim(), quantity: Number(part.quantity) })),
@@ -114,6 +151,7 @@ export default function TechnicianJobSubmissionPage() {
                 safetyIssueDetails: submission.safetyIssueDetails,
             })
             setSubmitted(true)
+            try { if (draftKey) sessionStorage.removeItem(draftKey) } catch { /* Submission is already accepted. */ }
         } catch (error) {
             setValidation(error instanceof JobSubmissionError ? error.message : errorMessages.temporary)
         } finally {
@@ -164,12 +202,15 @@ export default function TechnicianJobSubmissionPage() {
                 {job.workRequired && <div className="wide"><dt>Work required</dt><dd>{job.workRequired}</dd></div>}
             </dl>
             <form onSubmit={submit}>
+                <p role="status">{draftMessage || 'Checking for a saved draft…'}</p>
+                <fieldset disabled={!draftReady || busy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
                 <label>Current Hour Meter{job.requiresHourMeter && ' *'}
                     <input type="number" min="0" step="1" inputMode="numeric" value={hourMeter} onChange={(event) => {
                         setHourMeter(event.target.value)
                         setConfirmLowerHourMeter(false)
                     }} required={job.requiresHourMeter} />
                 </label>
+                {job.meterRecordedDateAvailable === true && hourMeter.trim() && <label>Meter reading date *<input type="date" value={hourMeterRecordedDate} max={today()} required onChange={(event) => setHourMeterRecordedDate(event.target.value)} /><small>The date you read the machine, not the date you submit this card.</small></label>}
                 {confirmLowerHourMeter && job.currentHourMeter != null && <section className="technician-lower-meter-confirmation" role="alert" aria-live="assertive">
                     <strong>Confirm lower hour meter</strong>
                     <p>You entered {Number(hourMeter).toLocaleString('en-NZ')} hours, which is lower than the previous reading of {job.currentHourMeter.toLocaleString('en-NZ')} hours. Confirm only if the reading shown on the machine is correct.</p>
@@ -266,6 +307,7 @@ export default function TechnicianJobSubmissionPage() {
                 </div>
                 {validation && <p className="technician-portal-error" role="alert">{validation}</p>}
                 <button type="submit" disabled={busy}>{busy ? 'Submitting…' : 'Submit Job Card'}</button>
+                </fieldset>
             </form>
         </section>
     </main>

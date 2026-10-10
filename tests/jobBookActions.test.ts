@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { resolveApplicationAccess } from '../src/auth/applicationAccess.ts'
 import { createBlankJobBookRow, JOB_BOOK_ENTRY_STAGES } from '../src/alpha/job-book/jobBookPrototype.ts'
 import { jobBookClipboardSource, jobBookCopyBlockedReason, jobBookEmailBlockedReason } from '../src/alpha/job-book/jobBookActions.ts'
-import { buildNumberedJobBookSpreadsheetRow } from '../src/alpha/jobs/utils/jobBookClipboard.ts'
+import { buildJobBookSpreadsheetRow, buildNumberedJobBookSpreadsheetRow, copyNumberedJobBookSpreadsheetRow } from '../src/alpha/jobs/utils/jobBookClipboard.ts'
 import { assignedTechnicianEmailBlockedReason, queuePrimaryJobDispatch } from '../src/alpha/jobs/services/primaryJobEmailWorkflow.ts'
 import type { CorrectableJob } from '../src/alpha/jobs/services/jobCorrectionsApi.ts'
 import { mapManagedJobBookRow } from '../src/alpha/job-book/jobBookApi.ts'
@@ -31,20 +31,51 @@ test('email permission is independent of allocation and absent for JobBookOnly/d
 
 test('managed order-book export matches Jobs exactly, including alternate fleets and long regional number', () => {
     const row = mapManagedJobBookRow(job, JOB_BOOKS.waikato)
-    const output = buildNumberedJobBookSpreadsheetRow(jobBookClipboardSource(row))
-    assert.equal(output, buildNumberedJobBookSpreadsheetRow(job))
-    assert.equal(output, 'Sample Technician\tWJ1234567\tFN123 / ALT-123\tCustomer\t\tSample Technician\n')
+    const output = buildNumberedJobBookSpreadsheetRow(jobBookClipboardSource(row), 'Office Admin')
+    assert.equal(output, buildNumberedJobBookSpreadsheetRow(job, 'Office Admin'))
+    assert.equal(output, 'Sample Technician\tWJ1234567\tFN123 / ALT-123\tCustomer\t\tOffice Admin\n')
     const serialOnly = { ...job, gr_Equipment: { ...job.gr_Equipment!, gr_fleet: null, gr_alternatefleetnumbers: null } }
-    assert.equal(buildNumberedJobBookSpreadsheetRow(jobBookClipboardSource(mapManagedJobBookRow(serialOnly, JOB_BOOKS.waikato))), buildNumberedJobBookSpreadsheetRow(serialOnly))
+    assert.equal(buildNumberedJobBookSpreadsheetRow(jobBookClipboardSource(mapManagedJobBookRow(serialOnly, JOB_BOOKS.waikato)), 'Office Admin'), buildNumberedJobBookSpreadsheetRow(serialOnly, 'Office Admin'))
 })
 
 test('Intake copies its saved snapshots without requiring or inventing a managed Job', () => {
     const row = { ...createBlankJobBookRow(1), jobNumber: '900010', mechanicName: 'Outwork\nTechnician', customer: 'Customer\tname', fleet: '' }
     assert.equal(jobBookCopyBlockedReason(row), '')
-    assert.equal(buildNumberedJobBookSpreadsheetRow(jobBookClipboardSource(row)), 'Outwork Technician\t900010\tW/S\tCustomer name\t\tOutwork Technician\n')
+    assert.equal(buildNumberedJobBookSpreadsheetRow(jobBookClipboardSource(row), ' Office\tAdmin\r\nName '), 'Outwork Technician\t900010\tW/S\tCustomer name\t\tOffice Admin Name\n')
     assert.match(jobBookEmailBlockedReason(row, true), /managed Job/)
     assert.match(jobBookCopyBlockedReason({ ...row, jobNumber: '' }), /Job Number/)
     assert.match(jobBookCopyBlockedReason({ ...row, entryStage: JOB_BOOK_ENTRY_STAGES.VOID }), /Void/)
+})
+
+test('order-book copy uses the current user only in the last cell, never the technician as a fallback', () => {
+    const source = {
+        gr_jobnumber: '147247',
+        gr_Mechanic: { gr_name: 'Ricardo' },
+        gr_Equipment: { gr_fleet: 'ServiceFoods03', gr_alternatefleetnumbers: 'CB3' },
+        gr_Site: { gr_Customer: { gr_name: 'Service Foods' } },
+    }
+    for (const name of ['Nargiza', 'Another Office Admin']) {
+        assert.equal(buildNumberedJobBookSpreadsheetRow(source, name), `Ricardo\t147247\tServiceFoods03 / CB3\tService Foods\t\t${name}\n`)
+    }
+    assert.throws(() => buildNumberedJobBookSpreadsheetRow(source, ' \t\n'), /Sign in/)
+    assert.equal(buildNumberedJobBookSpreadsheetRow({ ...source, gr_jobnumber: null }, 'Office Admin'), '')
+    assert.equal(buildJobBookSpreadsheetRow(job), 'Sample Technician\tModel\tFN123 / ALT-123\tCustomer\tSample work\tSample address\t\t\tPO1')
+})
+
+test('clipboard writer uses the supplied account name and does not copy without an identity or Job number', async () => {
+    const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+    const copied: string[] = []
+    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { clipboard: { writeText: async (text: string) => { copied.push(text) } } } })
+    try {
+        await copyNumberedJobBookSpreadsheetRow(job, 'Office Admin')
+        assert.deepEqual(copied, [buildNumberedJobBookSpreadsheetRow(job, 'Office Admin')])
+        await assert.rejects(copyNumberedJobBookSpreadsheetRow(job, ''), /Sign in/)
+        await assert.rejects(copyNumberedJobBookSpreadsheetRow({ ...job, gr_jobnumber: '' }, 'Office Admin'), /Job Number/)
+        assert.equal(copied.length, 1)
+    } finally {
+        if (originalNavigator) Object.defineProperty(globalThis, 'navigator', originalNavigator)
+        else Reflect.deleteProperty(globalThis, 'navigator')
+    }
 })
 
 test('Void, unnumbered, unassigned and restricted rows cannot start an email', () => {
@@ -138,7 +169,10 @@ test('both tables reuse action controls, composer, clipboard contract and queue 
     }
     assert.match(read('jobs/hooks/useJobs.ts'), /usePrimaryJobEmail\(\{/)
     assert.match(read('job-book/useJobBookActions.ts'), /usePrimaryJobEmail\(\{/)
-    assert.match(read('job-book/useJobBookActions.ts'), /copyNumberedJobBookSpreadsheetRow/)
+    assert.match(read('job-book/useJobBookActions.ts'), /copyNumberedJobBookSpreadsheetRow\(jobBookClipboardSource\(row\), signedInUserName\)/)
+    assert.match(read('jobs/components/JobsTable.tsx'), /copyNumberedJobBookSpreadsheetRow\(job, signedInUserName\)/)
+    assert.match(read('jobs/JobsScreen.tsx'), /signedInUserName=\{signedInUser\?\.displayName \?\? ''\}/)
+    assert.match(read('job-book/JobBookPrototypeScreen.tsx'), /useJobBookActions\(getAccessToken, canEmailAssignedTechnician, !canManageJobs, signedInUser\?\.displayName \?\? ''\)/)
     assert.match(read('job-book/JobBookPrototypeScreen.tsx'), /assignedRecipientOnly=\{!canManageJobs\}/)
     assert.match(read('jobs/hooks/usePrimaryJobEmail.ts'), /pending.current.has/)
     assert.match(read('jobs/hooks/usePrimaryJobEmail.ts'), /enabled\) throw new Error/)

@@ -36,6 +36,12 @@ pre-existing failures separately.
 
 ### Read-only local Job Card preview
 
+The normal Vite middleware mirrors V2's temporary shared-backend hand-off when the ignored local
+setting `VITE_JOB_CARD_SHARED_BACKEND=v1-production` is explicitly present. It uses the same bounded
+submission/review proxy as deployed V2, forwards only the delegated Dataverse authorization header
+and still relies on the shared backend's reviewer allowlist. This mode can perform permitted writes;
+use it only for deliberate live development under an approved reviewer identity.
+
 After explicit approval to read live Job Cards, a local launcher can add the opt-in Vite plugin
 `scripts/dev/jobCardReadOnlyProxy.mjs` while keeping the normal application configuration. It is not
 installed by default and does not participate in production builds. Use existing ignored local

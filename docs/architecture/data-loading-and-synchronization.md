@@ -1,5 +1,15 @@
 # Data Loading and Synchronization
 
+## V2 exception found in the 10 October audit
+
+Shared-query invalidation below describes implemented shared consumers and the target contract,
+not every current list. `useUnifiedJobWorklist` owns separate state and does not subscribe to
+equivalent invalidation; its scoped `useJobs` call also skips the global realtime subscription.
+V2's workflow leaves the realtime API URL empty. Restoring that URL alone will not synchronize
+the unified worklist. See audit A06 in the
+[application audit](../reviews/2026-10-10-application-audit.md).
+
+
 This document owns the cross-cutting architecture for collecting, caching, displaying,
 mutating, and synchronizing operational data. Feature documents continue to own business
 workflows and Dataverse schema documents continue to own logical field names.
@@ -142,10 +152,11 @@ These pieces should be migrated into a shared coordinator rather than discarded.
 
 ### 1. Supporting data and orchestration remain tied to hook instances
 
-The primary Jobs and Equipment list arrays are now shared by query key above routes. Every call to
+The legacy global Jobs and Equipment list arrays are shared by query key above routes. Every call to
 `useJobs()` or `useEquipmentManager()` still creates separate supporting reference arrays, readiness
 flags and background-refresh orchestration. Realtime connection ownership is no longer duplicated.
-Only the main Jobs register uses the global `useJobs()` mode. WOF, Equipment Job creation,
+The main Jobs register uses global `useJobs()` only in the non-unified path. In the V2 unified
+path, `useUnifiedJobWorklist` supplies independent state and disables global loading. WOF, Equipment Job creation,
 Chargeable Invoice Review, Customer Dashboard, and Scheduler use scoped adapters seeded with empty
 or bounded supporting collections; opening a WOF Job hydrates only that exact Job and its office
 updates. Customer Dashboard also instantiates Equipment Manager.
@@ -154,7 +165,7 @@ Consequences:
 
 - navigation now retains the primary Jobs and Equipment values, but supporting reference state is
   still discarded;
-- mutations to the main lists reconcile every mounted consumer, while supporting feature-local
+- mutations reconcile subscribed shared-query consumers, while unified worklist and supporting feature-local
   collections can still diverge until refreshed;
 - each new hook can repeat Customers, Sites, plans, schedule, assignment, or other reference reads;
 - supporting lookup refreshes can still be duplicated across feature-hook instances even though

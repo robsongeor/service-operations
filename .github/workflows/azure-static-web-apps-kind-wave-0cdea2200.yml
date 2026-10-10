@@ -26,6 +26,9 @@ jobs:
       VITE_APPLICATION_ACCESS_CONTROL_ENABLED: "true"
       # V2 reuses the proven production Job Card API/storage until its private backend settings are provisioned.
       VITE_JOB_CARD_SHARED_BACKEND: "v1-production"
+      # Independent activation gates: the shared backend/schema/identity are not upgraded by this deployment.
+      VITE_JOB_CARD_METER_APPROVAL_ENABLED: "false"
+      VITE_JOB_CARD_CURSOR_QUEUE_ENABLED: "false"
       # Re-enable after AZURE_REALTIME_FUNCTIONAPP_PUBLISH_PROFILE is restored and the V2 CORS allow-list is deployed.
       VITE_EQUIPMENT_REALTIME_API_URL: ""
     steps:

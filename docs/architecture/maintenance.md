@@ -22,15 +22,20 @@ plan updates atomically.
 - Equipment stores the Date Only value `gr_currenthourmeterrecordeddate` alongside its
   current hour reading. The two values are saved together; `modifiedon` is not a substitute.
 - Equipment Service Plan records represent A, B, and C state.
-- Every completed Job references Equipment and saves its completion reading. Service Jobs also
-  save Service Type and advance the applicable maintenance plans.
+- Canonical operational completion requires Equipment and completion evidence; Service completion
+  also saves Service Type and advances the applicable maintenance plans. Jobs may otherwise have
+  no Equipment. The local GreenTree safeguard routes closure to Completion Review rather than
+  bypassing these side effects; rollout/historical repair still require verification.
 - Historical Jobs and inactive plans remain readable.
 
 ## Shared Components and APIs
 
 `maintenanceConfiguration.ts` resolves Programme and Profile rules. Calculation and status
-helpers feed Equipment, Jobs, and Customer views. All Service completion entry points use
-`completeServiceJobAtomically`.
+helpers feed Equipment, Jobs, and Customer views. Canonical UI Service completion uses
+`completeServiceJobAtomically`. GreenTree reconciliation does not; existing Complete statuses alone
+do not prove maintenance history advanced. The local safeguard preserves Completion Review pending
+canonical operations completion. See the [Job Card implementation report](../reviews/2026-10-10-job-card-implementation.md)
+for the separate office-approved meter path and outstanding activation/historical-repair gates.
 
 ## Important Business Rules
 
@@ -51,8 +56,12 @@ helpers feed Equipment, Jobs, and Customer views. All Service completion entry p
 - Every Job type contributes completion readings equally to the Equipment usage forecast.
   Estimated readings remain usable but reduce confidence. Isolated bad readings are ignored,
   while a sustained lower sequence is treated as a meter reset and starts a new segment.
+- With `VITE_JOB_CARD_METER_APPROVAL_ENABLED`, an open Job can also supply an explicitly
+  office-approved Actual reading. Its approval reference must match the current hours, recorded
+  date and equipment. Approval updates usage evidence only, not service completion or plan history.
+  Both frontend/backend approval flags remain off pending schema and permission acceptance.
 - When completed Jobs contain usable meter evidence, the reading from the latest dated completed
-  Job is the operational Last Known Hour Meter for displays, completion comparisons, service-due
+  Job (or valid office-approved open Job when enabled) is the operational Last Known Hour Meter for displays, completion comparisons, service-due
   calculations, and forecasts. The Equipment current-meter fields are a fallback only when no such
   Job reading exists; a stale Equipment snapshot is not appended to Job evidence.
 - Job meter dates are Date Only, so time-of-day precision is unavailable. Forecasting retains

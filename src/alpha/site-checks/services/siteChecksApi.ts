@@ -430,8 +430,11 @@ export async function fetchSiteCheckEquipmentExclusionsPage(
 export async function allocateSiteCheckJobNumbers(
     _accessToken: string,
     _allocations: readonly { job: SiteCheckDetailJob; jobNumber: string }[],
-    _options: { apiUrl?: string; fetcher?: typeof fetch } = {},
+    _options?: { apiUrl?: string; fetcher?: typeof fetch },
 ) {
+    void _accessToken
+    void _allocations
+    void _options
     throw new Error('Manual Site Check Job number entry is disabled. Use the regional allocation system.')
 }
 
@@ -602,8 +605,11 @@ export async function deleteSiteCheckOccurrence(
 export async function clearSiteCheckJobNumber(
     _accessToken: string,
     _job: SiteCheckDetailJob,
-    _options: { apiUrl?: string; fetcher?: typeof fetch } = {},
+    _options?: { apiUrl?: string; fetcher?: typeof fetch },
 ) {
+    void _accessToken
+    void _job
+    void _options
     throw new Error('Allocated Job numbers are permanent and cannot be cleared or reused.')
 }
 

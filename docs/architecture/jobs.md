@@ -1,5 +1,16 @@
 # Jobs Architecture
 
+## Audit status — 10 October 2026
+
+The lifecycle below is the intended contract, not a claim that all entry points enforce it.
+Registration allocates too early; restricted correction/dispatch payloads conflict with the
+server guard; historical GreenTree completion bypassed canonical side effects; the unified worklist does not
+yet participate fully in shared invalidation. See audit A01–A06 in the
+[application audit](../reviews/2026-10-10-application-audit.md). V2 builds both unified flags enabled.
+The local [Job Card implementation](../reviews/2026-10-10-job-card-implementation.md) now routes
+GT closure to Completion Review and adds gated office-approved meter evidence. Not deployed;
+historical/void/reopen rules and real-account acceptance remain outstanding.
+
 ## Purpose
 
 Jobs are the operational backbone for breakdown, service, and workshop work. A Job records
@@ -46,7 +57,8 @@ rows, and do not participate in the “all technician submissions received” tr
 details remain visible and searchable in Job Book and in the canonical operational editor. Saving
 an external supplier is treated as allocation because there is no in-app technician dispatch; users
 should select it only after the supplier has been arranged, and use Action Required while booking or
-follow-up is still outstanding. GreenTree closure remains the automatic route to Complete. Repeated
+follow-up is still outstanding. The local GreenTree safeguard routes closure to Completion Review;
+operational completion remains an explicit canonical workflow. Repeated
 suppliers can later be promoted to a dedicated
 supplier directory without reinterpreting them as employees.
 
@@ -120,13 +132,14 @@ privileges and secure-link API authority, including server-side assigned-recipie
 restricted Admins. Browser capabilities and the preflight check alone cannot enforce that boundary.
 See [email delivery](../email-dispatch-flow.md) for transport ownership.
 
-The local unified-workflow contract now adds `gr_QueueInitialJobDispatch`. Behind the disabled
+The unified-workflow contract includes `gr_QueueInitialJobDispatch`. Behind the
 `VITE_UNIFIED_JOB_WORKFLOW_ENABLED` gate, restricted Admin sends use a retained request ID and the
 exact rendered message. The caller-scoped plugin rereads the Job and assigned technician, verifies
 the Job row version and recipient, rejects Site Check/Void/unnumbered/Unconfirmed work and creates
 one fingerprinted Email Dispatch row. Same-session uncertain retries reuse the identical request and
-body. The Azure secure-link call remains separate, and no Custom API, fingerprint column, privilege,
-step or role has been provisioned or live-tested.
+body. The Azure secure-link call remains separate. Provisioning is recorded in the rollout
+documents; real-role delivery and post-delivery allocation still require acceptance tests.
+The V2 workflow enables this gate; default-off behavior applies to builds that omit it.
 
 ## Job number safety foundation (3 October 2026)
 
@@ -135,7 +148,8 @@ separates registration, numbering and coordinator membership. Its first local im
 protects existing numbers without switching persistence or requiring unprovisioned columns.
 The next server/client slice now exists as local source and offline tests; see the authoritative
 [transactional registration contract](../features/JOB_BOOK_INTAKE_DESIGN.md#transactional-registration-implementation-local-only).
-It is not provisioned and stays disabled by default. The production feature gate now wires the same
+Registration/plugin provisioning is recorded and the V2 workflow enables the feature; earlier
+local-only headings describe history, not current activation. The production feature gate wires the same
 screen boundary to 100-row Dataverse pages, validates continuation links, and applies server-side
 Operational, Unconfirmed and Job Type filters. The
 [isolated unified walkthrough](../features/JOB_BOOK_INTAKE_DESIGN.md#unified-screen-walkthrough-3-october-2026-sample-data-only)
@@ -288,11 +302,15 @@ Status; Site Check dispatch retains its existing status updates. Azure link crea
 evidence of successful delivery.
 Jobs action feedback is announced as a bottom-right toast, can be dismissed explicitly, and clears
 automatically after five seconds. A new message replaces the previous timer safely.
-Every transition into Complete requires linked Equipment and a whole-number hour-meter reading.
+Canonical operational completion dialogs require linked Equipment and a whole-number hour-meter
+reading. This is not a universal server invariant for all writers. GreenTree reconciliation now
+routes closure to Completion Review locally, without invoking type-specific effects; deployment
+and historical-state checks remain (audit A03). Jobs may exist without Equipment.
 Every completion dialog also displays a required Job Completion Date, initially today and editable
 to a valid non-future date. The selected calendar date is stored in the existing Job Completed Date
 column for every Job type. That same calendar date is stored as the Job's meter-recorded date, so the
-completion dialog does not ask for a duplicate date. The latest dated completed Job with usable meter evidence is the operational current
+completion dialog does not ask for a duplicate date. The latest dated completed Job with usable meter evidence
+(or a valid office-approved open-Job reading when that feature is enabled) is the operational current
 reading. The Equipment current-meter fields are used only when no completed Job reading exists.
 For every completion type, the hour-meter input is the first editable field and receives initial
 focus. Job Completion Date is the adjacent field immediately after it in DOM and keyboard order, so
@@ -400,21 +418,27 @@ intake, but Site suggestions require a linked Customer.
 
 ## Operational Job Status Lifecycle
 
-| Status | Meaning | Automatic entry rule |
+| Status | Intended meaning | Intended entry rule |
 | --- | --- | --- |
 | Unallocated | The Job has not yet been successfully dispatched to a technician. | New operational Jobs begin here. A final technician withdrawal may return an Allocated Job here when no current technician assignment remains. |
 | Allocated | At least one technician has been successfully sent the Job. | A confirmed email dispatch moves only an Unallocated Job to Allocated. Selecting a mechanic without dispatching does not allocate the Job. |
 | Action Required | Office or coordinator action is needed before work can progress. | This is the user-facing name of the existing `Waiting for parts` Dataverse option. It remains coordinator-controlled and its numeric option-set value is unchanged. |
-| Completion Review | All current, non-withdrawn technician assignments have submitted Job Cards, but the Job is not yet complete. | The final required submission moves only an Allocated Job here. Active or expired links, replacement lifecycles, incomplete histories, and any other outstanding technician assignment prevent the transition. |
-| Complete | GreenTree has closed the Job. | The shared GreenTree reconciliation scheduler sets this when the matching GreenTree Job reports `IsClosed=true`. Technician responses and Job Card submission never set Complete. |
+| Completion Review | Submitted evidence needs office review, or GreenTree is closed but required operational completion evidence is missing. | Required assignments/evidence must be checked. The existing Azure-card-only enumeration and GreenTree bypass do not fully implement this rule. |
+| Complete | Operational completion is accepted with required evidence and type-specific side effects. | GreenTree closure alone must not complete a job with missing evidence (owner decision 10 October). Technician answers/submission alone never set Complete. |
 
-These automatic transitions are intentionally narrow and never overwrite another status selected by
-a coordinator. Technician answers such as further work or safety responses remain evidence for office
-review; they do not decide operational status. Submission attempts the Completion Review transition
-immediately, and the shared 15-minute server scheduler re-evaluates a bounded pending-card queue so a
-temporary Dataverse or credential failure cannot leave an eligible Job Allocated indefinitely. This
-queue is reconciled before the GreenTree polling checkpoint, so the GreenTree API cooldown never
-suppresses Job Card lifecycle recovery.
+Current exceptions must be fixed rather than treated as accepted lifecycle rules:
+
+- Registration with a mechanic/supplier immediately sets Allocated.
+- GreenTree `IsClosed=true` currently sets Complete regardless of required hours/WOF evidence or
+  maintenance side effects; it can overwrite another operational status.
+- Card reconciliation checks existing Azure link lifecycles, not the full Dataverse assignment set.
+  Its bounded queue has no continuation and can repeatedly revisit the same pending cards.
+- Submission attempts reconciliation and a scheduled run retries, but there is no guarantee of
+  progress for every job. Per-record failures can coexist with HTTP success.
+- Job Book also invokes the shared reconciliation endpoint. The scheduler is not its only caller.
+
+The agreed missing-evidence gate is documented but not implemented. Review the
+[release checklist](../../RELEASE_READINESS.md), including multi-technician and partial-failure tests.
 
 Job Number allocation and GreenTree confirmation are separate events. Admin may need time to create
 the newly numbered Job in GreenTree, so allocation must not immediately interpret a GreenTree `404`

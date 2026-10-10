@@ -3,9 +3,11 @@ param(
     [string]$Mode = 'Inspect',
     [string]$EnvironmentUrl = 'https://org0d4246d7.crm6.dynamics.com',
     [string]$SolutionUniqueName = 'ServiceOperationsNew',
+    [string]$UserName = '',
     [ValidateSet('Never', 'Auto')]
     [string]$LoginPrompt = 'Never',
-    [switch]$ValidateDefinition
+    [switch]$ValidateDefinition,
+    [switch]$IncludeJobCardApproval
 )
 
 $ErrorActionPreference = 'Stop'
@@ -31,6 +33,9 @@ $definitions = @(
     }
 )
 
+if ($IncludeJobCardApproval) {
+    $definitions += @{ Schema = 'gr_HourMeterApprovalReference'; Logical = 'gr_hourmeterapprovalreference'; Display = 'Hour Meter Approval Reference'; Kind = 'String' }
+}
 if (($definitions.Logical | Sort-Object -Unique).Count -ne $definitions.Count) {
     throw 'Hour-meter reading schema definition contains duplicate columns.'
 }
@@ -62,6 +67,10 @@ function Import-Sdk {
 
 function Connect-Dataverse {
     $connection = "AuthType=OAuth;Url=$($EnvironmentUrl.TrimEnd('/'));AppId=51f81489-12ee-4a9e-aaae-a2591f45987d;RedirectUri=app://58145B91-0C36-4500-8554-080854F2AC97;LoginPrompt=$LoginPrompt"
+    if ($UserName) {
+        if ($UserName -notmatch '^[^;\s@]+@[^;\s@]+$') { throw 'UserName must be a single account email.' }
+        $connection += ";UserName=$UserName"
+    }
     $client = [Microsoft.Xrm.Tooling.Connector.CrmServiceClient]::new($connection)
     if (-not $client.IsReady) { throw "Dataverse sign-in failed: $($client.LastCrmError)" }
     return $client
@@ -80,7 +89,7 @@ function Get-Attribute($Service, [string]$LogicalName) {
 }
 
 function Assert-Attribute($Attribute, $Definition) {
-    $expectedType = if ($Definition.Kind -eq 'Choice') { 'Picklist' } else { 'DateTime' }
+    $expectedType = if ($Definition.Kind -eq 'Choice') { 'Picklist' } elseif ($Definition.Kind -eq 'String') { 'String' } else { 'DateTime' }
     if ([string]$Attribute.AttributeType -ne $expectedType) {
         throw "Conflict: $entityName.$($Definition.Logical) must be $expectedType."
     }
@@ -99,6 +108,8 @@ function Assert-Attribute($Attribute, $Definition) {
                 throw "Conflict: $entityName.$($Definition.Logical) choice option $index."
             }
         }
+    } elseif ($Definition.Kind -eq 'String') {
+        if ($Attribute.MaxLength -ne 100) { throw "Conflict: $entityName.$($Definition.Logical) must be a 100-character string." }
     } else {
         if ([string]$Attribute.Format -ne 'DateOnly' -or [string]$Attribute.DateTimeBehavior.Value -ne 'DateOnly') {
             throw "Conflict: $entityName.$($Definition.Logical) must use Date Only behaviour and format."
@@ -124,6 +135,9 @@ function Ensure-Attribute($Service, $Definition, [bool]$Provision) {
                 [Microsoft.Xrm.Sdk.Metadata.OptionMetadata]::new((New-Label $option.Label), $option.Value)
             )
         }
+    } elseif ($Definition.Kind -eq 'String') {
+        $attribute = [Microsoft.Xrm.Sdk.Metadata.StringAttributeMetadata]::new()
+        $attribute.MaxLength = 100
     } else {
         $attribute = [Microsoft.Xrm.Sdk.Metadata.DateTimeAttributeMetadata]::new()
         $attribute.Format = [Microsoft.Xrm.Sdk.Metadata.DateTimeFormat]::DateOnly

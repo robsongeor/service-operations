@@ -1,5 +1,20 @@
 # Customer Dashboard Architecture
 
+## Persistence boundary — 10 October 2026
+
+The Customer Info draft editor does **not** persist every field. Some Customer name/accounts,
+contact, notes and operating-hours draft values stay in browser memory; some Site changes use
+real writes. A Save action must not imply the entire draft reached Dataverse.
+
+**Owner decision:** hide unfinished editing until it has proper persistence. This audit records
+the decision; the UI change remains to be implemented. Keep working Site settings, PO-contact
+settings, inline Customer/Site creation and Equipment transfer. The direct Add Site header button
+was intentionally removed; shared creation workflows are not obsolete.
+
+GreenTree account name is Site-level reference data, separate from the operational Customer.
+See [mapping ownership](../greentree-site-customer-mapping.md) and audit A07 in the
+[application audit](../reviews/2026-10-10-application-audit.md).
+
 ## Purpose
 
 Customer Dashboard provides a customer-centred operational view across Sites, Equipment,

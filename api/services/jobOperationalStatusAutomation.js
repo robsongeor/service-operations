@@ -2,6 +2,9 @@ const JOB_STATUS_ALLOCATED = 122830000
 const JOB_STATUS_UNALLOCATED = 122830001
 const JOB_STATUS_COMPLETION_REVIEW = 122830004
 const MAX_PENDING_RECONCILIATION_JOBS = 100
+const { enabled: meterApprovalEnabled, syncApprovedMeter } = require('./jobCardMeterApproval')
+const { readExpectedReturns } = require('./jobCardExpectedReturns')
+const { getJobCardMeterDataverseApplicationToken } = require('./dataverseApplicationToken')
 
 function lifecycleKey(record) {
     const assignmentId = String(record.assignmentId || '').trim().toLowerCase()
@@ -40,7 +43,7 @@ function hasCurrentTechnicianOwnership(records, now = Date.now()) {
         || (record.status === 'active' && Date.parse(record.expiresOn) > now))
 }
 
-async function transitionAllocatedJob({ jobId, targetStatus, dataverseOrigin, authorization, fetchImpl = fetch }) {
+async function transitionAllocatedJob({ jobId, targetStatus, dataverseOrigin, authorization, expectedJobEtag, fetchImpl = fetch }) {
     if (!dataverseOrigin || !/^Bearer\s+\S+$/i.test(authorization || '')) return false
     for (let attempt = 0; attempt < 2; attempt += 1) {
         const currentResponse = await fetchImpl(
@@ -53,6 +56,7 @@ async function transitionAllocatedJob({ jobId, targetStatus, dataverseOrigin, au
         if (current.gr_status !== JOB_STATUS_ALLOCATED) return false
         const etag = current['@odata.etag'] || currentResponse.headers.get('ETag') || ''
         if (!/^(W\/)?"[^"\r\n]+"$/.test(etag)) throw new Error('The Job version could not be verified.')
+        if (expectedJobEtag && etag !== expectedJobEtag) throw new Error('The Job changed after its technician returns were checked.')
         const updateResponse = await fetchImpl(`${dataverseOrigin}/api/data/v9.2/gr_jobs(${jobId})`, {
             method: 'PATCH',
             headers: {
@@ -72,7 +76,9 @@ async function transitionAllocatedJob({ jobId, targetStatus, dataverseOrigin, au
 
 async function moveJobToCompletionReviewAfterAllRequiredSubmissions(options) {
     if (!allRequiredTechnicianSubmissionsReceived(options.records)) return false
-    return transitionAllocatedJob({ ...options, targetStatus: JOB_STATUS_COMPLETION_REVIEW })
+    const expected = await readExpectedReturns({ ...options, origin: options.dataverseOrigin })
+    if (!expected.items.length || !expected.items.every((item) => ['received', 'withdrawn'].includes(item.state))) return false
+    return transitionAllocatedJob({ ...options, expectedJobEtag: expected.jobEtag, targetStatus: JOB_STATUS_COMPLETION_REVIEW })
 }
 
 async function reconcilePendingCompletionReviews({
@@ -81,8 +87,11 @@ async function reconcilePendingCompletionReviews({
     authorization,
     fetchImpl = fetch,
     maxJobs = MAX_PENDING_RECONCILIATION_JOBS,
+    acquireMeterToken = getJobCardMeterDataverseApplicationToken,
 }) {
-    const pending = await store.listPending(maxJobs + 1)
+    // Cursor discovery is independent of office state, so filing a card cannot discard retries.
+    const page = store.listReconciliationPage ? await store.listReconciliationPage(maxJobs) : null
+    const pending = page ? page.records : await store.listPending(maxJobs + 1)
     const jobIds = [...new Set(pending.map((record) => String(record.sourceJobId || '').trim().toLowerCase()).filter(Boolean))]
     const boundedJobIds = jobIds.slice(0, maxJobs)
     const result = {
@@ -92,7 +101,9 @@ async function reconcilePendingCompletionReviews({
         movedToCompletionReview: 0,
         unchanged: 0,
         failed: 0,
-        truncated: pending.length > maxJobs || jobIds.length > maxJobs,
+        meterApplied: 0,
+        meterFailed: 0,
+        truncated: page ? Boolean(page.next) : pending.length > maxJobs || jobIds.length > maxJobs,
     }
     for (const jobId of boundedJobIds) {
         result.jobsChecked += 1
@@ -116,6 +127,24 @@ async function reconcilePendingCompletionReviews({
             result.failed += 1
         }
     }
+    // Resolve at most once per batch and only if there is approved work. A failed credential
+    // lookup must not fall back to the caller or prevent ordinary status reconciliation.
+    let meterAuthorization
+    if (meterApprovalEnabled() && pending.some((record) => record.meterApprovalJson && ['pending', 'failed'].includes(record.meterSyncStatus))) {
+        try { meterAuthorization = `Bearer ${await acquireMeterToken({ fetchImpl })}` } catch { /* Count each pending failure below. */ }
+    }
+    if (meterApprovalEnabled()) for (const record of pending) {
+        if (!record.meterApprovalJson || !['pending', 'failed'].includes(record.meterSyncStatus)) continue
+        try {
+            const status = await syncApprovedMeter({ record, origin: dataverseOrigin, authorization: meterAuthorization, fetchImpl })
+            await store.replace({ ...record, meterSyncStatus: status, meterSyncError: '', meterSyncedOn: new Date().toISOString() }, record.etag)
+            result.meterApplied += 1
+        } catch {
+            result.meterFailed += 1
+            // Preserve the durable approval and revisit it on the next cursor cycle.
+        }
+    }
+    if (page) await store.saveReconciliationCursor(page.next)
     return result
 }
 

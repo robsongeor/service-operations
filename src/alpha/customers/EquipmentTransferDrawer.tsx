@@ -39,15 +39,13 @@ export default function EquipmentTransferDrawer({ customer, site, equipment, bus
     const [searchStatus, setSearchStatus] = useState<'idle' | 'loading' | 'error'>('idle')
 
     useEffect(() => {
-        if (!onSearchEquipment || searchQuery.trim().length < 2) {
-            setSearchStatus('idle')
-            return
-        }
+        if (!onSearchEquipment || searchQuery.trim().length < 2) return
         const controller = new AbortController()
         const timer = window.setTimeout(() => {
             setSearchStatus('loading')
             void onSearchEquipment(searchQuery.trim(), controller.signal)
                 .then((rows) => {
+                    if (controller.signal.aborted) return
                     setRemoteEquipment((current) => {
                         const merged = new Map(current.map((item) => [item.gr_equipmentid, item]))
                         rows.forEach((item) => merged.set(item.gr_equipmentid, item))
@@ -56,7 +54,7 @@ export default function EquipmentTransferDrawer({ customer, site, equipment, bus
                     setSearchStatus('idle')
                 })
                 .catch((error) => {
-                    if ((error as { name?: string }).name !== 'AbortError') setSearchStatus('error')
+                    if (!controller.signal.aborted && (error as { name?: string }).name !== 'AbortError') setSearchStatus('error')
                 })
         }, 250)
         return () => {
@@ -145,9 +143,12 @@ export default function EquipmentTransferDrawer({ customer, site, equipment, bus
                 placeholder="Select Equipment"
                 searchPlaceholder="Search fleet, serial, make or model…"
                 emptyLabel="No other Equipment matches this search"
-                onSearchChange={setSearchQuery}
-                isSearching={searchStatus === 'loading'}
-                searchError={searchStatus === 'error' ? 'Equipment search is temporarily unavailable.' : ''}
+                onSearchChange={(query) => {
+                    setSearchQuery(query)
+                    setSearchStatus(onSearchEquipment && query.trim().length >= 2 ? 'loading' : 'idle')
+                }}
+                isSearching={Boolean(onSearchEquipment) && searchQuery.trim().length >= 2 && searchStatus === 'loading'}
+                searchError={onSearchEquipment && searchQuery.trim().length >= 2 && searchStatus === 'error' ? 'Equipment search is temporarily unavailable.' : ''}
                 options={candidates.map((item) => ({
                     value: item.gr_equipmentid,
                     label: [equipmentLabel(item), item.gr_make, item.gr_model].filter(Boolean).join(' · '),

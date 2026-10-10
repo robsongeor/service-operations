@@ -3,7 +3,7 @@ import type { JobCardOfficeStatus, JobCardQueueItem, JobCardReviewQueueView } fr
 
 export const REVIEW_STAGE_TABS: { id: JobCardReviewQueueView; label: string }[] = [
     { id: 'open', label: 'Open jobs' }, { id: 'submitted', label: 'Submitted' },
-    { id: 'review', label: 'Review' }, { id: 'completed', label: 'Completed' },
+    { id: 'review', label: 'Needs follow-up' }, { id: 'completed', label: 'Completed' },
 ]
 export function readReviewStage(params: URLSearchParams): JobCardReviewQueueView {
     const value = params.get('view')
@@ -27,7 +27,7 @@ export type ReviewQueueView = {
 }
 export const DEFAULT_REVIEW_QUEUE_VIEW: ReviewQueueView = { search: '', jobType: 'all', attention: 'all', customer: '', technician: '', officeStatus: 'all', administrator: '', sort: { column: 'submitted', direction: 'descending' } }
 export const OFFICE_STATUS_LABELS: Record<JobCardOfficeStatus, string> = {
-    pending: 'Pending', inReview: 'In review', needsClarification: 'Needs clarification', onHold: 'On hold',
+    pending: 'Ready for entry', inReview: 'GreenTree entry', needsClarification: 'Needs follow-up', onHold: 'On hold',
     processedInGreenTree: 'Processed in GreenTree', noInvoiceRequired: 'No invoice required (retired outcome)', legacyReviewed: 'Reviewed (legacy outcome not recorded)',
 }
 const collator = new Intl.Collator('en-NZ', { numeric: true, sensitivity: 'base' })

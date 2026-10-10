@@ -10,6 +10,11 @@ by scanning the repository.
 | --- | --- |
 | Standard instructions for every Codex task | [`CODEX_PRE_PROMPT.md`](CODEX_PRE_PROMPT.md) |
 | Project rules and document routing | [`../AI_CONTEXT.md`](../AI_CONTEXT.md) |
+| Source audit: readiness, defects and refactor opportunities | [`reviews/2026-10-10-application-audit.md`](reviews/2026-10-10-application-audit.md) |
+| Job Card review screens, tracking/recovery gaps and next work | [`reviews/2026-10-10-job-card-review.md`](reviews/2026-10-10-job-card-review.md) |
+| Local office-approved meters, recovery implementation and activation gates | [`reviews/2026-10-10-job-card-implementation.md`](reviews/2026-10-10-job-card-implementation.md) |
+| Dedicated Job Card meter identity, guard rollout and rollback | [`job-card-meter-writer-rollout.md`](job-card-meter-writer-rollout.md) |
+| Obsolete features, dependencies and safe-removal checks | [`architecture/retirement-plan.md`](architecture/retirement-plan.md) |
 | Active branch, blockers, and deployment readiness | [`../CURRENT_STATE.md`](../CURRENT_STATE.md) |
 | Prioritised product and technical backlog | [`../TODO.md`](../TODO.md) |
 | System boundaries and document map | [`architecture/README.md`](architecture/README.md) |
@@ -44,10 +49,10 @@ The [Microsoft access audit](features/JOB_BOOK_ACCESS_AUDIT.md) records live rea
 | Site Checks (release validation) | [`features/SITE_CHECKS_IMPLEMENTATION_PLAN.md`](features/SITE_CHECKS_IMPLEMENTATION_PLAN.md) | [`features/SITE_CHECK_CHECKLIST_CONTENT_PROPOSAL.md`](features/SITE_CHECK_CHECKLIST_CONTENT_PROPOSAL.md) — unprovisioned checklist content proposal; [`site-checks-dataverse-schema.md`](site-checks-dataverse-schema.md) — provisioned and verified; [`site-checks-operations.md`](site-checks-operations.md) — release/smoke/rollback checklist |
 | Jobs | [`architecture/jobs.md`](architecture/jobs.md) | [`job-description-schema.md`](job-description-schema.md), [`job-card-dataverse-schema.md`](job-card-dataverse-schema.md), [`job-assignment-dataverse-schema.md`](job-assignment-dataverse-schema.md), [`email-dispatch-flow.md`](email-dispatch-flow.md) |
 | Regional Job Books (build complete; migration pending) | [`features/JOB_BOOK_INTAKE_DESIGN.md`](features/JOB_BOOK_INTAKE_DESIGN.md) | [`features/REGIONAL_JOB_BOOKS.md`](features/REGIONAL_JOB_BOOKS.md) — separate tables, release gates, migration, and cutover seeding |
-| Unified Job registration (local server source/tests; not activated) | [`features/JOB_BOOK_INTAKE_DESIGN.md#transactional-registration-implementation-local-only`](features/JOB_BOOK_INTAKE_DESIGN.md#transactional-registration-implementation-local-only) | [`../dataverse/job-registration/contract.json`](../dataverse/job-registration/contract.json) — behavioural contract; [`unified-job-workflow-dataverse-rollout.md`](unified-job-workflow-dataverse-rollout.md) — metadata readiness; [`unified-job-workflow-migration-and-security.md`](unified-job-workflow-migration-and-security.md) — historical migration and role review; [`unified-job-workflow-deployment-package.md`](unified-job-workflow-deployment-package.md) — validated dry-run package and rollback; [`unified-job-workflow-signing-key.md`](unified-job-workflow-signing-key.md) — private-key custody requirements |
-| Staff | [`architecture/staff-directory.md`](architecture/staff-directory.md) | [`staff-directory-dataverse-schema.md`](staff-directory-dataverse-schema.md) — columns provisioned and verified; application changes remain local |
+| Unified Job registration (V2 build enabled; acceptance gaps) | [`features/JOB_BOOK_INTAKE_DESIGN.md#transactional-registration-implementation-local-only`](features/JOB_BOOK_INTAKE_DESIGN.md#transactional-registration-implementation-local-only) | [`../dataverse/job-registration/contract.json`](../dataverse/job-registration/contract.json) — behavioural contract; [`unified-job-workflow-dataverse-rollout.md`](unified-job-workflow-dataverse-rollout.md) — metadata readiness; [`unified-job-workflow-migration-and-security.md`](unified-job-workflow-migration-and-security.md) — historical migration and role review; [`unified-job-workflow-deployment-package.md`](unified-job-workflow-deployment-package.md) — staged deployment procedure and rollback; [`unified-job-workflow-signing-key.md`](unified-job-workflow-signing-key.md) — private-key custody requirements |
+| Staff | [`architecture/staff-directory.md`](architecture/staff-directory.md) | [`staff-directory-dataverse-schema.md`](staff-directory-dataverse-schema.md) — recorded schema provisioning; verify deployed artifact and role access |
 | Technician submission | [`architecture/technician-job-submission.md`](architecture/technician-job-submission.md) | [`azure-job-card-storage.md`](azure-job-card-storage.md), [`technician-job-submission-schema.md`](technician-job-submission-schema.md) (legacy/Site Checks) |
-| Job Card Admin Review (Phases 1–3 implemented locally) | [`features/JOB_CARD_ADMIN_REVIEW_IMPLEMENTATION_PLAN.md`](features/JOB_CARD_ADMIN_REVIEW_IMPLEMENTATION_PLAN.md) | Open jobs / Submitted / Review / Completed, office notes/audit, ETag concurrency, and restricted administrator routing; identity/Dataverse provisioning and release remain approval-gated |
+| Job Card Admin Review (implemented; release validation required) | [`features/JOB_CARD_ADMIN_REVIEW_IMPLEMENTATION_PLAN.md`](features/JOB_CARD_ADMIN_REVIEW_IMPLEMENTATION_PLAN.md) | Open jobs / Submitted / Review / Completed, office notes/audit, ETag concurrency, and restricted administrator routing; recorded role/guard deployment does not replace named-user acceptance |
 | Equipment | [`architecture/equipment.md`](architecture/equipment.md) | [`equipment-alternate-fleet-number-schema.md`](equipment-alternate-fleet-number-schema.md), [`hour-meter-recorded-date-schema.md`](hour-meter-recorded-date-schema.md), [`hour-meter-reading-classification-schema.md`](hour-meter-reading-classification-schema.md) — hour-meter classification columns provisioned and locally enabled; completion smoke pending |
 | Equipment Map | [`architecture/equipment-map.md`](architecture/equipment-map.md) | Reuses current Site address; no Dataverse schema change |
 | Job Map | [`architecture/job-map.md`](architecture/job-map.md) | Operational Jobs grouped by recorded Site; reuses Equipment Map geocoding |
@@ -75,8 +80,13 @@ The [Microsoft access audit](features/JOB_BOOK_ACCESS_AUDIT.md) records live rea
 Architecture documents describe purpose, boundaries, workflows, data ownership, services,
 UI, business rules, extension points, and related files. Detailed logical names and field
 definitions belong in schema documents. Prioritised future work belongs in `TODO.md`,
-temporary progress belongs in `CURRENT_STATE.md`, and release history belongs in
+current status belongs in `CURRENT_STATE.md`, and release history belongs in
 `CHANGELOG.md` or Git history.
+
+Dated plans and checked-off implementation phases are historical delivery evidence, not blanket
+claims that the current build is ready. The current audit identifies behavior that does not yet
+satisfy the intended architecture; do not rewrite an intended rule to hide a defect. Label source
+configuration, recorded deployment and live acceptance separately.
 
 When architecture changes:
 

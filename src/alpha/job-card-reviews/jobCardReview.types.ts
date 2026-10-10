@@ -45,12 +45,13 @@ export type JobCardReviewSummary = {
     outcomeOn?: string
     outcomeBy?: JobCardOfficeActor
     officeActivities: JobCardOfficeActivity[]
+    officeCorrections?: JobCardOfficeActivity[]
     isTerminal: boolean
 }
 
 export type JobCardOfficeStatus = 'pending' | 'inReview' | 'needsClarification' | 'onHold' | 'processedInGreenTree' | 'noInvoiceRequired' | 'legacyReviewed'
 export type JobCardOfficeActor = { userId: string; displayName: string; email?: string }
-export type JobCardOfficeAction = 'startReview' | 'setNeedsClarification' | 'setOnHold' | 'completeGreenTreeProcessing'
+export type JobCardOfficeAction = 'startReview' | 'resumeReview' | 'recordCorrection' | 'setNeedsClarification' | 'setOnHold' | 'completeGreenTreeProcessing'
 export type JobCardOfficeActivity = {
     // Retain previously recorded actions without allowing new submissions of retired actions.
     action: JobCardOfficeAction | 'completeNoInvoiceRequired'
@@ -65,6 +66,7 @@ export type JobCardOpenJobSummary = Omit<JobCardReviewSummary, 'reviewId' | 'sub
     dispatchId: string
     sourceJobId: string
     sentOn: string
+    linkExpired?: boolean
     reviewId?: never
     submittedOn?: never
     officeStatus?: never
@@ -72,9 +74,15 @@ export type JobCardOpenJobSummary = Omit<JobCardReviewSummary, 'reviewId' | 'sub
 export type JobCardQueueItem = JobCardReviewSummary | JobCardOpenJobSummary
 export type JobCardReviewQueueView = 'open' | 'submitted' | 'review' | 'completed'
 export type JobCardReviewApiView = JobCardReviewQueueView | 'active' | 'history'
-export type JobCardReviewQueue = { items: JobCardQueueItem[]; view: JobCardReviewApiView; hasMore: boolean; nextOffset?: number; truncated?: boolean; scanLimitReached?: boolean }
+export type JobCardReviewQueue = { items: JobCardQueueItem[]; view: JobCardReviewApiView; hasMore: boolean; nextOffset?: number; nextCursor?: string; truncated?: boolean; scanLimitReached?: boolean }
 
 export type JobCardReview = JobCardReviewSummary & {
+    officeRecoveryAvailable?: boolean
+    meterApprovalAvailable?: boolean
+    hourMeterRecordedDate?: string
+    meterApproval?: { hours: number; recordedDate: string; approvedOn: string; approvedBy: JobCardOfficeActor; exceptionReason: string }
+    meterSyncStatus?: 'pending' | 'failed' | 'applied' | 'superseded'
+    meterSyncError?: string
     etag: string
     status: 'pendingReview' | 'reviewed'
     sourceJobId: string
@@ -94,3 +102,5 @@ export type JobCardReview = JobCardReviewSummary & {
     reviewedOn?: string
     reviewedByUserId?: string
 }
+
+export type JobCardMeterApprovalInput = { confirmed: boolean; hours: number; recordedDate: string; exceptionReason?: string }

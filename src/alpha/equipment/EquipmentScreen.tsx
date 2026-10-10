@@ -6,6 +6,7 @@ import EquipmentTable from './components/EquipmentTable'
 import { useEquipmentManager } from './hooks/useEquipmentManager'
 import type { Equipment } from '../jobs/types/equipment.types'
 import type { Customer } from '../jobs/types/customer.types'
+import { useCustomerSearch } from '../jobs/hooks/useCustomerSearch'
 import type { EquipmentSortKey, SortDirection } from './types/equipmentManager.types'
 import './EquipmentScreen.css'
 import { compareEquipmentDataQuality } from './dataQuality/equipmentDataQuality'
@@ -77,8 +78,9 @@ export default function EquipmentScreen({ readOnly = false }: { readOnly?: boole
     const [customerId, setCustomerId] = useState('')
     const [selectedFilterCustomer, setSelectedFilterCustomer] = useState<Customer | null>(null)
     const [customerFilterQuery, setCustomerFilterQuery] = useState('')
-    const [customerFilterResults, setCustomerFilterResults] = useState<Customer[]>([])
-    const [customerFilterSearchStatus, setCustomerFilterSearchStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+    const { results: customerFilterResults, status: customerFilterSearchStatus } = useCustomerSearch({
+        query: customerFilterQuery, open: true, customers: [], onSearchCustomers: searchEquipmentCustomers,
+    })
     const [siteId, setSiteId] = useState('')
     const [sortKey, setSortKey] = useState<EquipmentSortKey>('fleet')
     const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
@@ -113,31 +115,6 @@ export default function EquipmentScreen({ readOnly = false }: { readOnly?: boole
         }, 0)
         return () => window.clearTimeout(timer)
     }, [editingEquipment, equipment, isLoading, openEquipment, canOpenEditor, searchParams, setSearchParams])
-
-    useEffect(() => {
-        const query = customerFilterQuery.trim()
-        if (query.length < 2) {
-            setCustomerFilterResults([])
-            setCustomerFilterSearchStatus('idle')
-            return
-        }
-        const controller = new AbortController()
-        const timer = window.setTimeout(() => {
-            setCustomerFilterSearchStatus('loading')
-            void searchEquipmentCustomers(query, controller.signal)
-                .then((rows) => {
-                    setCustomerFilterResults(rows.slice(0, 8))
-                    setCustomerFilterSearchStatus('idle')
-                })
-                .catch((error) => {
-                    if ((error as { name?: string }).name !== 'AbortError') setCustomerFilterSearchStatus('error')
-                })
-        }, 250)
-        return () => {
-            window.clearTimeout(timer)
-            controller.abort()
-        }
-    }, [customerFilterQuery, searchEquipmentCustomers])
 
     const customerFilterOptions = useMemo(() => {
         const byId = new Map<string, Customer>()

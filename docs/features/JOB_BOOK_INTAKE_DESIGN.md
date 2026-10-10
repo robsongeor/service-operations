@@ -1,11 +1,24 @@
 # Job Book Intake safety model
 
-## Current implementation — transition planned
+## Scope and current-state correction — 10 October 2026
 
-The following sections describe the existing Intake/managed split, not the newly agreed target.
-The [unified workflow decision](#unified-workflow-decision-3-october-2026) at the end of this document
-supersedes that product model. Creation/linking has not switched over; existing records must not
-be treated as migrated merely because the screen labels are changing.
+This document preserves the historical Intake safety model and staged unified-workflow design.
+Descriptions below of “local only”, “unregistered”, “not provisioned” or “flag off” belong to those
+dated stages; they are **not current V2 deployment instructions**. V2 now builds unified registration
+and workflow enabled and plugin/role provisioning is recorded. Number-invariant activation,
+regional migration and named-user acceptance remain separate gates.
+
+Use [Jobs architecture](../architecture/jobs.md) for the current intended lifecycle,
+[current state](../../CURRENT_STATE.md) for build/deployment evidence, and the
+[application audit](../reviews/2026-10-10-application-audit.md) for known implementation gaps.
+Do not disable current safeguards or provision historical missing items merely to match this plan.
+
+## Historical Intake/managed split
+
+The following sections describe the earlier Intake/managed split. The
+[unified workflow decision](#unified-workflow-decision-3-october-2026) supersedes that product model
+for enabled V2 paths. Existing records must not be treated as migrated merely because screen labels
+or build flags changed.
 
 Job Book entries are not Jobs. They are intake/number-ledger records that may later create one managed `gr_job` record.
 

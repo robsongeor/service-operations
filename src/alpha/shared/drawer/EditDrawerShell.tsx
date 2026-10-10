@@ -23,6 +23,7 @@ export default function EditDrawerShell({ eyebrow, title, className = '', busy =
     const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
         if (event.key === 'Escape' && !busy) {
             event.preventDefault()
+            event.stopPropagation()
             onClose()
             return
         }

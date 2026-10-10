@@ -98,6 +98,11 @@ See [Authentication](docs/architecture/authentication.md) and
 - `docs/architecture/`: authoritative subsystem and cross-cutting architecture.
 - `docs/*.md`: detailed Dataverse schemas and operational references.
 - `CHANGELOG.md` and Git history: completed release history.
+- Dated audit reports: evidence, known implementation gaps and decisions; not live-cloud certification.
+
+Distinguish source behavior, build flags, recorded deployment and live acceptance. Do not rewrite
+a product rule to disguise a source defect, or infer safe deletion from an old filename/disabled flag.
+Use the [retirement runbook](docs/architecture/retirement-plan.md) before removing compatibility paths.
 
 Update the authoritative owner and link to it; do not copy the same architecture into
 multiple files.

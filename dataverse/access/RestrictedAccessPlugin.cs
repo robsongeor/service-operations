@@ -1,28 +1,40 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Globalization;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
 
 namespace ServiceOperations.Access
 {
-    // LOCAL SOURCE ONLY. Register only after the reviewed privilege manifest, secure role-ID
-    // configuration and all write paths pass target-environment tests. No name/email trust.
+    // Meter-writer extension is opt-in; legacy four-profile configurations stay valid.
+    // Register only after exact identity/role configuration and target-environment tests.
     public sealed class RestrictedAccessPlugin : IPlugin
     {
         readonly Dictionary<string, HashSet<Guid>> roles = new Dictionary<string, HashSet<Guid>>();
+        readonly Dictionary<string, Guid> meter = new Dictionary<string, Guid>();
         public RestrictedAccessPlugin(string unsecure, string secure)
         {
             if (String.IsNullOrWhiteSpace(secure)) throw new InvalidPluginExecutionException("Missing access role configuration.");
             foreach (string part in secure.Split(';'))
             {
                 string[] pair = part.Split('=');
+                if (pair.Length == 2 && new[] { "meterrole", "meteruser", "meterapplication" }.Contains(pair[0]))
+                {
+                    Guid value;
+                    if (meter.ContainsKey(pair[0]) || !Guid.TryParse(pair[1], out value) || value == Guid.Empty)
+                        throw new InvalidPluginExecutionException("Invalid meter writer configuration.");
+                    meter.Add(pair[0], value);
+                    continue;
+                }
                 if (pair.Length != 2 || !new[] { "full", "coordinator", "office", "book" }.Contains(pair[0]) || roles.ContainsKey(pair[0]))
                     throw new InvalidPluginExecutionException("Invalid access role configuration.");
                 roles.Add(pair[0], new HashSet<Guid>(pair[1].Split(',').Select(value => Guid.Parse(value.Trim()))));
             }
             if (roles.Count != 4 || roles.Values.Any(set => set.Contains(Guid.Empty)) || roles.Values.Sum(set => set.Count) != roles.Values.SelectMany(set => set).Distinct().Count())
                 throw new InvalidPluginExecutionException("Access roles must be distinct and complete.");
+            if (meter.Count != 0 && (meter.Count != 3 || roles.Values.Any(set => set.Contains(meter["meterrole"]))))
+                throw new InvalidPluginExecutionException("Meter writer requires a separate role, user and application.");
         }
 
         public void Execute(IServiceProvider provider)
@@ -38,6 +50,19 @@ namespace ServiceOperations.Access
             var teams = new QueryExpression("teamroles") { ColumnSet = new ColumnSet("roleid") };
             teams.AddLink("teammembership", "teamid", "teamid").LinkCriteria.AddCondition("systemuserid", ConditionOperator.Equal, context.InitiatingUserId);
             foreach (var row in service.RetrieveMultiple(teams).Entities) held.Add(row.GetAttributeValue<Guid>("roleid"));
+            // Check BEFORE privileged human profiles. A meter identity never gains the full/coordinator
+            // bypass, even if somebody accidentally also assigns a broader configured role.
+            if (meter.Count == 3 && (context.InitiatingUserId == meter["meteruser"] || held.Contains(meter["meterrole"])))
+            {
+                var caller = service.Retrieve("systemuser", context.InitiatingUserId, new ColumnSet("applicationid", "isdisabled"));
+                MeterWritePolicy.ValidateCaller(context.InitiatingUserId, caller, held, meter["meteruser"], meter["meterapplication"], meter["meterrole"]);
+                var change = context.InputParameters.Contains("Target") ? context.InputParameters["Target"] as Entity : null;
+                MeterWritePolicy.ValidateTarget(context.MessageName, change);
+                var current = service.Retrieve("gr_job", change.Id, new ColumnSet("gr_status", "statecode", "gr_registrationvoid", "gr_equipment", "gr_hourmeter", "gr_hourmeterrecordeddate", "gr_hourmeterreadingtype", "gr_hourmeterapprovalreference"));
+                var today = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("New Zealand Standard Time")).Date;
+                MeterWritePolicy.Validate(change, current, today);
+                return;
+            }
             string profile = new[] { "full", "coordinator", "office", "book" }.FirstOrDefault(key => roles[key].Overlaps(held));
             if (profile == null) throw new InvalidPluginExecutionException("No permitted application data role.");
             if (profile == "full" || profile == "coordinator") return;
@@ -199,6 +224,52 @@ namespace ServiceOperations.Access
                     !String.IsNullOrWhiteSpace(fingerprint) && fingerprint.Length == 64 && fingerprint.All(character => Uri.IsHexDigit(character));
             }
             return false;
+        }
+    }
+
+    public static class MeterWritePolicy
+    {
+        static readonly string[] Fields = { "gr_hourmeter", "gr_hourmeterreadingtype", "gr_hourmeterrecordeddate", "gr_hourmeterapprovalreference" };
+        static void Require(bool value) { if (!value) throw new InvalidPluginExecutionException("The requested change is outside the approved Job meter operation."); }
+        public static void ValidateCaller(Guid callerId, Entity caller, IEnumerable<Guid> held, Guid userId, Guid applicationId, Guid roleId)
+        {
+            Require(userId != Guid.Empty && applicationId != Guid.Empty && roleId != Guid.Empty && callerId == userId &&
+                caller != null && caller.Id == userId && caller.LogicalName == "systemuser" &&
+                caller.GetAttributeValue<Guid>("applicationid") == applicationId && caller.Contains("isdisabled") &&
+                !caller.GetAttributeValue<bool>("isdisabled") && held.Contains(roleId));
+        }
+        public static void ValidateTarget(string message, Entity target)
+        {
+            Require(message == "Update" && target != null && target.LogicalName == "gr_job" && target.Id != Guid.Empty);
+            Require(target.Attributes.Count == Fields.Length && Fields.All(target.Contains));
+            Require(target["gr_hourmeter"] is int && (int)target["gr_hourmeter"] >= 0 &&
+                target["gr_hourmeterreadingtype"] is OptionSetValue && ((OptionSetValue)target["gr_hourmeterreadingtype"]).Value == 122830000 &&
+                target["gr_hourmeterrecordeddate"] is DateTime && target["gr_hourmeterapprovalreference"] is string);
+        }
+        public static void Validate(Entity target, Entity current, DateTime today)
+        {
+            ValidateTarget("Update", target);
+            Require(current != null && current.Id == target.Id && current.LogicalName == "gr_job");
+            Require(current.GetAttributeValue<OptionSetValue>("statecode") != null && current.GetAttributeValue<OptionSetValue>("statecode").Value == 0 &&
+                current.GetAttributeValue<OptionSetValue>("gr_status") != null && current.GetAttributeValue<OptionSetValue>("gr_status").Value != 122830003 &&
+                !current.GetAttributeValue<bool>("gr_registrationvoid"));
+            var equipment = current.GetAttributeValue<EntityReference>("gr_equipment");
+            Require(equipment != null && equipment.LogicalName == "gr_equipment" && equipment.Id != Guid.Empty);
+            var date = (DateTime)target["gr_hourmeterrecordeddate"];
+            Require(date.TimeOfDay == TimeSpan.Zero && date.Date <= today.Date && date.Year >= 1);
+            var reference = ((string)target["gr_hourmeterapprovalreference"]).Split('|');
+            Guid reviewId;
+            Require(reference.Length == 4 && Guid.TryParseExact(reference[0], "D", out reviewId) && reviewId != Guid.Empty);
+            Require(reference[1] == ((int)target["gr_hourmeter"]).ToString(CultureInfo.InvariantCulture) &&
+                reference[2] == date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) &&
+                String.Equals(reference[3], equipment.Id.ToString("D"), StringComparison.OrdinalIgnoreCase));
+            var previous = current.GetAttributeValue<DateTime?>("gr_hourmeterrecordeddate");
+            Require(!previous.HasValue || previous.Value.Date <= date.Date);
+            Require(!previous.HasValue || previous.Value.Date != date.Date || !current.Contains("gr_hourmeter") ||
+                current.GetAttributeValue<int?>("gr_hourmeter") == (int)target["gr_hourmeter"]);
+            if (String.Equals(current.GetAttributeValue<string>("gr_hourmeterapprovalreference"), (string)target["gr_hourmeterapprovalreference"], StringComparison.Ordinal))
+                Require(current.GetAttributeValue<int?>("gr_hourmeter") == (int)target["gr_hourmeter"] && previous.HasValue && previous.Value.Date == date.Date &&
+                    current.GetAttributeValue<OptionSetValue>("gr_hourmeterreadingtype") != null && current.GetAttributeValue<OptionSetValue>("gr_hourmeterreadingtype").Value == 122830000);
         }
     }
 

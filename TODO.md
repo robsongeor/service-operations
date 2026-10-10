@@ -1,272 +1,130 @@
-# Service Operations Backlog
+# Prioritised backlog
 
-This is the authoritative prioritised backlog. Architecture belongs in `docs/architecture/`;
-temporary release readiness belongs in `CURRENT_STATE.md`; completed work belongs in
-`CHANGELOG.md`.
+Updated 10 October 2026 from the [source audit](docs/reviews/2026-10-10-application-audit.md).
+This is remaining work, not a completed-change log. See [current state](CURRENT_STATE.md) and
+[release gates](RELEASE_READINESS.md); historical backlog is retained in Git.
 
-## Priority 0 — Production readiness
+## Current review and technician workspace
 
-- [ ] Complete the owner-facing [Job Book Excel replacement rollout plan](docs/features/JOB_BOOK_ROLLOUT_PLAN.md):
-  confirm users/duties/regions, finish real integration, record acceptance evidence, rehearse migration,
-  then separately approve the single-writer cutover. No rollout until release criteria pass.
+- [x] **Job Card review screens/functions — initial review completed 10 October:**
+  [findings and acceptance plan](docs/reviews/2026-10-10-job-card-review.md), including a sample-only
+  walkthrough and 100 passing focused tests. This does not complete implementation or live acceptance.
+- [x] **Office queue first pass:** keep the Submitted queue mounted while a saved card opens in a
+  centred review dialog; preserve queue filters; label the action as GreenTree entry; use explicit
+  Auckland display time and lead with a compact evidence/attention scan strip. This is not deployed acceptance.
+- [x] **Local office safeguards:** office-only meter approval, correction notes, Resume entry,
+  expired-return visibility, assignment-return checks and retry discovery after filing. See
+  [implementation/activation report](docs/reviews/2026-10-10-job-card-implementation.md); not deployed.
+- [x] **Local meter-writer security:** dedicated backend credentials, exact application/user/role
+  binding and four-field guard in `1.0.2.0`; 114 offline policy tests pass. No shared GreenTree token
+  fallback or new human grants. [Rollout checklist](docs/job-card-meter-writer-rollout.md).
+- [ ] **Meter-writer production rollout:** obtain explicit approval for the missing reference column,
+  dedicated identity/role and guard deployment; verify actual allowed/denied writes and rollback
+  before enabling flags. Live remains `1.0.1.0`; no cloud changes made in this continuation.
+- [ ] **Review tracking/recovery release (JC01–JC04):** verify schema/permissions and shared backend,
+  enable/test optional bounded continuation/exact lookup; add proper queue indexes, monitoring,
+  assignment-concurrency protection and Open jobs continuation. New flags remain off.
+- [ ] **Review UX (JC05–JC06):** decide whether Open jobs should be renamed Awaiting cards;
+  refine focus-refresh/page retention, scroll
+  restoration and compact the queue columns. Reuse canonical review/shared components; no second
+  review workflow.
+- [ ] **Technician app — PARKED by owner on 10 October:** eventually provide a mobile-friendly personal list of assigned Jobs and let the
+  technician open, complete and submit each Job Card from that workspace. Reuse existing Job Card
+  forms, validation and evidence storage. Design authenticated technician identity and server-side
+  assignment-scoped access first; anonymous single-job tokens are not authority to list jobs.
+  Keep technician submission separate from operational Job completion. Offline support,
+  notifications and app packaging remain decisions, not assumed scope. Personal accounts are desired,
+  but Azure intermediaries must not be assumed to remove Dataverse licence requirements.
 
-- [ ] Complete regional Job Book migration and cutover using
-  [`docs/features/REGIONAL_JOB_BOOKS.md`](docs/features/REGIONAL_JOB_BOOKS.md): obtain, retain, import,
-  and reconcile each regional spreadsheet; derive and verify each production seed; target-smoke
-  allocation; then enable the two regional release gates. All three regional schemas, active keys,
-  and application-role privileges are provisioned and verified; both production gates remain disabled.
-- [x] Review and approve the full-width desktop Job Card detail draft for commit/push.
-- [ ] Deploy the full-width review and local-development safeguards only after separate owner
-  deployment approval. Production is unchanged by the feature-branch commit/push.
+## P0 — Before broad restricted-role rollout
 
-- [x] Deploy the owner-approved pending Job Card table. Release `024685e` published successfully;
-  live bundle and anonymous-access protection verified on 2 October 2026.
-- [ ] Complete the read-only signed-in review-queue check after the owner signs in. Populated
-  filters/shared controls are validated locally; mobile work is intentionally deferred.
-- [ ] Confirm the authorized queue display after refreshing the owner's signed-in localhost
-  browser. The approved live read-only connection, authentication boundary and write block pass
-  local checks; no Azure keys or production changes were needed.
+- [ ] **A01:** align client capabilities, narrow payloads, role-policy manifests and server guards.
+  Cover mechanic/supplier edits, Equipment saves containing compliance fields, and post-email allocation.
+  Preserve server-side rejection of unrelated writes; test real restricted identities.
+- [ ] **A02:** registration must remain Unallocated until confirmed dispatch, regardless of a selected
+  mechanic/supplier. Update registration/guard/tests together and plan historical correction separately.
+- [ ] **A03, owner-approved:** GreenTree closure without required completion evidence remains
+  Completion Review. Safeguard implemented locally; verify deployment and historical/void/reopen
+  handling. Operations still uses canonical type-specific completion when evidence is satisfied.
+- [ ] **A04/A05:** prove scheduled application identity and shared Job Card store, expose per-record
+  failure, add durable retries/continuation and prevent pending-card backlog starvation.
+- [ ] **A06:** connect unified Job worklist state to shared invalidation, then restore/verify V2
+  realtime configuration and independent-browser freshness.
+- [ ] **A07, owner-approved:** hide unfinished Customer Info editing until persistent.
+  Do not remove working Customer/Site creation, Site settings, PO contacts or Equipment transfers.
+- [x] Repair the three stale manifest/roster test expectations and six lint findings. Full local
+  suite now passes (890 Node tests); provisioning/deployment/assignment safeguards remain tested.
+- [ ] Reconcile remaining readiness-manifest/client-flag drift with actual deployment evidence.
+- [ ] Enforce Node 20 tests/lint/build and offline plugin policy tests in CI; complete named-user,
+  service-identity, auth and two-browser smoke from the release checklist.
 
-- [x] Publish and verify the Job Card review layout, all-photo ZIP save and same-screen associated
-  quotes. Owner-approved deployment and read-only live verification completed on 2 October 2026.
+## P1 — Data integrity and operational reliability
 
-- [x] Deploy and verify the Job Card office-control cleanup: Azure history in the Job drawer,
-  retirement of legacy status controls for ordinary Jobs, saved Azure PDF export, on-demand historical
-  evidence, and unchanged Site Check behaviour. Published with owner approval on 2 October 2026.
+- [ ] **A08:** make Quote header/line saves atomic and concurrency-protected.
+- [ ] **A09:** bind pending session recovery to initiating account; cancel safely on logout/switch.
+- [ ] **A10:** add map-tile quota/rate/cache controls and monitoring without exposing the provider key.
+- [ ] **A11:** strengthen deployment preflight, artifact/configuration verification, rollback capture
+  and signing-key recovery rehearsal before further plugin/role activation.
+- [ ] Define GreenTree reopen and voided/historical-job rules; never infer operational relationships
+  from inaccurate GT account data.
+- [ ] Confirm required technician/assignment evidence even when an assigned technician has no Azure link.
+- [ ] Make over-limit queue/history states actionable rather than silently omitting older work.
+- [ ] Complete feature-specific release checks for supplier assignment, hour-meter classification,
+  Site Checks and chargeable invoices; source presence is not activation approval.
 
-- [ ] Configure and verify the production server-only `DATAVERSE_URL`,
-  `DATAVERSE_TENANT_ID`, `DATAVERSE_CLIENT_ID`, and `DATAVERSE_CLIENT_SECRET` settings.
-- [ ] Obtain the owner's expanded Job Type category list, provision the approved categories, and
-  make Job Type a required selection in the Office Admin Job Book entry workflow. Until that work is
-  complete, an interim unclassified Job may send a Job Card without an invented type or service
-  hour-meter requirement. Treat Job Status as a separate control; this item does not expose or
-  change Status for Office Admins.
-- [ ] Provision an independent or dedicated shared permanent Job Card backend for V2, then retire
-  the temporary V2-to-V1 bridge. Configure the private Dataverse, Azure Storage, ACS email,
-  reviewer and public-URL settings listed in
-  [`docs/architecture/deployment.md`](docs/architecture/deployment.md#temporary-v2-job-card-backend-bridge),
-  pass the full production-safe Job Card smoke including review queues, authenticated photo access
-  and office actions, remove `VITE_JOB_CARD_SHARED_BACKEND` from the V2 workflow, redeploy and
-  verify before removing both submission and review proxies. Do not retire V1 while either bridge
-  route is in use.
-- [x] Run a production-safe Azure Technician Job Card submission smoke test covering link
-  generation, public lookup, submission, manager review, photo download, and replay
-  rejection.
+## P2 — Reuse, performance and maintainability
 
-## Priority 1 — Security and reliability
+- [ ] Extend shared searchable-select focus/keyboard/portal behavior; migrate compatible custom
+  mechanic/equipment controls without losing Other supplier / Unknown equipment actions.
+- [x] Reuse bounded Customer search coordination in Equipment filtering, including stale-response protection.
+- [ ] Put unified worklist into scoped query ownership with cancellation and incremental paging.
+- [ ] Measure Equipment initial projection, client filtering and heap; narrow loading where justified.
+- [ ] Index/resume Azure Table queues; measure scanned rows, oldest pending age and partial failures.
+- [ ] Extract orchestration/domain transitions from large Jobs, Customer, Equipment and Job Book files.
+  Keep canonical feature drawers instead of introducing more versions.
+- [ ] Reuse small authenticated-request helpers while preserving separate anonymous, reviewer,
+  invoice-role and application-identity authorization policies.
+- [ ] Add rendered interaction, failure-injection and cross-browser tests alongside textual contract tests.
+- [ ] Profile initial/PDF bundles before additional splitting; routes are already lazy-loaded.
 
-- [ ] Implement the agreed unified Job Book/staging/coordinator workflow in safe stages.
-  Ordinary Job number safety, transactional registration/allocation plugin source, server number
-  guards, disabled client adapter and offline SDK tests are implemented locally. A separate `--unified`
-  fake-data walkthrough now connects both screens with session request/replay recovery, saved-master
-  versus snapshot-only reconciliation, sample registered-entry Void, independent coordinator
-  membership and bounded pages. Local transactional plugin contracts now cover exact-version
-  membership and atomic registered-entry Void with caller-context guard integration; they remain
-  unregistered. A strict disabled client adapter and bounded production worklist are connected behind
-  the disabled gate; the default ordinary runtime is unchanged.
-  Assigned-technician initial dispatch now has a replay-safe guarded API and gated client path;
-  Manage/Void are also wired behind the same disabled gate while the localhost fixture remains separate.
-  The production worklist now uses 100-row Dataverse pages, trusted continuation links and server-side
-  Operational/Unconfirmed/type filters. A read-only readiness manifest/audit now defines the proposed
-  APIs, columns, role gates and activation blockers. The approved target audit confirmed the exact
-  missing delta without changes: five APIs, 12 columns, four regional Choice additions and two roles.
-  Direct manual create/import/paste writes, number clearing and numbered Site Check deletion now fail
-  closed behind the disabled gate; WOF number editing is omitted and new WOF Jobs remain unnumbered.
-  The reviewed regional allocator now accepts those specialist Jobs without changing their type,
-  evidence or source relationship, and the UI directs users to the guarded per-Job action. Next:
-  the migration/role package now has machine-readable no-auto-link and default-deny policies plus a
-  bounded aggregate-only audit, but all write/backfill decisions still need approval. The approved
-  read-only run found 1,191 Jobs, zero regional ledger rows and eight
-  unknown-format numbers. Preserve 1,154 numbered Jobs as legacy without fabricating ledgers; the
-  eight values are reviewed immutable regionless exceptions with fingerprint drift detection.
-  Review regional sequence/source evidence, assembly signing, exact
-  registration and rollback before writing or approving a Provision mode.
-  The compatible deployment unit is now rendered and validated: 12 columns, four Registered Choice
-  additions, four plugin types in assembly `1.0.0.0`, five APIs, 29 guard steps, four role profiles
-  and eleven reviewed assignments. The approved flag-off Dataverse package is provisioned and an
-  independent Verify run passes. All 29 shared-environment guard steps are disabled for V1 safety
-  while a separate V2 application deployment is prepared. No migration, seed, V1 application release
-  or feature enablement was performed. Remaining blockers include application/Entra role work, eight users' Dataverse
-  admission, sequence ownership and controlled live smoke testing. Feature enablement remains a
-  later approval.
-  Live read-only checks confirmed all four AutoNumber formats and Active keys plus provisional next
-  values `147174`, `WJ1548`, `HJ12253`, `CJ23859`; recalculate at cutover. George and Bruce remain
-  the only admitted intended Dataverse users, with no returned team-role grants; the other eight
-  still require authorized admission/licensing work.
-  Signing readiness now refuses repository-held keys and existing artifact overwrite, requires an
-  external owner-approved `.snk`, and emits a public-token/source/assembly-hash manifest without
-  deploying. George owns the protected PC-local key; signed assembly `1.0.0.0` has public key token
-  `0edea2881bb8578c` and a verified manifest. Nominate a backup owner, create protected recovery
-  storage and prove a recovery build before production use.
-  Exact registration review covers API request/response schemas, privilege-sharing authorization
-  sets, all 29 step identities and every pre-image column. The new Office Admin and Job Book Admin
-  roles use the Basic User baseline plus only the reviewed custom grants; Delete/Assign/Share remain
-  excluded. Pubudu is admitted as the third Office Admin rollout user and live Office Admin pilot and
-  now holds `Service Operations - Office Admin`. The temporary broader `Service Operations` and
-  Entra Service Coordinator assignments were removed with exact verification on 7 October 2026;
-  run final denial tests with no Full/Coordinator overlap.
-  Preserve unrelated platform roles. The separately controlled live Job Card reviewer allowlist was
-  reconciled on 6 October 2026 for George, Bruce, Andy, Jess, Nargiza and Pubudu. Recreate and verify
-  this setting when the permanent V2/shared backend is provisioned.
-  Durable cross-device recovery and cache retention remain.
-  Existing Intake dispatch remains blocked; schema, migration and permission rollout stay
-  approval-gated. See the [implementation sequence](docs/features/JOB_BOOK_INTAKE_DESIGN.md#unified-workflow-decision-3-october-2026).
+## Retained product and operational follow-ups
 
-- [ ] Deliver the restricted Job Card Admin review workflow for Nargiza and Jess using
-  [`docs/features/JOB_CARD_ADMIN_REVIEW_IMPLEMENTATION_PLAN.md`](docs/features/JOB_CARD_ADMIN_REVIEW_IMPLEMENTATION_PLAN.md):
-  immutable technician evidence, explicit office statuses/notes and audit, Active/History queues,
-  the `ServiceOperations.JobCardAdmin` route role, least-privilege Dataverse access, and the
-  server-side reviewer allowlist. The approved live reviewer setting is configured on the shared V1
-  backend; Entra/Dataverse provisioning and assignments, permanent V2 backend configuration, and
-  the remaining production pilot checks remain separate approval gates.
+These remain open from the earlier backlog; consolidation is not cancellation or completion.
 
-- [ ] Complete restricted Legacy Job Book rollout: create the Entra application roles
-  `ServiceOperations.FullAccess` and `ServiceOperations.JobBookOnly`, approve the named user/group
-  assignments, target-smoke the existing least-privilege `Service Operations - Job Book Only`
-  Dataverse role across the exact Job Book Entry/Job/Equipment/Customer/Site/Contact/Staff reads and
-  permitted writes, then enable `VITE_APPLICATION_ACCESS_CONTROL_ENABLED`. The Contact lookup and
-  its Site Contact Read plus Contact Read/Append To grants are provisioned and verified; the client
-  route boundary and development simulator are also complete.
+- [ ] Complete the owner-approved Excel replacement rehearsal, regional reconciliation and
+  single-writer number cutover. Recalculate seeds; old audit maxima are not current seeds.
+- [ ] Obtain the expanded Job Type categories and decide required selection for Office entry.
+  Preserve unclassified interim jobs; do not invent a service type or meter requirement.
+- [ ] Verify signing-key backup ownership/recovery and all required server configuration for the
+  specific backend; anonymous Azure Job Cards do not require Site Check credentials.
+- [ ] Verify non-empty Job-number uniqueness against current metadata/data before deciding whether
+  any additional key provisioning is needed; do not recreate an existing active key.
+- [ ] Review Equipment CSV administrator-only authorization beyond its client email gate.
+- [ ] Define orphan/retry-staged photo retention and cleanup; preserve accepted evidence.
+- [ ] Add privacy-safe portal failure/replay monitoring and cold/warm signed-in performance baselines.
+- [ ] Design the newly allocated-number GreenTree grace/retry policy and explicit archive marker.
+  Absence from a delta response is not a 404 or proof a Job is missing.
+- [ ] Make usage forecasting Site-aware only after defining historical/unknown-Site segmentation;
+  current evidence must not be rewritten or discarded.
+- [ ] Finish Staff signed-in/recipient smoke and intended configuration; keep external PO recipients
+  separate from opted-in internal CCs.
+- [ ] Complete reviewed Site Check findings and checklist-content/admin release work in its tracker.
+- [ ] Define persistent Customer Info separately after hiding unfinished editing.
+- [ ] Decide Parts quantity/part-number/inventory scope and technician evidence grouping.
+- [ ] Decide reviewed follow-up actions for Further Work/Safety evidence; no automatic outcome
+  based solely on technician responses.
+- [ ] Dedicated WOF/Schedule/Site events or delta recovery require a separate approved infrastructure change.
 
-- [ ] Implement the phased shared data-loading and multi-user synchronization architecture in
-  [`docs/architecture/data-loading-and-synchronization.md`](docs/architecture/data-loading-and-synchronization.md).
-  Request-generation guards, silent-token coalescing, shared Jobs/Equipment cache subscriptions,
-  primary startup/reference continuation paging, and the app-shell Operational Data Client are
-  complete locally. Equipment Job history is the first shared focused query with cancellation,
-  bounded invalidation, prefetch, and short-window eviction. Main Jobs/Equipment list ownership is
-  also migrated to versioned app-shell query keys while retaining the existing IndexedDB adapters.
-  Canonical Job edit drawers now open immediately, refresh Job core independently, separate editor
-  relationships from Quote/assignment readiness, and defer Job Card children/photos until that tab.
-  Focused Job core and Job Card metadata now use shared query keys with bounded invalidation and
-  eviction; full photo bytes load only when one photo is opened. Selected-Customer Dashboard Sites,
-  Equipment, Jobs, and Service Plans now use bounded scoped queries and focused Equipment completion
-  restores full linked history. The query client now exposes privacy-safe in-memory request/cache/
-  duration/payload metrics. Scheduler now uses bounded visible-week queries with adjacent prefetch,
-  and Job Map now uses a minimal status/location projection without global Job or Site reads. One
-  app-shell SignalR provider now dispatches the currently published Job, Equipment, and Staff events,
-  coalesces dependent query invalidation, performs bounded reconnect/visibility recovery, and shares
-  successful local Job/Equipment invalidations across account/environment-scoped browser tabs.
-  Job editor Equipment/Customer searches and dependent Site/Contact/Service Plan reads are now
-  bounded and cancellable, and related-record creates no longer refresh whole tables. Canonical Job
-  creation now renders supplied defaults immediately, shares the Staff directory, and exposes
-  dependency-specific loading/retry state instead of waiting on a broad reference bundle. Job-drawer
-  Quotes and Assignments now use separate tab-triggered focused Job queries, and Customer Dashboard
-  Quotes use a selected-Customer query. Equipment drawers now render their supplied core immediately,
-  load focused Service Plans only on Maintenance, and share focused Job history for usage evidence
-  across Equipment, Customer Dashboard, and WOF. Scoped Jobs consumers no longer trigger implicit
-  full Schedule Option or Office Update reads; Customer Dashboard and Scheduler supply bounded
-  Job-ID-filtered projections. WOF startup now reuses shared Equipment plus shared, paged Inspection
-  and referenced-Job Schedule Option queries, and defers editor-only directories and selected
-  relationship reads until their workflows open. The Quote register and exact-record editor reads
-  now use shared keys, defer editor support, reconcile same-scope tabs after local mutations, and
-  use bounded abortable Job, Customer, and active Equipment selectors with exact-record hydration.
-  Equipment Manager now renders from the shared Equipment projection without full Customer/Site/
-  Service Plan startup reads, uses visible-page maintenance queries and bounded drawer relationships,
-  and reserves complete reference loading for explicit Map/CSV needs. Quote Pricing and Staff now use
-  independent shared keys reused across Pricing, Quotes, and Jobs. Job Book now shares Staff, uses
-  bounded abortable Customer search, and loads Sites only for the selected Customer while retaining
-  its deliberate lightweight Equipment index. The final `useJobs()` call-site audit is complete:
-  linked WOF Job editing and Chargeable Invoice Job creation are scoped, completion reconciliation
-  uses exact Job/Equipment plus focused history/plans, and only the primary Jobs register remains a
-  deliberate global consumer. A development-only Sidebar diagnostic now exposes resettable
-  privacy-safe query-family and route-to-useful-content timings for the five remaining primary
-  registers. Next capture comparable signed-in cold/warm baselines, optimize the worst query family,
-  then separately approve dedicated WOF Inspection, Schedule Option, and Site events
-  or Dataverse watermark/delta recovery. New plugin events or Azure changes remain separately
-  approved work.
+## Retirement candidates — separate, gated changes
 
-- [ ] Approve, provision, and verify a Dataverse alternate key for non-empty Job Number so two
-  simultaneous first-time creates cannot bypass the application duplicate preflight. Confirm the
-  existing data set contains no duplicates before provisioning; this is a separate Dataverse change.
-- [ ] Replace the client-side Equipment CSV administrator email restriction with an
-  authoritative server or Dataverse permission boundary.
-- [ ] Review non-atomic multi-record workflows outside Service completion and Technician
-  submission; document recovery behaviour or make them atomic where business consistency
-  requires it.
-- [ ] Define cleanup and retention for retry-staged Job Photo rows when a technician never
-  completes the submission.
-- [ ] Add production monitoring for public portal authentication, submission failures, and
-  repeated temporary errors without logging secrets or submission content.
+Use the [retirement runbook](docs/architecture/retirement-plan.md). No removal has occurred or is
+certified unconditionally safe.
 
-## Priority 2 — Product improvements
-
-- [ ] Define an authoritative GreenTree-closed Job marker and retention policy, then use it as the
-  Service Coordination archive boundary. The progressive loader currently prioritises Unallocated,
-  Allocated, Action Required and unnumbered Jobs; loads Completion Review, Unconfirmed and the most
-  recent 90 days of completed Jobs in the background; and loads older completed history only when the
-  user explicitly selects Complete. Preserve on-demand access to closed historical Jobs.
-
-- [ ] Finish the GreenTree Job reconciliation rollout. The bounded, paginated delta client,
-  shared checkpoint/lease with overlap, automatic GT Entry reconciliation (managed Jobs and Job
-  Book intake), and GreenTree-closed to Complete transition are implemented. Production credentials,
-  least-privilege application identity and the independent 15-minute scheduled trigger are live.
-  Design a delayed direct lookup or retry policy for newly allocated numbers so normal administrative
-  entry time is allowed before a 404 establishes "not yet in GreenTree". Absence from a delta response
-  is not evidence of a 404.
-
-- [ ] Retire the **Unconfirmed** Job workflow end to end after a production-data and V1 dependency
-  audit. Remove its Service Coordination tab, filters, status transitions, scheduling/allocation
-  exclusions, Dataverse/API/plugin handling and other backend branches together; migrate or preserve
-  historical Unconfirmed records explicitly rather than partially removing the workflow.
-
-- [x] Add office PDF export for Azure Job Card evidence and load historical Dataverse evidence only
-  on demand. Do not remove Site Check dependencies or historical service records during cleanup.
-
-- [ ] Make Equipment usage forecasting Site-aware. Use each historical Job's recorded Site to start
-  a new forecast segment when Equipment moves, so usage from a previous operating environment does
-  not determine the new Site's service forecast. Define an explicit fallback for legacy Jobs without
-  a recorded Site and preserve all readings as history rather than rewriting or deleting them.
-
-- [ ] Complete release validation for the provisioned Job `gr_hourmeterreadingtype` Choice and
-  `gr_hourmeterrecordeddate` Date Only column: verify intended-manager read/write, smoke-test Actual
-  and Estimated completion for every Job type, then separately approve the deployed
-  `VITE_HOUR_METER_CLASSIFICATION_ENABLED` setting. Local development is enabled; deployment remains
-  unchanged. See
-  [`docs/hour-meter-reading-classification-schema.md`](docs/hour-meter-reading-classification-schema.md).
-
-- [ ] Deliver the planned manager-only Chargeable Invoice Review workflow: Phases 1–6 and the Phase 7 local retention/recovery, release-guard and rollback baseline are complete; separately approve/provision the six whole-package Delete grants, run the de-identified target-environment manager/deletion/accessibility/performance smoke, then complete separately approved role assignment and release validation. See [`docs/features/CHARGEABLE_INVOICE_REVIEW_IMPLEMENTATION_PLAN.md`](docs/features/CHARGEABLE_INVOICE_REVIEW_IMPLEMENTATION_PLAN.md) and [`docs/chargeable-invoice-review-operations.md`](docs/chargeable-invoice-review-operations.md); role provisioning/assignment, deployment and flag changes retain explicit approval gates.
-- [ ] Complete Staff Directory signed-in smoke testing and configure intended staff. All three Staff columns are provisioned and verified; verify Quote and Chargeable Invoice customer drafts include opted-in internal CCs without changing external Customer/Site PO routing. Amendment handoff continues to select an active internal recipient and suggest the sole Accounts record.
-- [x] Implement Site Check temporary Equipment availability:
-  enabled-Site-only marker, In Workshop/Temporarily Off-site exclusion, and occurrence
-  exclusion snapshots; no catch-up Jobs.
-
-- [ ] Deliver the approved Site Checks operational expansion in
-  [`docs/features/SITE_CHECKS_IMPLEMENTATION_PLAN.md`](docs/features/SITE_CHECKS_IMPLEMENTATION_PLAN.md):
-  cross-customer workspace, one-link bulk technician dispatch, versioned per-machine
-  checklists, guided multi-machine submission, and reviewed findings. Phases 15–18 retain
-  explicit schema/security approval gates.
-- [ ] Add versioned Site Check checklist administration for
-  `georger@liftrucks.co.nz`, including a dedicated least-privilege Dataverse role and
-  immutable publish-new-version workflow; see Phase 19 of the Site Checks tracker.
-- [ ] Complete persistent Customer creation and Customer-level information management;
-  current Customer-level behaviour still includes local prototype boundaries.
-- [ ] Decide whether Job Materials need quantity, part number, stock lookup, or inventory
-  integration. Keep the technician label as **Parts** unless the user workflow changes.
-- [ ] Consider technician/assignment grouping for time entries and submission evidence.
-- [ ] Decide whether Further Work and Safety Issues should create reviewed office actions,
-  Quotes, or follow-up Jobs. Do not automate these directly from technician input without
-  an office approval step.
-
-## Priority 3 — Quality and maintainability
-
-- [ ] Audit remaining feature-owned searchable dropdown implementations and migrate them to
-  the shared `SearchableSelect` primitive or a typed adapter around it. Preserve each workflow's
-  business rules while standardising arrow-key navigation, Enter selection, Escape handling,
-  loading/error states, focus behaviour and menu styling.
-- [ ] Add production-oriented end-to-end coverage for the highest-risk Job, WOF,
-  maintenance, Equipment transfer, CSV import, and technician portal workflows.
-- [ ] Review the current production bundle-size warning and introduce code splitting only
-  where it materially improves load performance.
-- [ ] Keep the modular knowledge base current and remove superseded limitations from release
-  notes when their replacement is implemented.
-
-## Backlog rules
-
-- Add work here only when it is agreed, actionable, and not merely an architectural
-  extension possibility.
-- Link complex work to its authoritative architecture document rather than duplicating the
-  design here.
-- Move the currently active item to `CURRENT_STATE.md`.
-- Remove completed items from this file and record user-visible results in `CHANGELOG.md`.
-- Do not treat a checkbox as authorisation to provision, deploy, create credentials, send
-  communications, or make destructive changes.
+- [ ] Recheck and remove isolated unused test screens, old CustomerOpenJobsTab and old maintenance
+  drawer component; preserve CSS still imported by current consumers.
+- [ ] Migrate remaining JobsTableSortIcon wrapper consumers before removing the wrapper.
+- [ ] Remove dormant prototype Customer draft branches only after proving no live entry point.
+- [ ] Retire legacy JobBookOnly compatibility only after tenant-wide assignment and V1 checks.
+- [ ] Replace V2 → V1 Job Card bridge only after storage/link/evidence/authorization migration is verified.
+- [ ] Retain Site Check/legacy Dataverse submissions, regional ledgers and numbering compatibility
+  until their independent migrations pass. Disabled flags and old filenames are not deletion evidence.

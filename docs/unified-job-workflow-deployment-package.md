@@ -1,7 +1,13 @@
 # Unified Job workflow — deployment package review
 
-Status: restricted-access production deployment completed 9 October 2026. Unified registration
-feature enablement, data migration and number-invariant activation remain separate future work.
+Recorded deployment: restricted-access package completed 9 October 2026. V2's current workflow
+builds unified registration/workflow enabled; data migration and invariant activation still have
+independent gates. This documentation audit did not reverify the cloud.
+
+The dry-run sequence below is dated historical planning, not the current build configuration.
+Do not reset live flags or rerun provisioning merely to match it. Resolve manifest/test drift and
+the client/server policy defects in the [audit](reviews/2026-10-10-application-audit.md), then use
+the [release checklist](../RELEASE_READINESS.md) for acceptance.
 
 ## Production access-guard deployment — 9 October 2026
 

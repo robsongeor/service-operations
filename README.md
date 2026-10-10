@@ -6,17 +6,13 @@ is a React and TypeScript application backed by Microsoft Dataverse.
 
 ## Architecture at a glance
 
-```text
-Customer → Site → Equipment → Job
-                         ├── Schedule / Assignment
-                         ├── Job Card / Technician Submission
-                         ├── Quote
-                         └── Maintenance / WOF history
-```
+Customer owns Sites; Equipment belongs to its current Site. A Job records its own operational
+Site and may optionally reference Equipment. Moving Equipment does not rewrite historical Jobs.
 
-The authenticated management application uses Microsoft Entra ID and delegated Dataverse
-access. Anonymous technician links use a server API and a separate least-privilege
-Dataverse Application User.
+The office application uses Microsoft Entra ID and delegated Dataverse access. Anonymous
+Job-level cards use private Azure snapshots/evidence without Dataverse access. Site Check
+assignment links retain their separate server-side Dataverse Application User workflow.
+GreenTree account references remain separate from operational Customer/Site relationships.
 
 ## Documentation
 
@@ -36,6 +32,11 @@ Common starting points:
 - [Reusable components](docs/architecture/reusable-components.md)
 - [Development workflow](docs/architecture/development-workflow.md)
 - [Deployment](docs/architecture/deployment.md)
+
+The [10 October audit](docs/reviews/2026-10-10-application-audit.md) records current risks,
+feature readiness and refactor opportunities. Follow the [release gates](RELEASE_READINESS.md)
+before broad rollout and the [retirement runbook](docs/architecture/retirement-plan.md)
+before deleting compatibility features.
 
 `AI_CONTEXT.md` contains durable project rules. `CURRENT_STATE.md` contains only active
 branch, readiness, blockers, and unfinished work.
@@ -57,10 +58,11 @@ npm run dev
 
 Open `http://localhost:5173`.
 
-The public Technician Job Card route is `/portal/job/:token`. Its local server process also
-requires the confidential `DATAVERSE_*` settings described in
-[Authentication](docs/architecture/authentication.md). Never expose those values through
-`VITE_` variables or commit secrets.
+The public Technician Job Card route is `/portal/job/:token`. Configure its Azure Table/Blob
+storage according to [Azure Job Card Storage](docs/azure-job-card-storage.md).
+Confidential `DATAVERSE_*` credentials are needed by the separate Site Check/application-identity
+flows, not anonymous Azure Job Card requests. See [Authentication](docs/architecture/authentication.md).
+Never expose confidential values through `VITE_` variables or commit secrets.
 
 ## Validation
 

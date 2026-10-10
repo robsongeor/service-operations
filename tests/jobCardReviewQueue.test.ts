@@ -20,7 +20,7 @@ test('queue defaults newest first and never mutates source rows', () => {
 })
 
 test('workflow stage links default to Submitted and preserve historical bookmarks', () => {
-    assert.deepEqual(REVIEW_STAGE_TABS.map((tab) => tab.label), ['Open jobs', 'Submitted', 'Review', 'Completed'])
+    assert.deepEqual(REVIEW_STAGE_TABS.map((tab) => tab.label), ['Open jobs', 'Submitted', 'Needs follow-up', 'Completed'])
     for (const stage of ['open', 'submitted', 'review', 'completed']) assert.equal(readReviewStage(new URLSearchParams({ view: stage })), stage)
     for (const stage of ['', 'active', 'invalid']) assert.equal(readReviewStage(new URLSearchParams({ view: stage })), 'submitted')
     assert.equal(readReviewStage(new URLSearchParams('view=history')), 'completed')

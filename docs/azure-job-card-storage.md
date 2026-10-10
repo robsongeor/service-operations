@@ -1,5 +1,15 @@
 # Azure Job Card Storage and Operations
 
+## Current V2 dependency
+
+The V2 build sets `VITE_JOB_CARD_SHARED_BACKEND=v1-production`; interactive Job Card APIs
+therefore use the V1 backend bridge. Do not provision a new isolated store and simply clear that
+flag: existing links, submissions, evidence and review history must remain reachable. Verify the
+reconciliation service uses the same authoritative store. See
+[deployment](architecture/deployment.md#temporary-v2-job-card-backend-bridge) and the
+[retirement runbook](architecture/retirement-plan.md#v2--v1-job-card-bridge).
+
+
 ## Purpose
 
 Technician Job Card requests and accepted evidence are retained in Azure without giving the
@@ -59,9 +69,11 @@ history. Every office transition copies the stored record, changes only those fi
 status, and replaces it under the loaded ETag. A stale ETag returns conflict rather than silently
 overwriting another administrator.
 
-Office states are Pending, In review, Needs clarification, On hold, and Processed in GreenTree.
+Office states remain Pending, In review, Needs clarification, On hold, and Processed in GreenTree.
+The office UI displays Pending as Ready for entry and In review as GreenTree entry; these are labels,
+not storage-value migrations.
 No invoice required is retired as an action; any previously saved outcome remains read-only.
-The UI groups Pending under Submitted, other non-terminal states under Review, and terminal/legacy
+The UI groups Pending under Submitted, other non-terminal states under In progress, and terminal/legacy
 outcomes under Completed. Existing `reviewed` rows without an office outcome derive as
 `Reviewed (legacy outcome not recorded)` and never imply GreenTree processing. Opening a card or
 marking Needs clarification never sends a technician message or creates a new link.
