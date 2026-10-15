@@ -208,7 +208,7 @@ test('retry reconciles an existing exact TimeCloud item without creating a dupli
     assert.equal(createCalls, 0)
 })
 
-test('Dataverse confirmation failures expose only the HTTP status and safe error code', async () => {
+test('Dataverse confirmation failures expose a redacted reason with the HTTP status and safe error code', async () => {
     const jobId = id(1)
     const ledgerId = id(2)
     const item = { _id: 'existing-item', code: '26958', name: '146781 [TEST ONLY - SAFE TO DELETE] Deliver to site by PTS' }
@@ -216,7 +216,7 @@ test('Dataverse confirmation failures expose only the HTTP status and safe error
         const target = String(url)
         if (target.endsWith('/WhoAmI')) return Response.json({ UserId: id(9) })
         if (target.includes('gr_jobbookentries(')) return Response.json({ gr_jobbookentryid: ledgerId, gr_jobnumber: '146781', gr_stage: 122830004, _gr_registeredjob_value: jobId })
-        if (target.includes('gr_jobs(') && init.method === 'PATCH') return Response.json({ error: { code: '0x80040265', message: 'sensitive server detail' } }, { status: 400 })
+        if (target.includes('gr_jobs(') && init.method === 'PATCH') return Response.json({ error: { code: '0x80040265', message: `Principal ${id(99)} <person@example.invalid> is missing prvWritegr_Job` } }, { status: 400 })
         if (target.includes('gr_jobs(')) return Response.json({ gr_jobid: jobId, gr_jobnumber: '146781', gr_description: 'Deliver to site by PTS', gr_timecloudentered: false, gr_registrationvoid: false, '@odata.etag': 'W/"7"' })
         throw new Error(`Unexpected request: ${target}`)
     }
@@ -230,7 +230,9 @@ test('Dataverse confirmation failures expose only the HTTP status and safe error
     })
     assert.equal(result.status, 503)
     assert.match(responseBody(result).error, /Dataverse HTTP 400, code 0x80040265/)
-    assert.doesNotMatch(responseBody(result).error, /sensitive server detail/)
+    assert.match(responseBody(result).error, /Principal <id> <email> is missing prvWritegr_Job/)
+    assert.doesNotMatch(responseBody(result).error, new RegExp(id(99)))
+    assert.doesNotMatch(responseBody(result).error, /person@example/)
 })
 
 test('invalid ledger linkage is rejected before TimeCloud or application credentials are used', async () => {

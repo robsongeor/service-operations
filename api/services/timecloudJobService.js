@@ -188,7 +188,14 @@ async function readDataverseConfirmation(response, message) {
     const code = typeof body?.error?.code === 'string' && /^[\w.-]{1,80}$/.test(body.error.code)
         ? `, code ${body.error.code}`
         : ''
-    throw new Error(`${message} (Dataverse HTTP ${response.status}${code}).`)
+    const rawReason = typeof body?.error?.message === 'string' ? body.error.message.replace(/\s+/g, ' ').trim() : ''
+    const reason = rawReason
+        ? `: ${rawReason
+            .replace(/\b[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}\b/gi, '<id>')
+            .replace(/<?[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}>?/gi, '<email>')
+            .slice(0, 300)}`
+        : ''
+    throw new Error(`${message} (Dataverse HTTP ${response.status}${code})${reason}.`)
 }
 
 async function sync(request, options = {}) {
