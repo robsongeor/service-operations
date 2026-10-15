@@ -48,6 +48,7 @@ function Ensure-StringColumn($Service, [string]$SchemaName, [string]$LogicalName
     if ($existing) {
         Require ([string]$existing.AttributeType -eq 'String') "Conflict: gr_job.$LogicalName is not text."
         Require ($existing.MaxLength -ge $Length) "Conflict: gr_job.$LogicalName is shorter than $Length characters."
+        Require (-not [bool]$existing.IsSecured) "Conflict: gr_job.$LogicalName has field security enabled."
         Write-Output "Verified gr_job.$LogicalName."
         return
     }
@@ -74,6 +75,9 @@ function Publish-Job($Service) {
 Import-Sdk
 $service = Connect-Dataverse
 try {
+    $marker = Get-Attribute $service 'gr_timecloudentered'
+    Require ($null -ne $marker -and [string]$marker.AttributeType -eq 'Boolean') 'Missing or invalid gr_job.gr_timecloudentered marker.'
+    Require (-not [bool]$marker.IsSecured) 'Conflict: gr_job.gr_timecloudentered has field security enabled.'
     Ensure-StringColumn $service 'gr_TimecloudJobItemId' 'gr_timecloudjobitemid' 'TimeCloud Job Item ID' 100
     Ensure-StringColumn $service 'gr_TimecloudCode' 'gr_timecloudcode' 'TimeCloud Code' 100
     if ($provision) { Publish-Job $service }

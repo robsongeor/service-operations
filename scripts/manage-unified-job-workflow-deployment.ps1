@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Provision', 'Verify', 'AssignPilot')]
+    [ValidateSet('Provision', 'Verify', 'AssignPilot', 'UpdateAssembly')]
     [string]$Mode = 'Verify',
     [string]$EnvironmentUrl = 'https://org0d4246d7.crm6.dynamics.com',
     [string]$SolutionUniqueName = 'ServiceOperationsNew',
@@ -26,6 +26,7 @@ $contract = Get-Content -LiteralPath (Join-Path $repository 'dataverse\job-regis
 $packageManifestPath = if ($PackageDirectory) { Join-Path $PackageDirectory 'ServiceOperations.UnifiedJobWorkflow.manifest.json' } else { '' }
 $assemblyPath = if ($PackageDirectory) { Join-Path $PackageDirectory 'ServiceOperations.UnifiedJobWorkflow.dll' } else { '' }
 $provision = $Mode -eq 'Provision'
+$updateAssembly = $Mode -eq 'UpdateAssembly'
 
 function Require([bool]$Condition, [string]$Message) { if (-not $Condition) { throw $Message } }
 function New-Label([string]$Text) { [Microsoft.Xrm.Sdk.Label]::new($Text, 1033) }
@@ -209,7 +210,7 @@ function Ensure-Assembly($Service, $Manifest) {
     $currentHash=''
     if($row.Attributes.ContainsKey('content') -and [string]$row['content']){$bytes=[Convert]::FromBase64String([string]$row['content']);$sha=[Security.Cryptography.SHA256]::Create();try{$currentHash=([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-','').ToLowerInvariant()}finally{$sha.Dispose()}}
     if($currentHash -ne [string]$Manifest.sha256){
-        if(-not $provision){throw "Plugin assembly content differs from the reviewed package (live $currentHash; package $($Manifest.sha256))."}
+        if(-not ($provision -or $updateAssembly)){throw "Plugin assembly content differs from the reviewed package (live $currentHash; package $($Manifest.sha256))."}
         $update=[Microsoft.Xrm.Sdk.Entity]::new('pluginassembly',$row.Id);$update['content']=[Convert]::ToBase64String([IO.File]::ReadAllBytes($assemblyPath));$Service.Update($update);Write-Host "Updated signed unified plugin assembly to $($Manifest.version)."
         $row=$Service.Retrieve('pluginassembly',$row.Id,[Microsoft.Xrm.Sdk.Query.ColumnSet]::new('pluginassemblyid','name','version','publickeytoken','isolationmode','sourcetype','content'))
         $bytes=[Convert]::FromBase64String([string]$row['content']);$sha=[Security.Cryptography.SHA256]::Create();try{$currentHash=([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-','').ToLowerInvariant()}finally{$sha.Dispose()}
@@ -299,6 +300,11 @@ try {
     $who=$service.Execute([Microsoft.Crm.Sdk.Messages.WhoAmIRequest]::new());Write-Output "Connected read/write operator $($who.UserId). Feature flag remains OFF."
     $solution=@(Find-Exactly $service 'solution' 'uniquename' $SolutionUniqueName @('solutionid','uniquename','ismanaged'));Require($solution.Count-eq1 -and -not[bool]$solution[0]['ismanaged']) 'Expected one unmanaged target solution.'
     $manifest=Get-PackageManifest
+    if($updateAssembly){
+        $assembly=Ensure-Assembly $service $manifest
+        Write-Output "Unified workflow assembly-only update completed at $($manifest.version). Metadata, roles, steps, migration, seeds, application deployment and feature enablement: NONE."
+        return
+    }
     foreach($column in $readiness.columns){if($column.type-eq'Lookup'){Ensure-Lookup $service $column}else{Ensure-Column $service $column}}
     Ensure-OptimisticConcurrency $service 'gr_job'
     foreach($table in $readiness.regionalTables){Ensure-OptimisticConcurrency $service ([string]$table)}

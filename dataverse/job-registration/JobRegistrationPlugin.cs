@@ -34,6 +34,7 @@ namespace ServiceOperations.JobRegistration
         public void Execute(IServiceProvider provider)
         {
             var context = (IPluginExecutionContext)provider.GetService(typeof(IPluginExecutionContext));
+            var tracing = (ITracingService)provider.GetService(typeof(ITracingService));
             if (context == null || context.Mode != 0 || !context.IsInTransaction || context.Stage != 30)
                 throw Failure("CONFIGURATION", "Registration requires a synchronous transactional Custom API.");
             if (context.UserId == Guid.Empty || context.UserId != context.InitiatingUserId)
@@ -47,10 +48,26 @@ namespace ServiceOperations.JobRegistration
             var service = factory.CreateOrganizationService(context.InitiatingUserId);
             try { Run(service, context); }
             catch (InvalidPluginExecutionException) { throw; }
-            catch (Exception)
+            catch (Exception error)
             {
+                TraceUnexpectedFailure(tracing, error);
                 // Throw out of the ambient transaction. Never catch a failed write and continue/retry inside it.
                 throw Failure("SAVE_FAILED", "Registration was not confirmed. Retry the same request or reload; do not request another number.");
+            }
+        }
+
+        private static void TraceUnexpectedFailure(ITracingService tracing, Exception error)
+        {
+            if (tracing == null || error == null) return;
+            int depth = 0;
+            for (var current = error; current != null && depth < 5; current = current.InnerException, depth++)
+            {
+                string message = current.Message ?? "";
+                message = Regex.Replace(message, "(?i)[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}", "[guid]");
+                message = Regex.Replace(message, "(?i)\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b", "[email]");
+                if (message.Length > 1000) message = message.Substring(0, 1000) + " [truncated]";
+                tracing.Trace("Job registration unexpected failure depth {0}: {1}; HResult {2}; message: {3}",
+                    depth, current.GetType().FullName, current.HResult, message);
             }
         }
 

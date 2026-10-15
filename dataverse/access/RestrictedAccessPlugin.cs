@@ -7,24 +7,26 @@ using Microsoft.Xrm.Sdk.Query;
 
 namespace ServiceOperations.Access
 {
-    // Meter-writer extension is opt-in; legacy four-profile configurations stay valid.
+    // Server-writer extensions are opt-in; legacy four-profile configurations stay valid.
     // Register only after exact identity/role configuration and target-environment tests.
     public sealed class RestrictedAccessPlugin : IPlugin
     {
         readonly Dictionary<string, HashSet<Guid>> roles = new Dictionary<string, HashSet<Guid>>();
         readonly Dictionary<string, Guid> meter = new Dictionary<string, Guid>();
+        readonly Dictionary<string, Guid> timecloud = new Dictionary<string, Guid>();
         public RestrictedAccessPlugin(string unsecure, string secure)
         {
             if (String.IsNullOrWhiteSpace(secure)) throw new InvalidPluginExecutionException("Missing access role configuration.");
             foreach (string part in secure.Split(';'))
             {
                 string[] pair = part.Split('=');
-                if (pair.Length == 2 && new[] { "meterrole", "meteruser", "meterapplication" }.Contains(pair[0]))
+                if (pair.Length == 2 && new[] { "meterrole", "meteruser", "meterapplication", "timecloudrole", "timeclouduser", "timecloudapplication" }.Contains(pair[0]))
                 {
+                    var writer = pair[0].StartsWith("meter", StringComparison.Ordinal) ? meter : timecloud;
                     Guid value;
-                    if (meter.ContainsKey(pair[0]) || !Guid.TryParse(pair[1], out value) || value == Guid.Empty)
-                        throw new InvalidPluginExecutionException("Invalid meter writer configuration.");
-                    meter.Add(pair[0], value);
+                    if (writer.ContainsKey(pair[0]) || !Guid.TryParse(pair[1], out value) || value == Guid.Empty)
+                        throw new InvalidPluginExecutionException("Invalid server writer configuration.");
+                    writer.Add(pair[0], value);
                     continue;
                 }
                 if (pair.Length != 2 || !new[] { "full", "coordinator", "office", "book" }.Contains(pair[0]) || roles.ContainsKey(pair[0]))
@@ -35,11 +37,16 @@ namespace ServiceOperations.Access
                 throw new InvalidPluginExecutionException("Access roles must be distinct and complete.");
             if (meter.Count != 0 && (meter.Count != 3 || roles.Values.Any(set => set.Contains(meter["meterrole"]))))
                 throw new InvalidPluginExecutionException("Meter writer requires a separate role, user and application.");
+            if (timecloud.Count != 0 && (timecloud.Count != 3 || roles.Values.Any(set => set.Contains(timecloud["timecloudrole"]))))
+                throw new InvalidPluginExecutionException("TimeCloud writer requires a separate role, user and application.");
+            if (meter.Count == 3 && timecloud.Count == 3 && (meter["meterrole"] == timecloud["timecloudrole"] || meter["meteruser"] == timecloud["timeclouduser"] || meter["meterapplication"] == timecloud["timecloudapplication"]))
+                throw new InvalidPluginExecutionException("Server writer identities must be distinct.");
         }
 
         public void Execute(IServiceProvider provider)
         {
             var context = (IPluginExecutionContext)provider.GetService(typeof(IPluginExecutionContext));
+            var tracing = (ITracingService)provider.GetService(typeof(ITracingService));
             if (context == null || context.Stage != 20 || context.Mode != 0 || !context.IsInTransaction || context.UserId != context.InitiatingUserId)
                 throw new InvalidPluginExecutionException("Access guard requires synchronous caller-context PreOperation.");
             var factory = (IOrganizationServiceFactory)provider.GetService(typeof(IOrganizationServiceFactory));
@@ -50,12 +57,26 @@ namespace ServiceOperations.Access
             var teams = new QueryExpression("teamroles") { ColumnSet = new ColumnSet("roleid") };
             teams.AddLink("teammembership", "teamid", "teamid").LinkCriteria.AddCondition("systemuserid", ConditionOperator.Equal, context.InitiatingUserId);
             foreach (var row in service.RetrieveMultiple(teams).Entities) held.Add(row.GetAttributeValue<Guid>("roleid"));
+            // Check server identities before privileged human profiles. An application identity
+            // never gains a human-profile bypass even if it is assigned another configured role.
+            if (timecloud.Count == 3 && (context.InitiatingUserId == timecloud["timeclouduser"] || held.Contains(timecloud["timecloudrole"])))
+            {
+                bool holdsRole;
+                var caller = RetrieveServerWriterIdentity(factory, context.InitiatingUserId, timecloud["timecloudrole"], out holdsRole);
+                TimeCloudWritePolicy.ValidateCaller(context.InitiatingUserId, caller, holdsRole ? new[] { timecloud["timecloudrole"] } : new Guid[0], timecloud["timeclouduser"], timecloud["timecloudapplication"], timecloud["timecloudrole"]);
+                var change = context.InputParameters.Contains("Target") ? context.InputParameters["Target"] as Entity : null;
+                TimeCloudWritePolicy.ValidateTarget(context.MessageName, change);
+                var current = service.Retrieve("gr_job", change.Id, new ColumnSet("statecode", "gr_registrationvoid", "gr_timecloudentered", "gr_timecloudjobitemid", "gr_timecloudcode"));
+                TimeCloudWritePolicy.Validate(change, current);
+                return;
+            }
             // Check BEFORE privileged human profiles. A meter identity never gains the full/coordinator
             // bypass, even if somebody accidentally also assigns a broader configured role.
             if (meter.Count == 3 && (context.InitiatingUserId == meter["meteruser"] || held.Contains(meter["meterrole"])))
             {
-                var caller = service.Retrieve("systemuser", context.InitiatingUserId, new ColumnSet("applicationid", "isdisabled"));
-                MeterWritePolicy.ValidateCaller(context.InitiatingUserId, caller, held, meter["meteruser"], meter["meterapplication"], meter["meterrole"]);
+                bool holdsRole;
+                var caller = RetrieveServerWriterIdentity(factory, context.InitiatingUserId, meter["meterrole"], out holdsRole);
+                MeterWritePolicy.ValidateCaller(context.InitiatingUserId, caller, holdsRole ? new[] { meter["meterrole"] } : new Guid[0], meter["meteruser"], meter["meterapplication"], meter["meterrole"]);
                 var change = context.InputParameters.Contains("Target") ? context.InputParameters["Target"] as Entity : null;
                 MeterWritePolicy.ValidateTarget(context.MessageName, change);
                 var current = service.Retrieve("gr_job", change.Id, new ColumnSet("gr_status", "statecode", "gr_registrationvoid", "gr_equipment", "gr_hourmeter", "gr_hourmeterrecordeddate", "gr_hourmeterreadingtype", "gr_hourmeterapprovalreference"));
@@ -71,8 +92,45 @@ namespace ServiceOperations.Access
             if (target == null) throw new InvalidPluginExecutionException("This record operation is not permitted.");
             if (context.MessageName == "Update" && (before == null || before.Id != target.Id || before.LogicalName != target.LogicalName))
                 throw new InvalidPluginExecutionException("Required access guard image is unavailable.");
-            if ((profile == "office" || profile == "book") && (IsRegistrationChild(context, target) || IsRegisteredVoidChild(context, target) || IsInitialDispatchChild(context, target))) return;
+            if (profile == "office" || profile == "book")
+            {
+                if (IsRegistrationChild(context, target) || IsRegisteredVoidChild(context, target) || IsInitialDispatchChild(context, target)) return;
+                TraceRegistrationDenial(tracing, context, target);
+            }
             RestrictedWritePolicy.Validate(profile, context.MessageName, target, before);
+        }
+
+        static Entity RetrieveServerWriterIdentity(IOrganizationServiceFactory factory, Guid userId, Guid roleId, out bool holdsRole)
+        {
+            // Server writers are exact, opt-in identities. Use the system context only for this
+            // two-column identity lookup and exact direct membership check so the application role
+            // does not need User/Role-directory read.
+            // All human-role queries and every business-record read/write remain caller-context operations.
+            var identityService = factory.CreateOrganizationService(null);
+            if (identityService == null) throw new InvalidPluginExecutionException("Server writer identity verification is unavailable.");
+            var membership = new QueryExpression("systemuserroles") { ColumnSet = new ColumnSet(false) };
+            membership.Criteria.AddCondition("systemuserid", ConditionOperator.Equal, userId);
+            membership.Criteria.AddCondition("roleid", ConditionOperator.Equal, roleId);
+            holdsRole = identityService.RetrieveMultiple(membership).Entities.Count == 1;
+            return identityService.Retrieve("systemuser", userId, new ColumnSet("applicationid", "isdisabled"));
+        }
+
+        static void TraceRegistrationDenial(ITracingService tracing, IPluginExecutionContext context, Entity target)
+        {
+            if (tracing == null || context == null || target == null) return;
+            var parent = context.ParentContext;
+            for (int depth = 0; parent != null && depth < 8; depth++, parent = parent.ParentContext)
+            {
+                if (parent.MessageName != "gr_RegisterJobBookJob" && parent.MessageName != "gr_AllocateJobBookNumber") continue;
+                string fields = String.Join(",", target.Attributes.Keys.OrderBy(value => value));
+                string inputs = String.Join(",", parent.InputParameters.Keys.OrderBy(value => value));
+                tracing.Trace("Registration access shape rejected: operation={0}/{1}; targetFields={2}; parentStage={3}; parentMode={4}; parentTransaction={5}; sameInitiator={6}; parentInputs={7}",
+                    context.MessageName, target.LogicalName, fields, parent.Stage, parent.Mode, parent.IsInTransaction,
+                    parent.InitiatingUserId == context.InitiatingUserId, inputs);
+                return;
+            }
+            tracing.Trace("Registration access shape rejected without a registration parent: operation={0}/{1}; targetFields={2}",
+                context.MessageName, target.LogicalName, String.Join(",", target.Attributes.Keys.OrderBy(value => value)));
         }
 
         internal static bool IsRegistrationChild(IPluginExecutionContext context, Entity target)
@@ -102,7 +160,7 @@ namespace ServiceOperations.Access
                     Guid siteId;
                     bool unknown = parent.InputParameters.Contains("EquipmentUnknown") && parent.InputParameters["EquipmentUnknown"] is bool && (bool)parent.InputParameters["EquipmentUnknown"];
                     var status = target.GetAttributeValue<OptionSetValue>("gr_status");
-                    return target.Id == requestId && target.Attributes.Keys.Count == expected.Count && target.Attributes.Keys.All(expected.Contains) &&
+                    return target.Id == requestId && RegistrationFields(target, expected.Concat(JobCreateDefaults)) && expected.All(target.Contains) && ValidJobCreateDefaults(target) &&
                         TryId(parent.InputParameters, "SiteId", out siteId) && Reference(target, "gr_site", "gr_site", siteId) &&
                         SameOptionalReference(parent.InputParameters, target, "EquipmentId", "gr_equipment", "gr_equipment") &&
                         SameOptionalReference(parent.InputParameters, target, "ContactId", "gr_contact", "gr_contact") &&
@@ -116,7 +174,7 @@ namespace ServiceOperations.Access
                 if (target.LogicalName == "gr_job" && context.MessageName == "Update")
                 {
                     string number = target.GetAttributeValue<string>("gr_jobnumber");
-                    return target.Id == jobId && target.Attributes.Keys.Count == 1 && target.Contains("gr_jobnumber") &&
+                    return target.Id == jobId && RegistrationFields(target, new[] { "gr_jobnumber" }) && target.Contains("gr_jobnumber") &&
                         ValidNumber(book, number);
                 }
                 if (target.LogicalName == table && context.MessageName == "Create")
@@ -133,7 +191,7 @@ namespace ServiceOperations.Access
                         ? !target.Contains("gr_mechanic") && target.Contains("gr_mechanictext")
                         : target.Contains("gr_mechanic") == target.Contains("gr_mechanictext");
                     string number = target.GetAttributeValue<string>("gr_jobnumber");
-                    return target.Id == requestId && target.Attributes.Keys.All(allowed.Contains) && required.All(target.Contains) &&
+                    return target.Id == requestId && RegistrationFields(target, allowed) && required.All(target.Contains) &&
                         stage != null && stage.Value == 122830004 && Reference(target, "gr_registeredjob", "gr_job", jobId) &&
                         !String.IsNullOrWhiteSpace(fingerprint) && fingerprint.Length == 64 && fingerprint.All(character => Uri.IsHexDigit(character)) &&
                         (equipmentReview ? equipmentAbsent : equipmentComplete) && mechanicComplete &&
@@ -142,6 +200,29 @@ namespace ServiceOperations.Access
                 return false;
             }
             return false;
+        }
+
+        static readonly string[] PlatformManagedFields = {
+            "createdby", "createdon", "createdonbehalfby", "importsequencenumber", "modifiedby", "modifiedon", "modifiedonbehalfby",
+            "organizationid", "overriddencreatedon", "ownerid", "owningbusinessunit", "owningteam", "owninguser", "statecode", "statuscode",
+            "timezoneruleversionnumber", "utcconversiontimezonecode", "versionnumber"
+        };
+        static readonly string[] JobCreateDefaults = {
+            "gr_currentofficeaction", "gr_gtentered", "gr_jobcardstatus", "gr_officeattentionrequired", "gr_registrationvoid", "gr_servicetype",
+            "gr_techniciansubmissionfurtherworkrequired", "gr_techniciansubmissionsafetyissueidentified", "gr_techniciansubmissiontokenused", "gr_timecloudentered"
+        };
+        static bool RegistrationFields(Entity target, IEnumerable<string> businessFields)
+        {
+            var allowed = new HashSet<string>(businessFields.Concat(PlatformManagedFields).Concat(new[] { target.LogicalName + "id" }), StringComparer.OrdinalIgnoreCase);
+            return target.Attributes.Keys.All(allowed.Contains);
+        }
+        static bool ValidJobCreateDefaults(Entity target)
+        {
+            foreach (string field in new[] { "gr_gtentered", "gr_officeattentionrequired", "gr_registrationvoid", "gr_techniciansubmissionfurtherworkrequired", "gr_techniciansubmissionsafetyissueidentified", "gr_techniciansubmissiontokenused", "gr_timecloudentered" })
+                if (target.Contains(field) && (!(target[field] is bool) || (bool)target[field])) return false;
+            foreach (string field in new[] { "gr_currentofficeaction", "gr_jobcardstatus", "gr_servicetype" })
+                if (target.Contains(field) && target[field] != null && !(target[field] is OptionSetValue)) return false;
+            return true;
         }
 
         static bool TryId(ParameterCollection values, string key, out Guid id)
@@ -224,6 +305,47 @@ namespace ServiceOperations.Access
                     !String.IsNullOrWhiteSpace(fingerprint) && fingerprint.Length == 64 && fingerprint.All(character => Uri.IsHexDigit(character));
             }
             return false;
+        }
+    }
+
+    public static class TimeCloudWritePolicy
+    {
+        static readonly string[] Fields = { "gr_timecloudentered", "gr_timecloudjobitemid", "gr_timecloudcode" };
+        static readonly string[] PlatformFields = { "gr_jobid", "modifiedby", "modifiedon", "modifiedonbehalfby" };
+        static void Require(bool value, string reason) { if (!value) throw new InvalidPluginExecutionException("The requested change is outside the approved TimeCloud confirmation operation (" + reason + ")."); }
+        public static void ValidateCaller(Guid callerId, Entity caller, IEnumerable<Guid> held, Guid userId, Guid applicationId, Guid roleId)
+        {
+            Require(userId != Guid.Empty && applicationId != Guid.Empty && roleId != Guid.Empty && callerId == userId &&
+                caller != null && caller.Id == userId && caller.LogicalName == "systemuser" &&
+                caller.GetAttributeValue<Guid>("applicationid") == applicationId && caller.Contains("isdisabled") &&
+                !caller.GetAttributeValue<bool>("isdisabled") && held.Contains(roleId), "CALLER");
+        }
+        public static void ValidateTarget(string message, Entity target)
+        {
+            Require(message == "Update" && target != null && target.LogicalName == "gr_job" && target.Id != Guid.Empty, "TARGET");
+            var unexpected = target.Attributes.Keys.Where(key => !Fields.Contains(key, StringComparer.OrdinalIgnoreCase) && !PlatformFields.Contains(key, StringComparer.OrdinalIgnoreCase)).OrderBy(key => key).ToArray();
+            var missing = Fields.Where(key => !target.Contains(key)).OrderBy(key => key).ToArray();
+            Require(unexpected.Length == 0 && missing.Length == 0, "TARGET_FIELDS unexpected=" + String.Join(",", unexpected) + " missing=" + String.Join(",", missing));
+            var itemId = target["gr_timecloudjobitemid"] as string;
+            var code = target["gr_timecloudcode"] as string;
+            Require(target["gr_timecloudentered"] is bool && (bool)target["gr_timecloudentered"] &&
+                !String.IsNullOrWhiteSpace(itemId) && itemId.Length <= 100 && itemId == itemId.Trim() &&
+                !String.IsNullOrWhiteSpace(code) && code.Length <= 100 && code == code.Trim(), "TARGET_VALUES");
+        }
+        public static void Validate(Entity target, Entity current)
+        {
+            ValidateTarget("Update", target);
+            Require(current != null && current.Id == target.Id && current.LogicalName == "gr_job" &&
+                current.GetAttributeValue<OptionSetValue>("statecode") != null && current.GetAttributeValue<OptionSetValue>("statecode").Value == 0 &&
+                !current.GetAttributeValue<bool>("gr_registrationvoid"), "CURRENT_STATE");
+            var itemId = (string)target["gr_timecloudjobitemid"];
+            var code = (string)target["gr_timecloudcode"];
+            if (current.GetAttributeValue<bool>("gr_timecloudentered"))
+                Require(String.Equals(current.GetAttributeValue<string>("gr_timecloudjobitemid"), itemId, StringComparison.Ordinal) &&
+                    String.Equals(current.GetAttributeValue<string>("gr_timecloudcode"), code, StringComparison.Ordinal), "CONFIRMED_MISMATCH");
+            else
+                Require(String.IsNullOrWhiteSpace(current.GetAttributeValue<string>("gr_timecloudjobitemid")) &&
+                    String.IsNullOrWhiteSpace(current.GetAttributeValue<string>("gr_timecloudcode")), "PARTIAL_CONFIRMATION");
         }
     }
 

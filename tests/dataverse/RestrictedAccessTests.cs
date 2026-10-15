@@ -23,6 +23,7 @@ public static class RestrictedAccessTests
         Test("no secure configuration fails closed", () => Denied(() => new RestrictedAccessPlugin("full=ignored", null)));
         Test("role IDs cannot overlap", () => Denied(() => new RestrictedAccessPlugin(null, "full="+Id+";coordinator="+Id+";office="+Id+";book="+Id)));
         MeterTests();
+        TimeCloudTests();
         foreach (string role in new[] { "office", "book" })
         {
             string r = role;
@@ -91,10 +92,16 @@ public static class RestrictedAccessTests
             var job = Row("gr_job"); job["gr_description"]="Repair mast"; job["gr_ordernumber"]="PO-1";
             job["gr_site"]=new EntityReference("gr_site",OtherId); job["gr_status"]=new OptionSetValue(122830001); job["gr_coordinatormanaged"]=false;
             if (!RestrictedAccessPlugin.IsRegistrationChild(create, job)) throw new Exception("Exact registration Job create was not accepted");
+            foreach(var field in new[]{"gr_gtentered","gr_officeattentionrequired","gr_registrationvoid","gr_techniciansubmissionfurtherworkrequired","gr_techniciansubmissionsafetyissueidentified","gr_techniciansubmissiontokenused","gr_timecloudentered"}) job[field]=false;
+            foreach(var field in new[]{"gr_currentofficeaction","gr_jobcardstatus","gr_servicetype"}) job[field]=new OptionSetValue(1);
+            job["gr_jobid"]=Id; job["createdon"]=new DateTime(2026,10,15); job["ownerid"]=new EntityReference("systemuser",Id); job["statecode"]=new OptionSetValue(0); job["statuscode"]=new OptionSetValue(1);
+            if (!RestrictedAccessPlugin.IsRegistrationChild(create, job)) throw new Exception("Platform-enriched registration Job create was not accepted");
             var ledger = RegistrationLedger("gr_jobbookentry", Id, Id);
+            ledger["gr_jobbookentryid"]=Id; ledger["createdon"]=new DateTime(2026,10,15); ledger["ownerid"]=new EntityReference("systemuser",Id); ledger["organizationid"]=new EntityReference("organization",OtherId);
             if (!RestrictedAccessPlugin.IsRegistrationChild(create, ledger)) throw new Exception("Exact registration ledger create was not accepted");
             var update = Context("Update", new ParameterCollection(), parent, 20);
             var number = Row("gr_job"); number["gr_jobnumber"]="123456";
+            number["modifiedon"]=new DateTime(2026,10,15); number["modifiedby"]=new EntityReference("systemuser",Id);
             if (!RestrictedAccessPlugin.IsRegistrationChild(update, number)) throw new Exception("Exact registration Job number update was not accepted");
             job["gr_jobtype"] = new OptionSetValue(1);
             if (RestrictedAccessPlugin.IsRegistrationChild(create, job)) throw new Exception("Additional registration Job field was accepted");
@@ -136,8 +143,12 @@ public static class RestrictedAccessTests
     static readonly Guid BookRole = new Guid("00000000-0000-4000-8000-000000000014");
     static readonly Guid MeterRole = new Guid("00000000-0000-4000-8000-000000000015");
     static readonly Guid MeterApp = new Guid("00000000-0000-4000-8000-000000000016");
+    static readonly Guid TimeCloudRole = new Guid("00000000-0000-4000-8000-000000000017");
+    static readonly Guid TimeCloudUser = new Guid("00000000-0000-4000-8000-000000000018");
+    static readonly Guid TimeCloudApp = new Guid("00000000-0000-4000-8000-000000000019");
     static string LegacyConfig { get { return "full="+FullRole+";coordinator="+CoordinatorRole+";office="+OfficeRole+";book="+BookRole; } }
     static string MeterConfig { get { return LegacyConfig+";meterrole="+MeterRole+";meteruser="+Id+";meterapplication="+MeterApp; } }
+    static string TimeCloudConfig { get { return LegacyConfig+";timecloudrole="+TimeCloudRole+";timeclouduser="+TimeCloudUser+";timecloudapplication="+TimeCloudApp; } }
     static Entity MeterTarget()
     {
         var row=Row("gr_job"); row["gr_hourmeter"]=1620; row["gr_hourmeterreadingtype"]=new OptionSetValue(122830000);
@@ -192,6 +203,7 @@ public static class RestrictedAccessTests
     }
     static void ExecuteMeterGuard(Entity target, Guid[] held, Entity caller)
     {
+        var identityReads=0;var membershipReads=0;
         var context=Proxy.For<IPluginExecutionContext>(new Dictionary<string,object>{
             {"Stage",20},{"Mode",0},{"IsInTransaction",true},{"UserId",Id},{"InitiatingUserId",Id},{"MessageName","Update"},
             {"InputParameters",new ParameterCollection{{"Target",target}}}
@@ -201,11 +213,78 @@ public static class RestrictedAccessTests
                 var query=(Microsoft.Xrm.Sdk.Query.QueryExpression)args[0];var result=new EntityCollection();
                 if(query.EntityName=="systemuserroles") foreach(var id in held){var row=new Entity("systemuserroles");row["roleid"]=id;result.Entities.Add(row);} return result;
             })},
-            {"Retrieve",new Func<object[],object>(args=>(string)args[0]=="systemuser"?caller:MeterCurrent())}
+            {"Retrieve",new Func<object[],object>(args=>{if((string)args[0]=="systemuser")throw new Exception("Caller service must not read the application identity");return MeterCurrent();})}
         });
-        var factory=Proxy.For<IOrganizationServiceFactory>(new Dictionary<string,object>{{"CreateOrganizationService",new Func<object[],object>(args=>{if((Guid)args[0]!=Id)throw new Exception("Impersonation is forbidden");return service;})}});
-        var provider=Proxy.For<IServiceProvider>(new Dictionary<string,object>{{"GetService",new Func<object[],object>(args=>(Type)args[0]==typeof(IPluginExecutionContext)?(object)context:factory)}});
+        var identityService=Proxy.For<IOrganizationService>(new Dictionary<string,object>{
+            {"Retrieve",new Func<object[],object>(args=>{if((string)args[0]!="systemuser"||(Guid)args[1]!=Id)throw new Exception("Elevated identity lookup escaped its exact user target");identityReads++;return caller;})},
+            {"RetrieveMultiple",new Func<object[],object>(args=>{var query=(Microsoft.Xrm.Sdk.Query.QueryExpression)args[0];if(query.EntityName!="systemuserroles"||query.Criteria.Conditions.Count!=2)throw new Exception("Elevated membership lookup escaped its exact association");membershipReads++;var result=new EntityCollection();if(Array.IndexOf(held,MeterRole)>=0)result.Entities.Add(new Entity("systemuserroles"));return result;})}
+        });
+        var factory=Proxy.For<IOrganizationServiceFactory>(new Dictionary<string,object>{{"CreateOrganizationService",new Func<object[],object>(args=>{if(args[0]==null)return identityService;if((Guid)args[0]!=Id)throw new Exception("Impersonation is forbidden");return service;})}});
+        var provider=Proxy.For<IServiceProvider>(new Dictionary<string,object>{{"GetService",new Func<object[],object>(args=>(Type)args[0]==typeof(IPluginExecutionContext)?(object)context:(Type)args[0]==typeof(IOrganizationServiceFactory)?(object)factory:null)}});
         new RestrictedAccessPlugin(null,MeterConfig).Execute(provider);
+        if(identityReads!=1||membershipReads!=1)throw new Exception("Expected one exact elevated identity and membership read");
+    }
+
+    static Entity TimeCloudTarget()
+    {
+        var row=new Entity("gr_job",TimeCloudUser); row["gr_timecloudentered"]=true;
+        row["gr_timecloudjobitemid"]="6aab1673160d0477d2e3e07d"; row["gr_timecloudcode"]="26958"; return row;
+    }
+    static Entity TimeCloudCurrent()
+    {
+        var row=new Entity("gr_job",TimeCloudUser); row["statecode"]=new OptionSetValue(0);
+        row["gr_registrationvoid"]=false; row["gr_timecloudentered"]=false; return row;
+    }
+    static Entity TimeCloudCaller() { var row=new Entity("systemuser",TimeCloudUser); row["applicationid"]=TimeCloudApp; row["isdisabled"]=false; return row; }
+    static void TimeCloudTests()
+    {
+        Test("dedicated TimeCloud configuration is opt in",()=>new RestrictedAccessPlugin(null,TimeCloudConfig));
+        Test("partial TimeCloud configuration fails closed",()=>Denied(()=>new RestrictedAccessPlugin(null,LegacyConfig+";timecloudrole="+TimeCloudRole)));
+        Test("TimeCloud role cannot reuse a human profile",()=>Denied(()=>new RestrictedAccessPlugin(null,TimeCloudConfig.Replace(TimeCloudRole.ToString(),OfficeRole.ToString()))));
+        Test("duplicate TimeCloud setting fails closed",()=>Denied(()=>new RestrictedAccessPlugin(null,TimeCloudConfig+";timeclouduser="+TimeCloudUser)));
+        Test("server writer identities must be distinct",()=>Denied(()=>new RestrictedAccessPlugin(null,MeterConfig+";timecloudrole="+TimeCloudRole+";timeclouduser="+Id+";timecloudapplication="+TimeCloudApp)));
+        Test("exact TimeCloud confirmation is allowed",()=>TimeCloudWritePolicy.Validate(TimeCloudTarget(),TimeCloudCurrent()));
+        Test("TimeCloud permits exact Dataverse platform fields",()=>{var row=TimeCloudTarget();row["gr_jobid"]=row.Id;row["modifiedby"]=new EntityReference("systemuser",TimeCloudUser);row["modifiedon"]=DateTime.UtcNow;row["modifiedonbehalfby"]=null;TimeCloudWritePolicy.Validate(row,TimeCloudCurrent());});
+        foreach(var message in new[]{"Create","Delete","Upsert"}) { var m=message; Test("TimeCloud denies "+m,()=>Denied(()=>TimeCloudWritePolicy.ValidateTarget(m,TimeCloudTarget()))); }
+        foreach(var field in new[]{"gr_status","gr_description","gr_gtentered"}) { var f=field; Test("TimeCloud denies extra field "+f,()=>{var row=TimeCloudTarget();row[f]="extra";Denied(()=>TimeCloudWritePolicy.Validate(row,TimeCloudCurrent()));}); }
+        Test("TimeCloud requires entered true",()=>{var row=TimeCloudTarget();row["gr_timecloudentered"]=false;Denied(()=>TimeCloudWritePolicy.Validate(row,TimeCloudCurrent()));});
+        foreach(var field in new[]{"gr_timecloudjobitemid","gr_timecloudcode"}) {
+            var f=field; Test("TimeCloud requires bounded nonempty "+f,()=>{var row=TimeCloudTarget();row[f]=" ";Denied(()=>TimeCloudWritePolicy.Validate(row,TimeCloudCurrent()));});
+            Test("TimeCloud rejects oversized "+f,()=>{var row=TimeCloudTarget();row[f]=new string('x',101);Denied(()=>TimeCloudWritePolicy.Validate(row,TimeCloudCurrent()));});
+        }
+        Test("TimeCloud denies inactive Job",()=>{var current=TimeCloudCurrent();current["statecode"]=new OptionSetValue(1);Denied(()=>TimeCloudWritePolicy.Validate(TimeCloudTarget(),current));});
+        Test("TimeCloud denies void Job",()=>{var current=TimeCloudCurrent();current["gr_registrationvoid"]=true;Denied(()=>TimeCloudWritePolicy.Validate(TimeCloudTarget(),current));});
+        Test("TimeCloud denies overwriting partial confirmation",()=>{var current=TimeCloudCurrent();current["gr_timecloudjobitemid"]="other";Denied(()=>TimeCloudWritePolicy.Validate(TimeCloudTarget(),current));});
+        Test("TimeCloud permits exact idempotent confirmation",()=>{var current=TimeCloudCurrent();current["gr_timecloudentered"]=true;current["gr_timecloudjobitemid"]=TimeCloudTarget()["gr_timecloudjobitemid"];current["gr_timecloudcode"]=TimeCloudTarget()["gr_timecloudcode"];TimeCloudWritePolicy.Validate(TimeCloudTarget(),current);});
+        Test("TimeCloud denies replacing confirmed identity",()=>{var current=TimeCloudCurrent();current["gr_timecloudentered"]=true;current["gr_timecloudjobitemid"]="other";current["gr_timecloudcode"]="26958";Denied(()=>TimeCloudWritePolicy.Validate(TimeCloudTarget(),current));});
+        Test("TimeCloud requires exact application user and role",()=>TimeCloudWritePolicy.ValidateCaller(TimeCloudUser,TimeCloudCaller(),new[]{TimeCloudRole},TimeCloudUser,TimeCloudApp,TimeCloudRole));
+        Test("human holding TimeCloud role is denied",()=>{var caller=TimeCloudCaller();caller.Attributes.Remove("applicationid");Denied(()=>TimeCloudWritePolicy.ValidateCaller(TimeCloudUser,caller,new[]{TimeCloudRole},TimeCloudUser,TimeCloudApp,TimeCloudRole));});
+        Test("other TimeCloud application is denied",()=>{var caller=TimeCloudCaller();caller["applicationid"]=OtherId;Denied(()=>TimeCloudWritePolicy.ValidateCaller(TimeCloudUser,caller,new[]{TimeCloudRole},TimeCloudUser,TimeCloudApp,TimeCloudRole));});
+        Test("disabled TimeCloud application is denied",()=>{var caller=TimeCloudCaller();caller["isdisabled"]=true;Denied(()=>TimeCloudWritePolicy.ValidateCaller(TimeCloudUser,caller,new[]{TimeCloudRole},TimeCloudUser,TimeCloudApp,TimeCloudRole));});
+        Test("TimeCloud missing role is denied",()=>Denied(()=>TimeCloudWritePolicy.ValidateCaller(TimeCloudUser,TimeCloudCaller(),new[]{OfficeRole},TimeCloudUser,TimeCloudApp,TimeCloudRole)));
+        Test("guard executes exact TimeCloud path",()=>ExecuteTimeCloudGuard(TimeCloudTarget(),new[]{TimeCloudRole},TimeCloudCaller()));
+        Test("Full role cannot bypass TimeCloud field guard",()=>{var row=TimeCloudTarget();row["gr_status"]=new OptionSetValue(122830003);Denied(()=>ExecuteTimeCloudGuard(row,new[]{TimeCloudRole,FullRole},TimeCloudCaller()));});
+        Test("configured TimeCloud user without TimeCloud role cannot use Full bypass",()=>Denied(()=>ExecuteTimeCloudGuard(TimeCloudTarget(),new[]{FullRole},TimeCloudCaller())));
+    }
+    static void ExecuteTimeCloudGuard(Entity target, Guid[] held, Entity caller)
+    {
+        var identityReads=0;var membershipReads=0;
+        var context=Proxy.For<IPluginExecutionContext>(new Dictionary<string,object>{
+            {"Stage",20},{"Mode",0},{"IsInTransaction",true},{"UserId",TimeCloudUser},{"InitiatingUserId",TimeCloudUser},{"MessageName","Update"},
+            {"InputParameters",new ParameterCollection{{"Target",target}}}
+        });
+        var service=Proxy.For<IOrganizationService>(new Dictionary<string,object>{
+            {"RetrieveMultiple",new Func<object[],object>(args=>{var query=(Microsoft.Xrm.Sdk.Query.QueryExpression)args[0];var result=new EntityCollection();if(query.EntityName=="systemuserroles")foreach(var id in held){var row=new Entity("systemuserroles");row["roleid"]=id;result.Entities.Add(row);}return result;})},
+            {"Retrieve",new Func<object[],object>(args=>{if((string)args[0]=="systemuser")throw new Exception("Caller service must not read the application identity");return TimeCloudCurrent();})}
+        });
+        var identityService=Proxy.For<IOrganizationService>(new Dictionary<string,object>{
+            {"Retrieve",new Func<object[],object>(args=>{if((string)args[0]!="systemuser"||(Guid)args[1]!=TimeCloudUser)throw new Exception("Elevated identity lookup escaped its exact user target");identityReads++;return caller;})},
+            {"RetrieveMultiple",new Func<object[],object>(args=>{var query=(Microsoft.Xrm.Sdk.Query.QueryExpression)args[0];if(query.EntityName!="systemuserroles"||query.Criteria.Conditions.Count!=2)throw new Exception("Elevated membership lookup escaped its exact association");membershipReads++;var result=new EntityCollection();if(Array.IndexOf(held,TimeCloudRole)>=0)result.Entities.Add(new Entity("systemuserroles"));return result;})}
+        });
+        var factory=Proxy.For<IOrganizationServiceFactory>(new Dictionary<string,object>{{"CreateOrganizationService",new Func<object[],object>(args=>{if(args[0]==null)return identityService;if((Guid)args[0]!=TimeCloudUser)throw new Exception("Impersonation is forbidden");return service;})}});
+        var provider=Proxy.For<IServiceProvider>(new Dictionary<string,object>{{"GetService",new Func<object[],object>(args=>(Type)args[0]==typeof(IPluginExecutionContext)?(object)context:(Type)args[0]==typeof(IOrganizationServiceFactory)?(object)factory:null)}});
+        new RestrictedAccessPlugin(null,TimeCloudConfig).Execute(provider);
+        if(identityReads!=1||membershipReads!=1)throw new Exception("Expected one exact elevated identity and membership read");
     }
 
     static Entity RegistrationLedger(string table, Guid ledgerId, Guid jobId)

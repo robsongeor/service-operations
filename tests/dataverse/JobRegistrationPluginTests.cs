@@ -144,6 +144,8 @@ namespace ServiceOperations.JobRegistration.Tests
                     var db = Fixture(); db.FailWrite = stage;
                     Reject(() => db.Invoke(JobRegistrationPlugin.RegisterMessage, NewRequest()), "SAVE_FAILED");
                     Check(db.Count("gr_job") == 0 && db.Count("gr_jobbookentry") == 0, "Partial write survived");
+                    Check(db.TraceLines.Count == 1 && db.TraceLines[0].Contains("System.Exception") && db.TraceLines[0].Contains("Simulated Dataverse failure"), "Unexpected failure was not traced for administrators");
+                    Check(!db.TraceLines[0].Contains(Id(1).ToString()) && !db.TraceLines[0].Contains("Sample work"), "Request data leaked into diagnostic tracing");
                     db.FailWrite = 0;
                     db.Invoke(JobRegistrationPlugin.RegisterMessage, NewRequest());
                     Check(db.Count("gr_job") == 1 && db.Count("gr_jobbookentry") == 1, "Failed request could not safely retry");
@@ -379,7 +381,7 @@ namespace ServiceOperations.JobRegistration.Tests
                 { "PrimaryEntityId", target.Id }, { "PrimaryEntityName", target.LogicalName }, { "MessageName", message },
                 { "InputParameters", new ParameterCollection { { "Target", target } } }, { "PreEntityImages", images }, { "ParentContext", parent }
             });
-            new JobNumberInvariantPlugin().Execute(new Provider(context, null));
+            new JobNumberInvariantPlugin().Execute(new Provider(context, null, null));
         }
         static string Table(string book) { return book == "auckland" ? "gr_jobbookentry" : "gr_" + book + "jobbookentry"; }
         internal static string Key(string table, Guid id) { return table + ":" + id.ToString("D"); }
@@ -389,6 +391,7 @@ namespace ServiceOperations.JobRegistration.Tests
         {
             internal Dictionary<string, Entity> Records = new Dictionary<string, Entity>();
             internal int Clock, LastWrites, LastReads, FailWrite;
+            internal readonly List<string> TraceLines = new List<string>();
             internal bool DenyWrites;
             internal Guid LastServiceUser;
             internal Action BeforeNumberUpdate;
@@ -412,8 +415,8 @@ namespace ServiceOperations.JobRegistration.Tests
                 });
                 try {
                     if (message == JobWorkflowPlugin.ManageMessage || message == JobWorkflowPlugin.VoidMessage || message == JobWorkflowPlugin.DispatchMessage)
-                        new JobWorkflowPlugin().Execute(new Provider(context, new Factory(this, service)));
-                    else new JobRegistrationPlugin().Execute(new Provider(context, new Factory(this, service)));
+                        new JobWorkflowPlugin().Execute(new Provider(context, new Factory(this, service), new Tracer(this)));
+                    else new JobRegistrationPlugin().Execute(new Provider(context, new Factory(this, service), new Tracer(this)));
                     service.Commit(); return output;
                 } finally { LastReads = service.Reads; LastWrites = service.Writes; }
             }
@@ -477,9 +480,15 @@ namespace ServiceOperations.JobRegistration.Tests
         }
         sealed class Provider : IServiceProvider
         {
-            readonly IPluginExecutionContext context; readonly IOrganizationServiceFactory factory;
-            internal Provider(IPluginExecutionContext value, IOrganizationServiceFactory services) { context = value; factory = services; }
-            public object GetService(Type type) { return type == typeof(IPluginExecutionContext) ? (object)context : type == typeof(IOrganizationServiceFactory) ? factory : null; }
+            readonly IPluginExecutionContext context; readonly IOrganizationServiceFactory factory; readonly ITracingService tracing;
+            internal Provider(IPluginExecutionContext value, IOrganizationServiceFactory services, ITracingService trace) { context = value; factory = services; tracing = trace; }
+            public object GetService(Type type) { return type == typeof(IPluginExecutionContext) ? (object)context : type == typeof(IOrganizationServiceFactory) ? (object)factory : type == typeof(ITracingService) ? (object)tracing : null; }
+        }
+        sealed class Tracer : ITracingService
+        {
+            readonly Database db;
+            internal Tracer(Database database) { db = database; }
+            public void Trace(string format, params object[] args) { db.TraceLines.Add(string.Format(format, args)); }
         }
         sealed class InterfaceProxy : RealProxy
         {

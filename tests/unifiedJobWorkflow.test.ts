@@ -147,6 +147,8 @@ test('deployment readiness tooling is read-only and non-interactive by default',
     // read-only boundary above and the explicit default Verify mode below instead.
     assert.match(script, /\$service\.Retrieve|\$service\.Execute/)
     assert.match(provisioner, /\[string\]\$Mode = 'Verify'/)
+    assert.match(provisioner, /'UpdateAssembly'/)
+    assert.match(provisioner, /if\(\$updateAssembly\)[\s\S]*Ensure-Assembly[\s\S]*return/)
     assert.match(provisioner, /\$provision = \$Mode -eq 'Provision'/)
     assert.equal(manifest.customApis.length, 5)
     assert.equal(manifest.regionalNumberContracts.length, 4)
@@ -210,7 +212,7 @@ test('dry-run deployment package is complete, ordered and cannot deploy', () => 
     assert.equal(readiness.regionalTables.length, 4)
     assert.equal(readiness.customApis.length, 5)
     assert.equal(plan.featureFlagDuringDeployment, false)
-    assert.equal(plan.assembly.version, '1.0.2.0')
+    assert.equal(plan.assembly.version, '1.0.12.0')
     assert.equal(/AssemblyVersion\("([^"]+)"\)/.exec(assemblyInfo)?.[1], plan.assembly.version)
     assert.equal(/AssemblyFileVersion\("([^"]+)"\)/.exec(assemblyInfo)?.[1], plan.assembly.version)
     assert.equal(plan.provisioningIncluded, false)

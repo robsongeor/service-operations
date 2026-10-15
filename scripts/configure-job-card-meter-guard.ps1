@@ -24,7 +24,7 @@ if ($Mode -eq 'Apply') {
 }
 $inspection = & (Join-Path $PSScriptRoot 'inspect-job-card-meter-access.ps1') -EnvironmentUrl $EnvironmentUrl -ApplicationId $ApplicationId -UserName $UserName -LoginPrompt $LoginPrompt | ConvertFrom-Json
 Require ($inspection.roleExists -and $inspection.privilegeMatch -and $inspection.applicationUserVerified -and $inspection.exclusiveRole) 'Dedicated identity/privileges have not passed inspection. No configuration was changed.'
-Require ($inspection.guardStepCount -eq 14 -and [Version]$inspection.guardVersion -eq [Version]'1.0.2.0') 'Deploy and verify the reviewed 1.0.2.0 assembly before configuring the writer.'
+Require ($inspection.guardStepCount -eq 14 -and [Version]$inspection.guardVersion -ge [Version]'1.0.2.0') 'Deploy and verify a reviewed assembly version 1.0.2.0 or later before configuring the writer.'
 if ($inspection.guardIdentityMatch) { Write-Output 'Exact meter identity is already configured; no changes.'; return }
 $connection = "AuthType=OAuth;Url=$($EnvironmentUrl.TrimEnd('/'));AppId=51f81489-12ee-4a9e-aaae-a2591f45987d;RedirectUri=app://58145B91-0C36-4500-8554-080854F2AC97;LoginPrompt=$LoginPrompt"
 if ($UserName) { Require ($UserName -match '^[^;\s@]+@[^;\s@]+$') 'Invalid account hint.'; $connection += ";UserName=$UserName" }
