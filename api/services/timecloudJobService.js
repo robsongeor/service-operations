@@ -182,6 +182,15 @@ async function readJson(response, message) {
     return body
 }
 
+async function readDataverseConfirmation(response, message) {
+    if (response.ok) return readJson(response, message)
+    const body = await response.json().catch(() => null)
+    const code = typeof body?.error?.code === 'string' && /^[\w.-]{1,80}$/.test(body.error.code)
+        ? `, code ${body.error.code}`
+        : ''
+    throw new Error(`${message} (Dataverse HTTP ${response.status}${code}).`)
+}
+
 async function sync(request, options = {}) {
     if (request.method !== 'POST') return jsonResponse(405, { error: 'Method not allowed.' }, { Allow: 'POST' })
     const allowed = new Set(['book', 'jobId', 'ledgerId', 'trigger'])
@@ -275,7 +284,7 @@ async function sync(request, options = {}) {
             }),
         })
         if (patchResponse.status === 412) return jsonResponse(409, { error: `Job ${job.gr_jobnumber} changed while TimeCloud was updated. Reload and retry to reconcile it.` })
-        const saved = await readJson(patchResponse, `TimeCloud Job ${job.gr_jobnumber} exists, but Dataverse could not record it. Retry to reconcile it.`)
+        const saved = await readDataverseConfirmation(patchResponse, `TimeCloud Job ${job.gr_jobnumber} exists, but Dataverse could not record it. Retry to reconcile it`)
         const savedEtag = saved['@odata.etag'] || patchResponse.headers.get('ETag') || ''
         if (!saved.gr_timecloudentered || saved.gr_timecloudjobitemid !== item._id || saved.gr_timecloudcode !== item.code || !savedEtag) {
             throw new Error(`TimeCloud Job ${job.gr_jobnumber} exists, but Dataverse could not confirm it. Retry to reconcile it.`)
