@@ -124,6 +124,45 @@ the preview, rejecting stale details with a reopen instruction. This is a prefli
 atomic server-side allocation lock. The existing dispatch service queues delivery and the shared
 hook monitors it in the background; duplicate clicks are blocked while delivery is pending.
 Ordinary Job sends never modify Job status, assignment, GT/Timecloud markers or saved evidence.
+
+## TimeCloud Job creation
+
+New unified Job Book registrations call the managed `/api/timecloudjobs` backend only after
+Dataverse has committed the permanent regional Job Number. The backend accepts only a regional
+ledger ID and its linked Job ID, validates the caller against Dataverse, verifies the registered
+ledger/Job pair, and uses a dedicated Dataverse application identity for the narrow confirmation
+write.
+
+TimeCloud authentication and the integrator key remain server-only. Creation is disabled unless
+`TIMECLOUD_JOB_CREATION_ENABLED=true` is explicitly configured. During validation,
+`TIMECLOUD_JOB_MODE=test` (also the fail-safe default) names every created item
+`<Job Number> [TEST ONLY - SAFE TO DELETE] <Description>` and sets its custom code to
+`JOBBOOK-TEST-ONLY`, making the test population easy to identify and remove. Test mode never creates
+automatically after registration; an operator must deliberately select Timecloud Entry on the
+registered disposable row. Production naming and automatic creation are unlocked only by
+deliberately setting the mode to `production`. A disabled integration returns a verified no-op so
+deploying it cannot turn a successful Job save into a misleading TimeCloud error. The backend obtains and caches
+the temporary Bearer token, searches active Job Items by the exact Job Number prefix, and creates a
+Job Item only when no exact match exists. The payload uses `<Job Number> <Description>`, the
+configured `Job Number` layer, an empty group/children/export-code set, and no geofence. TimeCloud
+assigns `code`.
+
+On confirmation, `gr_job.gr_timecloudentered`, `gr_timecloudjobitemid`, and `gr_timecloudcode` are
+written together under the Job ETag. A lost response or failed Dataverse write is recoverable: the
+next attempt finds the exact existing TimeCloud item and reconciles it instead of creating a
+duplicate. Multiple exact matches or an existing match with different details stop for review.
+The Job Book Timecloud Entry control is the retry path for registered rows; legacy/promoted marker
+behaviour remains unchanged.
+
+Required server settings are `TIMECLOUD_CLIENT_ID`, `TIMECLOUD_API_USERNAME`,
+`TIMECLOUD_API_PASSWORD`, `TIMECLOUD_INTEGRATOR_KEY`, `TIMECLOUD_JOB_LAYER_ID`, and
+`TIMECLOUD_JOB_MODE`; `TIMECLOUD_JOB_CREATION_ENABLED=true` is the independent release gate. Optional URL
+overrides are `TIMECLOUD_API_URL`, `TIMECLOUD_AUTH_URL`, and `TIMECLOUD_AUDIENCE`. None are Vite
+variables. Provision or verify the two identity columns with
+`scripts/manage-timecloud-job-schema.ps1` before enabling the deployed endpoint. The controlled
+test, cleanup, production-promotion and rollback procedure is in
+[`../timecloud-job-integration-rollout.md`](../timecloud-job-integration-rollout.md).
+
 Existing pilot-recipient restrictions, secure-link replacement confirmation and localhost send
 blocking remain intact. No sending was tested against live services.
 

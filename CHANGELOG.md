@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added duplicate-safe TimeCloud Job Item creation after unified Job Book registration. The
+  server-only integration verifies the Dataverse ledger/Job pair, caches a temporary TimeCloud
+  token, creates the configured Job Number-layer item without a geofence, persists the returned
+  TimeCloud item ID/code, and reuses the Job Book marker as a recoverable retry control. Creation
+  defaults to visibly labelled, custom-coded test-only items until production mode is explicit.
+
 - Elevated Pubudu from Job Book Admin back to Office Admin in both Entra and Dataverse using
   replacement-first, exact before/after verification. Unrelated Dataverse roles and the existing
   legacy JobBookOnly application assignment were preserved.

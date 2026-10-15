@@ -28,6 +28,16 @@
     "LIFTTRUCKS_API_KEY": "your-lifttrucks-api-key",
     "CHARGEABLE_INVOICE_PREVIEW_ENABLED": "false",
     "CHARGEABLE_INVOICE_APPROVAL_ENABLED": "false",
-    "GEOAPIFY_API_KEY": "your-geoapify-api-key"
+    "GEOAPIFY_API_KEY": "your-geoapify-api-key",
+    "TIMECLOUD_API_URL": "https://api.jointimecloud.com",
+    "TIMECLOUD_AUTH_URL": "https://auth.jointimecloud.com/oauth/token",
+    "TIMECLOUD_AUDIENCE": "https://prod.editmytime.com/",
+    "TIMECLOUD_CLIENT_ID": "your-timecloud-production-client-id",
+    "TIMECLOUD_API_USERNAME": "your-dedicated-timecloud-api-user-email",
+    "TIMECLOUD_API_PASSWORD": "your-dedicated-timecloud-api-user-password",
+    "TIMECLOUD_INTEGRATOR_KEY": "your-timecloud-integrator-key",
+    "TIMECLOUD_JOB_LAYER_ID": "671835fe0d6412dbb8cafb30",
+    "TIMECLOUD_JOB_CREATION_ENABLED": "false",
+    "TIMECLOUD_JOB_MODE": "test"
   }
 }

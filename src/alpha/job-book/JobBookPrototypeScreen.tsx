@@ -51,6 +51,7 @@ import JobBookVoidDialog from './JobBookVoidDialog'
 import { availableJobBooks, JOB_BOOKS, jobNumberSequence, REGIONAL_JOB_BOOK_ALLOCATION_ENABLED, type JobBookKey } from './jobBookConfig'
 import { fetchJobBookEquipmentIndex } from './jobBookEquipmentIndexApi'
 import { requestGreenTreeJobReconciliation } from './greenTreeJobSyncApi'
+import { syncJobBookJobToTimecloud } from './timecloudJobApi'
 import {
     applyEquipmentToRow,
     applyIntakeCustomerToRow,
@@ -575,8 +576,16 @@ export default function JobBookPrototypeScreen({
         registration.complete()
         setScheduleDrafts([])
         setIntakeDrawerOpen(false)
-        setSaveError('')
         setIntakeError('')
+        try {
+            const timecloud = await syncJobBookJobToTimecloud(token, { book: result.book, jobId: result.jobId, ledgerId: result.ledgerId, trigger: 'automatic' })
+            if (timecloud.timecloudEntered) reconcileIntakeRow({ ...saved, timecloudEntered: true, etag: timecloud.etag })
+            setSaveError('')
+        } catch (error) {
+            setSaveError(error instanceof Error
+                ? `Job ${result.jobNumber} was saved. ${error.message}`
+                : `Job ${result.jobNumber} was saved, but TimeCloud could not confirm it. Select Timecloud Entry to retry.`)
+        }
     }
     const resumeRegistration = async () => {
         const result = await registration.submit()
@@ -772,6 +781,19 @@ export default function JobBookPrototypeScreen({
                 setSaveError('')
                 try {
                     const token = await acquireDataverseAccessToken(instance, account)
+                    if (value && row.registeredLedgerId) {
+                        const timecloud = await syncJobBookJobToTimecloud(token, {
+                            book: row.jobBookKey,
+                            jobId: row.linkedJobId,
+                            ledgerId: row.registeredLedgerId,
+                            trigger: 'manual',
+                        })
+                        if (!timecloud.timecloudEntered) throw new Error('TimeCloud Job creation is currently disabled.')
+                        const saved = { timecloudEntered: true, entered: row.entered, etag: timecloud.etag }
+                        setRecentRows((current) => current.map((item) => item.linkedJobId === row.linkedJobId ? { ...item, ...saved } : item))
+                        setIntakeRows((current) => current.map((item) => item.linkedJobId === row.linkedJobId ? { ...item, ...saved } : item))
+                        return
+                    }
                     const saved = await updateManagedJobBookMarker(token, row, field, value as boolean)
                     setRecentRows((current) => current.map((item) => item.linkedJobId === row.linkedJobId ? { ...item, ...saved } : item))
                     setIntakeRows((current) => current.map((item) => item.linkedJobId === row.linkedJobId ? { ...item, ...saved } : item))

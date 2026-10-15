@@ -149,6 +149,15 @@ and restrict the provider key separately; never expose it through a `VITE_` vari
 `VITE_EQUIPMENT_MAP_TILE_URL` may optionally select a different public Leaflet raster-tile template;
 never put a provider credential in that browser-visible value.
 
+### TimeCloud Job creation
+
+V2 TimeCloud Job creation uses server-only credentials and remains independently disabled until
+`TIMECLOUD_JOB_CREATION_ENABLED=true` is set. Test releases must keep
+`TIMECLOUD_JOB_MODE=test`; this is also the fail-safe mode when the setting is absent. Do not set
+the mode to `production` during initial validation. The required settings, schema prerequisite,
+controlled smoke, cleanup and rollback procedure are maintained in
+[`../timecloud-job-integration-rollout.md`](../timecloud-job-integration-rollout.md).
+
 The managed address-search and Equipment Map APIs prefer the server-side `DATAVERSE_URL` setting.
 Because this repository is dedicated to the Liftrucks tenant and Azure Static Web Apps does not pass
 Vite build variables into its managed API runtime, those APIs use the fixed, non-secret Liftrucks
