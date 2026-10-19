@@ -54,12 +54,16 @@ try {
         $statuses = @($rowsByCode[$code] | Where-Object { $_.Attributes.Contains('gr_greentreestatus') } | ForEach-Object { [string]$_['gr_greentreestatus'] } | Where-Object { $_ } | Sort-Object -Unique)
         if ($statuses.Count -gt 1) { $conflicts++ }
     }
-    $remainingCodes = @($rowsByCode.Keys | Where-Object { @($rowsByCode[$_] | Where-Object { $_.Attributes.Contains('gr_greentreestatuscheckedon') }).Count -eq 0 } | Sort-Object)
+    $eligibleCodes = @($rowsByCode.Keys | Where-Object { $_ -match '^(?:[A-Z]{1,2})?[0-9]{1,20}$' })
+    $ignoredCodes = @($rowsByCode.Keys | Where-Object { $_ -notmatch '^(?:[A-Z]{1,2})?[0-9]{1,20}$' } | Sort-Object)
+    $remainingCodes = @($eligibleCodes | Where-Object { @($rowsByCode[$_] | Where-Object { $_.Attributes.Contains('gr_greentreestatuscheckedon') }).Count -eq 0 } | Sort-Object)
     [ordered]@{
         uniqueJobNumbers=$rowsByCode.Count
-        checkedUnique=@($rowsByCode.Keys | Where-Object { @($rowsByCode[$_] | Where-Object { $_.Attributes.Contains('gr_greentreestatuscheckedon') }).Count -gt 0 }).Count
-        remainingUnique=$remainingCodes.Count
-        remainingJobNumbers=$remainingCodes
+        eligibleJobNumbers=$eligibleCodes.Count
+        checkedEligible=@($eligibleCodes | Where-Object { @($rowsByCode[$_] | Where-Object { $_.Attributes.Contains('gr_greentreestatuscheckedon') }).Count -gt 0 }).Count
+        remainingEligible=$remainingCodes.Count
+        remainingEligibleJobNumbers=$remainingCodes
+        ignoredInvalidJobNumbers=$ignoredCodes
         crossRepresentationStatusConflicts=$conflicts
         tables=$tableReports
         mutationsPerformed=$false

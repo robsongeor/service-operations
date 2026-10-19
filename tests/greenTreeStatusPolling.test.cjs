@@ -65,27 +65,6 @@ test('backfill deduplicates Job Numbers, updates every representation and leaves
     assert.equal(patches.some((patch) => Object.hasOwn(patch.body, 'gr_status')), false)
 })
 
-test('backfill includes supported legacy alphanumeric, hyphenated and named Job codes', async () => {
-    const legacyCodes = ['143057A', 'DQ45-D', 'GALLAGHER CROWN', 'MASON', 'QUOTE', 'TEST', 'VWL000111']
-    const reads = []
-    const result = await pollGreenTreeJobStatuses({
-        mode: 'backfill', dataverseOrigin: 'https://example.crm.dynamics.com', authorization: 'Bearer token',
-        fetchJob: async (code) => { reads.push(code); return null },
-        fetchImpl: async (url, options = {}) => {
-            if (options.method) return new Response(null, { status: 204 })
-            const table = /\/api\/data\/v9\.2\/([^?]+)/.exec(String(url))?.[1]
-            return Response.json({ value: table === 'gr_jobs' ? legacyCodes.map((code, index) => ({
-                '@odata.etag': `W/"${index + 1}"`, gr_jobid: `job-${index + 1}`,
-                gr_jobnumber: code, gr_gtentered: false, gr_greentreestatuscheckedon: null,
-            })) : [] })
-        },
-    })
-    assert.deepEqual(reads.sort(), [...legacyCodes].sort())
-    assert.equal(result.checked, legacyCodes.length)
-    assert.equal(result.notEntered, legacyCodes.length)
-    assert.equal(result.updatedRecords, legacyCodes.length)
-})
-
 test('scheduled polling excludes fresh and finalised records and quarantines a regression', async () => {
     const now = Date.parse('2026-10-19T18:00:00Z')
     let patches = 0

@@ -57,15 +57,6 @@ test('normalises the GreenTree XML collection returned by the live API', () => {
     }])
 })
 
-test('accepts legacy exact GreenTree Job codes without permitting URL control characters', () => {
-    for (const code of ['143057A', 'DQ45-D', 'GALLAGHER CROWN', 'MASON', 'QUOTE', 'TEST', 'VWL000111']) {
-        assert.equal(client.supportedExactJobCode(code), true, code)
-    }
-    for (const code of ['', 'A/B', 'A?B', 'A#B', ' A\nB ', 'A'.repeat(51)]) {
-        assert.equal(client.supportedExactJobCode(code), false, JSON.stringify(code))
-    }
-})
-
 test('requests modified jobs with server-only credentials', async () => {
     process.env.LIFTTRUCKS_API_USERNAME = 'server-user'
     process.env.LIFTTRUCKS_API_PASSWORD = 'server-password'
