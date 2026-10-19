@@ -295,6 +295,12 @@ public static class RestrictedAccessTests
             var t=table;
             Test(t+" server may record exact GreenTree status",()=>GreenTreeStatusWritePolicy.Validate(GreenTreeTarget(t,"open"),GreenTreeCurrent(t,null)));
             Test(t+" server may record Not entered check time",()=>GreenTreeStatusWritePolicy.Validate(GreenTreeTarget(t,null),GreenTreeCurrent(t,null)));
+            Test(t+" server validation reads only table-specific GreenTree columns",()=>{
+                var columns=GreenTreeStatusWritePolicy.CurrentColumns(t).Columns;
+                if(t=="gr_job") {
+                    if(!columns.Contains("gr_registrationvoid")||!columns.Contains("gr_gtentered")||columns.Contains("gr_entered")) throw new Exception("Job GreenTree validation columns are invalid");
+                } else if(columns.Contains("gr_registrationvoid")||columns.Contains("gr_gtentered")||!columns.Contains("gr_entered")) throw new Exception("Ledger GreenTree validation columns are invalid");
+            });
             Test(t+" server denies invalid GreenTree status",()=>{var row=GreenTreeTarget(t,"open");row["gr_greentreestatus"]="complete";Denied(()=>GreenTreeStatusWritePolicy.Validate(row,GreenTreeCurrent(t,null)));});
             Test(t+" server denies GreenTree status regression",()=>Denied(()=>GreenTreeStatusWritePolicy.Validate(GreenTreeTarget(t,"open"),GreenTreeCurrent(t,"closed"))));
         }

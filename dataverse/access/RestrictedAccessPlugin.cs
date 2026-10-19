@@ -68,7 +68,7 @@ namespace ServiceOperations.Access
                 if (GreenTreeStatusWritePolicy.IsTarget(change))
                 {
                     GreenTreeStatusWritePolicy.ValidateTarget(context.MessageName, change);
-                    var greenTreeCurrent = service.Retrieve(change.LogicalName, change.Id, new ColumnSet("statecode", "gr_registrationvoid", "gr_gtentered", "gr_entered", "gr_greentreestatus", "gr_greentreestatuscheckedon"));
+                    var greenTreeCurrent = service.Retrieve(change.LogicalName, change.Id, GreenTreeStatusWritePolicy.CurrentColumns(change.LogicalName));
                     GreenTreeStatusWritePolicy.Validate(change, greenTreeCurrent);
                     return;
                 }
@@ -330,6 +330,13 @@ namespace ServiceOperations.Access
             return 0;
         }
         static string Marker(Entity target) { return target != null && target.LogicalName == "gr_job" ? "gr_gtentered" : "gr_entered"; }
+        public static ColumnSet CurrentColumns(string table)
+        {
+            Require(table == "gr_job" || Ledgers.Contains(table), "TARGET");
+            return table == "gr_job"
+                ? new ColumnSet("statecode", "gr_registrationvoid", "gr_gtentered", "gr_greentreestatus", "gr_greentreestatuscheckedon")
+                : new ColumnSet("statecode", "gr_entered", "gr_greentreestatus", "gr_greentreestatuscheckedon");
+        }
         public static bool IsTarget(Entity target)
         {
             return target != null && target.Attributes.Keys.Any(key => Fields.Contains(key, StringComparer.OrdinalIgnoreCase));

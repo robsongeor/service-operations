@@ -83,7 +83,7 @@ Release in this order:
 2. Run `scripts/manage-greentree-job-status-schema.ps1 -Mode Verify` and confirm it reports the
    expected missing columns before the first rollout.
 3. Run the same script with `-Mode Provision`, then run `-Mode Verify` again.
-4. Deploy and verify access guard `1.0.14.0`. The existing exact backend application user and its
+4. Deploy and verify access guard `1.0.15.0`. The existing exact backend application user and its
    dedicated integration-writer role may update only the GreenTree marker, factual status and
    checked timestamp for these five tables; the guard rejects mixed, regressive, inactive, void,
    future-dated or unrelated-field patches.
