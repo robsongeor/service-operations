@@ -4,6 +4,11 @@ const REQUEST_TIMEOUT_MS = 60_000
 const PAGE_SIZE = 100
 const MAX_PAGES = 25
 
+function supportedExactJobCode(value) {
+    const code = String(value || '').trim().toUpperCase()
+    return /^[A-Z0-9][A-Z0-9 -]{0,49}$/.test(code)
+}
+
 function configuredOrigin() {
     const configured = (process.env.LIFTTRUCKS_API_ORIGIN || DEFAULT_ORIGIN).trim()
     const url = new URL(configured)
@@ -110,7 +115,7 @@ async function fetchGreenTreeJobsModifiedSince(modifiedSince, options = {}) {
 
 async function fetchGreenTreeJobByCode(jobNumber, options = {}) {
     const code = String(jobNumber || '').trim().toUpperCase()
-    if (!/^(?:[A-Z]{1,2})?[0-9]{1,20}$/.test(code)) throw new Error('The GreenTree Job Number is invalid.')
+    if (!supportedExactJobCode(code)) throw new Error('The GreenTree Job Number is invalid.')
     const { username, password, apiKey } = credentials()
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), options.timeoutMs || REQUEST_TIMEOUT_MS)
@@ -149,6 +154,7 @@ async function fetchGreenTreeJobByCode(jobNumber, options = {}) {
 module.exports = {
     fetchGreenTreeJobsModifiedSince,
     fetchGreenTreeJobByCode,
+    supportedExactJobCode,
     greenTreeJobsFromPayload,
     greenTreeJobsFromXml,
     greenTreeJobSummary,

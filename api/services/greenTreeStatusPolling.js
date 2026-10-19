@@ -1,4 +1,4 @@
-const { fetchGreenTreeJobByCode } = require('./greenTreeJobs')
+const { fetchGreenTreeJobByCode, supportedExactJobCode } = require('./greenTreeJobs')
 const { _test: reconciliationTest } = require('./greenTreeJobReconciliation')
 
 const NOT_ENTERED_INTERVAL_MS = 15 * 60_000
@@ -96,7 +96,7 @@ async function pollGreenTreeJobStatuses({
     const byCode = new Map()
     candidates.forEach((record) => {
         const code = String(record.gr_jobnumber || '').trim().toUpperCase()
-        if (!/^(?:[A-Z]{1,2})?[0-9]{1,20}$/.test(code)) return
+        if (!supportedExactJobCode(code)) return
         const records = byCode.get(code) || []
         records.push(record)
         byCode.set(code, records)
