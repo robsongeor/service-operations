@@ -158,9 +158,13 @@ public static class RestrictedAccessTests
     static readonly Guid TimeCloudRole = new Guid("00000000-0000-4000-8000-000000000017");
     static readonly Guid TimeCloudUser = new Guid("00000000-0000-4000-8000-000000000018");
     static readonly Guid TimeCloudApp = new Guid("00000000-0000-4000-8000-000000000019");
+    static readonly Guid GreenTreeRole = new Guid("00000000-0000-4000-8000-00000000001a");
+    static readonly Guid GreenTreeUser = new Guid("00000000-0000-4000-8000-00000000001b");
+    static readonly Guid GreenTreeApp = new Guid("00000000-0000-4000-8000-00000000001c");
     static string LegacyConfig { get { return "full="+FullRole+";coordinator="+CoordinatorRole+";office="+OfficeRole+";book="+BookRole; } }
     static string MeterConfig { get { return LegacyConfig+";meterrole="+MeterRole+";meteruser="+Id+";meterapplication="+MeterApp; } }
     static string TimeCloudConfig { get { return LegacyConfig+";timecloudrole="+TimeCloudRole+";timeclouduser="+TimeCloudUser+";timecloudapplication="+TimeCloudApp; } }
+    static string GreenTreeConfig { get { return LegacyConfig+";greentreerole="+GreenTreeRole+";greentreeuser="+GreenTreeUser+";greentreeapplication="+GreenTreeApp; } }
     static Entity MeterTarget()
     {
         var row=Row("gr_job"); row["gr_hourmeter"]=1620; row["gr_hourmeterreadingtype"]=new OptionSetValue(122830000);
@@ -250,13 +254,13 @@ public static class RestrictedAccessTests
     static Entity TimeCloudCaller() { var row=new Entity("systemuser",TimeCloudUser); row["applicationid"]=TimeCloudApp; row["isdisabled"]=false; return row; }
     static Entity GreenTreeTarget(string table, string status)
     {
-        var row=new Entity(table,TimeCloudUser); row["gr_greentreestatuscheckedon"]=DateTime.UtcNow;
+        var row=new Entity(table,GreenTreeUser); row["gr_greentreestatuscheckedon"]=DateTime.UtcNow;
         if(status!=null) { row[table=="gr_job"?"gr_gtentered":"gr_entered"]=true; row["gr_greentreestatus"]=status; }
         return row;
     }
     static Entity GreenTreeCurrent(string table, string status)
     {
-        var row=new Entity(table,TimeCloudUser); row["statecode"]=new OptionSetValue(0);
+        var row=new Entity(table,GreenTreeUser); row["statecode"]=new OptionSetValue(0);
         var marker=table=="gr_job"?"gr_gtentered":"gr_entered"; row[marker]=!String.IsNullOrWhiteSpace(status);
         if(!String.IsNullOrWhiteSpace(status)) row["gr_greentreestatus"]=status;
         if(table=="gr_job") row["gr_registrationvoid"]=false;
@@ -294,6 +298,7 @@ public static class RestrictedAccessTests
         foreach(var table in new[]{"gr_job","gr_jobbookentry","gr_waikatojobbookentry","gr_hastingsjobbookentry","gr_christchurchjobbookentry"}) {
             var t=table;
             Test(t+" server may record exact GreenTree status",()=>GreenTreeStatusWritePolicy.Validate(GreenTreeTarget(t,"open"),GreenTreeCurrent(t,null)));
+            Test(t+" server permits Dataverse timezone metadata",()=>{var row=GreenTreeTarget(t,"open");row["timezoneruleversionnumber"]=4;row["utcconversiontimezonecode"]=12;GreenTreeStatusWritePolicy.Validate(row,GreenTreeCurrent(t,null));});
             Test(t+" server may record Not entered check time",()=>GreenTreeStatusWritePolicy.Validate(GreenTreeTarget(t,null),GreenTreeCurrent(t,null)));
             Test(t+" server validation reads only table-specific GreenTree columns",()=>{
                 var columns=GreenTreeStatusWritePolicy.CurrentColumns(t).Columns;
@@ -309,8 +314,36 @@ public static class RestrictedAccessTests
         Test("server denies mixed GreenTree and TimeCloud patch",()=>{var row=GreenTreeTarget("gr_job","open");row["gr_timecloudentered"]=true;Denied(()=>GreenTreeStatusWritePolicy.Validate(row,GreenTreeCurrent("gr_job",null)));});
         Test("server denies inactive GreenTree record",()=>{var current=GreenTreeCurrent("gr_job",null);current["statecode"]=new OptionSetValue(1);Denied(()=>GreenTreeStatusWritePolicy.Validate(GreenTreeTarget("gr_job",null),current));});
         Test("server denies void GreenTree Job",()=>{var current=GreenTreeCurrent("gr_job",null);current["gr_registrationvoid"]=true;Denied(()=>GreenTreeStatusWritePolicy.Validate(GreenTreeTarget("gr_job",null),current));});
-        Test("guard executes exact GreenTree status path",()=>ExecuteTimeCloudGuard(GreenTreeTarget("gr_job","open"),new[]{TimeCloudRole},TimeCloudCaller()));
-        Test("guard executes exact regional GreenTree status path",()=>ExecuteTimeCloudGuard(GreenTreeTarget("gr_waikatojobbookentry","closed"),new[]{TimeCloudRole},TimeCloudCaller()));
+        Test("dedicated GreenTree configuration is opt in",()=>new RestrictedAccessPlugin(null,GreenTreeConfig));
+        Test("partial GreenTree configuration fails closed",()=>Denied(()=>new RestrictedAccessPlugin(null,LegacyConfig+";greentreerole="+GreenTreeRole)));
+        Test("GreenTree role cannot reuse a human profile",()=>Denied(()=>new RestrictedAccessPlugin(null,GreenTreeConfig.Replace(GreenTreeRole.ToString(),OfficeRole.ToString()))));
+        Test("GreenTree and TimeCloud identities must be distinct",()=>Denied(()=>new RestrictedAccessPlugin(null,TimeCloudConfig+";greentreerole="+GreenTreeRole+";greentreeuser="+TimeCloudUser+";greentreeapplication="+GreenTreeApp)));
+        Test("GreenTree requires exact application user and role",()=>GreenTreeStatusWritePolicy.ValidateCaller(GreenTreeUser,GreenTreeCaller(),new[]{GreenTreeRole},GreenTreeUser,GreenTreeApp,GreenTreeRole));
+        Test("other GreenTree application is denied",()=>{var caller=GreenTreeCaller();caller["applicationid"]=OtherId;Denied(()=>GreenTreeStatusWritePolicy.ValidateCaller(GreenTreeUser,caller,new[]{GreenTreeRole},GreenTreeUser,GreenTreeApp,GreenTreeRole));});
+        Test("guard executes exact GreenTree status path",()=>ExecuteGreenTreeGuard(GreenTreeTarget("gr_job","open"),new[]{GreenTreeRole},GreenTreeCaller()));
+        Test("guard executes exact regional GreenTree status path",()=>ExecuteGreenTreeGuard(GreenTreeTarget("gr_waikatojobbookentry","closed"),new[]{GreenTreeRole},GreenTreeCaller()));
+        Test("TimeCloud identity cannot write GreenTree status",()=>Denied(()=>ExecuteTimeCloudGuard(GreenTreeTarget("gr_job","open"),new[]{TimeCloudRole},TimeCloudCaller())));
+    }
+    static Entity GreenTreeCaller() { var row=new Entity("systemuser",GreenTreeUser); row["applicationid"]=GreenTreeApp; row["isdisabled"]=false; return row; }
+    static void ExecuteGreenTreeGuard(Entity target, Guid[] held, Entity caller)
+    {
+        var identityReads=0;var membershipReads=0;
+        var context=Proxy.For<IPluginExecutionContext>(new Dictionary<string,object>{
+            {"Stage",20},{"Mode",0},{"IsInTransaction",true},{"UserId",GreenTreeUser},{"InitiatingUserId",GreenTreeUser},{"MessageName","Update"},
+            {"InputParameters",new ParameterCollection{{"Target",target}}}
+        });
+        var service=Proxy.For<IOrganizationService>(new Dictionary<string,object>{
+            {"RetrieveMultiple",new Func<object[],object>(args=>{var query=(Microsoft.Xrm.Sdk.Query.QueryExpression)args[0];var result=new EntityCollection();if(query.EntityName=="systemuserroles")foreach(var id in held){var row=new Entity("systemuserroles");row["roleid"]=id;result.Entities.Add(row);}return result;})},
+            {"Retrieve",new Func<object[],object>(args=>{if((string)args[0]=="systemuser")throw new Exception("Caller service must not read the application identity");return GreenTreeCurrent(target.LogicalName,null);})}
+        });
+        var identityService=Proxy.For<IOrganizationService>(new Dictionary<string,object>{
+            {"Retrieve",new Func<object[],object>(args=>{if((string)args[0]!="systemuser"||(Guid)args[1]!=GreenTreeUser)throw new Exception("Elevated identity lookup escaped its exact user target");identityReads++;return caller;})},
+            {"RetrieveMultiple",new Func<object[],object>(args=>{var query=(Microsoft.Xrm.Sdk.Query.QueryExpression)args[0];if(query.EntityName!="systemuserroles"||query.Criteria.Conditions.Count!=2)throw new Exception("Elevated membership lookup escaped its exact association");membershipReads++;var result=new EntityCollection();if(Array.IndexOf(held,GreenTreeRole)>=0)result.Entities.Add(new Entity("systemuserroles"));return result;})}
+        });
+        var factory=Proxy.For<IOrganizationServiceFactory>(new Dictionary<string,object>{{"CreateOrganizationService",new Func<object[],object>(args=>{if(args[0]==null)return identityService;if((Guid)args[0]!=GreenTreeUser)throw new Exception("Impersonation is forbidden");return service;})}});
+        var provider=Proxy.For<IServiceProvider>(new Dictionary<string,object>{{"GetService",new Func<object[],object>(args=>(Type)args[0]==typeof(IPluginExecutionContext)?(object)context:(Type)args[0]==typeof(IOrganizationServiceFactory)?(object)factory:null)}});
+        new RestrictedAccessPlugin(null,GreenTreeConfig).Execute(provider);
+        if(identityReads!=1||membershipReads!=1)throw new Exception("Expected one exact elevated identity and membership read");
     }
     static void ExecuteTimeCloudGuard(Entity target, Guid[] held, Entity caller)
     {

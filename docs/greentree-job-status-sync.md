@@ -83,10 +83,15 @@ Release in this order:
 2. Run `scripts/manage-greentree-job-status-schema.ps1 -Mode Verify` and confirm it reports the
    expected missing columns before the first rollout.
 3. Run the same script with `-Mode Provision`, then run `-Mode Verify` again.
-4. Deploy and verify access guard `1.0.15.0`. The existing exact backend application user and its
-   dedicated integration-writer role may update only the GreenTree marker, factual status and
-   checked timestamp for these five tables; the guard rejects mixed, regressive, inactive, void,
-   future-dated or unrelated-field patches.
+4. Deploy and verify access guard `1.0.18.0`. GreenTree status writes use the enabled application
+   user for client `ba0bb04d-dcb3-4434-9383-3001de294214` and its sole direct role,
+   **Service Operations GreenTree Sync**. This identity is distinct from the general Dataverse,
+   TimeCloud and Job Card meter writers. Run `scripts/inspect-dataverse-application-user.ps1`
+   read-only first, then attach the exact `greentreerole`, `greentreeuser` and
+   `greentreeapplication` tuple with `scripts/configure-greentree-status-guard.ps1`. The guard permits
+   this identity to update only the GreenTree marker, factual status and checked timestamp for the
+   five supported tables; it rejects mixed, regressive, inactive, void, future-dated or unrelated
+   patches. The TimeCloud identity remains limited to its three confirmation fields.
 5. Deploy the compatible API and application together.
 6. Run the initial full-status backfill to completion and retain its aggregate reconciliation report.
 7. Enable the status-aware scheduler only after the deployed API passes controlled checks for all

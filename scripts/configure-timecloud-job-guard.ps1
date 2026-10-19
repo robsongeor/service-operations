@@ -70,7 +70,7 @@ try {
         $value = [string]$config['secureconfig']; $settings = @{}
         foreach ($part in $value.Split(';')) {
             $pair = $part.Split('=')
-            Require ($pair.Count -eq 2 -and @('full','coordinator','office','book','meterrole','meteruser','meterapplication','timecloudrole','timeclouduser','timecloudapplication') -contains $pair[0] -and -not $settings.ContainsKey($pair[0])) 'Unexpected or duplicate secure guard setting.'
+            Require ($pair.Count -eq 2 -and @('full','coordinator','office','book','meterrole','meteruser','meterapplication','timecloudrole','timeclouduser','timecloudapplication','greentreerole','greentreeuser','greentreeapplication') -contains $pair[0] -and -not $settings.ContainsKey($pair[0])) 'Unexpected or duplicate secure guard setting.'
             $settings[$pair[0]] = $pair[1]
         }
         foreach ($required in @('full','coordinator','office','book')) { Require $settings.ContainsKey($required) 'Human role map must remain complete.' }
@@ -78,6 +78,8 @@ try {
         Require ($meterCount -in @(0,3)) 'Existing meter writer configuration is partial.'
         $timecloudCount = @(@('timecloudrole','timeclouduser','timecloudapplication') | Where-Object { $settings.ContainsKey($_) }).Count
         Require ($timecloudCount -in @(0,3)) 'Existing TimeCloud writer configuration is partial.'
+        $greenTreeCount = @(@('greentreerole','greentreeuser','greentreeapplication') | Where-Object { $settings.ContainsKey($_) }).Count
+        Require ($greenTreeCount -in @(0,3)) 'Existing GreenTree writer configuration is partial.'
         $humanIds = @(@('full','coordinator','office','book') | ForEach-Object { $settings[$_].Split(',') | ForEach-Object { [Guid]$_.Trim() } })
         Require ($humanIds -notcontains $RoleId) 'The TimeCloud role overlaps a human access profile.'
         if ($meterCount -eq 3) {
@@ -85,6 +87,9 @@ try {
         }
         if ($timecloudCount -eq 3) {
             Require ([Guid]$settings['timecloudrole'] -eq $RoleId -and [Guid]$settings['timeclouduser'] -eq $ApplicationUserId -and [Guid]$settings['timecloudapplication'] -eq $ApplicationId) 'A different TimeCloud writer is already configured.'
+        }
+        if ($greenTreeCount -eq 3) {
+            Require ([Guid]$settings['greentreerole'] -ne $RoleId -and [Guid]$settings['greentreeuser'] -ne $ApplicationUserId -and [Guid]$settings['greentreeapplication'] -ne $ApplicationId) 'The TimeCloud and GreenTree writer identities must be distinct.'
         }
         if (-not $baseConfig) { $baseConfig = $value }
         Require ($baseConfig -eq $value) 'The 14 guards do not share one reviewed secure configuration.'

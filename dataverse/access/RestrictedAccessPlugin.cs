@@ -14,15 +14,17 @@ namespace ServiceOperations.Access
         readonly Dictionary<string, HashSet<Guid>> roles = new Dictionary<string, HashSet<Guid>>();
         readonly Dictionary<string, Guid> meter = new Dictionary<string, Guid>();
         readonly Dictionary<string, Guid> timecloud = new Dictionary<string, Guid>();
+        readonly Dictionary<string, Guid> greentree = new Dictionary<string, Guid>();
         public RestrictedAccessPlugin(string unsecure, string secure)
         {
             if (String.IsNullOrWhiteSpace(secure)) throw new InvalidPluginExecutionException("Missing access role configuration.");
             foreach (string part in secure.Split(';'))
             {
                 string[] pair = part.Split('=');
-                if (pair.Length == 2 && new[] { "meterrole", "meteruser", "meterapplication", "timecloudrole", "timeclouduser", "timecloudapplication" }.Contains(pair[0]))
+                if (pair.Length == 2 && new[] { "meterrole", "meteruser", "meterapplication", "timecloudrole", "timeclouduser", "timecloudapplication", "greentreerole", "greentreeuser", "greentreeapplication" }.Contains(pair[0]))
                 {
-                    var writer = pair[0].StartsWith("meter", StringComparison.Ordinal) ? meter : timecloud;
+                    var writer = pair[0].StartsWith("meter", StringComparison.Ordinal) ? meter :
+                        pair[0].StartsWith("timecloud", StringComparison.Ordinal) ? timecloud : greentree;
                     Guid value;
                     if (writer.ContainsKey(pair[0]) || !Guid.TryParse(pair[1], out value) || value == Guid.Empty)
                         throw new InvalidPluginExecutionException("Invalid server writer configuration.");
@@ -39,8 +41,20 @@ namespace ServiceOperations.Access
                 throw new InvalidPluginExecutionException("Meter writer requires a separate role, user and application.");
             if (timecloud.Count != 0 && (timecloud.Count != 3 || roles.Values.Any(set => set.Contains(timecloud["timecloudrole"]))))
                 throw new InvalidPluginExecutionException("TimeCloud writer requires a separate role, user and application.");
-            if (meter.Count == 3 && timecloud.Count == 3 && (meter["meterrole"] == timecloud["timecloudrole"] || meter["meteruser"] == timecloud["timeclouduser"] || meter["meterapplication"] == timecloud["timecloudapplication"]))
+            if (greentree.Count != 0 && (greentree.Count != 3 || roles.Values.Any(set => set.Contains(greentree["greentreerole"]))))
+                throw new InvalidPluginExecutionException("GreenTree writer requires a separate role, user and application.");
+            if (WriterOverlap(meter, "meter", timecloud, "timecloud") ||
+                WriterOverlap(meter, "meter", greentree, "greentree") ||
+                WriterOverlap(timecloud, "timecloud", greentree, "greentree"))
                 throw new InvalidPluginExecutionException("Server writer identities must be distinct.");
+        }
+
+        static bool WriterOverlap(Dictionary<string, Guid> first, string firstPrefix, Dictionary<string, Guid> second, string secondPrefix)
+        {
+            return first.Count == 3 && second.Count == 3 &&
+                (first[firstPrefix + "role"] == second[secondPrefix + "role"] ||
+                 first[firstPrefix + "user"] == second[secondPrefix + "user"] ||
+                 first[firstPrefix + "application"] == second[secondPrefix + "application"]);
         }
 
         public void Execute(IServiceProvider provider)
@@ -59,19 +73,23 @@ namespace ServiceOperations.Access
             foreach (var row in service.RetrieveMultiple(teams).Entities) held.Add(row.GetAttributeValue<Guid>("roleid"));
             // Check server identities before privileged human profiles. An application identity
             // never gains a human-profile bypass even if it is assigned another configured role.
+            if (greentree.Count == 3 && (context.InitiatingUserId == greentree["greentreeuser"] || held.Contains(greentree["greentreerole"])))
+            {
+                bool holdsRole;
+                var caller = RetrieveServerWriterIdentity(factory, context.InitiatingUserId, greentree["greentreerole"], out holdsRole);
+                GreenTreeStatusWritePolicy.ValidateCaller(context.InitiatingUserId, caller, holdsRole ? new[] { greentree["greentreerole"] } : new Guid[0], greentree["greentreeuser"], greentree["greentreeapplication"], greentree["greentreerole"]);
+                var change = context.InputParameters.Contains("Target") ? context.InputParameters["Target"] as Entity : null;
+                GreenTreeStatusWritePolicy.ValidateTarget(context.MessageName, change);
+                var current = service.Retrieve(change.LogicalName, change.Id, GreenTreeStatusWritePolicy.CurrentColumns(change.LogicalName));
+                GreenTreeStatusWritePolicy.Validate(change, current);
+                return;
+            }
             if (timecloud.Count == 3 && (context.InitiatingUserId == timecloud["timeclouduser"] || held.Contains(timecloud["timecloudrole"])))
             {
                 bool holdsRole;
                 var caller = RetrieveServerWriterIdentity(factory, context.InitiatingUserId, timecloud["timecloudrole"], out holdsRole);
                 TimeCloudWritePolicy.ValidateCaller(context.InitiatingUserId, caller, holdsRole ? new[] { timecloud["timecloudrole"] } : new Guid[0], timecloud["timeclouduser"], timecloud["timecloudapplication"], timecloud["timecloudrole"]);
                 var change = context.InputParameters.Contains("Target") ? context.InputParameters["Target"] as Entity : null;
-                if (GreenTreeStatusWritePolicy.IsTarget(change))
-                {
-                    GreenTreeStatusWritePolicy.ValidateTarget(context.MessageName, change);
-                    var greenTreeCurrent = service.Retrieve(change.LogicalName, change.Id, GreenTreeStatusWritePolicy.CurrentColumns(change.LogicalName));
-                    GreenTreeStatusWritePolicy.Validate(change, greenTreeCurrent);
-                    return;
-                }
                 TimeCloudWritePolicy.ValidateTarget(context.MessageName, change);
                 var current = service.Retrieve("gr_job", change.Id, new ColumnSet("statecode", "gr_registrationvoid", "gr_timecloudentered", "gr_timecloudjobitemid", "gr_timecloudcode"));
                 TimeCloudWritePolicy.Validate(change, current);
@@ -319,9 +337,16 @@ namespace ServiceOperations.Access
     {
         static readonly string[] Ledgers = { "gr_jobbookentry", "gr_waikatojobbookentry", "gr_hastingsjobbookentry", "gr_christchurchjobbookentry" };
         static readonly string[] Fields = { "gr_gtentered", "gr_entered", "gr_greentreestatus", "gr_greentreestatuscheckedon" };
-        static readonly string[] PlatformFields = { "gr_jobid", "gr_jobbookentryid", "gr_waikatojobbookentryid", "gr_hastingsjobbookentryid", "gr_christchurchjobbookentryid", "modifiedby", "modifiedon", "modifiedonbehalfby" };
+        static readonly string[] PlatformFields = { "gr_jobid", "gr_jobbookentryid", "gr_waikatojobbookentryid", "gr_hastingsjobbookentryid", "gr_christchurchjobbookentryid", "modifiedby", "modifiedon", "modifiedonbehalfby", "timezoneruleversionnumber", "utcconversiontimezonecode" };
         static readonly string[] Statuses = { "open", "closed", "finalised" };
         static void Require(bool value, string reason) { if (!value) throw new InvalidPluginExecutionException("The requested change is outside the approved GreenTree status operation (" + reason + ")."); }
+        public static void ValidateCaller(Guid callerId, Entity caller, IEnumerable<Guid> held, Guid userId, Guid applicationId, Guid roleId)
+        {
+            Require(userId != Guid.Empty && applicationId != Guid.Empty && roleId != Guid.Empty && callerId == userId &&
+                caller != null && caller.Id == userId && caller.LogicalName == "systemuser" &&
+                caller.GetAttributeValue<Guid>("applicationid") == applicationId && caller.Contains("isdisabled") &&
+                !caller.GetAttributeValue<bool>("isdisabled") && held.Contains(roleId), "CALLER");
+        }
         static int Rank(string value)
         {
             if (value == "open") return 1;
@@ -347,7 +372,9 @@ namespace ServiceOperations.Access
                 (target.LogicalName == "gr_job" || Ledgers.Contains(target.LogicalName)), "TARGET");
             var marker = Marker(target);
             var allowed = new HashSet<string>(new[] { marker, "gr_greentreestatus", "gr_greentreestatuscheckedon" }.Concat(PlatformFields), StringComparer.OrdinalIgnoreCase);
-            Require(target.Attributes.Keys.All(allowed.Contains) && target.Contains("gr_greentreestatuscheckedon"), "TARGET_FIELDS");
+            var unexpected = target.Attributes.Keys.Where(key => !allowed.Contains(key)).OrderBy(key => key).ToArray();
+            Require(unexpected.Length == 0 && target.Contains("gr_greentreestatuscheckedon"),
+                "TARGET_FIELDS unexpected=" + String.Join(",", unexpected) + " missingCheckedOn=" + (!target.Contains("gr_greentreestatuscheckedon")));
             Require(target["gr_greentreestatuscheckedon"] is DateTime &&
                 ((DateTime)target["gr_greentreestatuscheckedon"]).ToUniversalTime() <= DateTime.UtcNow.AddMinutes(5), "CHECKED_ON");
             bool hasMarker = target.Contains(marker);
