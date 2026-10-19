@@ -151,6 +151,23 @@ test('restricted Equipment editor includes road compliance but excludes maintena
     assert.doesNotMatch(html, /Delete equipment|Equipment Ownership|Site Check Availability|>Maintenance<|>Job History</)
 })
 
+test('existing Equipment uses the shared Job location tile before relationship editing', () => {
+    const customer = { gr_customerid: id(92), gr_name: 'Power Forklifts' }
+    const site = { gr_siteid: id(93), gr_name: 'Henderson', gr_address: '134 Railside Avenue, Henderson', gr_Customer: customer }
+    const html = renderToStaticMarkup(createElement(Provider, { scope: 'equipment-location-summary-test' }, createElement(EquipmentDrawer, {
+        mode: 'edit', detailsOnly: true,
+        equipment: { gr_equipmentid: id(91), gr_fleet: 'F1', gr_make: 'Make', gr_model: 'Model', gr_serial: 'Serial', gr_Site: site, statecode: 0 },
+        customers: [customer], sites: [site], equipmentList: [], jobs: [], isSaving: false, saveError: '',
+        onClose: unavailable, onSave: unavailable, onDelete: unavailable, onSaveMaintenanceHistory: unavailable,
+    })))
+    assert.match(html, /Customer &amp; site/)
+    assert.match(html, /Power Forklifts/)
+    assert.match(html, /Henderson/)
+    assert.match(html, /134 Railside Avenue, Henderson/)
+    assert.match(html, /aria-label="Edit location"/)
+    assert.doesNotMatch(html, /id="equipment-customer"/)
+})
+
 test('Jobs retain the selected sort regardless of whether they have a number', () => {
     const rows = [
         { ...job, gr_jobid: id(21), gr_jobnumber: '910001', gr_description: 'Newest numbered', createdon: '2026-10-07T00:00:00Z' },

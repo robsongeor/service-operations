@@ -1,9 +1,16 @@
 name: GreenTree Job Status Sync
 
 on:
-  schedule:
-    - cron: "*/15 * * * *"
   workflow_dispatch:
+    inputs:
+      mode:
+        description: GreenTree status operation
+        required: true
+        default: scheduled
+        type: choice
+        options:
+          - scheduled
+          - backfill
 
 concurrency:
   group: greentree-job-status-sync-v2
@@ -12,27 +19,41 @@ concurrency:
 jobs:
   reconcile:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 60
     steps:
       - name: Reconcile GreenTree job changes
         env:
           SYNC_SECRET: ${{ secrets.GREENTREE_SYNC_SECRET }}
+          SYNC_MODE: ${{ inputs.mode || 'scheduled' }}
         run: |
           if [ -z "$SYNC_SECRET" ]; then
             echo "GREENTREE_SYNC_SECRET is not configured in GitHub Actions."
             exit 1
           fi
 
-          MODIFIED_SINCE=$(date -u -d '2 hours ago' '+%Y-%m-%dT%H:%M:%SZ')
+          if [ "$SYNC_MODE" = "backfill" ]; then
+            for BATCH in $(seq 1 400); do
+              RESPONSE=$(curl --fail-with-body --silent --show-error --retry 2 --retry-all-errors --max-time 240 \
+                --request POST --header "Content-Type: application/json" \
+                --header "X-GreenTree-Sync-Secret: $SYNC_SECRET" \
+                --data '{"mode":"backfill","batchSize":50}' \
+                "https://kind-wave-0cdea2200.2.azurestaticapps.net/api/greentreejobchanges")
+              echo "$RESPONSE" | jq '{mode,due,selected,checked,updatedRecords,notEntered,open,closed,finalised,remaining,conflicts,failed}'
+              if [ "$(echo "$RESPONSE" | jq '(.conflicts | length) + (.failed | length)')" -ne 0 ]; then
+                echo "Backfill stopped with conflicts or failed lookups."
+                exit 1
+              fi
+              if [ "$(echo "$RESPONSE" | jq '.selected')" -eq 0 ]; then
+                echo "GreenTree full-status backfill completed."
+                exit 0
+              fi
+            done
+            echo "Backfill exceeded the 400-batch safety limit."
+            exit 1
+          fi
 
-          curl --fail-with-body \
-            --silent \
-            --show-error \
-            --retry 2 \
-            --retry-all-errors \
-            --max-time 240 \
-            --request POST \
-            --header "Content-Type: application/json" \
+          curl --fail-with-body --silent --show-error --retry 2 --retry-all-errors --max-time 240 \
+            --request POST --header "Content-Type: application/json" \
             --header "X-GreenTree-Sync-Secret: $SYNC_SECRET" \
-            --data "{\"modifiedSince\":\"$MODIFIED_SINCE\"}" \
+            --data '{"mode":"scheduled","batchSize":100}' \
             "https://kind-wave-0cdea2200.2.azurestaticapps.net/api/greentreejobchanges"

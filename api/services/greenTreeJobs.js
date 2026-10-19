@@ -108,8 +108,47 @@ async function fetchGreenTreeJobsModifiedSince(modifiedSince, options = {}) {
     }
 }
 
+async function fetchGreenTreeJobByCode(jobNumber, options = {}) {
+    const code = String(jobNumber || '').trim().toUpperCase()
+    if (!/^(?:[A-Z]{1,2})?[0-9]{1,20}$/.test(code)) throw new Error('The GreenTree Job Number is invalid.')
+    const { username, password, apiKey } = credentials()
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), options.timeoutMs || REQUEST_TIMEOUT_MS)
+    try {
+        const upstreamUrl = new URL(`/api/01/JCJob/${encodeURIComponent(code)}`, configuredOrigin())
+        upstreamUrl.searchParams.set('ApiKey', apiKey)
+        const response = await (options.fetchImpl || fetch)(upstreamUrl, {
+            headers: {
+                Accept: 'application/xml',
+                Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`,
+            },
+            signal: controller.signal,
+        })
+        if (response.status === 404) return null
+        if (!response.ok) {
+            const error = new Error('The Lift Trucks API could not complete the exact Job request.')
+            error.status = response.status
+            throw error
+        }
+        const responseBody = await response.text()
+        const upstreamJobs = responseBody.trimStart().startsWith('<')
+            ? greenTreeJobsFromXml(responseBody)
+            : greenTreeJobsFromPayload(JSON.parse(responseBody))
+        const matches = upstreamJobs.map(greenTreeJobSummary).filter((job) => job.code.toUpperCase() === code)
+        if (matches.length > 1) {
+            const error = new Error('The Lift Trucks API returned duplicate exact Job matches.')
+            error.code = 'DUPLICATE_EXACT_MATCH'
+            throw error
+        }
+        return matches[0] || null
+    } finally {
+        clearTimeout(timeout)
+    }
+}
+
 module.exports = {
     fetchGreenTreeJobsModifiedSince,
+    fetchGreenTreeJobByCode,
     greenTreeJobsFromPayload,
     greenTreeJobsFromXml,
     greenTreeJobSummary,

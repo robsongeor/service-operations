@@ -122,7 +122,9 @@ The organization-owned `gr_jobbookentry` / `gr_jobbookentries` table was provisi
 - address verification/not-found flags
 - `gr_description` — required
 - `gr_customerpo`
-- `gr_entered` (displayed as **GT Entry**) â€” independent marker that the admin team has entered the job into Greentree
+- `gr_entered` — independent marker that GreenTree contains the Job Number
+- `gr_greentreestatus` — factual `open`, `closed` or `finalised` state; displayed as **Not entered**, **Open**, **Closed** or **Finalised** and never used as operational Job status
+- `gr_greentreestatuscheckedon` — UTC time of the last exact GreenTree status check; used only for polling cadence and resumable backfill
 - `gr_timecloudentered` (displayed as **Timecloud Entry**) â€” independent marker that the admin team has entered the job into Timecloud
 - `gr_promotedjob` — optional lookup to `gr_job`
 - `gr_promotedon`, `gr_promotedby`

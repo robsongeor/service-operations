@@ -407,6 +407,20 @@ namespace ServiceOperations.Access
             var set = new HashSet<string>(allowed, StringComparer.OrdinalIgnoreCase);
             if (target.Attributes.Keys.Any(key => !set.Contains(key))) Deny();
         }
+        static void GreenTreeStatus(Entity target, string marker)
+        {
+            if (target.Contains("gr_greentreestatuscheckedon"))
+            {
+                if (!(target["gr_greentreestatuscheckedon"] is DateTime) ||
+                    ((DateTime)target["gr_greentreestatuscheckedon"]).ToUniversalTime() > DateTime.UtcNow.AddMinutes(5)) Deny();
+            }
+            if (target.Contains("gr_greentreestatus"))
+            {
+                var value = target["gr_greentreestatus"] as string;
+                if (!target.Contains(marker) || !(target[marker] is bool) || !(bool)target[marker] ||
+                    !new[] { "open", "closed", "finalised" }.Contains(value, StringComparer.Ordinal)) Deny();
+            }
+        }
         public static void Validate(string profile, string message, Entity target, Entity before)
         {
             if (profile != "office" && profile != "book") { Deny(); return; }
@@ -424,7 +438,8 @@ namespace ServiceOperations.Access
             if (target.LogicalName == "gr_job")
             {
                 if (before.GetAttributeValue<bool>("gr_registrationvoid")) Deny();
-                Fields(target, JobDetails.Concat(office ? new[] { "gr_gtentered", "gr_timecloudentered" } : new string[0]));
+                Fields(target, JobDetails.Concat(office ? new[] { "gr_gtentered", "gr_greentreestatus", "gr_greentreestatuscheckedon", "gr_timecloudentered" } : new string[0]));
+                GreenTreeStatus(target, "gr_gtentered");
                 return;
             }
             if (Ledgers.Contains(target.LogicalName))
@@ -441,7 +456,8 @@ namespace ServiceOperations.Access
                     if (!before.Contains("gr_entered") || !before.Contains("gr_timecloudentered") || before.GetAttributeValue<bool>("gr_entered") || before.GetAttributeValue<bool>("gr_timecloudentered") || next == null || next.Value != 122830003 || String.IsNullOrWhiteSpace(reason) || reason.Length > 1000) Deny();
                     return;
                 }
-                Fields(target, IntakeDetails.Concat(office ? new[] { "gr_entered", "gr_timecloudentered" } : new string[0]));
+                Fields(target, IntakeDetails.Concat(office ? new[] { "gr_entered", "gr_greentreestatus", "gr_greentreestatuscheckedon", "gr_timecloudentered" } : new string[0]));
+                GreenTreeStatus(target, "gr_entered");
                 return;
             }
             Deny();

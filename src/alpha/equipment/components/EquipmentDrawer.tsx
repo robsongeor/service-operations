@@ -20,6 +20,7 @@ import { normalizeEquipmentInput, toEquipmentDateOnlyValue, type EquipmentCreate
 import { classifyEquipmentIdentifier, deriveSiteNameFromAddress, normalizeCustomerName, parseSpreadsheetRow, type IdentifierClassification, type SpreadsheetRow } from '../utils/equipmentCreateHelpers'
 import SearchableSelect, { type SearchableSelectOption } from '../../shared/searchable-select/SearchableSelect'
 import JobCustomerField from '../../jobs/components/JobCustomerField'
+import JobLocationSummary from '../../jobs/components/JobLocationSummary'
 import VerifiedAddressField from '../../jobs/components/VerifiedAddressField'
 import type { VerifiedAddressSuggestion } from '../../jobs/services/addressSearchApi'
 import { formatMaintenanceInterval, MAINTENANCE_PROFILES, POWER_TYPES, resolveMaintenanceConfiguration, SERVICE_PROGRAMMES, type MaintenanceProfile, type PowerType, type ServiceProgramme } from '../servicePlans/maintenanceConfiguration'
@@ -218,6 +219,7 @@ export default function EquipmentDrawer(props: Props) {
     const [complianceError, setComplianceError] = useState('')
     const [isComplianceSaving, setIsComplianceSaving] = useState(false)
     const [showProgrammeChangeConfirm, setShowProgrammeChangeConfirm] = useState(false)
+    const [editingRelationship, setEditingRelationship] = useState(isCreate)
 
     useEffect(() => {
         if (!customerId || !onLoadCustomerSites) {
@@ -273,7 +275,10 @@ export default function EquipmentDrawer(props: Props) {
         : []
     const usageForecast = equipment ? calculateEquipmentUsageForecast(equipment, history) : null
     const latestHourMeterReading = equipment ? resolveLatestHourMeterReading(equipment, history) : null
+    const selectedSite = sites.find((site) => site.gr_siteid === form.siteId)
+        ?? (equipment?.gr_Site?.gr_siteid === form.siteId ? equipment.gr_Site : undefined)
     const selectedCustomer = customers.find((customer) => customer.gr_customerid === customerId)
+        ?? selectedSite?.gr_Customer
     const siteChecksEnabled = Boolean(form.siteId) && Boolean(
         props.siteCheckEnabledSiteIds?.some((id) => id.toLowerCase() === form.siteId.toLowerCase()),
     )
@@ -861,7 +866,16 @@ export default function EquipmentDrawer(props: Props) {
                             }}><option value={POWER_TYPES.ICE}>ICE</option><option value={POWER_TYPES.ELECTRIC}>Electric</option><option value={POWER_TYPES.OTHER_UNKNOWN}>Other / Unknown</option></select></label><label>Service Programme<select value={form.serviceProgramme} onChange={(event) => updateField('serviceProgramme', Number(event.target.value) as ServiceProgramme)}><option value={SERVICE_PROGRAMMES.ICE_STANDARD}>ICE Standard — A/B/C</option><option value={SERVICE_PROGRAMMES.ELECTRIC_STANDARD}>Electric Standard — A/C</option><option value={SERVICE_PROGRAMMES.CUSTOM}>Custom</option></select></label><label>Default Maintenance Profile<select value={form.maintenanceProfile} onChange={(event) => { maintenanceProfileTouched.current = true; updateField('maintenanceProfile', Number(event.target.value) as MaintenanceProfile) }}><option value={MAINTENANCE_PROFILES.HIGH_USAGE}>High Usage</option><option value={MAINTENANCE_PROFILES.STANDARD}>Standard</option><option value={MAINTENANCE_PROFILES.LOW_USAGE}>Low Usage</option><option value={MAINTENANCE_PROFILES.CUSTOM}>Custom</option></select></label></>}
                             {isCreate && form.serviceProgramme === SERVICE_PROGRAMMES.CUSTOM && <>{([['A', 'customAEnabled'], ['B', 'customBEnabled'], ['C', 'customCEnabled']] as const).map(([label, field]) => <label className="equipment-wof-required" key={field}><input type="checkbox" checked={form[field]} onChange={(event) => updateField(field, event.target.checked)} /> {label} Service enabled</label>)}</>}
                             {isCreate && form.maintenanceProfile === MAINTENANCE_PROFILES.CUSTOM && <>{form.customAEnabled && <label>Custom A interval (days)<input type="number" min="1" value={form.customAIntervalDays} onChange={(event) => updateField('customAIntervalDays', event.target.value)} /></label>}{form.customBEnabled && form.serviceProgramme === SERVICE_PROGRAMMES.CUSTOM && <label>Custom B interval (days)<input type="number" min="1" value={form.customBIntervalDays} onChange={(event) => updateField('customBIntervalDays', event.target.value)} /></label>}{form.customCEnabled && <label>Custom C interval (days)<input type="number" min="1" value={form.customCIntervalDays} onChange={(event) => updateField('customCIntervalDays', event.target.value)} /></label>}</>}
-                            <div className="equipment-relationship-fields">
+                            {!editingRelationship && <section className="job-equipment-location equipment-relationship-summary" aria-label="Equipment location">
+                                <JobLocationSummary
+                                    customer={selectedCustomer?.gr_name ?? customerSearch}
+                                    site={selectedSite?.gr_name}
+                                    address={selectedSite?.gr_address}
+                                    onEdit={() => setEditingRelationship(true)}
+                                    disabled={busy}
+                                />
+                            </section>}
+                            {editingRelationship && <div className="equipment-relationship-fields">
                                 <JobCustomerField
                                     id="equipment-customer"
                                     query={customerSearch}
@@ -928,7 +942,7 @@ export default function EquipmentDrawer(props: Props) {
                                     {matchingSiteAddress && <p>Possible existing Site at this address: <button type="button" onClick={() => { updateField('siteId', matchingSiteAddress.gr_siteid); setSiteMode('existing'); setSiteQuery(matchingSiteAddress.gr_name); setNewSiteAddressSelection(null); setRelatedError('') }}>{matchingSiteAddress.gr_name}</button></p>}
                                 </div>}
                                 {relatedError && <p className="equipment-related-error" role="alert">{relatedError}</p>}
-                            </div>
+                            </div>}
                         </div>
                     </EditDrawerSection>}
 

@@ -63,6 +63,7 @@ import {
     setEquipmentReviewRequired,
     splitSiteAddress,
     getPromotionReadiness,
+    greenTreeJobStatusLabel,
     type JobBookRow,
     type PrototypeEquipment,
 } from './jobBookPrototype'
@@ -328,7 +329,7 @@ export default function JobBookPrototypeScreen({
                     setGreenTreeSyncStatus('syncing')
                     void requestGreenTreeJobReconciliation(token).then(async (result) => {
                         if (cancelled) return
-                        if (result?.updated) {
+                        if (result?.updatedRecords) {
                             const [refreshedJobPage, refreshedIntakePage] = await Promise.all([
                                 fetchRecentJobBookRows(token, selectedJobBook),
                                 fetchJobBookIntakeRows(token, selectedJobBook),
@@ -867,7 +868,7 @@ export default function JobBookPrototypeScreen({
                 <thead><tr>
                     <th className="job-number-column">Job Number</th><th className="date-column">Date</th><th className="mechanic-column">Mechanic</th>
                     <th>Equipment</th><th>Customer</th><th className="description-column">Description of the Job</th>
-                    <th className="address-column">Site Address</th><th>Customer PO #</th><th className="gt-entry-column">GT Entry</th><th className="timecloud-entry-column">Timecloud Entry</th><th>Actions</th>
+                    <th className="address-column">Site Address</th><th>Customer PO #</th><th className="gt-entry-column">GT Status</th><th className="timecloud-entry-column">Timecloud Entry</th><th>Actions</th>
                 </tr></thead>
                 <tbody>{displayedRows.map((row) => {
                     const canEditIntake = isEditableJobBookIntake(row)
@@ -875,6 +876,7 @@ export default function JobBookPrototypeScreen({
                     const isVoid = row.entryStage === JOB_BOOK_ENTRY_STAGES.VOID
                     const voidBlocked = jobBookVoidBlockedReason(row)
                     const markerBusy = savingEntryMarkers.has(row.id) || voidEntry.row?.id === row.id
+                    const greenTreeLabel = greenTreeJobStatusLabel(row.entered, row.greenTreeStatus ?? '')
                     return <tr key={row.id} className={isVoid ? 'job-book-void-row' : row.equipmentReviewRequired ? 'equipment-unconfigured' : undefined}>
                         <td className="job-number-column"><span className="job-book-number-value"><strong>{row.jobNumber}</strong>{isVoid && <span className="job-book-void-badge">VOID</span>}{row.entryStage === JOB_BOOK_ENTRY_STAGES.PROMOTED && <span className="job-book-managed-indicator" title="Managed Job" aria-label="Managed Job">✓</span>}</span></td>
                         <td className="date-column"><span className="job-book-readonly-date" aria-label="Job creation date">{displayDate(row.date)}</span></td>
@@ -890,7 +892,7 @@ export default function JobBookPrototypeScreen({
                             ? <span className="job-book-table-value job-book-address-value"><strong>{splitSiteAddress(row.address).street}</strong>{splitSiteAddress(row.address).locality && <small>{splitSiteAddress(row.address).locality}</small>}</span>
                             : <span className="job-book-table-value">—</span>}</td>
                         <td><span className="job-book-table-value">{row.customerPo || '—'}</span></td>
-                        <td className="gt-entry-column"><span className={`job-book-status-pill ${row.entered ? 'complete' : ''}`} title={row.entered ? 'This Job Number has been found in GreenTree.' : 'GreenTree has not confirmed this Job Number yet.'}>{row.entered ? 'In GreenTree' : 'Not confirmed'}</span></td>
+                        <td className="gt-entry-column"><span className={`job-book-status-pill ${row.entered ? `complete greentree-${row.greenTreeStatus || 'open'}` : ''}`} title={row.entered ? `GreenTree status: ${row.greenTreeStatus || 'open'}.` : 'This Job Number has not been entered in GreenTree.'}>{greenTreeLabel}</span></td>
                         <td className="timecloud-entry-column">{canUpdateEntryMarkers || isVoid || !canWriteMarkers ? <label className={`job-book-table-check ${row.timecloudEntered ? 'complete' : ''}`}><input type="checkbox" aria-label={`Timecloud Entry completed for Job ${row.jobNumber}`} disabled={!canUpdateEntryMarkers || isVoid || markerBusy} checked={row.timecloudEntered} onChange={(event) => void updateRowField(row, 'timecloudEntered', event.target.checked)} />{savingEntryMarkers.has(row.id) ? <span>Saving</span> : row.timecloudEntered ? <span>Done</span> : null}</label> : <span className="job-book-status-pill">Unavailable</span>}</td>
                         <td><div className="job-book-row-actions">{canEditIntake
                             ? <button type="button" className="job-quick-action job-quick-action-edit" onClick={() => openIntakeEntryEditor(row)}>Edit entry</button>

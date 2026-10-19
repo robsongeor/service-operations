@@ -2,7 +2,7 @@ const assert = require('node:assert/strict')
 const test = require('node:test')
 const endpoint = require('../api/greentreejobchanges/index')
 const client = require('../api/services/greenTreeJobs')
-const { reconcileGreenTreeJobs } = require('../api/services/greenTreeJobReconciliation')
+const { reconcileGreenTreeJobs, _test: reconciliationTest } = require('../api/services/greenTreeJobReconciliation')
 const {
     AzureGreenTreeSyncCheckpointStore,
     resetGreenTreeSyncCheckpointStore,
@@ -254,6 +254,64 @@ test('scheduled POST reconciles submitted job cards even when the GreenTree poll
     })
 })
 
+test('scheduled status polling uses the due-record poller and completes its checkpoint', { concurrency: false }, async () => {
+    process.env.DATAVERSE_URL = 'https://example.crm.dynamics.com'
+    let completed = 0
+    const run = { skipped: false, checkedThrough: '2026-10-19T00:00:00.000Z', modifiedSince: '2026-10-18T23:00:00.000Z', etag: 'W/"1"' }
+    const context = {}
+    await endpoint._test.greenTreeJobChanges(context, {
+        method: 'POST', headers: {}, query: {}, body: { mode: 'scheduled', batchSize: 25 },
+    }, {
+        authenticate: async () => 'Bearer delegated-token',
+        getCheckpointStore: () => ({ begin: async () => run, complete: async (value) => { assert.equal(value, run); completed += 1 } }),
+        getJobCardStore: () => ({}),
+        reconcilePendingCompletionReviews: async () => ({ pendingRecords: 0 }),
+        pollGreenTreeJobStatuses: async (options) => {
+            assert.equal(options.mode, 'scheduled')
+            assert.equal(options.batchSize, 25)
+            assert.equal(options.authorization, 'Bearer delegated-token')
+            return { mode: 'scheduled', due: 1, selected: 1, checked: 1, updatedRecords: 1, notEntered: 0, open: 1, closed: 0, finalised: 0, remaining: 0, conflicts: [], failed: [] }
+        },
+    })
+    assert.equal(context.res.status, 200)
+    assert.equal(JSON.parse(context.res.body).updatedRecords, 1)
+    assert.equal(completed, 1)
+})
+
+test('full status backfill requires scheduler authentication and bypasses the normal cooldown', { concurrency: false }, async () => {
+    process.env.DATAVERSE_URL = 'https://example.crm.dynamics.com'
+    let began = 0
+    let polled = 0
+    const denied = {}
+    await endpoint._test.greenTreeJobChanges(denied, {
+        method: 'POST', headers: {}, query: {}, body: { mode: 'backfill' },
+    }, {
+        authenticate: async () => 'Bearer delegated-token',
+        authenticateScheduler: async () => null,
+    })
+    assert.equal(denied.res.status, 401)
+
+    const context = {}
+    await endpoint._test.greenTreeJobChanges(context, {
+        method: 'POST', headers: {}, query: {}, body: { mode: 'backfill', batchSize: 100 },
+    }, {
+        authenticate: async () => { throw new Error('interactive authentication must not authorize backfill') },
+        authenticateScheduler: async () => 'Bearer application-token',
+        getCheckpointStore: () => ({ begin: async () => { began += 1 } }),
+        getJobCardStore: () => ({}),
+        reconcilePendingCompletionReviews: async () => ({ pendingRecords: 0 }),
+        pollGreenTreeJobStatuses: async (options) => {
+            polled += 1
+            assert.equal(options.mode, 'backfill')
+            assert.equal(options.authorization, 'Bearer application-token')
+            return { mode: 'backfill', due: 0, selected: 0, checked: 0, updatedRecords: 0, notEntered: 0, open: 0, closed: 0, finalised: 0, remaining: 0, conflicts: [], failed: [] }
+        },
+    })
+    assert.equal(context.res.status, 200)
+    assert.equal(polled, 1)
+    assert.equal(began, 0)
+})
+
 test('authenticated POST reconciles a GreenTree change into Dataverse', { concurrency: false }, async () => {
     process.env.DATAVERSE_URL = 'https://example.crm.dynamics.com'
     process.env.LIFTTRUCKS_API_USERNAME = 'server-user'
@@ -266,7 +324,7 @@ test('authenticated POST reconciles a GreenTree change into Dataverse', { concur
         if (String(url).startsWith('https://webview.liftrucks.co.nz/')) return Response.json([{ JCJobs: [{ Code: '147223', IsClosed: true }] }])
         if (String(url).includes('/gr_jobs?')) return Response.json({ value: [{
             '@odata.etag': 'W/"1"', gr_jobid: '00000000-0000-4000-8000-000000000002',
-            gr_jobnumber: '147223', gr_gtentered: false, gr_status: 122830001,
+            gr_jobnumber: '147223', gr_gtentered: false, gr_greentreestatus: null,
         }] })
         if (options.method === 'PATCH') return new Response(null, { status: 204 })
         throw new Error(`Unexpected request: ${url}`)
@@ -281,10 +339,9 @@ test('authenticated POST reconciles a GreenTree change into Dataverse', { concur
     assert.equal(context.res.status, 200)
     const body = JSON.parse(context.res.body)
     assert.equal(body.updated, 1)
-    assert.equal(body.movedToComplete, 0)
-    assert.equal(body.movedToCompletionReview, 1)
+    assert.equal(body.greenTreeStatusUpdated, 1)
     const patch = calls.find((call) => call.options.method === 'PATCH')
-    assert.deepEqual(JSON.parse(patch.options.body), { gr_gtentered: true, gr_status: 122830004 })
+    assert.deepEqual(JSON.parse(patch.options.body), { gr_gtentered: true, gr_greentreestatus: 'closed' })
 })
 
 test('limits diagnostic lookback to 24 hours', () => {
@@ -298,20 +355,20 @@ test('formats persistent UTC checkpoints as GreenTree Auckland wall time', () =>
     assert.equal(endpoint._test.formatGreenTreeModifiedSince(Date.parse('2026-07-09T08:00:00Z')), '2026-07-09T20:00:00')
 })
 
-test('reconciliation marks matched jobs entered but sends GreenTree-closed jobs to operational review without inventing completion evidence', async () => {
+test('reconciliation records factual GreenTree status without changing operational Job status', async () => {
     const patches = []
     const result = await reconcileGreenTreeJobs({
         jobs: [
             { code: '147223', isClosed: true, completeDate: '2026-10-09' },
-            { code: '147224', isClosed: false },
-            { code: 'MISSING', isClosed: true },
+            { code: '147224', isClosed: false, isFinalised: false },
+            { code: 'MISSING', isClosed: true, isFinalised: true },
         ],
         dataverseOrigin: 'https://example.crm.dynamics.com',
         authorization: 'Bearer valid-token',
         fetchImpl: async (url, options) => {
             if (!options.method) return Response.json({ value: [
-                { '@odata.etag': 'W/"1"', gr_jobid: '00000000-0000-4000-8000-000000000001', gr_jobnumber: '147223', gr_gtentered: false, gr_status: 122830000 },
-                { '@odata.etag': 'W/"2"', gr_jobid: '00000000-0000-4000-8000-000000000002', gr_jobnumber: '147224', gr_gtentered: false, gr_status: 122830001 },
+                { '@odata.etag': 'W/"1"', gr_jobid: '00000000-0000-4000-8000-000000000001', gr_jobnumber: '147223', gr_gtentered: false, gr_greentreestatus: null },
+                { '@odata.etag': 'W/"2"', gr_jobid: '00000000-0000-4000-8000-000000000002', gr_jobnumber: '147224', gr_gtentered: false, gr_greentreestatus: null },
             ] })
             patches.push({ url: String(url), options })
             return new Response(null, { status: 204 })
@@ -321,14 +378,40 @@ test('reconciliation marks matched jobs entered but sends GreenTree-closed jobs 
     assert.equal(result.matched, 2)
     assert.equal(result.updated, 2)
     assert.equal(result.markedEntered, 2)
-    assert.equal(result.movedToComplete, 0)
-    assert.equal(result.movedToCompletionReview, 1)
+    assert.equal(result.greenTreeStatusUpdated, 2)
     assert.deepEqual(result.unmatched, ['MISSING'])
-    assert.deepEqual(JSON.parse(patches[0].options.body), { gr_gtentered: true, gr_status: 122830004 })
-    assert.deepEqual(JSON.parse(patches[1].options.body), { gr_gtentered: true })
+    assert.deepEqual(JSON.parse(patches[0].options.body), { gr_gtentered: true, gr_greentreestatus: 'closed' })
+    assert.deepEqual(JSON.parse(patches[1].options.body), { gr_gtentered: true, gr_greentreestatus: 'open' })
+    assert.equal(patches.some((patch) => 'gr_status' in JSON.parse(patch.options.body)), false)
 })
 
-test('reconciliation never reopens a complete job and refuses duplicate job numbers', async () => {
+test('GreenTree finalised status takes precedence over closed status', () => {
+    assert.equal(reconciliationTest.greenTreeJobStatus({ isClosed: true, isFinalised: true }), 'finalised')
+    assert.equal(reconciliationTest.greenTreeJobStatus({ isClosed: true, isFinalised: false }), 'closed')
+    assert.equal(reconciliationTest.greenTreeJobStatus({ isClosed: false, isFinalised: false }), 'open')
+})
+
+test('reconciliation updates a previously entered Job when its GreenTree status changes', async () => {
+    const patches = []
+    const result = await reconcileGreenTreeJobs({
+        jobs: [{ code: '147223', isClosed: true, isFinalised: false }],
+        dataverseOrigin: 'https://example.crm.dynamics.com',
+        authorization: 'Bearer valid-token',
+        fetchImpl: async (_url, options = {}) => {
+            if (!options.method) return Response.json({ value: [{
+                '@odata.etag': 'W/"4"', gr_jobid: 'job-1', gr_jobnumber: '147223',
+                gr_gtentered: true, gr_greentreestatus: 'open',
+            }] })
+            patches.push(JSON.parse(options.body))
+            return new Response(null, { status: 204 })
+        },
+    })
+    assert.deepEqual(patches, [{ gr_gtentered: true, gr_greentreestatus: 'closed' }])
+    assert.equal(result.markedEntered, 0)
+    assert.equal(result.greenTreeStatusUpdated, 1)
+})
+
+test('reconciliation leaves current factual status alone and refuses duplicate job numbers', async () => {
     let patchCalls = 0
     const result = await reconcileGreenTreeJobs({
         jobs: [{ code: '147223', isClosed: true }, { code: '147224', isClosed: true }],
@@ -336,15 +419,15 @@ test('reconciliation never reopens a complete job and refuses duplicate job numb
         authorization: 'Bearer valid-token',
         fetchImpl: async (_url, options) => {
             if (!options.method) return Response.json({ value: [
-                { gr_jobid: '1', gr_jobnumber: '147223', gr_gtentered: true, gr_status: 122830003 },
-                { gr_jobid: '2', gr_jobnumber: '147224', gr_gtentered: false, gr_status: 122830001 },
-                { gr_jobid: '3', gr_jobnumber: '147224', gr_gtentered: false, gr_status: 122830001 },
+                { gr_jobid: '1', gr_jobnumber: '147223', gr_gtentered: true, gr_greentreestatus: 'closed' },
+                { gr_jobid: '2', gr_jobnumber: '147224', gr_gtentered: false, gr_greentreestatus: null },
+                { gr_jobid: '3', gr_jobnumber: '147224', gr_gtentered: false, gr_greentreestatus: null },
             ] })
             patchCalls += 1
             return new Response(null, { status: 204 })
         },
     })
-    assert.equal(result.alreadyComplete, 1)
+    assert.equal(result.greenTreeStatusUpdated, 0)
     assert.deepEqual(result.conflicts, ['147224'])
     assert.equal(patchCalls, 0)
 })
@@ -359,7 +442,7 @@ test('reconciliation marks a matching unregistered Job Book entry as entered', a
             if (!options.method && String(url).includes('/gr_jobs?')) return Response.json({ value: [] })
             if (!options.method && String(url).includes('/gr_jobbookentries?')) return Response.json({ value: [{
                 '@odata.etag': 'W/"3"', gr_jobbookentryid: 'entry-1', gr_jobnumber: '147225',
-                gr_entered: false, gr_stage: 122830000,
+                gr_entered: false, gr_greentreestatus: null, gr_stage: 122830000,
             }] })
             if (options.method === 'PATCH') { patches.push({ url: String(url), options }); return new Response(null, { status: 204 }) }
             throw new Error(`Unexpected request: ${url}`)
@@ -370,7 +453,7 @@ test('reconciliation marks a matching unregistered Job Book entry as entered', a
     assert.equal(result.intakeUpdated, 1)
     assert.deepEqual(result.unmatched, [])
     assert.match(patches[0].url, /gr_jobbookentries\(entry-1\)$/)
-    assert.deepEqual(JSON.parse(patches[0].options.body), { gr_entered: true })
+    assert.deepEqual(JSON.parse(patches[0].options.body), { gr_entered: true, gr_greentreestatus: 'open' })
 })
 
 test('checkpoint uses overlap, enforces cooldown, and preserves the watermark after failure', async () => {

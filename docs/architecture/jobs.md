@@ -439,8 +439,10 @@ searchable, while all new permanent numbers are assigned only by the regional al
 Job Book Intake is a separate organization-owned Dataverse ledger, not an Unset Job type. Creating
 an Intake row atomically receives its Job Number from the `gr_jobbookentry.gr_jobnumber` AutoNumber;
 the browser never calculates the next number. Intake, Legacy, Void, and Promoted stages remain
-outside managed Job type tabs. GT Entry and Timecloud Entry are independent administrative booleans
-on both Intake and managed Job records; neither is inferred from Job status or from the other marker.
+outside managed Job type tabs. The GreenTree entry marker and Timecloud Entry are independent
+administrative booleans on both Intake and managed Job records; neither is inferred from Job status
+or from the other marker. `gr_greentreestatus` stores only `open`, `closed` or `finalised` and is
+displayed as **Open**, **Closed** or **Finalised**; an unset entry marker displays **Not entered**.
 The Job Book Legacy table saves them individually with ETag concurrency protection. Promotion is
 intentionally disabled until one server-side idempotent operation can create the Job and mark the
 Intake row Promoted together; both Job Number alternate keys are Active.
@@ -462,14 +464,15 @@ intake, but Site suggestions require a linked Customer.
 | Unallocated | The Job has not yet been successfully dispatched to a technician. | New operational Jobs begin here. A final technician withdrawal may return an Allocated Job here when no current technician assignment remains. |
 | Allocated | At least one technician has been successfully sent the Job. | A confirmed email dispatch moves only an Unallocated Job to Allocated. Selecting a mechanic without dispatching does not allocate the Job. |
 | Action Required | Office or coordinator action is needed before work can progress. | This is the user-facing name of the existing `Waiting for parts` Dataverse option. It remains coordinator-controlled and its numeric option-set value is unchanged. |
-| Completion Review | Submitted evidence needs office review, or GreenTree is closed but required operational completion evidence is missing. | Required assignments/evidence must be checked. The existing Azure-card-only enumeration and GreenTree bypass do not fully implement this rule. |
+| Completion Review | Submitted evidence needs office review before operational completion. | Required assignments/evidence must be checked through the canonical completion workflow. |
 | Complete | Operational completion is accepted with required evidence and type-specific side effects. | GreenTree closure alone must not complete a job with missing evidence (owner decision 10 October). Technician answers/submission alone never set Complete. |
 
 Current exceptions must be fixed rather than treated as accepted lifecycle rules:
 
 - Registration with a mechanic/supplier immediately sets Allocated.
-- GreenTree `IsClosed=true` currently sets Complete regardless of required hours/WOF evidence or
-  maintenance side effects; it can overwrite another operational status.
+- GreenTree reconciliation records only the factual external state (`open`, `closed` or `finalised`)
+  and the GreenTree-entry marker. It must not change the operational Job status or perform
+  completion side effects.
 - Card reconciliation checks existing Azure link lifecycles, not the full Dataverse assignment set.
   Its bounded queue has no continuation and can repeatedly revisit the same pending cards.
 - Submission attempts reconciliation and a scheduled run retries, but there is no guarantee of
@@ -484,6 +487,10 @@ the newly numbered Job in GreenTree, so allocation must not immediately interpre
 as a meaningful failure. GreenTree delta reconciliation is shared by Job Book and Service
 Coordination. A future delayed direct-lookup/retry policy will provide an explicit grace period;
 absence from a `modifiedSince` delta response is never evidence that a Job does not exist.
+The Job Book displays the stored external state as **Open**, **Closed** or **Finalised**; unmatched
+rows display **Not entered**. This status is independent from the operational Job lifecycle.
+The status-specific polling and provisioning contract is documented in
+[GreenTree Job Status Synchronisation](../greentree-job-status-sync.md).
 
 ## Important Business Rules
 
@@ -522,8 +529,8 @@ absence from a `modifiedSince` delta response is never evidence that a Job does 
 - Successful dispatch moves only an Unallocated Job to Allocated. When the latest lifecycle for
   every non-withdrawn technician assignment has submitted evidence, an Allocated Job moves to
   Completion Review. Active, expired, replacement and truncated lifecycle histories block that
-  transition conservatively. Technician answers never determine the operational outcome, and a
-  technician submission never marks the Job Complete; GreenTree closure is authoritative.
+  transition conservatively. Technician answers and GreenTree status never determine the
+  operational outcome, and neither can mark the Job Complete.
 - Generated Site Check Job status changes from both the Jobs table and Job drawer route
   through `siteCheckCompletionApi`. It reloads the parent and every sibling, blocks progress
   on expected-count mismatch, and atomically completes the final Job, occurrence, and

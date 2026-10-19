@@ -4,6 +4,7 @@ import test from 'node:test'
 import {
     createBlankJobBookRow,
     applyIntakeCustomerToRow,
+    greenTreeJobStatusLabel,
     jobBookEquipmentFallback,
     jobBookLocationFieldsVisible,
     jobBookLocationSummaryVisible,
@@ -464,9 +465,18 @@ test('Job Book rows use bounded Dataverse pages, server search and infinite scro
 test('GreenTree entry is automated while Timecloud remains an explicit office marker', () => {
     const screen = readFileSync(new URL('../src/alpha/job-book/JobBookPrototypeScreen.tsx', import.meta.url), 'utf8')
     assert.match(screen, /requestGreenTreeJobReconciliation\(token\)/)
-    assert.match(screen, /row\.entered \? 'In GreenTree' : 'Not confirmed'/)
+    assert.match(screen, /greenTreeJobStatusLabel\(row\.entered, row\.greenTreeStatus \?\? ''\)/)
+    assert.match(screen, />GT Status</)
     assert.doesNotMatch(screen, /onChange=\{\(event\) => void updateRowField\(row, 'entered'/)
     assert.match(screen, /onChange=\{\(event\) => void updateRowField\(row, 'timecloudEntered'/)
+})
+
+test('GreenTree status labels use the agreed Job Book wording', () => {
+    assert.equal(greenTreeJobStatusLabel(false, ''), 'Not entered')
+    assert.equal(greenTreeJobStatusLabel(true, ''), 'Open')
+    assert.equal(greenTreeJobStatusLabel(true, 'open'), 'Open')
+    assert.equal(greenTreeJobStatusLabel(true, 'closed'), 'Closed')
+    assert.equal(greenTreeJobStatusLabel(true, 'finalised'), 'Finalised')
 })
 
 test('Job Book server filters cover visible columns, escape input and use Auckland dates', () => {

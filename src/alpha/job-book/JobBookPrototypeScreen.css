@@ -1340,6 +1340,14 @@
     background: #dcefe2;
     color: #2f6840;
 }
+.job-book-status-pill.greentree-closed {
+    background: #fff0c9;
+    color: #7a5312;
+}
+.job-book-status-pill.greentree-finalised {
+    background: #e5e9f7;
+    color: #465786;
+}
 
 .job-book-table-check {
     display: inline-flex;

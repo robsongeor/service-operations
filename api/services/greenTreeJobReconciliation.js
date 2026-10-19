@@ -1,5 +1,3 @@
-const JOB_STATUS_COMPLETE = 122830003
-const JOB_STATUS_COMPLETION_REVIEW = 122830004
 const JOB_BOOK_STAGE_VOID = 122830003
 const QUERY_CHUNK_SIZE = 20
 const JOB_BOOKS = [
@@ -25,7 +23,7 @@ function jobBookForCode(code) {
         || (/^[0-9]+$/.test(normalized) ? JOB_BOOKS.find((book) => !book.prefix) : null)
 }
 
-async function reconcileIntakeRows({ codes, dataverseOrigin, authorization, fetchImpl, result }) {
+async function reconcileIntakeRows({ codes, jobsByCode, dataverseOrigin, authorization, fetchImpl, result }) {
     const codesByBook = new Map()
     codes.forEach((code) => {
         const book = jobBookForCode(code)
@@ -39,7 +37,7 @@ async function reconcileIntakeRows({ codes, dataverseOrigin, authorization, fetc
         const records = []
         for (const codeChunk of chunk(bookCodes)) {
             const filter = codeChunk.map((code) => `gr_jobnumber eq '${escapeOData(code)}'`).join(' or ')
-            const select = `${book.idField},gr_jobnumber,gr_entered,gr_stage`
+            const select = `${book.idField},gr_jobnumber,gr_entered,gr_greentreestatus,gr_stage`
             const url = `${dataverseOrigin}/api/data/v9.2/${book.tableSetName}?$select=${select}&$filter=${encodeURIComponent(filter)}`
             const response = await fetchImpl(url, {
                 headers: { Authorization: authorization, Accept: 'application/json', Prefer: 'odata.maxpagesize=100' },
@@ -66,7 +64,11 @@ async function reconcileIntakeRows({ codes, dataverseOrigin, authorization, fetc
             result.matched += 1
             result.intakeMatched += 1
             result.unmatched = result.unmatched.filter((value) => value !== code)
-            if (record.gr_entered === true || record.gr_stage === JOB_BOOK_STAGE_VOID) continue
+            if (record.gr_stage === JOB_BOOK_STAGE_VOID) continue
+            const status = greenTreeJobStatus(jobsByCode.get(code))
+            const markEntered = record.gr_entered !== true
+            const statusChanged = record.gr_greentreestatus !== status
+            if (!markEntered && !statusChanged) continue
             if (!/^W\/"[^"]+"$/.test(record['@odata.etag'] || '')) { result.conflicts.push(code); continue }
             const response = await fetchImpl(`${dataverseOrigin}/api/data/v9.2/${book.tableSetName}(${record[book.idField]})`, {
                 method: 'PATCH',
@@ -76,12 +78,13 @@ async function reconcileIntakeRows({ codes, dataverseOrigin, authorization, fetc
                     'Content-Type': 'application/json',
                     'If-Match': record['@odata.etag'],
                 },
-                body: JSON.stringify({ gr_entered: true }),
+                body: JSON.stringify({ gr_entered: true, gr_greentreestatus: status }),
             })
             if (response.status === 412) { result.conflicts.push(code); continue }
             if (!response.ok) throw new Error('A matched Dataverse Job Book entry could not be reconciled.')
             result.updated += 1
-            result.markedEntered += 1
+            if (markEntered) result.markedEntered += 1
+            if (statusChanged) result.greenTreeStatusUpdated += 1
             result.intakeUpdated += 1
         }
     }
@@ -94,9 +97,7 @@ async function reconcileGreenTreeJobs({ jobs, dataverseOrigin, authorization, fe
         matched: 0,
         updated: 0,
         markedEntered: 0,
-        movedToComplete: 0,
-        movedToCompletionReview: 0,
-        alreadyComplete: 0,
+        greenTreeStatusUpdated: 0,
         intakeMatched: 0,
         intakeUpdated: 0,
         unmatched: [],
@@ -107,7 +108,7 @@ async function reconcileGreenTreeJobs({ jobs, dataverseOrigin, authorization, fe
     const records = []
     for (const codes of chunk([...byCode.keys()])) {
         const filter = codes.map((code) => `gr_jobnumber eq '${escapeOData(code)}'`).join(' or ')
-        const url = `${dataverseOrigin}/api/data/v9.2/gr_jobs?$select=gr_jobid,gr_jobnumber,gr_gtentered,gr_status,gr_completeddate&$filter=${encodeURIComponent(filter)}`
+        const url = `${dataverseOrigin}/api/data/v9.2/gr_jobs?$select=gr_jobid,gr_jobnumber,gr_gtentered,gr_greentreestatus&$filter=${encodeURIComponent(filter)}`
         const response = await fetchImpl(url, {
             headers: { Authorization: authorization, Accept: 'application/json', Prefer: 'odata.maxpagesize=100' },
         })
@@ -133,17 +134,10 @@ async function reconcileGreenTreeJobs({ jobs, dataverseOrigin, authorization, fe
         const record = matches[0]
         const payload = {}
         const markEntered = record.gr_gtentered !== true
-        let moveToCompletionReview = false
-        if (markEntered) payload.gr_gtentered = true
-        if (greenTreeJob.isClosed) {
-            if (record.gr_status === JOB_STATUS_COMPLETE) result.alreadyComplete += 1
-            else if (record.gr_status !== JOB_STATUS_COMPLETION_REVIEW) {
-                // GT closure confirms billing, not operational evidence or service/WOF side effects.
-                // Only the canonical completion workflow may mark the operational Job Complete.
-                payload.gr_status = JOB_STATUS_COMPLETION_REVIEW
-                moveToCompletionReview = true
-            }
-        }
+        const status = greenTreeJobStatus(greenTreeJob)
+        const statusChanged = record.gr_greentreestatus !== status
+        if (markEntered || statusChanged) payload.gr_gtentered = true
+        if (statusChanged) payload.gr_greentreestatus = status
         if (!Object.keys(payload).length) continue
         if (!/^W\/"[^"]+"$/.test(record['@odata.etag'] || '')) { result.conflicts.push(code); continue }
         const response = await fetchImpl(`${dataverseOrigin}/api/data/v9.2/gr_jobs(${record.gr_jobid})`, {
@@ -160,11 +154,12 @@ async function reconcileGreenTreeJobs({ jobs, dataverseOrigin, authorization, fe
         if (!response.ok) throw new Error('A matched Dataverse Job could not be reconciled.')
         result.updated += 1
         if (markEntered) result.markedEntered += 1
-        if (moveToCompletionReview) result.movedToCompletionReview += 1
+        if (statusChanged) result.greenTreeStatusUpdated += 1
     }
 
     await reconcileIntakeRows({
         codes: [...result.unmatched],
+        jobsByCode: byCode,
         dataverseOrigin,
         authorization,
         fetchImpl,
@@ -174,7 +169,13 @@ async function reconcileGreenTreeJobs({ jobs, dataverseOrigin, authorization, fe
     return result
 }
 
+function greenTreeJobStatus(job) {
+    if (job?.isFinalised) return 'finalised'
+    if (job?.isClosed) return 'closed'
+    return 'open'
+}
+
 module.exports = {
     reconcileGreenTreeJobs,
-    _test: { escapeOData, chunk, jobBookForCode, JOB_STATUS_COMPLETE, JOB_BOOK_STAGE_VOID, QUERY_CHUNK_SIZE },
+    _test: { escapeOData, chunk, jobBookForCode, greenTreeJobStatus, JOB_BOOK_STAGE_VOID, QUERY_CHUNK_SIZE },
 }

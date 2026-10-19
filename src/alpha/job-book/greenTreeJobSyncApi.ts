@@ -1,20 +1,21 @@
 const GREEN_TREE_SYNC_COOLDOWN_MS = 10 * 60_000
-const GREEN_TREE_INITIAL_LOOKBACK_MS = 23 * 60 * 60_000
 
 export type GreenTreeJobReconciliationResult = {
     checkedAt: string
     skipped?: boolean
     reason?: 'cooldown' | 'running'
-    received: number
-    matched: number
-    updated: number
-    markedEntered: number
-    movedToComplete: number
-    alreadyComplete: number
-    intakeMatched: number
-    intakeUpdated: number
-    unmatched: string[]
+    mode?: 'scheduled'
+    due: number
+    selected: number
+    checked: number
+    updatedRecords: number
+    notEntered: number
+    open: number
+    closed: number
+    finalised: number
+    remaining: number
     conflicts: string[]
+    failed: string[]
 }
 
 let lastAttemptAt = 0
@@ -32,7 +33,7 @@ export function requestGreenTreeJobReconciliation(accessToken: string) {
             Accept: 'application/json',
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ modifiedSince: new Date(now - GREEN_TREE_INITIAL_LOOKBACK_MS).toISOString() }),
+        body: JSON.stringify({ mode: 'scheduled' }),
     }).then(async (response) => {
         if (!response.ok) throw new Error('Automatic GreenTree reconciliation is temporarily unavailable.')
         return response.json() as Promise<GreenTreeJobReconciliationResult>

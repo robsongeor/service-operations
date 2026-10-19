@@ -1,6 +1,7 @@
 const { createHash, timingSafeEqual } = require('node:crypto')
 const { fetchGreenTreeJobsModifiedSince } = require('../services/greenTreeJobs')
 const { reconcileGreenTreeJobs } = require('../services/greenTreeJobReconciliation')
+const { pollGreenTreeJobStatuses } = require('../services/greenTreeStatusPolling')
 const { getGreenTreeSyncCheckpointStore } = require('../services/greenTreeSyncCheckpoint')
 const { getGreenTreeDataverseApplicationToken } = require('../services/dataverseApplicationToken')
 const { getJobCardStore } = require('../services/jobCardStorage')
@@ -89,10 +90,15 @@ async function greenTreeJobChanges(context, request, options = {}) {
         context.res = jsonResponse(405, { error: 'Method not allowed.' }, { Allow: 'GET, POST' })
         return
     }
+    const pollingMode = request.method === 'POST' && (request.body?.mode === 'scheduled' || request.body?.mode === 'backfill')
+        ? request.body.mode : ''
     let authorization
     try {
-        authorization = await (options.authenticate || validateAuthenticatedUser)(request)
-        if (!authorization && request.method === 'POST') authorization = await (options.authenticateScheduler || scheduledAuthorization)(request)
+        if (pollingMode === 'backfill') authorization = await (options.authenticateScheduler || scheduledAuthorization)(request)
+        else {
+            authorization = await (options.authenticate || validateAuthenticatedUser)(request)
+            if (!authorization && request.method === 'POST') authorization = await (options.authenticateScheduler || scheduledAuthorization)(request)
+        }
     } catch {
         context.res = jsonResponse(503, { error: 'The scheduled synchronization identity is unavailable.' })
         return
@@ -119,6 +125,20 @@ async function greenTreeJobChanges(context, request, options = {}) {
             jobCardStatusReconciliation = { failed: true }
         }
     }
+    if (pollingMode === 'backfill') {
+        try {
+            const reconciliation = await (options.pollGreenTreeJobStatuses || pollGreenTreeJobStatuses)({
+                mode: 'backfill',
+                batchSize: request.body?.batchSize,
+                dataverseOrigin: dataverseOrigin(),
+                authorization,
+            })
+            context.res = jsonResponse(200, { checkedAt: new Date().toISOString(), jobCardStatusReconciliation, ...reconciliation })
+        } catch (error) {
+            context.res = jsonResponse(502, { error: 'The GreenTree full-status backfill could not complete this batch.' })
+        }
+        return
+    }
     if (request.method === 'POST') {
         if (checkpointStore) {
             try { syncRun = await checkpointStore.begin() }
@@ -133,6 +153,22 @@ async function greenTreeJobChanges(context, request, options = {}) {
                 return
             }
         }
+    }
+    if (pollingMode === 'scheduled') {
+        try {
+            const reconciliation = await (options.pollGreenTreeJobStatuses || pollGreenTreeJobStatuses)({
+                mode: 'scheduled',
+                batchSize: request.body?.batchSize,
+                dataverseOrigin: dataverseOrigin(),
+                authorization,
+            })
+            if (checkpointStore && syncRun) await checkpointStore.complete(syncRun)
+            context.res = jsonResponse(200, { checkedAt: new Date().toISOString(), jobCardStatusReconciliation, ...reconciliation })
+        } catch (error) {
+            if (checkpointStore && syncRun) await checkpointStore.fail(syncRun).catch(() => undefined)
+            context.res = jsonResponse(502, { error: 'The GreenTree status polling request could not complete.' })
+        }
+        return
     }
     const modifiedSince = syncRun
         ? formatGreenTreeModifiedSince(Date.parse(syncRun.modifiedSince))

@@ -28,6 +28,18 @@ export const JOB_BOOK_ENTRY_STAGES = {
 
 export type JobBookEntryStage = typeof JOB_BOOK_ENTRY_STAGES[keyof typeof JOB_BOOK_ENTRY_STAGES]
 export type JobBookEntrySource = 'local-intake' | 'dataverse-intake' | 'dataverse-job'
+export type GreenTreeJobStatus = 'open' | 'closed' | 'finalised'
+
+export function greenTreeJobStatus(value: unknown): GreenTreeJobStatus | '' {
+    return value === 'open' || value === 'closed' || value === 'finalised' ? value : ''
+}
+
+export function greenTreeJobStatusLabel(entered: boolean, status: GreenTreeJobStatus | '') {
+    if (!entered) return 'Not entered'
+    if (status === 'closed') return 'Closed'
+    if (status === 'finalised') return 'Finalised'
+    return 'Open'
+}
 
 export const MANAGED_JOB_ENTRY_MARKER_COLUMNS = {
     entered: 'gr_gtentered',
@@ -63,6 +75,7 @@ export type JobBookRow = {
     addressNotFoundConfirmed: boolean
     customerPo: string
     entered: boolean
+    greenTreeStatus?: GreenTreeJobStatus | ''
     timecloudEntered: boolean
     equipmentConfigured: boolean
     equipmentReviewRequired: boolean
@@ -151,6 +164,7 @@ export function createBlankJobBookRow(jobNumber: number, jobBookKey: JobBookKey 
         addressNotFoundConfirmed: false,
         customerPo: '',
         entered: false,
+        greenTreeStatus: '',
         timecloudEntered: false,
         equipmentConfigured: false,
         equipmentReviewRequired: false,

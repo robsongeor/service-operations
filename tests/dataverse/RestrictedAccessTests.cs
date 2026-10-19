@@ -57,8 +57,18 @@ public static class RestrictedAccessTests
             Test(r+" rejects Void Job correction", () => { var before=Row("gr_job"); before["gr_registrationvoid"]=true; Denied(() => RestrictedWritePolicy.Validate(r,"Update",Row("gr_job"),before)); });
         }
         Test("book rejects GreenTree marker", () => Denied(() => Change("book","gr_job","gr_gtentered",true)));
+        Test("book rejects GreenTree status", () => Denied(() => Change("book","gr_job","gr_greentreestatus","open")));
         Test("book rejects Timecloud marker", () => Denied(() => Change("book","gr_job","gr_timecloudentered",true)));
         Test("office may record GreenTree marker", () => Change("office","gr_job","gr_gtentered",true));
+        foreach (string status in new[] { "open", "closed", "finalised" })
+        {
+            string value=status; Test("office may record GreenTree status "+value, () => { var before=Row("gr_job"); var target=Row("gr_job"); target["gr_gtentered"]=true; target["gr_greentreestatus"]=value; RestrictedWritePolicy.Validate("office","Update",target,before); });
+        }
+        Test("office cannot record an invalid GreenTree status", () => { var before=Row("gr_job"); var target=Row("gr_job"); target["gr_gtentered"]=true; target["gr_greentreestatus"]="Finished & Invoiced"; Denied(() => RestrictedWritePolicy.Validate("office","Update",target,before)); });
+        Test("office cannot record GreenTree status without its marker", () => Denied(() => Change("office","gr_job","gr_greentreestatus","closed")));
+        Test("office may record GreenTree checked time without a match", () => Change("office","gr_job","gr_greentreestatuscheckedon",DateTime.UtcNow));
+        Test("office cannot record a future GreenTree checked time", () => Denied(() => Change("office","gr_job","gr_greentreestatuscheckedon",DateTime.UtcNow.AddHours(1))));
+        Test("book rejects GreenTree checked time", () => Denied(() => Change("book","gr_job","gr_greentreestatuscheckedon",DateTime.UtcNow)));
         Test("office may record Timecloud marker", () => Change("office","gr_job","gr_timecloudentered",true));
         foreach (string table in new[] { "gr_jobbookentry", "gr_waikatojobbookentry", "gr_hastingsjobbookentry", "gr_christchurchjobbookentry" })
         {
@@ -69,6 +79,8 @@ public static class RestrictedAccessTests
             Test(t+" marked entry cannot Void", () => { before["gr_entered"]=true; Denied(() => RestrictedWritePolicy.Validate("book","Update",target,before)); before["gr_entered"]=false; });
             Test(t+" missing marker cannot Void", () => { before.Attributes.Remove("gr_timecloudentered"); Denied(() => RestrictedWritePolicy.Validate("book","Update",target,before)); before["gr_timecloudentered"]=false; });
             Test(t+" linked registration requires atomic operation", () => { before["gr_registeredjob"]=new EntityReference("gr_job",Id); Denied(() => RestrictedWritePolicy.Validate("book","Update",target,before)); });
+            Test(t+" office may record GreenTree status", () => { var statusBefore=Row(t); statusBefore["gr_stage"]=new OptionSetValue(122830000); var statusTarget=Row(t); statusTarget["gr_entered"]=true; statusTarget["gr_greentreestatus"]="open"; RestrictedWritePolicy.Validate("office","Update",statusTarget,statusBefore); });
+            Test(t+" office rejects GreenTree status without marker", () => { var statusBefore=Row(t); statusBefore["gr_stage"]=new OptionSetValue(122830000); var statusTarget=Row(t); statusTarget["gr_greentreestatus"]="closed"; Denied(() => RestrictedWritePolicy.Validate("office","Update",statusTarget,statusBefore)); });
         }
         Test("linked Void access exception requires the exact transactional API parent and fields", () => {
             var inputs = new ParameterCollection { { "Book", "auckland" }, { "JobId", Id }, { "LedgerId", Id }, { "Reason", "Duplicate" } };

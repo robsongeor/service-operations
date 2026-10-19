@@ -19,17 +19,16 @@ test('requests one background reconciliation and applies the browser cooldown', 
         assert.equal(options?.method, 'POST')
         assert.equal(new Headers(options?.headers).get('X-Dataverse-Authorization'), 'Bearer sample-token')
         const body = JSON.parse(String(options?.body))
-        const age = Date.now() - Date.parse(body.modifiedSince)
-        assert.ok(age > 22 * 60 * 60_000 && age < 24 * 60 * 60_000)
+        assert.deepEqual(body, { mode: 'scheduled' })
         return Response.json({
-            checkedAt: new Date().toISOString(), received: 1, matched: 1, updated: 1,
-            markedEntered: 1, movedToComplete: 0, alreadyComplete: 0,
-            unmatched: [], conflicts: [],
+            checkedAt: new Date().toISOString(), mode: 'scheduled', due: 1, selected: 1,
+            checked: 1, updatedRecords: 1, notEntered: 0, open: 1, closed: 0,
+            finalised: 0, remaining: 0, conflicts: [], failed: [],
         })
     }
     const first = await requestGreenTreeJobReconciliation('sample-token')
     const second = await requestGreenTreeJobReconciliation('sample-token')
-    assert.equal(first?.updated, 1)
+    assert.equal(first?.updatedRecords, 1)
     assert.equal(second, null)
     assert.equal(calls, 1)
 })
