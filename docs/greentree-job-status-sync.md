@@ -38,13 +38,17 @@ be reported for review rather than silently rewriting the stored state.
 
 ## Initial full-status backfill
 
-Before normal polling is enabled, run a one-time full-status backfill for every numbered record in:
+Before normal polling is enabled, run a one-time full-status backfill for every record with a valid
+GreenTree-shaped Job Number in:
 
 - managed Jobs (`gr_job`);
 - Auckland Job Book entries (`gr_jobbookentry`);
 - Waikato Job Book entries (`gr_waikatojobbookentry`);
 - Hastings Job Book entries (`gr_hastingsjobbookentry`); and
 - Christchurch Job Book entries (`gr_christchurchjobbookentry`).
+
+Known free-text or malformed supervisor entries are data-quality exceptions, not GreenTree lookup
+keys. The verifier must report them separately and exclude them from the due/remaining totals.
 
 The backfill must deduplicate identical Job Numbers before calling GreenTree, then apply the one
 authoritative result to every matching Dataverse representation. Registered ledger/managed-Job
@@ -97,10 +101,23 @@ Release in this order:
 7. Enable the status-aware scheduler only after the deployed API passes controlled checks for all
    four display states and confirms that `gr_status` is never patched.
 
-The current 15-minute `modifiedSince` delta job is not, by itself, the complete status-specific
-polling policy. Before scheduler enablement, the backend must retain enough per-record/checkpoint
-state to enforce the 3-hour Open cadence, the once-daily 7:00am Closed cadence, and the permanent
-Finalised exclusion. Schema provisioning alone does not enable polling.
+The old 15-minute `modifiedSince`-only delta job was retired when the status-aware scheduler was
+enabled. The backend retains a checked timestamp per record to enforce the 3-hour Open cadence, the
+once-daily 7:00am Closed cadence, and the permanent Finalised exclusion.
+
+## Live rollout record — 19 October 2026
+
+- The dedicated GreenTree Dataverse application user was verified and the access guard was deployed
+  as `1.0.18.0`. Deployment and verification were performed as `georger@liftrucks.co.nz`.
+- Full backfill workflow run `39202703036` completed successfully with no lookup failures or status
+  conflicts.
+- The read-only Dataverse verifier found 1,319 unique non-empty values: 1,311 valid Job Numbers were
+  checked, 0 valid Job Numbers remained, and 0 cross-representation status conflicts existed.
+- Eight known incorrect supervisor-entered values were recorded as ignored data-quality exceptions:
+  `143057A`, `146274A`, `DQ45-D`, `GALLAGHER CROWN`, `MASON`, `QUOTE`, `TEST`, and `VWL000111`.
+- The status-aware workflow was enabled on the default branch at commit `858e4d1`. It wakes every
+  15 minutes; per-record due logic applies the cadence in this document.
+- Plugin exception tracing was returned to **Off** after rollout diagnostics.
 
 ## Verification and rollback
 
