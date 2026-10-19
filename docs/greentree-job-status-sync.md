@@ -117,6 +117,8 @@ once-daily 7:00am Closed cadence, and the permanent Finalised exclusion.
   `143057A`, `146274A`, `DQ45-D`, `GALLAGHER CROWN`, `MASON`, `QUOTE`, `TEST`, and `VWL000111`.
 - The status-aware workflow was enabled on the default branch at commit `858e4d1`. It wakes every
   15 minutes; per-record due logic applies the cadence in this document.
+- The scheduler does not invoke the former operational Job completion-review reconciliation path.
+  GreenTree status remains factual metadata only and never changes operational `gr_status`.
 - Plugin exception tracing was returned to **Off** after rollout diagnostics.
 
 ## Verification and rollback

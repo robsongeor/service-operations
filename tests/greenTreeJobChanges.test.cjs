@@ -219,38 +219,21 @@ test('scheduled POST rejects a missing or incorrect scheduler secret', { concurr
     assert.equal(calls, 0)
 })
 
-test('scheduled POST reconciles submitted job cards even when the GreenTree poll is on cooldown', { concurrency: false }, async () => {
+test('scheduled POST does not reconcile operational Job completion when the GreenTree poll is on cooldown', { concurrency: false }, async () => {
     process.env.DATAVERSE_URL = 'https://example.crm.dynamics.com'
     const context = {}
-    let reconciliations = 0
     await endpoint._test.greenTreeJobChanges(context, {
         method: 'POST', headers: {}, query: {}, body: {},
     }, {
         authenticate: async () => 'Bearer application-token',
         getCheckpointStore: () => ({ begin: async () => ({ skipped: true, reason: 'cooldown' }) }),
-        getJobCardStore: () => ({ name: 'job-card-store' }),
-        reconcilePendingCompletionReviews: async ({ store, authorization }) => {
-            reconciliations += 1
-            assert.deepEqual(store, { name: 'job-card-store' })
-            assert.equal(authorization, 'Bearer application-token')
-            return { pendingRecords: 1, jobsChecked: 1, eligible: 1, movedToCompletionReview: 1, unchanged: 0, failed: 0, truncated: false }
-        },
+        reconcilePendingCompletionReviews: async () => { throw new Error('operational completion reconciliation must remain disabled') },
     })
     assert.equal(context.res.status, 200)
-    assert.equal(reconciliations, 1)
     assert.deepEqual(JSON.parse(context.res.body), {
         skipped: true,
         reason: 'cooldown',
         checkedAt: JSON.parse(context.res.body).checkedAt,
-        jobCardStatusReconciliation: {
-            pendingRecords: 1,
-            jobsChecked: 1,
-            eligible: 1,
-            movedToCompletionReview: 1,
-            unchanged: 0,
-            failed: 0,
-            truncated: false,
-        },
     })
 })
 
@@ -264,8 +247,6 @@ test('scheduled status polling uses the due-record poller and completes its chec
     }, {
         authenticate: async () => 'Bearer delegated-token',
         getCheckpointStore: () => ({ begin: async () => run, complete: async (value) => { assert.equal(value, run); completed += 1 } }),
-        getJobCardStore: () => ({}),
-        reconcilePendingCompletionReviews: async () => ({ pendingRecords: 0 }),
         pollGreenTreeJobStatuses: async (options) => {
             assert.equal(options.mode, 'scheduled')
             assert.equal(options.batchSize, 25)
@@ -298,8 +279,6 @@ test('full status backfill requires scheduler authentication and bypasses the no
         authenticate: async () => { throw new Error('interactive authentication must not authorize backfill') },
         authenticateScheduler: async () => 'Bearer application-token',
         getCheckpointStore: () => ({ begin: async () => { began += 1 } }),
-        getJobCardStore: () => ({}),
-        reconcilePendingCompletionReviews: async () => ({ pendingRecords: 0 }),
         pollGreenTreeJobStatuses: async (options) => {
             polled += 1
             assert.equal(options.mode, 'backfill')

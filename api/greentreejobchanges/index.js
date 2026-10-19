@@ -4,8 +4,6 @@ const { reconcileGreenTreeJobs } = require('../services/greenTreeJobReconciliati
 const { pollGreenTreeJobStatuses } = require('../services/greenTreeStatusPolling')
 const { getGreenTreeSyncCheckpointStore } = require('../services/greenTreeSyncCheckpoint')
 const { getGreenTreeDataverseApplicationToken } = require('../services/dataverseApplicationToken')
-const { getJobCardStore } = require('../services/jobCardStorage')
-const { reconcilePendingCompletionReviews } = require('../services/jobOperationalStatusAutomation')
 
 const MAX_LOOKBACK_MS = 24 * 60 * 60 * 1000
 
@@ -113,18 +111,6 @@ async function greenTreeJobChanges(context, request, options = {}) {
     const checkpointStore = request.method === 'POST'
         ? (options.getCheckpointStore || getGreenTreeSyncCheckpointStore)()
         : null
-    let jobCardStatusReconciliation = null
-    if (request.method === 'POST') {
-        try {
-            jobCardStatusReconciliation = await (options.reconcilePendingCompletionReviews || reconcilePendingCompletionReviews)({
-                store: (options.getJobCardStore || getJobCardStore)(),
-                dataverseOrigin: dataverseOrigin(),
-                authorization,
-            })
-        } catch {
-            jobCardStatusReconciliation = { failed: true }
-        }
-    }
     if (pollingMode === 'backfill') {
         try {
             const reconciliation = await (options.pollGreenTreeJobStatuses || pollGreenTreeJobStatuses)({
@@ -133,7 +119,7 @@ async function greenTreeJobChanges(context, request, options = {}) {
                 dataverseOrigin: dataverseOrigin(),
                 authorization,
             })
-            context.res = jsonResponse(200, { checkedAt: new Date().toISOString(), jobCardStatusReconciliation, ...reconciliation })
+            context.res = jsonResponse(200, { checkedAt: new Date().toISOString(), ...reconciliation })
         } catch (error) {
             context.res = jsonResponse(502, { error: 'The GreenTree full-status backfill could not complete this batch.' })
         }
@@ -148,7 +134,6 @@ async function greenTreeJobChanges(context, request, options = {}) {
                     skipped: true,
                     reason: syncRun.reason,
                     checkedAt: new Date().toISOString(),
-                    jobCardStatusReconciliation,
                 })
                 return
             }
@@ -163,7 +148,7 @@ async function greenTreeJobChanges(context, request, options = {}) {
                 authorization,
             })
             if (checkpointStore && syncRun) await checkpointStore.complete(syncRun)
-            context.res = jsonResponse(200, { checkedAt: new Date().toISOString(), jobCardStatusReconciliation, ...reconciliation })
+            context.res = jsonResponse(200, { checkedAt: new Date().toISOString(), ...reconciliation })
         } catch (error) {
             if (checkpointStore && syncRun) await checkpointStore.fail(syncRun).catch(() => undefined)
             context.res = jsonResponse(502, { error: 'The GreenTree status polling request could not complete.' })
@@ -187,7 +172,7 @@ async function greenTreeJobChanges(context, request, options = {}) {
                 authorization,
             })
             if (checkpointStore && syncRun) await checkpointStore.complete(syncRun)
-            context.res = jsonResponse(200, { modifiedSince, checkedAt: new Date().toISOString(), jobCardStatusReconciliation, ...reconciliation })
+            context.res = jsonResponse(200, { modifiedSince, checkedAt: new Date().toISOString(), ...reconciliation })
             return
         }
         context.res = jsonResponse(200, {
