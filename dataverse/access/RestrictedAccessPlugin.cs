@@ -65,6 +65,13 @@ namespace ServiceOperations.Access
                 var caller = RetrieveServerWriterIdentity(factory, context.InitiatingUserId, timecloud["timecloudrole"], out holdsRole);
                 TimeCloudWritePolicy.ValidateCaller(context.InitiatingUserId, caller, holdsRole ? new[] { timecloud["timecloudrole"] } : new Guid[0], timecloud["timeclouduser"], timecloud["timecloudapplication"], timecloud["timecloudrole"]);
                 var change = context.InputParameters.Contains("Target") ? context.InputParameters["Target"] as Entity : null;
+                if (GreenTreeStatusWritePolicy.IsTarget(change))
+                {
+                    GreenTreeStatusWritePolicy.ValidateTarget(context.MessageName, change);
+                    var greenTreeCurrent = service.Retrieve(change.LogicalName, change.Id, new ColumnSet("statecode", "gr_registrationvoid", "gr_gtentered", "gr_entered", "gr_greentreestatus", "gr_greentreestatuscheckedon"));
+                    GreenTreeStatusWritePolicy.Validate(change, greenTreeCurrent);
+                    return;
+                }
                 TimeCloudWritePolicy.ValidateTarget(context.MessageName, change);
                 var current = service.Retrieve("gr_job", change.Id, new ColumnSet("statecode", "gr_registrationvoid", "gr_timecloudentered", "gr_timecloudjobitemid", "gr_timecloudcode"));
                 TimeCloudWritePolicy.Validate(change, current);
@@ -305,6 +312,64 @@ namespace ServiceOperations.Access
                     !String.IsNullOrWhiteSpace(fingerprint) && fingerprint.Length == 64 && fingerprint.All(character => Uri.IsHexDigit(character));
             }
             return false;
+        }
+    }
+
+    public static class GreenTreeStatusWritePolicy
+    {
+        static readonly string[] Ledgers = { "gr_jobbookentry", "gr_waikatojobbookentry", "gr_hastingsjobbookentry", "gr_christchurchjobbookentry" };
+        static readonly string[] Fields = { "gr_gtentered", "gr_entered", "gr_greentreestatus", "gr_greentreestatuscheckedon" };
+        static readonly string[] PlatformFields = { "gr_jobid", "gr_jobbookentryid", "gr_waikatojobbookentryid", "gr_hastingsjobbookentryid", "gr_christchurchjobbookentryid", "modifiedby", "modifiedon", "modifiedonbehalfby" };
+        static readonly string[] Statuses = { "open", "closed", "finalised" };
+        static void Require(bool value, string reason) { if (!value) throw new InvalidPluginExecutionException("The requested change is outside the approved GreenTree status operation (" + reason + ")."); }
+        static int Rank(string value)
+        {
+            if (value == "open") return 1;
+            if (value == "closed") return 2;
+            if (value == "finalised") return 3;
+            return 0;
+        }
+        static string Marker(Entity target) { return target != null && target.LogicalName == "gr_job" ? "gr_gtentered" : "gr_entered"; }
+        public static bool IsTarget(Entity target)
+        {
+            return target != null && target.Attributes.Keys.Any(key => Fields.Contains(key, StringComparer.OrdinalIgnoreCase));
+        }
+        public static void ValidateTarget(string message, Entity target)
+        {
+            Require(message == "Update" && target != null && target.Id != Guid.Empty &&
+                (target.LogicalName == "gr_job" || Ledgers.Contains(target.LogicalName)), "TARGET");
+            var marker = Marker(target);
+            var allowed = new HashSet<string>(new[] { marker, "gr_greentreestatus", "gr_greentreestatuscheckedon" }.Concat(PlatformFields), StringComparer.OrdinalIgnoreCase);
+            Require(target.Attributes.Keys.All(allowed.Contains) && target.Contains("gr_greentreestatuscheckedon"), "TARGET_FIELDS");
+            Require(target["gr_greentreestatuscheckedon"] is DateTime &&
+                ((DateTime)target["gr_greentreestatuscheckedon"]).ToUniversalTime() <= DateTime.UtcNow.AddMinutes(5), "CHECKED_ON");
+            bool hasMarker = target.Contains(marker);
+            bool hasStatus = target.Contains("gr_greentreestatus");
+            Require(hasMarker == hasStatus, "STATUS_PAIR");
+            if (hasStatus)
+                Require(target[marker] is bool && (bool)target[marker] &&
+                    Statuses.Contains(target["gr_greentreestatus"] as string, StringComparer.Ordinal), "STATUS_VALUE");
+        }
+        public static void Validate(Entity target, Entity current)
+        {
+            ValidateTarget("Update", target);
+            Require(current != null && current.Id == target.Id && current.LogicalName == target.LogicalName, "CURRENT");
+            var state = current.GetAttributeValue<OptionSetValue>("statecode");
+            Require(state != null && state.Value == 0, "ACTIVE");
+            if (target.LogicalName == "gr_job") Require(!current.GetAttributeValue<bool>("gr_registrationvoid"), "VOID");
+            var previousChecked = current.GetAttributeValue<DateTime?>("gr_greentreestatuscheckedon");
+            var nextChecked = (DateTime)target["gr_greentreestatuscheckedon"];
+            Require(!previousChecked.HasValue || previousChecked.Value.ToUniversalTime() <= nextChecked.ToUniversalTime(), "CHECKED_ON_ORDER");
+            var marker = Marker(target);
+            string previousStatus = current.GetAttributeValue<string>("gr_greentreestatus") ?? "";
+            if (!target.Contains("gr_greentreestatus"))
+            {
+                Require(!current.GetAttributeValue<bool>(marker) && String.IsNullOrWhiteSpace(previousStatus), "NOT_ENTERED_STATE");
+                return;
+            }
+            string nextStatus = target.GetAttributeValue<string>("gr_greentreestatus");
+            Require(!current.GetAttributeValue<bool>(marker) || (bool)target[marker], "MARKER_ORDER");
+            Require(Rank(nextStatus) >= Rank(previousStatus), "STATUS_ORDER");
         }
     }
 

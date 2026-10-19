@@ -60,8 +60,8 @@ function trustedNextLink(value, origin) {
 async function readCandidatePage(table, mode, dataverseOrigin, authorization, fetchImpl) {
     const select = `${table.idField},gr_jobnumber,${table.marker},gr_greentreestatus,gr_greentreestatuscheckedon`
     const filter = mode === 'backfill'
-        ? 'gr_jobnumber ne null and gr_greentreestatuscheckedon eq null'
-        : "gr_jobnumber ne null and (gr_greentreestatus eq null or gr_greentreestatus ne 'finalised')"
+        ? 'statecode eq 0 and gr_jobnumber ne null and gr_greentreestatuscheckedon eq null'
+        : "statecode eq 0 and gr_jobnumber ne null and (gr_greentreestatus eq null or gr_greentreestatus ne 'finalised')"
     const url = `${dataverseOrigin}/api/data/v9.2/${table.tableSet}?$select=${select}&$filter=${encodeURIComponent(filter)}&$orderby=gr_greentreestatuscheckedon asc&$top=${QUERY_SIZE_PER_TABLE}`
     const response = await fetchImpl(url, { headers: { Authorization: authorization, Accept: 'application/json', Prefer: `odata.maxpagesize=${QUERY_SIZE_PER_TABLE}` } })
     if (!response.ok) throw new Error('Dataverse GreenTree polling candidates could not be loaded.')

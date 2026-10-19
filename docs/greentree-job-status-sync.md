@@ -83,7 +83,10 @@ Release in this order:
 2. Run `scripts/manage-greentree-job-status-schema.ps1 -Mode Verify` and confirm it reports the
    expected missing columns before the first rollout.
 3. Run the same script with `-Mode Provision`, then run `-Mode Verify` again.
-4. Deploy and verify access guard `1.0.13.0`.
+4. Deploy and verify access guard `1.0.14.0`. The existing exact backend application user and its
+   dedicated integration-writer role may update only the GreenTree marker, factual status and
+   checked timestamp for these five tables; the guard rejects mixed, regressive, inactive, void,
+   future-dated or unrelated-field patches.
 5. Deploy the compatible API and application together.
 6. Run the initial full-status backfill to completion and retain its aggregate reconciliation report.
 7. Enable the status-aware scheduler only after the deployed API passes controlled checks for all
