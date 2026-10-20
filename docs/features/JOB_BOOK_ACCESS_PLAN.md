@@ -67,8 +67,9 @@ profile and implement the distinct restricted profile, including navigation, lan
 server/Dataverse enforcement. Job Card API/private evidence access must match the approved
 reviewer set. Inspect existing production reviewers before applying a reconciled manifest.
 The live shared V1 backend reviewer allowlist was reconciled on 6 October 2026 for George, Bruce,
-Andy, Jess, Nargiza and Pubudu. Pubudu's restored Office Admin assignment agrees with that reviewer
-allowlist. Recreate only this approved reviewer set
+Andy, Jess, Nargiza and Pubudu. On 20 October 2026 the owner returned Pubudu to Job Book Admin in
+both Entra and Dataverse, and Pubudu was removed from the live reviewer allowlist. The current
+reviewer set is George, Bruce, Andy, Jess and Nargiza. Recreate only this approved reviewer set
 when the permanent V2/shared backend replaces the temporary proxy.
 
 ## Job Book Admin correction scope

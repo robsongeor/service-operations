@@ -80,7 +80,7 @@ assembly/source hashes in the package manifest.
 
 ## Role and assignment readiness
 
-The agreed eleven-account roster is present: one Full, two Coordinator, three Office Admin and five
+The agreed eleven-account roster is present: one Full, two Coordinator, two Office Admin and six
 Job Book Admin users. Existing unrelated assignments are explicitly preserved. Bruce retains current
 FullAccess until the added Coordinator path passes with his real account; old access is removed only
 after the replacement succeeds.
@@ -96,14 +96,16 @@ both Entra and Dataverse; unrelated roles and the legacy JobBookOnly app assignm
 Later that day, the owner approved returning Pubudu to Office Admin. The Office Admin replacement was
 verified before Job Book Admin was removed in both systems; unrelated roles were preserved. The
 obsolete JobBookOnly assignment was subsequently removed from Pubudu, Jess and Nargiza after exact
-Office Admin replacement verification. The shared backend reviewer allowlist already includes Pubudu and agrees with this
-final Office Admin state. The
+Office Admin replacement verification. On 20 October 2026 the owner returned Pubudu to Job Book
+Admin. The replacement was verified before Coordinator was removed in Entra and Dataverse, the
+Auckland home branch and unrelated roles were preserved, and Pubudu was removed from the shared
+backend reviewer allowlist. The
 cutover requires a fresh assignment export, one workflow role at a time, preservation of
 unrelated platform roles and explicit approval. Pubudu performs the account sign-in and MFA; no
 credential is collected.
 
-The live admission recheck on 9 October 2026 found all eleven intended accounts present. The five
-Job Book Admin and three Office Admin assignments were preserved during guard deployment.
+The live admission recheck on 20 October 2026 found all eleven intended accounts present. The six
+Job Book Admin and two Office Admin assignments are the current restricted-profile roster.
 
 The secure plugin configuration requires the exact business-unit Dataverse role IDs for Full,
 Coordinator, Office and Book profiles. Any overlapping direct/team grant that restores a denied

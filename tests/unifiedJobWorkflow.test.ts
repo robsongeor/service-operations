@@ -252,12 +252,12 @@ test('assignment plan preserves the agreed roster and cannot change access', () 
     assert.equal(assignments.removalIncluded, false)
     assert.equal(assignments.intendedUsers.length, 11)
     assert.deepEqual(Object.fromEntries(['full', 'coordinator', 'office', 'book'].map((profile) => [profile, assignments.intendedUsers.filter((user: { profile: string }) => user.profile === profile).length])), {
-        full: 1, coordinator: 3, office: 2, book: 5,
+        full: 1, coordinator: 2, office: 2, book: 6,
     })
     assert.equal(assignments.intendedUsers.filter((user: { dataverseAdmission: string }) => user.dataverseAdmission !== 'present').length, 0)
     const pubudu = assignments.intendedUsers.find((user: { upn: string }) => user.upn === 'pubudu@liftrucks.co.nz')
-    assert.equal(pubudu.profile, 'coordinator')
-    assert.equal(pubudu.currentAppAssignment, 'ServiceCoordinator')
+    assert.equal(pubudu.profile, 'book')
+    assert.equal(pubudu.currentAppAssignment, 'JobBookAdmin')
     assert.equal(assignments.roleTestPilots.find((user: { upn: string }) => user.upn === pubudu.upn).homeProfile, pubudu.profile)
     assert.ok(assignments.gates.some((gate: string) => /direct and team-derived/.test(gate)))
     assert.ok(assignments.gates.some((gate: string) => /preserve unrelated assignments/i.test(gate)))
@@ -265,6 +265,18 @@ test('assignment plan preserves the agreed roster and cannot change access', () 
     assert.match(admissionAudit, /\[string\]\$LoginPrompt = 'Never'/)
     for (const table of ['systemuserroles', 'teamroles', 'teammembership']) assert.match(admissionAudit, new RegExp(table))
     assert.doesNotMatch(admissionAudit, /CreateRequest|UpdateRequest|DeleteRequest|AssignRequest|AddMembersTeamRequest|AssociateRequest/)
+})
+
+test('Job Book Admin switch is additive-first and preserves unrelated access', () => {
+    const script = readFileSync(new URL('../scripts/switch-user-to-job-book-admin.ps1', import.meta.url), 'utf8')
+    assert.match(script, /\[string\]\$Mode = 'Plan'/)
+    assert.match(script, /ServiceOperations\.ServiceCoordinator/)
+    assert.match(script, /ServiceOperations\.JobBookAdmin/)
+    assert.match(script, /Service Operations - Job Book Admin/)
+    assert.match(script, /withReplacementGraph[\s\S]*withReplacementDataverse[\s\S]*Method Delete/)
+    assert.match(script, /An unrelated Entra application assignment was not preserved/)
+    assert.match(script, /An unrelated Dataverse role was not preserved/)
+    assert.doesNotMatch(script, /homebranch|gr_servicecoordinationbranch/i)
 })
 
 test('Job Card reader role repair is read-only, scoped and recorded in the Office grant policy', () => {
