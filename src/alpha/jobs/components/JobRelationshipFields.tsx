@@ -7,6 +7,7 @@ import { SERVICE_TYPES } from '../../equipment/servicePlans/equipmentServicePlan
 import { isServiceTypeEnabled } from '../../equipment/servicePlans/maintenanceConfiguration'
 import type { useJobEditor } from '../hooks/useJobEditor'
 import JobSiteCreatePanel, { type JobSiteCreateInput } from './JobSiteCreatePanel'
+import JobContactCreatePanel, { type JobContactCreateInput } from './JobContactCreatePanel'
 import JobCustomerField from './JobCustomerField'
 import JobEquipmentField from './JobEquipmentField'
 import JobSiteContactFields from './JobSiteContactFields'
@@ -88,9 +89,6 @@ export default function JobRelationshipFields({
     } = editor
     const [panel, setPanel] = useState<Panel>('')
     const [editingLocation, setEditingLocation] = useState(false)
-    const [isCreating, setIsCreating] = useState(false)
-    const [createError, setCreateError] = useState('')
-    const [contact, setContact] = useState({ name: '', phone: '', email: '' })
     const selectedEquipment = equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)
     const selectedSite = filteredSites.find((site) => site.gr_siteid === draft.siteId) ?? selectedEquipment?.gr_Site
     const selectedCustomer = customers.find((customer) => customer.gr_customerid === draft.customerId) ?? selectedSite?.gr_Customer
@@ -193,7 +191,6 @@ export default function JobRelationshipFields({
 
     const openPanel = (nextPanel: Panel) => {
         setPanel(nextPanel)
-        setCreateError('')
     }
 
     const selectEquipment = (item: Equipment) => {
@@ -250,34 +247,12 @@ export default function JobRelationshipFields({
         setPanel('')
     }
 
-    const createContact = async () => {
-        if (!draft.siteId) return setCreateError('Select a site first.')
-        if (!contact.name.trim()) return setCreateError('Enter a contact name.')
-        try {
-            setIsCreating(true)
-            setCreateError('')
-            const contactId = await onCreateContact({
-                siteId: draft.siteId, name: contact.name.trim(),
-                phone: contact.phone.trim() || undefined,
-                email: contact.email.trim() || undefined,
-            })
-            setDraft((current) => ({ ...current, contactId }))
-            setContact({ name: '', phone: '', email: '' })
-            setPanel('')
-        } catch (error) {
-            console.error(error)
-            setCreateError('Contact could not be created.')
-        } finally { setIsCreating(false) }
+    const createContact = async (input: JobContactCreateInput) => {
+        if (!draft.siteId) throw new Error('Select a site first.')
+        const contactId = await onCreateContact({ siteId: draft.siteId, ...input })
+        setDraft((current) => ({ ...current, contactId }))
+        setPanel('')
     }
-
-    const actions = (create: () => void, label: string, disabled = false) => (
-        <div className="job-edit-create-actions">
-            <button type="button" onClick={() => setPanel('')} disabled={isCreating}>Cancel</button>
-            <button type="button" className="primary" onClick={create} disabled={isCreating || disabled}>
-                {isCreating ? 'Creating...' : label}
-            </button>
-        </div>
-    )
 
     return <>
         {hideHeading ? <JobEquipmentField
@@ -374,13 +349,6 @@ export default function JobRelationshipFields({
         {panel === 'site' && <JobSiteCreatePanel key={draft.customerId} customerName={customerSearch}
             description="Create and select this Site for the job." onCreate={createSite} onCancel={() => setPanel('')} />}
 
-        {panel === 'contact' && <div className="job-edit-create-panel job-edit-field-wide">
-            <div><h4>New contact</h4><p>Create and select a contact for the chosen site.</p></div>
-            <label className="job-edit-field"><span>Contact name</span><input autoFocus value={contact.name} onChange={(e) => setContact({ ...contact, name: e.target.value })} /></label>
-            <label className="job-edit-field"><span>Phone</span><input type="tel" value={contact.phone} onChange={(e) => setContact({ ...contact, phone: e.target.value })} /></label>
-            <label className="job-edit-field"><span>Email</span><input type="email" value={contact.email} onChange={(e) => setContact({ ...contact, email: e.target.value })} /></label>
-            {createError && <p className="job-edit-error" role="alert">{createError}</p>}
-            {actions(createContact, 'Create contact')}
-        </div>}
+        {panel === 'contact' && <JobContactCreatePanel onCreate={createContact} onCancel={() => setPanel('')} />}
     </>
 }

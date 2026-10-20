@@ -44,8 +44,8 @@
         "gr_Customer": ["Create", "Read", "AppendTo"],
         "gr_Site": ["Create", "Read", "Append", "AppendTo"],
         "gr_Equipment": ["Read", "Write", "Append", "AppendTo"],
-        "gr_Contact": ["Read", "AppendTo"],
-        "gr_SiteContact": ["Read"],
+        "gr_Contact": ["Create", "Read", "AppendTo"],
+        "gr_SiteContact": ["Create", "Read", "Append"],
         "gr_Mechanic": ["Read", "AppendTo"],
         "gr_JobAssignment": ["Read"],
         "gr_JobOfficeUpdate": ["Read"]

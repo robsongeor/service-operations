@@ -293,3 +293,22 @@ test('Job Card reader role repair is read-only, scoped and recorded in the Offic
     assert.match(script, /Microsoft\.Dynamics\.CRM\.AddPrivilegesRole/)
     assert.match(script, /No user assignments or non-read table privileges were changed/)
 })
+
+test('Job Book relationship creation is narrowly granted and reproducibly managed', () => {
+    const grants = JSON.parse(readFileSync(new URL('../dataverse/access/unified-workflow-role-grants.json', import.meta.url), 'utf8'))
+    const book = grants.profiles.find((profile: { profile: string }) => profile.profile === 'book')
+    const office = grants.profiles.find((profile: { profile: string }) => profile.profile === 'office')
+    const script = readFileSync(new URL('../scripts/manage-job-book-relationship-create-access.ps1', import.meta.url), 'utf8')
+
+    assert.deepEqual(book.tables.gr_Contact, ['Create', 'Read', 'AppendTo'])
+    assert.deepEqual(book.tables.gr_SiteContact, ['Create', 'Read', 'Append'])
+    assert.deepEqual(office.tables.gr_Contact, ['Read', 'AppendTo'])
+    assert.deepEqual(office.tables.gr_SiteContact, ['Read'])
+    assert.match(script, /\[string\]\$Mode = 'Plan'/)
+    assert.match(script, /Service Operations - Job Book Admin/)
+    for (const privilege of ['prvCreategr_Contact', 'prvCreategr_SiteContact', 'prvAppendgr_SiteContact']) {
+        assert.match(script, new RegExp(privilege))
+    }
+    assert.doesNotMatch(script, /prv(?:Delete|Write|Assign|Share)gr_(?:Contact|SiteContact)/)
+    assert.match(script, /Microsoft\.Dynamics\.CRM\.AddPrivilegesRole/)
+})

@@ -6,6 +6,7 @@ import { getSignedInUserInfo } from '../../auth/signedInUser'
 import { applicationAccessFromEnvironment } from '../../auth/applicationAccess'
 import { searchCustomers, createCustomer, findCustomersByName } from '../jobs/services/customersApi'
 import { fetchCustomerSites, createSite } from '../jobs/services/sitesApi'
+import { createContact, createSiteContact } from '../jobs/services/contactsApi'
 import { createEquipment } from '../jobs/services/equipmentApi'
 import { invalidateJobsCache } from '../jobs/services/jobsApi'
 import { createEquipmentDestination } from '../equipment/services/equipmentLocationWorkflow'
@@ -33,6 +34,8 @@ import JobEquipmentAndLocationFields from '../jobs/components/JobEquipmentAndLoc
 import JobDetailsFields from '../jobs/components/JobDetailsFields'
 import { EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED } from '../jobs/domain/externalSupplierAssignment'
 import JobSiteContactFields from '../jobs/components/JobSiteContactFields'
+import JobSiteCreatePanel, { type JobSiteCreateInput } from '../jobs/components/JobSiteCreatePanel'
+import JobContactCreatePanel, { type JobContactCreateInput } from '../jobs/components/JobContactCreatePanel'
 import JobEquipmentLocation from '../jobs/components/JobEquipmentLocation'
 import JobLocationSummary from '../jobs/components/JobLocationSummary'
 import { isPersistedEquipmentId } from '../equipment/services/equipmentLocationWorkflow'
@@ -209,6 +212,7 @@ export default function JobBookPrototypeScreen({
     const [loadError, setLoadError] = useState('')
     const [intakeDrawerOpen, setIntakeDrawerOpen] = useState(false)
     const [editingIntakeRow, setEditingIntakeRow] = useState<JobBookRow | null>(null)
+    const [intakeCreatePanel, setIntakeCreatePanel] = useState<'' | 'site' | 'contact'>('')
     const [editingEntryLocation, setEditingEntryLocation] = useState(false)
     const [createdEntryLocation, setCreatedEntryLocation] = useState(false)
     const showEntryLocationSummary = jobBookLocationSummaryVisible(draft, Boolean(editingIntakeRow) || createdEntryLocation, editingEntryLocation)
@@ -282,6 +286,7 @@ export default function JobBookPrototypeScreen({
         setCorrectingJobId('')
         setIntakeDrawerOpen(false)
         setEditingIntakeRow(null)
+        setIntakeCreatePanel('')
         setSaveError('')
         setPageLoadError('')
         setSelectedJobBookKey(jobBookKey)
@@ -581,6 +586,7 @@ export default function JobBookPrototypeScreen({
         registration.complete()
         setScheduleDrafts([])
         setIntakeDrawerOpen(false)
+        setIntakeCreatePanel('')
         setIntakeError('')
         try {
             const timecloud = await syncJobBookJobToTimecloud(token, { book: result.book, jobId: result.jobId, ledgerId: result.ledgerId, trigger: 'automatic' })
@@ -652,6 +658,7 @@ export default function JobBookPrototypeScreen({
             setEditingIntakeRow(null)
             setIntakeValidationAttempted(false)
             setIntakeDrawerOpen(false)
+            setIntakeCreatePanel('')
         } catch (error) {
             setIntakeError(error instanceof Error ? error.message : 'The Intake entry could not be saved.')
         } finally {
@@ -662,6 +669,7 @@ export default function JobBookPrototypeScreen({
         if (savingIntake) return
         setIntakeDrawerOpen(false)
         setEditingIntakeRow(null)
+        setIntakeCreatePanel('')
         setIntakeValidationAttempted(false)
         setIntakeError('')
         setScheduleDrafts([])
@@ -670,6 +678,7 @@ export default function JobBookPrototypeScreen({
         setEditingEntryLocation(false)
         setCreatedEntryLocation(false)
         setEditingIntakeRow(null)
+        setIntakeCreatePanel('')
         setIntakeError('')
         setIntakeValidationAttempted(false)
         setDraft(createBlankJobBookRow(0, selectedJobBookKey))
@@ -688,6 +697,7 @@ export default function JobBookPrototypeScreen({
         if (!isEditableJobBookIntake(row)) return
         setEditingEntryLocation(false)
         setEditingIntakeRow(row)
+        setIntakeCreatePanel('')
         setCreatedEntryLocation(false)
         setIntakeError('')
         setIntakeValidationAttempted(false)
@@ -719,6 +729,7 @@ export default function JobBookPrototypeScreen({
     }
     const selectIntakeEquipment = (item: Equipment | undefined) => {
         setEditingEntryLocation(false)
+        setIntakeCreatePanel('')
         setIntakeError('')
         setIntakeSites([])
         setIntakeContacts([])
@@ -747,6 +758,7 @@ export default function JobBookPrototypeScreen({
     }
     const selectIntakeSite = (siteId: string) => {
         const selected = intakeSiteOptions.find((site) => site.gr_siteid === siteId)
+        setIntakeCreatePanel('')
         setIntakeError('')
         setIntakeContacts([])
         setDraft((current) => ({
@@ -768,6 +780,43 @@ export default function JobBookPrototypeScreen({
             contactId,
             contactName: selected?.gr_Contact?.gr_name ?? '',
         }))
+    }
+    const createIntakeSite = async (input: JobSiteCreateInput) => {
+        if (!draft.customerId) throw new Error('Select a customer first.')
+        const siteId = await createSite(await getAccessToken(), { customerId: draft.customerId, ...input })
+        const created: Site = {
+            gr_siteid: siteId,
+            gr_name: input.name,
+            gr_address: input.address,
+            gr_Customer: { gr_customerid: draft.customerId, gr_name: draft.customer },
+        }
+        setIntakeSites((current) => [created, ...current.filter((site) => site.gr_siteid !== siteId)])
+        setIntakeContacts([])
+        setDraft((current) => ({
+            ...current,
+            siteId,
+            site: input.name,
+            address: input.address,
+            addressVerified: true,
+            addressNotFoundConfirmed: false,
+            contactId: '',
+            contactName: '',
+        }))
+        setIntakeCreatePanel('')
+    }
+    const createIntakeContact = async (input: JobContactCreateInput) => {
+        if (!draft.siteId) throw new Error('Select a site first.')
+        const token = await getAccessToken()
+        const contactId = await createContact(token, input)
+        await createSiteContact(token, draft.siteId, contactId)
+        const created: SiteContact = {
+            gr_sitecontactid: `created-${contactId}`,
+            gr_Site: { gr_siteid: draft.siteId, gr_name: draft.site },
+            gr_Contact: { gr_contactid: contactId, gr_name: input.name, gr_phone: input.phone, gr_email: input.email },
+        }
+        setIntakeContacts((current) => [created, ...current.filter((link) => link.gr_Contact?.gr_contactid !== contactId)])
+        setDraft((current) => ({ ...current, contactId, contactName: input.name }))
+        setIntakeCreatePanel('')
     }
     const updateRowField = async (row: JobBookRow, field: 'timecloudEntered', value: boolean) => {
         if (!canWriteMarkers || !canUpdateJobBookMarkers(row, allowManagedJobMarkerUpdates) || voidEntry.row?.id === row.id) return
@@ -1056,6 +1105,7 @@ export default function JobBookPrototypeScreen({
                     error={intakeValidationAttempted ? intakeLocationErrors.customer : undefined}
                     onSearchCustomers={searchJobBookCustomers}
                     onChange={(customerId, customerName) => {
+                        setIntakeCreatePanel('')
                         setIntakeSites([])
                         setIntakeContacts([])
                         setDraft((current) => applyCustomerSelection(current, customerId, customerName))
@@ -1069,10 +1119,12 @@ export default function JobBookPrototypeScreen({
                                 readSites: (id) => fetchCustomerSites(token, id), createSite: (input) => createSite(token, input),
                             })
                             setDraft((current) => ({ ...current, customerId: customer.gr_customerid, customer: customer.gr_name, siteId: site.gr_siteid, site: site.gr_name, address: site.gr_address, addressVerified: true }))
+                            setIntakeCreatePanel('')
                             setCreatedEntryLocation(true); setEditingEntryLocation(false)
                             return
                         }
                         setIntakeError('')
+                        setIntakeCreatePanel('')
                         setIntakeSites([])
                         setIntakeContacts([])
                         setDraft((current) => ({
@@ -1104,9 +1156,22 @@ export default function JobBookPrototypeScreen({
                     siteError={intakeValidationAttempted ? intakeLocationErrors.site || (draft.customerId && !draft.siteId ? 'Select a Site for this Customer.' : undefined) : undefined}
                     onSiteChange={selectIntakeSite}
                     onContactChange={selectIntakeContact}
+                    onAddSite={UNIFIED_JOB_RUNTIME && !editingIntakeRow ? () => setIntakeCreatePanel('site') : undefined}
+                    onAddContact={UNIFIED_JOB_RUNTIME && !editingIntakeRow && intakeContactLookupAvailable ? () => setIntakeCreatePanel('contact') : undefined}
                     onRetrySites={() => setIntakeSiteLoadAttempt((current) => current + 1)}
                     onRetryContacts={() => setIntakeContactLoadAttempt((current) => current + 1)}
                 />
+                {intakeCreatePanel === 'site' && <JobSiteCreatePanel key={draft.customerId}
+                    customerName={draft.customer}
+                    description="Create and select this Site for the Job Book entry."
+                    onCreate={createIntakeSite}
+                    onCancel={() => setIntakeCreatePanel('')}
+                />}
+                {intakeCreatePanel === 'contact' && <JobContactCreatePanel
+                    description="Create and select a contact for the chosen Site."
+                    onCreate={createIntakeContact}
+                    onCancel={() => setIntakeCreatePanel('')}
+                />}
                 </>}
             </fieldset>
             <fieldset className="job-book-intake-section" disabled={savingIntake || Boolean(registration.pending)}>
