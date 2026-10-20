@@ -122,3 +122,18 @@ The schema was provisioned and published on 25 July 2026. The Public Portal Serv
 Organization Create, Read, Write, and Append on all three child tables and Job Append To,
 which Dataverse requires to create lookup-related children. Delete, Assign, and Share are
 not granted.
+
+## Authenticated Job Card readers
+
+The Service Coordination Job drawer reads technician evidence directly from Dataverse. The
+`Service Operations` coordinator role and `Service Operations - Office Admin` role therefore need
+Organization-level **Read only** on `gr_jobcardsubmission`,
+`gr_jobcardsubmissiontimeentry`, `gr_jobmaterial`, and `gr_jobphoto`. Organization depth is required
+because the evidence can be owned by another technician or the submission service identity.
+
+Use `scripts/manage-job-card-reader-role-access.ps1` in `Plan`, `Apply`, then `Verify` mode. It
+defaults to the `Service Operations` coordinator role. Pass an explicitly reviewed `-RoleNames`
+list when applying the same policy to Office Admin. The script is limited to those four generated
+Read privileges, refuses managed roles or lower-depth replacement, verifies the authenticated
+operator, and never changes user assignments. Job Book Admin is deliberately excluded because
+that profile has no Job Card review capability.

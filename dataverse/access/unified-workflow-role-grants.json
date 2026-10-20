@@ -21,6 +21,10 @@
         "gr_Mechanic": ["Read", "AppendTo"],
         "gr_EmailDispatch": ["Create", "Read", "Append"],
         "gr_JobAssignment": ["Read"],
+        "gr_JobCardSubmission": ["Read"],
+        "gr_JobCardSubmissionTimeEntry": ["Read"],
+        "gr_JobMaterial": ["Read"],
+        "gr_JobPhoto": ["Read"],
         "gr_JobOfficeUpdate": ["Read"],
         "gr_Quote": ["Read"],
         "gr_QuoteLine": ["Read"],
@@ -60,6 +64,7 @@
   "notes": [
     "Restricted Job and ledger writes require the synchronous server guards; table Write alone is never treated as field authorization.",
     "Office receives Email Dispatch Create only for the guarded initial-dispatch API; generic direct creation is denied by the restricted-access step.",
+    "Coordinator and Office Admin readers receive organization-depth Read only for Job Card submissions, time entries, materials, and photos so the authenticated Job drawer can display evidence created by technicians or the service identity.",
     "Job Book Admin receives no Email Dispatch or coordinator Job Schedule Option privilege.",
     "Job Card private evidence remains separately authorized by the Azure reviewer allowlist."
   ]

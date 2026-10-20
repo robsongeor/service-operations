@@ -252,12 +252,12 @@ test('assignment plan preserves the agreed roster and cannot change access', () 
     assert.equal(assignments.removalIncluded, false)
     assert.equal(assignments.intendedUsers.length, 11)
     assert.deepEqual(Object.fromEntries(['full', 'coordinator', 'office', 'book'].map((profile) => [profile, assignments.intendedUsers.filter((user: { profile: string }) => user.profile === profile).length])), {
-        full: 1, coordinator: 2, office: 3, book: 5,
+        full: 1, coordinator: 3, office: 2, book: 5,
     })
     assert.equal(assignments.intendedUsers.filter((user: { dataverseAdmission: string }) => user.dataverseAdmission !== 'present').length, 0)
     const pubudu = assignments.intendedUsers.find((user: { upn: string }) => user.upn === 'pubudu@liftrucks.co.nz')
-    assert.equal(pubudu.profile, 'office')
-    assert.equal(pubudu.currentAppAssignment, 'JobCardAdmin')
+    assert.equal(pubudu.profile, 'coordinator')
+    assert.equal(pubudu.currentAppAssignment, 'ServiceCoordinator')
     assert.equal(assignments.roleTestPilots.find((user: { upn: string }) => user.upn === pubudu.upn).homeProfile, pubudu.profile)
     assert.ok(assignments.gates.some((gate: string) => /direct and team-derived/.test(gate)))
     assert.ok(assignments.gates.some((gate: string) => /preserve unrelated assignments/i.test(gate)))
@@ -265,4 +265,19 @@ test('assignment plan preserves the agreed roster and cannot change access', () 
     assert.match(admissionAudit, /\[string\]\$LoginPrompt = 'Never'/)
     for (const table of ['systemuserroles', 'teamroles', 'teammembership']) assert.match(admissionAudit, new RegExp(table))
     assert.doesNotMatch(admissionAudit, /CreateRequest|UpdateRequest|DeleteRequest|AssignRequest|AddMembersTeamRequest|AssociateRequest/)
+})
+
+test('Job Card reader role repair is read-only, scoped and recorded in the Office grant policy', () => {
+    const grants = JSON.parse(readFileSync(new URL('../dataverse/access/unified-workflow-role-grants.json', import.meta.url), 'utf8'))
+    const office = grants.profiles.find((profile: { profile: string }) => profile.profile === 'office')
+    const script = readFileSync(new URL('../scripts/manage-job-card-reader-role-access.ps1', import.meta.url), 'utf8')
+    const expectedTables = ['gr_JobCardSubmission', 'gr_JobCardSubmissionTimeEntry', 'gr_JobMaterial', 'gr_JobPhoto']
+
+    for (const table of expectedTables) assert.deepEqual(office.tables[table], ['Read'])
+    assert.match(script, /\[string\]\$Mode = 'Plan'/)
+    assert.match(script, /\[string\[\]\]\$RoleNames = @\('Service Operations'\)/)
+    for (const table of expectedTables) assert.match(script, new RegExp(`prvRead${table}`))
+    assert.doesNotMatch(script, /prv(?:Create|Write|Delete|Assign|Share)gr_Job(?:CardSubmission|Material|Photo)/)
+    assert.match(script, /Microsoft\.Dynamics\.CRM\.AddPrivilegesRole/)
+    assert.match(script, /No user assignments or non-read table privileges were changed/)
 })
