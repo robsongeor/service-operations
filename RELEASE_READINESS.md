@@ -15,7 +15,7 @@ remain in Git (`git show f73f3d6:RELEASE_READINESS.md`); they are not current ap
 | Registration status | Deployed; live acceptance required | Assembly 1.0.19 creates every registered Job in Staging even when a mechanic is selected; only confirmed dispatch moves it to With Technician |
 | Completion consistency | Blocked (A03) | Missing required evidence remains Completion Review; valid completion updates type-specific history/maintenance/compliance exactly once |
 | Reconciliation | Unverified/needs work (A04/A05) | Scheduled identity passes guard, correct store/checkpoint, partial failures visible, backlog advances, retries do not lose conflicts |
-| Multi-user freshness | Blocked (A06) | Separate browsers and resume/reconnect reflect unified Job mutations without manual route reload |
+| Multi-user freshness | Job Book deployed; named-user acceptance pending (A06) | Auckland ledger and managed-Job events use bounded SignalR push with reconnect/visibility recovery and no timer polling; complete separate-browser Office Admin/Job Book Admin acceptance |
 | Customer Info | Blocked for exposed unfinished editing (A07) | Nonpersistent fields cannot be presented as saved; working Site/PO/transfer functions retained |
 | Auth recovery | Needs smoke (A09) | Correct redirect bridge; expiry/cancel/logout/account-switch behavior; no wrong-account mutation resume |
 | Job Card bridge | Must remain until replacement proved | V1/V2 share authoritative cards; existing links/photos/reviews continue working |

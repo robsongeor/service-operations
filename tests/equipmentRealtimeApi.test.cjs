@@ -2,7 +2,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const test = require('node:test')
-const { equipmentEvent, jobEvent, staffEvent } = require('../realtime-api/equipmentchanged/index')._test
+const { equipmentEvent, jobEvent, staffEvent, jobBookEvent } = require('../realtime-api/equipmentchanged/index')._test
 const { corsHeaders } = require('../realtime-api/services/realtimeSecurity')
 
 test('realtime CORS accepts explicit production and localhost origins only', () => {
@@ -60,6 +60,14 @@ test('the protected realtime webhook maps a minimal Dataverse Staff event', () =
     assert.equal(staffEvent({ PrimaryEntityName: 'gr_job', PrimaryEntityId: event.staffId, MessageName: 'Update' }), undefined)
 })
 
+test('the protected realtime webhook maps bounded regional Job Book events', () => {
+    const event = jobBookEvent({ PrimaryEntityName: 'gr_jobbookentry', PrimaryEntityId: '{11111111-1111-4111-8111-111111111111}', MessageName: 'Update' })
+    assert.equal(event.entryId, '11111111-1111-4111-8111-111111111111')
+    assert.equal(event.book, 'auckland')
+    assert.equal(event.operation, 'update')
+    assert.equal(jobBookEvent({ PrimaryEntityName: 'gr_customer', PrimaryEntityId: event.entryId, MessageName: 'Update' }), undefined)
+})
+
 test('Node v4 entrypoints preserve protected receiver and authenticated negotiate routes', () => {
     const packageDefinition = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'realtime-api', 'package.json'), 'utf8'))
     assert.equal(packageDefinition.main, 'src/functions/*.js')
@@ -72,7 +80,7 @@ test('Node v4 entrypoints preserve protected receiver and authenticated negotiat
     assert.match(negotiate, /route: 'negotiate'/)
 })
 
-test('V2 disables the optional realtime client until its Function deployment credential is restored', () => {
+test('V2 enables the authenticated realtime client without a polling fallback', () => {
     const workflow = fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', 'azure-static-web-apps-kind-wave-0cdea2200.yml'), 'utf8')
-    assert.match(workflow, /VITE_EQUIPMENT_REALTIME_API_URL: ""/)
+    assert.match(workflow, /VITE_EQUIPMENT_REALTIME_API_URL: https:\/\/serviceops-equipment-realtime-bbd3f9\.azurewebsites\.net\/api/)
 })

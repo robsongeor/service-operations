@@ -2,12 +2,12 @@
 
 Dataverse remains the source of truth. This integration broadcasts invalidation events only; it does not create another Equipment, Jobs, or Staff database.
 
-## Current V2 limitation — 10 October 2026
+## V2 activation
 
-The V2 workflow leaves `VITE_EQUIPMENT_REALTIME_API_URL` empty pending its infrastructure/CORS
-repair. Separately, the unified Job worklist owns state outside shared invalidation, so restoring
-SignalR alone is insufficient. These instructions describe the integration, not proof it is active
-for V2. Follow audit A06 and the two-browser acceptance gate in
+The V2 client uses the authenticated SignalR endpoint for event-driven Equipment, Jobs, Staff and
+Job Book updates. It does not poll Dataverse on a timer. If the connection is interrupted, the active
+screen performs one authoritative recovery read after SignalR reconnects or when the browser tab
+becomes visible again. Follow audit A06 and the two-browser acceptance gate in
 [release readiness](../RELEASE_READINESS.md).
 
 ## Azure resources
@@ -51,6 +51,12 @@ For Jobs, reuse this protected service endpoint and register PostOperation async
 the corresponding bounded SignalR event. Configure Update filtering attributes for the Job fields
 projected by the Jobs table. These steps are required before the client can receive Job
 invalidations; they are intentionally not created by an ordinary application deployment.
+
+For the Auckland Job Book, register the same three steps on `gr_jobbookentry` with
+`scripts/manage-jobs-realtime-registration.ps1 -EntityName gr_jobbookentry`. The receiver broadcasts
+only the ledger ID, book key, operation and event time. Connected Job Book screens read that one
+changed ledger row; a managed `gr_job` event reads that one Job. A full first-page recovery read is
+reserved for reconnect, tab visibility recovery or an explicit user refresh.
 
 For Staff, reuse the endpoint and register the same three steps on `gr_mechanic`. Run
 `scripts/manage-staff-realtime-registration.ps1 -Mode Inspect`, then use `-Mode Register` only after

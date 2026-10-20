@@ -2,6 +2,7 @@ import { HubConnectionBuilder, HubConnectionState, LogLevel } from '@microsoft/s
 import { isEquipmentRealtimeEvent, type EquipmentRealtimeEvent } from '../../equipment/services/equipmentRealtime.ts'
 import { isJobsRealtimeEvent, type JobsRealtimeEvent } from '../../jobs/services/jobsRealtime.ts'
 import { isStaffRealtimeEvent, type StaffRealtimeEvent } from '../../mechanics/services/staffRealtime.ts'
+import { isJobBookRealtimeEvent, type JobBookRealtimeEvent } from '../../job-book/jobBookRealtime.ts'
 
 export type OperationalRealtimeStatus = 'disabled' | 'connecting' | 'connected' | 'disconnected'
 
@@ -11,6 +12,7 @@ export function startOperationalRealtime(options: {
     onJobEvent: (event: JobsRealtimeEvent) => void
     onEquipmentEvent: (event: EquipmentRealtimeEvent) => void
     onStaffEvent: (event: StaffRealtimeEvent) => void
+    onJobBookEvent: (event: JobBookRealtimeEvent) => void
     onStatus: (status: OperationalRealtimeStatus) => void
     onReconnected: () => void
 }) {
@@ -36,6 +38,9 @@ export function startOperationalRealtime(options: {
     })
     connection.on('staffChanged', (value: unknown) => {
         if (isStaffRealtimeEvent(value)) options.onStaffEvent(value)
+    })
+    connection.on('jobBookChanged', (value: unknown) => {
+        if (isJobBookRealtimeEvent(value)) options.onJobBookEvent(value)
     })
     connection.onreconnecting(() => options.onStatus('connecting'))
     connection.onreconnected(() => {

@@ -7,6 +7,7 @@ import { publishEquipmentChange } from '../../equipment/services/equipmentRealti
 import { invalidateSharedJobsDataCache } from '../../jobs/services/jobsDataCache'
 import { publishJobChange } from '../../jobs/services/jobsRealtime'
 import { publishStaffChange } from '../../mechanics/services/staffRealtime'
+import { publishJobBookChange } from '../../job-book/jobBookRealtime'
 import { useOperationalDataClient } from '../data/OperationalDataClientContext'
 import { startOperationalRealtime, type OperationalRealtimeStatus } from './operationalRealtime'
 import {
@@ -90,6 +91,7 @@ export default function OperationalRealtimeProvider({ children }: { children: Re
                 scheduleInvalidation('equipment')
             },
             onStaffEvent: publishStaffChange,
+            onJobBookEvent: publishJobBookChange,
             onReconnected: () => recover('reconnected'),
         })
         const recoverWhenVisible = () => {

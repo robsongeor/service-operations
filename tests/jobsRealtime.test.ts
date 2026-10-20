@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { isJobsRealtimeEvent } from '../src/alpha/jobs/services/jobsRealtime.ts'
+import { isJobBookRealtimeEvent } from '../src/alpha/job-book/jobBookRealtime.ts'
 import {
     createOperationalCrossTabInvalidation,
     operationalCrossTabChannelName,
@@ -14,6 +15,12 @@ test('Jobs realtime accepts only bounded Dataverse change notifications', () => 
     assert.equal(isJobsRealtimeEvent({ jobId: '11111111-1111-4111-8111-111111111111', operation: 'read', changedAt: '2026-08-16T01:00:00.000Z' }), false)
 })
 
+test('Job Book realtime accepts only bounded ledger notifications', () => {
+    assert.equal(isJobBookRealtimeEvent({ entryId: '11111111-1111-4111-8111-111111111111', book: 'auckland', operation: 'create', changedAt: '2026-10-21T01:00:00.000Z' }), true)
+    assert.equal(isJobBookRealtimeEvent({ entryId: 'not-a-guid', book: 'auckland', operation: 'update', changedAt: 'now' }), false)
+    assert.equal(isJobBookRealtimeEvent({ entryId: '11111111-1111-4111-8111-111111111111', book: 'unknown', operation: 'update', changedAt: '2026-10-21T01:00:00.000Z' }), false)
+})
+
 test('app shell owns one realtime connection and Jobs reconciles events without polling', () => {
     const app = readFileSync('src/App.tsx', 'utf8')
     const provider = readFileSync('src/alpha/shared/realtime/OperationalRealtimeProvider.tsx', 'utf8')
@@ -21,6 +28,7 @@ test('app shell owns one realtime connection and Jobs reconciles events without 
     const hook = readFileSync('src/alpha/jobs/hooks/useJobs.ts', 'utf8')
     const equipmentHook = readFileSync('src/alpha/equipment/hooks/useEquipmentManager.ts', 'utf8')
     const jobMapHook = readFileSync('src/alpha/job-map/useJobMapData.ts', 'utf8')
+    const jobBook = readFileSync('src/alpha/job-book/JobBookPrototypeScreen.tsx', 'utf8')
 
     assert.match(app, /<OperationalRealtimeProvider key=/)
     assert.doesNotMatch(app, /<StaffRealtimeBridge/)
@@ -28,6 +36,7 @@ test('app shell owns one realtime connection and Jobs reconciles events without 
     assert.match(connection, /connection\.on\('jobChanged'/)
     assert.match(connection, /connection\.on\('equipmentChanged'/)
     assert.match(connection, /connection\.on\('staffChanged'/)
+    assert.match(connection, /connection\.on\('jobBookChanged'/)
     assert.match(provider, /onReconnected: \(\) => recover\('reconnected'\)/)
     assert.match(provider, /visibilitychange/)
     assert.match(provider, /window\.setTimeout\(\(\) => \{ void flushInvalidations\(\) \}, 750\)/)
@@ -37,11 +46,16 @@ test('app shell owns one realtime connection and Jobs reconciles events without 
     assert.match(hook, /subscribeToJobChanges\(refreshJobs\)/)
     assert.match(hook, /subscribeToOperationalRealtimeRecovery\(refreshJobs\)/)
     assert.match(equipmentHook, /subscribeToEquipmentChanges\(refreshEquipment\)/)
+    assert.match(jobBook, /subscribeToJobBookChanges/)
+    assert.match(jobBook, /subscribeToJobChanges/)
+    assert.match(jobBook, /fetchJobBookIntakeRow/)
+    assert.match(jobBook, /fetchJobForCorrection/)
     assert.doesNotMatch(hook, /startJobsRealtime\(/)
     assert.doesNotMatch(equipmentHook, /startEquipmentRealtime\(/)
     assert.doesNotMatch(jobMapHook, /startJobsRealtime\(/)
     assert.doesNotMatch(provider, /setInterval\(/)
     assert.doesNotMatch(hook, /setInterval\(/)
+    assert.doesNotMatch(jobBook, /setInterval\(/)
 })
 
 test('realtime invalidation stays bounded to dependent shared query families', () => {

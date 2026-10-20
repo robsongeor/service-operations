@@ -9,6 +9,7 @@ import { fetchCustomerSites, createSite } from '../jobs/services/sitesApi'
 import { createContact, createSiteContact } from '../jobs/services/contactsApi'
 import { createEquipment } from '../jobs/services/equipmentApi'
 import { invalidateJobsCache } from '../jobs/services/jobsApi'
+import { subscribeToJobChanges } from '../jobs/services/jobsRealtime'
 import { createEquipmentDestination } from '../equipment/services/equipmentLocationWorkflow'
 import { UNIFIED_JOB_RUNTIME, UNIFIED_JOB_WALKTHROUGH } from '../jobs/domain/unifiedJobWorkflow'
 import { useJobRegistration } from '../jobs/hooks/useJobRegistration'
@@ -44,6 +45,7 @@ import JobScheduleFields from '../jobs/components/JobScheduleFields'
 import { createJobScheduleOption } from '../jobs/services/jobScheduleApi'
 import type { JobScheduleOptionDraft } from '../jobs/types/jobSchedule.types'
 import { useOperationalQuery } from '../shared/data/useOperationalQuery'
+import { useOperationalRealtimeStatus } from '../shared/realtime/OperationalRealtimeStatusContext'
 import { STAFF_DIRECTORY_QUERY_KEY } from '../shared/data/operationalCollectionKeys'
 import { STANDARD_JOB_TYPE_OPTIONS, type JobType } from '../jobs/types/jobType.types'
 import { jobCreationLocationErrors } from '../jobs/domain/jobCreationLocation'
@@ -51,8 +53,9 @@ import { createJobBookIntakeRow, fetchJobBookIntakeRows, fetchJobBookIntakeRow, 
 import { isEditableJobBookIntake, jobBookVoidBlockedReason } from './jobBookEntryWorkflow'
 import { useJobBookVoid } from './useJobBookVoid'
 import JobBookVoidDialog from './JobBookVoidDialog'
-import { availableJobBooks, JOB_BOOKS, jobNumberSequence, REGIONAL_JOB_BOOK_ALLOCATION_ENABLED, type JobBookKey } from './jobBookConfig'
+import { availableJobBooks, JOB_BOOKS, jobNumberBelongsToBook, jobNumberSequence, REGIONAL_JOB_BOOK_ALLOCATION_ENABLED, type JobBookKey } from './jobBookConfig'
 import { fetchJobBookEquipmentIndex } from './jobBookEquipmentIndexApi'
+import { subscribeToJobBookChanges } from './jobBookRealtime'
 import { requestGreenTreeJobReconciliation, requestGreenTreeJobStatusCheck } from './greenTreeJobSyncApi'
 import { syncJobBookJobToTimecloud } from './timecloudJobApi'
 import {
@@ -208,6 +211,7 @@ export default function JobBookPrototypeScreen({
     const [draft, setDraft] = useState<JobBookRow>(() => createBlankJobBookRow(0))
     const [equipment, setEquipment] = useState<PrototypeEquipment[]>([])
     const [loading, setLoading] = useState(true)
+    const [refreshingRows, setRefreshingRows] = useState(false)
     const [loadError, setLoadError] = useState('')
     const [intakeDrawerOpen, setIntakeDrawerOpen] = useState(false)
     const [editingIntakeRow, setEditingIntakeRow] = useState<JobBookRow | null>(null)
@@ -250,11 +254,14 @@ export default function JobBookPrototypeScreen({
     const [intakeContactLoadError, setIntakeContactLoadError] = useState('')
     const [intakeContactLoadAttempt, setIntakeContactLoadAttempt] = useState(0)
     const [intakeContactLookupAvailable, setIntakeContactLookupAvailable] = useState(() => jobBookIntakeContactLookupIsAvailable())
-    const reconcileIntakeRow = (saved: JobBookRow) => {
+    const realtimeStatus = useOperationalRealtimeStatus()
+    const reconcileIntakeRow = useCallback((saved: JobBookRow) => {
         setIntakeRows((current) => appendUniqueRows(current, [saved]))
+        setSearchIntakeRows((current) => appendUniqueRows(current, [saved]))
         if (saved.linkedJobId) setRecentRows((current) => current.map((item) => item.linkedJobId === saved.linkedJobId ? saved : item))
+        if (saved.linkedJobId) setSearchRecentRows((current) => current.map((item) => item.linkedJobId === saved.linkedJobId ? saved : item))
         if (UNIFIED_JOB_RUNTIME) invalidateJobsCache()
-    }
+    }, [])
     const voidEntry = useJobBookVoid(getAccessToken, reconcileIntakeRow)
     const rowActions = useJobBookActions(getAccessToken, canEmailAssignedTechnician, !canManageJobs, signedInUser?.displayName ?? '')
 
@@ -360,6 +367,80 @@ export default function JobBookPrototypeScreen({
         void load()
         return () => { cancelled = true }
     }, [account, instance, selectedJobBook])
+
+    const refreshJobBookRows = useCallback(async () => {
+        if (!account) return
+        const generation = bookPageGeneration.current
+        setRefreshingRows(true)
+        setPageLoadError('')
+        try {
+            const token = await getAccessToken()
+            const [jobPage, intakePage] = await Promise.all([
+                fetchRecentJobBookRows(token, selectedJobBook),
+                fetchJobBookIntakeRows(token, selectedJobBook),
+            ])
+            if (generation !== bookPageGeneration.current) return
+            setRecentRows(jobPage.records)
+            setIntakeRows(intakePage.records)
+            setRecentNextLink(jobPage.nextLink)
+            setIntakeNextLink(intakePage.nextLink)
+            searchGeneration.current++
+            setSearchReady(false)
+        } catch (error) {
+            if (generation === bookPageGeneration.current) setPageLoadError(error instanceof Error ? error.message : 'The latest Job Book entries could not be loaded.')
+        } finally {
+            if (generation === bookPageGeneration.current) setRefreshingRows(false)
+        }
+    }, [account, getAccessToken, selectedJobBook])
+
+    useEffect(() => {
+        if (!account) return
+        let stopped = false
+        let recoveryTimer: number | undefined
+        const scheduleRecovery = () => {
+            if (recoveryTimer !== undefined) window.clearTimeout(recoveryTimer)
+            recoveryTimer = window.setTimeout(() => { if (!stopped) void refreshJobBookRows() }, 500)
+        }
+        const unsubscribeJobBook = subscribeToJobBookChanges((event) => {
+            if (!event) { scheduleRecovery(); return }
+            if (event.book !== selectedJobBookKey) return
+            if (event.operation === 'delete') {
+                setIntakeRows((current) => current.filter((row) => row.intakeRecordId?.toLowerCase() !== event.entryId.toLowerCase()))
+                setSearchIntakeRows((current) => current.filter((row) => row.intakeRecordId?.toLowerCase() !== event.entryId.toLowerCase()))
+                return
+            }
+            void getAccessToken()
+                .then((token) => fetchJobBookIntakeRow(token, { jobBookKey: event.book, intakeRecordId: event.entryId }))
+                .then((saved) => { if (!stopped) reconcileIntakeRow(saved) })
+                .catch(() => { if (!stopped) scheduleRecovery() })
+        })
+        const unsubscribeJobs = subscribeToJobChanges((event) => {
+            if (event.operation === 'delete') {
+                const matches = (row: JobBookRow) => row.linkedJobId?.toLowerCase() !== event.jobId.toLowerCase()
+                setRecentRows((current) => current.filter(matches))
+                setSearchRecentRows((current) => current.filter(matches))
+                return
+            }
+            void getAccessToken()
+                .then((token) => fetchJobForCorrection(token, event.jobId))
+                .then((job) => {
+                    if (stopped) return
+                    if (!job.gr_jobnumber || !jobNumberBelongsToBook(job.gr_jobnumber, selectedJobBook)) return
+                    const saved = mapManagedJobBookRow(job, selectedJobBook)
+                    setRecentRows((current) => appendUniqueRows(current, [saved]))
+                    setSearchRecentRows((current) => appendUniqueRows(current, [saved]))
+                    setIntakeRows((current) => current.map((row) => row.linkedJobId === job.gr_jobid ? { ...row, ...saved, intakeRecordId: row.intakeRecordId, registeredLedgerId: row.registeredLedgerId, ledgerEtag: row.ledgerEtag } : row))
+                    setSearchIntakeRows((current) => current.map((row) => row.linkedJobId === job.gr_jobid ? { ...row, ...saved, intakeRecordId: row.intakeRecordId, registeredLedgerId: row.registeredLedgerId, ledgerEtag: row.ledgerEtag } : row))
+                })
+                .catch(() => { if (!stopped) scheduleRecovery() })
+        })
+        return () => {
+            stopped = true
+            if (recoveryTimer !== undefined) window.clearTimeout(recoveryTimer)
+            unsubscribeJobBook()
+            unsubscribeJobs()
+        }
+    }, [account, getAccessToken, reconcileIntakeRow, refreshJobBookRows, selectedJobBook, selectedJobBookKey])
 
     useEffect(() => {
         const customerId = draft.customerId
@@ -876,6 +957,7 @@ export default function JobBookPrototypeScreen({
                 <p>View {selectedJobBook.label} managed Jobs and Intake entries in one separate register.</p>
             </div>
             <div className="job-book-header-summary" aria-label="Job Book status">
+                <span title={realtimeStatus === 'connected' ? 'Changes from other users are delivered automatically.' : 'Use Refresh to check for changes while live updates reconnect.'}>{realtimeStatus === 'connected' ? 'Live' : realtimeStatus === 'connecting' ? 'Connecting…' : 'Manual refresh'}</span>
                 <span>{filtersActive
                     ? searchingRows ? 'Searching all Job Book entries…' : `${displayedRows.length} matching`
                     : `${displayedRows.length} shown · ${allRows.length} loaded`}</span>
@@ -887,6 +969,7 @@ export default function JobBookPrototypeScreen({
                 {staffDirectoryQuery.data === undefined && (staffDirectoryQuery.status === 'initial' || staffDirectoryQuery.status === 'loading') && <span>Loading Staff…</span>}
                 {staffDirectoryQuery.data === undefined && staffDirectoryQuery.error && <button type="button" className="job-book-inline-retry" title={staffDirectoryQuery.error.message} onClick={() => void staffDirectoryQuery.refetch().catch(() => undefined)}>Retry Staff</button>}
                 <span className="job-book-local-badge">LEGACY VIEW</span>
+                <button type="button" className="job-book-inline-retry" disabled={refreshingRows || loading} onClick={() => void refreshJobBookRows()}>{refreshingRows ? 'Refreshing…' : 'Refresh'}</button>
                 <button type="button" className="job-book-new-entry-button" disabled={regionalAllocationLocked || Boolean(registration.pending)} title={regionalAllocationLocked ? 'Available after this regional Job Book is migrated and seeded.' : undefined} onClick={openNewIntakeEntry}>+ New entry</button>
             </div>
         </header>

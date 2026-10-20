@@ -18,7 +18,7 @@ Both explicitly build on Node 20 with `npm ci` and `npm run build`, upload `dist
 `skip_app_build: true`, and deploy managed API source from `api`. V1 version metadata uses
 a tag/SHA; V2 labels its short SHA as a V2 Pilot. Server settings remain separate from public build-time flags.
 
-### V2 configuration in source (10 October 2026)
+### V2 configuration in source (21 October 2026)
 
 | Setting | Workflow value |
 | --- | --- |
@@ -27,7 +27,7 @@ a tag/SHA; V2 labels its short SHA as a V2 Pilot. Server settings remain separat
 | `VITE_UNIFIED_JOB_WORKFLOW_ENABLED` | `true` |
 | Regional-book and regional-allocation flags | `false` |
 | `VITE_JOB_CARD_SHARED_BACKEND` | `v1-production` |
-| `VITE_EQUIPMENT_REALTIME_API_URL` | Empty |
+| `VITE_EQUIPMENT_REALTIME_API_URL` | `https://serviceops-equipment-realtime-bbd3f9.azurewebsites.net/api` |
 | External-supplier / hour-meter classification flags | Not enabled by this workflow; default false |
 
 This table describes the workflow, **not a fresh observation of the deployed artifact**.

@@ -1,13 +1,13 @@
 # Data Loading and Synchronization
 
-## V2 exception found in the 10 October audit
+## V2 realtime activation — 21 October 2026
 
-Shared-query invalidation below describes implemented shared consumers and the target contract,
-not every current list. `useUnifiedJobWorklist` owns separate state and does not subscribe to
-equivalent invalidation; its scoped `useJobs` call also skips the global realtime subscription.
-V2's workflow leaves the realtime API URL empty. Restoring that URL alone will not synchronize
-the unified worklist. See audit A06 in the
-[application audit](../reviews/2026-10-10-application-audit.md).
+V2 enables the authenticated SignalR endpoint. The Auckland Job Book consumes bounded ledger and
+managed-Job events: a normal event reads only the changed record, while reconnect, visibility
+recovery and the explicit Refresh action read the bounded first page. There is no timer-based
+polling. Other independently owned lists still require their own event consumer and acceptance
+evidence; enabling the shared connection alone is not proof that every list is synchronized. See
+audit A06 in the [application audit](../reviews/2026-10-10-application-audit.md).
 
 
 This document owns the cross-cutting architecture for collecting, caching, displaying,
@@ -49,7 +49,7 @@ Jobs and Equipment list services
 
 Authenticated app shell
     -> one account-scoped SignalR connection
-    -> bounded Job, Equipment, and Staff event dispatcher
+    -> bounded Job, Job Book, Equipment, and Staff event dispatcher
     -> immediate focused-record invalidation
     -> coalesced dependent-query invalidation
     -> reconnect and visibility recovery for currently observed queries

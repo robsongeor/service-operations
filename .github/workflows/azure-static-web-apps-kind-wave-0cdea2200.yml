@@ -34,8 +34,7 @@ jobs:
       # Independent activation gates: the shared backend/schema/identity are not upgraded by this deployment.
       VITE_JOB_CARD_METER_APPROVAL_ENABLED: "false"
       VITE_JOB_CARD_CURSOR_QUEUE_ENABLED: "false"
-      # Re-enable after AZURE_REALTIME_FUNCTIONAPP_PUBLISH_PROFILE is restored and the V2 CORS allow-list is deployed.
-      VITE_EQUIPMENT_REALTIME_API_URL: ""
+      VITE_EQUIPMENT_REALTIME_API_URL: https://serviceops-equipment-realtime-bbd3f9.azurewebsites.net/api
     steps:
       - uses: actions/checkout@v3
         with:
