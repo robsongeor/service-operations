@@ -149,6 +149,11 @@ Job Item only when no exact match exists. The payload uses `<Job Number> <Descri
 configured `Job Number` layer, an empty group/children/export-code set, and no geofence. TimeCloud
 assigns `code`.
 
+The V2 production environment was promoted on 20 October 2026 and now uses
+`TIMECLOUD_JOB_MODE=production`. Production items use `<Job Number> <Description>` and a blank
+integration custom code. The test-mode behaviour above remains available only for controlled
+validation and rollback-safe testing.
+
 On confirmation, `gr_job.gr_timecloudentered`, `gr_timecloudjobitemid`, and `gr_timecloudcode` are
 written together under the Job ETag. A lost response or failed Dataverse write is recoverable: the
 next attempt finds the exact existing TimeCloud item and reconciles it instead of creating a

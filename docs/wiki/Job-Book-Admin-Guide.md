@@ -75,9 +75,7 @@ have allocated a number.
 
 ## TimeCloud status
 
-The TimeCloud entry is created automatically after the Job Number is saved. It currently uses
-controlled test mode, so the TimeCloud item is labelled **[TEST ONLY - SAFE TO DELETE]**. Do not
-rename it or treat it as production TimeCloud work.
+The production TimeCloud entry is created automatically after the Job Number is saved.
 
 | Status | Meaning |
 | --- | --- |
@@ -85,8 +83,8 @@ rename it or treat it as production TimeCloud work.
 | **Entered** | TimeCloud confirmed the entry. |
 | **Error** | TimeCloud did not confirm the request. The Service Operations Job is still saved. Report the error and do not create another Job. |
 
-The status is read-only. There is no TimeCloud checkbox to select. **Entered** means the controlled
-test item was confirmed; it does not mean production mode has been enabled.
+The status is read-only. There is no TimeCloud checkbox to select. **Entered** means TimeCloud
+confirmed the production entry.
 
 ## GreenTree status
 

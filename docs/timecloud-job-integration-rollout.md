@@ -7,14 +7,20 @@ and server-setting changes are separately authorised operations. `TIMECLOUD_JOB_
 defaults to disabled. When creation is enabled, `TIMECLOUD_JOB_MODE` defaults to `test`;
 production behaviour requires the exact value `production`.
 
-On 15 October 2026, the following non-secret Production settings were saved on the V2 Static Web
-App: `TIMECLOUD_JOB_CREATION_ENABLED=true`, `TIMECLOUD_JOB_MODE=test`, and
-`TIMECLOUD_JOB_LAYER_ID=671835fe0d6412dbb8cafb30`. The four TimeCloud credential settings were
-entered by the owner and verified only for presence while masked; their values were not recorded in
-the repository or this runbook. The deployed creation gate was deliberately enabled for controlled
-testing on 15 October 2026. The two Job identity columns were provisioned, published and
-structurally re-verified in Dataverse on 15 October 2026 with
+On 20 October 2026, the owner approved production promotion. The V2 Static Web App now has the
+following non-secret settings: `TIMECLOUD_JOB_CREATION_ENABLED=true`,
+`TIMECLOUD_JOB_MODE=production`, and
+`TIMECLOUD_JOB_LAYER_ID=671835fe0d6412dbb8cafb30`. The four TimeCloud credential settings remain
+server-only and were never recorded in the repository or this runbook. The two Job identity columns
+were provisioned, published and structurally re-verified in Dataverse on 15 October 2026 with
 `scripts/manage-timecloud-job-schema.ps1 -Mode Provision`.
+
+Before promotion, creation was paused. Exact test items `6ad05f4beb98711856e562a2` (Job `150004`,
+TimeCloud code `27892`) and `6ad70a4d0be79d9f55526602` (Job `150006`, TimeCloud code `28041`) were
+confirmed by both required test markers and archived. A fresh active search returned zero
+test-labelled items. The mode was then changed while creation remained disabled, verified as
+`production`, and creation was re-enabled. The next genuine Job Book registration is the controlled
+production smoke; do not create an irreversible Job solely to test the integration.
 
 Test mode creates an active Job Item with:
 
@@ -162,6 +168,11 @@ Production promotion is a separate decision after test evidence is accepted:
 
 Never change test items into production items by renaming them. Production creates must start from
 an approved real Job Book registration.
+
+Production promotion completed on 20 October 2026. New items use `<Job Number> <Description>`, a
+blank integration custom code, the configured Job Number layer and no geofence. Retain the rollback
+sequence below and verify the next genuine production Job after creation; no disposable production
+Job is authorised for smoke testing.
 
 ## Rollback
 

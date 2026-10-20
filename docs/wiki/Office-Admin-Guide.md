@@ -36,11 +36,10 @@ Use the same Auckland creation workflow described in the [Job Book Admin guide](
 > **Creating a Job is irreversible.** The allocated Job Number cannot be deleted, reused or undone.
 > An eligible Void action retains the number and history; it does not remove the Job.
 
-TimeCloud currently runs in controlled test mode. It shows **Uploading…** while the automatic
-request is running, **Entered** after the labelled test item is confirmed and **Error** only when the
+TimeCloud now runs in production mode. It shows **Uploading…** while the automatic request is
+running, **Entered** after TimeCloud confirms the production entry and **Error** only when the
 request fails. The Service Operations Job is already saved if TimeCloud shows Error, so report it
-instead of creating another Job. Do not rename or treat a **[TEST ONLY - SAFE TO DELETE]** item as a
-production TimeCloud Job.
+instead of creating another Job.
 
 ## Email the assigned technician
 

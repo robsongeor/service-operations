@@ -151,11 +151,11 @@ never put a provider credential in that browser-visible value.
 
 ### TimeCloud Job creation
 
-V2 TimeCloud Job creation uses server-only credentials and remains independently disabled until
-`TIMECLOUD_JOB_CREATION_ENABLED=true` is set. Test releases must keep
-`TIMECLOUD_JOB_MODE=test`; this is also the fail-safe mode when the setting is absent. Do not set
-the mode to `production` during initial validation. The required settings, schema prerequisite,
-controlled smoke, cleanup and rollback procedure are maintained in
+V2 TimeCloud Job creation uses server-only credentials and remains independently gated by
+`TIMECLOUD_JOB_CREATION_ENABLED`. Production promotion was approved and completed on 20 October
+2026 with `TIMECLOUD_JOB_CREATION_ENABLED=true` and `TIMECLOUD_JOB_MODE=production`. The absent-mode
+fail-safe remains `test`. The required settings, schema prerequisite, controlled smoke, cleanup,
+promotion record and rollback procedure are maintained in
 [`../timecloud-job-integration-rollout.md`](../timecloud-job-integration-rollout.md).
 
 The managed address-search and Equipment Map APIs prefer the server-side `DATAVERSE_URL` setting.

@@ -26,8 +26,7 @@ a separate change is announced.
   deleted, reused or undone after it has been allocated.
 - Do not create a second Job while the first save or TimeCloud upload is still pending.
 - Bulk Job creation and Site Check creation are not available in this release.
-- TimeCloud creation is currently running in controlled **test mode**. Test entries are clearly
-  labelled in TimeCloud and must not be treated as production TimeCloud work.
+- TimeCloud creation is live in production mode. Its status is automatic and read-only.
 
 ## Need help?
 

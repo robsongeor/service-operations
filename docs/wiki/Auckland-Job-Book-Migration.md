@@ -11,8 +11,7 @@ existing processes until a separate change is announced.
 
 - New Auckland Jobs are created from **Job Book** using **+ New entry**.
 - The app allocates the next permanent Auckland Job Number after the entry is saved.
-- The saved Job is created in Service Operations and sent automatically to the controlled
-  TimeCloud test workflow.
+- The saved Job is created in Service Operations and sent automatically to TimeCloud.
 - Job details are maintained in the app instead of the Auckland spreadsheet.
 
 ## Before creating a Job
@@ -45,11 +44,7 @@ use **Resume saved request** so the same request is completed without allocating
 
 ## TimeCloud status
 
-TimeCloud creation starts automatically after the permanent Job Number is saved. During the current
-rollout it runs in **test mode**. The TimeCloud item name includes **[TEST ONLY - SAFE TO DELETE]**
-and its integration code is **JOBBOOK-TEST-ONLY**. Do not rename a test item or treat it as a
-production TimeCloud Job.
-
+TimeCloud creation starts automatically in production mode after the permanent Job Number is saved.
 The Job Book shows a read-only status:
 
 | Status | Meaning |
@@ -58,8 +53,8 @@ The Job Book shows a read-only status:
 | **Entered** | TimeCloud confirmed the entry and Service Operations saved that confirmation. |
 | **Error** | TimeCloud did not confirm the request. The Service Operations Job is still saved. Report the error; do not create the Job again. |
 
-There is no TimeCloud checkbox to select manually. A Job Book status of **Entered** means the test
-item was confirmed during this rollout; it does not mean production mode has been enabled.
+There is no TimeCloud checkbox to select manually. **Entered** means TimeCloud confirmed the
+production entry and Service Operations saved its TimeCloud identity.
 
 ## GreenTree status
 
