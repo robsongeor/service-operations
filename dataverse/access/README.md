@@ -1,6 +1,6 @@
 # Restricted access guard
 
-**Live in production from 9 October 2026.** The signed `1.0.1.0` assembly and 14
+**Live in production from 9 October 2026; current assembly `1.0.23.0`.** The signed assembly and 14
 synchronous PreOperation restricted-access steps are enabled with exact secure
 Dataverse role IDs, required `Before` images and no filtering attributes. The 15
 legacy number-invariant steps remain registered but disabled while V1/manual
@@ -41,7 +41,9 @@ prove live effective privileges; both meter feature flags remain off.
   JobBookAdmin and an unassigned legacy JobBookOnly compatibility profile.
 - Admin Equipment writes allow fleet, alternate fleet numbers, make, model,
   serial and Site only. The client requires an exact ETag and reloads the saved
-  record. Moving Equipment does not rewrite historical Jobs.
+  record. Moving Equipment does not rewrite historical Jobs. Dataverse-owned update metadata is
+  accepted only when its primary key, direct caller, timestamp and unchanged platform values are
+  validated; delegated Equipment updates remain denied.
 - The plugin resolves configured Dataverse role IDs from direct/team
   membership. Unknown roles fail closed; Full and coordinator bypass this
   field guard, while ordinary data privileges and other plugins still apply.

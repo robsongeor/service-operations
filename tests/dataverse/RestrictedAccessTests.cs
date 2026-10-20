@@ -30,6 +30,38 @@ public static class RestrictedAccessTests
             Test(r+" corrects managed Job description", () => Change(r, "gr_job", "gr_description", "Corrected"));
             Test(r+" edits Equipment details", () => Change(r, "gr_equipment", "gr_serial", "Corrected serial"));
             Test(r+" moves Equipment", () => Change(r, "gr_equipment", "gr_site", new EntityReference("gr_site", Id)));
+            Test(r+" moves Equipment with validated Dataverse update metadata", () => {
+                var target=Row("gr_equipment"); target["gr_site"]=new EntityReference("gr_site",Id);
+                target["gr_equipmentid"]=Id; target["modifiedby"]=new EntityReference("systemuser",Id);
+                target["modifiedon"]=DateTime.UtcNow; target["modifiedonbehalfby"]=null;
+                target["ownerid"]=new EntityReference("systemuser",OtherId); target["statecode"]=new OptionSetValue(0);
+                target["timezoneruleversionnumber"]=4; target["utcconversiontimezonecode"]=null;
+                var before=Row("gr_equipment"); before["ownerid"]=new EntityReference("systemuser",OtherId); before["statecode"]=new OptionSetValue(0);
+                before["timezoneruleversionnumber"]=4; before["utcconversiontimezonecode"]=null;
+                RestrictedWritePolicy.Validate(r,"Update",target,before,Id);
+            });
+            Test(r+" rejects Equipment update metadata for another user", () => {
+                var target=Row("gr_equipment"); target["gr_site"]=new EntityReference("gr_site",Id);
+                target["modifiedby"]=new EntityReference("systemuser",OtherId);
+                Denied(() => RestrictedWritePolicy.Validate(r,"Update",target,Row("gr_equipment"),Id));
+            });
+            Test(r+" rejects a mismatched Equipment primary key", () => {
+                var target=Row("gr_equipment"); target["gr_site"]=new EntityReference("gr_site",Id); target["gr_equipmentid"]=OtherId;
+                Denied(() => RestrictedWritePolicy.Validate(r,"Update",target,Row("gr_equipment"),Id));
+            });
+            Test(r+" rejects a future Equipment modification time", () => {
+                var target=Row("gr_equipment"); target["gr_site"]=new EntityReference("gr_site",Id); target["modifiedon"]=DateTime.UtcNow.AddHours(1);
+                Denied(() => RestrictedWritePolicy.Validate(r,"Update",target,Row("gr_equipment"),Id));
+            });
+            Test(r+" rejects delegated Equipment update metadata", () => {
+                var target=Row("gr_equipment"); target["gr_site"]=new EntityReference("gr_site",Id); target["modifiedonbehalfby"]=new EntityReference("systemuser",OtherId);
+                Denied(() => RestrictedWritePolicy.Validate(r,"Update",target,Row("gr_equipment"),Id));
+            });
+            Test(r+" rejects changed platform-owned Equipment metadata", () => {
+                var target=Row("gr_equipment"); target["gr_site"]=new EntityReference("gr_site",Id); target["ownerid"]=new EntityReference("systemuser",OtherId);
+                var before=Row("gr_equipment"); before["ownerid"]=new EntityReference("systemuser",Id);
+                Denied(() => RestrictedWritePolicy.Validate(r,"Update",target,before,Id));
+            });
             Test(r+" creates Customer", () => { var target=Row("gr_customer"); target["gr_name"]="New Customer"; RestrictedWritePolicy.Validate(r,"Create",target,null); });
             Test(r+" creates Site", () => { var target=Row("gr_site"); target["gr_name"]="New Site"; target["gr_customer"]=new EntityReference("gr_customer",Id); RestrictedWritePolicy.Validate(r,"Create",target,null); });
             Test(r+" creates platform-enriched Site", () => {

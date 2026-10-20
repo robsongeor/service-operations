@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-10-21 — Restricted Equipment location saves
+
+- Updated the signed unified Dataverse guard to `1.0.23.0` so Office Admin and Job Book Admin users
+  can save the explicitly selected Equipment Site when Dataverse enriches the update with its own
+  record ID and modification metadata.
+- The Equipment-only policy validates the primary key, caller identity, timestamp and unchanged
+  platform-owned values. Delegated writes, unrelated Equipment fields and changes to owner, state,
+  organisation or creation metadata remain denied.
+- Reproduced the original `400` under Nargiza's profile, verified her effective Equipment access,
+  and preserved all roles, records, numbering and the existing 29 guard registrations.
+
 ## Unreleased
 
 - Reconciled the live user roster: Bruce now has only Service Coordinator; Paul and James now have

@@ -222,6 +222,14 @@ failed Auckland request preceding this update rolled back completely, and a read
 that no Job or ledger existed at or above `147479` before the retained request was resumed. The
 assembly-only deployment again preserved both Admin role assignment sets and all 29 enabled guards.
 
+Signed workflow assembly `1.0.23.0` then corrected direct Equipment location saves for Office Admin
+and Job Book Admin users. Dataverse adds the Equipment primary key and modification metadata to the
+PreOperation update target; the guard now accepts those platform-owned values only when the key,
+direct caller and timestamp validate and all other platform values remain unchanged from the
+pre-image. Unrelated Equipment fields and delegated updates remain denied. The assembly-only update
+changed no roles, records, numbering, metadata, steps, migration state or feature flags and retained
+all 29 enabled guards.
+
 The next action is a controlled live test with the dedicated Job Book Admin and Office Admin accounts.
 The first successful creation is permanent history: use a real or deliberately retained/voided test
 Job, verify it remains Staging until confirmed dispatch, and do not delete or reseed it.

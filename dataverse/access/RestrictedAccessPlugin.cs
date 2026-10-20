@@ -571,6 +571,43 @@ namespace ServiceOperations.Access
                 if (timestamp < DateTime.UtcNow.AddHours(-1) || timestamp > DateTime.UtcNow.AddMinutes(5)) Deny();
             }
         }
+        static bool SamePlatformValue(object left, object right)
+        {
+            if (left == null || right == null) return left == null && right == null;
+            var leftReference = left as EntityReference;
+            var rightReference = right as EntityReference;
+            if (leftReference != null || rightReference != null)
+                return leftReference != null && rightReference != null && leftReference.Id == rightReference.Id &&
+                    String.Equals(leftReference.LogicalName, rightReference.LogicalName, StringComparison.OrdinalIgnoreCase);
+            var leftOption = left as OptionSetValue;
+            var rightOption = right as OptionSetValue;
+            if (leftOption != null || rightOption != null)
+                return leftOption != null && rightOption != null && leftOption.Value == rightOption.Value;
+            return Object.Equals(left, right);
+        }
+        static void ValidateUpdate(Entity target, Entity before, IEnumerable<string> businessFields, Guid initiatingUserId)
+        {
+            string primaryKey = target.LogicalName + "id";
+            var platformFields = CreatePlatformFields.Concat(new[] { primaryKey }).ToArray();
+            Fields(target, businessFields.Concat(platformFields));
+            if (target.Contains(primaryKey) && (!(target[primaryKey] is Guid) || (Guid)target[primaryKey] != target.Id)) Deny();
+            if (target.Contains("modifiedby"))
+            {
+                var actor = target.GetAttributeValue<EntityReference>("modifiedby");
+                if (initiatingUserId == Guid.Empty || actor == null || actor.LogicalName != "systemuser" || actor.Id != initiatingUserId) Deny();
+            }
+            if (target.Contains("modifiedon"))
+            {
+                if (!(target["modifiedon"] is DateTime)) Deny();
+                var timestamp = ((DateTime)target["modifiedon"]).ToUniversalTime();
+                if (timestamp < DateTime.UtcNow.AddHours(-1) || timestamp > DateTime.UtcNow.AddMinutes(5)) Deny();
+            }
+            if (target.Contains("modifiedonbehalfby") && target["modifiedonbehalfby"] != null) Deny();
+            foreach (string field in platformFields.Where(field => field != primaryKey && field != "modifiedby" && field != "modifiedon" && field != "modifiedonbehalfby"))
+            {
+                if (target.Contains(field) && (!before.Contains(field) || !SamePlatformValue(target[field], before[field]))) Deny();
+            }
+        }
         public static void Validate(string profile, string message, Entity target, Entity before)
         {
             Validate(profile, message, target, before, Guid.Empty);
@@ -588,7 +625,7 @@ namespace ServiceOperations.Access
                 Deny(); return;
             }
             if (message != "Update" || before == null || before.Id != target.Id || before.LogicalName != target.LogicalName) { Deny(); return; }
-            if (target.LogicalName == "gr_equipment") { Fields(target, EquipmentDetails); return; }
+            if (target.LogicalName == "gr_equipment") { ValidateUpdate(target, before, EquipmentDetails, initiatingUserId); return; }
             if (target.LogicalName == "gr_job")
             {
                 if (before.GetAttributeValue<bool>("gr_registrationvoid")) Deny();
