@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import type { Job } from '../types/job.types'
 import type { Mechanic } from '../types/mechanic.types'
-import { getJobTypeLabel, JOB_TYPES } from '../types/jobType.types'
+import { getJobTypeLabel, JOB_TYPES, SERVICE_COORDINATION_JOB_TYPE_OPTIONS } from '../types/jobType.types'
 import JobTypeBadge from './JobTypeBadge'
 import JobTypeTabs from './JobTypeTabs'
 import {
@@ -330,6 +330,7 @@ export default function JobsTable({
                     allLabel="All jobs"
                     selectedJobType={selectedJobType}
                     includeUnnumbered={unifiedWorklist}
+                    jobTypeOptions={unifiedWorklist ? SERVICE_COORDINATION_JOB_TYPE_OPTIONS : undefined}
                     onChange={(jobType) => onViewStateChange({ ...viewState, selectedJobType: jobType })}
                 />
                 <div className="jobs-list-toolbar" aria-label="Filter jobs by status">

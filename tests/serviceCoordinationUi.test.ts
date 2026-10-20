@@ -8,6 +8,7 @@ import {
     fetchServiceCoordinationContext,
     setPersonalJobWatch,
 } from '../src/alpha/jobs/services/serviceCoordinationApi.ts'
+import { JOB_TYPES, SERVICE_COORDINATION_JOB_TYPE_OPTIONS, serviceCoordinationJobTypeFilter } from '../src/alpha/jobs/types/jobType.types.ts'
 
 const originalFetch = globalThis.fetch
 
@@ -62,4 +63,12 @@ test('Jobs screen keeps home branch, all branches and personal watchlist as dist
     assert.match(views, /All branches/)
     assert.match(views, /My watchlist/)
     assert.match(views, /watchlistEnabled &&/)
+})
+
+test('Service Coordination omits the Site Check tab and migrates an old saved selection', () => {
+    assert.equal(SERVICE_COORDINATION_JOB_TYPE_OPTIONS.some((option) => option.value === JOB_TYPES.SITE_CHECK), false)
+    assert.equal(serviceCoordinationJobTypeFilter(JOB_TYPES.SITE_CHECK), 'operational')
+    assert.equal(serviceCoordinationJobTypeFilter(JOB_TYPES.SERVICE), JOB_TYPES.SERVICE)
+    const table = readFileSync(new URL('../src/alpha/jobs/components/JobsTable.tsx', import.meta.url), 'utf8')
+    assert.match(table, /jobTypeOptions=\{unifiedWorklist \? SERVICE_COORDINATION_JOB_TYPE_OPTIONS : undefined\}/)
 })

@@ -27,6 +27,14 @@ export const SCHEDULER_JOB_TYPE_OPTIONS = JOB_TYPE_OPTIONS.filter(
     (option) => option.value !== JOB_TYPES.SITE_CHECK,
 )
 
+export const SERVICE_COORDINATION_JOB_TYPE_OPTIONS = JOB_TYPE_OPTIONS.filter(
+    (option) => option.value !== JOB_TYPES.SITE_CHECK,
+)
+
+export function serviceCoordinationJobTypeFilter(jobType: JobTypeFilter): JobTypeFilter {
+    return jobType === JOB_TYPES.SITE_CHECK ? 'operational' : jobType
+}
+
 export type JobCreationSource = 'standard' | 'wof' | 'site-check'
 
 export function assertJobTypeAllowedForCreation(jobType: JobType, source: JobCreationSource = 'standard') {

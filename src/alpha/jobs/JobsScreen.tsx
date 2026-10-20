@@ -9,7 +9,7 @@ import JobCreateDrawer from './components/JobCreateDrawer'
 import type { Job } from './types/job.types'
 import { DEFAULT_JOBS_VIEW_STATE, applyJobsDefaultView, getJobsViewStateKey, restoreJobsViewState, type JobsViewState, type ScheduledJobsVisibility } from './types/jobsViewState.types'
 import { jobStatusIsVisible, JOB_STATUSES, JOB_STATUS_OPTIONS, type JobStatus } from './types/jobStatus.types'
-import { JOB_TYPE_OPTIONS } from './types/jobType.types'
+import { JOB_TYPE_OPTIONS, SERVICE_COORDINATION_JOB_TYPE_OPTIONS, serviceCoordinationJobTypeFilter } from './types/jobType.types'
 import { APPLICATION_DEFAULT_JOBS_VIEW, canonicaliseJobStatuses, getJobsDefaultViewKey, restoreJobsDefaultView, saveJobsDefaultView, type JobsDefaultView } from './types/jobsDefaultView.types'
 import { getSignedInUserInfo } from '../../auth/signedInUser'
 import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
@@ -35,12 +35,22 @@ export default function JobsScreen() {
     const signedInUser = getSignedInUserInfo(activeAccount)
     const storageKey = signedInUser ? getJobsViewStateKey(signedInUser.storageId) : null
     const defaultViewStorageKey = signedInUser ? getJobsDefaultViewKey(signedInUser.storageId) : null
-    const [defaultView, setDefaultView] = useState<JobsDefaultView>(() => defaultViewStorageKey
-        ? restoreJobsDefaultView(defaultViewStorageKey) ?? APPLICATION_DEFAULT_JOBS_VIEW
-        : APPLICATION_DEFAULT_JOBS_VIEW)
-    const [viewState, setViewState] = useState<JobsViewState>(() => UNIFIED_JOB_WALKTHROUGH ? { ...DEFAULT_JOBS_VIEW_STATE } : storageKey
-        ? restoreJobsViewState(storageKey, true) ?? applyJobsDefaultView(defaultView)
-        : DEFAULT_JOBS_VIEW_STATE)
+    const [defaultView, setDefaultView] = useState<JobsDefaultView>(() => {
+        const restored = defaultViewStorageKey
+            ? restoreJobsDefaultView(defaultViewStorageKey) ?? APPLICATION_DEFAULT_JOBS_VIEW
+            : APPLICATION_DEFAULT_JOBS_VIEW
+        return UNIFIED_JOB_RUNTIME
+            ? { ...restored, selectedJobType: serviceCoordinationJobTypeFilter(restored.selectedJobType) }
+            : restored
+    })
+    const [viewState, setViewState] = useState<JobsViewState>(() => {
+        const restored = UNIFIED_JOB_WALKTHROUGH ? { ...DEFAULT_JOBS_VIEW_STATE } : storageKey
+            ? restoreJobsViewState(storageKey, true) ?? applyJobsDefaultView(defaultView)
+            : DEFAULT_JOBS_VIEW_STATE
+        return UNIFIED_JOB_RUNTIME
+            ? { ...restored, selectedJobType: serviceCoordinationJobTypeFilter(restored.selectedJobType) }
+            : restored
+    })
     const coordination = useServiceCoordination()
     const activeCoordinationView = viewState.coordinationView === 'watchlist' && !SERVICE_COORDINATION_WATCHLIST_ENABLED
         ? 'branch'
@@ -171,11 +181,14 @@ export default function JobsScreen() {
         const savedDefault = defaultViewStorageKey
             ? restoreJobsDefaultView(defaultViewStorageKey) ?? APPLICATION_DEFAULT_JOBS_VIEW
             : APPLICATION_DEFAULT_JOBS_VIEW
-        setDefaultView(savedDefault)
+        const effectiveDefault = UNIFIED_JOB_RUNTIME
+            ? { ...savedDefault, selectedJobType: serviceCoordinationJobTypeFilter(savedDefault.selectedJobType) }
+            : savedDefault
+        setDefaultView(effectiveDefault)
         setViewState((current) => ({
             ...current,
-            selectedJobType: savedDefault.selectedJobType,
-            visibleStatuses: [...savedDefault.visibleStatuses],
+            selectedJobType: effectiveDefault.selectedJobType,
+            visibleStatuses: [...effectiveDefault.visibleStatuses],
             searchText: '',
         }))
     }
@@ -415,7 +428,7 @@ export default function JobsScreen() {
                             }))}
                         >
                             <option value="operational">Operational</option>
-                            {JOB_TYPE_OPTIONS.map((jobType) => <option key={jobType.value} value={jobType.value}>{jobType.label}</option>)}
+                            {(UNIFIED_JOB_RUNTIME ? SERVICE_COORDINATION_JOB_TYPE_OPTIONS : JOB_TYPE_OPTIONS).map((jobType) => <option key={jobType.value} value={jobType.value}>{jobType.label}</option>)}
                             <option value="unnumbered">Unnumbered</option>
                             <option value="all">All jobs (unfiltered)</option>
                         </select>
