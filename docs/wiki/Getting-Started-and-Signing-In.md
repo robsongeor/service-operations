@@ -3,6 +3,9 @@
 Service Operations is Liftrucks' workspace for managing operational records. Your work account
 determines which parts of the app you can open and which actions you can perform.
 
+The Job Book migration beginning **Wednesday 21 October 2026** applies to Auckland only. Other
+branches continue using their existing Job Book processes until a separate change is announced.
+
 ## Before you begin
 
 You need:
@@ -15,7 +18,7 @@ Do not share an account. Each person signs in separately so changes can be trace
 
 ## Open Service Operations
 
-Open the V2 pilot site:
+Open:
 
 **[https://kind-wave-0cdea2200.2.azurestaticapps.net](https://kind-wave-0cdea2200.2.azurestaticapps.net)**
 
@@ -33,16 +36,24 @@ Bookmark this address after confirming that the Service Operations sign-in page 
    is returning from Microsoft.
 5. Check the name shown at the bottom of the left menu to make sure the correct account is active.
 
-### What a Job Book Admin should see
+## Check that the correct role opened
 
-A Job Book Admin normally lands on **Job Book** and sees these menu items:
+A **Job Book Admin** normally lands on **Job Book** and sees:
 
 - **Job Book**
 - **Equipment**
 - **Customers**
 
-Seeing fewer options may mean the older access claim is still cached. Seeing operational or review
-screens that are not listed above should be reported before continuing.
+An **Office Admin** normally lands on **Job Card reviews** and also sees:
+
+- **Job Book**
+- **Quotes**
+- **Equipment**
+- **Customers**
+
+Office Admin is the user-facing name for the Job Card Admin access profile. Seeing fewer options may
+mean the older access claim is still cached. Seeing screens outside your assigned role should be
+reported before continuing.
 
 ## Move around the app
 
@@ -78,17 +89,22 @@ Do not open a second copy of the record while reconnection is in progress.
 | Message | Meaning | What to do |
 | --- | --- | --- |
 | **Access has not been assigned** | Microsoft sign-in succeeded, but the account has no Service Operations app role. | Contact the administrator and provide your work email address. |
-| **This area is not available** | The link opened a screen outside your assigned role. | Select **Return to Job Book** or use the left menu. |
+| **This area is not available** | The link opened a screen outside your assigned role. | Use the left menu to return to an available screen. |
 | **Reconnect to continue** | The Microsoft session used for Dataverse has expired. | Select **Reconnect Microsoft** once and complete sign-in. |
 | A page keeps showing **Loading** or a load warning | The app or data service may be temporarily unavailable. | Wait briefly, use the on-screen retry once, then report the message if it continues. |
 
-## Good habits
+## Reporting a problem
 
-- Search before creating a Customer, Site, Equipment record or Job Book entry.
-- Read the complete confirmation message before an important action.
-- If a save reports that the request was retained, resume that request instead of creating another.
-- Never enter passwords, verification codes or customer-sensitive information into support messages.
+Report issues as soon as possible and include:
 
-Next: [Job Book Admin guide](Job-Book-Admin-Guide)
+- what you were trying to do;
+- what happened instead;
+- the Job Number, when applicable; and
+- a screenshot of the affected area.
 
-_Last reviewed: 9 October 2026._
+On Windows, hold **Windows key + Shift + S**, select the area, then paste the screenshot into your
+email. Do not include passwords, verification codes or unnecessary customer-sensitive information.
+
+Next: [Auckland Job Book migration](Auckland-Job-Book-Migration) · [Job Book Admin guide](Job-Book-Admin-Guide) · [Office Admin guide](Office-Admin-Guide)
+
+_Last reviewed: 20 October 2026._
