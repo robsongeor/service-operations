@@ -1,6 +1,7 @@
 # Release readiness
 
-Reviewed 10 October 2026 at `f73f3d6`. **Broad restricted-role rollout is not signed off.**
+Reviewed 20 October 2026 after the Auckland production cutover. **Controlled Auckland role
+acceptance is next; broad restricted-role rollout is not yet signed off.**
 This checklist separates implemented source from verified deployment. Older progress notes
 remain in Git (`git show f73f3d6:RELEASE_READINESS.md`); they are not current approval.
 
@@ -8,17 +9,17 @@ remain in Git (`git show f73f3d6:RELEASE_READINESS.md`); they are not current ap
 
 | Gate | Status | Acceptance evidence |
 | --- | --- | --- |
-| Build | Pass locally | Repeat on CI Node 20 and deployed artifact |
+| Build | Pass locally | Complete Node suite, lint, production build and 48 offline registration/plugin checks passed before cutover; repeat on CI/deployed artifact |
 | Complete tests and lint | Pass locally | 894 Node tests including legacy-backend compatibility, full ESLint and build pass; 114 offline access-policy tests pass. Repeat in CI and on the release artifact |
 | Restricted-role policy | Blocked (A01) | Real Office/Job Book accounts: allowed corrections/mechanic/basic Equipment saves succeed; unrelated fields/status/scheduling/delete fail server-side |
-| Registration status | Blocked (A02) | Selecting a mechanic/supplier alone remains Unallocated; only confirmed dispatch allocates |
+| Registration status | Deployed; live acceptance required | Assembly 1.0.19 creates every registered Job in Staging even when a mechanic is selected; only confirmed dispatch moves it to With Technician |
 | Completion consistency | Blocked (A03) | Missing required evidence remains Completion Review; valid completion updates type-specific history/maintenance/compliance exactly once |
 | Reconciliation | Unverified/needs work (A04/A05) | Scheduled identity passes guard, correct store/checkpoint, partial failures visible, backlog advances, retries do not lose conflicts |
 | Multi-user freshness | Blocked (A06) | Separate browsers and resume/reconnect reflect unified Job mutations without manual route reload |
 | Customer Info | Blocked for exposed unfinished editing (A07) | Nonpersistent fields cannot be presented as saved; working Site/PO/transfer functions retained |
 | Auth recovery | Needs smoke (A09) | Correct redirect bridge; expiry/cancel/logout/account-switch behavior; no wrong-account mutation resume |
 | Job Card bridge | Must remain until replacement proved | V1/V2 share authoritative cards; existing links/photos/reviews continue working |
-| Dataverse rollout/rollback | Needs live verification | Exact artifacts, secure role map, step states, effective roles, no unintended V1 breakage; usable signing-key recovery/rollback |
+| Dataverse rollout/rollback | Live artifact verified; recovery/test evidence remains | Signed 1.0.19 hash/token, role grants, shared secure role/writer map and 29 enabled steps verified; complete named-role acceptance and protected off-PC signing-key recovery proof |
 | Monitoring | Incomplete | Alert on per-record reconciliation failure and aging backlog, not HTTP/job success alone |
 
 Details and source owners: [application audit](docs/reviews/2026-10-10-application-audit.md).
@@ -50,8 +51,8 @@ are independent layers. Test all applicable layers.
 - **Job Cards:** follow the [office-approval activation report](docs/reviews/2026-10-10-job-card-implementation.md).
   Meter/continuation flags are off; verify schema, narrow server identity, shared V1 backend,
   retries and real-account acceptance. The signed-in technician app is parked; do not expand the pilot.
-  The dedicated writer and guard `1.0.2.0` are implemented locally, not deployed. Live read-only
-  checks found no approval-reference column or dedicated role; production guard is `1.0.1.0`.
+  Unified guard assembly `1.0.19.0` is deployed, but that does not enable the independent meter or
+  continuation switches or prove their application-identity acceptance.
   Follow the [meter-writer rollout checklist](docs/job-card-meter-writer-rollout.md); explicit
   production approval and real-identity acceptance remain required. Do not grant humans meter writes.
 - **External supplier:** enable only after schema/plugin contract and restricted create/edit/save
@@ -62,12 +63,24 @@ are independent layers. Test all applicable layers.
   code does not approve checklist content, role access or full release.
 - **Chargeable invoices:** use [operations checklist](docs/chargeable-invoice-review-operations.md);
   manager authorization and import/approval flags remain separate.
-- **Regional books/numbering:** rehearse migration/counts/uniqueness and V1 compatibility before
-  enabling additional flags or invariant guards.
+- **Regional books/numbering:** Auckland spreadsheet allocation is frozen, the reconciled maximum is
+  `147474`, the next number is `147475`, and all 15 production invariant guards are enabled. Other
+  regional creation remains disabled; do not treat this as approval to cut over another branch.
 - **Maps:** verify tiles/geocoding configuration and address the public tile-proxy usage budget.
 - **Quotes:** failure/concurrency tests for full save; partial header/line updates remain a known risk.
 
 ## Cutover evidence
+
+On 20 October 2026 George approved the Auckland cutover after confirming the spreadsheet was frozen.
+The signed `1.0.19.0` package (`0edea2881bb8578c`, SHA-256
+`1033a8c660c29e7dcba59cb0e42517447cee6846852eb0f7cc244b02f3852a04`) was deployed. Office Admin
+role drift was reconciled, the approved writer-identity extensions were preserved, and independent
+verification passed for 29 enabled steps: 14 restricted-access and 15 number-invariant. Pre- and
+post-activation audits both reported maximum `147474`; no deployment test consumed `147475`.
+
+Before broad release, run the matrix above with the dedicated Job Book Admin and Office Admin test
+accounts. Record the permanent Job created (or its retained Void history), its Staging status and
+Auckland branch, TimeCloud outcome, Office dispatch/review behavior, and denied operations.
 
 Record the exact commit, client flags, API artifact, plugin version/hash, deployment environment,
 effective role snapshot, test identities, outcomes and rollback artifact. Keep secrets and customer

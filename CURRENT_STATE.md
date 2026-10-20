@@ -1,6 +1,6 @@
 # Current application state
 
-Reviewed 10 October 2026 against branch `v2-deployment`, commit `f73f3d6`.
+Reviewed 20 October 2026 against branch `v2-deployment`, after the Auckland production cutover.
 This page is a current summary, not a release history or blanket live-cloud certification.
 
 ## V2 release scope — 11 October 2026
@@ -19,9 +19,9 @@ not made live on the authoritative shared service by a V2-only push. Broader rel
 
 ## Release position
 
-**Hold broad restricted-role rollout pending the security and workflow gates below.**
-The source build passes, but client capabilities and Dataverse guard allowlists disagree.
-A hidden menu, a simulated role, or a successful deployment is not authorization proof.
+**Auckland is cut over to V2 for a controlled Job Book Admin and Office Admin acceptance test.**
+The production assembly, role grants and number guards are live and verified. Broad staff rollout
+still waits for the two named-role tests below; a successful deployment is not authorization proof.
 
 Read the [application audit](docs/reviews/2026-10-10-application-audit.md) for evidence,
 feature readiness, refactor opportunities and test results.
@@ -37,14 +37,10 @@ no schema, permission or deployment changes occurred. Real-account acceptance, q
 automation monitoring remain outstanding. **The personal-account technician app is parked at the
 owner's request**; existing emailed links and the limited pilot remain.
 
-The readiness continuation cleared the original test/lint failures: **894 Node tests, full lint,
-build and 114 offline access-policy tests pass locally**. Equipment search reuses bounded request
-handling; maintenance detail/contact state is isolated by selection and account. A dedicated,
-four-field meter writer is implemented locally in guard `1.0.2.0`. Read-only live checks confirm
-the existing reading type/date columns, but the approval-reference column and dedicated writer
-role are missing; production still runs `1.0.1.0` with 14 guards. Production provisioning was
-blocked pending explicit approval. No feature flags or cloud permissions were changed.
-See the [meter-writer rollout checklist](docs/job-card-meter-writer-rollout.md).
+The original 10 October test/lint and `1.0.1.0` deployment snapshot is superseded by the Auckland
+cutover evidence below. Meter approval and continuation remain independently gated; deploying the
+unified workflow does not activate those features. See the
+[meter-writer rollout checklist](docs/job-card-meter-writer-rollout.md).
 
 ## Source and configuration
 
@@ -65,23 +61,33 @@ See the [meter-writer rollout checklist](docs/job-card-meter-writer-rollout.md).
 See [deployment](docs/architecture/deployment.md), [routing](docs/architecture/routing.md),
 [security](docs/architecture/security.md) and [data loading](docs/architecture/data-loading-and-synchronization.md).
 
-## Recorded deployment evidence — not reverified by this audit
+## Auckland production cutover — 20 October 2026
 
-Previous work records signed plugin assembly 1.0.1.0 and 14 enabled restricted-access guards;
-15 numbering invariant guards were registered but left disabled for shared V1 compatibility.
-The reviewed restricted-user cohort records 3 Office Admins and 5 Job Book Admins with the
-obsolete JobBookOnly assignments removed. This is not a new live tenant-wide inventory.
+- George confirmed the Auckland spreadsheet allocator was frozen and explicitly approved deployment.
+- The final pre-cutover audit found 1,316 numbered Jobs, Auckland maximum `147474`, active Job and
+  Auckland-ledger uniqueness keys, and `147475` available as the next permanent number.
+- Signed assembly `ServiceOperations.UnifiedJobWorkflow` `1.0.19.0` was deployed with public-key token
+  `0edea2881bb8578c` and SHA-256
+  `1033a8c660c29e7dcba59cb0e42517447cee6846852eb0f7cc244b02f3852a04`.
+- The reviewed Office Admin role drift was reconciled. Production verification preserved two Office
+  Admin and seven Job Book Admin direct assignments and the approved TimeCloud/GreenTree writer
+  extensions in the shared restricted-access configuration.
+- All 14 restricted-access guards and all 15 number-invariant guards are enabled. An independent
+  all-scope verification passed with 29 enabled workflow steps.
+- The post-cutover number audit still reported maximum `147474`; deployment did not create a Job or
+  consume `147475`.
 
-The readiness manifest still labels registration flag-off, while the V2 workflow builds it on.
-Resolve that evidence/configuration drift before using manifests as a release gate.
-Never enable all invariant guards or remove compatibility paths without checking V1 writers.
+The remaining release action is controlled live acceptance with George's Job Book Admin and Office
+Admin test accounts. The first successful Auckland creation consumes `147475` permanently; use a real
+or deliberately retained/voided acceptance Job, never delete or reseed it. A protected off-PC signing-
+key recovery copy and proof build also remain operational recovery work before unattended broad use.
 
 ## Current blockers
 
 | Finding | Required action |
 | --- | --- |
 | A01: restricted save/dispatch policy mismatch | Align mechanic/supplier and Equipment payloads with reviewed server operations; prove allowed and denied writes |
-| A02: mechanic selection allocates at registration | Keep Unallocated until confirmed dispatch; update plugin, guard, contracts and tests together |
+| A02: mechanic selection allocated at registration | Resolved in deployed 1.0.19; confirm Staging behavior with the restricted test accounts |
 | A03: GreenTree closure bypasses operational completion | Preserve Completion Review until required operational evidence is present |
 | A04/A05: reconciliation permissions, partial failures and bounded-queue starvation | Prove scheduled identity/store, observe per-record outcomes, add continuation/retry handling |
 | A06: unified coordination worklist can stay stale | Connect scoped worklist to invalidation and test independent browsers |
@@ -141,12 +147,12 @@ confirmed delivery owns the transition to With Technician, with a status-only re
 failures.
 
 The branch/watch API, authoritative bounded Job Card progress summary, branch-scoped queue,
-private watchlist UI and Job Book branch stamping are implemented behind default-off client/server
-gates. Evidence-based status and branch migration has deterministic hashed Plans, checkpointed ETag
+private watchlist UI and Job Book branch stamping are deployed in V2. Evidence-based status and
+branch migration has deterministic hashed Plans, checkpointed ETag
 Apply/Verify and conditional rollback with simulation coverage. On 20 October 2026 the approved
 Auckland historical migration was applied and verified for 1,320 Jobs. Forty-one unclassified Jobs
-were exported to CSV for later review and intentionally left unchanged. Application/backend
-deployment and feature enablement remain separate release steps.
+were exported to CSV for later review and intentionally left unchanged. The Auckland registration
+backend and number guards were deployed at cutover; named restricted-user acceptance remains.
 
 Andy Lee's verified home/default branch is Christchurch. Bruce Frost, George Robson and Pubudu use
 Auckland. Home branch controls the initial worklist and new-Job default, while every participating

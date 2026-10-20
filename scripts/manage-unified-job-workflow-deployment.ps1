@@ -7,7 +7,7 @@ param(
     [string]$PilotUpn = 'pubudu@liftrucks.co.nz',
     [string]$UserName = '',
     [ValidateSet('AccessOnly', 'All')]
-    [string]$GuardScope = 'AccessOnly',
+    [string]$GuardScope = 'All',
     [ValidateSet('Never', 'Auto')]
     [string]$LoginPrompt = 'Never'
 )
@@ -241,13 +241,57 @@ function Expand-Steps {
     $access=$plan.guardSteps[1];foreach($registration in $access.registrations){foreach($table in $registration.tables){$steps.Add([pscustomobject]@{pluginType=$access.pluginType;message=$registration.message;table=$table;order=20;image=$registration.image;columns=if($registration.image){@($registration.image.columns)}else{@()}})}}
     @($steps)
 }
-function Ensure-SecureConfig($Service,[string]$Value){$rows=@(Find-Exactly $Service 'sdkmessageprocessingstepsecureconfig' 'secureconfig' $Value @('sdkmessageprocessingstepsecureconfigid','secureconfig'));Require($rows.Count -le 1) 'Duplicate unified secure configuration.';if(-not$rows.Count){if(-not$provision){throw 'Missing unified secure configuration.'};$entity=[Microsoft.Xrm.Sdk.Entity]::new('sdkmessageprocessingstepsecureconfig');$entity['secureconfig']=$Value;$id=$Service.Create($entity);$rows=@($Service.Retrieve('sdkmessageprocessingstepsecureconfig',$id,[Microsoft.Xrm.Sdk.Query.ColumnSet]::new('sdkmessageprocessingstepsecureconfigid','secureconfig')));Write-Host 'Created encrypted restricted-role configuration.'};$rows[0]}
+function Read-SecureConfig([string]$Value) {
+    $allowed=@('full','coordinator','office','book','meterrole','meteruser','meterapplication','timecloudrole','timeclouduser','timecloudapplication','greentreerole','greentreeuser','greentreeapplication')
+    $settings=@{}
+    foreach($part in $Value.Split(';')){
+        $pair=$part.Split('=')
+        Require($pair.Count-eq2 -and $allowed-contains$pair[0] -and -not$settings.ContainsKey($pair[0])) 'Malformed or unsupported restricted-access secure configuration.'
+        $settings[$pair[0]]=$pair[1]
+    }
+    foreach($name in @('full','coordinator','office','book')){
+        Require($settings.ContainsKey($name)) "Restricted-access secure configuration is missing $name."
+        $ids=@($settings[$name].Split(',')|ForEach-Object{[Guid]$_.Trim()})
+        Require($ids.Count-gt0 -and $ids-notcontains[Guid]::Empty -and @($ids|Select-Object -Unique).Count-eq$ids.Count) "Restricted-access secure configuration has invalid $name role IDs."
+    }
+    foreach($prefix in @('meter','timecloud','greentree')){
+        $names=@("${prefix}role","${prefix}user","${prefix}application")
+        $count=@($names|Where-Object{$settings.ContainsKey($_)}).Count
+        Require($count-in@(0,3)) "Restricted-access secure configuration has a partial $prefix writer identity."
+        foreach($name in @($names|Where-Object{$settings.ContainsKey($_)})){Require([Guid]$settings[$name]-ne[Guid]::Empty) "Restricted-access secure configuration has an invalid $name."}
+    }
+    $settings
+}
+function Resolve-SecureConfig($Service,$PluginTypes,[string]$Value){
+    $expected=Read-SecureConfig $Value
+    $type=$PluginTypes['ServiceOperations.Access.RestrictedAccessPlugin']
+    $query=[Microsoft.Xrm.Sdk.Query.QueryExpression]::new('sdkmessageprocessingstep')
+    $query.ColumnSet=[Microsoft.Xrm.Sdk.Query.ColumnSet]::new('sdkmessageprocessingstepid','sdkmessageprocessingstepsecureconfigid')
+    $query.Criteria.AddCondition('plugintypeid',[Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,$type.Id)
+    $existing=@($Service.RetrieveMultiple($query).Entities)
+    if(-not$existing.Count){
+        $rows=@(Find-Exactly $Service 'sdkmessageprocessingstepsecureconfig' 'secureconfig' $Value @('sdkmessageprocessingstepsecureconfigid','secureconfig'))
+        Require($rows.Count-le1) 'Duplicate unified secure configuration.'
+        if(-not$rows.Count){if(-not$provision){throw 'Missing unified secure configuration.'};$entity=[Microsoft.Xrm.Sdk.Entity]::new('sdkmessageprocessingstepsecureconfig');$entity['secureconfig']=$Value;$id=$Service.Create($entity);$rows=@($Service.Retrieve('sdkmessageprocessingstepsecureconfig',$id,[Microsoft.Xrm.Sdk.Query.ColumnSet]::new('sdkmessageprocessingstepsecureconfigid','secureconfig')));Write-Host 'Created encrypted restricted-role configuration.'}
+        return $rows[0]
+    }
+    $references=@($existing|ForEach-Object{if($_.Attributes.ContainsKey('sdkmessageprocessingstepsecureconfigid')){$_['sdkmessageprocessingstepsecureconfigid'].Id}}|Select-Object -Unique)
+    Require($references.Count-eq1) 'Restricted-access steps do not share one secure configuration.'
+    $secure=$Service.Retrieve('sdkmessageprocessingstepsecureconfig',$references[0],[Microsoft.Xrm.Sdk.Query.ColumnSet]::new('sdkmessageprocessingstepsecureconfigid','secureconfig'))
+    $actual=Read-SecureConfig ([string]$secure['secureconfig'])
+    foreach($name in @('full','coordinator','office','book')){Require([string]$actual[$name]-eq[string]$expected[$name]) "Restricted-access $name role map differs from the reviewed role identity."}
+    $human=@(@('full','coordinator','office','book')|ForEach-Object{$actual[$_].Split(',')|ForEach-Object{[Guid]$_.Trim()}})
+    Require(@($human|Select-Object -Unique).Count-eq$human.Count) 'Restricted-access human role maps overlap.'
+    foreach($prefix in @('meter','timecloud','greentree')){if($actual.ContainsKey("${prefix}role")){Require($human-notcontains[Guid]$actual["${prefix}role"]) "Restricted-access $prefix writer role overlaps a human role."}}
+    Write-Host 'Verified shared restricted-access configuration; approved server-writer extensions were preserved.'
+    $secure
+}
 function Ensure-Steps($Service,$PluginTypes,$Roles){
     $full=@(Find-Exactly $Service 'role' 'name' 'System Administrator' @('roleid','name'))
     $coordinator=@(Find-Exactly $Service 'role' 'name' 'Service Operations' @('roleid','name'))
     Require($full.Count-eq1 -and $coordinator.Count-eq1) 'Full/coordinator role resolution failed.'
     $secureValue="full=$($full[0].Id);coordinator=$($coordinator[0].Id);office=$($Roles['office'].Id);book=$($Roles['book'].Id)"
-    $secure=Ensure-SecureConfig $Service $secureValue
+    $secure=Resolve-SecureConfig $Service $PluginTypes $secureValue
     $verified=0
     $stepsToEnable=[Collections.Generic.List[Microsoft.Xrm.Sdk.EntityReference]]::new()
     foreach($definition in @(Expand-Steps)){

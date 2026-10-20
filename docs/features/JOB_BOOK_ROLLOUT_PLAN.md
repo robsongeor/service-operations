@@ -1,6 +1,6 @@
 # Job Book rollout — replacing Excel
 
-Owner: George. Status: V2 implementation and recorded provisioning exist; broad rollout acceptance is not complete.
+Owner: George. Status: Auckland production cutover completed; controlled restricted-role acceptance is next.
 Prepared 3 October 2026. This plan covers Job Book and its connection to Service coordination.
 
 ## Outcome and release rule
@@ -199,6 +199,16 @@ The live cutover then reconciled 1,316 numbered managed Jobs and reported Auckla
 Job Number as `147474`. `gr_jobbookentry.gr_jobnumber` was seeded to `147475`; Dataverse confirmed
 the next Auckland allocation as `147475`, with both Job and Job Book alternate keys active. No dummy
 Job was created after seeding because doing so would consume a permanent production number.
+
+After George confirmed the spreadsheet was frozen, signed workflow assembly `1.0.19.0` was deployed
+and verified. The Office Admin role grant was reconciled, the shared restricted-access configuration
+retained its approved server-writer identities, and all 15 number-invariant guards were enabled.
+Independent verification reported all 29 workflow steps enabled. A final number audit still reported
+maximum `147474`, so deployment did not consume the first live number `147475`.
+
+The next action is a controlled live test with the dedicated Job Book Admin and Office Admin accounts.
+The first successful creation is permanent history: use a real or deliberately retained/voided test
+Job, verify it remains Staging until confirmed dispatch, and do not delete or reseed it.
 
 This was an explicitly approved pre-launch cleanup of identified rollout fixtures, not the normal
 handling for a real or post-launch Job. Permanent business Jobs must remain in history and follow the

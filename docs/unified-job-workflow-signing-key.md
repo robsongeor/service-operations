@@ -1,6 +1,6 @@
 # Unified Job workflow — signing-key custody
 
-Status: primary local key used for the production `1.0.1.0` deployment on 9 October 2026; recovery
+Status: primary local key used for the production `1.0.19.0` deployment on 20 October 2026; recovery
 backup remains required.
 
 ## Current custody record
@@ -10,12 +10,12 @@ backup remains required.
 - Access: George's Windows account and `SYSTEM`, Full Control, inheritance disabled.
 - Generation: 2,048-bit Microsoft Strong Cryptographic Provider signature key, created locally with
   `scripts/new-unified-job-workflow-signing-key.ps1`.
-- Assembly identity: `ServiceOperations.UnifiedJobWorkflow`, version `1.0.1.0`, public key token
+- Assembly identity: `ServiceOperations.UnifiedJobWorkflow`, version `1.0.19.0`, public key token
   `0edea2881bb8578c`.
-- Deployed package: `%LOCALAPPDATA%\ServiceOperations\Packages\ServiceOperations.UnifiedJobWorkflow-1.0.1-20261009-r1`.
-- Assembly SHA-256: `764da41e5866517c6536343bde1834c7debd1ff8de77abe49fc564870728a505`.
-- All `1.0.0.0` packages are superseded.
-- Deployment performed: restricted-access guard live; number-invariant steps remain disabled.
+- Deployed package: `%LOCALAPPDATA%\ServiceOperations\Packages\ServiceOperations.UnifiedJobWorkflow-1.0.19-20261020-cutover-r1`.
+- Assembly SHA-256: `1033a8c660c29e7dcba59cb0e42517447cee6846852eb0f7cc244b02f3852a04`.
+- All earlier packages are superseded for the active assembly.
+- Deployment performed: 14 restricted-access and 15 number-invariant steps live; all 29 verified.
 - Open custody gate: nominate a backup owner, create protected recovery storage and prove recovery with
   a test build. The PC-local copy alone is not sufficient production recovery.
 

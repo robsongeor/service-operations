@@ -158,7 +158,7 @@ test('deployment readiness tooling is read-only and non-interactive by default',
     assert.match(provisioner, /regionalTables\)\{Ensure-OptimisticConcurrency/)
     assert.ok(manifest.activationBlockers.some((gate: string) => /named-user allowed\/denied acceptance/.test(gate)))
     assert.ok(manifest.activationBlockers.some((gate: string) => /signing-key recovery/.test(gate)))
-    assert.ok(manifest.activationBlockers.some((gate: string) => /number-invariant steps disabled until V1\/manual numbering is retired/.test(gate)))
+    assert.ok(!manifest.activationBlockers.some((gate: string) => /number-invariant steps disabled until V1\/manual numbering is retired/.test(gate)))
 })
 
 test('migration audit is bounded, aggregate-only and cannot write backfills', () => {

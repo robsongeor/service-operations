@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "status": "access-guard-live-unified-registration-flag-off",
+  "status": "auckland-cutover-live-named-user-acceptance-pending",
   "target": {
     "environmentUrl": "https://org0d4246d7.crm6.dynamics.com",
     "solutionUniqueName": "ServiceOperationsNew"
@@ -48,7 +48,6 @@
   ],
   "activationBlockers": [
     "Complete named-user allowed/denied acceptance tests for Job Book Admin and Office Admin across all four regional ledgers.",
-    "Complete the protected signing-key recovery backup and prove a recovery build.",
-    "Keep all 15 number-invariant steps disabled until V1/manual numbering is retired and the separate migration cutover is approved."
+    "Complete the protected signing-key recovery backup and prove a recovery build."
   ]
 }
