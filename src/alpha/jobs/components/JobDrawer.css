@@ -83,13 +83,22 @@
 }
 
 .edit-drawer-header .job-drawer-watch-action {
+    display: inline-flex;
+    width: auto;
+    min-width: 62px;
+    height: 34px;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
     border: 1px solid var(--border-color, #cbd5e1);
     border-radius: 999px;
     background: #fff;
     color: #334155;
-    padding: 0.45rem 0.75rem;
+    padding: 0 0.75rem;
     font: inherit;
     font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
     cursor: pointer;
 }
 
