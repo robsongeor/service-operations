@@ -17,8 +17,9 @@ This document records the target design and current implementation boundary. The
 nullable Job/System User branch columns and user-owned Job Watch table were provisioned and
 post-verified on 19 October 2026. The approved historical Auckland Job migration and the reviewed
 home branches for Andy Lee, Bruce Frost, George Robson and Pubudu were applied and verified on
-20 October 2026. Reviewed exceptions remain unclassified; the default-off application gates are a
-separate release control.
+20 October 2026. Paul Robson and James Ashby were subsequently onboarded with verified Auckland
+home branches alongside their Job Book Admin assignments. Reviewed exceptions remain unclassified;
+the application gates are a separate release control.
 
 ## User experience
 
@@ -208,8 +209,9 @@ conditional rollback preserves any newer operational edit. Simulation tests cove
 conflicts, interruption/resume and partial outcomes. On 20 October 2026 the approved Auckland
 historical migration was applied and verified for 1,320 Jobs. Forty-one unclassified Jobs were
 exported for review and intentionally left unchanged. The reviewed System User mappings were also
-applied and verified: Andy Lee uses Christchurch; Bruce Frost, George Robson and Pubudu use
-Auckland. All participating users may still select All branches.
+applied and verified: Andy Lee uses Christchurch; Bruce Frost, George Robson, Pubudu, Paul Robson
+and James Ashby use Auckland. All participating users may still select All branches where their
+application role exposes branch selection.
 
 ## Release order and acceptance
 
@@ -217,8 +219,8 @@ Auckland. All participating users may still select All branches.
 2. Decide whether branch scope is operational filtering or enforced Dataverse security isolation.
 3. Provision the Branch Choice, Job/System User columns, Job Watch table, alternate key and minimum
    privileges; publish and verify metadata before deploying dependent code.
-4. Configure and verify each participating user's home branch. Auckland's two coordinators receive
-   Auckland; Christchurch users receive Christchurch.
+4. Configure and verify each participating user's home branch. Auckland users receive Auckland;
+   Christchurch users receive Christchurch.
 5. Run and approve the historical branch Plan, then apply and verify it in bounded batches.
 6. Deploy server-owned watch operations and branch-scoped Service Coordination queries.
 7. Test two Auckland users sharing Branch work but maintaining different watches.

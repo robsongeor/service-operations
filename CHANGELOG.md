@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Reconciled the live user roster: Bruce now has only Service Coordinator; Paul and James now have
+  only Job Book Admin in the Service Operations application and Dataverse, with verified Auckland
+  home branches. Unrelated Dataverse roles and the Job Card reviewer allowlist were preserved.
+
 - Added duplicate-safe TimeCloud Job Item creation after unified Job Book registration. The
   server-only integration verifies the Dataverse ledger/Job pair, caches a temporary TimeCloud
   token, creates the configured Job Number-layer item without a geofence, persists the returned

@@ -80,10 +80,10 @@ assembly/source hashes in the package manifest.
 
 ## Role and assignment readiness
 
-The agreed eleven-account roster is present: one Full, two Coordinator, two Office Admin and six
-Job Book Admin users. Existing unrelated assignments are explicitly preserved. Bruce retains current
-FullAccess until the added Coordinator path passes with his real account; old access is removed only
-after the replacement succeeds.
+The agreed thirteen-account roster is present: one Full, three Coordinator, two Office Admin and
+seven Job Book Admin users. Existing unrelated assignments are explicitly preserved. On 20 October
+2026 Bruce's Coordinator replacement was reverified before his superseded FullAccess assignment was
+removed. George is now the only FullAccess user.
 
 Pubudu was the third Office Admin rollout user and live Office Admin pilot. The replacement Office
 Admin role was verified and the broader `Service Operations` role was removed with exact before/after
@@ -96,16 +96,20 @@ both Entra and Dataverse; unrelated roles and the legacy JobBookOnly app assignm
 Later that day, the owner approved returning Pubudu to Office Admin. The Office Admin replacement was
 verified before Job Book Admin was removed in both systems; unrelated roles were preserved. The
 obsolete JobBookOnly assignment was subsequently removed from Pubudu, Jess and Nargiza after exact
-Office Admin replacement verification. On 20 October 2026 the owner returned Pubudu to Job Book
-Admin. The replacement was verified before Coordinator was removed in Entra and Dataverse, the
-Auckland home branch and unrelated roles were preserved, and Pubudu was removed from the shared
-backend reviewer allowlist. The
+Office Admin replacement verification. On 20 October 2026 the owner briefly returned Pubudu to Job
+Book Admin. The replacement was verified before Coordinator was removed in Entra and Dataverse and
+the Auckland home branch and unrelated roles were preserved. The owner then selected Service
+Coordinator as Pubudu's final profile; it was verified in Entra and Dataverse, Job Book Admin was
+removed, and the shared backend reviewer allowlist includes Pubudu as a Coordinator. The
 cutover requires a fresh assignment export, one workflow role at a time, preservation of
 unrelated platform roles and explicit approval. Pubudu performs the account sign-in and MFA; no
 credential is collected.
 
-The live admission recheck on 20 October 2026 found all eleven intended accounts present. The six
-Job Book Admin and two Office Admin assignments are the current restricted-profile roster.
+The live access recheck on 20 October 2026 found all thirteen intended accounts present. Paul and
+James were assigned Job Book Admin in Entra and Dataverse, their previous default/broad Service
+Operations assignments were removed after replacement verification, and both received verified
+Auckland home branches. Seven Job Book Admin and two Office Admin assignments are now the current
+restricted-profile roster. Bruce, Andy and Pubudu are the three Service Coordinators.
 
 The secure plugin configuration requires the exact business-unit Dataverse role IDs for Full,
 Coordinator, Office and Book profiles. Any overlapping direct/team grant that restores a denied
@@ -121,9 +125,9 @@ never delete or renumber records as generic rollback.
 
 ## Remaining approval blockers
 
-- The Entra `ServiceOperations.ServiceCoordinator` application role is provisioned and assigned
-  additively to Bruce. Complete his named-user acceptance test, then remove temporary FullAccess only
-  after the restricted role passes.
+- The Entra `ServiceOperations.ServiceCoordinator` application role is provisioned and Bruce's
+  temporary FullAccess overlap has been removed. Complete the remaining named-user allowed/denied
+  workflow acceptance for the restricted profile.
 - Keep the 15 shared Dataverse Job number/ledger invariant steps disabled while V1 still requires
   manual Job Number entry. V2 blocks manual entry in its frontend during this explicitly accepted
   overlap. When V1 is retired or migrated, enable and verify the invariant steps as a separate

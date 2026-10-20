@@ -42,7 +42,7 @@ and number cutover retain their independent gates below.
   duplicate/cancelled number, existing managed Job and a job already entered into GreenTree/Timecloud.
 - [ ] Nominate pilot users, the support contact, a cutover window and the person allowed to halt rollout.
 
-The agreed eleven-user roster and role decisions are maintained in the
+The agreed thirteen-user roster and role decisions are maintained in the
 [user access plan](JOB_BOOK_ACCESS_PLAN.md). Office Admins have access across all regions; pilot waves remain to be confirmed.
 
 ## 2. User access and controls
@@ -53,15 +53,15 @@ These are application roles, not Microsoft tenant administrator privileges.
 | User group | Agreed direction | Application role |
 | --- | --- | --- |
 | George only | Unrestricted application access | Existing `ServiceOperations.FullAccess` |
-| Bruce and Andy | Operational management through a distinct restricted route set | `ServiceOperations.ServiceCoordinator` is provisioned and assigned |
-| Jess, Nargiza and Pubudu | Office Admin: corrections, assignment/email, GT/Timecloud markers and review; same Customer/Site creation and Equipment move/detail-edit scope as Job Book Admin | `ServiceOperations.JobCardAdmin` is assigned in Entra and Dataverse |
-| Martin, Lance, Ranjani, Ashneel and Kaizer | Job Book Admin: entry, eligible-entry Void, factual corrections after handoff, Customer/Site creation, Equipment moves and detail edits; mechanic selection permitted; no email, markers or review | `ServiceOperations.JobBookAdmin` is assigned in Entra and Dataverse |
+| Bruce, Andy and Pubudu | Operational management through a distinct restricted route set | `ServiceOperations.ServiceCoordinator` is provisioned and assigned |
+| Jess and Nargiza | Office Admin: corrections, assignment/email, GT/Timecloud markers and review; same Customer/Site creation and Equipment move/detail-edit scope as Job Book Admin | `ServiceOperations.JobCardAdmin` is assigned in Entra and Dataverse |
+| Martin, Lance, Ranjani, Ashneel, Kaizer, Paul and James | Job Book Admin: entry, eligible-entry Void, factual corrections after handoff, Customer/Site creation, Equipment moves and detail edits; mechanic selection permitted; no email, markers or review | `ServiceOperations.JobBookAdmin` is assigned in Entra and Dataverse |
 | Job Book only | Obsolete | No restricted Admin account retains this Entra assignment |
 
 ServiceCoordinator has a distinct route set and must remain separate from FullAccess.
 Do not give coordinators an additional FullAccess claim that would bypass later restrictions.
-Job Card review is limited to George, both Service coordinators, Jess, Nargiza and Pubudu. The five
-planned Job Book Admins retain entry and correction duties with mechanic selection but without email, marker writes
+Job Card review is limited to George, all three Service coordinators, Jess and Nargiza. The seven
+Job Book Admins retain entry and correction duties with mechanic selection but without email, marker writes
 or review access. The profile exists; live operation-level acceptance is required before rollout.
 Both Admin groups have separate Customers and Equipment screens under the agreed creation,
 movement and detail-edit permissions. Job Book Admins do not gain review or coordination access.

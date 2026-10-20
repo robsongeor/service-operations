@@ -1,6 +1,6 @@
 # Job Book user access plan
 
-Recorded status: eleven-account Entra and Dataverse roster updated 9 October 2026; not re-audited live on 10 October.
+Recorded status: thirteen-account Entra and Dataverse roster re-audited live on 20 October 2026.
 The restricted-access server guard is recorded deployed; named-user acceptance remains required.
 The 10 October source audit found the guard disagrees with approved mechanic and Equipment
 editing capabilities. See [release gates](../../RELEASE_READINESS.md) and
@@ -10,21 +10,23 @@ Do not treat the intended matrix below as proof that every operation succeeds.
 ## Live audit
 
 The [3 October read-only audit](JOB_BOOK_ACCESS_AUDIT.md) confirms the original ten Entra accounts.
-A 9 October recheck confirms all eleven intended users are present in Dataverse. The obsolete
-JobBookOnly Entra assignment was removed from all eight restricted Admin accounts after each
-replacement role was verified. See the audit for the original snapshot and rollout history.
+On 20 October a fresh live Entra/Dataverse inventory reconciled the expanded thirteen-account roster.
+Bruce's superseded FullAccess claim was removed after ServiceCoordinator was verified. Paul and James
+were assigned JobBookAdmin in both systems, their former broad/default assignments were removed, and
+both received verified Auckland home branches. See the audit for the original snapshot and rollout
+history.
 
 ## Role decisions
 
 | Business role | Decision | Implementation status |
 | --- | --- | --- |
 | Full access | George only; unrestricted application access | Existing `ServiceOperations.FullAccess` profile |
-| Service coordinator | Bruce and Andy; operational management with the approved restricted screen set | Separate frontend profile implemented as `ServiceOperations.ServiceCoordinator`; Microsoft provisioning, Bruce assignment and named-user verification are mandatory go-live blockers |
-| Office Admin | Jess, Nargiza and Pubudu; entry, corrections, technician assignment/email, markers and review | `ServiceOperations.JobCardAdmin` is assigned in Entra and Dataverse |
-| Job Book Admin | Five entry/correction users; eligible-entry Void allowed; corrections remain allowed after coordinator handoff; mechanic selection permitted; no technician email, review or GT/Timecloud marker changes | `ServiceOperations.JobBookAdmin` is assigned in Entra and Dataverse |
+| Service coordinator | Bruce, Andy and Pubudu; operational management with the approved restricted screen set | `ServiceOperations.ServiceCoordinator` is assigned in Entra and Dataverse |
+| Office Admin | Jess and Nargiza; entry, corrections, technician assignment/email, markers and review | `ServiceOperations.JobCardAdmin` is assigned in Entra and Dataverse |
+| Job Book Admin | Martin, Lance, Ranjani, Ashneel, Kaizer, Paul and James; eligible-entry Void allowed; corrections remain allowed after coordinator handoff; mechanic selection permitted; no technician email, review or GT/Timecloud marker changes | `ServiceOperations.JobBookAdmin` is assigned in Entra and Dataverse |
 | Job Book only | Obsolete | No restricted Admin account retains this Entra assignment |
 
-Keep Service coordinator distinct from Full access. Do not assign Bruce or Andy FullAccess: a
+Keep Service coordinator distinct from Full access. Do not assign Bruce, Andy or Pubudu FullAccess: a
 remaining FullAccess claim would bypass the coordinator screen restrictions. Future changes must cover both UI capabilities and
 authoritative server/Dataverse permissions, including other roles and team grants.
 
@@ -33,14 +35,14 @@ tenant administration, bypassing data-integrity rules or authority to rewrite pe
 
 ## Intended users
 
-Assignments below were verified on 9 October 2026. Everyone uses an individual work account.
+Assignments below were verified live on 20 October 2026. Everyone uses an individual work account.
 
 | Person/account | Intended role | Identity basis |
 | --- | --- | --- |
 | George — `georger@liftrucks.co.nz` | Full access | Existing project owner account; verify target identity |
 | `brucef@liftrucks.co.nz` | Service coordinator | Supplied by George |
 | `andyl@liftrucks.co.nz` | Service coordinator | Supplied by George |
-| `pubudu@liftrucks.co.nz` | Office Admin | Returned from Job Book Admin to Office Admin in Entra and Dataverse; obsolete JobBookOnly removed after replacement verification. |
+| `pubudu@liftrucks.co.nz` | Service coordinator | Verified in Entra and Dataverse with Auckland home branch. |
 | Jess — `jessamynb@liftrucks.co.nz` | Office Admin | Name and email confirmed by George |
 | Nargiza — `nargiza@liftrucks.co.nz` | Office Admin | Name and email confirmed by George |
 | `martinh@liftrucks.co.nz` | Job Book Admin | Supplied by George |
@@ -48,16 +50,18 @@ Assignments below were verified on 9 October 2026. Everyone uses an individual w
 | `ranjani@liftrucks.co.nz` | Job Book Admin | Supplied by George |
 | `ashneelk@liftrucks.co.nz` | Job Book Admin | Supplied by George |
 | `kaizerg@liftrucks.co.nz` | Job Book Admin | Supplied by George |
+| Paul — `paulr@liftrucks.co.nz` | Job Book Admin | Verified in Entra and Dataverse with Auckland home branch. |
+| James — `jamesa@liftrucks.co.nz` | Job Book Admin | Verified in Entra and Dataverse with Auckland home branch. |
 
 ## Job Card review access decision
 
 Job Card review, including marking a card Processed in GreenTree, is limited to:
 
 - George through Full access.
-- Service coordinators Bruce and Andy.
-- Office Admins Jess, Nargiza and Pubudu.
+- Service coordinators Bruce, Andy and Pubudu.
+- Office Admins Jess and Nargiza.
 
-Martin, Lance, Ranjani, Ashneel and Kaizer are planned Job Book Admins. They do not receive Job Card
+Martin, Lance, Ranjani, Ashneel, Kaizer, Paul and James are Job Book Admins. They do not receive Job Card
 review access. Both Admin groups may work across all four Job Books.
 
 The JobBookAdmin profile permits correction and mechanic selection but must separate these from technician email,
@@ -66,10 +70,8 @@ it does not permit corrections to managed Jobs. Keep Office Admin on the existin
 profile and implement the distinct restricted profile, including navigation, landing route and
 server/Dataverse enforcement. Job Card API/private evidence access must match the approved
 reviewer set. Inspect existing production reviewers before applying a reconciled manifest.
-The live shared V1 backend reviewer allowlist was reconciled on 6 October 2026 for George, Bruce,
-Andy, Jess, Nargiza and Pubudu. On 20 October 2026 the owner returned Pubudu to Job Book Admin in
-both Entra and Dataverse, and Pubudu was removed from the live reviewer allowlist. The current
-reviewer set is George, Bruce, Andy, Jess and Nargiza. Recreate only this approved reviewer set
+The live shared V1 backend reviewer allowlist was re-read on 20 October 2026. The current reviewer
+set is George, Bruce, Andy, Pubudu, Jess and Nargiza. Recreate only this approved reviewer set
 when the permanent V2/shared backend replaces the temporary proxy.
 
 ## Job Book Admin correction scope
@@ -90,7 +92,7 @@ when the permanent V2/shared backend replaces the temporary proxy.
 
 ## Shared Admin Customer/Site and Equipment access
 
-George confirmed that both Job Book Admins and Office Admins (Jess, Nargiza and Pubudu) may:
+George confirmed that both Job Book Admins and Office Admins (Jess and Nargiza) may:
 
 - Create Customers and Sites.
 - Explicitly move Equipment between Sites/Customers. Persist the Equipment Site relationship;
@@ -122,7 +124,7 @@ The precise Equipment field allowlist remains an implementation decision.
 ## Office Admin scope retained for review
 
 - Job Book entry and permitted factual corrections, including GT/Timecloud entry markers.
-- Job Card reviews and office review actions only for Jess, Nargiza and Pubudu, as specified above;
+- Job Card reviews and office review actions only for Jess and Nargiza, as specified above;
   original technician evidence stays protected.
 - Mechanic selection/reselection through the shared approved workflow, plus assigned-technician
   email. This does not grant broader coordination, scheduling or additional-assignment management.
@@ -138,7 +140,7 @@ and tested for the final approved reviewer roster.
 
 ## Agreed Admin navigation
 
-| Screen | Job Book Admin | Office Admin (Jess, Nargiza and Pubudu) |
+| Screen | Job Book Admin | Office Admin (Jess and Nargiza) |
 | --- | --- | --- |
 | Job Book | Entry, mechanic selection, factual corrections and eligible Void; no email or GT/Timecloud tick writes | Entry, mechanic selection, corrections, eligible Void, assigned-tech email and GT/Timecloud tick writes |
 | Customers | Separate screen; view and create Customers/Sites; no general editing of existing Customer/Site master records | Same |
@@ -165,20 +167,21 @@ fail closed. George's FullAccess profile remains unrestricted.
 ### Mandatory provisioning before live use
 
 The 7 October record describes additive ServiceCoordinator testing for Bruce while retaining
-FullAccess. The later roster is the intended destination; a fresh effective-role check and named-user
-test are still needed before claiming both coordinators are restricted. Verify direct and team
-grants for Bruce and Andy, then remove any obsolete FullAccess assignment only after the coordinator
-path works. George remains the sole intended FullAccess user. This audit did not change assignments.
+FullAccess. On 20 October the live replacement was reverified and Bruce's FullAccess assignment was
+removed; he now has only ServiceCoordinator in this application and `Service Operations` in
+Dataverse. Andy and Pubudu also have only the reviewed ServiceCoordinator application profile.
+George remains the sole intended FullAccess user. Real-account allowed/denied workflow acceptance
+remains separate from assignment verification.
 
 ## Decisions still needed
 
 - [x] Both Admin groups may view and work across all four regional Job Books; no regional restrictions.
   Their existing action permissions still apply.
-- [x] George confirmed Jess, Nargiza and Pubudu email addresses. Pubudu's target identity is verified; the other target identities still require verification before assignment.
+- [x] The thirteen target identities and current Service Operations assignments were reverified live on 20 October 2026.
 - [x] Job Book Admins may Void eligible entries under the existing reason, retention, marker,
   coordinator-membership and concurrency safeguards.
 - [x] Job Book Admins may create Customers/Sites, explicitly move Equipment and update Equipment details.
-- [x] Office Admins Jess, Nargiza and Pubudu receive the same Equipment-detail editing permission as Job Book Admins.
+- [x] Office Admins Jess and Nargiza receive the same Equipment-detail editing permission as Job Book Admins.
 - [x] Job Book Admins have separate Customers and Equipment screens, with the agreed permissions;
   Office Admins retain those screens too.
 - [ ] Reconcile the approved Equipment-detail scope with the server allowlist: fleet/aliases,
@@ -196,7 +199,7 @@ path works. George remains the sole intended FullAccess user. This audit did not
   through both the UI and direct APIs.
 - [ ] Implement and verify the approved Customer/Site creation, Equipment movement and detail-edit
   permissions; test stale saves, historical preservation and denial of unrelated actions.
-- [ ] Verify all eleven target accounts, environment access, existing roles/team membership and
+- [ ] Verify all thirteen target accounts, environment access, existing roles/team membership and
   authoritative permissions. Do not infer permissions from Staff records or menu visibility.
 - [ ] Provision/assign roles only as a separately authorized rollout action after verification.
 - [ ] Test each role with its actual account, including denied actions and direct API requests.
