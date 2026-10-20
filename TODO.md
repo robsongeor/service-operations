@@ -46,6 +46,7 @@ This is remaining work, not a completed-change log. See [current state](CURRENT_
 - [ ] **A03, owner-approved:** GreenTree closure without required completion evidence remains
   Completion Review. Safeguard implemented locally; verify deployment and historical/void/reopen
   handling. Operations still uses canonical type-specific completion when evidence is satisfied.
+  Automatic Completion Review → Complete processing remains explicitly on hold.
 - [ ] **A04/A05:** prove scheduled application identity and shared Job Card store, expose per-record
   failure, add durable retries/continuation and prevent pending-card backlog starvation.
 - [ ] **A06:** connect unified Job worklist state to shared invalidation, then restore/verify V2
@@ -60,6 +61,62 @@ This is remaining work, not a completed-change log. See [current state](CURRENT_
 
 ## P1 — Data integrity and operational reliability
 
+- [ ] Execute the ordered
+  [Service Coordination workflow implementation plan](docs/features/SERVICE_COORDINATION_WORKFLOW_IMPLEMENTATION_PLAN.md)
+  phase by phase. Initial delivery ends with lifecycle, branch queue, personal watchlist, card
+  progress, reviewed migrations and staged acceptance; specialised Service/WOF cards and automatic
+  Completion Review → Complete remain deferred and must not be pulled into the first release.
+  - [x] Complete Phases 0–2: source/authority inventory, shared labels, lifecycle model, registration
+    and WOF Staging alignment, guarded dispatch recovery, and transition tests without changing
+    Dataverse metadata or data.
+  - [x] Retire Unconfirmed from active source behavior: remove the tab/status choice and new-write
+    paths; compatibility-map legacy rows/preferences to Staging so they stay visible and actionable.
+    Live Inspect found 25 rows with zero missing ETags; the zero-exception Plan remains unapplied.
+  - [x] Build and run the approved Phase 3 metadata manager for Job Status labels, operating branch
+    fields and the private user-owned Job Watch table. Post-Verify passes; ordinary coordinator watch
+    privileges are user-depth and Assign/Share were not granted. No user/Job branch values were set.
+- [x] Add explicit operating-branch scope and a private per-user Job Watch table in source. Auckland users
+  must share the Auckland branch queue while retaining independent watchlists; Christchurch users
+  default to Christchurch work. Do not derive branch from technician text, Site address, creator or
+  browser storage, and do not reuse shared Office Attention as a personal watch. Follow the
+  [branch/watchlist schema, migration and acceptance plan](docs/job-branch-and-personal-watchlist.md).
+  Backend/client gates remain off pending mappings, migration and named-user acceptance.
+  The revised read-only branch Plan incorporates the approved Auckland baseline for 1,293 legacy
+  plain-number Jobs. It plans 1,310 updates and quarantines 43 otherwise unclassified Jobs. The
+  exception CSV and initial three-user branch-mapping sheet are ready; live Apply and user mapping
+  remain pending exact approval.
+- [ ] Decide whether branch scope is a normal worklist filter or enforced Dataverse row-level
+  isolation. If isolation is required, design branch owner teams/business units and prove allowed
+  Auckland collaboration plus denied cross-branch reads with direct named-user/API tests; a hidden UI
+  row is not a security boundary.
+- [x] Implement the agreed Service Coordination lifecycle presentation in source and verified metadata without changing Dataverse
+  Choice numbers: display Unallocated as **Staging**, Allocated as **With Technician**, expose
+  per-assignment Job Card return progress in the worklist, and use office attention/follow-up rather
+  than an inaccurate lifecycle status to keep watched Jobs visible. Inspect and publish the matching
+  global `gr_status` labels through the controlled
+  [schema and historical migration plan](docs/job-status-lifecycle-migration.md).
+  Progress/client gates remain off until the shared backend is deployed and accepted.
+- [x] Build and simulate the evidence-based historical Job Status migration in Inspect, Plan, Apply
+  and Verify modes. Do not blanket-reset Allocated Jobs: confirmed dispatch, current assignment/card
+  lifecycle, deliberate Action Required and terminal/completion evidence must drive classification.
+  Deterministically migrate legacy Unconfirmed `122830005` to Staging `122830001`; verify no rows,
+  filters, plugins or integrations still reference it before removing/retiring that Choice option.
+  Apply only an approved plan in bounded ETag-protected batches and retain exceptions/rollback audit.
+  - [x] Add the narrow, write-free legacy retirement manifest and Inspect/Plan tool with aggregate
+    inspection, deterministic hash, expected row versions and a synthetic PowerShell 5.1 test.
+  - [x] Run approved live Inspect: 1,353 Jobs, 25 legacy Unconfirmed and zero missing ETags. The
+    deterministic Plan has 25 ready changes and zero exceptions. Apply is not approved and has not
+    run; historical branch evidence and participating-user mappings remain outstanding.
+- [ ] Extend the shared technician Job Card contract with type-specific completion evidence. Service
+  cards must supply the Service Type, completion date and classified/dated completion meter required
+  by atomic maintenance updates. WOF cards must supply the completion date, classified/dated meter
+  and new WOF expiry required by the linked inspection/Equipment update. Preserve immutable evidence,
+  assignment ownership, review/correction history and the anonymous-browser Dataverse boundary.
+- [ ] After type-specific cards and atomic processing are accepted, replace the manual Service/WOF
+  completion dialogs and design the guarded Completion Review → Complete processor. Require complete
+  current-roster evidence, safe type-specific side effects and GreenTree Closed/Finalised; retain
+  Completion Review with office attention for missing/conflicting evidence. Do not remove the manual
+  paths or enable automatic completion before migration, idempotency, retry and live acceptance gates.
 - [ ] **A08:** make Quote header/line saves atomic and concurrency-protected.
 - [ ] **A09:** bind pending session recovery to initiating account; cancel safely on logout/switch.
 - [ ] **A10:** add map-tile quota/rate/cache controls and monitoring without exposing the provider key.

@@ -3,7 +3,7 @@ import type { Mechanic } from '../types/mechanic.types'
 import { JOB_TYPE_OPTIONS, type JobType } from '../types/jobType.types'
 import { jobRequiresMaintenance } from '../types/jobType.types'
 import type { JobEditorDraft } from '../hooks/useJobEditor'
-import { JOB_STATUSES, JOB_STATUS_OPTIONS, UNCONFIRMED_OPERATION_MESSAGE, type JobStatus } from '../types/jobStatus.types'
+import { JOB_STATUS_OPTIONS, type JobStatus } from '../types/jobStatus.types'
 import { SERVICE_TYPES, SERVICE_TYPE_OPTIONS, type ServiceType } from '../../equipment/servicePlans/equipmentServicePlan.types'
 import type { Equipment } from '../types/equipment.types'
 import { isServiceTypeEnabled, resolveMaintenanceConfiguration } from '../../equipment/servicePlans/maintenanceConfiguration'
@@ -46,7 +46,7 @@ export default function JobCoreFields({ draft, setDraft, mechanics, mechanicsLoa
                     </label>
                     <label className="job-edit-field">
                         <span>Status</span>
-                        <select disabled={correctionsOnly} value={draft.status} onChange={(event) => { const status = Number(event.target.value) as JobStatus; setDraft((current) => ({ ...current, status, mechanicId: status === JOB_STATUSES.UNCONFIRMED ? '' : current.mechanicId, externalSupplierDetails: status === JOB_STATUSES.UNCONFIRMED ? '' : current.externalSupplierDetails, externalSupplierSelected: status === JOB_STATUSES.UNCONFIRMED ? false : current.externalSupplierSelected })) }}>
+                        <select disabled={correctionsOnly} value={draft.status} onChange={(event) => { const status = Number(event.target.value) as JobStatus; setDraft((current) => ({ ...current, status })) }}>
                             {JOB_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                         </select>
                     </label>
@@ -62,7 +62,6 @@ export default function JobCoreFields({ draft, setDraft, mechanics, mechanicsLoa
                 externalSupplierSelected={draft.externalSupplierSelected}
                 onExternalSupplierDetailsChange={mechanicEditable ? (externalSupplierDetails) => setDraft((current) => ({ ...current, externalSupplierDetails })) : undefined}
                 onExternalSupplierSelectedChange={mechanicEditable ? (externalSupplierSelected) => setDraft((current) => ({ ...current, externalSupplierSelected })) : undefined}
-                mechanicDisabledMessage={!correctionsOnly && draft.status === JOB_STATUSES.UNCONFIRMED ? UNCONFIRMED_OPERATION_MESSAGE : undefined}
                 mechanicsLoading={mechanicsLoading}
                 mechanicsError={mechanicsError}
                 onRetryMechanics={onRetryMechanics}

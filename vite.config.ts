@@ -30,6 +30,10 @@ const equipmentPhotoService = require('./api/services/equipmentPhotoService') as
 const mapTileService = require('./api/services/mapTileService') as {
   getTile: (request: LocalFunctionRequest & { params: Record<string, string> }) => Promise<LocalFunctionResponse>
 }
+const serviceCoordinationService = require('./api/services/serviceCoordinationService') as {
+  handleServiceCoordination: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
+  jsonResponse: (status: number, body: object, headers?: Record<string, string>) => LocalFunctionResponse
+}
 type GreenTreeJobChangesEndpoint = (
   context: { res?: LocalFunctionResponse },
   request: LocalFunctionRequest,
@@ -99,7 +103,7 @@ function sendFunctionResponse(response: ServerResponse, result: LocalFunctionRes
 }
 
 function jobSubmissionProxy(env: Record<string, string | undefined>): Plugin {
-  for (const name of ['JOB_CARD_STORAGE_MODE', 'JOB_CARD_LOCAL_DEVELOPMENT', 'JOB_CARD_NOTIFICATION_MODE', 'AZURE_STORAGE_CONNECTION_STRING', 'JOB_CARD_TABLE_NAME', 'JOB_CARD_PHOTO_CONTAINER', 'ACS_EMAIL_CONNECTION_STRING', 'ACS_EMAIL_SENDER', 'JOB_CARD_REVIEW_EMAIL_TO', 'JOB_CARD_REVIEWER_EMAILS', 'APP_PUBLIC_URL']) {
+  for (const name of ['JOB_CARD_STORAGE_MODE', 'JOB_CARD_LOCAL_DEVELOPMENT', 'JOB_CARD_NOTIFICATION_MODE', 'JOB_CARD_COORDINATION_SUMMARY_ENABLED', 'AZURE_STORAGE_CONNECTION_STRING', 'JOB_CARD_TABLE_NAME', 'JOB_CARD_PHOTO_CONTAINER', 'ACS_EMAIL_CONNECTION_STRING', 'ACS_EMAIL_SENDER', 'JOB_CARD_REVIEW_EMAIL_TO', 'JOB_CARD_REVIEWER_EMAILS', 'APP_PUBLIC_URL']) {
     if (env[name]) process.env[name] ||= env[name]
   }
   process.env.DATAVERSE_URL ||= env.DATAVERSE_URL || env.VITE_DATAVERSE_URL
@@ -617,6 +621,35 @@ function mapTileProxy(env: Record<string, string | undefined>): Plugin {
   }
 }
 
+function serviceCoordinationProxy(env: Record<string, string | undefined>): Plugin {
+  process.env.DATAVERSE_URL ||= env.DATAVERSE_URL || env.VITE_DATAVERSE_URL
+  process.env.SERVICE_COORDINATION_BACKEND_ENABLED ||= env.SERVICE_COORDINATION_BACKEND_ENABLED
+  const installMiddleware = (middlewares: { use: (handler: (request: IncomingMessage, response: ServerResponse, next: () => void) => void) => void }) => {
+    middlewares.use((request, response, next) => {
+      if (!request.url) return next()
+      const requestUrl = new URL(request.url, 'http://localhost')
+      if (requestUrl.pathname !== '/api/servicecoordination') return next()
+      void (async () => {
+        const parsed = request.method === 'POST' ? await readLimitedJsonBody(request, 4096) : { body: {}, tooLarge: false }
+        if (parsed.tooLarge) return sendFunctionResponse(response, serviceCoordinationService.jsonResponse(413, { error: 'The request is too large.' }))
+        if (parsed.body === null) return sendFunctionResponse(response, serviceCoordinationService.jsonResponse(400, { error: 'The request body is invalid.' }))
+        const result = await serviceCoordinationService.handleServiceCoordination({
+          method: request.method,
+          headers: request.headers,
+          query: Object.fromEntries(requestUrl.searchParams),
+          body: parsed.body,
+        })
+        sendFunctionResponse(response, result)
+      })().catch(() => sendFunctionResponse(response, serviceCoordinationService.jsonResponse(503, { error: 'The Service Coordination service is temporarily unavailable.' })))
+    })
+  }
+  return {
+    name: 'service-coordination-api-proxy',
+    configureServer(server) { installMiddleware(server.middlewares) },
+    configurePreviewServer(server) { installMiddleware(server.middlewares) },
+  }
+}
+
 function greenTreeJobChangesProxy(env: Record<string, string | undefined>): Plugin {
   for (const name of [
     'DATAVERSE_URL',
@@ -704,6 +737,7 @@ export default defineConfig(({ mode }) => {
       react(),
       liftTrucksProxy(env),
       greenTreeJobChangesProxy(env),
+      serviceCoordinationProxy(env),
       jobSubmissionProxy(env),
       siteCheckAssignmentProxy(env),
       chargeableInvoicePreviewProxy(env),

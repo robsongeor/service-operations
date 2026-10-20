@@ -247,7 +247,7 @@ export function useWof() {
         const accessToken = await token()
         await createWofApi(accessToken, input, {
             jobNumber: '', orderNumber: '', description: input.description.trim(),
-            jobType: JOB_TYPES.WOF, status: input.assignmentMode === 'internal' ? JOB_STATUSES.ALLOCATED : JOB_STATUSES.UNALLOCATED,
+            jobType: JOB_TYPES.WOF, status: JOB_STATUSES.UNALLOCATED,
             equipmentId: input.equipment.gr_equipmentid,
             mechanicId: input.assignmentMode === 'internal' ? input.internalInspectorId : undefined,
             siteId: input.equipment.gr_Site?.gr_siteid,

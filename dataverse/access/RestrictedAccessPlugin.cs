@@ -190,7 +190,7 @@ namespace ServiceOperations.Access
                         SameOptionalReference(parent.InputParameters, target, "EquipmentId", "gr_equipment", "gr_equipment") &&
                         SameOptionalReference(parent.InputParameters, target, "ContactId", "gr_contact", "gr_contact") &&
                         SameOptionalReference(parent.InputParameters, target, "MechanicId", "gr_mechanic", "gr_mechanic") &&
-                        unknown != target.Contains("gr_equipment") && status != null && status.Value == (target.Contains("gr_mechanic") || target.Contains("gr_externalsupplierdetails") ? 122830000 : 122830001) &&
+                        unknown != target.Contains("gr_equipment") && status != null && status.Value == 122830001 &&
                         !target.GetAttributeValue<bool>("gr_coordinatormanaged") &&
                         SameText(parent.InputParameters, "Description", target.GetAttributeValue<string>("gr_description")) &&
                         SameText(parent.InputParameters, "OrderNumber", target.GetAttributeValue<string>("gr_ordernumber")) &&

@@ -237,9 +237,9 @@ test('Equipment Job History labels created, completed, and hour-meter evidence',
     assert.match(drawer, /job\.gr_hourmeter == null \? 'Not recorded'/)
     assert.match(drawer, /HOUR_METER_READING_TYPES\.ESTIMATED/)
     assert.match(drawer, /<span title=\{job\.gr_description \|\| 'No description'\}>/)
-    assert.match(drawer, /className="equipment-history-status" data-status=\{job\.gr_status\}/)
+    assert.match(drawer, /className="equipment-history-status" data-status=\{canonicalJobStatus\(job\.gr_status\)\}/)
     const styles = readFileSync(new URL('../src/alpha/equipment/EquipmentScreen.css', import.meta.url), 'utf8')
-    for (const status of ['122830000', '122830001', '122830002', '122830003', '122830004', '122830005']) {
+    for (const status of ['122830000', '122830001', '122830002', '122830003', '122830004']) {
         assert.match(styles, new RegExp(`equipment-history-status\\[data-status="${status}"\\]`))
     }
 })

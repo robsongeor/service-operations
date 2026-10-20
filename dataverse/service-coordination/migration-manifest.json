@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "migrationId": "service-coordination-reconciliation-v1",
+  "maximumRecords": 100000,
+  "batchSize": 20,
+  "status": {
+    "field": "status",
+    "dataverseField": "gr_status",
+    "values": {
+      "withTechnician": 122830000,
+      "staging": 122830001,
+      "actionRequired": 122830002,
+      "complete": 122830003,
+      "completionReview": 122830004,
+      "legacyUnconfirmed": 122830005
+    }
+  },
+  "branch": {
+    "field": "operatingBranch",
+    "dataverseField": "gr_operatingbranch",
+    "values": {
+      "auckland": 122830000,
+      "waikato": 122830001,
+      "hastings": 122830002,
+      "christchurch": 122830003
+    },
+    "numberPrefixes": {
+      "WJ": 122830001,
+      "HJ": 122830002,
+      "CJ": 122830003
+    },
+    "plainNumericRequiresExplicitMapping": true
+  },
+  "applyAllowlist": ["gr_status", "gr_operatingbranch"],
+  "requiresApprovedPlanHash": true,
+  "customerContentAllowedInArtifacts": false
+}

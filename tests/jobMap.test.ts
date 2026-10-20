@@ -22,11 +22,12 @@ test('groups the three operational map statuses by Site and excludes completed J
     const sites = groupJobsBySite([
         job('1', JOB_STATUSES.ALLOCATED, 'site-1'),
         job('2', JOB_STATUSES.UNALLOCATED, 'site-1'),
+        job('legacy', JOB_STATUSES.UNCONFIRMED, 'site-1'),
         job('3', JOB_STATUSES.WAITING_FOR_PARTS, 'site-2'),
         job('4', JOB_STATUSES.COMPLETE, 'site-2'),
     ])
     assert.equal(sites.length, 2)
-    assert.deepEqual(sites.find((site) => site.siteId === 'site-1')?.jobs.map((item) => item.gr_jobid), ['1', '2'])
+    assert.deepEqual(sites.find((site) => site.siteId === 'site-1')?.jobs.map((item) => item.gr_jobid), ['1', '2', 'legacy'])
     assert.equal(sites.find((site) => site.siteId === 'site-1')?.markerTone, 'mixed')
     assert.equal(sites.find((site) => site.siteId === 'site-2')?.markerTone, 'waiting')
 })
@@ -86,6 +87,22 @@ test('Job Map does not issue a Dataverse request when every status is disabled',
     try {
         assert.deepEqual(await fetchJobMapJobs('token', []), [])
         assert.equal(requestCount, 0)
+    } finally {
+        globalThis.fetch = originalFetch
+    }
+})
+
+test('Job Map requests legacy Unconfirmed rows when Staging is visible', async () => {
+    const originalFetch = globalThis.fetch
+    let requested = ''
+    globalThis.fetch = (async (input: string | URL | Request) => {
+        requested = decodeURIComponent(String(input))
+        return Response.json({ value: [] })
+    }) as typeof fetch
+    try {
+        await fetchJobMapJobs('token', [JOB_STATUSES.UNALLOCATED])
+        assert.match(requested, /gr_status eq 122830001/)
+        assert.match(requested, /gr_status eq 122830005/)
     } finally {
         globalThis.fetch = originalFetch
     }

@@ -7,7 +7,7 @@ import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
 import PageHeader from '../shared/page-header/PageHeader'
 import { equipmentMapCacheKey, restoreEquipmentMapCache, saveEquipmentMapCache, type CachedCoordinate } from '../equipment-map/equipmentMapCache'
 import { geocodeEquipmentSites } from '../equipment-map/equipmentGeocodingApi'
-import { JOB_STATUSES, type JobStatus } from '../jobs/types/jobStatus.types'
+import { canonicalJobStatus, getJobStatusLabel, JOB_STATUSES, type JobStatus } from '../jobs/types/jobStatus.types'
 import { groupJobsBySite, isJobMapStatus, jobMapMarkerTone, jobMapStatusLabel, jobsWithoutSite } from './jobMap'
 import { useJobMapData } from './useJobMapData'
 import '../equipment-map/EquipmentMapScreen.css'
@@ -17,9 +17,9 @@ const JobLocationMap = lazy(() => import('./JobLocationMap'))
 const normalized = (value?: string | null) => value?.trim().toLocaleLowerCase() ?? ''
 
 const statusFilters: Array<{ value: JobStatus; label: string; tone: string }> = [
-    { value: JOB_STATUSES.ALLOCATED, label: 'Allocated', tone: 'allocated' },
-    { value: JOB_STATUSES.UNALLOCATED, label: 'Unallocated', tone: 'unallocated' },
-    { value: JOB_STATUSES.WAITING_FOR_PARTS, label: 'Action Required', tone: 'waiting' },
+    { value: JOB_STATUSES.ALLOCATED, label: getJobStatusLabel(JOB_STATUSES.ALLOCATED), tone: 'allocated' },
+    { value: JOB_STATUSES.UNALLOCATED, label: getJobStatusLabel(JOB_STATUSES.UNALLOCATED), tone: 'unallocated' },
+    { value: JOB_STATUSES.WAITING_FOR_PARTS, label: getJobStatusLabel(JOB_STATUSES.WAITING_FOR_PARTS), tone: 'waiting' },
 ]
 
 function jobEquipmentIdentity(job: ReturnType<typeof jobsWithoutSite>[number]) {
@@ -115,7 +115,7 @@ export default function JobMapScreen() {
         return groupedSites.flatMap((site) => {
             if (customerId && site.customerId !== customerId) return []
             if (siteId && site.siteId !== siteId) return []
-            const matchingJobs = site.jobs.filter((job) => enabledStatuses[job.gr_status] && (!query || [
+            const matchingJobs = site.jobs.filter((job) => enabledStatuses[canonicalJobStatus(job.gr_status)] && (!query || [
                 job.gr_jobnumber, job.gr_description, job.gr_Equipment?.gr_fleet, job.gr_Equipment?.gr_alternatefleetnumbers,
                 job.gr_Equipment?.gr_serial, job.gr_Equipment?.gr_make, job.gr_Equipment?.gr_model,
                 job.gr_Mechanic?.gr_name, site.siteName, site.customerName, site.address,
@@ -131,7 +131,7 @@ export default function JobMapScreen() {
     const mappedSites = filteredSites.filter((site) => site.coordinate)
     const selectedSite = filteredSites.find((site) => site.siteId === selectedSiteId) ?? filteredSites[0]
     const visibleJobCount = filteredSites.reduce((sum, site) => sum + site.jobs.length, 0)
-    const enabledTargetJobs = targetJobs.filter((job) => enabledStatuses[job.gr_status])
+    const enabledTargetJobs = targetJobs.filter((job) => enabledStatuses[canonicalJobStatus(job.gr_status)])
     const missingSiteCount = jobsWithoutSite(enabledTargetJobs).length
     const unmappedJobCount = missingSiteCount + filteredSites.filter((site) => !site.coordinate).reduce((sum, site) => sum + site.jobs.length, 0)
     const addressedSites = groupedSites.filter((site) => site.address)
@@ -161,7 +161,7 @@ export default function JobMapScreen() {
                 </Suspense>
                 {detailsOpen && <aside className="equipment-map-details job-map-details" aria-label="Jobs at selected Site">
                     {selectedSite ? <><header><button type="button" className="equipment-map-details-close" aria-label="Close Site details" onClick={() => setDetailsOpen(false)}>×</button><span>{selectedSite.customerName}</span><h2>{selectedSite.siteName}</h2><p>{selectedSite.address || 'No address recorded'}</p></header>
-                        <ul>{selectedSite.jobs.map((job) => <li key={job.gr_jobid}><button type="button" onClick={() => navigate(`/jobs?jobId=${encodeURIComponent(job.gr_jobid)}`)}><span className={`job-map-status status-${job.gr_status}`}>{jobMapStatusLabel(job.gr_status)}</span><strong>Job {job.gr_jobnumber || 'No number'} · {jobEquipmentIdentity(job)}</strong><span>{job.gr_description || 'No description'}{job.gr_Mechanic?.gr_name ? ` · ${job.gr_Mechanic.gr_name}` : ''}</span></button></li>)}</ul>
+                        <ul>{selectedSite.jobs.map((job) => <li key={job.gr_jobid}><button type="button" onClick={() => navigate(`/jobs?jobId=${encodeURIComponent(job.gr_jobid)}`)}><span className={`job-map-status status-${canonicalJobStatus(job.gr_status)}`}>{jobMapStatusLabel(job.gr_status)}</span><strong>Job {job.gr_jobnumber || 'No number'} · {jobEquipmentIdentity(job)}</strong><span>{job.gr_description || 'No description'}{job.gr_Mechanic?.gr_name ? ` · ${job.gr_Mechanic.gr_name}` : ''}</span></button></li>)}</ul>
                     </> : <div className="equipment-map-empty"><strong>No Jobs match these filters.</strong><p>Select at least one status or change the filters.</p></div>}
                 </aside>}
             </div>

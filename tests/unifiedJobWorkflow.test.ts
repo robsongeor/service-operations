@@ -101,7 +101,7 @@ test('either factual marker, coordinator membership, missing reason, or competin
     const f = setup(); f.register()
     assert.throws(() => f.voidEntry({ book: 'auckland', ledgerId: id(4), jobId: id(4), reason: ' ' }, actor), /INVALID/)
 })
-test('Staging means unnumbered, not Unconfirmed, and older work retains its operational fallback', () => {
+test('Staging worklist remains number-based while older work retains its operational fallback', () => {
     const base = { gr_jobid: id(1), gr_jobnumber: null, gr_status: 122830003, gr_coordinatormanaged: false } as Job
     assert.equal(jobMatchesWorklist(base, 'staging'), true)
     assert.equal(jobMatchesWorklist(base, 'operational'), false)
@@ -212,13 +212,18 @@ test('dry-run deployment package is complete, ordered and cannot deploy', () => 
     assert.equal(readiness.regionalTables.length, 4)
     assert.equal(readiness.customApis.length, 5)
     assert.equal(plan.featureFlagDuringDeployment, false)
-    assert.equal(plan.assembly.version, '1.0.18.0')
+    assert.equal(plan.assembly.version, '1.0.19.0')
     assert.equal(/AssemblyVersion\("([^"]+)"\)/.exec(assemblyInfo)?.[1], plan.assembly.version)
     assert.equal(/AssemblyFileVersion\("([^"]+)"\)/.exec(assemblyInfo)?.[1], plan.assembly.version)
     assert.equal(plan.provisioningIncluded, false)
     assert.equal(plan.deploymentIncluded, false)
     assert.equal(plan.assignmentIncluded, false)
     assert.equal(plan.featureEnableIncluded, false)
+    assert.deepEqual(contract.initialOperationalStatus, {
+        value: 122830001,
+        label: 'Staging',
+        rule: 'Technician or supplier selection is planning data. Only confirmed Job Card delivery moves an ordinary Job to With Technician.',
+    })
     assert.deepEqual(plan.assembly.types, [
         'ServiceOperations.JobRegistration.JobRegistrationPlugin',
         'ServiceOperations.JobRegistration.JobWorkflowPlugin',

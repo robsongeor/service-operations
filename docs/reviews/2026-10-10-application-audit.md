@@ -84,6 +84,11 @@ or supplier is selected. The restricted guard's registration-child check repeats
 The agreed workflow is Unallocated until dispatch is confirmed; selecting a person is not delivery.
 The email workflow separately transitions after successful delivery, producing two competing owners.
 
+**Source resolution recorded 19 October 2026:** registration, its restricted-access mirror and
+ordinary WOF creation now write Staging regardless of assignment. Confirmed delivery remains the
+only ordinary transition to With Technician, and a status-only retry is available after a delivered
+email. This source correction has not been deployed and did not rewrite historical Jobs.
+
 Owners: [registration](../../dataverse/job-registration/JobRegistrationPlugin.cs),
 [guard](../../dataverse/access/RestrictedAccessPlugin.cs),
 [dispatch workflow](../../src/alpha/jobs/services/primaryJobEmailWorkflow.ts).

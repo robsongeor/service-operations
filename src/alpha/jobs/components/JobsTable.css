@@ -444,14 +444,6 @@
 .jobs-table tbody tr[data-status="122830004"]:hover { background: #f4f1ff; }
 .jobs-table tbody tr[data-status="122830004"] td:first-child { box-shadow: inset 3px 0 0 #8d78bd; }
 .jobs-table-status[data-status="122830004"] { border-color: #cbc4e6; background: #f0edfb; color: #604f88; }
-.status-filter[data-status="122830005"] { border-color: #d9aa4d; color: #77520b; }
-.status-filter[data-status="122830005"].active { background: #fff0c2; color: #654306; }
-.jobs-table tbody tr[data-status="122830005"] { background: #fffaf0; }
-.jobs-table tbody tr[data-status="122830005"]:hover { background: #fff3d5; }
-.jobs-table tbody tr[data-status="122830005"] td:first-child { box-shadow: inset 3px 0 0 #d59b2b; }
-.jobs-table tbody tr[data-status="122830005"] td.jobs-table-actions-column { background: #fffaf0; }
-.jobs-table tbody tr[data-status="122830005"]:hover td.jobs-table-actions-column { background: #fff3d5; }
-.jobs-table-status[data-status="122830005"] { border-color: #e1bd70; background: #fff0c2; color: #704b08; }
 
 
 .jobs-table-action {
@@ -637,3 +629,43 @@
     background: #fff0f0;
     color: #923d3d;
 }
+
+.jobs-watch-action {
+    border: 1px solid #cbd5e1;
+    border-radius: 999px;
+    background: #fff;
+    color: #334155;
+    padding: 5px 9px;
+    font: inherit;
+    font-size: 0.7rem;
+    font-weight: 750;
+    cursor: pointer;
+}
+
+.jobs-watch-action.watching {
+    border-color: #2563eb;
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+
+.jobs-branch-badge,
+.jobs-progress-badge {
+    display: inline-flex;
+    width: fit-content;
+    margin-top: 4px;
+    border-radius: 999px;
+    background: #eef2f7;
+    color: #475569;
+    padding: 2px 6px;
+    font-size: 0.6rem;
+    font-weight: 750;
+    white-space: nowrap;
+}
+
+.jobs-progress-badge.ready { background: #e9f5ef; color: #24634f; }
+.jobs-progress-badge.partial,
+.jobs-progress-badge.awaiting { background: #edf5fa; color: #35617f; }
+.jobs-progress-badge.expired,
+.jobs-progress-badge.conflict,
+.jobs-progress-badge.unavailable { background: #fff0f0; color: #8c3838; }
+.jobs-progress-badge.not-sent { background: #fff5e3; color: #7c5924; }

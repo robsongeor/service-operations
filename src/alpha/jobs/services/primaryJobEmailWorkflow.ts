@@ -3,7 +3,6 @@ import { assertJobEmailSendingAllowed, buildPrimaryJobEmail, onlineJobCardPilotE
 import { assertJobHasEmailableJobNumber } from './jobEmailRules.ts'
 import { isValidTechnicianEmail } from '../utils/technicianMailto.ts'
 import { usesAzureJobCards } from '../types/jobCardWorkflow.ts'
-import { JOB_STATUSES } from '../types/jobStatus.types.ts'
 import { JOB_CARD_STATUSES } from '../types/jobCardStatus.types.ts'
 import { createEmailDispatch, waitForEmailDispatch } from './emailDispatchApi.ts'
 import { generateJobSubmissionLink } from './jobSubmissionLinkApi.ts'
@@ -13,7 +12,6 @@ import { JOB_WORKFLOW_ENABLED, runJobWorkflow } from './jobWorkflowApi.ts'
 
 export function assignedTechnicianEmailBlockedReason(job: Job) {
     if (!job.gr_jobnumber?.trim()) return 'A Job Number must be assigned before this Job can be emailed.'
-    if (job.gr_status === JOB_STATUSES.UNCONFIRMED) return 'A coordinator must confirm this Job before it can be emailed.'
     if (!usesAzureJobCards(job)) return 'Use the separate Site Check workflow for this Job.'
     if (!job.gr_Mechanic?.gr_mechanicid) return 'A coordinator must assign a technician before this Job can be emailed.'
     if (!isValidTechnicianEmail(job.gr_Mechanic.gr_email)) return 'The assigned technician needs a valid email address before this Job can be emailed.'

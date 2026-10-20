@@ -1,14 +1,15 @@
 import type { Job } from '../types/job.types.ts'
 import { JOB_WORKFLOW_ENABLED } from '../services/jobWorkflowApi.ts'
+import { SERVICE_COORDINATION_CLIENT_ENABLED } from './serviceCoordinationConfig.ts'
 
 // The walkthrough flag stays development-only. The separate production gate is
 // disabled by default and must not be enabled before schema/API/security rollout.
 export const UNIFIED_JOB_WALKTHROUGH = import.meta.env?.DEV === true
     && import.meta.env?.VITE_UNIFIED_JOB_WALKTHROUGH === 'true'
-export const UNIFIED_JOB_RUNTIME = UNIFIED_JOB_WALKTHROUGH || JOB_WORKFLOW_ENABLED
+export const UNIFIED_JOB_RUNTIME = UNIFIED_JOB_WALKTHROUGH || JOB_WORKFLOW_ENABLED || SERVICE_COORDINATION_CLIENT_ENABLED
 
 export type JobWorklist = 'operational' | 'staging' | 'all'
-export const UNIFIED_JOB_SELECT = ',gr_coordinatormanaged,gr_registrationvoid,gr_registrationvoidreason'
+export const UNIFIED_JOB_SELECT = `,gr_coordinatormanaged,gr_registrationvoid,gr_registrationvoidreason${SERVICE_COORDINATION_CLIENT_ENABLED ? ',gr_operatingbranch' : ''}`
 
 export function isCoordinatorManaged(job: Job) {
     // Missing migration metadata must never silently remove existing work.

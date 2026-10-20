@@ -206,9 +206,9 @@ Sites, and selected-Site Contacts then hydrate independently with cancellation a
 Job Quotes and technician Assignments now use separate focused Job query keys. Neither query starts
 with the drawer shell: Quotes load when the Quotes tab opens and Assignments load when the Job Card
 tab opens. Concurrent consumers deduplicate the same Job request, tab-specific failures retry without
-blocking Job editing, and Assignment mutations refresh only the focused Assignment key. Moving a Job
-to Unconfirmed performs one bounded Assignment lookup before removing linked operational work, so
-that business rule does not depend on previously opening the Job Card tab.
+blocking Job editing, and Assignment mutations refresh only the focused Assignment key. The retired
+Unconfirmed status no longer triggers destructive Assignment or Schedule cleanup; historical values
+are treated as Staging until the controlled data migration rewrites them.
 
 ### 4. Some screens still fetch global data for scoped views
 

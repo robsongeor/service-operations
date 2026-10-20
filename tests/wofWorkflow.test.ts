@@ -164,6 +164,8 @@ test('WOF workflow refresh reconciles the shared bounded register queries after 
     assert.doesNotMatch(source, /setScheduleOptions/)
     assert.doesNotMatch(source, /fetchJobs\(accessToken\)/)
     assert.doesNotMatch(source, /fetchJobScheduleOptions\(accessToken\)/)
+    assert.match(source, /jobType: JOB_TYPES\.WOF, status: JOB_STATUSES\.UNALLOCATED/)
+    assert.doesNotMatch(source, /assignmentMode === 'internal' \? JOB_STATUSES\.ALLOCATED/)
 })
 
 test('WOF inspection history is continuation-safe and abortable', () => {

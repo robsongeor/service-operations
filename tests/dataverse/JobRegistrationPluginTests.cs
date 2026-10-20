@@ -38,6 +38,10 @@ namespace ServiceOperations.JobRegistration.Tests
             { "RequestId", Id(n) }, { "JobId", job.Id }, { "ExpectedJobRowVersion", job.RowVersion },
             { "RecipientEmail", "tech@example.invalid" }, { "Subject", "Job details" }, { "Body", "<p>Safe fixture body</p>" }
         }; }
+        static int Branch(string book) { return new Dictionary<string, int> {
+            { "auckland", 122830000 }, { "waikato", 122830001 },
+            { "hastings", 122830002 }, { "christchurch", 122830003 }
+        }[book]; }
         static Database Fixture()
         {
             var db = new Database();
@@ -52,7 +56,7 @@ namespace ServiceOperations.JobRegistration.Tests
         {
             var job = new Entity("gr_job", Id(700)) { Attributes = {
                 { "gr_description", "Staged work" }, { "gr_site", new EntityReference("gr_site", Site) },
-                { "gr_status", new OptionSetValue(122830005) }, { "gr_jobtype", new OptionSetValue(122830000) },
+                { "gr_status", new OptionSetValue(122830001) }, { "gr_jobtype", new OptionSetValue(122830000) },
                 { "gr_coordinatormanaged", true }, { "gr_gtentered", true }, { "gr_techniciansubmissionstory", "Immutable evidence" }
             } };
             db.Put(job); return db.Get("gr_job", job.Id);
@@ -70,6 +74,8 @@ namespace ServiceOperations.JobRegistration.Tests
                     Check(ledger.GetAttributeValue<EntityReference>(JobRegistrationPlugin.RegisteredJob).Id == job.Id, "Missing Job link");
                     Check(!job.Contains("gr_jobtype") && !job.GetAttributeValue<bool>(JobRegistrationPlugin.CoordinatorManaged), "Basic Job entered operational workflow");
                     Check(job.GetAttributeValue<EntityReference>("gr_mechanic").Id == Mechanic, "Initial technician was lost");
+                    Check(job.GetAttributeValue<OptionSetValue>("gr_status").Value == 122830001, "Assigned registration must remain in Staging");
+                    Check(job.GetAttributeValue<OptionSetValue>(JobRegistrationPlugin.OperatingBranch).Value == Branch(selected), "Selected Job Book did not stamp the operating branch");
                     Check(!ledger.Contains("gr_promotedjob") && !ledger.GetAttributeValue<bool>("gr_addressverified"), "Invented promotion/verification");
                     Check(db.LastServiceUser == Caller, "Service must use caller identity");
                 });
@@ -80,7 +86,7 @@ namespace ServiceOperations.JobRegistration.Tests
                 Check(db.Get("gr_jobbookentry", Id(1)).GetAttributeValue<bool>("gr_equipmentreviewrequired"), "Unknown Equipment missing");
                 Check(db.Get("gr_job", Id(1)).GetAttributeValue<EntityReference>("gr_site").Id == Site, "Missing Site");
             });
-            Test("unassigned new entry remains valid and unallocated", () => {
+            Test("unassigned new entry remains valid and in Staging", () => {
                 var db = Fixture(); var request = NewRequest(); request.Remove("MechanicId");
                 db.Invoke(JobRegistrationPlugin.RegisterMessage, request);
                 Check(db.Get("gr_job", Id(1)).GetAttributeValue<OptionSetValue>("gr_status").Value == 122830001, "Unexpected status");
@@ -91,7 +97,7 @@ namespace ServiceOperations.JobRegistration.Tests
                 var job = db.Get("gr_job", Id(1)); var ledger = db.Get("gr_jobbookentry", Id(1));
                 Check(!job.Contains("gr_mechanic") && job.GetAttributeValue<string>("gr_externalsupplierdetails") == "AutoTreads - large tyres", "External supplier was not stored separately");
                 Check(ledger.GetAttributeValue<string>("gr_mechanictext") == "AutoTreads - large tyres", "External supplier snapshot missing");
-                Check(job.GetAttributeValue<OptionSetValue>("gr_status").Value == 122830000, "Assigned external work should be Allocated");
+                Check(job.GetAttributeValue<OptionSetValue>("gr_status").Value == 122830001, "Assigned external work must remain in Staging until dispatch");
                 var invalid = NewRequest(2); invalid["ExternalSupplierDetails"] = "AutoTreads";
                 Reject(() => db.Invoke(JobRegistrationPlugin.RegisterMessage, invalid), "INVALID");
             });
@@ -156,8 +162,9 @@ namespace ServiceOperations.JobRegistration.Tests
                 var result = db.Invoke(JobRegistrationPlugin.AllocateMessage, request);
                 var saved = db.Get("gr_job", draft.Id);
                 Check(saved.GetAttributeValue<string>("gr_jobnumber").StartsWith("WJ"), "Wrong region");
-                Check(saved.GetAttributeValue<OptionSetValue>("gr_status").Value == 122830005, "Status changed");
+                Check(saved.GetAttributeValue<OptionSetValue>("gr_status").Value == 122830001, "Status changed");
                 Check(saved.GetAttributeValue<bool>(JobRegistrationPlugin.CoordinatorManaged), "Membership changed");
+                Check(saved.GetAttributeValue<OptionSetValue>(JobRegistrationPlugin.OperatingBranch).Value == Branch("waikato"), "Allocation did not stamp the selected operating branch");
                 Check(saved.GetAttributeValue<string>("gr_techniciansubmissionstory") == "Immutable evidence", "Evidence changed");
                 Check(db.Get(Table("waikato"), Id(2)).GetAttributeValue<bool>("gr_entered"), "Factual marker lost");
                 Check((bool)db.Invoke(JobRegistrationPlugin.AllocateMessage, request)["WasReplay"], "Allocation replay failed");
@@ -212,7 +219,7 @@ namespace ServiceOperations.JobRegistration.Tests
                 var request = ManageRequest(job); var first = db.Invoke(JobWorkflowPlugin.ManageMessage, request);
                 var saved = db.Get("gr_job", job.Id);
                 Check(saved.GetAttributeValue<bool>(JobRegistrationPlugin.CoordinatorManaged), "Membership was not enabled");
-                Check(saved.GetAttributeValue<OptionSetValue>("gr_status").Value == 122830005 && saved.GetAttributeValue<string>("gr_techniciansubmissionstory") == "Immutable evidence", "Manage changed operational data");
+                Check(saved.GetAttributeValue<OptionSetValue>("gr_status").Value == 122830001 && saved.GetAttributeValue<string>("gr_techniciansubmissionstory") == "Immutable evidence", "Manage changed operational data");
                 Check(!(bool)first["WasReplay"] && (bool)db.Invoke(JobWorkflowPlugin.ManageMessage, request)["WasReplay"], "Manage replay failed");
             });
             Test("Manage job rejects stale, Void and additional-field requests", () => {
@@ -279,6 +286,12 @@ namespace ServiceOperations.JobRegistration.Tests
                 Check(!dispatch.Contains("gr_jobassignment") && !dispatch.GetAttributeValue<bool>("gr_emailsent"), "Dispatch changed assignment or invented delivery");
                 Check((bool)db.Invoke(JobWorkflowPlugin.DispatchMessage, request)["WasReplay"] && db.Count("gr_emaildispatch") == 1, "Dispatch replay duplicated delivery");
             });
+            Test("legacy Unconfirmed status dispatches as Staging during migration", () => {
+                var db = Fixture(); db.Invoke(JobRegistrationPlugin.RegisterMessage, NewRequest());
+                var job = db.Get("gr_job", Id(1)); job["gr_status"] = new OptionSetValue(122830005);
+                db.Invoke(JobWorkflowPlugin.DispatchMessage, DispatchRequest(job));
+                Check(db.Count("gr_emaildispatch") == 1, "Legacy Staging-compatible Job was rejected");
+            });
             Test("initial dispatch rejects stale Jobs, recipient overrides and unrelated inputs", () => {
                 var db = Fixture(); db.Invoke(JobRegistrationPlugin.RegisterMessage, NewRequest());
                 var job = db.Get("gr_job", Id(1)); var stale = DispatchRequest(job); job.RowVersion = "999";
@@ -290,15 +303,14 @@ namespace ServiceOperations.JobRegistration.Tests
                 Check(db.Count("gr_emaildispatch") == 0, "Rejected dispatch created a row");
             });
             Test("initial dispatch fails closed for ineligible Job or technician state", () => {
-                for (int scenario = 0; scenario < 6; scenario++) {
+                for (int scenario = 0; scenario < 5; scenario++) {
                     var db = Fixture(); db.Invoke(JobRegistrationPlugin.RegisterMessage, NewRequest());
                     var job = db.Get("gr_job", Id(1)); var mechanic = db.Get("gr_mechanic", Mechanic);
                     if (scenario == 0) job["gr_jobnumber"] = null;
                     if (scenario == 1) job[JobWorkflowPlugin.RegistrationVoid] = true;
-                    if (scenario == 2) job["gr_status"] = new OptionSetValue(122830005);
-                    if (scenario == 3) job["gr_jobtype"] = new OptionSetValue(122830004);
-                    if (scenario == 4) mechanic["statecode"] = new OptionSetValue(1);
-                    if (scenario == 5) mechanic["gr_jobassignmentenabled"] = false;
+                    if (scenario == 2) job["gr_jobtype"] = new OptionSetValue(122830004);
+                    if (scenario == 3) mechanic["statecode"] = new OptionSetValue(1);
+                    if (scenario == 4) mechanic["gr_jobassignmentenabled"] = false;
                     Reject(() => db.Invoke(JobWorkflowPlugin.DispatchMessage, DispatchRequest(job)), "INVALID");
                 }
             });

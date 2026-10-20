@@ -306,7 +306,7 @@ export default function SchedulingScreen() {
             <>
             <section className="scheduling-summary">
                 <div>
-                    <span>Seven-day planner</span>
+                    <span>{schedulerData.branch ? `${schedulerData.branch.label} branch planner` : 'Seven-day planner'}</span>
                     <h2>{rangeFormatter.format(weekStart)} – {rangeFormatter.format(weekEnd)}</h2>
                 </div>
                 <div className="scheduling-summary-controls">
@@ -337,7 +337,7 @@ export default function SchedulingScreen() {
                     includeOperational={false}
                     jobTypeOptions={SCHEDULER_JOB_TYPE_OPTIONS}
                     onChange={(jobType) => {
-                        if (jobType !== 'unconfirmed' && jobType !== 'operational' && jobType !== 'unnumbered') setSelectedJobType(jobType)
+                        if (jobType !== 'operational' && jobType !== 'unnumbered') setSelectedJobType(jobType)
                     }}
                     ariaLabel="Filter scheduled jobs by type"
                 />

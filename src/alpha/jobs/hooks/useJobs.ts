@@ -24,7 +24,7 @@ import { UNIFIED_JOB_WALKTHROUGH } from '../domain/unifiedJobWorkflow'
 import { updateWalkthroughJob } from '../services/unifiedJobWalkthroughApi'
 import { subscribeToJobChanges } from '../services/jobsRealtime'
 import type { JobSaveInput } from '../types/jobSave.types'
-import { JOB_STATUSES, UNCONFIRMED_OPERATION_MESSAGE, jobIsOperational, type JobStatus } from '../types/jobStatus.types'
+import { canonicalJobStatus, JOB_STATUSES, type JobStatus } from '../types/jobStatus.types'
 import { jobIsSchedulerEligible, SITE_CHECK_SCHEDULER_MESSAGE } from '../types/jobSchedulerEligibility'
 import { JOB_CARD_STATUSES, type JobCardStatus } from '../types/jobCardStatus.types'
 import type { JobAssignmentInput } from '../types/jobAssignment.types'
@@ -682,7 +682,7 @@ export function useJobs(options: UseJobsOptions = {}) {
         return options
     }
 
-    const assertJobOperational = async (token: string, jobId: string) => {
+    const requireJob = async (token: string, jobId: string) => {
         let job = jobs.find((candidate) => candidate.gr_jobid.toLowerCase() === jobId.toLowerCase())
         if (!job) {
             if (loadGlobalOperationalData) {
@@ -697,36 +697,13 @@ export function useJobs(options: UseJobsOptions = {}) {
             }
         }
         if (!job) throw new Error('The job could not be found. Refresh the page and try again.')
-        if (!jobIsOperational(job.gr_status)) throw new Error(UNCONFIRMED_OPERATION_MESSAGE)
         return job
     }
 
     const assertJobSchedulerEligible = async (token: string, jobId: string) => {
-        const job = await assertJobOperational(token, jobId)
+        const job = await requireJob(token, jobId)
         if (!jobIsSchedulerEligible(job)) throw new Error(SITE_CHECK_SCHEDULER_MESSAGE)
         return job
-    }
-
-    const prepareJobForUnconfirmed = async (token: string, job: Job) => {
-        const options = scheduleOptions.filter((option) => option._gr_job_value?.toLowerCase() === job.gr_jobid.toLowerCase())
-        const assignments = await fetchJobAssignmentsForJobApi(token, job.gr_jobid)
-        if (!job.gr_Mechanic && options.length === 0 && assignments.length === 0) return
-
-        const confirmed = window.confirm(
-            'Move this job to Unconfirmed?\n\n'
-            + 'It is already allocated or scheduled. Continuing will remove its technician allocation, '
-            + 'additional assignments, and schedule options.',
-        )
-        if (!confirmed) throw new Error('The status change was cancelled.')
-
-        await Promise.all([
-            ...options.map((option) => deleteJobScheduleOptionApi(token, option.gr_jobscheduleoptionid)),
-            ...assignments.map((assignment) => deleteJobAssignmentApi(token, assignment.gr_jobassignmentid)),
-            ...(job.gr_Mechanic
-                ? [updateJobFieldsApi(token, job.gr_jobid, { 'gr_Mechanic@odata.bind': null })]
-                : []),
-        ])
-        setScheduleOptions((current) => current.filter((option) => option._gr_job_value?.toLowerCase() !== job.gr_jobid.toLowerCase()))
     }
 
     const createScheduleOption = async (option: JobScheduleOptionInput) => {
@@ -865,7 +842,7 @@ export function useJobs(options: UseJobsOptions = {}) {
 
     const updateJobStatus = async (jobId: string, status: JobStatus) => {
         if (UNIFIED_JOB_WALKTHROUGH) {
-            await updateSampleFields(jobId, { gr_status: status, ...(status === JOB_STATUSES.UNCONFIRMED ? { 'gr_Mechanic@odata.bind': null } : {}) })
+            await updateSampleFields(jobId, { gr_status: canonicalJobStatus(status) })
             return true
         }
         const currentJob = jobs.find((job) => job.gr_jobid === jobId)
@@ -904,9 +881,7 @@ export function useJobs(options: UseJobsOptions = {}) {
             }
             return true
         }
-        if (status === JOB_STATUSES.UNCONFIRMED && currentJob.gr_status !== JOB_STATUSES.UNCONFIRMED) {
-            await prepareJobForUnconfirmed(token, currentJob)
-        }
+        status = canonicalJobStatus(status)
         const completedDate = currentJob?.gr_completeddate ?? new Date().toISOString()
         await updateJobStatusApi(token, jobId, status, isCompleting ? completedDate : undefined)
         setJobs((current) => current.map((job) => job.gr_jobid === jobId
@@ -917,7 +892,7 @@ export function useJobs(options: UseJobsOptions = {}) {
 
     const createJobAssignment = async (assignment: JobAssignmentInput) => {
         const token = await getAccessToken()
-        await assertJobOperational(token, assignment.jobId)
+        await requireJob(token, assignment.jobId)
         await createJobAssignmentApi(token, assignment)
     }
 
@@ -988,6 +963,12 @@ export function useJobs(options: UseJobsOptions = {}) {
         )
     }
 
+    const retryConfirmedDeliveryStatus = async (jobId: string) => {
+        const token = await getAccessToken()
+        await markJobAllocatedAfterConfirmedDelivery(token, jobId)
+        await fetchJobs()
+    }
+
     const deleteJobAssignment = async (assignmentId: string) => {
         const token = await getAccessToken()
         await deleteJobAssignmentApi(token, assignmentId)
@@ -1009,7 +990,7 @@ export function useJobs(options: UseJobsOptions = {}) {
     ) => {
         if (UNIFIED_JOB_WALKTHROUGH) return updateSampleFields(jobId, fields)
         const token = await getAccessToken()
-        if (fields['gr_Mechanic@odata.bind']) await assertJobOperational(token, jobId)
+        if (fields['gr_Mechanic@odata.bind']) await requireJob(token, jobId)
 
         await updateJobFieldsApi(token, jobId, fields)
 
@@ -1021,7 +1002,7 @@ export function useJobs(options: UseJobsOptions = {}) {
         if (!currentJob) throw new Error('The job could not be found. Refresh the page and try again.')
         assertJobNumberUnchanged(currentJob, job.jobNumber)
         if (UNIFIED_JOB_WALKTHROUGH) {
-            if (job.status === JOB_STATUSES.UNCONFIRMED) job = { ...job, mechanicId: undefined }
+            job = { ...job, status: canonicalJobStatus(job.status) }
             await updateSampleFields(jobId, buildJobUpdateFields(job))
             return true
         }
@@ -1065,13 +1046,7 @@ export function useJobs(options: UseJobsOptions = {}) {
             }
             return true
         }
-        if (job.status === JOB_STATUSES.UNCONFIRMED && currentJob.gr_status !== JOB_STATUSES.UNCONFIRMED) {
-            await prepareJobForUnconfirmed(token, currentJob)
-            job = { ...job, mechanicId: undefined }
-        }
-        if (job.status === JOB_STATUSES.UNCONFIRMED && job.mechanicId) {
-            throw new Error(UNCONFIRMED_OPERATION_MESSAGE)
-        }
+        job = { ...job, status: canonicalJobStatus(job.status) }
         const completedDate = job.completedDate || (isCompleting ? new Date().toISOString() : undefined)
         const jobWithCompletion = { ...job, completedDate }
         await updateJobApi(token, jobId, jobWithCompletion)
@@ -1398,9 +1373,7 @@ export function useJobs(options: UseJobsOptions = {}) {
     }
 
     const createJob = async (job: JobSaveInput) => {
-        if (job.status === JOB_STATUSES.UNCONFIRMED && job.mechanicId) {
-            throw new Error(UNCONFIRMED_OPERATION_MESSAGE)
-        }
+        job = { ...job, status: canonicalJobStatus(job.status) }
         const token = await getAccessToken()
 
         const jobId = await createJobApi(token, job)
@@ -1619,6 +1592,7 @@ export function useJobs(options: UseJobsOptions = {}) {
         queuePrimaryJobEmail,
         emailDeliveryStates,
         sendAssignmentJobEmail,
+        retryConfirmedDeliveryStatus,
         createJobAssignment,
         updateJobAssignmentStatus,
         deleteJobAssignment,

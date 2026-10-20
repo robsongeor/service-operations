@@ -10,6 +10,19 @@
     "office": { "entraValue": "ServiceOperations.JobCardAdmin", "dataverseRole": "Service Operations - Office Admin" },
     "book": { "entraValue": "ServiceOperations.JobBookAdmin", "dataverseRole": "Service Operations - Job Book Admin" }
   },
+  "homeBranchSetup": {
+    "requiredForEveryNewUser": true,
+    "allowImplicitDefault": false,
+    "authoritativeMapping": "dataverse/service-coordination/user-branch-mapping.json",
+    "setupCommand": "scripts/setup-service-operations-user-home-branch.ps1",
+    "allowedBranches": {
+      "Auckland": 122830000,
+      "Waikato": 122830001,
+      "Hastings": 122830002,
+      "Christchurch": 122830003
+    },
+    "completionRule": "User setup is incomplete until the explicit reviewed home-branch Plan Apply has completed and live Verify reports one verified user and zero mismatches."
+  },
   "intendedUsers": [
     { "upn": "georger@liftrucks.co.nz", "profile": "full", "currentAppAssignment": "FullAccess plus default access", "dataverseAdmission": "present" },
     { "upn": "brucef@liftrucks.co.nz", "profile": "coordinator", "currentAppAssignment": "FullAccess", "dataverseAdmission": "present" },
@@ -42,6 +55,7 @@
   ],
   "jobCardReviewerProfiles": ["full", "coordinator", "office"],
   "gates": [
+    "Record an explicit home branch in the authoritative mapping and complete the single-user Plan, Apply and Verify workflow before treating any new user assignment as complete.",
     "Resolve every account to one enabled licensed target identity and capture immutable object IDs only in the approved execution evidence.",
     "Export current Entra app assignments plus direct and team-derived Dataverse roles immediately before change.",
     "Create missing Entra role definitions and Dataverse roles before assigning users; preserve existing stable definitions.",

@@ -30,7 +30,8 @@ const renderRegistration = (props = {}) => renderToStaticMarkup(createElement(Re
 
 test('coordination tabs filter a progressively loaded worklist without becoming query dependencies', () => {
     const source = readFileSync(new URL('../src/alpha/jobs/hooks/useUnifiedJobWorklist.ts', import.meta.url), 'utf8')
-    assert.match(source, /export function useUnifiedJobWorklist\(loadCompletedArchive = false\)/)
+    assert.match(source, /export function useUnifiedJobWorklist\(loadCompletedArchive = false, options:/)
+    assert.match(source, /fetchUnifiedJobsPage\(token, scope, cursor, undefined, options\.operatingBranch\)/)
     assert.match(source, /fetchScope\(token, 'priority', current\)/)
     assert.match(source, /Promise\.all\(\[\s*fetchScope\(token, 'deferred', current\),\s*fetchScope\(token, 'recent-complete', current\)/)
     assert.match(source, /if \(loadCompletedArchive && !busy && !backgroundBusy\) void loadArchive\(\)/)
@@ -103,7 +104,7 @@ test('Service Coordination treats every Dataverse Job as operational while retai
         { ...job, gr_jobid: id(10), gr_description: 'Managed site check', gr_coordinatormanaged: true, gr_jobtype: 122830004 },
         { ...job, gr_jobid: id(11), gr_description: 'Unnumbered staging' },
         { ...job, gr_jobid: id(12), gr_description: 'Registered book work', gr_jobnumber: '910001' },
-        { ...job, gr_jobid: id(13), gr_description: 'Unconfirmed work', gr_status: 122830005 },
+        { ...job, gr_jobid: id(13), gr_description: 'Legacy staging work', gr_status: 122830005 },
         { ...job, gr_jobid: id(14), gr_description: 'Historical ledger entry', legacyBookEntry: { void: false } },
     ]
     const operational = renderWorklist(rows, 'operational')
@@ -111,7 +112,7 @@ test('Service Coordination treats every Dataverse Job as operational while retai
     assert.doesNotMatch(operational, /jobs-table-muted">Managed</)
     assert.doesNotMatch(operational, /Historical ledger entry/)
     assert.equal((operational.match(/role="tablist"/g) ?? []).length, 1)
-    assert.match(operational, />Unconfirmed</)
+    assert.doesNotMatch(operational, />Unconfirmed</)
     assert.match(operational, />Unnumbered</)
     assert.match(operational, />All jobs</)
     assert.ok(operational.indexOf('>Unnumbered</button>') < operational.indexOf('>Operational</button>'))
@@ -119,9 +120,7 @@ test('Service Coordination treats every Dataverse Job as operational while retai
     const all = renderWorklist(rows, 'all')
     for (const row of rows) assert.ok(all.includes(row.gr_description))
     assert.doesNotMatch(all, /jobs-table-muted">(?:Staging|Job Book)</)
-    const unconfirmed = renderWorklist(rows, 'unconfirmed')
-    assert.match(unconfirmed, /Unconfirmed work/)
-    assert.doesNotMatch(unconfirmed, /Unnumbered staging|Historical ledger entry/)
+    assert.match(operational, /Legacy staging work/)
     const unnumbered = renderWorklist(rows, 'unnumbered')
     assert.match(unnumbered, /Unnumbered staging/)
     assert.match(unnumbered, />Allocate<\/button>/)

@@ -69,6 +69,14 @@ Azure submission/review does not change Dataverse Job Card Status, complete a Jo
 Date, Equipment hours, maintenance or assignments, or create follow-up work/Quotes. With the new
 meter gate enabled, explicit office completion/approval separately updates the Job's meter fields;
 technician submission alone never does so. Original evidence remains unchanged.
+This remains the current boundary while type-specific completion cards are designed. The agreed
+future Service card will carry the Service Type, completion date and classified/dated completion
+meter evidence required by the atomic maintenance workflow. The agreed future WOF card will carry
+the completion date, classified/dated completion meter and new WOF expiry required by the atomic
+inspection/Equipment workflow. These fields extend the same assignment-owned evidence lifecycle;
+they do not authorize a public browser to write Dataverse or directly set Job Status. The deferred
+completion processor and retirement gates are owned by
+[Jobs — Deferred type-specific Job Card completion](jobs.md#deferred-type-specific-job-card-completion).
 The local meter writer uses only dedicated backend `JOB_CARD_METER_DATAVERSE_*` credentials,
 including in scheduled retry; it cannot fall back to the general/GreenTree token. Guard `1.0.2.0`
 binds its role, application and system user to the four-field Job patch. The human reviewer still

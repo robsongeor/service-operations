@@ -24,6 +24,7 @@ import { UNIFIED_JOB_RUNTIME, UNIFIED_JOB_SELECT } from '../domain/unifiedJobWor
 import { JOB_STATUSES } from '../types/jobStatus.types.ts'
 import type { JobTypeFilter } from '../types/jobType.types.ts'
 import { EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED } from '../domain/externalSupplierAssignment.ts'
+import { OPERATING_BRANCH_LABELS, type OperatingBranch } from '../types/operatingBranch.types.ts'
 
 const DATAVERSE_URL = import.meta.env?.VITE_DATAVERSE_URL ?? ''
 const HOUR_METER_READING_SELECT = (HOUR_METER_CLASSIFICATION_ENABLED ? ',gr_hourmeterreadingtype,gr_hourmeterrecordeddate' : '') + (JOB_CARD_METER_APPROVAL_ENABLED ? ',gr_hourmeterapprovalreference' : '')
@@ -33,22 +34,29 @@ const JOB_EXPAND = 'gr_Equipment($select=gr_equipmentid,gr_fleet,gr_alternatefle
 
 export const UNIFIED_JOBS_PAGE_SIZE = 100
 export const RECENT_COMPLETED_JOB_DAYS = 90
+export const ACTIVE_GREENTREE_JOB_FILTER = "(gr_greentreestatus eq null or (gr_greentreestatus ne 'closed' and gr_greentreestatus ne 'finalised'))"
 export type UnifiedJobsServerScope = JobTypeFilter | 'staging' | 'priority' | 'deferred' | 'recent-complete' | 'complete-archive'
 
-export function unifiedJobsServerFilter(scope: UnifiedJobsServerScope, now = new Date()) {
-    if (scope === 'all') return ''
-    if (scope === 'priority') return `((gr_status eq ${JOB_STATUSES.UNALLOCATED} or gr_status eq ${JOB_STATUSES.ALLOCATED} or gr_status eq ${JOB_STATUSES.WAITING_FOR_PARTS}) or gr_jobnumber eq null) and gr_registrationvoid ne true`
-    if (scope === 'deferred') return `(gr_status eq ${JOB_STATUSES.COMPLETION_REVIEW} or gr_status eq ${JOB_STATUSES.UNCONFIRMED}) and gr_registrationvoid ne true`
-    if (scope === 'recent-complete') {
+export function unifiedJobsServerFilter(scope: UnifiedJobsServerScope, now = new Date(), operatingBranch?: OperatingBranch) {
+    let filter = ''
+    if (scope === 'priority') filter = `((gr_status eq ${JOB_STATUSES.UNALLOCATED} or gr_status eq ${JOB_STATUSES.UNCONFIRMED} or gr_status eq ${JOB_STATUSES.ALLOCATED} or gr_status eq ${JOB_STATUSES.WAITING_FOR_PARTS}) or gr_jobnumber eq null) and gr_registrationvoid ne true`
+    else if (scope === 'deferred') filter = `gr_status eq ${JOB_STATUSES.COMPLETION_REVIEW} and gr_registrationvoid ne true`
+    else if (scope === 'recent-complete') {
         const cutoff = new Date(now)
         cutoff.setUTCDate(cutoff.getUTCDate() - RECENT_COMPLETED_JOB_DAYS)
-        return `gr_status eq ${JOB_STATUSES.COMPLETE} and gr_completeddate ge ${cutoff.toISOString().slice(0, 10)} and gr_registrationvoid ne true`
+        filter = `gr_status eq ${JOB_STATUSES.COMPLETE} and gr_completeddate ge ${cutoff.toISOString().slice(0, 10)} and gr_registrationvoid ne true`
     }
-    if (scope === 'complete-archive') return `gr_status eq ${JOB_STATUSES.COMPLETE} and gr_registrationvoid ne true`
-    if (scope === 'operational') return '(gr_coordinatormanaged eq true or gr_coordinatormanaged eq null) and gr_registrationvoid ne true'
-    if (scope === 'staging' || scope === 'unnumbered') return 'gr_jobnumber eq null and gr_registrationvoid ne true'
-    if (scope === 'unconfirmed') return `gr_status eq ${JOB_STATUSES.UNCONFIRMED} and gr_registrationvoid ne true`
-    return `gr_jobtype eq ${scope} and gr_registrationvoid ne true`
+    else if (scope === 'complete-archive') filter = `gr_status eq ${JOB_STATUSES.COMPLETE} and gr_registrationvoid ne true`
+    else if (scope === 'operational') filter = '(gr_coordinatormanaged eq true or gr_coordinatormanaged eq null) and gr_registrationvoid ne true'
+    else if (scope === 'staging' || scope === 'unnumbered') filter = 'gr_jobnumber eq null and gr_registrationvoid ne true'
+    else if (scope !== 'all') filter = `gr_jobtype eq ${scope} and gr_registrationvoid ne true`
+    filter = filter ? `(${filter}) and ${ACTIVE_GREENTREE_JOB_FILTER}` : ACTIVE_GREENTREE_JOB_FILTER
+    if (operatingBranch !== undefined) {
+        if (!(operatingBranch in OPERATING_BRANCH_LABELS)) throw new Error('The operating branch is invalid.')
+        const branchFilter = `gr_operatingbranch eq ${operatingBranch}`
+        filter = filter ? `(${filter}) and ${branchFilter}` : branchFilter
+    }
+    return filter
 }
 
 function trustedUnifiedJobsNextLink(value?: string) {
@@ -67,10 +75,11 @@ export async function fetchUnifiedJobsPage(
     scope: UnifiedJobsServerScope,
     continuationLink = '',
     signal?: AbortSignal,
+    operatingBranch?: OperatingBranch,
 ): Promise<{ records: Job[]; next: string }> {
     if (!UNIFIED_JOB_RUNTIME) throw new Error('The unified Jobs worklist is disabled.')
     if (!DATAVERSE_URL) throw new Error('Dataverse is not configured.')
-    const filter = unifiedJobsServerFilter(scope)
+    const filter = unifiedJobsServerFilter(scope, new Date(), operatingBranch)
     const initial = `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=${JOB_SELECT}&$expand=${JOB_EXPAND}${filter ? `&$filter=${encodeURIComponent(filter)}` : ''}&$orderby=createdon desc,gr_jobid asc`
     const response = await fetch(continuationLink ? trustedUnifiedJobsNextLink(continuationLink) : initial, {
         cache: 'no-store',
@@ -327,13 +336,24 @@ export async function fetchJobsForSites(accessToken: string, siteIds: readonly s
     return rows
 }
 
-export async function fetchJobsByIds(accessToken: string, jobIds: readonly string[], signal?: AbortSignal): Promise<Job[]> {
+export async function fetchJobsByIds(
+    accessToken: string,
+    jobIds: readonly string[],
+    signal?: AbortSignal,
+    operatingBranch?: OperatingBranch,
+): Promise<Job[]> {
     const filters = buildDataverseIdFilterBatches('gr_jobid', jobIds)
     if (!filters.length) return []
+    if (operatingBranch !== undefined && !(operatingBranch in OPERATING_BRANCH_LABELS)) {
+        throw new Error('The operating branch is invalid.')
+    }
     const rows: Job[] = []
     for (const filter of filters) {
+        const scopedFilter = operatingBranch === undefined
+            ? filter
+            : `(${filter}) and gr_operatingbranch eq ${operatingBranch}`
         rows.push(...await fetchAllDataversePages<Job>(
-            `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=${JOB_SELECT}&$expand=${JOB_EXPAND}&$filter=${encodeURIComponent(filter)}`,
+            `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=${JOB_SELECT}&$expand=${JOB_EXPAND}&$filter=${encodeURIComponent(scopedFilter)}`,
             {
                 cache: 'no-store',
                 signal,
@@ -495,6 +515,10 @@ export function buildJobCreatePayload(
         gr_jobtype: job.jobType,
         gr_status: job.status,
         gr_servicetype: job.serviceType,
+    }
+    if (job.operatingBranch !== undefined) {
+        if (!(job.operatingBranch in OPERATING_BRANCH_LABELS)) throw new Error('The operating branch is invalid.')
+        newJob.gr_operatingbranch = job.operatingBranch
     }
 
     if (job.equipmentId) {
@@ -688,7 +712,7 @@ export async function updateJobStatus(
 
 export class ConfirmedDeliveryStatusError extends Error {
     constructor() {
-        super('The Job Card email was sent, but the Job could not be moved to Allocated. Refresh the Job and update its status if it is still Unallocated; do not resend the email.')
+        super('The Job Card email was sent, but the Job could not be moved to With Technician. Use Retry status update if it is still in Staging; do not resend the email.')
         this.name = 'ConfirmedDeliveryStatusError'
     }
 }
@@ -703,7 +727,7 @@ export async function markJobAllocatedAfterConfirmedDelivery(token: string, jobI
         if (!currentResponse.ok) throw new ConfirmedDeliveryStatusError()
         const current = await currentResponse.json() as Pick<Job, 'gr_jobid' | 'gr_status' | '@odata.etag'>
         if (current.gr_jobid?.toLowerCase() !== jobId.toLowerCase()) throw new ConfirmedDeliveryStatusError()
-        if (current.gr_status !== JOB_STATUSES.UNALLOCATED) return false
+        if (current.gr_status !== JOB_STATUSES.UNALLOCATED && current.gr_status !== JOB_STATUSES.UNCONFIRMED) return false
         const etag = current['@odata.etag'] || currentResponse.headers.get('ETag') || ''
         if (!/^(W\/)?"[^"\r\n]+"$/.test(etag)) throw new ConfirmedDeliveryStatusError()
         const updateResponse = await fetch(`${DATAVERSE_URL}/api/data/v9.2/gr_jobs(${jobId})`, {

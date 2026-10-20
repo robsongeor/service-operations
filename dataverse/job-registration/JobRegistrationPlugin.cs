@@ -19,9 +19,9 @@ namespace ServiceOperations.JobRegistration
         public const string RegisteredJob = "gr_registeredjob";
         public const string Fingerprint = "gr_registrationfingerprint";
         public const string CoordinatorManaged = "gr_coordinatormanaged";
+        public const string OperatingBranch = "gr_operatingbranch";
         public const int RegisteredStage = 122830004; // Proposed new Choice; never reinterpret historical Promoted.
-        private const int Unallocated = 122830001;
-        private const int Allocated = 122830000;
+        private const int Staging = 122830001;
 
         private static readonly Dictionary<string, string> Tables = new Dictionary<string, string> {
             { "auckland", "gr_jobbookentry" }, { "waikato", "gr_waikatojobbookentry" },
@@ -29,6 +29,10 @@ namespace ServiceOperations.JobRegistration
         };
         private static readonly Dictionary<string, string> Prefixes = new Dictionary<string, string> {
             { "auckland", "" }, { "waikato", "WJ" }, { "hastings", "HJ" }, { "christchurch", "CJ" }
+        };
+        private static readonly Dictionary<string, int> OperatingBranches = new Dictionary<string, int> {
+            { "auckland", 122830000 }, { "waikato", 122830001 },
+            { "hastings", 122830002 }, { "christchurch", 122830003 }
         };
 
         public void Execute(IServiceProvider provider)
@@ -102,8 +106,12 @@ namespace ServiceOperations.JobRegistration
                 if (!string.IsNullOrWhiteSpace(externalSupplier)) job["gr_externalsupplierdetails"] = externalSupplier;
                 bool unknown = RequiredBool(context.InputParameters, "EquipmentUnknown");
                 if (unknown == job.Contains("gr_equipment")) throw Failure("INVALID", "Select Equipment or explicitly confirm it is not known yet.");
-                job["gr_status"] = new OptionSetValue(job.Contains("gr_mechanic") || job.Contains("gr_externalsupplierdetails") ? Allocated : Unallocated);
+                // Assignment is planning data. Only confirmed Job Card delivery moves a normal Job
+                // from Staging to With Technician.
+                job["gr_status"] = new OptionSetValue(Staging);
                 job[CoordinatorManaged] = false;
+                // The selected regional Job Book is authoritative for the Job's initial branch.
+                job[OperatingBranch] = new OptionSetValue(OperatingBranches[book]);
                 // Deliberately no Job type, number, scheduling, service/completion, marker or evidence input.
                 foreach (string name in new[] { "gr_description", "gr_ordernumber", "gr_site", "gr_equipment", "gr_contact", "gr_mechanic", "gr_externalsupplierdetails" })
                     values.Add(CanonicalValue(job, name));
@@ -142,8 +150,8 @@ namespace ServiceOperations.JobRegistration
                 if (!string.IsNullOrWhiteSpace(current.GetAttributeValue<string>("gr_jobnumber")))
                     throw Failure("ALREADY_NUMBERED", "The Job already has a number. It cannot receive another.");
                 if (current.RowVersion != expectedVersion) throw Failure("CONFLICT", "The Job changed elsewhere. Reload before allocating its number.");
-                // Specialist Jobs retain their source records and operational fields. Number allocation
-                // changes only the Job number and creates the same immutable regional ledger snapshot.
+                // Specialist Jobs retain their source records and operational fields. Initial number
+                // allocation also stamps the selected regional Job Book as the Job's operating branch.
                 job = current;
             }
 
@@ -158,6 +166,7 @@ namespace ServiceOperations.JobRegistration
                 ? service.Retrieve("gr_job", jobId, new ColumnSet("gr_jobnumber")).RowVersion : expectedVersion };
             if (string.IsNullOrWhiteSpace(patch.RowVersion)) throw Failure("CONFIGURATION", "Job concurrency protection is unavailable.");
             patch["gr_jobnumber"] = number;
+            patch[OperatingBranch] = new OptionSetValue(OperatingBranches[book]);
             service.Execute(new UpdateRequest { Target = patch, ConcurrencyBehavior = ConcurrencyBehavior.IfRowVersionMatches });
             var savedJob = service.Retrieve("gr_job", jobId, new ColumnSet("gr_jobnumber"));
             Output(context, book, savedJob, savedLedger, false);

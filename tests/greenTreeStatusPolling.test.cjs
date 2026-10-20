@@ -85,3 +85,33 @@ test('scheduled polling excludes fresh and finalised records and quarantines a r
     assert.deepEqual(result.conflicts, ['150003'])
     assert.equal(patches, 0)
 })
+
+test('manual polling forces one exact Job lookup and updates every matching representation', async () => {
+    const patches = []
+    const reads = []
+    const result = await pollGreenTreeJobStatuses({
+        mode: 'manual', jobNumber: '150006', now: Date.parse('2026-10-20T01:00:00Z'),
+        dataverseOrigin: 'https://example.crm.dynamics.com', authorization: 'Bearer token',
+        fetchJob: async (code) => ({ code, isClosed: false, isFinalised: false }),
+        fetchImpl: async (url, options = {}) => {
+            if (options.method) {
+                patches.push({ url: String(url), body: JSON.parse(options.body) })
+                return new Response(null, { status: 204 })
+            }
+            reads.push(decodeURIComponent(String(url)))
+            const table = /\/api\/data\/v9\.2\/([^?]+)/.exec(String(url))?.[1]
+            if (table === 'gr_jobs') return Response.json({ value: [{ '@odata.etag': 'W/"1"', gr_jobid: 'job-1', gr_jobnumber: '150006', gr_gtentered: false, gr_greentreestatus: null }] })
+            if (table === 'gr_jobbookentries') return Response.json({ value: [{ '@odata.etag': 'W/"2"', gr_jobbookentryid: 'ledger-1', gr_jobnumber: '150006', gr_entered: false, gr_greentreestatus: null }] })
+            return Response.json({ value: [] })
+        },
+    })
+    assert.equal(reads.length, 5)
+    assert.ok(reads.every((url) => url.includes("gr_jobnumber eq '150006'")))
+    assert.equal(result.mode, 'manual')
+    assert.equal(result.checked, 1)
+    assert.equal(result.entered, true)
+    assert.equal(result.status, 'open')
+    assert.equal(result.updatedRecords, 2)
+    assert.equal(patches.length, 2)
+    assert.ok(patches.every((patch) => patch.body.gr_greentreestatus === 'open'))
+})

@@ -3,7 +3,7 @@ import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation'
 import EditDrawerSection from '../../shared/drawer/EditDrawerSection'
 import EditDrawerShell from '../../shared/drawer/EditDrawerShell'
 import DrawerTabs from '../../shared/drawer/DrawerTabs'
-import { JOB_STATUS_OPTIONS } from '../../jobs/types/jobStatus.types'
+import { canonicalJobStatus, getJobStatusLabel } from '../../jobs/types/jobStatus.types'
 import { HOUR_METER_READING_TYPES } from '../../equipment/hourMeter/hourMeterReading.types'
 import { EQUIPMENT_SITE_CHECK_AVAILABILITY_OPTIONS } from '../../equipment/types/equipmentSiteCheckAvailability.types'
 import type { Equipment } from '../../jobs/types/equipment.types'
@@ -232,7 +232,7 @@ export default function SiteCheckDetailsDrawer({
             : jobs.length === 0 ? <p>No generated Jobs were found.</p>
                 : <div className="site-check-job-list site-check-job-history-list">
                     {jobs.map((job) => {
-                        const jobStatus = JOB_STATUS_OPTIONS.find((option) => option.value === job.gr_status)?.label ?? 'Unknown'
+                        const jobStatus = getJobStatusLabel(job.gr_status)
                         const details = <>
                             <div className="site-check-job-history-title">
                                 <div>
@@ -243,7 +243,7 @@ export default function SiteCheckDetailsDrawer({
                             </div>
                             <div className="site-check-job-history-meta">
                                 <span>Site Check</span>
-                                <span className="site-check-job-history-status" data-status={job.gr_status}>{jobStatus}</span>
+                                <span className="site-check-job-history-status" data-status={canonicalJobStatus(job.gr_status)}>{jobStatus}</span>
                                 <span>{equipmentLabel(job)}</span>
                             </div>
                             <dl>

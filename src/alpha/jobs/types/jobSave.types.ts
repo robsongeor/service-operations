@@ -3,6 +3,7 @@ import type { JobStatus } from './jobStatus.types'
 import type { ServiceType } from '../../equipment/servicePlans/equipmentServicePlan.types'
 import type { OfficeAction } from './officeAction.types'
 import type { HourMeterReadingType } from '../../equipment/hourMeter/hourMeterReading.types'
+import type { OperatingBranch } from './operatingBranch.types'
 
 export type JobSaveInput = {
     jobNumber: string
@@ -10,6 +11,8 @@ export type JobSaveInput = {
     description: string
     jobType: JobType
     status: JobStatus
+    /** Set only at creation from the authenticated coordinator or authoritative regional ledger. */
+    operatingBranch?: OperatingBranch
     equipmentId?: string
     /** Creation drawer has explicitly managed the asset location; never move it again on Job save. */
     equipmentLocationHandled?: boolean

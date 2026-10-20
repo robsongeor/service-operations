@@ -11,7 +11,7 @@ import { useJobEditor } from '../hooks/useJobEditor'
 import JobCoreFields from './JobCoreFields'
 import JobRelationshipFields, { type JobRelationshipLookupProps } from './JobRelationshipFields'
 import JobScheduleFields from './JobScheduleFields'
-import { JOB_STATUSES, UNCONFIRMED_OPERATION_MESSAGE } from '../types/jobStatus.types'
+import { canonicalJobStatus, JOB_STATUSES } from '../types/jobStatus.types'
 import JobDrawerShell from './JobDrawerShell'
 import JobQuotesSection from './JobQuotesSection'
 import JobCardFields from './JobCardFields'
@@ -34,7 +34,7 @@ import { JOB_NUMBER_REQUIRED_EMAIL_MESSAGE, jobHasEmailableJobNumber } from '../
 import { OFFICE_ACTIONS, type JobOfficeUpdate } from '../types/officeAction.types'
 import JobOfficeFields from './JobOfficeFields'
 import { jobHasActiveSubmissionLink } from '../services/jobSubmissionLinkApi'
-import type { JobCardDetails } from '../services/jobsApi'
+import { ConfirmedDeliveryStatusError, type JobCardDetails } from '../services/jobsApi'
 import { useOperationalQuery } from '../../shared/data/useOperationalQuery'
 import {
     focusedJobAssignmentsQueryKey,
@@ -65,7 +65,7 @@ function createJobEditorDraft(job: Job) {
         mechanicId: job.gr_Mechanic?.gr_mechanicid ?? '',
         externalSupplierDetails: job.gr_externalsupplierdetails ?? '',
         externalSupplierSelected: Boolean(job.gr_externalsupplierdetails),
-        status: job.gr_status,
+        status: canonicalJobStatus(job.gr_status),
         equipmentId: job.gr_Equipment?.gr_equipmentid ?? '',
         customerId: job.gr_Site?.gr_Customer?.gr_customerid ?? '',
         siteId: job.gr_Site?.gr_siteid ?? '',
@@ -118,6 +118,7 @@ type Props = JobRelationshipLookupProps & {
     onCreateAssignment: (assignment: JobAssignmentInput) => Promise<void>
     onSendPrimary: (job: Job) => Promise<void>
     onSendAssignment: (job: Job, assignment: JobAssignment) => Promise<void>
+    onRetryConfirmedDeliveryStatus?: (jobId: string) => Promise<void>
     onDeleteAssignment: (assignmentId: string) => Promise<void>
     officeUpdates?: JobOfficeUpdate[]
     onCreateOfficeUpdate?: (input: { jobId: string; jobNumber?: string | null; text: string }) => Promise<JobOfficeUpdate>
@@ -137,6 +138,8 @@ type Props = JobRelationshipLookupProps & {
     allowCorrectionMasterCreation?: boolean
     saveBlockedReason?: string
     onReloadCorrections?: () => void
+    watched?: boolean
+    onToggleWatch?: () => Promise<void>
     onClose: () => void
 }
 
@@ -172,6 +175,7 @@ export default function JobEditDrawer({
     onCreateAssignment,
     onSendPrimary,
     onSendAssignment,
+    onRetryConfirmedDeliveryStatus = async () => { throw new Error('Retry status update is unavailable in this view. Refresh the Job and update it from Service Coordination; do not resend the email.') },
     onDeleteAssignment,
     officeUpdates = [],
     onCreateOfficeUpdate = async () => { throw new Error('Office updates are unavailable in this view.') },
@@ -191,6 +195,8 @@ export default function JobEditDrawer({
     allowCorrectionMasterCreation = false,
     saveBlockedReason = '',
     onReloadCorrections,
+    watched = false,
+    onToggleWatch,
     onClose,
 }: Props) {
     const [job, setJob] = useState(initialJob)
@@ -210,6 +216,9 @@ export default function JobEditDrawer({
     const [isDeleting, setIsDeleting] = useState(false)
     const [deleteError, setDeleteError] = useState('')
     const [isEmailing, setIsEmailing] = useState(false)
+    const [dispatchStatusRecoveryRequired, setDispatchStatusRecoveryRequired] = useState(false)
+    const [isRecoveringDispatchStatus, setIsRecoveringDispatchStatus] = useState(false)
+    const [isUpdatingWatch, setIsUpdatingWatch] = useState(false)
     const [showEmailLinkConfirm, setShowEmailLinkConfirm] = useState(false)
     const [activeTab, setActiveTab] = useState<'details' | 'office' | 'scheduling' | 'jobcard' | 'quotes'>(correctionsOnly ? 'details' : initialTab)
     const [officeAction, setOfficeAction] = useState(job.gr_currentofficeaction ?? OFFICE_ACTIONS.NONE)
@@ -468,9 +477,23 @@ export default function JobEditDrawer({
             setShowEmailLinkConfirm(false)
             await onSendPrimary(job)
         } catch (error) {
+            if (error instanceof ConfirmedDeliveryStatusError) setDispatchStatusRecoveryRequired(true)
             setSaveError(error instanceof Error ? error.message : 'The job email flow did not complete.')
         } finally {
             setIsEmailing(false)
+        }
+    }
+
+    const retryDispatchStatus = async () => {
+        try {
+            setIsRecoveringDispatchStatus(true)
+            setSaveError('')
+            await onRetryConfirmedDeliveryStatus(job.gr_jobid)
+            setDispatchStatusRecoveryRequired(false)
+        } catch (error) {
+            setSaveError(error instanceof Error ? error.message : 'The Job status update could not be retried.')
+        } finally {
+            setIsRecoveringDispatchStatus(false)
         }
     }
 
@@ -480,9 +503,21 @@ export default function JobEditDrawer({
             eyebrow={correctionsOnly ? `${jobBookLabel} Job Book` : 'Edit job'}
             title={correctionsOnly ? `Edit ${jobBookLabel} Job Book entry` : job.gr_jobnumber || 'Unnumbered job'}
             className={correctionsOnly ? 'job-book-intake-drawer' : undefined}
-            busy={isSaving || isDeleting || isEmailing || locationSaving}
+            busy={isSaving || isDeleting || isEmailing || isRecoveringDispatchStatus || locationSaving}
             onClose={onClose}
-            headerAction={!correctionsOnly &&
+            headerAction={!correctionsOnly && <div className="job-drawer-header-actions">
+                {onToggleWatch && <button
+                    type="button"
+                    className={watched ? 'job-drawer-watch-action watching' : 'job-drawer-watch-action'}
+                    aria-pressed={watched}
+                    disabled={isUpdatingWatch}
+                    onClick={() => {
+                        setIsUpdatingWatch(true)
+                        void onToggleWatch().catch((error) => setSaveError(error instanceof Error ? error.message : 'The watchlist could not be updated.')).finally(() => setIsUpdatingWatch(false))
+                    }}
+                >
+                    {isUpdatingWatch ? 'Updating…' : watched ? 'Watching' : 'Watch'}
+                </button>}
                 <button
                     type="button"
                     className={`job-drawer-email-action${azureJobCards ? '' : ` status-${jobCardStatus}`}`}
@@ -492,7 +527,7 @@ export default function JobEditDrawer({
                 >
                     {emailLabel}
                 </button>
-            }
+            </div>}
             footer={
                 <>
                     <div className="job-edit-footer-leading">
@@ -510,6 +545,7 @@ export default function JobEditDrawer({
                         {saveError || saveBlockedReason
                             ? <span className="job-edit-save-error" role="alert">{saveError || saveBlockedReason}</span>
                             : <span>{locationPending ? 'Save or cancel the equipment location change before saving the Job.' : correctionsOnly ? `Editing Job Book ${job.gr_jobnumber || 'entry'}.` : 'Save to update this job in Dataverse.'}</span>}
+                        {dispatchStatusRecoveryRequired && <button type="button" disabled={isRecoveringDispatchStatus} onClick={() => void retryDispatchStatus()}>{isRecoveringDispatchStatus ? 'Retrying status…' : 'Retry status update'}</button>}
                         {correctionsOnly && saveBlockedReason && <button type="button" onClick={onReloadCorrections}>Reload latest details</button>}
                     </div>
                     <div className="job-edit-footer-actions">
@@ -680,7 +716,6 @@ export default function JobEditDrawer({
                         <JobScheduleFields
                             jobId={job.gr_jobid}
                             scheduleOptions={scheduleOptions}
-                            disabledMessage={draft.status === JOB_STATUSES.UNCONFIRMED ? UNCONFIRMED_OPERATION_MESSAGE : undefined}
                             onCreate={onCreateScheduleOption}
                             onUpdate={onUpdateScheduleOption}
                             onDelete={onDeleteScheduleOption}
@@ -730,6 +765,7 @@ export default function JobEditDrawer({
                                     onCreateAssignment={createAssignmentAndRefresh}
                                     onSendPrimary={onSendPrimary}
                                     onSendAssignment={sendAssignmentAndRefresh}
+                                    onDispatchStatusRecoveryRequired={(message) => { setDispatchStatusRecoveryRequired(true); setSaveError(message) }}
                                     onDeleteAssignment={deleteAssignmentAndRefresh}
                                     onLoadPhoto={onLoadJobPhoto}
                                 />

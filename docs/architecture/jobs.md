@@ -113,7 +113,8 @@ authority.
 
 `canEmailAssignedTechnician` grants FullAccess and JobCardAdmin the separate Job Book row action.
 JobBookOnly cannot email. It requires a numbered managed Job, a linked technician with a valid
-email, and a non-Unconfirmed ordinary Job; Intake, Void and Site Check rows are not dispatched.
+email, and an ordinary Job; Intake, Void and Site Check rows are not dispatched. The retired
+Unconfirmed value is treated as Staging during migration.
 Admins can edit the subject and email-only comments, not the recipient or technician allocation.
 The corrections drawer itself still has no dispatch controls. Coordinators retain their existing
 Jobs composer recipient controls.
@@ -174,7 +175,7 @@ See [email delivery](../email-dispatch-flow.md) for transport ownership.
 The unified-workflow contract includes `gr_QueueInitialJobDispatch`. Behind the
 `VITE_UNIFIED_JOB_WORKFLOW_ENABLED` gate, restricted Admin sends use a retained request ID and the
 exact rendered message. The caller-scoped plugin rereads the Job and assigned technician, verifies
-the Job row version and recipient, rejects Site Check/Void/unnumbered/Unconfirmed work and creates
+the Job row version and recipient, rejects Site Check/Void/unnumbered work and creates
 one fingerprinted Email Dispatch row. Same-session uncertain retries reuse the identical request and
 body. The Azure secure-link call remains separate. Provisioning is recorded in the rollout
 documents; real-role delivery and post-delivery allocation still require acceptance tests.
@@ -190,7 +191,7 @@ The next server/client slice now exists as local source and offline tests; see t
 Registration/plugin provisioning is recorded and the V2 workflow enables the feature; earlier
 local-only headings describe history, not current activation. The production feature gate wires the same
 screen boundary to 100-row Dataverse pages, validates continuation links, and applies server-side
-Operational, Unconfirmed and Job Type filters. The
+Operational and Job Type filters. Legacy Unconfirmed rows are included with Staging-priority work. The
 [isolated unified walkthrough](../features/JOB_BOOK_INTAKE_DESIGN.md#unified-screen-walkthrough-3-october-2026-sample-data-only)
 retains its fixture endpoints and shared creation/correction controls. This is not a substitute for
 the remaining schema, privilege, migration and specialist-workflow rollout.
@@ -461,15 +462,73 @@ intake, but Site suggestions require a linked Customer.
 
 | Status | Intended meaning | Intended entry rule |
 | --- | --- | --- |
-| Unallocated | The Job has not yet been successfully dispatched to a technician. | New operational Jobs begin here. A final technician withdrawal may return an Allocated Job here when no current technician assignment remains. |
-| Allocated | At least one technician has been successfully sent the Job. | A confirmed email dispatch moves only an Unallocated Job to Allocated. Selecting a mechanic without dispatching does not allocate the Job. |
+| Staging (stored as `Unallocated`) | The Job is being prepared and has not yet been successfully dispatched. A technician may be tentatively selected without changing this lifecycle state. | New operational Jobs begin here. A final technician withdrawal may return a With Technician Job here when no current technician ownership remains. |
+| With Technician (stored as `Allocated`) | At least one technician has been successfully sent the Job. This covers queued, travelling and in-progress work; it does not claim that work has physically started. | A confirmed Job Card dispatch moves only a Staging Job to With Technician. Selecting a mechanic without dispatching does not move the Job. |
 | Action Required | Office or coordinator action is needed before work can progress. | This is the user-facing name of the existing `Waiting for parts` Dataverse option. It remains coordinator-controlled and its numeric option-set value is unchanged. |
-| Completion Review | Submitted evidence needs office review before operational completion. | Required assignments/evidence must be checked through the canonical completion workflow. |
+| Completion Review | Every current required technician return has been received and the submitted evidence needs office processing before operational completion. | The latest lifecycle for every required current assignment must be received or explicitly withdrawn. Action Required is never automatically overridden. |
 | Complete | Operational completion is accepted with required evidence and type-specific side effects. | GreenTree closure alone must not complete a job with missing evidence (owner decision 10 October). Technician answers/submission alone never set Complete. |
 
-Current exceptions must be fixed rather than treated as accepted lifecycle rules:
+**Staging** and **With Technician** are the agreed coordinator-facing labels. The existing
+`Unallocated` and `Allocated` Dataverse Choice values remain the active storage contract. Legacy
+Unconfirmed `122830005` is no longer an active status: it is displayed/filtered as Staging until a
+controlled migration rewrites it to `122830001`, after which the Choice option can be retired.
+Assignment, schedule and Job Card progress
+are facts shown alongside the lifecycle rather than additional operational statuses. Service
+Coordination should expose progress such as **Not sent**, **Awaiting 2 cards**, **1 of 2 received**,
+**All cards received** and **Link expired** without requiring the coordinator to open every Job.
+The target also renames the existing Dataverse labels `Waiting for parts` to **Action Required** and
+`Review` to **Completion Review**, while retaining the five active numeric values. Label publication
+and evidence-based correction of historical rows are separate operations; see
+[Job Status Lifecycle Schema and Historical Migration](../job-status-lifecycle-migration.md).
 
-- Registration with a mechanic/supplier immediately sets Allocated.
+Office attention and personal watching are separate concerns. Existing
+`gr_officeattentionrequired` remains a shared operational signal for every coordinator working that
+branch. A dedicated user-owned Job Watch keeps a Job on one signed-in user's personal list without
+leaving its lifecycle incorrectly in Staging or changing the shared attention state. Branch work is
+shared: Auckland's coordinators see the same Auckland queue while keeping independent watchlists;
+Christchurch sees Christchurch work by default. The schema, identity, migration and security
+boundary are defined in [Job Branch Scope and Personal Watchlist](../job-branch-and-personal-watchlist.md).
+
+### Deferred type-specific Job Card completion
+
+Owner decision recorded 19 October 2026: the current manual Service and WOF completion dialogs are
+a transition mechanism, not the intended long-term source of completion evidence. They remain in
+place until replacement Job Cards and an atomic processor are implemented and accepted; do not
+remove them merely because the target design is documented.
+
+The target design gives each completion-sensitive Job type a completable technician Job Card:
+
+- A **Service Job Card** must capture every value required by the existing Service completion
+  operation, including the performed Service Type, Job Completion Date, completion hour meter and
+  its recorded date/classification. Accepted evidence must be sufficient to update the Job,
+  Equipment meter and the applicable A/B/C maintenance-plan baselines atomically.
+- A **WOF Job Card** must capture every value required by the existing WOF completion operation,
+  including the Job Completion Date, completion hour meter and its recorded date/classification,
+  and the new WOF expiry date. Accepted evidence must remain tied to the explicit WOF Inspection and
+  Equipment so the inspection history and authoritative Equipment expiry can be updated atomically.
+- Shared time, parts, story, photos, further-work and safety evidence continue to use the normal Job
+  Card contract. Type-specific completion answers extend that contract; they do not create a second
+  unrelated submission workflow.
+
+Automatic **Completion Review → Complete** processing is explicitly on hold. For now, receipt of all
+required technician cards may move With Technician to Completion Review, but neither technician
+submission, office filing nor GreenTree status may automatically mark the Job Complete. The future
+processor must first validate the accepted type-specific evidence, current assignment roster and
+current Dataverse relationships, then execute the existing Service/WOF side effects atomically. Only
+after that work is safe may GreenTree **Closed** or **Finalised** act as the external completion gate
+and the operational Job become Complete. Conflicting or missing evidence must remain in Completion
+Review with visible office attention; automation must not invent values or partially update records.
+
+Retiring the manual completion dialogs is therefore a later cutover step after schema, technician
+forms, review/correction handling, atomic processing, retry/idempotency, migration compatibility and
+live acceptance are complete. See [Technician Job Card Submission](technician-job-submission.md),
+[Maintenance](maintenance.md), [WOF](wof.md) and the active backlog in [`TODO.md`](../../TODO.md).
+
+The registration exception was corrected in source on 19 October 2026: ordinary registration and
+WOF creation now remain Staging even when a technician or supplier is selected, and the restricted
+guard enforces the same payload. Deployment and historical reconciliation remain separate approved
+phases. Current exceptions must be fixed rather than treated as accepted lifecycle rules:
+
 - GreenTree reconciliation records only the factual external state (`open`, `closed` or `finalised`)
   and the GreenTree-entry marker. It must not change the operational Job status or perform
   completion side effects.
@@ -519,9 +578,8 @@ The status-specific polling and provisioning contract is documented in
 - Completed Job readings are accepted by default. Sequence analysis may display an isolated value
   as Potentially incorrect, an unresolved drop as Possible reset, or a sustained lower increasing
   sequence as Confirmed reset; these assessments are derived and do not rewrite history.
-- Unconfirmed Jobs are visible history but unavailable for allocation and scheduling.
-- Moving allocated work to Unconfirmed removes allocations and schedules through existing
-  APIs before changing status.
+- Historical Unconfirmed Jobs are compatibility-mapped to Staging and remain visible, assignable,
+  schedulable and dispatchable until migration. Unconfirmed is absent from tabs and editable choices.
 - Office attention is independent of operational Job Status, and Office Update history is
   append-only.
 - Assignment instructions, dispatch state, and Job Card state are assignment-specific.
@@ -529,8 +587,10 @@ The status-specific polling and provisioning contract is documented in
 - Successful dispatch moves only an Unallocated Job to Allocated. When the latest lifecycle for
   every non-withdrawn technician assignment has submitted evidence, an Allocated Job moves to
   Completion Review. Active, expired, replacement and truncated lifecycle histories block that
-  transition conservatively. Technician answers and GreenTree status never determine the
-  operational outcome, and neither can mark the Job Complete.
+  transition conservatively. These are the stored status names; Service Coordination presents them
+  as Staging and With Technician. Technician answers and GreenTree status never currently determine
+  the operational outcome, and neither can mark the Job Complete. The deferred type-specific Job
+  Card design above must be delivered before that completion boundary changes.
 - Generated Site Check Job status changes from both the Jobs table and Job drawer route
   through `siteCheckCompletionApi`. It reloads the parent and every sibling, blocks progress
   on expected-count mismatch, and atomically completes the final Job, occurrence, and

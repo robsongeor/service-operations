@@ -58,7 +58,8 @@ a fallback.
 
 ## Important Business Rules
 
-- Unconfirmed Jobs are not schedulable.
+- Historical Unconfirmed values behave as Staging and are schedulable until migrated; there is no
+  active Unconfirmed choice or scheduler tab.
 - Site Check Jobs are not schedulable.
 - Schedule options are durable child records, not fields copied onto the Job.
 - Removing or invalidating allocation must coordinate with affected schedule records.

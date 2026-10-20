@@ -5,7 +5,8 @@ import { getJobTypeLabel, JOB_TYPES } from '../types/jobType.types'
 import JobTypeBadge from './JobTypeBadge'
 import JobTypeTabs from './JobTypeTabs'
 import {
-    JOB_STATUSES,
+    canonicalJobStatus,
+    getJobStatusLabel,
     JOB_STATUS_OPTIONS,
     JOB_STATUS_PRIORITY,
     type JobStatus,
@@ -31,6 +32,8 @@ import JobQuickActions from './JobQuickActions'
 import type { JobEmailDeliveryState, JobEmailDraft } from '../services/jobEmail'
 import { buildJobBookSpreadsheetRow, copyNumberedJobBookSpreadsheetRow } from '../utils/jobBookClipboard'
 import { EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED } from '../domain/externalSupplierAssignment'
+import { OPERATING_BRANCH_LABELS } from '../types/operatingBranch.types'
+import type { CoordinationView, JobCardProgressSummary } from '../types/serviceCoordination.types'
 
 type Props = {
     unifiedWorklist?: boolean
@@ -62,6 +65,11 @@ type Props = {
     officeUpdates: JobOfficeUpdate[]
     scheduleOptions: JobScheduleOption[]
     stickyThroughColumnId: JobsStickyThroughColumnId | null
+    coordinationView?: CoordinationView
+    watchedJobIds?: ReadonlySet<string>
+    onToggleWatch?: (job: Job) => Promise<void>
+    progressSummaries?: Readonly<Record<string, JobCardProgressSummary>>
+    progressUnavailable?: boolean
 }
 
 const createdDateFormatter = new Intl.DateTimeFormat('en-NZ', {
@@ -92,6 +100,11 @@ export default function JobsTable({
     officeUpdates,
     scheduleOptions,
     stickyThroughColumnId,
+    coordinationView = 'branch',
+    watchedJobIds = new Set<string>(),
+    onToggleWatch,
+    progressSummaries = {},
+    progressUnavailable = false,
 }: Props) {
     const { searchText, selectedJobType, officeAttentionFilter, scheduledJobsVisibility, sort } = viewState
     const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(() => new Set())
@@ -153,11 +166,10 @@ export default function JobsTable({
     }
 
     const jobsForSelectedType = useMemo(() => jobs.filter((job) => {
-        if (selectedJobType === 'unconfirmed' && job.gr_status !== JOB_STATUSES.UNCONFIRMED) return false
         if (selectedJobType === 'unnumbered' && (job.legacyBookEntry || job.gr_registrationvoid || job.gr_jobnumber?.trim())) return false
         if (job.legacyBookEntry) return selectedJobType === 'all'
         if (selectedJobType === 'operational' && (unifiedWorklist ? job.gr_registrationvoid : job.gr_jobtype === JOB_TYPES.SITE_CHECK)) return false
-        if (selectedJobType !== 'all' && selectedJobType !== 'operational' && selectedJobType !== 'unconfirmed' && selectedJobType !== 'unnumbered' && job.gr_jobtype !== selectedJobType) return false
+        if (selectedJobType !== 'all' && selectedJobType !== 'operational' && selectedJobType !== 'unnumbered' && job.gr_jobtype !== selectedJobType) return false
         if (!jobMatchesScheduledVisibility(job.gr_jobid, scheduleOptions, scheduledJobsVisibility)) return false
         const needsAttention = jobNeedsOfficeAttention(job)
         const matchesOfficeActionFilter = officeAttentionFilter === 'all'
@@ -174,7 +186,7 @@ export default function JobsTable({
         if (!search) return jobsForSelectedType
 
         return jobsForSelectedType.filter((job) => {
-            const statusLabel = JOB_STATUS_OPTIONS.find((status) => status.value === job.gr_status)?.label
+            const statusLabel = getJobStatusLabel(job.gr_status)
             const searchableText = [
                 job.gr_jobnumber,
                 job.gr_ordernumber,
@@ -318,14 +330,7 @@ export default function JobsTable({
                     allLabel="All jobs"
                     selectedJobType={selectedJobType}
                     includeUnnumbered={unifiedWorklist}
-                    includeUnconfirmed
-                    onChange={(jobType) => onViewStateChange({
-                        ...viewState,
-                        selectedJobType: jobType,
-                        visibleStatuses: jobType === 'unconfirmed' && !visibleStatuses.includes(JOB_STATUSES.UNCONFIRMED)
-                            ? [...visibleStatuses, JOB_STATUSES.UNCONFIRMED]
-                            : visibleStatuses,
-                    })}
+                    onChange={(jobType) => onViewStateChange({ ...viewState, selectedJobType: jobType })}
                 />
                 <div className="jobs-list-toolbar" aria-label="Filter jobs by status">
                     <span>Status</span>
@@ -467,7 +472,7 @@ export default function JobsTable({
                             return (
                             <tr
                                 key={job.gr_jobid}
-                                data-status={job.gr_status}
+                                data-status={canonicalJobStatus(job.gr_status)}
                             >
                                 <td {...stickyProps('attention')} className={`${stickyProps('attention').className ?? ''} jobs-attention-column`.trim()}>
                                     {jobNeedsOfficeAttention(job) && <span className="jobs-office-indicator" title="Office attention required" aria-label="Office attention required" />}
@@ -478,6 +483,9 @@ export default function JobsTable({
                                         : onAllocateNumber && !job.gr_registrationvoid
                                             ? <button type="button" className="jobs-table-allocate-number" onClick={() => onAllocateNumber(job)}>Allocate</button>
                                             : <span className="jobs-table-job-number" title="Job number pending allocation.">—</span>}
+                                    {coordinationView === 'watchlist' && job.gr_operatingbranch !== null && job.gr_operatingbranch !== undefined && (
+                                        <small className="jobs-branch-badge">{OPERATING_BRANCH_LABELS[job.gr_operatingbranch]}</small>
+                                    )}
                                 </td>
 
                                 <td {...stickyProps('created')} className={stickyProps('created').className ? `${stickyProps('created').className} jobs-table-date` : 'jobs-table-date'}>
@@ -541,7 +549,7 @@ export default function JobsTable({
                                 </td>
 
                                 <td {...stickyProps('mechanic')}>
-                                    {job.gr_registrationvoid || job.gr_status === JOB_STATUSES.UNCONFIRMED ? (
+                                    {job.gr_registrationvoid ? (
                                         <span className="jobs-table-muted">Not available</span>
                                     ) : <SearchableMechanicSelect
                                         mechanics={mechanics}
@@ -568,9 +576,9 @@ export default function JobsTable({
                                     <select
                                         disabled={Boolean(job.gr_registrationvoid)}
                                         className="jobs-table-select jobs-table-status"
-                                        data-status={job.gr_status}
+                                        data-status={canonicalJobStatus(job.gr_status)}
                                         aria-label="Job status"
-                                        value={job.gr_status}
+                                        value={canonicalJobStatus(job.gr_status)}
                                         onChange={async (event) => {
                                             try { await onStatusChange(job.gr_jobid, Number(event.target.value) as JobStatus) }
                                             catch (error) { window.alert(error instanceof Error ? error.message : 'The job status could not be updated.') }
@@ -604,6 +612,23 @@ export default function JobsTable({
 
                                 <td className="jobs-table-actions-column">
                                     <div className="jobs-table-actions">
+                                        {progressUnavailable
+                                            ? <span className="jobs-progress-badge unavailable" title="Job Card progress is unavailable">Cards unavailable</span>
+                                            : progressSummaries[job.gr_jobid.toLowerCase()] && <span
+                                                className={`jobs-progress-badge ${progressSummaries[job.gr_jobid.toLowerCase()].state}`}
+                                                title={`Job Card progress: ${progressSummaries[job.gr_jobid.toLowerCase()].returnedCount} of ${progressSummaries[job.gr_jobid.toLowerCase()].currentRequiredTechnicianCount} returned; ${progressSummaries[job.gr_jobid.toLowerCase()].state}`}
+                                            >
+                                                {progressSummaries[job.gr_jobid.toLowerCase()].returnedCount}/{progressSummaries[job.gr_jobid.toLowerCase()].currentRequiredTechnicianCount} cards
+                                            </span>}
+                                        {onToggleWatch && <button
+                                            type="button"
+                                            className={watchedJobIds.has(job.gr_jobid.toLowerCase()) ? 'jobs-watch-action watching' : 'jobs-watch-action'}
+                                            aria-pressed={watchedJobIds.has(job.gr_jobid.toLowerCase())}
+                                            aria-label={`${watchedJobIds.has(job.gr_jobid.toLowerCase()) ? 'Stop watching' : 'Watch'} Job ${job.gr_jobnumber || 'row'}`}
+                                            onClick={() => { void onToggleWatch(job).catch((error) => window.alert(error instanceof Error ? error.message : 'The watchlist could not be updated.')) }}
+                                        >
+                                            {watchedJobIds.has(job.gr_jobid.toLowerCase()) ? 'Watching' : 'Watch'}
+                                        </button>}
                                         {unifiedWorklist && job.gr_registrationvoid && <span className="jobs-table-muted">Void</span>}
                                         {!unifiedWorklist && <input
                                             type="checkbox"

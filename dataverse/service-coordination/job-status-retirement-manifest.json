@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "migrationId": "job-status-unconfirmed-retirement-v1",
+  "table": "gr_job",
+  "primaryId": "gr_jobid",
+  "statusColumn": "gr_status",
+  "globalChoice": "gr_status",
+  "sourceStatus": 122830005,
+  "targetStatus": 122830001,
+  "reasonCode": "legacy-unconfirmed-retirement",
+  "maximumRecords": 100000,
+  "knownStatuses": [
+    { "value": 122830000, "targetLabel": "With Technician" },
+    { "value": 122830001, "targetLabel": "Staging" },
+    { "value": 122830002, "targetLabel": "Action Required" },
+    { "value": 122830003, "targetLabel": "Complete" },
+    { "value": 122830004, "targetLabel": "Completion Review" },
+    { "value": 122830005, "targetLabel": "Retired legacy Unconfirmed" }
+  ],
+  "writeIncluded": false,
+  "choiceRetirementIncluded": false,
+  "otherStatusReclassificationIncluded": false
+}

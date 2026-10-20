@@ -126,7 +126,7 @@ test('Job Book guards Manage job presentation and entry point while retaining In
 test('unified production Jobs uses the bounded worklist without changing the default runtime', () => {
     const screen = readFileSync(new URL('../src/alpha/jobs/JobsScreen.tsx', import.meta.url), 'utf8')
     const worklist = readFileSync(new URL('../src/alpha/jobs/hooks/useUnifiedJobWorklist.ts', import.meta.url), 'utf8')
-    assert.match(screen, /useUnifiedJobWorklist\(completedArchiveRequested\)/)
+    assert.match(screen, /useUnifiedJobWorklist\(completedArchiveRequested, \{/)
     assert.match(screen, /useJobs\(UNIFIED_JOB_RUNTIME \? \{ loadGlobalOperationalData: false/)
     assert.match(screen, /unifiedWorklist=\{UNIFIED_JOB_RUNTIME\}/)
     assert.match(worklist, /fetchScope\(token, 'priority', current\)/)

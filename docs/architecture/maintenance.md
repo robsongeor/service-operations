@@ -14,7 +14,11 @@ remain separate from Dataverse reads and writes.
 
 Service completion is a coordinated workflow under the generic Jobs completion framework.
 It reloads authoritative records, validates the request, and applies Job, Equipment, and
-plan updates atomically.
+plan updates atomically. Its current office-entered dialog remains the supported completion path.
+The agreed target is for a type-specific Service Job Card to supply the required completion
+evidence, followed later by an atomic processor; automatic completion and retirement of the manual
+dialog are deliberately deferred. See
+[Jobs — Deferred type-specific Job Card completion](jobs.md#deferred-type-specific-job-card-completion).
 
 ## Major Dataverse Relationships
 

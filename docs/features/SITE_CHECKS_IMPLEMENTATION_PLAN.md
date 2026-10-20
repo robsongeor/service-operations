@@ -136,7 +136,7 @@ supported product target; Site Checks follows the existing desktop application s
 | Job lookups used by canonical create | `gr_Equipment`, `gr_Mechanic`, `gr_Site`, `gr_Contact` | `jobsApi.createJob` |
 | Job Type | `gr_jobtype`, global Choice `gr_jobtypechoices` | WOF schema |
 | Existing Job Type values | Breakdown `122830000`; Service `122830001`; Workshop `122830002`; WOF `122830003` | `jobType.types.ts`; WOF schema |
-| Job Status values | Allocated `122830000`; Unallocated `122830001`; Waiting for parts `122830002`; Complete `122830003`; Completion Review `122830004`; Unconfirmed `122830005` | `jobStatus.types.ts` |
+| Job Status values | Allocated `122830000`; Unallocated `122830001`; Waiting for parts `122830002`; Complete `122830003`; Completion Review `122830004`; legacy Unconfirmed `122830005` (now Staging-compatible pending retirement) | `jobStatus.types.ts` |
 | Job Card Status values | Not sent `122830000`; Sent `122830001`; Submitted `122830002`; Closed `122830003` | `jobCardStatus.types.ts`; Job Card schema |
 | Primary technician | Job lookup `gr_Mechanic` to `gr_mechanic`; ID `gr_mechanicid` | Job services/types |
 | Additional technicians | Job Assignment child table; not used for the initial Site Check assignment | Job Assignment schema |
@@ -356,7 +356,8 @@ Implement explicit filters:
   default and label **Operational**.
 - numeric Site Check Type: dedicated **Site Checks** tab.
 - `all`: truly unfiltered and labelled **All including Site Checks**.
-- existing numeric type tabs and `unconfirmed` retain their semantics.
+- existing numeric type tabs retain their semantics. The later Service Coordination decision retires
+  the `unconfirmed` tab and compatibility-maps saved preferences to Operational + Staging.
 
 Version both account-scoped preference keys to v3. On one-time migration:
 
@@ -374,8 +375,9 @@ composition, sorting, and existing preference fallback.
 
 ## 11. Scheduler exclusion architecture
 
-Create a pure Jobs-owned eligibility helper such as `jobIsSchedulerEligible(job)` beside
-`jobIsOperational`. It returns false for Unconfirmed and for Site Check Type. Both:
+Create a pure Jobs-owned eligibility helper such as `jobIsSchedulerEligible(job)`. The later
+Service Coordination decision narrowed its exclusion to Site Check Type; legacy Unconfirmed values
+now behave as Staging during migration. Both:
 
 1. Scheduler projection (`SchedulingScreen.visibleOptionsThisWeek`), and
 2. schedule creation/update validation in `useJobs`/`jobScheduleApi`
@@ -1077,7 +1079,8 @@ Legacy current/default `all` migrates to `operational`, preserving the pre-Site-
 set, statuses, search, office/scheduled filters, sorting, and sticky-column preference.
 Operational is the application default and excludes only Site Check Type; Site Checks has a
 dedicated numeric-type tab; All jobs is explicitly truly unfiltered by type. The shared
-Jobs-owned `jobIsSchedulerEligible` excludes Unconfirmed and Site Check Jobs. Scheduler
+Jobs-owned `jobIsSchedulerEligible` excludes Site Check Jobs. Legacy Unconfirmed values now behave
+as Staging pending migration. Scheduler
 projection, create, confirm, and update paths use it; Scheduler tabs use a Site-Check-free
 option list. Historical erroneous schedule options remain stored and hidden, with a
 non-destructive weekly audit count shown for review.

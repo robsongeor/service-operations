@@ -16,7 +16,7 @@ import type { SiteContact } from '../jobs/types/siteContact.types'
 import { useOperationalQuery } from '../shared/data/useOperationalQuery'
 import { getJobTypeLabel, JOB_TYPES } from '../jobs/types/jobType.types'
 import { isOpenJob } from '../jobs/types/jobOpen'
-import { JOB_STATUS_OPTIONS } from '../jobs/types/jobStatus.types'
+import { getJobStatusLabel } from '../jobs/types/jobStatus.types'
 import type { Job } from '../jobs/types/job.types'
 import type { Equipment } from '../jobs/types/equipment.types'
 import {
@@ -467,7 +467,7 @@ function MaintenanceBookingWorkspace({ storageKey }: { storageKey: string }) {
                             {openJobs.length === 0
                                 ? <p>No open jobs are linked to this equipment.</p>
                                 : openJobs.map((job) => <article key={job.gr_jobid}>
-                                    <div><strong>{job.gr_jobnumber ? `Job ${job.gr_jobnumber}` : 'Job number not set'}</strong><span>{getJobTypeLabel(job.gr_jobtype)} · {JOB_STATUS_OPTIONS.find((option) => option.value === job.gr_status)?.label ?? 'Open'}</span><small>{job.gr_description || `Created ${formatDate(job.createdon)}`}</small></div>
+                                    <div><strong>{job.gr_jobnumber ? `Job ${job.gr_jobnumber}` : 'Job number not set'}</strong><span>{getJobTypeLabel(job.gr_jobtype)} · {getJobStatusLabel(job.gr_status)}</span><small>{job.gr_description || `Created ${formatDate(job.createdon)}`}</small></div>
                                     <div><Link to={`/jobs?jobId=${encodeURIComponent(job.gr_jobid)}`}>View</Link><button type="button" onClick={() => attachExistingJob(job)}>Attach this job</button></div>
                                 </article>)}
                         </div>}

@@ -8,6 +8,7 @@ const { enabled: meterApprovalEnabled, validReadingDate, meterProjection, syncAp
 const { listOpenJobs } = require('./jobCardOpenJobs')
 const { reviewPage } = require('./jobCardReviewPaging')
 const { readExpectedReturns } = require('./jobCardExpectedReturns')
+const { coordinationSummary } = require('./jobCardCoordinationSummary')
 const {
     allRequiredTechnicianSubmissionsReceived,
     moveJobToCompletionReviewAfterAllRequiredSubmissions,
@@ -429,6 +430,21 @@ async function handleReviewRequest(request) {
     if (!['GET', 'POST'].includes(request.method)) return jsonResponse(405, { error: 'Method not allowed.' }, { Allow: 'GET, POST' })
     const identity = await validateAuthenticatedUser(request)
     if (!identity) return jsonResponse(401, { error: 'Authentication is required.' }, { 'WWW-Authenticate': 'Bearer' })
+    if (request.method === 'POST' && request.body?.action === 'coordinationSummary') {
+        if (process.env.JOB_CARD_COORDINATION_SUMMARY_ENABLED !== 'true') return jsonResponse(503, { error: 'Job Card coordination summaries are not enabled.' })
+        try {
+            return jsonResponse(200, await coordinationSummary({
+                body: request.body,
+                origin: dataverseOrigin(),
+                authorization: identity.authorization,
+                store: getJobCardStore(),
+            }))
+        } catch (error) {
+            if (error.statusCode === 400) return jsonResponse(400, { error: 'The Job Card coordination summary request is invalid.' })
+            if (error.statusCode === 403) return jsonResponse(403, { error: 'Job read access is required.' })
+            return jsonResponse(503, { error: 'Job Card coordination summaries could not be verified.' })
+        }
+    }
     const reviewer = await authorizeReviewer(identity)
     if (!reviewer) return jsonResponse(403, { error: 'Job Card reviewer access is required.' })
     const reviewId = typeof request.query?.reviewId === 'string' ? request.query.reviewId.trim() : ''

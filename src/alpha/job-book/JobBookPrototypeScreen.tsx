@@ -50,7 +50,7 @@ import { useJobBookVoid } from './useJobBookVoid'
 import JobBookVoidDialog from './JobBookVoidDialog'
 import { availableJobBooks, JOB_BOOKS, jobNumberSequence, REGIONAL_JOB_BOOK_ALLOCATION_ENABLED, type JobBookKey } from './jobBookConfig'
 import { fetchJobBookEquipmentIndex } from './jobBookEquipmentIndexApi'
-import { requestGreenTreeJobReconciliation } from './greenTreeJobSyncApi'
+import { requestGreenTreeJobReconciliation, requestGreenTreeJobStatusCheck } from './greenTreeJobSyncApi'
 import { syncJobBookJobToTimecloud } from './timecloudJobApi'
 import {
     applyEquipmentToRow,
@@ -84,6 +84,8 @@ function appendUniqueRows(current: JobBookRow[], incoming: JobBookRow[]) {
     incoming.forEach((row) => byId.set(row.id, row))
     return [...byId.values()]
 }
+
+type GreenTreeManualFeedback = { kind: 'success' | 'error'; message: string }
 
 function prepareJobBookRows(intakeRows: JobBookRow[], recentRows: JobBookRow[], equipment: PrototypeEquipment[]) {
     return reconcileJobBookRows(intakeRows, recentRows)
@@ -234,6 +236,8 @@ export default function JobBookPrototypeScreen({
     const [savingEntryMarkers, setSavingEntryMarkers] = useState<Set<string>>(() => new Set())
     const [saveError, setSaveError] = useState('')
     const [greenTreeSyncStatus, setGreenTreeSyncStatus] = useState<'idle' | 'syncing' | 'error'>('idle')
+    const [greenTreeManualCheckJobNumber, setGreenTreeManualCheckJobNumber] = useState('')
+    const [greenTreeManualFeedback, setGreenTreeManualFeedback] = useState<Record<string, GreenTreeManualFeedback>>({})
     const [intakeSites, setIntakeSites] = useState<Site[]>([])
     const [intakeContacts, setIntakeContacts] = useState<SiteContact[]>([])
     const [intakeSiteLoadStatus, setIntakeSiteLoadStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
@@ -812,6 +816,48 @@ export default function JobBookPrototypeScreen({
             })
         }
     }
+    const checkGreenTreeStatus = async (row: JobBookRow) => {
+        const jobNumber = row.jobNumber.trim().toUpperCase()
+        if (!jobNumber || greenTreeManualCheckJobNumber || greenTreeSyncStatus === 'syncing') return
+        setGreenTreeManualCheckJobNumber(jobNumber)
+        setGreenTreeManualFeedback((current) => {
+            const next = { ...current }
+            delete next[jobNumber]
+            return next
+        })
+        try {
+            const result = await requestGreenTreeJobStatusCheck(await getAccessToken(), jobNumber)
+            if (result.failed.includes(jobNumber)) throw new Error('GreenTree could not be reached for this Job. Try again.')
+            if (result.conflicts.includes(jobNumber)) throw new Error('The stored status changed during the check. Reload the Job Book and try again.')
+            const updateStatus = (items: JobBookRow[]) => items.map((item) => (
+                item.jobNumber.trim().toUpperCase() === result.jobNumber
+                    ? { ...item, entered: result.entered, greenTreeStatus: result.status }
+                    : item
+            ))
+            setRecentRows(updateStatus)
+            setIntakeRows(updateStatus)
+            setSearchRecentRows(updateStatus)
+            setSearchIntakeRows(updateStatus)
+            const label = greenTreeJobStatusLabel(result.entered, result.status)
+            setGreenTreeManualFeedback((current) => ({
+                ...current,
+                [jobNumber]: {
+                    kind: 'success',
+                    message: result.entered ? `Confirmed in GreenTree: ${label}` : 'Not found in GreenTree',
+                },
+            }))
+        } catch (error) {
+            setGreenTreeManualFeedback((current) => ({
+                ...current,
+                [jobNumber]: {
+                    kind: 'error',
+                    message: error instanceof Error ? error.message : 'The manual GreenTree check failed.',
+                },
+            }))
+        } finally {
+            setGreenTreeManualCheckJobNumber('')
+        }
+    }
     const promotionReadiness = promotionRow ? getPromotionReadiness(promotionRow) : null
 
     return <main className="job-book-screen">
@@ -877,6 +923,9 @@ export default function JobBookPrototypeScreen({
                     const voidBlocked = jobBookVoidBlockedReason(row)
                     const markerBusy = savingEntryMarkers.has(row.id) || voidEntry.row?.id === row.id
                     const greenTreeLabel = greenTreeJobStatusLabel(row.entered, row.greenTreeStatus ?? '')
+                    const normalizedJobNumber = row.jobNumber.trim().toUpperCase()
+                    const checkingGreenTree = greenTreeManualCheckJobNumber === normalizedJobNumber
+                    const greenTreeFeedback = greenTreeManualFeedback[normalizedJobNumber]
                     return <tr key={row.id} className={isVoid ? 'job-book-void-row' : row.equipmentReviewRequired ? 'equipment-unconfigured' : undefined}>
                         <td className="job-number-column"><span className="job-book-number-value"><strong>{row.jobNumber}</strong>{isVoid && <span className="job-book-void-badge">VOID</span>}{row.entryStage === JOB_BOOK_ENTRY_STAGES.PROMOTED && <span className="job-book-managed-indicator" title="Managed Job" aria-label="Managed Job">✓</span>}</span></td>
                         <td className="date-column"><span className="job-book-readonly-date" aria-label="Job creation date">{displayDate(row.date)}</span></td>
@@ -892,7 +941,7 @@ export default function JobBookPrototypeScreen({
                             ? <span className="job-book-table-value job-book-address-value"><strong>{splitSiteAddress(row.address).street}</strong>{splitSiteAddress(row.address).locality && <small>{splitSiteAddress(row.address).locality}</small>}</span>
                             : <span className="job-book-table-value">—</span>}</td>
                         <td><span className="job-book-table-value">{row.customerPo || '—'}</span></td>
-                        <td className="gt-entry-column"><span className={`job-book-status-pill ${row.entered ? `complete greentree-${row.greenTreeStatus || 'open'}` : ''}`} title={row.entered ? `GreenTree status: ${row.greenTreeStatus || 'open'}.` : 'This Job Number has not been entered in GreenTree.'}>{greenTreeLabel}</span></td>
+                        <td className="gt-entry-column"><button type="button" className={`job-book-status-pill job-book-gt-status-button ${row.entered ? `complete greentree-${row.greenTreeStatus || 'open'}` : ''}`} aria-label={`Check GreenTree status for Job ${row.jobNumber}`} disabled={Boolean(greenTreeManualCheckJobNumber) || greenTreeSyncStatus === 'syncing'} title={greenTreeSyncStatus === 'syncing' ? 'Wait for the scheduled GreenTree check to finish.' : 'Check this Job Number in GreenTree now.'} onClick={() => void checkGreenTreeStatus(row)}>{checkingGreenTree ? 'Checking…' : greenTreeLabel}</button>{greenTreeFeedback && <small className={`job-book-gt-check-feedback ${greenTreeFeedback.kind}`} role={greenTreeFeedback.kind === 'error' ? 'alert' : 'status'}>{greenTreeFeedback.message}</small>}</td>
                         <td className="timecloud-entry-column">{canUpdateEntryMarkers || isVoid || !canWriteMarkers ? <label className={`job-book-table-check ${row.timecloudEntered ? 'complete' : ''}`}><input type="checkbox" aria-label={`Timecloud Entry completed for Job ${row.jobNumber}`} disabled={!canUpdateEntryMarkers || isVoid || markerBusy} checked={row.timecloudEntered} onChange={(event) => void updateRowField(row, 'timecloudEntered', event.target.checked)} />{savingEntryMarkers.has(row.id) ? <span>Saving</span> : row.timecloudEntered ? <span>Done</span> : null}</label> : <span className="job-book-status-pill">Unavailable</span>}</td>
                         <td><div className="job-book-row-actions">{canEditIntake
                             ? <button type="button" className="job-quick-action job-quick-action-edit" onClick={() => openIntakeEntryEditor(row)}>Edit entry</button>

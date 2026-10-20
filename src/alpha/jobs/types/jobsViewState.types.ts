@@ -1,15 +1,18 @@
-import { JOB_STATUSES, type JobStatus } from './jobStatus.types.ts'
+import { canonicalJobStatus, JOB_STATUS_OPTIONS, type JobStatus } from './jobStatus.types.ts'
 import { JOB_TYPES, type JobTypeFilter } from './jobType.types.ts'
 import type { JobsDefaultView } from './jobsDefaultView.types.ts'
+import type { CoordinationView } from './serviceCoordination.types.ts'
 
 export const LEGACY_JOBS_VIEW_STATE_KEY = 'service-operations.jobs-view-state.v1'
 export const LEGACY_SCOPED_JOBS_VIEW_STATE_KEY_PREFIX = 'service-operations.jobs-view-state.v2'
-export const JOBS_VIEW_STATE_KEY_PREFIX = 'service-operations.jobs-view-state.v3'
+export const PREVIOUS_JOBS_VIEW_STATE_KEY_PREFIX = 'service-operations.jobs-view-state.v3'
+export const JOBS_VIEW_STATE_KEY_PREFIX = 'service-operations.jobs-view-state.v4'
 
 export type ScheduledJobsVisibility = 'all' | 'today' | 'today-tomorrow' | 'this-week'
 export type JobsSortColumn = 'created' | 'status' | 'customer' | 'mechanic'
 
 export type JobsViewState = {
+    coordinationView: CoordinationView
     visibleStatuses: JobStatus[]
     selectedJobType: JobTypeFilter
     officeAttentionFilter: 'all' | 'required' | 'none'
@@ -21,11 +24,12 @@ export type JobsViewState = {
     }
 }
 
-const jobStatuses = new Set<number>(Object.values(JOB_STATUSES))
+const jobStatuses = new Set<number>(JOB_STATUS_OPTIONS.map((status) => status.value))
 const jobTypes = new Set<number>(Object.values(JOB_TYPES))
 
 export const DEFAULT_JOBS_VIEW_STATE: JobsViewState = {
-    visibleStatuses: Object.values(JOB_STATUSES),
+    coordinationView: 'branch',
+    visibleStatuses: JOB_STATUS_OPTIONS.map((status) => status.value),
     selectedJobType: 'operational',
     officeAttentionFilter: 'all',
     searchText: '',
@@ -42,19 +46,21 @@ function parseJobsViewState(raw: string | null): JobsViewState | null {
         if (!raw) return null
         const value = JSON.parse(raw) as Partial<JobsViewState>
         if (!value || typeof value !== 'object') return null
-        let visibleStatuses = Array.isArray(value.visibleStatuses)
-            ? value.visibleStatuses.filter((status): status is JobStatus => typeof status === 'number' && jobStatuses.has(status))
+        const visibleStatuses = Array.isArray(value.visibleStatuses)
+            ? [...new Set(value.visibleStatuses
+                .filter((status): status is JobStatus => typeof status === 'number')
+                .map(canonicalJobStatus)
+                .filter((status) => jobStatuses.has(status)))]
             : DEFAULT_JOBS_VIEW_STATE.visibleStatuses
-        const selectedJobType = value.selectedJobType === 'all'
-            || value.selectedJobType === 'operational'
-            || value.selectedJobType === 'unconfirmed'
-            || value.selectedJobType === 'unnumbered'
-            || (typeof value.selectedJobType === 'number' && jobTypes.has(value.selectedJobType))
-            ? value.selectedJobType as JobTypeFilter
+        const rawSelectedJobType: unknown = value.selectedJobType
+        const selectedJobType = rawSelectedJobType === 'unconfirmed'
+            ? 'operational'
+            : rawSelectedJobType === 'all'
+            || rawSelectedJobType === 'operational'
+            || rawSelectedJobType === 'unnumbered'
+            || (typeof rawSelectedJobType === 'number' && jobTypes.has(rawSelectedJobType))
+            ? rawSelectedJobType as JobTypeFilter
             : DEFAULT_JOBS_VIEW_STATE.selectedJobType
-        if (selectedJobType === 'unconfirmed' && !visibleStatuses.includes(JOB_STATUSES.UNCONFIRMED)) {
-            visibleStatuses = [...visibleStatuses, JOB_STATUSES.UNCONFIRMED]
-        }
         const officeAttentionFilter = value.officeAttentionFilter === 'required' || value.officeAttentionFilter === 'none'
             ? value.officeAttentionFilter
             : 'all'
@@ -71,6 +77,9 @@ function parseJobsViewState(raw: string | null): JobsViewState | null {
                 : 'all'
 
         return {
+            coordinationView: value.coordinationView === 'watchlist' || value.coordinationView === 'all'
+                ? value.coordinationView
+                : 'branch',
             visibleStatuses,
             selectedJobType,
             officeAttentionFilter,
@@ -98,14 +107,17 @@ export function restoreJobsViewState(storageKey: string, migrateLegacy = false):
 
         if (migrateLegacy) {
             const storageId = storageKey.slice(`${JOBS_VIEW_STATE_KEY_PREFIX}.`.length)
+            const previousKey = `${PREVIOUS_JOBS_VIEW_STATE_KEY_PREFIX}.${storageId}`
             const legacyScopedKey = `${LEGACY_SCOPED_JOBS_VIEW_STATE_KEY_PREFIX}.${storageId}`
-            const legacyScopedValue = sessionStorage.getItem(legacyScopedKey)
+            const previousValue = sessionStorage.getItem(previousKey)
+            const legacyScopedValue = previousValue ?? sessionStorage.getItem(legacyScopedKey)
             if (legacyScopedValue !== null) {
                 const migratedState = parseJobsViewState(legacyScopedValue)
                 if (migratedState) {
                     if (migratedState.selectedJobType === 'all') migratedState.selectedJobType = 'operational'
                     sessionStorage.setItem(storageKey, JSON.stringify(migratedState))
                 }
+                sessionStorage.removeItem(previousKey)
                 sessionStorage.removeItem(legacyScopedKey)
                 return migratedState
             }

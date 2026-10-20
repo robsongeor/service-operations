@@ -152,14 +152,13 @@ namespace ServiceOperations.JobRegistration
                 return;
             }
 
-            var job = Find(service, "gr_job", jobId, "gr_jobnumber", "gr_status", "gr_jobtype", "gr_sitecheck", "gr_mechanic", RegistrationVoid);
+            var job = Find(service, "gr_job", jobId, "gr_jobnumber", "gr_jobtype", "gr_sitecheck", "gr_mechanic", RegistrationVoid);
             if (job == null) throw Failure("NOT_FOUND", "The Job is no longer available.");
             if (job.RowVersion != expected) throw Failure("CONFLICT", "The Job changed elsewhere. Reopen the email preview before sending.");
-            var status = job.GetAttributeValue<OptionSetValue>("gr_status");
             var type = job.GetAttributeValue<OptionSetValue>("gr_jobtype");
             var mechanicRef = job.GetAttributeValue<EntityReference>("gr_mechanic");
             if (String.IsNullOrWhiteSpace(job.GetAttributeValue<string>("gr_jobnumber")) || job.GetAttributeValue<bool>(RegistrationVoid) ||
-                (status != null && status.Value == 122830005) || (type != null && type.Value == 122830004) ||
+                (type != null && type.Value == 122830004) ||
                 job.GetAttributeValue<EntityReference>("gr_sitecheck") != null || mechanicRef == null || mechanicRef.LogicalName != "gr_mechanic")
                 throw Failure("INVALID", "Only an eligible numbered ordinary Job with an assigned technician can be dispatched.");
             var mechanic = service.Retrieve("gr_mechanic", mechanicRef.Id, new ColumnSet("gr_name", "gr_email", "statecode", "gr_jobassignmentenabled"));

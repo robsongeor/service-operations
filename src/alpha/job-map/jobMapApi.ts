@@ -1,6 +1,6 @@
 import { fetchAllDataversePages } from '../shared/dataverse/fetchAllDataversePages.ts'
 import type { Job } from '../jobs/types/job.types.ts'
-import type { JobStatus } from '../jobs/types/jobStatus.types.ts'
+import { JOB_STATUSES, type JobStatus } from '../jobs/types/jobStatus.types.ts'
 import { JOB_MAP_STATUSES } from './jobMap.ts'
 
 const DATAVERSE_URL = import.meta.env?.VITE_DATAVERSE_URL ?? ''
@@ -19,7 +19,10 @@ export async function fetchJobMapJobs(
 ): Promise<Job[]> {
     const canonicalStatuses = canonicalJobMapStatuses(statuses)
     if (!canonicalStatuses.length) return []
-    const statusFilter = canonicalStatuses.map((status) => `gr_status eq ${status}`).join(' or ')
+    const queryStatuses = canonicalStatuses.includes(JOB_STATUSES.UNALLOCATED)
+        ? [...canonicalStatuses, JOB_STATUSES.UNCONFIRMED]
+        : canonicalStatuses
+    const statusFilter = queryStatuses.map((status) => `gr_status eq ${status}`).join(' or ')
     return fetchAllDataversePages<Job>(
         `${DATAVERSE_URL}/api/data/v9.2/gr_jobs?$select=${JOB_MAP_SELECT}&$expand=${JOB_MAP_EXPAND}&$filter=${encodeURIComponent(`(${statusFilter})`)}&$orderby=createdon desc`,
         {

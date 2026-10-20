@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "jobs": [
+    {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "etag": "W/\"10\"",
+      "status": 122830005,
+      "operatingBranch": null,
+      "jobNumber": "WJ100001",
+      "registeredLedgerBranches": [122830001]
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "etag": "W/\"20\"",
+      "status": 122830001,
+      "operatingBranch": 122830000,
+      "jobNumber": "CJ100002",
+      "statusEvidence": {
+        "complete": true,
+        "successfulDispatch": true,
+        "activeCardLifecycle": true,
+        "acceptedReturns": 0,
+        "currentRequiredTechnicians": 1,
+        "allCurrentRequiredReturned": false
+      }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "etag": "W/\"30\"",
+      "status": 122830000,
+      "operatingBranch": null,
+      "jobNumber": "HJ100003",
+      "statusEvidence": {
+        "complete": true,
+        "successfulDispatch": true,
+        "activeCardLifecycle": true,
+        "acceptedReturns": 2,
+        "currentRequiredTechnicians": 2,
+        "allCurrentRequiredReturned": true
+      }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "etag": "W/\"40\"",
+      "status": 122830002,
+      "operatingBranch": null,
+      "jobNumber": "100004",
+      "explicitReviewedBranches": [122830000]
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000005",
+      "etag": "W/\"50\"",
+      "status": 122830003,
+      "operatingBranch": null,
+      "jobNumber": "UNKNOWN-5"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000006",
+      "etag": "W/\"60\"",
+      "status": 122830000,
+      "operatingBranch": null,
+      "jobNumber": "CJ100006",
+      "registeredLedgerBranches": [122830000, 122830003],
+      "statusEvidence": { "complete": false, "truncated": true }
+    }
+  ]
+}

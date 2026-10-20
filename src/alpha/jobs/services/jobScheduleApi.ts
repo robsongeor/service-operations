@@ -5,6 +5,7 @@ import type {
 import { fetchAllDataversePages } from '../../shared/dataverse/fetchAllDataversePages.ts'
 import { buildDataverseIdFilterBatches } from '../../shared/dataverse/boundedDataverseFilters.ts'
 import { invalidateOperationalQueries } from '../../shared/data/OperationalDataClient.ts'
+import { OPERATING_BRANCH_LABELS, type OperatingBranch } from '../types/operatingBranch.types.ts'
 
 const DATAVERSE_URL = import.meta.env?.VITE_DATAVERSE_URL ?? ''
 const SCHEDULE_OPTIONS_URL =
@@ -91,11 +92,18 @@ export async function fetchJobScheduleOptionsForWindow(
     startDate: string,
     endDate: string,
     signal?: AbortSignal,
+    operatingBranch?: OperatingBranch,
 ): Promise<JobScheduleOption[]> {
     assertDateOnly(startDate)
     assertDateOnly(endDate)
     if (startDate > endDate) throw new Error('The schedule window start must not follow its end.')
-    const filter = `gr_scheduledate ge ${startDate} and gr_scheduledate le ${endDate}`
+    if (operatingBranch !== undefined && !(operatingBranch in OPERATING_BRANCH_LABELS)) {
+        throw new Error('The operating branch is invalid.')
+    }
+    const dateFilter = `gr_scheduledate ge ${startDate} and gr_scheduledate le ${endDate}`
+    const filter = operatingBranch === undefined
+        ? dateFilter
+        : `(${dateFilter}) and gr_Job/gr_operatingbranch eq ${operatingBranch}`
     return fetchAllDataversePages<JobScheduleOption>(
         `${SCHEDULE_OPTIONS_URL}?$select=gr_jobscheduleoptionid,gr_name,gr_scheduletype,gr_scheduledate,gr_scheduletime,gr_confirmed,_gr_job_value&$filter=${encodeURIComponent(filter)}`,
         {

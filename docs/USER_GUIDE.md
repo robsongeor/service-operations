@@ -208,7 +208,7 @@ Open **Jobs** to create, allocate, track and complete work. This is the main ope
 
 The page has job-type tabs, status filters, search, sorting and settings. Use them to narrow the work list:
 
-- Use the job-type tabs to focus on operational work, a particular job type, unconfirmed jobs, or all jobs.
+- Use the job-type tabs to focus on operational work, a particular job type, unnumbered jobs, or all jobs.
 - Use status filters to show only the job statuses you need.
 - Use search to find a job number, customer, site, equipment or description.
 - Select a column heading to sort the list.

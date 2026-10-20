@@ -259,6 +259,31 @@ test('scheduled status polling uses the due-record poller and completes its chec
     assert.equal(completed, 1)
 })
 
+test('manual status check uses the delegated user, exact Job Number and no shared checkpoint', { concurrency: false }, async () => {
+    process.env.DATAVERSE_URL = 'https://example.crm.dynamics.com'
+    let polled = 0
+    const context = {}
+    await endpoint._test.greenTreeJobChanges(context, {
+        method: 'POST', headers: {}, query: {}, body: { mode: 'manual', jobNumber: '150006' },
+    }, {
+        authenticate: async () => 'Bearer delegated-token',
+        authenticateScheduler: async () => { throw new Error('manual checks must not use scheduler authentication') },
+        getCheckpointStore: () => { throw new Error('manual checks must not open the shared checkpoint') },
+        pollGreenTreeJobStatuses: async (options) => {
+            polled += 1
+            assert.equal(options.mode, 'manual')
+            assert.equal(options.jobNumber, '150006')
+            assert.equal(options.authorization, 'Bearer delegated-token')
+            return { mode: 'manual', jobNumber: '150006', entered: true, status: 'open', due: 1, selected: 1, checked: 1, updatedRecords: 2, notEntered: 0, open: 1, closed: 0, finalised: 0, remaining: 0, conflicts: [], failed: [] }
+        },
+    })
+    assert.equal(context.res.status, 200)
+    assert.equal(polled, 1)
+    const body = JSON.parse(context.res.body)
+    assert.equal(body.entered, true)
+    assert.equal(body.status, 'open')
+})
+
 test('full status backfill requires scheduler authentication and bypasses the normal cooldown', { concurrency: false }, async () => {
     process.env.DATAVERSE_URL = 'https://example.crm.dynamics.com'
     let began = 0

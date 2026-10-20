@@ -217,7 +217,6 @@
 .site-check-job-history-meta .site-check-job-history-status[data-status="122830002"] { background: #e5f0f8; color: #456d87; }
 .site-check-job-history-meta .site-check-job-history-status[data-status="122830003"] { background: #edf0ee; color: #515854; }
 .site-check-job-history-meta .site-check-job-history-status[data-status="122830004"] { background: #f0edfb; color: #604f88; }
-.site-check-job-history-meta .site-check-job-history-status[data-status="122830005"] { background: #fff0c2; color: #704b08; }
 .site-check-job-history-list dl { display: grid; gap: 4px; margin: 0; }
 .site-check-job-history-list dl div { display: grid; grid-template-columns: 100px 1fr; gap: 8px; }
 .site-check-job-history-list dt { color: #737a76; font-size: .68rem; font-weight: 700; }

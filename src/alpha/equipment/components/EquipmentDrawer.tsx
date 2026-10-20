@@ -5,7 +5,7 @@ import type { Job } from '../../jobs/types/job.types'
 import type { Site } from '../../jobs/types/site.types'
 import { getJobCardStatus, JOB_CARD_STATUS_OPTIONS } from '../../jobs/types/jobCardStatus.types'
 import { getJobTypeLabel } from '../../jobs/types/jobType.types'
-import { JOB_STATUS_OPTIONS } from '../../jobs/types/jobStatus.types'
+import { canonicalJobStatus, getJobStatusLabel } from '../../jobs/types/jobStatus.types'
 import EditDrawerConfirmation from '../../shared/drawer/EditDrawerConfirmation'
 import EditDrawerFormDialog from '../../shared/drawer/EditDrawerFormDialog'
 import EditDrawerSection from '../../shared/drawer/EditDrawerSection'
@@ -1131,7 +1131,7 @@ export default function EquipmentDrawer(props: Props) {
                                 <div><strong>{job.gr_jobnumber || 'Job number not set'}</strong><span title={job.gr_description || 'No description'}>{job.gr_description || 'No description'}</span></div>
                                 <time dateTime={job.createdon}>Created {formatDate(job.createdon)}</time>
                             </div>
-                            <div className="equipment-history-meta"><span>{getJobTypeLabel(job.gr_jobtype)}</span><span className="equipment-history-status" data-status={job.gr_status}>{JOB_STATUS_OPTIONS.find((option) => option.value === job.gr_status)?.label ?? 'Status not set'}</span><span>{JOB_CARD_STATUS_OPTIONS.find((option) => option.value === getJobCardStatus(job.gr_jobcardstatus))?.label}</span></div>
+                            <div className="equipment-history-meta"><span>{getJobTypeLabel(job.gr_jobtype)}</span><span className="equipment-history-status" data-status={canonicalJobStatus(job.gr_status)}>{getJobStatusLabel(job.gr_status)}</span><span>{JOB_CARD_STATUS_OPTIONS.find((option) => option.value === getJobCardStatus(job.gr_jobcardstatus))?.label}</span></div>
                             <dl>
                                 <div><dt>Completed Date</dt><dd>{job.gr_completeddate ? formatDate(job.gr_completeddate) : 'Not completed'}</dd></div>
                                 <div><dt>Hours Recorded</dt><dd>{job.gr_hourmeter == null ? 'Not recorded' : `${job.gr_hourmeter.toLocaleString('en-NZ')} hours${job.gr_hourmeterreadingtype === HOUR_METER_READING_TYPES.ESTIMATED ? ' · Estimated' : ''}`}</dd></div>

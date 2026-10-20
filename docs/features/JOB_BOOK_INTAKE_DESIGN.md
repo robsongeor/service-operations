@@ -283,7 +283,8 @@ remain; they are not four regional copies of the operational Jobs schema.
 Target screen membership:
 
 - **Job Book:** numbered work, including retained historical and Void allocations.
-- **Jobs / Staging:** unnumbered work. Do not equate this with the existing Unconfirmed status.
+- **Jobs / Staging worklist:** unnumbered work. This number-based worklist remains distinct from the
+  Staging status filter; the former Unconfirmed status is now compatibility-mapped to Staging.
 - **Jobs / Operational:** work deliberately placed in the coordinator worklist, independent of
   whether it has a number. Existing specialist WOF/Site Check creation boundaries remain.
 - **Jobs / All jobs:** basic registered work, staging and coordinator-managed work, with suitable
@@ -461,8 +462,8 @@ Implemented in this mode:
   Customer, Site and Contact remain hidden until Equipment is selected or the user explicitly
   chooses **Equipment not known yet**. Service Coordination adds only Job type and Status controls.
 - Service coordination uses one tab row: Operational, Breakdown, Service, Workshop, WOF,
-  Site Check, Unconfirmed and All jobs. Operational uses explicit coordinator membership;
-  Unconfirmed retains its status meaning. All jobs includes read-only unlinked ledger history
+  Site Check and All jobs. Operational uses explicit coordinator membership. The retired
+  Unconfirmed status has no tab and legacy values behave as Staging. All jobs includes read-only unlinked ledger history
   alongside working Jobs, without creating or converting historical records. An unnumbered managed Job can belong to both Staging and
   Operational. Older Jobs lacking the new membership metadata keep their existing managed fallback.
   Coordinator settings are configured after Manage job. The legacy spreadsheet allocation controls
@@ -479,7 +480,8 @@ Implemented in this mode:
   frozen; retry replays the original request without reapplying later corrections. A confirmed
   concurrency rejection requires reloading before discarding that rejected allocation request.
 - Jobs fetches 100 records per page with explicit Load more. The disabled production gate now applies
-  server-side Operational, Unconfirmed and Job Type filters and accepts only same-environment Jobs
+  server-side Operational and Job Type filters, includes legacy Unconfirmed values with Staging
+  priority work, and accepts only same-environment Jobs
   continuation links. Job Book retains incremental paging. Exact post-save reads and bounded refreshes
   replace global all-Jobs loads. Durable cache/retention policy remains rollout work.
 

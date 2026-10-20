@@ -464,9 +464,14 @@ test('Job Book rows use bounded Dataverse pages, server search and infinite scro
 
 test('GreenTree entry is automated while Timecloud remains an explicit office marker', () => {
     const screen = readFileSync(new URL('../src/alpha/job-book/JobBookPrototypeScreen.tsx', import.meta.url), 'utf8')
+    const syncApi = readFileSync(new URL('../src/alpha/job-book/greenTreeJobSyncApi.ts', import.meta.url), 'utf8')
     assert.match(screen, /requestGreenTreeJobReconciliation\(token\)/)
+    assert.match(screen, /requestGreenTreeJobStatusCheck\(await getAccessToken\(\), jobNumber\)/)
     assert.match(screen, /greenTreeJobStatusLabel\(row\.entered, row\.greenTreeStatus \?\? ''\)/)
     assert.match(screen, />GT Status</)
+    assert.match(screen, /aria-label=\{`Check GreenTree status for Job \$\{row\.jobNumber\}`\}/)
+    assert.match(screen, /onClick=\{\(\) => void checkGreenTreeStatus\(row\)\}/)
+    assert.match(syncApi, /JSON\.stringify\(\{ mode: 'manual', jobNumber: jobNumber\.trim\(\) \}\)/)
     assert.doesNotMatch(screen, /onChange=\{\(event\) => void updateRowField\(row, 'entered'/)
     assert.match(screen, /onChange=\{\(event\) => void updateRowField\(row, 'timecloudEntered'/)
 })

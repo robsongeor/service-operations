@@ -5,6 +5,7 @@ import type { ServiceType } from '../../equipment/servicePlans/equipmentServiceP
 import type { OfficeAction } from './officeAction.types'
 import type { HourMeterReadingType } from '../../equipment/hourMeter/hourMeterReading.types'
 import type { JobCardSubmission } from './jobCardSubmission.types'
+import type { OperatingBranch } from './operatingBranch.types'
 
 export type Job = {
     /** Read-only ledger projection in the isolated walkthrough; never a writable Job. */
@@ -18,6 +19,7 @@ export type Job = {
     gr_registrationvoid?: boolean
     gr_registrationvoidreason?: string | null
     gr_status: JobStatus
+    gr_operatingbranch?: OperatingBranch | null
     gr_ordernumber: string | null
     gr_description: string | null
     gr_externalsupplierdetails?: string | null

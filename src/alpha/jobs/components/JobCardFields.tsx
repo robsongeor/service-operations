@@ -18,6 +18,7 @@ import { useJobCardHistory } from '../../job-card-reviews/useJobCardHistory'
 import JobCardHistoryPanel from '../../job-card-reviews/JobCardHistoryPanel'
 import { useHistoricalJobCards } from '../hooks/useHistoricalJobCards'
 import { useActiveMsalAccount } from '../../../auth/useActiveMsalAccount'
+import { ConfirmedDeliveryStatusError } from '../services/jobsApi'
 
 type Props = {
     job: Job
@@ -27,6 +28,7 @@ type Props = {
     onCreateAssignment: (assignment: { jobId: string; mechanicId: string; mechanicName: string; instructions?: string }) => Promise<void>
     onSendPrimary: (job: Job) => Promise<void>
     onSendAssignment: (job: Job, assignment: JobAssignment) => Promise<void>
+    onDispatchStatusRecoveryRequired: (message: string) => void
     onDeleteAssignment: (assignmentId: string) => Promise<void>
     onLoadPhoto?: (photoId: string, signal?: AbortSignal) => Promise<string>
 }
@@ -162,7 +164,7 @@ export default function JobCardFields(props: Props) {
     return <JobCardContent key={`${account?.homeAccountId || ''}:${props.job.gr_jobid}`} {...props} />
 }
 
-function JobCardContent({ job, mechanics, assignments, onStatusChange, onCreateAssignment, onSendPrimary, onSendAssignment, onDeleteAssignment, onLoadPhoto }: Props) {
+function JobCardContent({ job, mechanics, assignments, onStatusChange, onCreateAssignment, onSendPrimary, onSendAssignment, onDispatchStatusRecoveryRequired, onDeleteAssignment, onLoadPhoto }: Props) {
     const azure = usesAzureJobCards(job)
     const history = useJobCardHistory(azure ? job.gr_jobid : undefined)
     const archive = useHistoricalJobCards(azure ? job.gr_jobid : undefined)
@@ -220,7 +222,10 @@ function JobCardContent({ job, mechanics, assignments, onStatusChange, onCreateA
             if (target === 'primary') await onSendPrimary(job)
             else await onSendAssignment(job, target)
         }
-        catch (caught) { setError(caught instanceof Error ? caught.message : 'The Job Card could not be sent.') }
+        catch (caught) {
+            if (caught instanceof ConfirmedDeliveryStatusError) onDispatchStatusRecoveryRequired(caught.message)
+            setError(caught instanceof Error ? caught.message : 'The Job Card could not be sent.')
+        }
         finally { setIsUpdating(false); setBusyId(''); setPendingEmail(null); if (azure) history.refresh() }
     }
     const requestSend = (target: 'primary' | JobAssignment, status: JobCardStatus) => {

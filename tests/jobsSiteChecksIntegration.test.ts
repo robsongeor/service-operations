@@ -39,6 +39,21 @@ test('v2 current view migrates legacy All to Operational and preserves preferenc
     assert.deepEqual(restored?.sort, { column: 'customer', direction: 'descending' })
 })
 
+test('current view preserves the All branches coordination scope', () => {
+    const storage = new MemoryStorage()
+    Object.assign(globalThis, { sessionStorage: storage })
+    storage.setItem(getJobsViewStateKey('all-branches-user'), JSON.stringify({
+        coordinationView: 'all',
+        visibleStatuses: [JOB_STATUSES.UNALLOCATED],
+        selectedJobType: 'operational',
+        officeAttentionFilter: 'all',
+        searchText: '',
+        scheduledJobsVisibility: 'all',
+        sort: { column: 'status', direction: 'ascending' },
+    }))
+    assert.equal(restoreJobsViewState(getJobsViewStateKey('all-branches-user'))?.coordinationView, 'all')
+})
+
 test('v1 saved default migrates All to Operational while preserving statuses', () => {
     const storage = new MemoryStorage()
     Object.assign(globalThis, { sessionStorage: storage })
@@ -52,9 +67,22 @@ test('v1 saved default migrates All to Operational while preserving statuses', (
     assert.deepEqual(restored?.visibleStatuses, [JOB_STATUSES.ALLOCATED, JOB_STATUSES.COMPLETE])
 })
 
-test('Scheduler eligibility excludes Site Check and Unconfirmed Jobs', () => {
+test('retired Unconfirmed preferences migrate to Staging and the Operational tab', () => {
+    const storage = new MemoryStorage()
+    Object.assign(globalThis, { sessionStorage: storage })
+    storage.setItem(getJobsDefaultViewKey('user-legacy'), JSON.stringify({
+        selectedJobType: 'unconfirmed',
+        visibleStatuses: [JOB_STATUSES.UNCONFIRMED],
+        stickyThroughColumnId: null,
+    }))
+    const restored = restoreJobsDefaultView(getJobsDefaultViewKey('user-legacy'))
+    assert.equal(restored?.selectedJobType, 'operational')
+    assert.deepEqual(restored?.visibleStatuses, [JOB_STATUSES.UNALLOCATED])
+})
+
+test('Scheduler eligibility excludes Site Check while legacy Unconfirmed behaves as Staging', () => {
     assert.equal(jobIsSchedulerEligible({ gr_status: JOB_STATUSES.ALLOCATED, gr_jobtype: JOB_TYPES.SITE_CHECK }), false)
-    assert.equal(jobIsSchedulerEligible({ gr_status: JOB_STATUSES.UNCONFIRMED, gr_jobtype: JOB_TYPES.BREAKDOWN }), false)
+    assert.equal(jobIsSchedulerEligible({ gr_status: JOB_STATUSES.UNCONFIRMED, gr_jobtype: JOB_TYPES.BREAKDOWN }), true)
     assert.equal(jobIsSchedulerEligible({ gr_status: JOB_STATUSES.ALLOCATED, gr_jobtype: JOB_TYPES.BREAKDOWN }), true)
 })
 

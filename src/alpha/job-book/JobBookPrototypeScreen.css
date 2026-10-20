@@ -1129,8 +1129,8 @@
 }
 
 .job-book-grid .gt-entry-column {
-    width: 90px;
-    min-width: 90px;
+    width: 140px;
+    min-width: 140px;
 }
 
 .job-book-grid .timecloud-entry-column {
@@ -1347,6 +1347,35 @@
 .job-book-status-pill.greentree-finalised {
     background: #e5e9f7;
     color: #465786;
+}
+
+.job-book-gt-status-button {
+    border: 1px solid transparent;
+    font: inherit;
+    font-size: 0.64rem;
+    cursor: pointer;
+}
+
+.job-book-gt-status-button:hover:not(:disabled),
+.job-book-gt-status-button:focus-visible {
+    border-color: currentColor;
+}
+
+.job-book-gt-status-button:disabled {
+    cursor: wait;
+    opacity: 0.7;
+}
+
+.job-book-gt-check-feedback {
+    display: block;
+    margin-top: 5px;
+    color: #3f6550;
+    font-size: 0.61rem;
+    line-height: 1.25;
+}
+
+.job-book-gt-check-feedback.error {
+    color: #a13434;
 }
 
 .job-book-table-check {

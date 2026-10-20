@@ -66,7 +66,7 @@ test('uncertain guarded dispatch retry reuses the same request and rendered body
     assert.equal(bodies[0], bodies[1])
 })
 
-test('confirmed delivery moves only an Unallocated Job to Allocated', async () => {
+test('confirmed delivery moves Staging, including the legacy value, to Allocated', async () => {
     const patches = []
     globalThis.fetch = async (url, options = {}) => {
         if ((options.method || 'GET') === 'GET') return Response.json({ gr_jobid: id(1), gr_status: 122830001, '@odata.etag': 'W/"11"' })
@@ -78,8 +78,49 @@ test('confirmed delivery moves only an Unallocated Job to Allocated', async () =
     assert.equal(patches[0].options.headers['If-Match'], 'W/"11"')
     assert.deepEqual(JSON.parse(String(patches[0].options.body)), { gr_status: 122830000 })
 
-    globalThis.fetch = async () => Response.json({ gr_jobid: id(1), gr_status: 122830002, '@odata.etag': 'W/"12"' })
+    globalThis.fetch = async (url, options = {}) => {
+        if ((options.method || 'GET') === 'GET') return Response.json({ gr_jobid: id(1), gr_status: 122830005, '@odata.etag': 'W/"12"' })
+        patches.push({ url: String(url), options })
+        return new Response(null, { status: 204 })
+    }
+    assert.equal(await markJobAllocatedAfterConfirmedDelivery('token', id(1)), true)
+    assert.equal(patches.length, 2)
+
+    globalThis.fetch = async () => Response.json({ gr_jobid: id(1), gr_status: 122830002, '@odata.etag': 'W/"13"' })
     assert.equal(await markJobAllocatedAfterConfirmedDelivery('token', id(1)), false)
+})
+
+test('a confirmed email status failure is retried without queuing another email', async () => {
+    const stagedJob = { ...job, gr_status: 122830001 }
+    let dispatchCalls = 0
+    let statusPatchAttempts = 0
+    globalThis.fetch = async (url, options = {}) => {
+        const method = options.method || 'GET'
+        if (String(url).endsWith('/gr_QueueInitialJobDispatch')) {
+            dispatchCalls += 1
+            return Response.json({ DispatchId: id(11), WasReplay: false })
+        }
+        if (String(url).includes('/gr_emaildispatchs(')) return Response.json({ gr_emailsent: true })
+        if (String(url).includes('/gr_jobs(') && method === 'GET') return Response.json(stagedJob)
+        if (String(url).includes('/gr_jobs(') && method === 'PATCH') {
+            statusPatchAttempts += 1
+            return statusPatchAttempts === 1 ? new Response(null, { status: 500 }) : new Response(null, { status: 204 })
+        }
+        throw new Error(`Unexpected request ${url}`)
+    }
+    const queued = await queuePrimaryJobDispatch('token', stagedJob, draft, {
+        hostname: 'app.example.invalid', assignedRecipientOnly: true, verifyCurrentJob: true,
+        dispatchAttempt: { requestId: id(11) },
+    })
+    await assert.rejects(queued.confirmDelivery(), (error) => {
+        assert.equal(error.name, 'ConfirmedDeliveryStatusError')
+        assert.match(error.message, /Retry status update/)
+        assert.match(error.message, /do not resend/)
+        return true
+    })
+    assert.equal(await markJobAllocatedAfterConfirmedDelivery('token', id(1)), true)
+    assert.equal(dispatchCalls, 1)
+    assert.equal(statusPatchAttempts, 2)
 })
 
 test('production unified worklist is server-filtered, bounded and explicitly paged', async () => {
@@ -94,7 +135,7 @@ test('production unified worklist is server-filtered, bounded and explicitly pag
     assert.equal(first.next, next)
     const initial = new URL(requests[0].url)
     assert.equal(initial.pathname, '/api/data/v9.2/gr_jobs')
-    assert.equal(initial.searchParams.get('$filter'), '(gr_coordinatormanaged eq true or gr_coordinatormanaged eq null) and gr_registrationvoid ne true')
+    assert.equal(initial.searchParams.get('$filter'), "((gr_coordinatormanaged eq true or gr_coordinatormanaged eq null) and gr_registrationvoid ne true) and (gr_greentreestatus eq null or (gr_greentreestatus ne 'closed' and gr_greentreestatus ne 'finalised'))")
     assert.match(initial.searchParams.get('$select'), /gr_coordinatormanaged/)
     assert.equal(requests[0].headers.Prefer, 'odata.maxpagesize=100')
     await fetchUnifiedJobsPage('token', 'operational', first.next)
@@ -102,16 +143,26 @@ test('production unified worklist is server-filtered, bounded and explicitly pag
 })
 
 test('production worklist filters preserve tab meaning and reject untrusted paging', async () => {
-    assert.equal(unifiedJobsServerFilter('all'), '')
-    assert.match(unifiedJobsServerFilter('priority'), /gr_status eq 122830001 or gr_status eq 122830000 or gr_status eq 122830002/)
+    const activeGreenTree = "(gr_greentreestatus eq null or (gr_greentreestatus ne 'closed' and gr_greentreestatus ne 'finalised'))"
+    assert.equal(unifiedJobsServerFilter('all'), activeGreenTree)
+    assert.match(unifiedJobsServerFilter('priority'), /gr_status eq 122830001 or gr_status eq 122830005 or gr_status eq 122830000 or gr_status eq 122830002/)
     assert.match(unifiedJobsServerFilter('priority'), /gr_jobnumber eq null/)
-    assert.match(unifiedJobsServerFilter('deferred'), /gr_status eq 122830004 or gr_status eq 122830005/)
-    assert.equal(unifiedJobsServerFilter('recent-complete', new Date('2026-10-07T00:00:00Z')), 'gr_status eq 122830003 and gr_completeddate ge 2026-07-09 and gr_registrationvoid ne true')
-    assert.equal(unifiedJobsServerFilter('complete-archive'), 'gr_status eq 122830003 and gr_registrationvoid ne true')
-    assert.equal(unifiedJobsServerFilter('staging'), 'gr_jobnumber eq null and gr_registrationvoid ne true')
-    assert.equal(unifiedJobsServerFilter('unnumbered'), 'gr_jobnumber eq null and gr_registrationvoid ne true')
-    assert.match(unifiedJobsServerFilter('unconfirmed'), /gr_status eq 122830005/)
-    assert.equal(unifiedJobsServerFilter(122830004), 'gr_jobtype eq 122830004 and gr_registrationvoid ne true')
+    for (const scope of ['priority', 'deferred', 'recent-complete', 'complete-archive', 'staging', 'unnumbered', 122830004]) {
+        assert.match(unifiedJobsServerFilter(scope, new Date('2026-10-07T00:00:00Z')), /gr_greentreestatus eq null/)
+        assert.match(unifiedJobsServerFilter(scope, new Date('2026-10-07T00:00:00Z')), /gr_greentreestatus ne 'closed'/)
+        assert.match(unifiedJobsServerFilter(scope, new Date('2026-10-07T00:00:00Z')), /gr_greentreestatus ne 'finalised'/)
+    }
+    assert.match(unifiedJobsServerFilter('deferred'), /gr_status eq 122830004 and gr_registrationvoid ne true/)
+    assert.match(unifiedJobsServerFilter('recent-complete', new Date('2026-10-07T00:00:00Z')), /gr_status eq 122830003 and gr_completeddate ge 2026-07-09 and gr_registrationvoid ne true/)
+    assert.match(unifiedJobsServerFilter('complete-archive'), /gr_status eq 122830003 and gr_registrationvoid ne true/)
+    assert.match(unifiedJobsServerFilter('staging'), /gr_jobnumber eq null and gr_registrationvoid ne true/)
+    assert.match(unifiedJobsServerFilter('unnumbered'), /gr_jobnumber eq null and gr_registrationvoid ne true/)
+    assert.match(unifiedJobsServerFilter(122830004), /gr_jobtype eq 122830004 and gr_registrationvoid ne true/)
+    assert.equal(
+        unifiedJobsServerFilter('operational', new Date('2026-10-07T00:00:00Z'), 122830003),
+        "(((gr_coordinatormanaged eq true or gr_coordinatormanaged eq null) and gr_registrationvoid ne true) and (gr_greentreestatus eq null or (gr_greentreestatus ne 'closed' and gr_greentreestatus ne 'finalised'))) and gr_operatingbranch eq 122830003",
+    )
+    assert.throws(() => unifiedJobsServerFilter('all', new Date(), 99), /operating branch is invalid/i)
     globalThis.fetch = async () => Response.json({ value: [], '@odata.nextLink': 'https://attacker.invalid/api/data/v9.2/gr_jobs?$skiptoken=x' })
     await assert.rejects(() => fetchUnifiedJobsPage('token', 'all'), /invalid Jobs continuation link/)
 })
@@ -129,9 +180,14 @@ test('unified runtime fails closed before every remaining direct number mutation
 test('unified Job creation omits the number field entirely', () => {
     const payload = buildJobCreatePayload({
         jobNumber: '', orderNumber: '', description: 'Staged work', jobType: 122830000,
-        status: 122830005, serviceType: 122830000, siteId: id(3),
+        status: 122830001, serviceType: 122830000, siteId: id(3),
     })
     assert.equal(Object.hasOwn(payload, 'gr_jobnumber'), false)
+    const branchPayload = buildJobCreatePayload({
+        jobNumber: '', orderNumber: '', description: 'Christchurch staged work', jobType: 122830000,
+        status: 122830001, serviceType: 122830000, siteId: id(3), operatingBranch: 122830003,
+    })
+    assert.equal(branchPayload.gr_operatingbranch, 122830003)
 })
 
 test('unified WOF corrections never submit the Job number field', async () => {

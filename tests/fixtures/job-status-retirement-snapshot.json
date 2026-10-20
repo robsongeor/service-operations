@@ -1,0 +1,50 @@
+{
+  "metadata": {
+    "table": "gr_job",
+    "attribute": "gr_status",
+    "isGlobal": true,
+    "optionSetName": "gr_status",
+    "options": [
+      { "value": 122830000, "labels": [{ "languageCode": 1033, "label": "Allocated" }] },
+      { "value": 122830001, "labels": [{ "languageCode": 1033, "label": "Unallocated" }] },
+      { "value": 122830002, "labels": [{ "languageCode": 1033, "label": "Waiting for parts" }] },
+      { "value": 122830003, "labels": [{ "languageCode": 1033, "label": "Complete" }] },
+      { "value": 122830004, "labels": [{ "languageCode": 1033, "label": "Review" }] },
+      { "value": 122830005, "labels": [{ "languageCode": 1033, "label": "Unconfirmed" }] }
+    ]
+  },
+  "jobs": [
+    {
+      "id": "00000000-0000-0000-0000-000000000002",
+      "status": 122830005,
+      "stateCode": 1,
+      "registrationVoid": true,
+      "jobType": 122830001,
+      "etag": "202"
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000001",
+      "status": 122830005,
+      "stateCode": 0,
+      "registrationVoid": false,
+      "jobType": 122830000,
+      "etag": "101"
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000003",
+      "status": 122830005,
+      "stateCode": 0,
+      "registrationVoid": false,
+      "jobType": null,
+      "etag": ""
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000004",
+      "status": 122830000,
+      "stateCode": 0,
+      "registrationVoid": false,
+      "jobType": 122830000,
+      "etag": "404"
+    }
+  ]
+}

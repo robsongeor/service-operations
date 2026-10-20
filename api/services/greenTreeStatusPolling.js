@@ -57,11 +57,13 @@ function trustedNextLink(value, origin) {
     } catch { return '' }
 }
 
-async function readCandidatePage(table, mode, dataverseOrigin, authorization, fetchImpl) {
+async function readCandidatePage(table, mode, jobNumber, dataverseOrigin, authorization, fetchImpl) {
     const select = `${table.idField},gr_jobnumber,${table.marker},gr_greentreestatus,gr_greentreestatuscheckedon`
-    const filter = mode === 'backfill'
-        ? 'statecode eq 0 and gr_jobnumber ne null and gr_greentreestatuscheckedon eq null'
-        : "statecode eq 0 and gr_jobnumber ne null and (gr_greentreestatus eq null or gr_greentreestatus ne 'finalised')"
+    const filter = mode === 'manual'
+        ? `statecode eq 0 and gr_jobnumber eq '${jobNumber}'`
+        : mode === 'backfill'
+            ? 'statecode eq 0 and gr_jobnumber ne null and gr_greentreestatuscheckedon eq null'
+            : "statecode eq 0 and gr_jobnumber ne null and (gr_greentreestatus eq null or gr_greentreestatus ne 'finalised')"
     const url = `${dataverseOrigin}/api/data/v9.2/${table.tableSet}?$select=${select}&$filter=${encodeURIComponent(filter)}&$orderby=gr_greentreestatuscheckedon asc&$top=${QUERY_SIZE_PER_TABLE}`
     const response = await fetchImpl(url, { headers: { Authorization: authorization, Accept: 'application/json', Prefer: `odata.maxpagesize=${QUERY_SIZE_PER_TABLE}` } })
     if (!response.ok) throw new Error('Dataverse GreenTree polling candidates could not be loaded.')
@@ -83,16 +85,20 @@ async function mapWithConcurrency(items, limit, worker) {
 }
 
 async function pollGreenTreeJobStatuses({
-    mode = 'scheduled', batchSize = DEFAULT_BATCH_SIZE, dataverseOrigin, authorization,
+    mode = 'scheduled', batchSize = DEFAULT_BATCH_SIZE, jobNumber = '', dataverseOrigin, authorization,
     fetchImpl = fetch, fetchJob = fetchGreenTreeJobByCode, now = Date.now(),
 }) {
-    if (mode !== 'scheduled' && mode !== 'backfill') throw new Error('Unknown GreenTree status polling mode.')
+    if (mode !== 'scheduled' && mode !== 'backfill' && mode !== 'manual') throw new Error('Unknown GreenTree status polling mode.')
     if (!dataverseOrigin || !/^Bearer\s+\S+$/i.test(authorization || '')) throw new Error('Dataverse polling identity is unavailable.')
+    const manualJobNumber = String(jobNumber || '').trim().toUpperCase()
+    if (mode === 'manual' && !/^(?:[A-Z]{1,2})?[0-9]{1,20}$/.test(manualJobNumber)) throw new Error('The manual GreenTree Job Number is invalid.')
     const boundedBatchSize = Math.max(1, Math.min(Number(batchSize) || DEFAULT_BATCH_SIZE, MAX_BATCH_SIZE))
-    const pages = await Promise.all(TABLES.map((table) => readCandidatePage(table, mode, dataverseOrigin, authorization, fetchImpl)))
-    const candidates = pages.flat().filter((record) => mode === 'backfill'
-        ? !record.gr_greentreestatuscheckedon
-        : statusRefreshDue(record.gr_greentreestatus, record.gr_greentreestatuscheckedon, now))
+    const pages = await Promise.all(TABLES.map((table) => readCandidatePage(table, mode, manualJobNumber, dataverseOrigin, authorization, fetchImpl)))
+    const candidates = pages.flat().filter((record) => mode === 'manual'
+        ? true
+        : mode === 'backfill'
+            ? !record.gr_greentreestatuscheckedon
+            : statusRefreshDue(record.gr_greentreestatus, record.gr_greentreestatuscheckedon, now))
     const byCode = new Map()
     candidates.forEach((record) => {
         const code = String(record.gr_jobnumber || '').trim().toUpperCase()
@@ -102,11 +108,12 @@ async function pollGreenTreeJobStatuses({
         byCode.set(code, records)
     })
     const dueCodes = [...byCode.keys()]
-    const selectedCodes = dueCodes.slice(0, boundedBatchSize)
+    const selectedCodes = mode === 'manual' ? dueCodes : dueCodes.slice(0, boundedBatchSize)
     const result = {
         mode, due: dueCodes.length, selected: selectedCodes.length, checked: 0, updatedRecords: 0,
         notEntered: 0, open: 0, closed: 0, finalised: 0, conflicts: [], failed: [],
-        remaining: Math.max(0, dueCodes.length - selectedCodes.length),
+        remaining: mode === 'manual' ? 0 : Math.max(0, dueCodes.length - selectedCodes.length),
+        ...(mode === 'manual' ? { jobNumber: manualJobNumber, entered: false, status: '' } : {}),
     }
     const checkedOn = new Date(now).toISOString()
 
@@ -116,6 +123,10 @@ async function pollGreenTreeJobStatuses({
         catch { result.failed.push(code); return }
         result.checked += 1
         const nextStatus = greenTreeJob ? reconciliationTest.greenTreeJobStatus(greenTreeJob) : ''
+        if (mode === 'manual') {
+            result.entered = Boolean(greenTreeJob)
+            result.status = nextStatus
+        }
         if (!nextStatus) result.notEntered += 1
         else result[nextStatus] += 1
         for (const record of byCode.get(code) || []) {

@@ -90,9 +90,10 @@ and deployment runbooks, with backups and rollback, rather than deleting feature
 
 ### `Unconfirmed`, `WAITING_FOR_PARTS`, and coordinator-managed data
 
-- `Unconfirmed` still participates in forms, filters/preferences, scheduling and dispatch checks.
-  Count affected live Jobs and decide the replacement state before removing the option. Migrate
-  saved filters and test edit/dispatch of historical rows, or they may become hidden/uneditable.
+- `Unconfirmed` is retired in source and deterministically maps to Staging. It is absent from forms
+  and tabs; legacy rows and saved preferences are compatibility-normalised so they remain visible
+  and editable. Count and migrate every live `122830005` row to `122830001`, prove zero remaining
+  dependencies, then remove/disable the Dataverse option without reusing its number.
 - `WAITING_FOR_PARTS` is an internal constant whose persisted value is displayed as **Action
   Required**. Renaming the symbol is possible; changing/deleting the Dataverse Choice value
   without migration corrupts meaning. Audit every serializer, filter and integration first.

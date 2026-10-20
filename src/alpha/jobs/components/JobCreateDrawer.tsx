@@ -6,7 +6,7 @@ import type { Site } from '../types/site.types'
 import type { Customer } from '../types/customer.types'
 import type { SiteContact } from '../types/siteContact.types'
 import type { JobType } from '../types/jobType.types'
-import { JOB_STATUSES, UNCONFIRMED_OPERATION_MESSAGE, type JobStatus } from '../types/jobStatus.types'
+import { canonicalJobStatus, JOB_STATUSES, type JobStatus } from '../types/jobStatus.types'
 import type { JobSaveInput } from '../types/jobSave.types'
 import { useJobEditor } from '../hooks/useJobEditor'
 import JobDrawerShell from './JobDrawerShell'
@@ -77,7 +77,7 @@ export default function JobCreateDrawer({
         initialDraft: {
             jobNumber: initialValues?.jobNumber ?? '', orderNumber: initialValues?.orderNumber ?? '', description: initialValues?.description ?? '',
             jobType: initialValues?.jobType ?? '',
-            status: initialValues?.status ?? JOB_STATUSES.UNALLOCATED,
+            status: canonicalJobStatus(initialValues?.status ?? JOB_STATUSES.UNALLOCATED),
             mechanicId: '',
             externalSupplierDetails: '',
             externalSupplierSelected: false,
@@ -188,7 +188,7 @@ export default function JobCreateDrawer({
             createdJob = true
             setJobWasCreated(true)
 
-            const scheduleOptionsToCreate = stagingOnly || draft.status === JOB_STATUSES.UNCONFIRMED ? [] : scheduleDrafts
+            const scheduleOptionsToCreate = stagingOnly ? [] : scheduleDrafts
             await Promise.all(scheduleOptionsToCreate.map((option) =>
                 onCreateScheduleOption({
                     jobId,
@@ -277,7 +277,6 @@ export default function JobCreateDrawer({
                 {!stagingOnly && <JobScheduleFields
                     draftOptions={scheduleDrafts}
                     onDraftOptionsChange={setScheduleDrafts}
-                    disabledMessage={draft.status === JOB_STATUSES.UNCONFIRMED ? UNCONFIRMED_OPERATION_MESSAGE : undefined}
                 />}
             </fieldset>
         </JobDrawerShell>

@@ -102,6 +102,66 @@ These are product decisions. The original documentation audit did not implement 
 Job Card work implements the local GT safeguard only. New hour-meter evidence requires office
 approval, corrections are recorded by office staff, and the personal-account technician app is parked.
 
+## Owner decisions recorded on 19 October
+
+1. Service Coordination will present the existing Unallocated and Allocated lifecycle values as
+   **Staging** and **With Technician**. Assignment alone remains a planning fact; confirmed Job Card
+   dispatch is the lifecycle transition. Office attention/follow-up, not an inaccurate status, keeps
+   Jobs on the coordinator's working list. The existing numeric Choice values remain stable, but the
+   matching global Dataverse labels and historical rows need a controlled metadata/migration release;
+   see the [Job Status lifecycle migration plan](docs/job-status-lifecycle-migration.md).
+2. Service and WOF completion evidence will eventually move into type-specific technician Job Cards.
+   The current manual completion dialogs remain until those cards and an atomic processor replace
+   them safely. Automatic Completion Review → Complete processing is on hold and GreenTree closure
+   must not bypass required evidence or Service/WOF side effects. The target contract and retirement
+   gates are documented in
+   [Jobs architecture](docs/architecture/jobs.md#deferred-type-specific-job-card-completion).
+3. Service Coordination needs a shared Branch work queue plus a private user watchlist. Auckland's
+   two coordinators share Auckland Jobs but may watch different Jobs; Christchurch defaults to its
+   own Jobs. This requires an authoritative operating branch on Job and System User plus a separate
+   user-owned Job Watch record. Shared Office Attention is not a personal watch. Whether branch
+   filtering is also a Dataverse security boundary remains a release decision; see
+   [Job Branch Scope and Personal Watchlist](docs/job-branch-and-personal-watchlist.md).
+4. Unconfirmed is no longer a distinct lifecycle state or tab; it is the same operational meaning
+   as Staging. Source now hides the option and compatibility-maps historical `122830005` rows and
+   saved preferences to Staging without hiding or disabling them. Phase 3 now includes a read-only,
+   offline-testable Inspect/Plan tool for the deterministic `122830005` → `122830001` retirement.
+   Live inspection found 25 legacy rows, all with row versions, and produced a deterministic
+   zero-exception Plan. It has not been applied. The option must remain until an approved Apply and
+   zero-reference verification complete.
+
+The ordered source, schema, migration, deployment, acceptance and rollback work for these decisions
+is now tracked in the
+[Service Coordination workflow implementation plan](docs/features/SERVICE_COORDINATION_WORKFLOW_IMPLEMENTATION_PLAN.md).
+Phases 0–7 are complete in source. Phase 3 metadata was provisioned and post-verified: the shared
+Branch Choice, nullable Job/System User fields and user-owned Job Watch table exist, its alternate
+key is Active, and the Service Operations role has user-depth watch CRUD/Append privileges without
+Assign/Share. Registration and ordinary WOF creation stay in Staging regardless of assignment;
+confirmed delivery owns the transition to With Technician, with a status-only retry after delivery
+failures.
+
+The branch/watch API, authoritative bounded Job Card progress summary, branch-scoped queue,
+private watchlist UI and Job Book branch stamping are implemented behind default-off client/server
+gates. Evidence-based status and branch migration has deterministic hashed Plans, checkpointed ETag
+Apply/Verify and conditional rollback with simulation coverage. On 20 October 2026 the approved
+Auckland historical migration was applied and verified for 1,320 Jobs. Forty-one unclassified Jobs
+were exported to CSV for later review and intentionally left unchanged. Application/backend
+deployment and feature enablement remain separate release steps.
+
+Andy Lee's verified home/default branch is Christchurch. Bruce Frost, George Robson and Pubudu use
+Auckland. Home branch controls the initial worklist and new-Job default, while every participating
+user may switch to All branches. This is operational filtering, not Dataverse row-level isolation.
+The final four-user verification reported four verified users and zero mismatches. The onboarding
+manifest now makes an explicit reviewed home branch mandatory for every new user; the single-user
+setup command requires an exact Plan hash and automatically verifies Apply before the assignment is
+considered complete. It never defaults a missing branch to Auckland.
+
+The Service Coordination worklist now implements Home branch, All branches and My watchlist as
+distinct persisted views. Home branch applies the Dataverse branch filter; All branches omits that
+filter; new Jobs still default to the signed-in user's configured home branch.
+The initial delivery uses operational branch filtering; Dataverse branch
+security isolation and automatic Job completion remain deferred phases.
+
 ## Initial audit validation snapshot
 
 The counts below describe the initial audit, not today's latest result. The three contract failures

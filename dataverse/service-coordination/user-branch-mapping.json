@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "scope": "participating-service-coordination-users",
+  "allBranchesAvailable": true,
+  "users": [
+    { "userPrincipalName": "andyl@liftrucks.co.nz", "homeBranch": 122830003 },
+    { "userPrincipalName": "brucef@liftrucks.co.nz", "homeBranch": 122830000 },
+    { "userPrincipalName": "georger@liftrucks.co.nz", "homeBranch": 122830000 },
+    { "userPrincipalName": "pubudu@liftrucks.co.nz", "homeBranch": 122830000 }
+  ]
+}

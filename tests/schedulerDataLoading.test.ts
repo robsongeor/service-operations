@@ -33,10 +33,11 @@ test('Scheduler Schedule Option request is bounded to the visible window and fol
     }) as typeof fetch
 
     try {
-        const rows = await fetchJobScheduleOptionsForWindow('token', '2026-08-17', '2026-08-23')
+        const rows = await fetchJobScheduleOptionsForWindow('token', '2026-08-17', '2026-08-23', undefined, 122830003)
         assert.deepEqual(rows.map((row) => row.gr_jobscheduleoptionid), ['option-1', 'option-2'])
         assert.equal(requests.length, 2)
         assert.match(decodeURIComponent(requests[0]), /gr_scheduledate ge 2026-08-17 and gr_scheduledate le 2026-08-23/)
+        assert.match(decodeURIComponent(requests[0]), /gr_Job\/gr_operatingbranch eq 122830003/)
         assert.equal(requests[1], 'https://example.invalid/scheduler?page=2')
     } finally {
         globalThis.fetch = originalFetch
@@ -59,12 +60,13 @@ test('Scheduler loads only unique Jobs referenced by the bounded options', async
             '11111111-1111-4111-8111-111111111111',
             '22222222-2222-4222-8222-222222222222',
             '11111111-1111-4111-8111-111111111111',
-        ])
+        ], undefined, 122830003)
         assert.equal(rows.length, 2)
         assert.equal(requests.length, 1)
         const decoded = decodeURIComponent(requests[0])
         assert.match(decoded, /gr_jobid eq 11111111-1111-4111-8111-111111111111/)
         assert.match(decoded, /gr_jobid eq 22222222-2222-4222-8222-222222222222/)
+        assert.match(decoded, /gr_operatingbranch eq 122830003/)
 
         requests.length = 0
         assert.deepEqual(await fetchJobsByIds('token', []), [])
@@ -80,10 +82,16 @@ test('Scheduler screen consumes scoped weekly data and prefetches adjacent windo
     const jobsHook = readFileSync(new URL('../src/alpha/jobs/hooks/useJobs.ts', import.meta.url), 'utf8')
 
     assert.match(screen, /useSchedulerWindowData\(weekStart\)/)
+    assert.match(screen, /schedulerData\.branch\.label.*branch planner/)
     assert.match(screen, /loadGlobalOperationalData: false/)
     assert.match(screen, /scheduleOptions: schedulerData\.scheduleOptions/)
     assert.match(hook, /adjacentSchedulerWindows\(weekStart\)/)
     assert.match(hook, /client\.prefetchQuery/)
+    assert.match(hook, /fetchServiceCoordinationContext\(await getToken\(\), signal\)/)
+    assert.match(hook, /fetchJobScheduleOptionsForWindow\([\s\S]*operatingBranch/)
+    assert.match(hook, /fetchJobsByIds\(await getToken\(\), jobIds, signal, operatingBranch\)/)
+    assert.match(hook, /scheduleOptions\.filter/)
+    assert.match(hook, /fetchJobOfficeUpdatesForJobs\(await getToken\(\), scopedJobIds, signal\)/)
     assert.match(jobsHook, /hasScopedScheduleOptions/)
     assert.match(jobsHook, /onScopedDataChangedRef\.current/)
 })

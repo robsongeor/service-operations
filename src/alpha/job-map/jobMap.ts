@@ -1,5 +1,5 @@
 import type { Job } from '../jobs/types/job.types.ts'
-import { JOB_STATUSES, type JobStatus } from '../jobs/types/jobStatus.types.ts'
+import { canonicalJobStatus, getJobStatusLabel, JOB_STATUSES, type JobStatus } from '../jobs/types/jobStatus.types.ts'
 import type { JobMapSite } from './jobMap.types.ts'
 
 export const JOB_MAP_STATUSES = [
@@ -9,18 +9,15 @@ export const JOB_MAP_STATUSES = [
 ] as const
 
 export function isJobMapStatus(status: JobStatus) {
-    return (JOB_MAP_STATUSES as readonly JobStatus[]).includes(status)
+    return (JOB_MAP_STATUSES as readonly JobStatus[]).includes(canonicalJobStatus(status))
 }
 
 export function jobMapStatusLabel(status: JobStatus) {
-    if (status === JOB_STATUSES.ALLOCATED) return 'Allocated'
-    if (status === JOB_STATUSES.UNALLOCATED) return 'Unallocated'
-    if (status === JOB_STATUSES.WAITING_FOR_PARTS) return 'Action Required'
-    return 'Other'
+    return isJobMapStatus(status) ? getJobStatusLabel(status) : 'Other'
 }
 
 export function jobMapMarkerTone(statuses: JobStatus[]): JobMapSite['markerTone'] {
-    const unique = new Set(statuses)
+    const unique = new Set(statuses.map(canonicalJobStatus))
     if (unique.size !== 1) return 'mixed'
     if (unique.has(JOB_STATUSES.ALLOCATED)) return 'allocated'
     if (unique.has(JOB_STATUSES.UNALLOCATED)) return 'unallocated'

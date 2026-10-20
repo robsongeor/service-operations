@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import type { Job } from '../jobs/types/job.types'
 import { getJobTypeLabel } from '../jobs/types/jobType.types'
-import { JOB_STATUS_OPTIONS } from '../jobs/types/jobStatus.types'
+import { canonicalJobStatus, getJobStatusLabel } from '../jobs/types/jobStatus.types'
 import { jobNeedsOfficeAttention, type JobOfficeUpdate } from '../jobs/types/officeAction.types'
 
 type Props = {
@@ -59,14 +59,14 @@ export default function CustomerOpenJobsTab({ jobs, officeUpdates, isLoading, er
                 </header>
                 <div className="customer-job-list">
                     {group.jobs.map((job) => {
-                        const status = JOB_STATUS_OPTIONS.find((option) => option.value === job.gr_status)?.label ?? 'Unknown'
+                        const status = getJobStatusLabel(job.gr_status)
                         const latestUpdate = latestUpdates[job.gr_jobid.toLowerCase()]
                         return <button type="button" key={job.gr_jobid} onClick={() => onOpenJob(job)}>
                             <div className="customer-job-number">
                                 <span>{jobNeedsOfficeAttention(job) && <i title="Office attention required" aria-label="Office attention required" />}{job.gr_jobnumber || 'No Job Number'}</span>
                                 <small>{getJobTypeLabel(job.gr_jobtype)}</small>
                             </div>
-                            <span className="customer-job-status" data-status={job.gr_status}>{status}</span>
+                            <span className="customer-job-status" data-status={canonicalJobStatus(job.gr_status)}>{status}</span>
                             <div><strong>{job.gr_Equipment?.gr_fleet || 'No Equipment'}</strong><small>{job.gr_description || 'No description'}</small></div>
                             <div><strong>{job.gr_Mechanic?.gr_name || 'Unallocated'}</strong><small>{latestUpdate?.text || 'No office update'}</small></div>
                         </button>

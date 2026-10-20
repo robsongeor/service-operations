@@ -1,11 +1,13 @@
 {
-  "version": 1,
+  "version": 2,
   "status": "local-source-only-not-provisioned",
   "pluginType": "ServiceOperations.JobRegistration.JobRegistrationPlugin",
   "transaction": "synchronous MainOperation; IsInTransaction must be true; initiating caller only",
   "newJobId": "RequestId",
   "newLedgerId": "RequestId",
   "numberSource": "Existing regional Dataverse AutoNumber; never client arithmetic",
+  "initialOperationalStatus": { "value": 122830001, "label": "Staging", "rule": "Technician or supplier selection is planning data. Only confirmed Job Card delivery moves an ordinary Job to With Technician." },
+  "initialOperatingBranch": { "source": "Book", "mapping": { "auckland": 122830000, "waikato": 122830001, "hastings": 122830002, "christchurch": 122830003 }, "rule": "Registration and initial number allocation stamp the selected regional Job Book as the Job operating branch. Later branch transfers are a separate reviewed workflow." },
   "apis": [
     {
       "name": "gr_RegisterJobBookJob",
@@ -62,7 +64,7 @@
   ],
   "response": { "JobId": "Guid", "LedgerId": "Guid", "Book": "String", "JobNumber": "String", "JobRowVersion": "String", "WasReplay": "Boolean" },
   "proposedSchema": {
-    "gr_job": { "gr_coordinatormanaged": "Boolean; new registration explicitly false; existing records require reviewed migration and legacy fallback", "gr_registrationvoid": "Boolean; set only by the atomic registered-entry Void API", "gr_registrationvoidreason": "String max 1000; set with gr_registrationvoid by the same transaction", "gr_externalsupplierdetails": "Multiline text max 1000; mutually exclusive with gr_mechanic" },
+    "gr_job": { "gr_status": "Existing global Choice; new ordinary registration always writes Staging 122830001 regardless of technician or supplier selection", "gr_operatingbranch": "Existing global Choice; initial value is derived from the selected regional Job Book", "gr_coordinatormanaged": "Boolean; new registration explicitly false; existing records require reviewed migration and legacy fallback", "gr_registrationvoid": "Boolean; set only by the atomic registered-entry Void API", "gr_registrationvoidreason": "String max 1000; set with gr_registrationvoid by the same transaction", "gr_externalsupplierdetails": "Multiline text max 1000; mutually exclusive with gr_mechanic" },
     "gr_emaildispatch": { "gr_jobdispatchfingerprint": "String max 64; canonical SHA-256 replay identity for guarded initial dispatch" },
     "regionalTables": ["gr_jobbookentry", "gr_waikatojobbookentry", "gr_hastingsjobbookentry", "gr_christchurchjobbookentry"],
     "regionalColumns": { "gr_registeredjob": "Optional Lookup to gr_job; independent of historical gr_promotedjob", "gr_registrationfingerprint": "Optional String max 64; canonical SHA-256 replay identity" },

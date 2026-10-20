@@ -8,7 +8,7 @@ import JobEditDrawer from './components/JobEditDrawer'
 import JobCreateDrawer from './components/JobCreateDrawer'
 import type { Job } from './types/job.types'
 import { DEFAULT_JOBS_VIEW_STATE, applyJobsDefaultView, getJobsViewStateKey, restoreJobsViewState, type JobsViewState, type ScheduledJobsVisibility } from './types/jobsViewState.types'
-import { JOB_STATUSES, JOB_STATUS_OPTIONS, type JobStatus } from './types/jobStatus.types'
+import { jobStatusIsVisible, JOB_STATUSES, JOB_STATUS_OPTIONS, type JobStatus } from './types/jobStatus.types'
 import { JOB_TYPE_OPTIONS } from './types/jobType.types'
 import { APPLICATION_DEFAULT_JOBS_VIEW, canonicaliseJobStatuses, getJobsDefaultViewKey, restoreJobsDefaultView, saveJobsDefaultView, type JobsDefaultView } from './types/jobsDefaultView.types'
 import { getSignedInUserInfo } from '../../auth/signedInUser'
@@ -23,6 +23,9 @@ import EquipmentDrawer from '../equipment/components/EquipmentDrawer'
 import type { Equipment } from './types/equipment.types'
 import { useQuoteEditorOverlay } from '../quotes/QuoteEditorOverlayContext'
 import { useOperationalScreenReady } from '../shared/data/OperationalScreenPerformanceContext'
+import { useJobCardProgress, useServiceCoordination } from './hooks/useServiceCoordination'
+import { JOB_CARD_PROGRESS_SUMMARY_ENABLED, SERVICE_COORDINATION_BRANCH_ENABLED, SERVICE_COORDINATION_WATCHLIST_ENABLED } from './domain/serviceCoordinationConfig'
+import ServiceCoordinationViews from './components/ServiceCoordinationViews'
 
 export default function JobsScreen() {
     const navigate = useNavigate()
@@ -38,10 +41,29 @@ export default function JobsScreen() {
     const [viewState, setViewState] = useState<JobsViewState>(() => UNIFIED_JOB_WALKTHROUGH ? { ...DEFAULT_JOBS_VIEW_STATE } : storageKey
         ? restoreJobsViewState(storageKey, true) ?? applyJobsDefaultView(defaultView)
         : DEFAULT_JOBS_VIEW_STATE)
-    const completedArchiveRequested = viewState.visibleStatuses.length === 1
+    const coordination = useServiceCoordination()
+    const activeCoordinationView = viewState.coordinationView === 'watchlist' && !SERVICE_COORDINATION_WATCHLIST_ENABLED
+        ? 'branch'
+        : viewState.coordinationView === 'all' && !SERVICE_COORDINATION_BRANCH_ENABLED
+            ? 'branch'
+            : viewState.coordinationView
+    const branchWorklistActive = activeCoordinationView !== 'watchlist'
+    const completedArchiveRequested = branchWorklistActive && viewState.visibleStatuses.length === 1
         && viewState.visibleStatuses[0] === JOB_STATUSES.COMPLETE
-    const unifiedWorklist = useUnifiedJobWorklist(completedArchiveRequested)
-    const scopedData = useMemo(() => ({ jobs: unifiedWorklist.jobs, equipment: [], sites: [], servicePlans: [], scheduleOptions: [], officeUpdates: [] }), [unifiedWorklist.jobs])
+    const branchScopeReady = !SERVICE_COORDINATION_BRANCH_ENABLED || Boolean(coordination.context?.branch)
+    const unifiedWorklist = useUnifiedJobWorklist(completedArchiveRequested, {
+        enabled: branchScopeReady,
+        operatingBranch: SERVICE_COORDINATION_BRANCH_ENABLED && activeCoordinationView === 'branch'
+            ? coordination.context?.branch.value
+            : undefined,
+    })
+    const watchedJobs = useMemo(() => coordination.watches.map((item) => item.job), [coordination.watches])
+    const coordinatedJobs = useMemo(() => {
+        const rows = new Map(unifiedWorklist.jobs.map((job) => [job.gr_jobid.toLowerCase(), job]))
+        watchedJobs.forEach((job) => rows.set(job.gr_jobid.toLowerCase(), job))
+        return [...rows.values()]
+    }, [unifiedWorklist.jobs, watchedJobs])
+    const scopedData = useMemo(() => ({ jobs: coordinatedJobs, equipment: [], sites: [], servicePlans: [], scheduleOptions: [], officeUpdates: [] }), [coordinatedJobs])
     const [allocationJob, setAllocationJob] = useState<Job | null>(null)
     const {
         jobs, equipmentList, mechanics, mechanicsLoading, mechanicsError, retryMechanics, sites, customers, siteContacts,
@@ -50,7 +72,7 @@ export default function JobsScreen() {
         officeUpdates,
         createJob, updateJob, deleteJob, updateJobStatus, updateJobFields,
         updateJobCardStatus,
-        sendPrimaryJobEmail, queuePrimaryJobEmail, emailDeliveryStates, sendAssignmentJobEmail,
+        sendPrimaryJobEmail, queuePrimaryJobEmail, emailDeliveryStates, sendAssignmentJobEmail, retryConfirmedDeliveryStatus,
         createJobAssignment, deleteJobAssignment,
         createContactForSite, createEquipment, createSite, createCustomer,
         updateEquipment, setupEquipmentMaintenance, saveEquipmentMaintenanceHistory, deleteEquipment,
@@ -66,7 +88,13 @@ export default function JobsScreen() {
         loadEquipmentServicePlansForEditor,
         isLoading, loadError, retryInitialLoad, fetchJobForDrawer, fetchJobCardDetails, fetchJobPhotoBody,
     } = useJobs(UNIFIED_JOB_RUNTIME ? { loadGlobalOperationalData: false, scopedData, onScopedDataChanged: unifiedWorklist.reload } : {})
-    const pageIsLoading = isLoading || (UNIFIED_JOB_RUNTIME && unifiedWorklist.busy && unifiedWorklist.jobs.length === 0)
+    const displayedJobs = activeCoordinationView === 'watchlist'
+        ? watchedJobs
+        : (UNIFIED_JOB_RUNTIME ? unifiedWorklist.jobs : jobs)
+    const progress = useJobCardProgress(displayedJobs)
+    const pageIsLoading = isLoading
+        || (SERVICE_COORDINATION_BRANCH_ENABLED && coordination.busy && branchWorklistActive)
+        || (UNIFIED_JOB_RUNTIME && unifiedWorklist.busy && branchWorklistActive && unifiedWorklist.jobs.length === 0)
     useOperationalScreenReady('Jobs', !pageIsLoading)
     const [editingJob, setEditingJob] = useState<Job | null>(null)
     const [editingInitialTab, setEditingInitialTab] = useState<'details' | 'jobcard'>('details')
@@ -152,7 +180,7 @@ export default function JobsScreen() {
         }))
     }
 
-    const filteredJobs = jobs.filter((job) => job.legacyBookEntry ? viewState.selectedJobType === 'all' : visibleStatuses.includes(job.gr_status))
+    const filteredJobs = displayedJobs.filter((job) => job.legacyBookEntry ? viewState.selectedJobType === 'all' : jobStatusIsVisible(job.gr_status, visibleStatuses))
     const scheduledSettingLabels: Record<ScheduledJobsVisibility, string> = {
         all: 'All scheduled Jobs',
         today: 'Scheduled today',
@@ -194,7 +222,7 @@ export default function JobsScreen() {
             <header className="jobs-page-header">
                 <h1>Jobs</h1>
                 <div className="jobs-page-header-actions">
-                    <span>{jobs.length} records</span>
+                    <span>{displayedJobs.length} records</span>
                     {UNIFIED_JOB_RUNTIME && unifiedWorklist.backgroundBusy && <span className="jobs-cache-status">Loading additional jobs…</span>}
                     {jobsRealtimeStatus !== 'disabled' && (
                         <span className={`jobs-realtime-status ${jobsRealtimeStatus}`}>
@@ -241,6 +269,25 @@ export default function JobsScreen() {
             {UNIFIED_JOB_RUNTIME && unifiedWorklist.error && <section className="jobs-filter-bar" aria-label="Job worklist notices">
                 {unifiedWorklist.error && <span role="alert">{unifiedWorklist.error}</span>}
             </section>}
+            {SERVICE_COORDINATION_BRANCH_ENABLED && coordination.contextError && <section className="jobs-filter-bar" aria-label="Branch setup notice">
+                <span role="alert">{coordination.contextError}</span>
+                <button type="button" onClick={() => { void coordination.reload() }}>Try again</button>
+            </section>}
+            {SERVICE_COORDINATION_WATCHLIST_ENABLED && coordination.watchError && <section className="jobs-filter-bar" aria-label="Watchlist notice">
+                <span role="alert">{coordination.watchError}</span>
+                <button type="button" onClick={() => { void coordination.reload() }}>Try again</button>
+            </section>}
+            {JOB_CARD_PROGRESS_SUMMARY_ENABLED && progress.error && <section className="jobs-filter-bar" aria-label="Job Card progress notice">
+                <span role="alert">{progress.error}</span>
+            </section>}
+
+            {(SERVICE_COORDINATION_BRANCH_ENABLED || SERVICE_COORDINATION_WATCHLIST_ENABLED) && <ServiceCoordinationViews
+                view={activeCoordinationView}
+                branchLabel={coordination.context?.branch.label}
+                allBranchesEnabled={SERVICE_COORDINATION_BRANCH_ENABLED}
+                watchlistEnabled={SERVICE_COORDINATION_WATCHLIST_ENABLED}
+                onChange={(coordinationView) => setViewState((current) => ({ ...current, coordinationView }))}
+            />}
 
             {referenceDataStatus === 'error' && (
                 <div className="jobs-reference-data-state jobs-reference-data-error" role="alert">
@@ -269,11 +316,19 @@ export default function JobsScreen() {
                     </div>
                     <button type="button" onClick={retryInitialLoad}>Try again</button>
                 </section>
-            ) : jobs.length === 0 ? (
+            ) : SERVICE_COORDINATION_BRANCH_ENABLED && branchWorklistActive && !coordination.context?.branch ? (
+                <section className="jobs-data-state jobs-data-state-error" role="alert">
+                    <div><h2>Branch setup required</h2><p>Your account needs a Service Coordination branch before Branch work can be loaded.</p></div>
+                </section>
+            ) : displayedJobs.length === 0 ? (
                 <section className="jobs-data-state">
                     <div>
-                        <h2>No jobs found</h2>
-                        <p>Dataverse is connected, but the jobs table contains no records.</p>
+                        <h2>{activeCoordinationView === 'watchlist' ? 'No watched jobs' : 'No jobs found'}</h2>
+                        <p>{activeCoordinationView === 'watchlist'
+                            ? 'Jobs you watch will remain here until you remove them.'
+                            : activeCoordinationView === 'all'
+                                ? 'There are no Jobs in the current All branches view.'
+                                : 'There are no Jobs in your home branch.'}</p>
                     </div>
                 </section>
             ) : (
@@ -281,6 +336,11 @@ export default function JobsScreen() {
                     unifiedWorklist={UNIFIED_JOB_RUNTIME}
                     onAllocateNumber={UNIFIED_JOB_RUNTIME ? setAllocationJob : undefined}
                     jobs={filteredJobs}
+                    coordinationView={activeCoordinationView}
+                    watchedJobIds={coordination.watchedJobIds}
+                    onToggleWatch={SERVICE_COORDINATION_WATCHLIST_ENABLED ? coordination.toggleWatch : undefined}
+                    progressSummaries={progress.summaries}
+                    progressUnavailable={JOB_CARD_PROGRESS_SUMMARY_ENABLED && Boolean(progress.error)}
                     signedInUserName={signedInUser?.displayName ?? ''}
                     visibleStatuses={visibleStatuses}
                     viewState={viewState}
@@ -289,7 +349,7 @@ export default function JobsScreen() {
                     onResetToDefault={resetToDefault}
                     resetToDefaultDisabled={currentMatchesDefault}
                     onStatusChange={async (jobId, status) => {
-                        if (status === JOB_STATUSES.COMPLETE || status === JOB_STATUSES.UNCONFIRMED) {
+                        if (status === JOB_STATUSES.COMPLETE) {
                             await prepareJobReferenceData()
                         }
                         return updateJobStatus(jobId, status)
@@ -316,12 +376,7 @@ export default function JobsScreen() {
                     setViewState((current) => ({ ...current, scheduledJobsVisibility: draftScheduledVisibility }))
                     const nextDefaultView = {
                         ...draftDefaultView,
-                        visibleStatuses: canonicaliseJobStatuses(
-                            draftDefaultView.selectedJobType === 'unconfirmed'
-                                && !draftDefaultView.visibleStatuses.includes(JOB_STATUSES.UNCONFIRMED)
-                                ? [...draftDefaultView.visibleStatuses, JOB_STATUSES.UNCONFIRMED]
-                                : draftDefaultView.visibleStatuses,
-                        ),
+                        visibleStatuses: canonicaliseJobStatuses(draftDefaultView.visibleStatuses),
                     }
                     if (defaultViewStorageKey && saveJobsDefaultView(defaultViewStorageKey, nextDefaultView)) {
                         setDefaultView(nextDefaultView)
@@ -354,7 +409,7 @@ export default function JobsScreen() {
                             value={draftDefaultView.selectedJobType}
                             onChange={(event) => setDraftDefaultView((current) => ({
                                 ...current,
-                                selectedJobType: event.target.value === 'all' || event.target.value === 'operational' || event.target.value === 'unconfirmed' || event.target.value === 'unnumbered'
+                                selectedJobType: event.target.value === 'all' || event.target.value === 'operational' || event.target.value === 'unnumbered'
                                     ? event.target.value
                                     : Number(event.target.value) as JobsDefaultView['selectedJobType'],
                             }))}
@@ -362,7 +417,6 @@ export default function JobsScreen() {
                             <option value="operational">Operational</option>
                             {JOB_TYPE_OPTIONS.map((jobType) => <option key={jobType.value} value={jobType.value}>{jobType.label}</option>)}
                             <option value="unnumbered">Unnumbered</option>
-                            <option value="unconfirmed">Unconfirmed</option>
                             <option value="all">All jobs (unfiltered)</option>
                         </select>
                     </label>
@@ -410,7 +464,12 @@ export default function JobsScreen() {
                 <JobCreateDrawer
                     {...sharedDrawerProps}
                     existingJobs={jobs}
-                    onCreateJob={createJob}
+                    onCreateJob={(input) => createJob({
+                        ...input,
+                        ...(SERVICE_COORDINATION_BRANCH_ENABLED && coordination.context?.branch
+                            ? { operatingBranch: coordination.context.branch.value }
+                            : {}),
+                    })}
                     onCreateScheduleOption={createScheduleOption}
                     closeAfterCreate={false}
                     onCreated={async (jobId) => {
@@ -443,10 +502,13 @@ export default function JobsScreen() {
                     onCreateAssignment={createJobAssignment}
                     onSendPrimary={sendPrimaryJobEmail}
                     onSendAssignment={sendAssignmentJobEmail}
+                    onRetryConfirmedDeliveryStatus={retryConfirmedDeliveryStatus}
                     onDeleteAssignment={deleteJobAssignment}
                     officeUpdates={officeUpdates.filter((update) => update.jobId.toLowerCase() === editingJob.gr_jobid.toLowerCase())}
                     onCreateOfficeUpdate={createJobOfficeUpdate}
                     onSaveOfficeAttention={updateJobOfficeAttention}
+                    watched={coordination.watchedJobIds.has(editingJob.gr_jobid.toLowerCase())}
+                    onToggleWatch={SERVICE_COORDINATION_WATCHLIST_ENABLED ? () => coordination.toggleWatch(editingJob) : undefined}
                     onClose={() => {
                         setEditingJob(null)
                         setEditingInitialTab('details')

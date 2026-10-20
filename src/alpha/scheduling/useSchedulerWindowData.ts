@@ -5,11 +5,14 @@ import { acquireDataverseAccessToken } from '../../auth/dataverseAuthentication'
 import { fetchJobsByIds } from '../jobs/services/jobsApi'
 import { fetchJobScheduleOptionsForWindow } from '../jobs/services/jobScheduleApi'
 import { fetchJobOfficeUpdatesForJobs } from '../jobs/services/jobOfficeUpdatesApi'
+import { SERVICE_COORDINATION_BRANCH_ENABLED } from '../jobs/domain/serviceCoordinationConfig'
+import { fetchServiceCoordinationContext } from '../jobs/services/serviceCoordinationApi'
 import type { Job } from '../jobs/types/job.types'
 import type { JobScheduleOption } from '../jobs/types/jobSchedule.types'
 import type { JobOfficeUpdate } from '../jobs/types/officeAction.types'
 import {
     operationalIdFingerprint,
+    SCHEDULER_BRANCH_CONTEXT_QUERY_KEY,
     schedulerJobsQueryKey,
     schedulerOfficeUpdatesQueryKey,
     schedulerOptionsQueryKey,
@@ -34,15 +37,25 @@ export function useSchedulerWindowData(weekStart: Date) {
     const { instance } = useMsal()
     const account = useActiveMsalAccount()
     const client = useOperationalDataClient()
-    const enabled = Boolean(account)
+    const signedIn = Boolean(account)
     const window = useMemo(() => schedulerWindow(weekStart), [weekStart])
     const getToken = useCallback(
         () => acquireDataverseAccessToken(instance, account),
         [account, instance],
     )
+    const branchContextQuery = useOperationalQuery({
+        key: SCHEDULER_BRANCH_CONTEXT_QUERY_KEY,
+        enabled: signedIn && SERVICE_COORDINATION_BRANCH_ENABLED,
+        staleTimeMs: WINDOW_CACHE_TIME_MS,
+        cacheTimeMs: WINDOW_CACHE_TIME_MS,
+        queryFn: async ({ signal }) => fetchServiceCoordinationContext(await getToken(), signal),
+    })
+    const branch = SERVICE_COORDINATION_BRANCH_ENABLED ? branchContextQuery.data?.branch : undefined
+    const operatingBranch = branch?.value
+    const enabled = signedIn && (!SERVICE_COORDINATION_BRANCH_ENABLED || operatingBranch !== undefined)
     const optionsKey = useMemo(
-        () => schedulerOptionsQueryKey(window.startDate, window.endDate),
-        [window.endDate, window.startDate],
+        () => schedulerOptionsQueryKey(window.startDate, window.endDate, operatingBranch),
+        [operatingBranch, window.endDate, window.startDate],
     )
     const optionsQuery = useOperationalQuery<JobScheduleOption[]>({
         key: optionsKey,
@@ -54,14 +67,15 @@ export function useSchedulerWindowData(weekStart: Date) {
             window.startDate,
             window.endDate,
             signal,
+            operatingBranch,
         ),
     })
     const scheduleOptions = optionsQuery.data ?? EMPTY_OPTIONS
     const jobIds = useMemo(() => optionJobIds(scheduleOptions), [scheduleOptions])
     const jobFingerprint = useMemo(() => operationalIdFingerprint(jobIds), [jobIds])
     const jobsKey = useMemo(
-        () => schedulerJobsQueryKey(window.startDate, window.endDate, jobFingerprint),
-        [jobFingerprint, window.endDate, window.startDate],
+        () => schedulerJobsQueryKey(window.startDate, window.endDate, jobFingerprint, operatingBranch),
+        [jobFingerprint, operatingBranch, window.endDate, window.startDate],
     )
     const optionsReady = optionsQuery.status !== 'initial' && optionsQuery.status !== 'loading'
     const jobsQuery = useOperationalQuery<Job[]>({
@@ -69,26 +83,35 @@ export function useSchedulerWindowData(weekStart: Date) {
         enabled: enabled && optionsReady,
         staleTimeMs: WINDOW_STALE_TIME_MS,
         cacheTimeMs: WINDOW_CACHE_TIME_MS,
-        queryFn: async ({ signal }) => fetchJobsByIds(await getToken(), jobIds, signal),
+        queryFn: async ({ signal }) => fetchJobsByIds(await getToken(), jobIds, signal, operatingBranch),
     })
+    const scopedJobIds = useMemo(() => (jobsQuery.data ?? EMPTY_JOBS).map((job) => job.gr_jobid.toLowerCase()), [jobsQuery.data])
+    const scopedJobIdSet = useMemo(() => new Set(scopedJobIds), [scopedJobIds])
+    const scopedScheduleOptions = useMemo(() => scheduleOptions.filter((option) => {
+        const jobId = option._gr_job_value?.toLowerCase()
+        return Boolean(jobId && scopedJobIdSet.has(jobId))
+    }), [scheduleOptions, scopedJobIdSet])
+    const scopedJobFingerprint = useMemo(() => operationalIdFingerprint(scopedJobIds), [scopedJobIds])
+    const jobsReady = jobsQuery.status !== 'initial' && jobsQuery.status !== 'loading'
     const officeUpdatesQuery = useOperationalQuery<JobOfficeUpdate[]>({
-        key: schedulerOfficeUpdatesQueryKey(window.startDate, window.endDate, jobFingerprint),
-        enabled: enabled && optionsReady,
+        key: schedulerOfficeUpdatesQueryKey(window.startDate, window.endDate, scopedJobFingerprint, operatingBranch),
+        enabled: enabled && optionsReady && jobsReady,
         staleTimeMs: WINDOW_STALE_TIME_MS,
         cacheTimeMs: WINDOW_CACHE_TIME_MS,
-        queryFn: async ({ signal }) => fetchJobOfficeUpdatesForJobs(await getToken(), jobIds, signal),
+        queryFn: async ({ signal }) => fetchJobOfficeUpdatesForJobs(await getToken(), scopedJobIds, signal),
     })
 
     useEffect(() => {
         if (!enabled || optionsQuery.data === undefined) return
         const prefetchWindow = async (target: SchedulerWindow, token: string) => {
             const prefetchedOptions = await client.prefetchQuery(
-                schedulerOptionsQueryKey(target.startDate, target.endDate),
+                schedulerOptionsQueryKey(target.startDate, target.endDate, operatingBranch),
                 ({ signal }) => fetchJobScheduleOptionsForWindow(
                     token,
                     target.startDate,
                     target.endDate,
                     signal,
+                    operatingBranch,
                 ),
                 { staleTimeMs: WINDOW_STALE_TIME_MS, cacheTimeMs: WINDOW_CACHE_TIME_MS },
             )
@@ -98,28 +121,36 @@ export function useSchedulerWindowData(weekStart: Date) {
                     target.startDate,
                     target.endDate,
                     operationalIdFingerprint(prefetchedIds),
+                    operatingBranch,
                 ),
-                ({ signal }) => fetchJobsByIds(token, prefetchedIds, signal),
+                ({ signal }) => fetchJobsByIds(token, prefetchedIds, signal, operatingBranch),
                 { staleTimeMs: WINDOW_STALE_TIME_MS, cacheTimeMs: WINDOW_CACHE_TIME_MS },
             )
         }
         void getToken().then((token) => Promise.all(
             adjacentSchedulerWindows(weekStart).map((target) => prefetchWindow(target, token)),
         )).catch(() => undefined)
-    }, [client, enabled, getToken, optionsQuery.data, weekStart])
+    }, [client, enabled, getToken, operatingBranch, optionsQuery.data, weekStart])
 
     const refetch = useCallback(async () => {
-        if (!enabled) return
+        if (!signedIn) return
+        if (SERVICE_COORDINATION_BRANCH_ENABLED && operatingBranch === undefined) {
+            await branchContextQuery.refetch()
+            return
+        }
         await Promise.all([optionsQuery.refetch(), jobsQuery.refetch(), officeUpdatesQuery.refetch()])
-    }, [enabled, jobsQuery, officeUpdatesQuery, optionsQuery])
+    }, [branchContextQuery, jobsQuery, officeUpdatesQuery, operatingBranch, optionsQuery, signedIn])
     const statuses = [optionsQuery.status, jobsQuery.status]
-    const isLoading = enabled && statuses.some((status) => status === 'initial' || status === 'loading')
-    const error = optionsQuery.error ?? jobsQuery.error
+    const branchLoading = signedIn && SERVICE_COORDINATION_BRANCH_ENABLED
+        && (branchContextQuery.status === 'initial' || branchContextQuery.status === 'loading')
+    const isLoading = branchLoading || (enabled && statuses.some((status) => status === 'initial' || status === 'loading'))
+    const error = branchContextQuery.error ?? optionsQuery.error ?? jobsQuery.error
 
     return {
         jobs: jobsQuery.data ?? EMPTY_JOBS,
-        scheduleOptions,
+        scheduleOptions: scopedScheduleOptions,
         officeUpdates: officeUpdatesQuery.data ?? EMPTY_OFFICE_UPDATES,
+        branch,
         isLoading,
         isRefreshing: statuses.some((status) => status === 'refreshing'),
         error: error?.message ?? '',

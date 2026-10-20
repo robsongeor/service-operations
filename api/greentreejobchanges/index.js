@@ -88,14 +88,14 @@ async function greenTreeJobChanges(context, request, options = {}) {
         context.res = jsonResponse(405, { error: 'Method not allowed.' }, { Allow: 'GET, POST' })
         return
     }
-    const pollingMode = request.method === 'POST' && (request.body?.mode === 'scheduled' || request.body?.mode === 'backfill')
+    const pollingMode = request.method === 'POST' && (request.body?.mode === 'scheduled' || request.body?.mode === 'backfill' || request.body?.mode === 'manual')
         ? request.body.mode : ''
     let authorization
     try {
         if (pollingMode === 'backfill') authorization = await (options.authenticateScheduler || scheduledAuthorization)(request)
         else {
             authorization = await (options.authenticate || validateAuthenticatedUser)(request)
-            if (!authorization && request.method === 'POST') authorization = await (options.authenticateScheduler || scheduledAuthorization)(request)
+            if (!authorization && request.method === 'POST' && pollingMode !== 'manual') authorization = await (options.authenticateScheduler || scheduledAuthorization)(request)
         }
     } catch {
         context.res = jsonResponse(503, { error: 'The scheduled synchronization identity is unavailable.' })
@@ -103,6 +103,30 @@ async function greenTreeJobChanges(context, request, options = {}) {
     }
     if (!authorization) {
         context.res = jsonResponse(401, { error: 'Authentication is required.' }, { 'WWW-Authenticate': 'Bearer' })
+        return
+    }
+
+    if (pollingMode === 'manual') {
+        const jobNumber = String(request.body?.jobNumber || '').trim().toUpperCase()
+        if (!/^(?:[A-Z]{1,2})?[0-9]{1,20}$/.test(jobNumber)) {
+            context.res = jsonResponse(400, { error: 'A valid Job Number is required for a manual GreenTree check.' })
+            return
+        }
+        try {
+            const reconciliation = await (options.pollGreenTreeJobStatuses || pollGreenTreeJobStatuses)({
+                mode: 'manual',
+                jobNumber,
+                dataverseOrigin: dataverseOrigin(),
+                authorization,
+            })
+            if (reconciliation.selected !== 1) {
+                context.res = jsonResponse(404, { error: 'No active Job Book or Job record was found for that Job Number.' })
+                return
+            }
+            context.res = jsonResponse(200, { checkedAt: new Date().toISOString(), ...reconciliation })
+        } catch {
+            context.res = jsonResponse(502, { error: 'The manual GreenTree Job check could not be completed.' })
+        }
         return
     }
 

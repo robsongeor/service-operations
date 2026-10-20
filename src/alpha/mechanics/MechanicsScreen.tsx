@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { getJobTypeLabel } from '../jobs/types/jobType.types'
-import { JOB_STATUS_OPTIONS } from '../jobs/types/jobStatus.types'
+import { canonicalJobStatus, getJobStatusLabel } from '../jobs/types/jobStatus.types'
 import type { Mechanic } from '../jobs/types/mechanic.types'
 import MechanicDialog from './components/MechanicDialog'
 import { useMechanics, useStaffJobs } from './hooks/useMechanics'
@@ -204,7 +204,7 @@ export default function MechanicsScreen() {
                                                 {selectedJobs.map((job) => (
                                                     <tr key={job.gr_jobid}>
                                                         <td><strong>{job.gr_jobnumber || 'Unnumbered'}</strong><small>{job.gr_ordernumber ? `Order ${job.gr_ordernumber}` : 'No order number'}</small></td>
-                                                        <td><span className={`mechanic-job-status status-${job.gr_status}`}>{JOB_STATUS_OPTIONS.find((status) => status.value === job.gr_status)?.label ?? 'Unknown'}</span></td>
+                                                        <td><span className={`mechanic-job-status status-${canonicalJobStatus(job.gr_status)}`}>{getJobStatusLabel(job.gr_status)}</span></td>
                                                         <td>{getJobTypeLabel(job.gr_jobtype)}</td>
                                                         <td><strong>{job.gr_Site?.gr_Customer?.gr_name || 'No customer'}</strong><small>{job.gr_Site?.gr_name || 'No site'}</small></td>
                                                         <td><strong>{job.gr_Equipment?.gr_fleet || 'No equipment'}</strong><small>{[job.gr_Equipment?.gr_make, job.gr_Equipment?.gr_model].filter(Boolean).join(' ')}</small></td>

@@ -48,6 +48,11 @@ foreach ($api in $readiness.customApis) {
     }
 }
 Require (-not $assignments.assignmentIncluded -and -not $assignments.removalIncluded) 'Assignment plan must remain review-only.'
+Require ([bool]$assignments.homeBranchSetup.requiredForEveryNewUser) 'Every new user must have a home-branch setup gate.'
+Require (-not [bool]$assignments.homeBranchSetup.allowImplicitDefault) 'Home-branch setup must not allow an implicit default.'
+Require ((Same-Set @($assignments.homeBranchSetup.allowedBranches.PSObject.Properties.Name) @('Auckland','Waikato','Hastings','Christchurch'))) 'Home-branch setup must expose the four reviewed branch labels.'
+Require (@($assignments.homeBranchSetup.allowedBranches.PSObject.Properties.Value | ForEach-Object { [int]$_ } | Sort-Object -Unique).Count -eq 4) 'Home-branch setup values must be unique.'
+Require (-not [string]::IsNullOrWhiteSpace([string]$assignments.homeBranchSetup.setupCommand)) 'Home-branch setup command is missing.'
 Require (@($assignments.intendedUsers).Count -eq 11) 'Expected the agreed eleven-account roster.'
 Require (@($assignments.intendedUsers | Group-Object upn | Where-Object Count -ne 1).Count -eq 0) 'Duplicate roster account detected.'
 foreach ($user in $assignments.intendedUsers) { Require (@($roles.profiles | Where-Object profile -eq $user.profile).Count -eq 1) "Unknown target profile for $($user.upn)." }

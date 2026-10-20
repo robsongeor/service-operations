@@ -560,6 +560,26 @@ test('all required submissions move only an Allocated Job to Completion Review',
     const patch = calls.find((call) => call.options.method === 'PATCH')
     assert.deepEqual(JSON.parse(patch.options.body), { gr_status: statusAutomation._test.JOB_STATUS_COMPLETION_REVIEW })
     assert.equal(patch.options.headers['If-Match'], 'W/"8"')
+
+    let protectedWrites = 0
+    const protectedResult = await statusAutomation.moveJobToCompletionReviewAfterAllRequiredSubmissions({
+        jobId: '00000000-0000-4000-8000-000000000001',
+        records: [{ tokenHash: 'primary', technicianId: 'tech-1', assignmentId: '', status: 'pendingReview', createdOn: '2026-10-09T01:00:00Z' }],
+        dataverseOrigin: 'https://example.crm.dynamics.com',
+        authorization: 'Bearer application-token',
+        fetchImpl: async (url, options = {}) => {
+            if (String(url).includes('/gr_jobassignments?')) return Response.json({ value: [] })
+            if (options.method === 'PATCH') { protectedWrites += 1; return new Response(null, { status: 204 }) }
+            return Response.json({
+                gr_jobid: '00000000-0000-4000-8000-000000000001',
+                _gr_mechanic_value: 'tech-1',
+                gr_status: 122830002,
+                '@odata.etag': 'W/"9"',
+            })
+        },
+    })
+    assert.equal(protectedResult, false, 'Action Required must remain coordinator-controlled')
+    assert.equal(protectedWrites, 0)
 })
 
 test('scheduled reconciliation retries submitted Job Cards and reports blocked Jobs without exposing identifiers', async () => {

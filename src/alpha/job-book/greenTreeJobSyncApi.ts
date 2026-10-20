@@ -18,6 +18,13 @@ export type GreenTreeJobReconciliationResult = {
     failed: string[]
 }
 
+export type GreenTreeManualJobCheckResult = Omit<GreenTreeJobReconciliationResult, 'mode'> & {
+    mode: 'manual'
+    jobNumber: string
+    entered: boolean
+    status: '' | 'open' | 'closed' | 'finalised'
+}
+
 let lastAttemptAt = 0
 let activeRequest: Promise<GreenTreeJobReconciliationResult | null> | null = null
 
@@ -39,6 +46,25 @@ export function requestGreenTreeJobReconciliation(accessToken: string) {
         return response.json() as Promise<GreenTreeJobReconciliationResult>
     }).finally(() => { activeRequest = null })
     return activeRequest
+}
+
+export async function requestGreenTreeJobStatusCheck(accessToken: string, jobNumber: string) {
+    const response = await fetch('/api/greentreejobchanges', {
+        method: 'POST',
+        headers: {
+            'X-Dataverse-Authorization': `Bearer ${accessToken}`,
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ mode: 'manual', jobNumber: jobNumber.trim() }),
+    })
+    if (!response.ok) {
+        const body = await response.json().catch(() => ({})) as { error?: unknown }
+        throw new Error(typeof body.error === 'string' && body.error
+            ? body.error
+            : 'The manual GreenTree Job check is temporarily unavailable.')
+    }
+    return response.json() as Promise<GreenTreeManualJobCheckResult>
 }
 
 export function resetGreenTreeJobReconciliationCooldownForTests() {

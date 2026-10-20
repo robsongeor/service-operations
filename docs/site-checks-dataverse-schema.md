@@ -127,16 +127,18 @@ writes.
 | Job Status | Waiting for parts | `122830002` |
 | Job Status | Complete | `122830003` |
 | Job Status | Review | `122830004` |
-| Job Status | Unconfirmed | `122830005` |
+| Job Status | Unconfirmed (legacy; migrate to Staging, then retire) | `122830005` |
 | Job Card Status | Not sent | `122830000` |
 | Job Card Status | Sent | `122830001` |
 | Job Card Status | Submitted | `122830002` |
 | Job Card Status | Closed | `122830003` |
 
 Dataverse labels Job Status `122830004` as **Review**. Current application code labels the
-same value **Completion Review**. Site Checks will continue using the numeric contract and
-must not silently rename this existing application label; reconciliation is a separate
-product/documentation decision.
+same value **Completion Review**. The 19 October owner decision now targets a controlled metadata
+rename while preserving the numeric contract. It has not yet been applied. Site Checks continue
+using the existing number; metadata publication and historical row reconciliation must follow the
+separate [Job Status lifecycle migration plan](job-status-lifecycle-migration.md), not a silent
+feature-specific rename.
 
 ## Confirmed table: Site Check Schedule
 

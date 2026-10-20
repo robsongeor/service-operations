@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "status": "source-complete-not-provisioned",
+  "defaultMode": "Inspect",
+  "solutionUniqueName": "ServiceOperationsNew",
+  "publisherPrefix": "gr",
+  "languageCode": 1033,
+  "jobStatusChoice": {
+    "name": "gr_status",
+    "attribute": "gr_job.gr_status",
+    "options": [
+      { "value": 122830000, "label": "With Technician", "updateLabel": true },
+      { "value": 122830001, "label": "Staging", "updateLabel": true },
+      { "value": 122830002, "label": "Action Required", "updateLabel": true },
+      { "value": 122830003, "label": "Complete", "updateLabel": true },
+      { "value": 122830004, "label": "Completion Review", "updateLabel": true },
+      { "value": 122830005, "label": "Unconfirmed", "updateLabel": false }
+    ]
+  },
+  "branchChoice": {
+    "name": "gr_operatingbranch",
+    "displayName": "Operating Branch",
+    "description": "The branch currently responsible for coordinating a Job.",
+    "options": [
+      { "value": 122830000, "label": "Auckland" },
+      { "value": 122830001, "label": "Waikato" },
+      { "value": 122830002, "label": "Hastings" },
+      { "value": 122830003, "label": "Christchurch" }
+    ]
+  },
+  "branchColumns": [
+    {
+      "table": "gr_job",
+      "schemaName": "gr_OperatingBranch",
+      "logicalName": "gr_operatingbranch",
+      "displayName": "Operating Branch",
+      "description": "The branch currently responsible for coordinating this Job."
+    },
+    {
+      "table": "systemuser",
+      "schemaName": "gr_ServiceOperationsBranch",
+      "logicalName": "gr_serviceoperationsbranch",
+      "displayName": "Service Operations Branch",
+      "description": "The user's default Service Operations branch."
+    }
+  ],
+  "watchTable": {
+    "schemaName": "gr_JobWatch",
+    "logicalName": "gr_jobwatch",
+    "entitySetName": "gr_jobwatchs",
+    "displayName": "Job Watch",
+    "collectionName": "Job Watches",
+    "primaryId": "gr_jobwatchid",
+    "primaryName": "gr_name",
+    "primaryNameSchema": "gr_Name",
+    "primaryNameLength": 200,
+    "lookups": [
+      {
+        "schemaName": "gr_Job",
+        "logicalName": "gr_job",
+        "displayName": "Job",
+        "target": "gr_job",
+        "relationship": "gr_job_gr_jobwatch_job",
+        "referencedNavigationProperty": "gr_job_gr_jobwatch_gr_job",
+        "deleteBehavior": "Cascade"
+      },
+      {
+        "schemaName": "gr_Watcher",
+        "logicalName": "gr_watcher",
+        "displayName": "Watcher",
+        "target": "systemuser",
+        "relationship": "gr_systemuser_gr_jobwatch_watcher",
+        "referencedNavigationProperty": "gr_systemuser_gr_jobwatch_gr_watcher",
+        "deleteBehavior": "Restrict"
+      }
+    ],
+    "alternateKey": {
+      "schemaName": "gr_JobWatch_JobWatcher_Key",
+      "logicalName": "gr_jobwatch_jobwatcher_key",
+      "attributes": ["gr_job", "gr_watcher"]
+    }
+  },
+  "rolePolicy": {
+    "roleName": "Service Operations",
+    "tableSchemaName": "gr_JobWatch",
+    "requiredDepth": "Basic",
+    "operations": ["Create", "Read", "Write", "Delete", "Append", "AppendTo"],
+    "forbiddenOperations": ["Assign", "Share"],
+    "ordinaryUsersMayMutateOtherUsersWatches": false,
+    "branchConfigurationIsAdministrative": true
+  },
+  "provisioningRequiresExplicitApproval": true,
+  "assignmentsIncluded": false,
+  "userBranchValuesIncluded": false,
+  "jobBranchValuesIncluded": false,
+  "migrationIncluded": false,
+  "choiceDeletionIncluded": false
+}

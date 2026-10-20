@@ -125,7 +125,7 @@ Mark each check Pass / Fail / Not run; a unit test alone does not close a live i
 | Double click / connection loss | Refresh/retry confirms the same operation and number, without duplicate work or lost corrections |
 | Edit collision | Two people edit one record; the later stale save prompts recovery instead of silently overwriting the first |
 | Operational access | All non-void Jobs shown in Service Coordination open the canonical operational drawer across type tabs; no duplicate Job/number or separate Manage job step is required in that screen |
-| Views and search | Operational contains managed work; Unconfirmed is status-based; All jobs and Job Book find the expected records across all pages/history |
+| Views and search | Operational contains managed work; legacy Unconfirmed rows appear as Staging with no separate tab; All jobs and Job Book find the expected records across all pages/history |
 | GT / Timecloud markers | Values persist, audit identities are correct and stale updates cannot clear another person's work; ticks do not claim automated external entry |
 | Void | Reason required; number and history retained; already-entered or otherwise protected work is blocked; no ordinary delete/reuse escape |
 | Technician dispatch, if in launch scope | Correct recipient and current details; explicit authorized send produces one tracked dispatch; retry does not duplicate it; local sample never sends |

@@ -6,6 +6,7 @@ import { fetchWalkthroughJobsPage } from '../services/unifiedJobWalkthroughApi'
 import { fetchUnifiedJobsPage, type UnifiedJobsServerScope } from '../services/jobsApi'
 import { UNIFIED_JOB_RUNTIME, UNIFIED_JOB_WALKTHROUGH } from '../domain/unifiedJobWorkflow'
 import type { Job } from '../types/job.types'
+import type { OperatingBranch } from '../types/operatingBranch.types'
 
 function mergeJobs(current: readonly Job[], incoming: readonly Job[]) {
     const rows = new Map(current.map((job) => [job.gr_jobid.toLowerCase(), job]))
@@ -13,7 +14,7 @@ function mergeJobs(current: readonly Job[], incoming: readonly Job[]) {
     return [...rows.values()]
 }
 
-export function useUnifiedJobWorklist(loadCompletedArchive = false) {
+export function useUnifiedJobWorklist(loadCompletedArchive = false, options: { enabled?: boolean; operatingBranch?: OperatingBranch } = {}) {
     const { instance } = useMsal()
     const account = useActiveMsalAccount()
     const getAccessToken = useCallback(() => acquireDataverseAccessToken(instance, account), [instance, account])
@@ -30,7 +31,7 @@ export function useUnifiedJobWorklist(loadCompletedArchive = false) {
         const seen = new Set<string>()
         let cursor = ''
         for (let pageNumber = 0; pageNumber < 50; pageNumber++) {
-            const page = await fetchUnifiedJobsPage(token, scope, cursor)
+            const page = await fetchUnifiedJobsPage(token, scope, cursor, undefined, options.operatingBranch)
             if (current !== generation.current) return []
             for (const row of page.records) rows.set(row.gr_jobid.toLowerCase(), row)
             if (!page.next) { cursor = ''; break }
@@ -40,7 +41,7 @@ export function useUnifiedJobWorklist(loadCompletedArchive = false) {
         }
         if (cursor) throw new Error('The Jobs worklist exceeded its safe automatic paging limit.')
         return [...rows.values()]
-    }, [])
+    }, [options.operatingBranch])
 
     const fetchWalkthrough = useCallback(async (token: string, current: number) => {
         const rows = new Map<string, Job>()
@@ -79,7 +80,7 @@ export function useUnifiedJobWorklist(loadCompletedArchive = false) {
     }, [fetchScope, getAccessToken])
 
     const load = useCallback(async (requireConfirmation = false) => {
-        if (!UNIFIED_JOB_RUNTIME) return
+        if (!UNIFIED_JOB_RUNTIME || options.enabled === false) return
         const current = ++generation.current
         archiveLoaded.current = false
         setBusy(true); setError('')
@@ -109,13 +110,16 @@ export function useUnifiedJobWorklist(loadCompletedArchive = false) {
         } finally {
             if (current === generation.current) { setBusy(false); setBackgroundBusy(false) }
         }
-    }, [fetchScope, fetchWalkthrough, getAccessToken])
+    }, [fetchScope, fetchWalkthrough, getAccessToken, options.enabled])
     useEffect(() => {
-        if (!UNIFIED_JOB_RUNTIME) return
+        if (!UNIFIED_JOB_RUNTIME || options.enabled === false) {
+            const reset = setTimeout(() => { setBusy(false); setJobs([]) }, 0)
+            return () => clearTimeout(reset)
+        }
         const requestGeneration = generation
         const timer = setTimeout(() => void load(), 0)
         return () => { clearTimeout(timer); requestGeneration.current++ }
-    }, [load])
+    }, [load, options.enabled])
     useEffect(() => {
         if (loadCompletedArchive && !busy && !backgroundBusy) void loadArchive()
     }, [backgroundBusy, busy, loadArchive, loadCompletedArchive])

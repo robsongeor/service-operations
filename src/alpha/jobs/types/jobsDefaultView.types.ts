@@ -1,4 +1,4 @@
-import { JOB_STATUSES, JOB_STATUS_OPTIONS, type JobStatus } from './jobStatus.types.ts'
+import { canonicalJobStatus, JOB_STATUS_OPTIONS, type JobStatus } from './jobStatus.types.ts'
 import { JOB_TYPE_OPTIONS, type JobTypeFilter } from './jobType.types.ts'
 import { isJobsStickyThroughColumnId, type JobsStickyThroughColumnId } from './jobsTableColumns.ts'
 
@@ -25,7 +25,7 @@ export function getJobsDefaultViewKey(storageId: string) {
 }
 
 export function canonicaliseJobStatuses(statuses: JobStatus[]) {
-    return [...new Set(statuses)].sort((left, right) => left - right)
+    return [...new Set(statuses.map(canonicalJobStatus))].sort((left, right) => left - right)
 }
 
 export function restoreJobsDefaultView(storageKey: string): JobsDefaultView | null {
@@ -39,21 +39,21 @@ export function restoreJobsDefaultView(storageKey: string): JobsDefaultView | nu
         const value = JSON.parse(raw ?? legacyRaw!) as Partial<JobsDefaultView> | null
         if (!value || typeof value !== 'object') return null
 
-        const selectedJobType = value.selectedJobType === 'all'
-            || value.selectedJobType === 'operational'
-            || value.selectedJobType === 'unconfirmed'
-            || value.selectedJobType === 'unnumbered'
-            || (typeof value.selectedJobType === 'number' && validJobTypes.has(value.selectedJobType))
-            ? value.selectedJobType as JobsDefaultView['selectedJobType']
+        const rawSelectedJobType: unknown = value.selectedJobType
+        const selectedJobType = rawSelectedJobType === 'unconfirmed'
+            ? 'operational'
+            : rawSelectedJobType === 'all'
+            || rawSelectedJobType === 'operational'
+            || rawSelectedJobType === 'unnumbered'
+            || (typeof rawSelectedJobType === 'number' && validJobTypes.has(rawSelectedJobType))
+            ? rawSelectedJobType as JobsDefaultView['selectedJobType']
             : APPLICATION_DEFAULT_JOBS_VIEW.selectedJobType
-        let visibleStatuses = Array.isArray(value.visibleStatuses)
-            ? canonicaliseJobStatuses(value.visibleStatuses.filter(
-                (status): status is JobStatus => typeof status === 'number' && validJobStatuses.has(status),
-            ))
+        const visibleStatuses = Array.isArray(value.visibleStatuses)
+            ? canonicaliseJobStatuses(value.visibleStatuses
+                .filter((status): status is JobStatus => typeof status === 'number')
+                .map(canonicalJobStatus)
+                .filter((status) => validJobStatuses.has(status)))
             : APPLICATION_DEFAULT_JOBS_VIEW.visibleStatuses
-        if (selectedJobType === 'unconfirmed' && !visibleStatuses.includes(JOB_STATUSES.UNCONFIRMED)) {
-            visibleStatuses = canonicaliseJobStatuses([...visibleStatuses, JOB_STATUSES.UNCONFIRMED])
-        }
 
         const stickyThroughColumnId = value.stickyThroughColumnId === null
             ? null

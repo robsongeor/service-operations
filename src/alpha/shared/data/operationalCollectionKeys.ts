@@ -42,16 +42,22 @@ export function customerDashboardQuotesQueryKey(customerId: string) {
     return ['customer-dashboard', customerId.toLowerCase(), 'quotes-v1'] as const satisfies OperationalQueryKey
 }
 
-export function schedulerOptionsQueryKey(startDate: string, endDate: string) {
-    return ['scheduler', 'options-v1', startDate, endDate] as const satisfies OperationalQueryKey
+function schedulerBranchKey(operatingBranch?: number) {
+    return operatingBranch === undefined ? 'all-branches' : `branch-${operatingBranch}`
 }
 
-export function schedulerJobsQueryKey(startDate: string, endDate: string, jobFingerprint: string) {
-    return ['scheduler', 'jobs-v1', startDate, endDate, jobFingerprint] as const satisfies OperationalQueryKey
+export const SCHEDULER_BRANCH_CONTEXT_QUERY_KEY = ['scheduler', 'branch-context-v1'] as const satisfies OperationalQueryKey
+
+export function schedulerOptionsQueryKey(startDate: string, endDate: string, operatingBranch?: number) {
+    return ['scheduler', 'options-v1', schedulerBranchKey(operatingBranch), startDate, endDate] as const satisfies OperationalQueryKey
 }
 
-export function schedulerOfficeUpdatesQueryKey(startDate: string, endDate: string, jobFingerprint: string) {
-    return ['scheduler', 'job-office-updates-v1', startDate, endDate, jobFingerprint] as const satisfies OperationalQueryKey
+export function schedulerJobsQueryKey(startDate: string, endDate: string, jobFingerprint: string, operatingBranch?: number) {
+    return ['scheduler', 'jobs-v1', schedulerBranchKey(operatingBranch), startDate, endDate, jobFingerprint] as const satisfies OperationalQueryKey
+}
+
+export function schedulerOfficeUpdatesQueryKey(startDate: string, endDate: string, jobFingerprint: string, operatingBranch?: number) {
+    return ['scheduler', 'job-office-updates-v1', schedulerBranchKey(operatingBranch), startDate, endDate, jobFingerprint] as const satisfies OperationalQueryKey
 }
 
 export function jobMapJobsQueryKey(statuses: readonly number[]) {

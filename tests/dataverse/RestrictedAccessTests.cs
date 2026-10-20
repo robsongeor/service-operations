@@ -108,6 +108,14 @@ public static class RestrictedAccessTests
             foreach(var field in new[]{"gr_currentofficeaction","gr_jobcardstatus","gr_servicetype"}) job[field]=new OptionSetValue(1);
             job["gr_jobid"]=Id; job["createdon"]=new DateTime(2026,10,15); job["ownerid"]=new EntityReference("systemuser",Id); job["statecode"]=new OptionSetValue(0); job["statuscode"]=new OptionSetValue(1);
             if (!RestrictedAccessPlugin.IsRegistrationChild(create, job)) throw new Exception("Platform-enriched registration Job create was not accepted");
+            inputs["MechanicId"] = Id;
+            parent = Context("gr_RegisterJobBookJob", inputs, null, 30);
+            create = Context("Create", new ParameterCollection(), parent, 20);
+            job["gr_mechanic"] = new EntityReference("gr_mechanic",Id);
+            if (!RestrictedAccessPlugin.IsRegistrationChild(create, job)) throw new Exception("Assigned registration in Staging was not accepted");
+            job["gr_status"] = new OptionSetValue(122830000);
+            if (RestrictedAccessPlugin.IsRegistrationChild(create, job)) throw new Exception("Assignment was allowed to imply With Technician");
+            job["gr_status"] = new OptionSetValue(122830001);
             var ledger = RegistrationLedger("gr_jobbookentry", Id, Id);
             ledger["gr_jobbookentryid"]=Id; ledger["createdon"]=new DateTime(2026,10,15); ledger["ownerid"]=new EntityReference("systemuser",Id); ledger["organizationid"]=new EntityReference("organization",OtherId);
             if (!RestrictedAccessPlugin.IsRegistrationChild(create, ledger)) throw new Exception("Exact registration ledger create was not accepted");

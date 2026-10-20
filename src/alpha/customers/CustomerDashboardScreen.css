@@ -278,7 +278,6 @@
 .customer-job-status[data-status="122830001"] { border-color: #d0ad4a; color: #705500; }
 .customer-job-status[data-status="122830002"] { border-color: #94b1c4; color: #456d87; }
 .customer-job-status[data-status="122830004"] { border-color: #cbc4e6; color: #604f88; }
-.customer-job-status[data-status="122830005"] { border-color: #d9aa4d; color: #77520b; background: #fff8e7; }
 .customer-quotes-toolbar { display: flex; flex-wrap: wrap; gap: 10px; padding: 12px; border: 1px solid #e1e7e3; border-radius: 10px; background: #f7f9f8; }
 .customer-quotes-toolbar label { display: grid; min-width: 170px; gap: 5px; color: #626e67; font-size: .66rem; font-weight: 750; }
 .customer-quotes-toolbar select { min-height: 36px; padding: 0 28px 0 9px; border: 1px solid #cfd7d2; border-radius: 8px; background: #fff; color: #313b35; font: inherit; }

@@ -7,6 +7,12 @@ effects. A Complete badge is not proof of a current WOF expiry. The owner decisi
 missing-evidence jobs in Completion Review; that change remains unimplemented. See audit A03 in
 the [application audit](../reviews/2026-10-10-application-audit.md).
 
+The agreed target is for a type-specific WOF Job Card to capture the new WOF expiry and all other
+evidence required by the existing atomic WOF completion operation. The current office-entered
+completion dialog remains in place until that card, review/correction path and processor are safely
+implemented. Automatic Completion Review → Complete processing is on hold; see
+[Jobs — Deferred type-specific Job Card completion](jobs.md#deferred-type-specific-job-card-completion).
+
 ## Purpose
 
 WOF manages road-compliance work and inspection history for road-registered Equipment. Jobs

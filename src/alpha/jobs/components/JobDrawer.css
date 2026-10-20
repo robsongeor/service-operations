@@ -76,6 +76,29 @@
     white-space: nowrap;
 }
 
+.job-drawer-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.edit-drawer-header .job-drawer-watch-action {
+    border: 1px solid var(--border-color, #cbd5e1);
+    border-radius: 999px;
+    background: #fff;
+    color: #334155;
+    padding: 0.45rem 0.75rem;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.edit-drawer-header .job-drawer-watch-action.watching {
+    border-color: #2563eb;
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+
 .edit-drawer-header .job-drawer-email-action.status-122830001,
 .edit-drawer-header .job-drawer-email-action.status-122830002,
 .edit-drawer-header .job-drawer-email-action.status-122830003 {

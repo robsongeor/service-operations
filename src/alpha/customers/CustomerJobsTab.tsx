@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { currentNewZealandDateOnly, newZealandDateOnly } from '../shared/dates/dateOnly'
 import type { Job } from '../jobs/types/job.types'
-import { JOB_STATUS_OPTIONS } from '../jobs/types/jobStatus.types'
+import { canonicalJobStatus, getJobStatusLabel } from '../jobs/types/jobStatus.types'
 import { getJobTypeLabel } from '../jobs/types/jobType.types'
 import {
     customerJobsCsv,
@@ -158,10 +158,10 @@ export default function CustomerJobsTab({ customerName, jobs, isLoading, error, 
                                 <th>Job</th><th>Status</th><th>Type</th><th>Created</th><th>Completed</th><th>Site</th><th>Equipment</th><th>Description</th><th>Technician</th><th>Order</th>
                             </tr></thead>
                             <tbody>{filteredJobs.map((job) => {
-                                const status = JOB_STATUS_OPTIONS.find((item) => item.value === job.gr_status)?.label ?? 'Unknown'
+                                const status = getJobStatusLabel(job.gr_status)
                                 return <tr key={job.gr_jobid} tabIndex={readOnly ? undefined : 0} onClick={readOnly ? undefined : () => onOpenJob(job)} onKeyDown={readOnly ? undefined : (event) => { if (event.key === 'Enter') onOpenJob(job) }}>
                                     <td><strong>{job.gr_jobnumber || 'No Job Number'}</strong></td>
-                                    <td><span className="customer-job-status" data-status={job.gr_status}>{status}</span></td>
+                                    <td><span className="customer-job-status" data-status={canonicalJobStatus(job.gr_status)}>{status}</span></td>
                                     <td>{getJobTypeLabel(job.gr_jobtype)}</td>
                                     <td>{formatDate(newZealandDateOnly(job.createdon))}</td>
                                     <td>{formatDate(job.gr_completeddate)}</td>

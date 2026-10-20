@@ -3,7 +3,7 @@ import { useMsal } from '@azure/msal-react'
 import { acquireDataverseAccessToken } from '../../auth/dataverseAuthentication'
 import { useActiveMsalAccount } from '../../auth/useActiveMsalAccount'
 import type { Job } from '../jobs/types/job.types'
-import type { JobStatus } from '../jobs/types/jobStatus.types'
+import { canonicalJobStatus, type JobStatus } from '../jobs/types/jobStatus.types'
 import { jobMapJobsQueryKey } from '../shared/data/operationalCollectionKeys'
 import { useOperationalDataClient } from '../shared/data/OperationalDataClientContext'
 import { useOperationalQuery } from '../shared/data/useOperationalQuery'
@@ -39,7 +39,7 @@ export function useJobMapData(requestedStatuses: readonly JobStatus[]) {
 
     const allStatusJobs = client.getState<Job[]>(ALL_STATUSES_KEY).data
     const jobs = statuses.length
-        ? (query.data ?? allStatusJobs?.filter((job) => statuses.includes(job.gr_status)) ?? EMPTY_JOBS)
+        ? (query.data ?? allStatusJobs?.filter((job) => statuses.includes(canonicalJobStatus(job.gr_status))) ?? EMPTY_JOBS)
         : EMPTY_JOBS
     const hasUsableData = query.data !== undefined || allStatusJobs !== undefined
 
