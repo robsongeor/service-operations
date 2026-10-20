@@ -33,6 +33,21 @@ Job Book Admins cannot:
 
 Search before creating a new Job so the same work is not entered twice.
 
+## Equipment, Customer and Site availability
+
+Most Equipment from GreenTree is already in Service Operations, but some Equipment may not yet be
+linked to its current Customer and Site. Many Customers and Sites may also need to be created during
+the initial Auckland rollout.
+
+- Search carefully before creating a Customer or Site.
+- Do not create duplicate Equipment when the machine already exists.
+- If existing Equipment has no location or the wrong location, update its Customer and Site first,
+  then return to Job Book.
+- When creating a Site, type enough of the address to start the verification search. Suggestions may
+  take a few seconds to appear.
+- Select the correct New Zealand address from the suggestions. Free-text manual addresses cannot be
+  saved.
+
 ## Add an Auckland Job Book entry
 
 1. Select **Auckland** in Job Book.
@@ -45,7 +60,8 @@ Search before creating a new Job so the same work is not entered twice.
 5. Select the Site Contact when one is relevant. Leave **No contact** when no contact should be
    recorded.
 6. If the correct Site or Contact does not exist, select **+ Add new site** or **+ Add new contact**
-   from the relevant selector and complete the requested information.
+   from the relevant selector and complete the requested information. For a new Site, wait for the
+   address search and select a verified suggestion.
 7. Enter a clear **Description of the job**.
 8. Select the mechanic, or leave the Job **Unassigned** if this is not known yet.
 9. Enter the **Customer PO** when one was supplied.
@@ -127,7 +143,9 @@ disabled, read the explanation and report the issue instead of trying to create 
 | Situation | What to do |
 | --- | --- |
 | Equipment cannot be found | Search fleet, alternate fleet, serial, make and model. Use **Equipment not known yet** only when necessary. |
+| Equipment exists but has no Site | Update the existing Equipment's Customer and Site. Do not create duplicate Equipment. |
 | The Site or Contact is missing | Use **+ Add new site** or **+ Add new contact** from the selector. Search first to avoid duplicates. |
+| Address suggestions have not appeared | Wait a few seconds and refine the address search. A manually typed address cannot be saved. |
 | A save is still pending | Wait. If prompted, use **Resume saved request**. Do not create another Job. |
 | TimeCloud shows **Error** | The Job is already saved. Report the error and Job Number; do not create it again. |
 | A save reports a conflict | Reload the current record, recheck the correction and try once more. |

@@ -33,6 +33,12 @@ Use the same Auckland creation workflow described in the [Job Book Admin guide](
 6. Recheck everything and select **Add to Job Book** once.
 7. Wait for the permanent Job Number and TimeCloud status.
 
+Most GreenTree Equipment is already present, but some machines may not yet be linked to a Customer
+and Site. Many Customers and Sites may also need to be created during the initial rollout. Search
+before creating records and do not duplicate existing Equipment. New Site addresses must be selected
+from the verified New Zealand address suggestions; allow a few seconds for results to appear because
+manual free-text addresses cannot be saved.
+
 > **Creating a Job is irreversible.** The allocated Job Number cannot be deleted, reused or undone.
 > An eligible Void action retains the number and history; it does not remove the Job.
 

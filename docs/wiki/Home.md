@@ -40,6 +40,10 @@ a separate change is announced.
 - Check every Job carefully before selecting **Add to Job Book**. A permanent Job Number cannot be
   deleted, reused or undone after it has been allocated.
 - Do not create a second Job while the first save or TimeCloud upload is still pending.
+- Most GreenTree Equipment is present, but some Equipment may still need its Customer and Site
+  relationship set. Search before creating records and never duplicate existing Equipment.
+- New Site addresses must be selected from the verified New Zealand address suggestions. Results can
+  take a few seconds to appear; free-text manual addresses cannot be saved.
 - Bulk Job creation and Site Check creation are not available in this release.
 - TimeCloud creation is live in production mode. Its status is automatic and read-only.
 

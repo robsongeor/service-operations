@@ -3,6 +3,10 @@
 This guide covers the Customer, Site and Contact actions available to Auckland **Job Book Admins**
 and **Office Admins**.
 
+During the initial Auckland rollout, many Customers and Sites may not yet exist in Service
+Operations. They will be added progressively as Jobs are created and records are reviewed. Search
+carefully before creating a record so the shared directory does not accumulate duplicates.
+
 ## Search before creating
 
 Customer, Site and Contact records are shared. Creating a duplicate makes Equipment and Job history
@@ -38,6 +42,9 @@ Restricted roles can create a Customer with its first Site from the Customer sel
 1. Open **Customers** and search carefully for the Customer.
 2. If no correct result exists, use the create option in the Customer selector.
 3. Enter the Customer name, first Site name and verified address.
+   - Address suggestions may take a few seconds to appear.
+   - Select the correct New Zealand address from the suggestions. Manual free-text entry is not
+     available and cannot be saved.
 4. Check the spelling and address.
 5. Save once and wait for the confirmation.
 
@@ -89,6 +96,8 @@ copy of the Equipment.
   is cancelled.
 - General Customer information editing and general Contact administration are not enabled for these
   rollout roles.
+- New Site addresses must be selected from the verified address suggestions. Wait a few seconds for
+  the results; a manually typed free-text address cannot be saved.
 
 ## If something goes wrong
 

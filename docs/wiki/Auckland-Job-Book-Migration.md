@@ -28,6 +28,16 @@ checking while improving visibility and traceability.
 Search Job Book first to confirm that the work has not already been entered. Then check that you
 have the correct Equipment, Customer, Site, address, Contact, description, mechanic and Customer PO.
 
+Most Equipment from GreenTree is already available in Service Operations. However, some Equipment
+may not yet be linked to its current Customer and Site. Many Customers and Sites are also being
+added progressively and may not exist in the app yet. Search carefully before creating anything. If
+the Equipment exists but its location is missing or wrong, update the existing Equipment relationship
+rather than creating duplicate Equipment.
+
+New Site addresses must be verified. Address suggestions can take a few seconds to appear after you
+start typing. Wait for the search, then select the correct New Zealand address from the suggestions.
+A manually typed free-text address cannot be saved.
+
 > **Important:** creating a Job is irreversible. After **Add to Job Book** allocates a permanent Job
 > Number, the Job cannot be deleted, the number cannot be reused and the creation cannot be undone.
 > An eligible entry may later be marked Void, but Void retains the Job Number and full history; it
@@ -41,7 +51,8 @@ have the correct Equipment, Customer, Site, address, Contact, description, mecha
 4. Select the correct Equipment, or **Equipment not known yet** when it genuinely cannot be
    identified.
 5. Check the Customer, Site and address. When the required record does not exist, use **+ Add new
-   site** or **+ Add new contact** from the relevant selector.
+   site** or **+ Add new contact** from the relevant selector. When creating a Site, wait for and
+   select a verified address suggestion; manual address entry is not available.
 6. Enter a clear **Description of the job**.
 7. Select the mechanic, or leave the Job **Unassigned** if this is not known yet.
 8. Enter the Customer PO when one was supplied.

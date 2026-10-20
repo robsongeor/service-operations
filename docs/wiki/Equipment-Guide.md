@@ -12,6 +12,16 @@ This guide covers the restricted Equipment workflow available to Auckland **Job 
 Search by more than one identifier when the first result is uncertain. Former or Customer-specific
 fleet numbers may appear under **Alternate Fleet Numbers**.
 
+Most Equipment from GreenTree is already present in Service Operations. The GreenTree Equipment
+load did not automatically create or assign all Customers and Sites, so some machines may have no
+current location relationship yet. Do not create duplicate Equipment when the machine can already
+be found.
+
+If the correct Customer or Site does not exist, create the missing relationship record through the
+available location editor. New Site addresses must be selected from the verified New Zealand address
+suggestions. The search can take a few seconds, and a manually typed free-text address cannot be
+saved.
+
 ## Details these roles can maintain
 
 Open an Equipment record to update approved master details, including:
@@ -36,6 +46,9 @@ Change the Equipment location only when the physical machine has genuinely moved
 2. Select the correct Customer and Site.
 3. Check the destination address.
 4. Save once and wait for confirmation.
+
+If the destination Customer or Site is missing, search again before creating it. When creating a
+Site, wait for the address suggestions and select the correct verified result.
 
 The move changes the current Equipment location. Historical Jobs keep the Customer, Site and address
 that were recorded when those Jobs were created.
