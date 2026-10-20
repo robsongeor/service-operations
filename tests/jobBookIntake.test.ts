@@ -5,6 +5,7 @@ import {
     createBlankJobBookRow,
     applyIntakeCustomerToRow,
     greenTreeJobStatusLabel,
+    timecloudJobStatusLabel,
     jobBookEquipmentFallback,
     jobBookLocationFieldsVisible,
     jobBookLocationSummaryVisible,
@@ -470,7 +471,7 @@ test('Job Book rows use bounded Dataverse pages, server search and infinite scro
     assert.match(api, /remaining = JOB_BOOK_PAGE_SIZE/)
 })
 
-test('GreenTree entry is automated while Timecloud remains an explicit office marker', () => {
+test('GreenTree and TimeCloud display authoritative integration status without manual marker controls', () => {
     const screen = readFileSync(new URL('../src/alpha/job-book/JobBookPrototypeScreen.tsx', import.meta.url), 'utf8')
     const syncApi = readFileSync(new URL('../src/alpha/job-book/greenTreeJobSyncApi.ts', import.meta.url), 'utf8')
     assert.match(screen, /requestGreenTreeJobReconciliation\(token\)/)
@@ -481,7 +482,9 @@ test('GreenTree entry is automated while Timecloud remains an explicit office ma
     assert.match(screen, /onClick=\{\(\) => void checkGreenTreeStatus\(row\)\}/)
     assert.match(syncApi, /JSON\.stringify\(\{ mode: 'manual', jobNumber: jobNumber\.trim\(\) \}\)/)
     assert.doesNotMatch(screen, /onChange=\{\(event\) => void updateRowField\(row, 'entered'/)
-    assert.match(screen, /onChange=\{\(event\) => void updateRowField\(row, 'timecloudEntered'/)
+    assert.match(screen, />TimeCloud Status</)
+    assert.match(screen, /timecloudJobStatusLabel\(row\.timecloudEntered\)/)
+    assert.doesNotMatch(screen, /updateRowField|Timecloud Entry completed|type="checkbox"[^>]*timecloud/i)
 })
 
 test('GreenTree status labels use the agreed Job Book wording', () => {
@@ -505,6 +508,11 @@ test('Job Book server filters cover visible columns, escape input and use Auckla
     assert.match(managed, /createdon lt 2026-10-07T11:00:00\.000Z/)
     assert.match(intake, /contains\(gr_customersnapshot,'Kerrs'\)/)
     assert.match(intake, /contains\(gr_customerpo,'Godfrey''s'\)/)
+})
+
+test('TimeCloud status labels expose only confirmed entry or failure', () => {
+    assert.equal(timecloudJobStatusLabel(true), 'Entered')
+    assert.equal(timecloudJobStatusLabel(false), 'Error')
 })
 
 test('Job Book search downloads no more than 100 records in its first batch', async () => {

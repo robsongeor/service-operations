@@ -47,8 +47,8 @@ import { useOperationalQuery } from '../shared/data/useOperationalQuery'
 import { STAFF_DIRECTORY_QUERY_KEY } from '../shared/data/operationalCollectionKeys'
 import { STANDARD_JOB_TYPE_OPTIONS, type JobType } from '../jobs/types/jobType.types'
 import { jobCreationLocationErrors } from '../jobs/domain/jobCreationLocation'
-import { createJobBookIntakeRow, fetchJobBookIntakeRows, fetchJobBookIntakeRow, fetchJobBookSearchBatch, fetchRecentJobBookRows, jobBookIntakeContactLookupIsAvailable, updateJobBookIntakeRow, updateJobBookIntakeMarker, updateManagedJobBookMarker, mapManagedJobBookRow } from './jobBookApi'
-import { canUpdateJobBookMarkers, isEditableJobBookIntake, jobBookVoidBlockedReason } from './jobBookEntryWorkflow'
+import { createJobBookIntakeRow, fetchJobBookIntakeRows, fetchJobBookIntakeRow, fetchJobBookSearchBatch, fetchRecentJobBookRows, jobBookIntakeContactLookupIsAvailable, updateJobBookIntakeRow, mapManagedJobBookRow } from './jobBookApi'
+import { isEditableJobBookIntake, jobBookVoidBlockedReason } from './jobBookEntryWorkflow'
 import { useJobBookVoid } from './useJobBookVoid'
 import JobBookVoidDialog from './JobBookVoidDialog'
 import { availableJobBooks, JOB_BOOKS, jobNumberSequence, REGIONAL_JOB_BOOK_ALLOCATION_ENABLED, type JobBookKey } from './jobBookConfig'
@@ -67,6 +67,7 @@ import {
     splitSiteAddress,
     getPromotionReadiness,
     greenTreeJobStatusLabel,
+    timecloudJobStatusLabel,
     type JobBookRow,
     type PrototypeEquipment,
 } from './jobBookPrototype'
@@ -169,16 +170,14 @@ function CustomerPicker({ id, value, customerName, required, error, onSearchCust
 
 export default function JobBookPrototypeScreen({
     allowManagedJobOpen = true,
-    allowManagedJobMarkerUpdates = true,
 }: {
     allowManagedJobOpen?: boolean
-    allowManagedJobMarkerUpdates?: boolean
 }) {
     const { instance } = useMsal()
     const account = useActiveMsalAccount()
     const signedInUser = getSignedInUserInfo(account)
     const { canManageJobs, canScheduleJobs, canCorrectJobDetails, canEmailAssignedTechnician } = applicationAccessFromEnvironment(account)
-    const { canUpdateEntryMarkers: canWriteMarkers, canAssignInitialTechnician } = applicationAccessFromEnvironment(account)
+    const { canAssignInitialTechnician } = applicationAccessFromEnvironment(account)
     const jobBooks = useMemo(() => availableJobBooks(), [])
     const [selectedJobBookKey, setSelectedJobBookKey] = useState<JobBookKey>('auckland')
     const bookPageGeneration = useRef(0)
@@ -237,7 +236,6 @@ export default function JobBookPrototypeScreen({
     const [savingIntake, setSavingIntake] = useState(false)
     const [locationPending, setLocationPending] = useState(false)
     const [locationSaving, setLocationSaving] = useState(false)
-    const [savingEntryMarkers, setSavingEntryMarkers] = useState<Set<string>>(() => new Set())
     const [saveError, setSaveError] = useState('')
     const [greenTreeSyncStatus, setGreenTreeSyncStatus] = useState<'idle' | 'syncing' | 'error'>('idle')
     const [greenTreeManualCheckJobNumber, setGreenTreeManualCheckJobNumber] = useState('')
@@ -594,8 +592,8 @@ export default function JobBookPrototypeScreen({
             setSaveError('')
         } catch (error) {
             setSaveError(error instanceof Error
-                ? `Job ${result.jobNumber} was saved. ${error.message}`
-                : `Job ${result.jobNumber} was saved, but TimeCloud could not confirm it. Select Timecloud Entry to retry.`)
+                ? `Job ${result.jobNumber} was saved, but TimeCloud could not confirm it. ${error.message}`
+                : `Job ${result.jobNumber} was saved, but TimeCloud could not confirm it. Its TimeCloud status will show Error.`)
         }
     }
     const resumeRegistration = async () => {
@@ -818,53 +816,6 @@ export default function JobBookPrototypeScreen({
         setDraft((current) => ({ ...current, contactId, contactName: input.name }))
         setIntakeCreatePanel('')
     }
-    const updateRowField = async (row: JobBookRow, field: 'timecloudEntered', value: boolean) => {
-        if (!canWriteMarkers || !canUpdateJobBookMarkers(row, allowManagedJobMarkerUpdates) || voidEntry.row?.id === row.id) return
-        const isEntryMarker = field === 'timecloudEntered'
-        if (isEntryMarker && savingEntryMarkers.has(row.id)) return
-        if (isEntryMarker) setSavingEntryMarkers((current) => new Set(current).add(row.id))
-        try {
-            if (row.intakeRecordId && !row.registeredLedgerId) {
-                setSaveError('')
-                try { reconcileIntakeRow(await updateJobBookIntakeMarker(await getAccessToken(), row, field, value)) }
-                catch (error) { setSaveError(error instanceof Error ? error.message : 'The Intake changes were not saved.') }
-                return
-            }
-            if (row.entrySource === 'dataverse-job' && field === 'timecloudEntered') {
-                if (!account) { setSaveError('Sign in before saving Job entry markers.'); return }
-                setSaveError('')
-                try {
-                    const token = await acquireDataverseAccessToken(instance, account)
-                    if (value && row.registeredLedgerId) {
-                        const timecloud = await syncJobBookJobToTimecloud(token, {
-                            book: row.jobBookKey,
-                            jobId: row.linkedJobId,
-                            ledgerId: row.registeredLedgerId,
-                            trigger: 'manual',
-                        })
-                        if (!timecloud.timecloudEntered) throw new Error('TimeCloud Job creation is currently disabled.')
-                        const saved = { timecloudEntered: true, entered: row.entered, etag: timecloud.etag }
-                        setRecentRows((current) => current.map((item) => item.linkedJobId === row.linkedJobId ? { ...item, ...saved } : item))
-                        setIntakeRows((current) => current.map((item) => item.linkedJobId === row.linkedJobId ? { ...item, ...saved } : item))
-                        return
-                    }
-                    const saved = await updateManagedJobBookMarker(token, row, field, value as boolean)
-                    setRecentRows((current) => current.map((item) => item.linkedJobId === row.linkedJobId ? { ...item, ...saved } : item))
-                    setIntakeRows((current) => current.map((item) => item.linkedJobId === row.linkedJobId ? { ...item, ...saved } : item))
-                } catch (error) {
-                    setSaveError(error instanceof Error ? error.message : 'The Job entry marker was not saved.')
-                }
-                return
-            }
-            setSaveError('This row is no longer backed by Dataverse. Reload the page before editing it.')
-        } finally {
-            if (isEntryMarker) setSavingEntryMarkers((current) => {
-                const next = new Set(current)
-                next.delete(row.id)
-                return next
-            })
-        }
-    }
     const checkGreenTreeStatus = async (row: JobBookRow) => {
         const jobNumber = row.jobNumber.trim().toUpperCase()
         if (!jobNumber || greenTreeManualCheckJobNumber || greenTreeSyncStatus === 'syncing') return
@@ -963,14 +914,13 @@ export default function JobBookPrototypeScreen({
                 <thead><tr>
                     <th className="job-number-column">Job Number</th><th className="date-column">Date</th><th className="mechanic-column">Mechanic</th>
                     <th>Equipment</th><th>Customer</th><th className="description-column">Description of the Job</th>
-                    <th className="address-column">Site Address</th><th>Customer PO #</th><th className="gt-entry-column">GT Status</th><th className="timecloud-entry-column">Timecloud Entry</th><th>Actions</th>
+                    <th className="address-column">Site Address</th><th>Customer PO #</th><th className="gt-entry-column">GT Status</th><th className="timecloud-entry-column">TimeCloud Status</th><th>Actions</th>
                 </tr></thead>
                 <tbody>{displayedRows.map((row) => {
                     const canEditIntake = isEditableJobBookIntake(row)
-                    const canUpdateEntryMarkers = canWriteMarkers && canUpdateJobBookMarkers(row, allowManagedJobMarkerUpdates)
                     const isVoid = row.entryStage === JOB_BOOK_ENTRY_STAGES.VOID
                     const voidBlocked = jobBookVoidBlockedReason(row)
-                    const markerBusy = savingEntryMarkers.has(row.id) || voidEntry.row?.id === row.id
+                    const markerBusy = voidEntry.row?.id === row.id
                     const greenTreeLabel = greenTreeJobStatusLabel(row.entered, row.greenTreeStatus ?? '')
                     const normalizedJobNumber = row.jobNumber.trim().toUpperCase()
                     const checkingGreenTree = greenTreeManualCheckJobNumber === normalizedJobNumber
@@ -991,7 +941,7 @@ export default function JobBookPrototypeScreen({
                             : <span className="job-book-table-value">—</span>}</td>
                         <td><span className="job-book-table-value">{row.customerPo || '—'}</span></td>
                         <td className="gt-entry-column"><button type="button" className={`job-book-status-pill job-book-gt-status-button ${row.entered ? `complete greentree-${row.greenTreeStatus || 'open'}` : ''}`} aria-label={`Check GreenTree status for Job ${row.jobNumber}`} disabled={Boolean(greenTreeManualCheckJobNumber) || greenTreeSyncStatus === 'syncing'} title={greenTreeSyncStatus === 'syncing' ? 'Wait for the scheduled GreenTree check to finish.' : 'Check this Job Number in GreenTree now.'} onClick={() => void checkGreenTreeStatus(row)}>{checkingGreenTree ? 'Checking…' : greenTreeLabel}</button>{greenTreeFeedback && <small className={`job-book-gt-check-feedback ${greenTreeFeedback.kind}`} role={greenTreeFeedback.kind === 'error' ? 'alert' : 'status'}>{greenTreeFeedback.message}</small>}</td>
-                        <td className="timecloud-entry-column">{canUpdateEntryMarkers || isVoid || !canWriteMarkers ? <label className={`job-book-table-check ${row.timecloudEntered ? 'complete' : ''}`}><input type="checkbox" aria-label={`Timecloud Entry completed for Job ${row.jobNumber}`} disabled={!canUpdateEntryMarkers || isVoid || markerBusy} checked={row.timecloudEntered} onChange={(event) => void updateRowField(row, 'timecloudEntered', event.target.checked)} />{savingEntryMarkers.has(row.id) ? <span>Saving</span> : row.timecloudEntered ? <span>Done</span> : null}</label> : <span className="job-book-status-pill">Unavailable</span>}</td>
+                        <td className="timecloud-entry-column"><span className={`job-book-status-pill ${row.timecloudEntered ? 'complete' : 'error'}`} aria-label={`TimeCloud status for Job ${row.jobNumber}: ${timecloudJobStatusLabel(row.timecloudEntered)}`} title={row.timecloudEntered ? 'TimeCloud confirmed this Job entry.' : 'TimeCloud did not confirm this Job entry.'}>{timecloudJobStatusLabel(row.timecloudEntered)}</span></td>
                         <td><div className="job-book-row-actions">{canEditIntake
                             ? <button type="button" className="job-quick-action job-quick-action-edit" onClick={() => openIntakeEntryEditor(row)}>Edit entry</button>
                             : isVoid

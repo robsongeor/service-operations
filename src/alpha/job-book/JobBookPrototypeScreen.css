@@ -1340,6 +1340,11 @@
     background: #dcefe2;
     color: #2f6840;
 }
+
+.job-book-status-pill.error {
+    background: #fce8e8;
+    color: #9d2f2f;
+}
 .job-book-status-pill.greentree-closed {
     background: #fff0c9;
     color: #7a5312;
@@ -1376,34 +1381,6 @@
 
 .job-book-gt-check-feedback.error {
     color: #a13434;
-}
-
-.job-book-table-check {
-    display: inline-flex;
-    min-height: 28px;
-    align-items: center;
-    gap: 6px;
-    padding: 0 8px;
-    border: 1px solid #d7ddd9;
-    border-radius: 999px;
-    background: #f1f3f1;
-    color: #68716c;
-    font-size: 0.64rem;
-    font-weight: 700;
-    cursor: pointer;
-}
-
-.job-book-table-check.complete {
-    border-color: #9dc8a8;
-    background: #dcefe2;
-    color: #2f6840;
-}
-
-.job-book-table-check input {
-    width: auto;
-    min-height: 0;
-    padding: 0;
-    accent-color: #2f7845;
 }
 
 .job-book-grid .job-book-table-edit {

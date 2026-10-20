@@ -65,9 +65,10 @@ when TimeCloud requires a documented environment-specific value.
    permanent regional number is allocated.
 6. Verify exactly one TimeCloud item exists with the expected Job Number prefix, test-only label,
    custom code, Job Number layer, assigned code and no geofence.
-7. Confirm Dataverse records the returned item ID/code and marks Timecloud Entry.
-8. For the same disposable row, retry Timecloud Entry once. Verify the integration finds the same
-   TimeCloud item and does not create a duplicate.
+7. Confirm Dataverse records the returned item ID/code and the Job Book displays TimeCloud Status
+   **Entered**. Confirm there is no editable TimeCloud checkbox.
+8. Exercise an idempotent backend retry with the same registered Job/ledger pair. Verify the
+   integration finds the same TimeCloud item and does not create a duplicate.
 9. Exercise an unauthorised caller and verify no TimeCloud request or Dataverse write occurs.
 10. Return `TIMECLOUD_JOB_CREATION_ENABLED=false` after the test window unless another approved
    test immediately follows.

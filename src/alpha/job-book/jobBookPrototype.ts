@@ -41,6 +41,10 @@ export function greenTreeJobStatusLabel(entered: boolean, status: GreenTreeJobSt
     return 'Open'
 }
 
+export function timecloudJobStatusLabel(timecloudEntered: boolean) {
+    return timecloudEntered ? 'Entered' : 'Error'
+}
+
 export const MANAGED_JOB_ENTRY_MARKER_COLUMNS = {
     entered: 'gr_gtentered',
     timecloudEntered: 'gr_timecloudentered',

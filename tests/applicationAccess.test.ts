@@ -217,7 +217,7 @@ test('App and Sidebar enforce the Job Card Admin route and presentation boundary
     assert.match(app, /<QuotesScreen[^>]*readOnly/)
     assert.match(app, /<EquipmentScreen readOnly/)
     assert.match(app, /<CustomerDashboardScreen readOnly/)
-    assert.match(app, /allowManagedJobMarkerUpdates=\{access.canUpdateEntryMarkers\}/)
+    assert.doesNotMatch(app, /allowManagedJobMarkerUpdates/)
     assert.match(quotes, /readOnly/)
     assert.match(quotes, /readOnly && editingQuote/)
     assert.match(quotes, /<QuoteReadOnlyDialog/)

@@ -153,8 +153,10 @@ On confirmation, `gr_job.gr_timecloudentered`, `gr_timecloudjobitemid`, and `gr_
 written together under the Job ETag. A lost response or failed Dataverse write is recoverable: the
 next attempt finds the exact existing TimeCloud item and reconciles it instead of creating a
 duplicate. Multiple exact matches or an existing match with different details stop for review.
-The Job Book Timecloud Entry control and a retained Service Coordination allocation request are the
-retry paths for registered rows; legacy/promoted marker behaviour remains unchanged.
+The Job Book shows this confirmation as a read-only **TimeCloud Status**: **Entered** only when the
+server has saved the returned TimeCloud identity, otherwise **Error**. Users cannot manually tick or
+clear the confirmation. A retained Service Coordination allocation request remains an idempotent
+recovery path when allocation succeeded but TimeCloud confirmation did not.
 
 Required server settings are `TIMECLOUD_CLIENT_ID`, `TIMECLOUD_API_USERNAME`,
 `TIMECLOUD_API_PASSWORD`, `TIMECLOUD_INTEGRATOR_KEY`, `TIMECLOUD_JOB_LAYER_ID`, and
