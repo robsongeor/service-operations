@@ -177,7 +177,7 @@ namespace ServiceOperations.Access
 
                 if (target.LogicalName == "gr_job" && context.MessageName == "Create" && creating)
                 {
-                    var expected = new HashSet<string>(new[] { "gr_description", "gr_ordernumber", "gr_site", "gr_status", "gr_coordinatormanaged" });
+                    var expected = new HashSet<string>(new[] { "gr_description", "gr_ordernumber", "gr_site", "gr_status", "gr_coordinatormanaged", "gr_operatingbranch" });
                     foreach (var pair in new[] { new[] { "EquipmentId", "gr_equipment", "gr_equipment" }, new[] { "ContactId", "gr_contact", "gr_contact" }, new[] { "MechanicId", "gr_mechanic", "gr_mechanic" } })
                         if (parent.InputParameters.Contains(pair[0]) && parent.InputParameters[pair[0]] is Guid && (Guid)parent.InputParameters[pair[0]] != Guid.Empty) expected.Add(pair[1]);
                     string externalSupplier = parent.InputParameters.Contains("ExternalSupplierDetails") ? parent.InputParameters["ExternalSupplierDetails"] as string : null;
@@ -185,12 +185,14 @@ namespace ServiceOperations.Access
                     Guid siteId;
                     bool unknown = parent.InputParameters.Contains("EquipmentUnknown") && parent.InputParameters["EquipmentUnknown"] is bool && (bool)parent.InputParameters["EquipmentUnknown"];
                     var status = target.GetAttributeValue<OptionSetValue>("gr_status");
+                    var branch = target.GetAttributeValue<OptionSetValue>("gr_operatingbranch");
                     return target.Id == requestId && RegistrationFields(target, expected.Concat(JobCreateDefaults)) && expected.All(target.Contains) && ValidJobCreateDefaults(target) &&
                         TryId(parent.InputParameters, "SiteId", out siteId) && Reference(target, "gr_site", "gr_site", siteId) &&
                         SameOptionalReference(parent.InputParameters, target, "EquipmentId", "gr_equipment", "gr_equipment") &&
                         SameOptionalReference(parent.InputParameters, target, "ContactId", "gr_contact", "gr_contact") &&
                         SameOptionalReference(parent.InputParameters, target, "MechanicId", "gr_mechanic", "gr_mechanic") &&
                         unknown != target.Contains("gr_equipment") && status != null && status.Value == 122830001 &&
+                        branch != null && branch.Value == BranchValue(book) &&
                         !target.GetAttributeValue<bool>("gr_coordinatormanaged") &&
                         SameText(parent.InputParameters, "Description", target.GetAttributeValue<string>("gr_description")) &&
                         SameText(parent.InputParameters, "OrderNumber", target.GetAttributeValue<string>("gr_ordernumber")) &&
@@ -199,8 +201,10 @@ namespace ServiceOperations.Access
                 if (target.LogicalName == "gr_job" && context.MessageName == "Update")
                 {
                     string number = target.GetAttributeValue<string>("gr_jobnumber");
-                    return target.Id == jobId && RegistrationFields(target, new[] { "gr_jobnumber" }) && target.Contains("gr_jobnumber") &&
-                        ValidNumber(book, number);
+                    var branch = target.GetAttributeValue<OptionSetValue>("gr_operatingbranch");
+                    return target.Id == jobId && RegistrationFields(target, new[] { "gr_jobnumber", "gr_operatingbranch" }) &&
+                        target.Contains("gr_jobnumber") && target.Contains("gr_operatingbranch") && ValidNumber(book, number) &&
+                        branch != null && branch.Value == BranchValue(book);
                 }
                 if (target.LogicalName == table && context.MessageName == "Create")
                 {
@@ -277,6 +281,11 @@ namespace ServiceOperations.Access
             if (String.IsNullOrWhiteSpace(number) || number.Length > 30) return false;
             string prefix = book == "waikato" ? "WJ" : book == "hastings" ? "HJ" : book == "christchurch" ? "CJ" : "";
             return System.Text.RegularExpressions.Regex.IsMatch(number, "^" + prefix + "[0-9]+$");
+        }
+        static int BranchValue(string book)
+        {
+            return book == "auckland" ? 122830000 : book == "waikato" ? 122830001 :
+                book == "hastings" ? 122830002 : book == "christchurch" ? 122830003 : -1;
         }
 
         internal static bool IsRegisteredVoidChild(IPluginExecutionContext context, Entity target)

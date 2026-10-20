@@ -214,6 +214,14 @@ denied. The assembly-only deployment changed no roles, metadata, Jobs, customers
 migration state or feature flags. Verification preserved the 2 Office Admin and 7 Job Book Admin
 assignments and confirmed all 29 workflow guard steps enabled.
 
+Later on 21 October 2026, signed workflow assembly `1.0.21.0` corrected the transactional guard
+contract for the operating-branch value that the registration service already writes from the
+selected regional Job Book. The guard now requires the exact expected branch on both initial Job
+creation and final number assignment; it does not permit a caller-selected branch override. The
+failed Auckland request preceding this update rolled back completely, and a read-only audit confirmed
+that no Job or ledger existed at or above `147479` before the retained request was resumed. The
+assembly-only deployment again preserved both Admin role assignment sets and all 29 enabled guards.
+
 The next action is a controlled live test with the dedicated Job Book Admin and Office Admin accounts.
 The first successful creation is permanent history: use a real or deliberately retained/voided test
 Job, verify it remains Staging until confirmed dispatch, and do not delete or reseed it.

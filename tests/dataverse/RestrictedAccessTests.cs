@@ -121,7 +121,7 @@ public static class RestrictedAccessTests
             var parent = Context("gr_RegisterJobBookJob", inputs, null, 30);
             var create = Context("Create", new ParameterCollection(), parent, 20);
             var job = Row("gr_job"); job["gr_description"]="Repair mast"; job["gr_ordernumber"]="PO-1";
-            job["gr_site"]=new EntityReference("gr_site",OtherId); job["gr_status"]=new OptionSetValue(122830001); job["gr_coordinatormanaged"]=false;
+            job["gr_site"]=new EntityReference("gr_site",OtherId); job["gr_status"]=new OptionSetValue(122830001); job["gr_coordinatormanaged"]=false; job["gr_operatingbranch"]=new OptionSetValue(122830000);
             if (!RestrictedAccessPlugin.IsRegistrationChild(create, job)) throw new Exception("Exact registration Job create was not accepted");
             foreach(var field in new[]{"gr_gtentered","gr_officeattentionrequired","gr_registrationvoid","gr_techniciansubmissionfurtherworkrequired","gr_techniciansubmissionsafetyissueidentified","gr_techniciansubmissiontokenused","gr_timecloudentered"}) job[field]=false;
             foreach(var field in new[]{"gr_currentofficeaction","gr_jobcardstatus","gr_servicetype"}) job[field]=new OptionSetValue(1);
@@ -139,9 +139,12 @@ public static class RestrictedAccessTests
             ledger["gr_jobbookentryid"]=Id; ledger["createdon"]=new DateTime(2026,10,15); ledger["ownerid"]=new EntityReference("systemuser",Id); ledger["organizationid"]=new EntityReference("organization",OtherId);
             if (!RestrictedAccessPlugin.IsRegistrationChild(create, ledger)) throw new Exception("Exact registration ledger create was not accepted");
             var update = Context("Update", new ParameterCollection(), parent, 20);
-            var number = Row("gr_job"); number["gr_jobnumber"]="123456";
+            var number = Row("gr_job"); number["gr_jobnumber"]="123456"; number["gr_operatingbranch"]=new OptionSetValue(122830000);
             number["modifiedon"]=new DateTime(2026,10,15); number["modifiedby"]=new EntityReference("systemuser",Id);
             if (!RestrictedAccessPlugin.IsRegistrationChild(update, number)) throw new Exception("Exact registration Job number update was not accepted");
+            number["gr_operatingbranch"] = new OptionSetValue(122830001);
+            if (RestrictedAccessPlugin.IsRegistrationChild(update, number)) throw new Exception("Wrong registration branch was accepted");
+            number["gr_operatingbranch"] = new OptionSetValue(122830000);
             job["gr_jobtype"] = new OptionSetValue(1);
             if (RestrictedAccessPlugin.IsRegistrationChild(create, job)) throw new Exception("Additional registration Job field was accepted");
             ledger["gr_jobnumber"] = "WJ1234";
@@ -153,7 +156,7 @@ public static class RestrictedAccessTests
             var parent = Context("gr_AllocateJobBookNumber", inputs, null, 30);
             var ledger = RegistrationLedger("gr_waikatojobbookentry", Id, OtherId); ledger["gr_jobnumber"] = "WJ1548";
             if (!RestrictedAccessPlugin.IsRegistrationChild(Context("Create", new ParameterCollection(), parent, 20), ledger)) throw new Exception("Exact allocation ledger was not accepted");
-            var job = new Entity("gr_job", OtherId); job["gr_jobnumber"]="WJ1548";
+            var job = new Entity("gr_job", OtherId); job["gr_jobnumber"]="WJ1548"; job["gr_operatingbranch"]=new OptionSetValue(122830001);
             if (!RestrictedAccessPlugin.IsRegistrationChild(Context("Update", new ParameterCollection(), parent, 20), job)) throw new Exception("Exact allocation Job update was not accepted");
             job.Id = Id;
             if (RestrictedAccessPlugin.IsRegistrationChild(Context("Update", new ParameterCollection(), parent, 20), job)) throw new Exception("Allocation updated the request ID instead of the Job ID");
