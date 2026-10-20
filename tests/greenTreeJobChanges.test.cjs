@@ -226,6 +226,7 @@ test('scheduled POST does not reconcile operational Job completion when the Gree
         method: 'POST', headers: {}, query: {}, body: {},
     }, {
         authenticate: async () => 'Bearer application-token',
+        getGreenTreeDataverseApplicationToken: async () => 'application-token',
         getCheckpointStore: () => ({ begin: async () => ({ skipped: true, reason: 'cooldown' }) }),
         reconcilePendingCompletionReviews: async () => { throw new Error('operational completion reconciliation must remain disabled') },
     })
@@ -246,11 +247,12 @@ test('scheduled status polling uses the due-record poller and completes its chec
         method: 'POST', headers: {}, query: {}, body: { mode: 'scheduled', batchSize: 25 },
     }, {
         authenticate: async () => 'Bearer delegated-token',
+        getGreenTreeDataverseApplicationToken: async () => 'application-token',
         getCheckpointStore: () => ({ begin: async () => run, complete: async (value) => { assert.equal(value, run); completed += 1 } }),
         pollGreenTreeJobStatuses: async (options) => {
             assert.equal(options.mode, 'scheduled')
             assert.equal(options.batchSize, 25)
-            assert.equal(options.authorization, 'Bearer delegated-token')
+            assert.equal(options.authorization, 'Bearer application-token')
             return { mode: 'scheduled', due: 1, selected: 1, checked: 1, updatedRecords: 1, notEntered: 0, open: 1, closed: 0, finalised: 0, remaining: 0, conflicts: [], failed: [] }
         },
     })
@@ -259,7 +261,7 @@ test('scheduled status polling uses the due-record poller and completes its chec
     assert.equal(completed, 1)
 })
 
-test('manual status check uses the delegated user, exact Job Number and no shared checkpoint', { concurrency: false }, async () => {
+test('manual status check authenticates the user but writes with the dedicated identity', { concurrency: false }, async () => {
     process.env.DATAVERSE_URL = 'https://example.crm.dynamics.com'
     let polled = 0
     const context = {}
@@ -267,13 +269,14 @@ test('manual status check uses the delegated user, exact Job Number and no share
         method: 'POST', headers: {}, query: {}, body: { mode: 'manual', jobNumber: '150006' },
     }, {
         authenticate: async () => 'Bearer delegated-token',
+        getGreenTreeDataverseApplicationToken: async () => 'application-token',
         authenticateScheduler: async () => { throw new Error('manual checks must not use scheduler authentication') },
         getCheckpointStore: () => { throw new Error('manual checks must not open the shared checkpoint') },
         pollGreenTreeJobStatuses: async (options) => {
             polled += 1
             assert.equal(options.mode, 'manual')
             assert.equal(options.jobNumber, '150006')
-            assert.equal(options.authorization, 'Bearer delegated-token')
+            assert.equal(options.authorization, 'Bearer application-token')
             return { mode: 'manual', jobNumber: '150006', entered: true, status: 'open', due: 1, selected: 1, checked: 1, updatedRecords: 2, notEntered: 0, open: 1, closed: 0, finalised: 0, remaining: 0, conflicts: [], failed: [] }
         },
     })
@@ -282,6 +285,22 @@ test('manual status check uses the delegated user, exact Job Number and no share
     const body = JSON.parse(context.res.body)
     assert.equal(body.entered, true)
     assert.equal(body.status, 'open')
+})
+
+test('manual status check fails before polling when its dedicated writer is unavailable', { concurrency: false }, async () => {
+    process.env.DATAVERSE_URL = 'https://example.crm.dynamics.com'
+    let polled = 0
+    const context = {}
+    await endpoint._test.greenTreeJobChanges(context, {
+        method: 'POST', headers: {}, query: {}, body: { mode: 'manual', jobNumber: '150006' },
+    }, {
+        authenticate: async () => 'Bearer delegated-token',
+        getGreenTreeDataverseApplicationToken: async () => { throw new Error('unavailable') },
+        pollGreenTreeJobStatuses: async () => { polled += 1 },
+    })
+    assert.equal(context.res.status, 503)
+    assert.equal(polled, 0)
+    assert.deepEqual(JSON.parse(context.res.body), { error: 'The GreenTree synchronization identity is unavailable.' })
 })
 
 test('full status backfill requires scheduler authentication and bypasses the normal cooldown', { concurrency: false }, async () => {
@@ -318,6 +337,9 @@ test('full status backfill requires scheduler authentication and bypasses the no
 
 test('authenticated POST reconciles a GreenTree change into Dataverse', { concurrency: false }, async () => {
     process.env.DATAVERSE_URL = 'https://example.crm.dynamics.com'
+    process.env.GREENTREE_DATAVERSE_TENANT_ID = 'tenant-id'
+    process.env.GREENTREE_DATAVERSE_CLIENT_ID = 'client-id'
+    process.env.GREENTREE_DATAVERSE_CLIENT_SECRET = 'client-secret'
     process.env.LIFTTRUCKS_API_USERNAME = 'server-user'
     process.env.LIFTTRUCKS_API_PASSWORD = 'server-password'
     process.env.LIFTTRUCKS_API_KEY = 'server-key'
@@ -325,6 +347,7 @@ test('authenticated POST reconciles a GreenTree change into Dataverse', { concur
     global.fetch = async (url, options = {}) => {
         calls.push({ url: String(url), options })
         if (String(url).endsWith('/WhoAmI')) return Response.json({ UserId: '00000000-0000-4000-8000-000000000001' })
+        if (String(url).includes('/oauth2/v2.0/token')) return Response.json({ access_token: 'application-token' })
         if (String(url).startsWith('https://webview.liftrucks.co.nz/')) return Response.json([{ JCJobs: [{ Code: '147223', IsClosed: true }] }])
         if (String(url).includes('/gr_jobs?')) return Response.json({ value: [{
             '@odata.etag': 'W/"1"', gr_jobid: '00000000-0000-4000-8000-000000000002',
@@ -345,6 +368,7 @@ test('authenticated POST reconciles a GreenTree change into Dataverse', { concur
     assert.equal(body.updated, 1)
     assert.equal(body.greenTreeStatusUpdated, 1)
     const patch = calls.find((call) => call.options.method === 'PATCH')
+    assert.equal(patch.options.headers.Authorization, 'Bearer application-token')
     assert.deepEqual(JSON.parse(patch.options.body), { gr_gtentered: true, gr_greentreestatus: 'closed' })
 })
 

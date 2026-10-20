@@ -835,7 +835,7 @@ export default function JobBookPrototypeScreen({
         })
         try {
             const result = await requestGreenTreeJobStatusCheck(await getAccessToken(), jobNumber)
-            if (result.failed.includes(jobNumber)) throw new Error('GreenTree could not be reached for this Job. Try again.')
+            if (result.failed.includes(jobNumber)) throw new Error('The GreenTree check could not be completed for this Job. Try again.')
             if (result.conflicts.includes(jobNumber)) throw new Error('The stored status changed during the check. Reload the Job Book and try again.')
             const updateStatus = (items: JobBookRow[]) => items.map((item) => (
                 item.jobNumber.trim().toUpperCase() === result.jobNumber

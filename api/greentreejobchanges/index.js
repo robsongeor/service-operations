@@ -91,11 +91,18 @@ async function greenTreeJobChanges(context, request, options = {}) {
     const pollingMode = request.method === 'POST' && (request.body?.mode === 'scheduled' || request.body?.mode === 'backfill' || request.body?.mode === 'manual')
         ? request.body.mode : ''
     let authorization
+    let authenticatedByScheduler = false
     try {
-        if (pollingMode === 'backfill') authorization = await (options.authenticateScheduler || scheduledAuthorization)(request)
+        if (pollingMode === 'backfill') {
+            authorization = await (options.authenticateScheduler || scheduledAuthorization)(request)
+            authenticatedByScheduler = Boolean(authorization)
+        }
         else {
             authorization = await (options.authenticate || validateAuthenticatedUser)(request)
-            if (!authorization && request.method === 'POST' && pollingMode !== 'manual') authorization = await (options.authenticateScheduler || scheduledAuthorization)(request)
+            if (!authorization && request.method === 'POST' && pollingMode !== 'manual') {
+                authorization = await (options.authenticateScheduler || scheduledAuthorization)(request)
+                authenticatedByScheduler = Boolean(authorization)
+            }
         }
     } catch {
         context.res = jsonResponse(503, { error: 'The scheduled synchronization identity is unavailable.' })
@@ -106,18 +113,32 @@ async function greenTreeJobChanges(context, request, options = {}) {
         return
     }
 
-    if (pollingMode === 'manual') {
-        const jobNumber = String(request.body?.jobNumber || '').trim().toUpperCase()
-        if (!/^(?:[A-Z]{1,2})?[0-9]{1,20}$/.test(jobNumber)) {
-            context.res = jsonResponse(400, { error: 'A valid Job Number is required for a manual GreenTree check.' })
+    const manualJobNumber = pollingMode === 'manual'
+        ? String(request.body?.jobNumber || '').trim().toUpperCase()
+        : ''
+    if (pollingMode === 'manual' && !/^(?:[A-Z]{1,2})?[0-9]{1,20}$/.test(manualJobNumber)) {
+        context.res = jsonResponse(400, { error: 'A valid Job Number is required for a manual GreenTree check.' })
+        return
+    }
+
+    let writeAuthorization = authorization
+    if (request.method === 'POST' && !authenticatedByScheduler && !options.useDelegatedWrites) {
+        try {
+            const token = await (options.getGreenTreeDataverseApplicationToken || getGreenTreeDataverseApplicationToken)()
+            writeAuthorization = `Bearer ${token}`
+        } catch {
+            context.res = jsonResponse(503, { error: 'The GreenTree synchronization identity is unavailable.' })
             return
         }
+    }
+
+    if (pollingMode === 'manual') {
         try {
             const reconciliation = await (options.pollGreenTreeJobStatuses || pollGreenTreeJobStatuses)({
                 mode: 'manual',
-                jobNumber,
+                jobNumber: manualJobNumber,
                 dataverseOrigin: dataverseOrigin(),
-                authorization,
+                authorization: writeAuthorization,
             })
             if (reconciliation.selected !== 1) {
                 context.res = jsonResponse(404, { error: 'No active Job Book or Job record was found for that Job Number.' })
@@ -141,7 +162,7 @@ async function greenTreeJobChanges(context, request, options = {}) {
                 mode: 'backfill',
                 batchSize: request.body?.batchSize,
                 dataverseOrigin: dataverseOrigin(),
-                authorization,
+                authorization: writeAuthorization,
             })
             context.res = jsonResponse(200, { checkedAt: new Date().toISOString(), ...reconciliation })
         } catch (error) {
@@ -169,7 +190,7 @@ async function greenTreeJobChanges(context, request, options = {}) {
                 mode: 'scheduled',
                 batchSize: request.body?.batchSize,
                 dataverseOrigin: dataverseOrigin(),
-                authorization,
+                authorization: writeAuthorization,
             })
             if (checkpointStore && syncRun) await checkpointStore.complete(syncRun)
             context.res = jsonResponse(200, { checkedAt: new Date().toISOString(), ...reconciliation })
@@ -193,7 +214,7 @@ async function greenTreeJobChanges(context, request, options = {}) {
             const reconciliation = await reconcileGreenTreeJobs({
                 jobs,
                 dataverseOrigin: dataverseOrigin(),
-                authorization,
+                authorization: writeAuthorization,
             })
             if (checkpointStore && syncRun) await checkpointStore.complete(syncRun)
             context.res = jsonResponse(200, { modifiedSince, checkedAt: new Date().toISOString(), ...reconciliation })
@@ -218,6 +239,7 @@ module.exports = (context, request) => greenTreeJobChanges(context, request)
 module.exports.localDevelopment = (context, request) => greenTreeJobChanges(context, request, {
     authenticate: acceptDelegatedBearerForLocalDevelopment,
     getCheckpointStore: () => null,
+    useDelegatedWrites: true,
 })
 
 module.exports._test = {

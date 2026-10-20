@@ -105,6 +105,13 @@ The old 15-minute `modifiedSince`-only delta job was retired when the status-awa
 enabled. The backend retains a checked timestamp per record to enforce the 3-hour Open cadence, the
 once-daily 7:00am Closed cadence, and the permanent Finalised exclusion.
 
+Interactive checks authenticate the signed-in user before accepting the request, but the factual
+GreenTree marker, status and checked timestamp are read and written by the same dedicated GreenTree
+application identity used by scheduled polling. This keeps the result consistent for every permitted
+application role without granting human users direct write access to synchronization-only fields.
+Local development may reuse its delegated test token because production application credentials are
+intentionally unavailable there.
+
 ## Live rollout record — 19 October 2026
 
 - The dedicated GreenTree Dataverse application user was verified and the access guard was deployed
