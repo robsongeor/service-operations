@@ -105,6 +105,6 @@ Report issues as soon as possible and include:
 On Windows, hold **Windows key + Shift + S**, select the area, then paste the screenshot into your
 email. Do not include passwords, verification codes or unnecessary customer-sensitive information.
 
-Next: [Auckland Job Book migration](Auckland-Job-Book-Migration) · [Job Book Admin guide](Job-Book-Admin-Guide) · [Office Admin guide](Office-Admin-Guide)
+Next: [Auckland Job Book migration](Auckland-Job-Book-Migration) · [Job Book Admin guide](Job-Book-Admin-Guide) · [Office Admin guide](Office-Admin-Guide) · [Customers, Sites and Contacts](Customers-Sites-and-Contacts)
 
 _Last reviewed: 20 October 2026._

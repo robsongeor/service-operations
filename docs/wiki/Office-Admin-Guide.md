@@ -28,7 +28,7 @@ Use the same Auckland creation workflow described in the [Job Book Admin guide](
 1. Search Job Book first.
 2. Select **Auckland**, then **+ New entry**.
 3. Select and verify Equipment, Customer, Site, address and Contact.
-4. Use **Create new Site** or **Create new Contact** when the correct record does not exist.
+4. Use **+ Add new site** or **+ Add new contact** when the correct record does not exist.
 5. Enter the description, initial mechanic and Customer PO.
 6. Recheck everything and select **Add to Job Book** once.
 7. Wait for the permanent Job Number and TimeCloud status.
@@ -36,9 +36,11 @@ Use the same Auckland creation workflow described in the [Job Book Admin guide](
 > **Creating a Job is irreversible.** The allocated Job Number cannot be deleted, reused or undone.
 > An eligible Void action retains the number and history; it does not remove the Job.
 
-TimeCloud shows **Uploading…** while the automatic request is running, **Entered** after confirmation
-and **Error** only when the request fails. The Service Operations Job is already saved if TimeCloud
-shows Error, so report it instead of creating another Job.
+TimeCloud currently runs in controlled test mode. It shows **Uploading…** while the automatic
+request is running, **Entered** after the labelled test item is confirmed and **Error** only when the
+request fails. The Service Operations Job is already saved if TimeCloud shows Error, so report it
+instead of creating another Job. Do not rename or treat a **[TEST ONLY - SAFE TO DELETE]** item as a
+production TimeCloud Job.
 
 ## Email the assigned technician
 
@@ -74,6 +76,9 @@ For a submitted card:
 Completing office review records the review outcome. It does not close the operational Job and does
 not itself send information to GreenTree.
 
+See [Office Job Card review](Office-Job-Card-Review) for the complete queue, evidence, follow-up,
+meter approval and completion workflow.
+
 ## GreenTree and TimeCloud status
 
 - Select a Job Book row's **GT Status** button to perform a fresh GreenTree check.
@@ -92,6 +97,6 @@ Report problems as soon as possible. Include what you were trying to do, what ha
 Number and the exact message. Hold **Windows key + Shift + S**, select the affected area, then paste
 the screenshot into your email.
 
-Back to [Service Operations user guides](Home) · [Auckland Job Book migration](Auckland-Job-Book-Migration) · [Getting started and signing in](Getting-Started-and-Signing-In)
+Back to [Service Operations user guides](Home) · [Auckland Job Book migration](Auckland-Job-Book-Migration) · [Customers, Sites and Contacts](Customers-Sites-and-Contacts) · [Office Job Card review](Office-Job-Card-Review)
 
 _Last reviewed: 20 October 2026._

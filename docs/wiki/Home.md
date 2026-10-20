@@ -15,6 +15,9 @@ a separate change is announced.
 - [Getting started and signing in](Getting-Started-and-Signing-In)
 - [Job Book Admin guide](Job-Book-Admin-Guide)
 - [Office Admin guide](Office-Admin-Guide)
+- [Customers, Sites and Contacts](Customers-Sites-and-Contacts)
+- [Equipment guide](Equipment-Guide)
+- [Office Job Card review](Office-Job-Card-Review)
 
 ## Important rules
 
@@ -23,6 +26,8 @@ a separate change is announced.
   deleted, reused or undone after it has been allocated.
 - Do not create a second Job while the first save or TimeCloud upload is still pending.
 - Bulk Job creation and Site Check creation are not available in this release.
+- TimeCloud creation is currently running in controlled **test mode**. Test entries are clearly
+  labelled in TimeCloud and must not be treated as production TimeCloud work.
 
 ## Need help?
 

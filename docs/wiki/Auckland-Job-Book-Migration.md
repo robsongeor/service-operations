@@ -11,7 +11,8 @@ existing processes until a separate change is announced.
 
 - New Auckland Jobs are created from **Job Book** using **+ New entry**.
 - The app allocates the next permanent Auckland Job Number after the entry is saved.
-- The saved Job is created in Service Operations and sent automatically to TimeCloud.
+- The saved Job is created in Service Operations and sent automatically to the controlled
+  TimeCloud test workflow.
 - Job details are maintained in the app instead of the Auckland spreadsheet.
 
 ## Before creating a Job
@@ -31,8 +32,8 @@ have the correct Equipment, Customer, Site, address, Contact, description, mecha
 3. Select **+ New entry**.
 4. Select the correct Equipment, or **Equipment not known yet** when it genuinely cannot be
    identified.
-5. Check the Customer, Site and address. When the required record does not exist, use **Create new
-   Site** or **Create new Contact** from the relevant selector.
+5. Check the Customer, Site and address. When the required record does not exist, use **+ Add new
+   site** or **+ Add new contact** from the relevant selector.
 6. Enter a clear **Description of the job**.
 7. Select the mechanic, or leave the Job **Unassigned** if this is not known yet.
 8. Enter the Customer PO when one was supplied.
@@ -44,8 +45,12 @@ use **Resume saved request** so the same request is completed without allocating
 
 ## TimeCloud status
 
-TimeCloud creation starts automatically after the permanent Job Number is saved. The Job Book shows
-a read-only status:
+TimeCloud creation starts automatically after the permanent Job Number is saved. During the current
+rollout it runs in **test mode**. The TimeCloud item name includes **[TEST ONLY - SAFE TO DELETE]**
+and its integration code is **JOBBOOK-TEST-ONLY**. Do not rename a test item or treat it as a
+production TimeCloud Job.
+
+The Job Book shows a read-only status:
 
 | Status | Meaning |
 | --- | --- |
@@ -53,7 +58,8 @@ a read-only status:
 | **Entered** | TimeCloud confirmed the entry and Service Operations saved that confirmation. |
 | **Error** | TimeCloud did not confirm the request. The Service Operations Job is still saved. Report the error; do not create the Job again. |
 
-There is no TimeCloud checkbox to select manually.
+There is no TimeCloud checkbox to select manually. A Job Book status of **Entered** means the test
+item was confirmed during this rollout; it does not mean production mode has been enabled.
 
 ## GreenTree status
 
@@ -77,6 +83,6 @@ when available and the exact message shown on screen.
 On Windows, hold **Windows key + Shift + S**, select the affected area, then paste the screenshot
 into your support email.
 
-See also: [Getting started and signing in](Getting-Started-and-Signing-In) · [Job Book Admin guide](Job-Book-Admin-Guide) · [Office Admin guide](Office-Admin-Guide)
+See also: [Getting started and signing in](Getting-Started-and-Signing-In) · [Job Book Admin guide](Job-Book-Admin-Guide) · [Office Admin guide](Office-Admin-Guide) · [Customers, Sites and Contacts](Customers-Sites-and-Contacts)
 
 _Last reviewed: 20 October 2026._

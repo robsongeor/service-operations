@@ -44,7 +44,7 @@ Search before creating a new Job so the same work is not entered twice.
 4. Check the Customer, Site and address.
 5. Select the Site Contact when one is relevant. Leave **No contact** when no contact should be
    recorded.
-6. If the correct Site or Contact does not exist, select **Create new Site** or **Create new Contact**
+6. If the correct Site or Contact does not exist, select **+ Add new site** or **+ Add new contact**
    from the relevant selector and complete the requested information.
 7. Enter a clear **Description of the job**.
 8. Select the mechanic, or leave the Job **Unassigned** if this is not known yet.
@@ -75,7 +75,9 @@ have allocated a number.
 
 ## TimeCloud status
 
-The TimeCloud entry is created automatically after the Job Number is saved.
+The TimeCloud entry is created automatically after the Job Number is saved. It currently uses
+controlled test mode, so the TimeCloud item is labelled **[TEST ONLY - SAFE TO DELETE]**. Do not
+rename it or treat it as production TimeCloud work.
 
 | Status | Meaning |
 | --- | --- |
@@ -83,7 +85,8 @@ The TimeCloud entry is created automatically after the Job Number is saved.
 | **Entered** | TimeCloud confirmed the entry. |
 | **Error** | TimeCloud did not confirm the request. The Service Operations Job is still saved. Report the error and do not create another Job. |
 
-The status is read-only. There is no TimeCloud checkbox to select.
+The status is read-only. There is no TimeCloud checkbox to select. **Entered** means the controlled
+test item was confirmed; it does not mean production mode has been enabled.
 
 ## GreenTree status
 
@@ -126,7 +129,7 @@ disabled, read the explanation and report the issue instead of trying to create 
 | Situation | What to do |
 | --- | --- |
 | Equipment cannot be found | Search fleet, alternate fleet, serial, make and model. Use **Equipment not known yet** only when necessary. |
-| The Site or Contact is missing | Use **Create new Site** or **Create new Contact** from the selector. Search first to avoid duplicates. |
+| The Site or Contact is missing | Use **+ Add new site** or **+ Add new contact** from the selector. Search first to avoid duplicates. |
 | A save is still pending | Wait. If prompted, use **Resume saved request**. Do not create another Job. |
 | TimeCloud shows **Error** | The Job is already saved. Report the error and Job Number; do not create it again. |
 | A save reports a conflict | Reload the current record, recheck the correction and try once more. |
@@ -135,6 +138,6 @@ disabled, read the explanation and report the issue instead of trying to create 
 When reporting a problem, include what you were doing, the Job Number, the exact message and a
 screenshot. Hold **Windows key + Shift + S**, select the affected area, then paste it into the email.
 
-Back to [Service Operations user guides](Home) · [Auckland Job Book migration](Auckland-Job-Book-Migration) · [Getting started and signing in](Getting-Started-and-Signing-In)
+Back to [Service Operations user guides](Home) · [Auckland Job Book migration](Auckland-Job-Book-Migration) · [Customers, Sites and Contacts](Customers-Sites-and-Contacts) · [Equipment guide](Equipment-Guide)
 
 _Last reviewed: 20 October 2026._
