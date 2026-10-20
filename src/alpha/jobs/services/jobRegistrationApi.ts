@@ -1,4 +1,4 @@
-import { JOB_BOOKS, jobNumberBelongsToBook, type JobBookKey } from '../../job-book/jobBookConfig.ts'
+import { JOB_BOOKS, jobNumberBelongsToBook, REGIONAL_JOB_BOOK_ALLOCATION_ENABLED, type JobBookKey } from '../../job-book/jobBookConfig.ts'
 
 export type RegisterJobBookCommand = Readonly<{
     kind: 'register'
@@ -91,9 +91,12 @@ export function buildJobRegistrationAction(command: JobRegistrationCommand) {
 }
 
 /** No direct table writes, fallback allocation, silent retries, login, or request-ID generation here. */
-export function createJobRegistrationClient(options: { apiUrl: string; enabled: boolean; fetcher?: typeof fetch }) {
+export function createJobRegistrationClient(options: { apiUrl: string; enabled: boolean; regionalBooksEnabled?: boolean; fetcher?: typeof fetch }) {
     return async (accessToken: string, command: JobRegistrationCommand): Promise<JobRegistrationResult> => {
         if (!options.enabled) throw new JobRegistrationError('disabled', 'Unified Job registration is not enabled. No changes were made.')
+        if (command?.book !== 'auckland' && !options.regionalBooksEnabled) {
+            throw new JobRegistrationError('disabled', 'Only the Auckland Job Book is currently enabled. No changes were made.')
+        }
         const { action, parameters, expectedJobId } = buildJobRegistrationAction(command)
         const book = parameters.Book as JobBookKey
         let response: Response
@@ -131,4 +134,5 @@ const environment = import.meta.env
 export const registerOrAllocateJob = createJobRegistrationClient({
     apiUrl: `${environment?.VITE_DATAVERSE_URL ?? ''}/api/data/v9.2`,
     enabled: environment?.VITE_UNIFIED_JOB_REGISTRATION_ENABLED === 'true',
+    regionalBooksEnabled: REGIONAL_JOB_BOOK_ALLOCATION_ENABLED,
 })

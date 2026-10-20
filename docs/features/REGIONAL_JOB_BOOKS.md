@@ -24,7 +24,9 @@ exact number format and excludes unknown formats from all four books for migrati
 - `VITE_REGIONAL_JOB_BOOKS_ENABLED=false` keeps the current Auckland-only screen and prevents users
   from opening the empty regional tables before their legacy rows are migrated.
 - `VITE_REGIONAL_JOB_BOOK_ALLOCATION_ENABLED=false` allows migrated regional registers to be
-  reviewed while keeping New entry disabled for Waikato, Hastings, and Christchurch.
+  reviewed while keeping New entry disabled for Waikato, Hastings, and Christchurch. The shared
+  registration client also rejects non-Auckland creation or allocation requests while this gate is
+  off, before contacting Dataverse.
 - Auckland allocation remains unchanged throughout the staged rollout.
 
 Both regional gates remain false in the Azure workflow until migration and cutover are verified.

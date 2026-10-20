@@ -5,7 +5,7 @@ import { buildJobRegistrationAction, createJobRegistrationClient, registerOrAllo
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 const command: RegisterJobBookCommand = { kind: 'register', requestId: id(1), book: 'waikato', description: 'Sample work', siteId: id(2), equipmentUnknown: true, mechanicId: id(3) }
 const result = { JobId: id(1), LedgerId: id(1), JobNumber: 'WJ12345678', Book: 'waikato', JobRowVersion: '123', WasReplay: false }
-const client = (fetcher: typeof fetch) => createJobRegistrationClient({ enabled: true, apiUrl: 'https://dataverse.example.invalid/api/data/v9.2', fetcher })
+const client = (fetcher: typeof fetch) => createJobRegistrationClient({ enabled: true, regionalBooksEnabled: true, apiUrl: 'https://dataverse.example.invalid/api/data/v9.2', fetcher })
 
 test('registration is disabled by default and never falls back to legacy table writes', async () => {
     await assert.rejects(() => registerOrAllocateJob('sample', command), { kind: 'disabled' })
@@ -22,6 +22,17 @@ test('registration accepts only simple initial data, preserving a stable explici
     for (const field of ['jobNumber', 'jobType', 'status', 'coordinatorManaged', 'recipient', 'actorId', 'schedule', 'entered']) {
         assert.throws(() => buildJobRegistrationAction({ ...command, [field]: 'tampered' } as never), /additional fields/)
     }
+})
+
+test('regional registration is blocked unless the regional rollout gate is enabled', async () => {
+    let calls = 0
+    const aucklandOnly = createJobRegistrationClient({
+        apiUrl: 'https://dataverse.example.invalid/api/data/v9.2',
+        enabled: true,
+        fetcher: async () => { calls++; return Response.json(result) },
+    })
+    await assert.rejects(() => aucklandOnly('sample', command), { kind: 'disabled', message: 'Only the Auckland Job Book is currently enabled. No changes were made.' })
+    assert.equal(calls, 0)
 })
 
 test('registration accepts bounded external supplier details instead of a Staff lookup', () => {
