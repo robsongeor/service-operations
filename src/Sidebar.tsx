@@ -16,7 +16,7 @@ const menuItems = [
     { label: 'Maintenance Booking', shortLabel: 'MB', path: '/maintenance-booking' },
     { label: 'Greentree Review', shortLabel: 'GT', path: '/equipment/greentree-test' },
     { label: 'Equipment Map', shortLabel: 'M', path: '/equipment-map' },
-    { label: 'WOF / REGO', shortLabel: 'W', path: '/wof' },
+    { label: 'WOF', shortLabel: 'W', path: '/wof' },
     { label: 'Service coordination', shortLabel: 'SC', path: '/jobs' },
     { label: 'Job Import', shortLabel: 'JI', path: '/job-import' },
     { label: 'Equipment Photos', shortLabel: 'P', path: '/equipment-photos' },

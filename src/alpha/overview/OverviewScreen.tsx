@@ -25,7 +25,7 @@ const networkLinks = [
     { title: 'Customers', detail: 'Sites, contacts and service settings', path: '/customers', icon: 'C' },
     { title: 'Equipment', detail: 'Fleet records and maintenance', path: '/equipment', icon: 'E' },
     { title: 'Equipment Map', detail: 'Assigned Site locations', path: '/equipment-map', icon: 'M' },
-    { title: 'WOF / REGO', detail: 'Road-compliance work', path: '/wof', icon: 'W' },
+    { title: 'WOF', detail: 'Road-compliance work', path: '/wof', icon: 'W' },
     { title: 'Staff', detail: 'Technicians and contact details', path: '/staff', icon: 'S' },
     { title: 'Pricing', detail: 'Reusable quote items and rates', path: '/pricing', icon: '$' },
 ]
