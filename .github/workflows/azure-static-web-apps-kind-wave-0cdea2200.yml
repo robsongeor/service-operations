@@ -24,6 +24,11 @@ jobs:
       VITE_UNIFIED_JOB_REGISTRATION_ENABLED: "true"
       VITE_UNIFIED_JOB_WORKFLOW_ENABLED: "true"
       VITE_APPLICATION_ACCESS_CONTROL_ENABLED: "true"
+      # Service Coordination metadata, historical branch migration, user home branches and backend are verified.
+      VITE_SERVICE_COORDINATION_BRANCH_ENABLED: "true"
+      VITE_SERVICE_COORDINATION_WATCHLIST_ENABLED: "true"
+      # Keep progress off until the shared V1 Job Card backend supports and accepts the summary contract.
+      VITE_JOB_CARD_PROGRESS_SUMMARY_ENABLED: "false"
       # V2 reuses the proven production Job Card API/storage until its private backend settings are provisioned.
       VITE_JOB_CARD_SHARED_BACKEND: "v1-production"
       # Independent activation gates: the shared backend/schema/identity are not upgraded by this deployment.
