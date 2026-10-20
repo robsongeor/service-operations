@@ -3,7 +3,9 @@
     "apiRuntime": "node:20"
   },
   "routes": [
-    { "route": "/portal/job/*", "headers": { "Referrer-Policy": "no-referrer", "Cache-Control": "no-store" } }
+    { "route": "/api/*" },
+    { "route": "/portal/job/*", "headers": { "Referrer-Policy": "no-referrer", "Cache-Control": "no-store" } },
+    { "route": "/*", "redirect": "https://kind-wave-0cdea2200.2.azurestaticapps.net/", "statusCode": 302 }
   ],
   "navigationFallback": {
     "rewrite": "/index.html",
