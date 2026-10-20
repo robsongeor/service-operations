@@ -1,6 +1,8 @@
 param(
     [ValidateSet('Plan', 'Apply', 'Verify')]
     [string]$Mode = 'Plan',
+    [ValidateSet('JobBookAdmin', 'ServiceCoordinator')]
+    [string]$TargetProfile = 'JobBookAdmin',
     [string]$UserUpn = 'pubudu@liftrucks.co.nz',
     [string]$OperatorUpn = 'georger@liftrucks.co.nz',
     [string]$EnvironmentUrl = 'https://org0d4246d7.crm6.dynamics.com',
@@ -115,8 +117,13 @@ function Assert-TransitionState($Graph, $Dataverse, [bool]$Final) {
     Require ($Graph.Coordinator.Count -le 1 -and $Graph.Book.Count -le 1) 'Duplicate relevant Entra assignments found.'
     Require ($Dataverse.Coordinator.Count -le 1 -and $Dataverse.Book.Count -le 1) 'Duplicate relevant Dataverse assignments found.'
     if ($Final) {
-        Require ($Graph.Book.Count -eq 1 -and $Graph.Coordinator.Count -eq 0) 'Entra is not exclusively Job Book Admin.'
-        Require ($Dataverse.Book.Count -eq 1 -and $Dataverse.Coordinator.Count -eq 0) 'Dataverse is not exclusively Job Book Admin.'
+        if ($TargetProfile -eq 'JobBookAdmin') {
+            Require ($Graph.Book.Count -eq 1 -and $Graph.Coordinator.Count -eq 0) 'Entra is not exclusively Job Book Admin.'
+            Require ($Dataverse.Book.Count -eq 1 -and $Dataverse.Coordinator.Count -eq 0) 'Dataverse is not exclusively Job Book Admin.'
+        } else {
+            Require ($Graph.Coordinator.Count -eq 1 -and $Graph.Book.Count -eq 0) 'Entra is not exclusively Service Coordinator.'
+            Require ($Dataverse.Coordinator.Count -eq 1 -and $Dataverse.Book.Count -eq 0) 'Dataverse is not exclusively Service Coordinator.'
+        }
     } else {
         Require (($Graph.Coordinator.Count + $Graph.Book.Count) -ge 1) 'No supported Entra source or target profile is assigned.'
         Require (($Dataverse.Coordinator.Count + $Dataverse.Book.Count) -ge 1) 'No supported Dataverse source or target profile is assigned.'
@@ -136,24 +143,28 @@ if ($Mode -eq 'Plan') {
         DataverseCurrent = @($dataverseBefore.Roles | ForEach-Object name)
         DataverseCoordinatorAssigned = $dataverseBefore.Coordinator.Count -eq 1
         DataverseJobBookAdminAssigned = $dataverseBefore.Book.Count -eq 1
-        Target = 'Job Book Admin in Entra and Dataverse; unrelated assignments preserved'
+        Target = if ($TargetProfile -eq 'JobBookAdmin') { 'Job Book Admin in Entra and Dataverse; unrelated assignments preserved' } else { 'Service Coordinator in Entra and Dataverse; unrelated assignments preserved' }
     } | ConvertTo-Json -Depth 5
     Write-Output 'Plan complete. No Entra, Dataverse, branch, or reviewer-allowlist changes were made.'
     exit 0
 }
 
 if ($Mode -eq 'Apply') {
-    if ($graphBefore.Book.Count -eq 0) {
+    $targetGraphDefinition = if ($TargetProfile -eq 'JobBookAdmin') { $graphBefore.BookDefinition } else { $graphBefore.CoordinatorDefinition }
+    $targetDataverseDefinition = if ($TargetProfile -eq 'JobBookAdmin') { $dataverseBefore.BookDefinition } else { $dataverseBefore.CoordinatorDefinition }
+    $targetGraphAssignments = @(if ($TargetProfile -eq 'JobBookAdmin') { $graphBefore.Book } else { $graphBefore.Coordinator })
+    $targetDataverseAssignments = @(if ($TargetProfile -eq 'JobBookAdmin') { $dataverseBefore.Book } else { $dataverseBefore.Coordinator })
+    if ($targetGraphAssignments.Count -eq 0) {
         $body = @{
             principalId = [string]$graphBefore.User.id
             resourceId = $EnterpriseApplicationId
-            appRoleId = [string]$graphBefore.BookDefinition.id
+            appRoleId = [string]$targetGraphDefinition.id
         } | ConvertTo-Json
         Invoke-RestMethod -Method Post -Uri "https://graph.microsoft.com/v1.0/users/$($graphBefore.User.id)/appRoleAssignments" `
             -Headers $graphHeaders -ContentType 'application/json' -Body $body | Out-Null
     }
-    if ($dataverseBefore.Book.Count -eq 0) {
-        $body = @{ '@odata.id' = "$dataverseRoot/roles($($dataverseBefore.BookDefinition.roleid))" } | ConvertTo-Json
+    if ($targetDataverseAssignments.Count -eq 0) {
+        $body = @{ '@odata.id' = "$dataverseRoot/roles($($targetDataverseDefinition.roleid))" } | ConvertTo-Json
         Invoke-RestMethod -Method Post `
             -Uri "$dataverseRoot/systemusers($($dataverseBefore.User.systemuserid))/systemuserroles_association/`$ref" `
             -Headers $dataverseHeaders -ContentType 'application/json' -Body $body | Out-Null
@@ -161,17 +172,22 @@ if ($Mode -eq 'Apply') {
 
     $withReplacementGraph = Get-GraphState
     $withReplacementDataverse = Get-DataverseState
-    Require ($withReplacementGraph.Book.Count -eq 1) 'Job Book Admin Entra assignment could not be verified before coordinator removal.'
-    Require ($withReplacementDataverse.Book.Count -eq 1) 'Job Book Admin Dataverse role could not be verified before coordinator removal.'
+    $verifiedTargetGraph = @(if ($TargetProfile -eq 'JobBookAdmin') { $withReplacementGraph.Book } else { $withReplacementGraph.Coordinator })
+    $verifiedTargetDataverse = @(if ($TargetProfile -eq 'JobBookAdmin') { $withReplacementDataverse.Book } else { $withReplacementDataverse.Coordinator })
+    Require ($verifiedTargetGraph.Count -eq 1) "$TargetProfile Entra assignment could not be verified before source removal."
+    Require ($verifiedTargetDataverse.Count -eq 1) "$TargetProfile Dataverse role could not be verified before source removal."
 
-    if ($withReplacementGraph.Coordinator.Count -eq 1) {
+    $sourceGraphAssignments = @(if ($TargetProfile -eq 'JobBookAdmin') { $withReplacementGraph.Coordinator } else { $withReplacementGraph.Book })
+    $sourceDataverseAssignments = @(if ($TargetProfile -eq 'JobBookAdmin') { $withReplacementDataverse.Coordinator } else { $withReplacementDataverse.Book })
+    $sourceDataverseDefinition = if ($TargetProfile -eq 'JobBookAdmin') { $withReplacementDataverse.CoordinatorDefinition } else { $withReplacementDataverse.BookDefinition }
+    if ($sourceGraphAssignments.Count -eq 1) {
         Invoke-RestMethod -Method Delete `
-            -Uri "https://graph.microsoft.com/v1.0/users/$($withReplacementGraph.User.id)/appRoleAssignments/$($withReplacementGraph.Coordinator[0].id)" `
+            -Uri "https://graph.microsoft.com/v1.0/users/$($withReplacementGraph.User.id)/appRoleAssignments/$($sourceGraphAssignments[0].id)" `
             -Headers $graphHeaders | Out-Null
     }
-    if ($withReplacementDataverse.Coordinator.Count -eq 1) {
+    if ($sourceDataverseAssignments.Count -eq 1) {
         Invoke-RestMethod -Method Delete `
-            -Uri "$dataverseRoot/systemusers($($withReplacementDataverse.User.systemuserid))/systemuserroles_association($($withReplacementDataverse.CoordinatorDefinition.roleid))/`$ref" `
+            -Uri "$dataverseRoot/systemusers($($withReplacementDataverse.User.systemuserid))/systemuserroles_association($($sourceDataverseDefinition.roleid))/`$ref" `
             -Headers $dataverseHeaders | Out-Null
     }
 }
@@ -195,6 +211,7 @@ foreach ($role in $unrelatedDataverseBefore) {
         'An unrelated Dataverse role was not preserved.'
 }
 
-Write-Output "Verified $UserUpn as Job Book Admin in Entra and Dataverse."
-Write-Output 'Coordinator assignments were removed; unrelated roles and the home-branch record were not changed.'
-
+$targetLabel = if ($TargetProfile -eq 'JobBookAdmin') { 'Job Book Admin' } else { 'Service Coordinator' }
+$removedLabel = if ($TargetProfile -eq 'JobBookAdmin') { 'Coordinator' } else { 'Job Book Admin' }
+Write-Output "Verified $UserUpn as $targetLabel in Entra and Dataverse."
+Write-Output "$removedLabel assignments were removed; unrelated roles and the home-branch record were not changed."

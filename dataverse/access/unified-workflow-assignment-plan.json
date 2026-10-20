@@ -27,7 +27,7 @@
     { "upn": "georger@liftrucks.co.nz", "profile": "full", "currentAppAssignment": "FullAccess plus default access", "dataverseAdmission": "present" },
     { "upn": "brucef@liftrucks.co.nz", "profile": "coordinator", "currentAppAssignment": "FullAccess", "dataverseAdmission": "present" },
     { "upn": "andyl@liftrucks.co.nz", "profile": "coordinator", "currentAppAssignment": "ServiceCoordinator", "dataverseAdmission": "present" },
-    { "upn": "pubudu@liftrucks.co.nz", "profile": "book", "currentAppAssignment": "JobBookAdmin", "dataverseAdmission": "present" },
+    { "upn": "pubudu@liftrucks.co.nz", "profile": "coordinator", "currentAppAssignment": "ServiceCoordinator", "dataverseAdmission": "present" },
     { "upn": "jessamynb@liftrucks.co.nz", "profile": "office", "currentAppAssignment": "JobCardAdmin", "dataverseAdmission": "present" },
     { "upn": "nargiza@liftrucks.co.nz", "profile": "office", "currentAppAssignment": "JobCardAdmin", "dataverseAdmission": "present" },
     { "upn": "martinh@liftrucks.co.nz", "profile": "book", "currentAppAssignment": "JobBookAdmin", "dataverseAdmission": "present" },
@@ -39,16 +39,16 @@
   "roleTestPilots": [
     {
       "upn": "pubudu@liftrucks.co.nz",
-      "purpose": "Live Job Book Admin guide and denial verification account.",
-      "homeProfile": "book",
-      "currentDirectRoles": ["Dataverse as a Cluster App Role", "Dataverse Intelligence Learning Management Role", "Dataverse Search Role", "Service Operations - Job Book Admin"],
+      "purpose": "Live Service Coordinator workflow account.",
+      "homeProfile": "coordinator",
+      "currentDirectRoles": ["Dataverse as a Cluster App Role", "Dataverse Intelligence Learning Management Role", "Dataverse Search Role", "Service Operations"],
       "currentTeamRoles": [],
       "constraints": [
         "Export current Entra and direct/team Dataverse assignments before any approved test change.",
-        "On 20 October 2026 the owner directed that Pubudu return to Job Book Admin. The additive-first switch replaces Service Coordinator in Entra and Dataverse and preserves unrelated platform roles.",
-        "Reject any remaining overlap with Full or Coordinator workflow roles during the final pilot.",
-        "Preserve unrelated platform roles; Job Book Admin is the current rollout profile.",
-        "Remove Pubudu from the separate shared Job Card reviewer allowlist because Job Book Admin has no review capability.",
+        "On 20 October 2026 the owner directed that Pubudu return to Service Coordinator. The additive-first switch replaces Job Book Admin in Entra and Dataverse and preserves unrelated platform roles.",
+        "Reject any remaining overlap with Full or Job Book Admin workflow roles during the final pilot.",
+        "Preserve unrelated platform roles; Service Coordinator is the current rollout profile.",
+        "Include Pubudu in the separate shared Job Card reviewer allowlist because Service Coordinator has review capability.",
         "The account owner performs sign-in and MFA; credentials are never shared or stored."
       ]
     }
