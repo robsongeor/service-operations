@@ -22,6 +22,12 @@ test-labelled items. The mode was then changed while creation remained disabled,
 `production`, and creation was re-enabled. The next genuine Job Book registration is the controlled
 production smoke; do not create an irreversible Job solely to test the integration.
 
+As part of the separately approved Auckland Job Book cutover later that day, disposable Dataverse
+rollout-test Jobs `150005` and `150006` and their exact matching Auckland ledger rows were removed
+before the live Auckland number sequence was seeded to `147475`. The TimeCloud archive remains the
+external-system history for the previously archived `150006` test item. This cleanup is not a
+supported procedure for real or post-launch Jobs.
+
 Test mode creates an active Job Item with:
 
 - name: `<Job Number> [TEST ONLY - SAFE TO DELETE] <Description>`;

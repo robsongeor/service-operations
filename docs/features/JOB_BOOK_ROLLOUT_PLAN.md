@@ -186,6 +186,24 @@ Do not enable regional allocation simply because the regional tables exist. Foll
 [regional migration procedure](REGIONAL_JOB_BOOKS.md), reviewed for this unified release. Auckland
 also needs reconciliation and an explicit cutover decision because it already has an allocation path.
 
+### Auckland production numbering record — 20 October 2026
+
+The Auckland pre-launch numbering audit initially found only two records above the agreed legacy
+maximum: rollout-test Jobs `150005` and `150006`, each with an exact matching Auckland Job Book
+ledger row and the description `TEST`. George explicitly approved removal of those disposable test
+records before launch. The four exact Dataverse records were deleted atomically and a subsequent
+audit confirmed that neither `gr_job` nor `gr_jobbookentry` contained a numeric Job Number at or
+above `147475`.
+
+The live cutover then reconciled 1,316 numbered managed Jobs and reported Auckland's maximum numeric
+Job Number as `147474`. `gr_jobbookentry.gr_jobnumber` was seeded to `147475`; Dataverse confirmed
+the next Auckland allocation as `147475`, with both Job and Job Book alternate keys active. No dummy
+Job was created after seeding because doing so would consume a permanent production number.
+
+This was an explicitly approved pre-launch cleanup of identified rollout fixtures, not the normal
+handling for a real or post-launch Job. Permanent business Jobs must remain in history and follow the
+Void/cancellation process rather than being deleted or renumbered.
+
 ## 7. Stop, recovery and rollback
 
 Stop new entries immediately for duplicate/wrong numbers, missing saved work, unauthorized access,
