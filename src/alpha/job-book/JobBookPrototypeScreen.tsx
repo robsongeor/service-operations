@@ -236,6 +236,7 @@ export default function JobBookPrototypeScreen({
     const [savingIntake, setSavingIntake] = useState(false)
     const [locationPending, setLocationPending] = useState(false)
     const [locationSaving, setLocationSaving] = useState(false)
+    const [timecloudSyncingJobIds, setTimecloudSyncingJobIds] = useState<Set<string>>(() => new Set())
     const [saveError, setSaveError] = useState('')
     const [greenTreeSyncStatus, setGreenTreeSyncStatus] = useState<'idle' | 'syncing' | 'error'>('idle')
     const [greenTreeManualCheckJobNumber, setGreenTreeManualCheckJobNumber] = useState('')
@@ -583,6 +584,7 @@ export default function JobBookPrototypeScreen({
         })))
         registration.complete()
         setScheduleDrafts([])
+        setTimecloudSyncingJobIds((current) => new Set(current).add(result.jobId.toLowerCase()))
         setIntakeDrawerOpen(false)
         setIntakeCreatePanel('')
         setIntakeError('')
@@ -594,6 +596,12 @@ export default function JobBookPrototypeScreen({
             setSaveError(error instanceof Error
                 ? `Job ${result.jobNumber} was saved, but TimeCloud could not confirm it. ${error.message}`
                 : `Job ${result.jobNumber} was saved, but TimeCloud could not confirm it. Its TimeCloud status will show Error.`)
+        } finally {
+            setTimecloudSyncingJobIds((current) => {
+                const next = new Set(current)
+                next.delete(result.jobId.toLowerCase())
+                return next
+            })
         }
     }
     const resumeRegistration = async () => {
@@ -925,6 +933,8 @@ export default function JobBookPrototypeScreen({
                     const normalizedJobNumber = row.jobNumber.trim().toUpperCase()
                     const checkingGreenTree = greenTreeManualCheckJobNumber === normalizedJobNumber
                     const greenTreeFeedback = greenTreeManualFeedback[normalizedJobNumber]
+                    const timecloudUploading = timecloudSyncingJobIds.has(row.linkedJobId.toLowerCase())
+                    const timecloudLabel = timecloudJobStatusLabel(row.timecloudEntered, timecloudUploading)
                     return <tr key={row.id} className={isVoid ? 'job-book-void-row' : row.equipmentReviewRequired ? 'equipment-unconfigured' : undefined}>
                         <td className="job-number-column"><span className="job-book-number-value"><strong>{row.jobNumber}</strong>{isVoid && <span className="job-book-void-badge">VOID</span>}{row.entryStage === JOB_BOOK_ENTRY_STAGES.PROMOTED && <span className="job-book-managed-indicator" title="Managed Job" aria-label="Managed Job">✓</span>}</span></td>
                         <td className="date-column"><span className="job-book-readonly-date" aria-label="Job creation date">{displayDate(row.date)}</span></td>
@@ -941,7 +951,7 @@ export default function JobBookPrototypeScreen({
                             : <span className="job-book-table-value">—</span>}</td>
                         <td><span className="job-book-table-value">{row.customerPo || '—'}</span></td>
                         <td className="gt-entry-column"><button type="button" className={`job-book-status-pill job-book-gt-status-button ${row.entered ? `complete greentree-${row.greenTreeStatus || 'open'}` : ''}`} aria-label={`Check GreenTree status for Job ${row.jobNumber}`} disabled={Boolean(greenTreeManualCheckJobNumber) || greenTreeSyncStatus === 'syncing'} title={greenTreeSyncStatus === 'syncing' ? 'Wait for the scheduled GreenTree check to finish.' : 'Check this Job Number in GreenTree now.'} onClick={() => void checkGreenTreeStatus(row)}>{checkingGreenTree ? 'Checking…' : greenTreeLabel}</button>{greenTreeFeedback && <small className={`job-book-gt-check-feedback ${greenTreeFeedback.kind}`} role={greenTreeFeedback.kind === 'error' ? 'alert' : 'status'}>{greenTreeFeedback.message}</small>}</td>
-                        <td className="timecloud-entry-column"><span className={`job-book-status-pill ${row.timecloudEntered ? 'complete' : 'error'}`} aria-label={`TimeCloud status for Job ${row.jobNumber}: ${timecloudJobStatusLabel(row.timecloudEntered)}`} title={row.timecloudEntered ? 'TimeCloud confirmed this Job entry.' : 'TimeCloud did not confirm this Job entry.'}>{timecloudJobStatusLabel(row.timecloudEntered)}</span></td>
+                        <td className="timecloud-entry-column"><span className={`job-book-status-pill ${timecloudUploading ? 'uploading' : row.timecloudEntered ? 'complete' : 'error'}`} aria-label={`TimeCloud status for Job ${row.jobNumber}: ${timecloudLabel}`} title={timecloudUploading ? 'This Job is being uploaded to TimeCloud.' : row.timecloudEntered ? 'TimeCloud confirmed this Job entry.' : 'TimeCloud did not confirm this Job entry.'}>{timecloudLabel}</span></td>
                         <td><div className="job-book-row-actions">{canEditIntake
                             ? <button type="button" className="job-quick-action job-quick-action-edit" onClick={() => openIntakeEntryEditor(row)}>Edit entry</button>
                             : isVoid

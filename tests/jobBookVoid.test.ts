@@ -265,7 +265,7 @@ test('screen and dialog reuse the workflow rules, retain Void evidence, and offe
     const dialog = read('JobBookVoidDialog.tsx')
     const hook = read('useJobBookVoid.ts')
     assert.match(screen, /disabled=\{Boolean\(voidBlocked\) \|\| markerBusy \|\| loading \|\| greenTreeSyncStatus === 'syncing'\}/)
-    assert.match(screen, /timecloudJobStatusLabel\(row\.timecloudEntered\)/)
+    assert.match(screen, /timecloudJobStatusLabel\(row\.timecloudEntered, timecloudUploading\)/)
     assert.doesNotMatch(screen, /Timecloud Entry completed|updateRowField/)
     assert.match(screen, /job-book-void-badge">VOID/)
     assert.match(screen, /row\.voidReason \|\| 'No reason recorded/)

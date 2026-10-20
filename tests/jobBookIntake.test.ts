@@ -483,7 +483,9 @@ test('GreenTree and TimeCloud display authoritative integration status without m
     assert.match(syncApi, /JSON\.stringify\(\{ mode: 'manual', jobNumber: jobNumber\.trim\(\) \}\)/)
     assert.doesNotMatch(screen, /onChange=\{\(event\) => void updateRowField\(row, 'entered'/)
     assert.match(screen, />TimeCloud Status</)
-    assert.match(screen, /timecloudJobStatusLabel\(row\.timecloudEntered\)/)
+    assert.match(screen, /timecloudJobStatusLabel\(row\.timecloudEntered, timecloudUploading\)/)
+    assert.match(screen, /setTimecloudSyncingJobIds/)
+    assert.match(screen, /timecloudUploading \? 'uploading'/)
     assert.doesNotMatch(screen, /updateRowField|Timecloud Entry completed|type="checkbox"[^>]*timecloud/i)
 })
 
@@ -510,9 +512,10 @@ test('Job Book server filters cover visible columns, escape input and use Auckla
     assert.match(intake, /contains\(gr_customerpo,'Godfrey''s'\)/)
 })
 
-test('TimeCloud status labels expose only confirmed entry or failure', () => {
+test('TimeCloud status labels distinguish in-flight, confirmed, and failed entry', () => {
     assert.equal(timecloudJobStatusLabel(true), 'Entered')
     assert.equal(timecloudJobStatusLabel(false), 'Error')
+    assert.equal(timecloudJobStatusLabel(false, true), 'Uploading…')
 })
 
 test('Job Book search downloads no more than 100 records in its first batch', async () => {

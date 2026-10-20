@@ -41,7 +41,8 @@ export function greenTreeJobStatusLabel(entered: boolean, status: GreenTreeJobSt
     return 'Open'
 }
 
-export function timecloudJobStatusLabel(timecloudEntered: boolean) {
+export function timecloudJobStatusLabel(timecloudEntered: boolean, uploading = false) {
+    if (uploading) return 'Uploading…'
     return timecloudEntered ? 'Entered' : 'Error'
 }
 
