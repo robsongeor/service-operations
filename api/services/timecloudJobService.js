@@ -234,15 +234,6 @@ async function sync(request, options = {}) {
         })
         const settings = (options.settings || timecloudSettings)()
         if (!settings) return jsonResponse(503, { error: 'TimeCloud integration is not configured.' })
-        if (settings.mode === 'test' && trigger === 'automatic') return jsonResponse(200, {
-            jobId,
-            jobNumber: ledger.gr_jobnumber,
-            timecloudEntered: false,
-            created: false,
-            skipped: true,
-            reason: 'test-mode-manual-only',
-        })
-
         const applicationToken = await (options.getApplicationToken || getDataverseApplicationToken)({ fetchImpl })
         const applicationAuthorization = `Bearer ${applicationToken}`
         const select = 'gr_jobid,gr_jobnumber,gr_description,gr_timecloudentered,gr_timecloudjobitemid,gr_timecloudcode,gr_registrationvoid'

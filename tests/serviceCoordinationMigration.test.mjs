@@ -197,7 +197,8 @@ test('System User home-branch plan is deterministic, exact and read-only', () =>
 
 test('live migration wrapper keeps tokens out of arguments and requires exact plan hashes', () => {
     const source = readFileSync(new URL('../scripts/invoke-service-coordination-live-migration.ps1', import.meta.url), 'utf8')
-    assert.match(source, /CurrentAccessToken/)
+    assert.match(source, /az account show --query user\.name/)
+    assert.match(source, /az account get-access-token --resource/)
     assert.match(source, /DATAVERSE_ACCESS_TOKEN/)
     assert.match(source, /--approved-plan-hash/)
     assert.match(source, /CheckpointPath/)

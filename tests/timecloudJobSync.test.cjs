@@ -57,7 +57,7 @@ test('TimeCloud creation stays disabled until explicitly enabled and defaults to
     }
 })
 
-test('disabled creation and automatic test-mode registration stop before application credentials or TimeCloud', async () => {
+test('disabled creation stops before application credentials or TimeCloud', async () => {
     const jobId = id(1)
     const ledgerId = id(2)
     let applicationTokenCalls = 0
@@ -70,13 +70,35 @@ test('disabled creation and automatic test-mode registration stop before applica
     assert.deepEqual(responseBody(disabled), {
         jobId, jobNumber: '146781', timecloudEntered: false, created: false, skipped: true, reason: 'disabled',
     })
-    const testAutomatic = await service.sync(request({ book: 'auckland', jobId, ledgerId, trigger: 'automatic' }), {
-        ...base, enabled: true, settings: () => ({ mode: 'test' }),
-    })
-    assert.deepEqual(responseBody(testAutomatic), {
-        jobId, jobNumber: '146781', timecloudEntered: false, created: false, skipped: true, reason: 'test-mode-manual-only',
-    })
     assert.equal(applicationTokenCalls, 0)
+})
+
+test('automatic registration creates disposable TimeCloud work while test mode remains enabled', async () => {
+    const jobId = id(1)
+    const ledgerId = id(2)
+    let createdName = ''
+    const fetchImpl = async (url, init = {}) => {
+        const target = String(url)
+        if (target.endsWith('/WhoAmI')) return Response.json({ UserId: id(9) })
+        if (target.includes('gr_jobbookentries(')) return Response.json({ gr_jobbookentryid: ledgerId, gr_jobnumber: '146781', gr_stage: 122830004, _gr_registeredjob_value: jobId })
+        if (target.includes('gr_jobs(') && init.method === 'PATCH') return Response.json({ gr_timecloudentered: true, gr_timecloudjobitemid: 'automatic-item', gr_timecloudcode: '26959', '@odata.etag': 'W/"8"' })
+        if (target.includes('gr_jobs(')) return Response.json({ gr_jobid: jobId, gr_jobnumber: '146781', gr_description: 'Automatic test work', gr_timecloudentered: false, gr_registrationvoid: false, '@odata.etag': 'W/"7"' })
+        throw new Error(`Unexpected request: ${target}`)
+    }
+    const result = await service.sync(request({ book: 'auckland', jobId, ledgerId, trigger: 'automatic' }), {
+        fetchImpl,
+        enabled: true,
+        getApplicationToken: async () => 'application-token',
+        settings: () => ({ configured: true, mode: 'test' }),
+        accessToken: async () => 'temporary-token',
+        findTimecloudJob: async () => null,
+        createTimecloudJob: async (_settings, _token, name) => {
+            createdName = name
+            return { _id: 'automatic-item', code: '26959', name }
+        },
+    })
+    assert.equal(result.status, 201)
+    assert.equal(createdName, '146781 [TEST ONLY - SAFE TO DELETE] Automatic test work')
 })
 
 test('exact matching uses the Job Number as the first complete name token', () => {

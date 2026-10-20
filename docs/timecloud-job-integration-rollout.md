@@ -60,13 +60,14 @@ when TimeCloud requires a documented environment-specific value.
 3. Set `TIMECLOUD_JOB_MODE=test`, then deliberately set
    `TIMECLOUD_JOB_CREATION_ENABLED=true`.
 4. Register one purpose-built disposable Job Book job with no customer-sensitive test text.
-5. Confirm registration alone does not create a TimeCloud item, then deliberately select
-   Timecloud Entry on that registered disposable row.
+5. Confirm registration automatically creates its test-labelled TimeCloud item. Separately create
+   an unnumbered Service Coordination Job and confirm TimeCloud creation occurs only when its
+   permanent regional number is allocated.
 6. Verify exactly one TimeCloud item exists with the expected Job Number prefix, test-only label,
    custom code, Job Number layer, assigned code and no geofence.
 7. Confirm Dataverse records the returned item ID/code and marks Timecloud Entry.
-8. For the same disposable row, clear and reselect Timecloud Entry once. Verify the integration
-   finds the same TimeCloud item and does not create a duplicate.
+8. For the same disposable row, retry Timecloud Entry once. Verify the integration finds the same
+   TimeCloud item and does not create a duplicate.
 9. Exercise an unauthorised caller and verify no TimeCloud request or Dataverse write occurs.
 10. Return `TIMECLOUD_JOB_CREATION_ENABLED=false` after the test window unless another approved
    test immediately follows.

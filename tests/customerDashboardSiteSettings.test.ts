@@ -17,6 +17,7 @@ const scheduleSettingsSource = readFileSync(new URL('../src/alpha/site-checks/co
 const searchableSelectSource = readFileSync(new URL('../src/alpha/shared/searchable-select/SearchableSelect.tsx', import.meta.url), 'utf8')
 const customerDataSource = readFileSync(new URL('../src/alpha/customers/useCustomerDashboardData.ts', import.meta.url), 'utf8')
 const sitesApiSource = readFileSync(new URL('../src/alpha/jobs/services/sitesApi.ts', import.meta.url), 'utf8')
+const customersApiSource = readFileSync(new URL('../src/alpha/jobs/services/customersApi.ts', import.meta.url), 'utf8')
 const mappingPlannerSource = readFileSync(new URL('../scripts/backfill-greentree-site-customers.mjs', import.meta.url), 'utf8')
 const mappingApplySource = readFileSync(new URL('../scripts/apply-greentree-site-customer-backfill.ps1', import.meta.url), 'utf8')
 
@@ -55,6 +56,17 @@ test('Customer Dashboard opens and focuses the Customer search when the page mou
     assert.match(dashboardSource, /<SearchableSelect[\s\S]*?id="customer-dashboard-customer"[\s\S]*?autoFocus/)
     assert.match(searchableSelectSource, /const \[open, setOpen\] = useState\(autoFocus && !disabled\)/)
     assert.match(searchableSelectSource, /requestAnimationFrame\(\(\) => inputRef\.current\?\.focus\(\)\)/)
+})
+
+test('Customer Info is Dataverse-backed and restricted Customer creation remains name-only', () => {
+    for (const field of ['gr_accountscontact', 'gr_accountsphone', 'gr_accountsemail', 'gr_purchaseorderrequirements', 'gr_customernotes']) {
+        assert.match(customersApiSource, new RegExp(field))
+    }
+    assert.match(customersApiSource, /method: 'PATCH'/)
+    assert.match(customersApiSource, /Object\.hasOwn\(customer, 'accountsContact'\)/)
+    assert.match(dashboardSource, /updateDashboardCustomer\(selectedCustomer\.gr_customerid, draft\)/)
+    assert.doesNotMatch(dashboardSource, /customerDrafts/)
+    assert.doesNotMatch(customerDrawerSource, /remains a prototype|page-only|UI prototype/)
 })
 
 test('restricted Customer Dashboard uses one shared Customer picker without exposing capability text', () => {

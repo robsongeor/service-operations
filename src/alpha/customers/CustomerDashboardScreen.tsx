@@ -119,6 +119,7 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
         loadEquipmentServicePlans,
         createEquipment: createDashboardEquipment,
         createCustomer: createDashboardCustomer,
+        updateCustomer: updateDashboardCustomer,
         createSite: createDashboardSite,
         saveEquipmentMaintenanceHistory,
         deleteEquipment,
@@ -221,8 +222,6 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
     const [customerDrawerInitialTab, setCustomerDrawerInitialTab] = useState<CustomerDrawerTab>('info')
     const [editingSiteId, setEditingSiteId] = useState('')
     const [siteSuccess, setSiteSuccess] = useState('')
-    const [localCustomers, setLocalCustomers] = useState<Customer[]>([])
-    const [customerDrafts, setCustomerDrafts] = useState<Record<string, CustomerDraft>>({})
     const siteSettingsTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({})
     const sitesHeadingRef = useRef<HTMLHeadingElement>(null)
     const equipmentJobHistory = useEquipmentJobHistory(editingEquipment?.gr_equipmentid)
@@ -297,31 +296,11 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
         return () => window.clearTimeout(timer)
     }, [customers, searchParams, setSearchParams])
 
-    const allCustomers = useMemo(() => [...customers, ...localCustomers].map((customer) => ({
-        ...customer,
-        gr_name: customerDrafts[customer.gr_customerid]?.name ?? customer.gr_name,
-    })), [customerDrafts, customers, localCustomers])
-
-    const allSites = useMemo(() => {
-        const customersWithDrafts = new Set(Object.keys(customerDrafts).map((id) => id.toLowerCase()))
-        const unchangedSites = sites.filter((site) => {
-            const siteCustomerId = getSiteCustomerId(site)
-            return !siteCustomerId || !customersWithDrafts.has(siteCustomerId.toLowerCase())
-        })
-        const draftSites: Site[] = Object.entries(customerDrafts).flatMap(([customerId, draft]) => draft.sites.map((site) => ({
-            gr_siteid: site.id,
-            gr_name: site.name,
-            gr_address: site.address,
-            gr_inductionrequired: null,
-            gr_inductionrequirements: null,
-            gr_defaultmaintenanceprofile: null,
-            gr_Customer: { gr_customerid: customerId, gr_name: draft.name },
-        })))
-        return [...unchangedSites, ...draftSites]
-    }, [customerDrafts, sites])
+    const allCustomers = customers
+    const allSites = sites
 
     const customerOptions = useMemo(() => {
-        return allCustomers
+        return [...allCustomers]
             .sort((a, b) => a.gr_name.localeCompare(b.gr_name))
             .map((customer) => ({ value: customer.gr_customerid, label: customer.gr_name }))
     }, [allCustomers])
@@ -371,13 +350,12 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
         .map((schedule) => schedule._gr_site_value)
     const siteCheckBySite = new Map(siteCheckDashboard.items.map((item) => [item.siteId, item]))
     const visibleCustomerSites = customerSites
-    const selectedCustomerDraft = customerDrafts[selectedCustomerId]
     const customerContacts: CustomerContact[] = [
-        ...(selectedCustomerDraft?.accountsContact ? [{
+        ...(selectedCustomer?.gr_accountscontact ? [{
             id: `prototype-accounts-${selectedCustomerId}`,
-            name: selectedCustomerDraft.accountsContact,
-            phone: selectedCustomerDraft.accountsPhone || undefined,
-            email: selectedCustomerDraft.accountsEmail || undefined,
+            name: selectedCustomer.gr_accountscontact,
+            phone: selectedCustomer.gr_accountsphone || undefined,
+            email: selectedCustomer.gr_accountsemail || undefined,
             role: 'Accounts',
             siteIds: [],
             isPrimary: true,
@@ -577,34 +555,39 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
         }
     }
 
-    const customerDrawerInitialValue = selectedCustomer ? customerDrafts[selectedCustomer.gr_customerid] ?? {
+    const customerDrawerInitialValue = selectedCustomer ? {
         name: selectedCustomer.gr_name,
-        accountsContact: '',
-        accountsPhone: '',
-        accountsEmail: '',
-        purchaseOrderRequirements: '',
-        notes: '',
+        accountsContact: selectedCustomer.gr_accountscontact ?? '',
+        accountsPhone: selectedCustomer.gr_accountsphone ?? '',
+        accountsEmail: selectedCustomer.gr_accountsemail ?? '',
+        purchaseOrderRequirements: selectedCustomer.gr_purchaseorderrequirements ?? '',
+        notes: selectedCustomer.gr_customernotes ?? '',
         sites: customerSites.map((site) => ({
             id: site.gr_siteid,
             name: site.gr_name,
             address: site.gr_address,
-            operatingHours: '',
         })),
     } : undefined
 
     const saveCustomerDraft = async (draft: CustomerDraft) => {
         if (customerDrawerMode === 'create') {
-            const customerId = `prototype-customer-${crypto.randomUUID()}`
-            setLocalCustomers((current) => [...current, { gr_customerid: customerId, gr_name: draft.name }])
-            setCustomerDrafts((current) => ({ ...current, [customerId]: draft }))
+            const customer = await createDashboardCustomer(draft)
+            const createdSites = await Promise.all(draft.sites.map((site) => createDashboardSite({
+                customerId: customer.gr_customerid,
+                name: site.name,
+                address: site.address,
+            }, customer)))
             setExpandedSitesByCustomer((current) => ({
                 ...current,
-                [customerId]: Object.fromEntries(draft.sites.map((site) => [site.id, true])),
+                [customer.gr_customerid]: Object.fromEntries(createdSites.map((site) => [site.gr_siteid, true])),
             }))
-            setSelectedCustomerId(customerId)
+            setSelectedCustomerId(customer.gr_customerid)
             setActiveTab('sites')
             setCustomerDrawerMode(null)
-            return draft
+            return {
+                ...draft,
+                sites: createdSites.map((site) => ({ id: site.gr_siteid, name: site.gr_name, address: site.gr_address ?? '' })),
+            }
         } else if (selectedCustomer) {
             const existingSites = new Map(sites.map((site) => [site.gr_siteid, site]))
             const siteUpdates = draft.sites
@@ -619,7 +602,8 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
                     input: { name: site.name, address: site.address },
                 }))
             const newSiteDrafts = draft.sites.filter((site) => site.id.startsWith('prototype-site-'))
-            const [, createdSites] = await Promise.all([
+            const [savedCustomer, , createdSites] = await Promise.all([
+                updateDashboardCustomer(selectedCustomer.gr_customerid, draft),
                 updateSites(siteUpdates),
                 Promise.all(newSiteDrafts.map((site) => createDashboardSite({
                     customerId: selectedCustomer.gr_customerid,
@@ -630,6 +614,12 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
             const createdSitesByPrototypeId = new Map(newSiteDrafts.map((site, index) => [site.id, createdSites[index]]))
             const persistedDraft = {
                 ...draft,
+                name: savedCustomer.gr_name,
+                accountsContact: savedCustomer.gr_accountscontact ?? '',
+                accountsPhone: savedCustomer.gr_accountsphone ?? '',
+                accountsEmail: savedCustomer.gr_accountsemail ?? '',
+                purchaseOrderRequirements: savedCustomer.gr_purchaseorderrequirements ?? '',
+                notes: savedCustomer.gr_customernotes ?? '',
                 sites: draft.sites.map((site) => {
                     const created = createdSitesByPrototypeId.get(site.id)
                     return created ? {
@@ -640,7 +630,6 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
                     } : site
                 }),
             }
-            setCustomerDrafts((current) => ({ ...current, [selectedCustomer.gr_customerid]: persistedDraft }))
             if (createdSites.length > 0) {
                 setExpandedSitesByCustomer((current) => ({
                     ...current,
@@ -685,7 +674,6 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
                             ?? (retainedCreatedCustomer.current?.gr_name.trim().toLowerCase() === name ? retainedCreatedCustomer.current : null)
                             ?? await createDashboardCustomer({ name: input.customerName })
                         retainedCreatedCustomer.current = customer
-                        setLocalCustomers((current) => [...current.filter((item) => item.gr_customerid !== customer.gr_customerid), customer])
                         await createDashboardSite({ customerId: customer.gr_customerid, name: input.siteName, address: input.address }, customer)
                         setSelectedCustomerId(customer.gr_customerid)
                         setRelationshipQuery('')
@@ -769,7 +757,6 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
                     : visibleCustomerSites.map((site) => {
                     const rows = equipmentForSite(site)
                     const equipmentSort = equipmentSortBySite[site.gr_siteid] ?? DEFAULT_SITE_EQUIPMENT_SORT
-                    const operatingHours = customerDrafts[selectedCustomer.gr_customerid]?.sites.find((item) => item.id === site.gr_siteid)?.operatingHours
                     const expanded = siteIsExpanded(site.gr_siteid)
                     const equipmentRegionId = `customer-site-equipment-${site.gr_siteid}`
                     const siteCheck = siteCheckBySite.get(site.gr_siteid.toLowerCase())
@@ -802,7 +789,6 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
                                         <small>GreenTree account</small>
                                         <strong>{site.gr_greentreecustomername || 'Not mapped'}</strong>
                                     </span>
-                                    <span><small>Operating hours</small><strong>{operatingHours || 'Not recorded'}</strong></span>
                                     {siteCheck?.schedule.gr_enabled && <span className="customer-site-check-summary" data-state={siteCheck.state}>
                                         <small>Site Check</small>
                                         <strong>{siteCheck.state === 'in-progress'
@@ -979,18 +965,17 @@ export default function CustomerDashboardScreen({ readOnly = false }: { readOnly
                 </header>
                 <dl className="customer-info-summary">
                     <div><dt>Name</dt><dd>{selectedCustomer.gr_name}</dd></div>
-                    <div><dt>Accounts Contact</dt><dd>{customerDrafts[selectedCustomer.gr_customerid]?.accountsContact || 'Not recorded'}</dd></div>
-                    <div><dt>Accounts Phone</dt><dd>{customerDrafts[selectedCustomer.gr_customerid]?.accountsPhone || 'Not recorded'}</dd></div>
-                    <div><dt>Accounts Email</dt><dd>{customerDrafts[selectedCustomer.gr_customerid]?.accountsEmail || 'Not recorded'}</dd></div>
-                    <div><dt>Purchase Order Requirements</dt><dd>{customerDrafts[selectedCustomer.gr_customerid]?.purchaseOrderRequirements || 'Not recorded'}</dd></div>
+                    <div><dt>Accounts Contact</dt><dd>{selectedCustomer.gr_accountscontact || 'Not recorded'}</dd></div>
+                    <div><dt>Accounts Phone</dt><dd>{selectedCustomer.gr_accountsphone || 'Not recorded'}</dd></div>
+                    <div><dt>Accounts Email</dt><dd>{selectedCustomer.gr_accountsemail || 'Not recorded'}</dd></div>
+                    <div><dt>Purchase Order Requirements</dt><dd>{selectedCustomer.gr_purchaseorderrequirements || 'Not recorded'}</dd></div>
                     <div><dt>Site Count</dt><dd>{customerSites.length} {customerSites.length === 1 ? 'Site' : 'Sites'}</dd></div>
                     <div><dt>Contact Count</dt><dd>{customerContacts.length} {customerContacts.length === 1 ? 'Contact' : 'Contacts'}</dd></div>
                 </dl>
                 <div className="customer-info-notes">
                     <div className="customer-section-heading"><div><span>Long-term information</span><h3>Customer Notes</h3></div></div>
-                    <p>{customerDrafts[selectedCustomer.gr_customerid]?.notes || 'No Customer notes have been recorded.'}</p>
+                    <p>{selectedCustomer.gr_customernotes || 'No Customer notes have been recorded.'}</p>
                 </div>
-                {!customerDrafts[selectedCustomer.gr_customerid] && <p className="customer-info-prototype-note">Customer information is currently a local prototype and is not loaded from Dataverse.</p>}
             </section>}
         </>}
 

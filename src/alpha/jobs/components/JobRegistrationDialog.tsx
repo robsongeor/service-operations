@@ -8,6 +8,7 @@ import { walkthroughJobAction } from '../services/unifiedJobWalkthroughApi'
 import { runJobWorkflow } from '../services/jobWorkflowApi'
 import { UNIFIED_JOB_WALKTHROUGH } from '../domain/unifiedJobWorkflow'
 import { useActiveMsalAccount } from '../../../auth/useActiveMsalAccount'
+import { syncJobBookJobToTimecloud } from '../../job-book/timecloudJobApi'
 
 export default function JobRegistrationDialog({ job: initial, mode, getAccessToken, onClose, onSaved }: {
     job: Job; mode: 'allocate' | 'manage'; getAccessToken: () => Promise<string>; onClose: () => void; onSaved: () => void | Promise<void>
@@ -38,6 +39,18 @@ export default function JobRegistrationDialog({ job: initial, mode, getAccessTok
                 if (!book) { setError('Select the regional Job Book before allocating a number.'); return }
                 const result = await registration.submit({ kind: 'allocate', requestId: crypto.randomUUID(), book, jobId: job.gr_jobid, etag: job['@odata.etag'] ?? '' })
                 if (!result) return
+                try {
+                    await syncJobBookJobToTimecloud(await getAccessToken(), {
+                        book: result.book,
+                        jobId: result.jobId,
+                        ledgerId: result.ledgerId,
+                        trigger: 'automatic',
+                    })
+                } catch (cause) {
+                    await onSaved()
+                    setError(`Job ${result.jobNumber} was allocated, but TimeCloud could not confirm it. ${cause instanceof Error ? cause.message : 'Retry this same allocation request to reconcile it.'}`)
+                    return
+                }
             }
             await onSaved()
             if (mode === 'allocate') registration.complete()
@@ -51,7 +64,7 @@ export default function JobRegistrationDialog({ job: initial, mode, getAccessTok
         submitDisabled={Boolean(job.gr_registrationvoid || (mode === 'allocate' && (!book || (job.gr_jobnumber && !registration.pending))) || (registration.pending?.kind === 'allocate' && registration.pending.jobId !== job.gr_jobid))}>
         <p>{job.gr_description}</p>
         {mode === 'allocate' ? <>
-            <p>You are about to allocate one permanent regional Job Number to this Job. Check the Job Book below before confirming. This does not send an email, enter GreenTree or add the Job to Operational.</p>
+            <p>You are about to allocate one permanent regional Job Number to this Job. Check the Job Book below before confirming. This does not send an email, enter GreenTree or add the Job to Operational. It also creates or reconciles the TimeCloud entry when that integration is enabled.</p>
             <label><span>Job Book</span><select value={book} disabled={busy || registration.busy || Boolean(registration.pending)} onChange={(event) => setBook(event.target.value as JobBookKey | '')}><option value="">Select regional Job Book</option>{JOB_BOOK_KEYS.map((key) => <option key={key} value={key}>{JOB_BOOKS[key].label}</option>)}</select></label>
             {job.gr_jobnumber && <p>Current number: <strong>{job.gr_jobnumber}</strong>. It cannot be replaced.</p>}
             {registration.pending && <p>The original request is retained across closing or reloading this tab.</p>}

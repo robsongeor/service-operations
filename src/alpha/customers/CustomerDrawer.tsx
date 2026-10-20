@@ -7,7 +7,6 @@ export type CustomerSiteDraft = {
     id: string
     name: string
     address: string
-    operatingHours: string
 }
 
 export type CustomerDraft = {
@@ -35,7 +34,6 @@ const newSite = (): CustomerSiteDraft => ({
     id: `prototype-site-${crypto.randomUUID()}`,
     name: '',
     address: '',
-    operatingHours: '',
 })
 
 const emptyCustomer = (): CustomerDraft => ({
@@ -127,7 +125,6 @@ export default function CustomerDrawer({ mode, initialValue, initialTab = 'info'
                 ...site,
                 name: site.name.trim(),
                 address: site.address.trim(),
-                operatingHours: site.operatingHours.trim(),
             })),
         }
 
@@ -138,7 +135,7 @@ export default function CustomerDrawer({ mode, initialValue, initialTab = 'info'
             const savedValue = await onSave(value)
             setDraft(savedValue)
             setSavedDraft(savedValue)
-            setSaveSuccess('Site changes saved to Dataverse.')
+            setSaveSuccess('Customer and Site changes saved to Dataverse.')
         } catch (caught) {
             setSaveError(caught instanceof Error ? caught.message : 'Site changes could not be saved. Please try again.')
         } finally {
@@ -167,7 +164,7 @@ export default function CustomerDrawer({ mode, initialValue, initialTab = 'info'
                     ? <span className="customer-drawer-error" role="alert">{firstError}</span>
                     : saveSuccess && !isDirty
                     ? <span className="customer-drawer-success" role="status">{saveSuccess}</span>
-                    : <span>{mode === 'edit' ? 'Site name and address changes save to Dataverse.' : 'New Customer creation remains a prototype.'}</span>}
+                    : <span>Customer information and Site changes save to Dataverse.</span>}
             </div>
             <div className="customer-drawer-footer-actions">
                 <button type="button" onClick={requestClose} disabled={isSaving}>Cancel</button>
@@ -179,8 +176,8 @@ export default function CustomerDrawer({ mode, initialValue, initialTab = 'info'
     >
         <form id="customer-drawer-form" onSubmit={submit}>
             <div className="customer-drawer-notice">
-                <strong>{mode === 'edit' ? 'Site editing' : 'UI prototype'}</strong>
-                <span>{mode === 'edit' ? 'Existing Site name and address changes are saved to Dataverse. Customer information remains page-only.' : 'Customer and Site creation changes exist only until this page is refreshed.'}</span>
+                <strong>{mode === 'edit' ? 'Customer and Site editing' : 'Create Customer'}</strong>
+                <span>Customer information and Site name/address changes are stored in Dataverse.</span>
             </div>
 
             <nav className="customer-drawer-tabs" aria-label="Customer drawer sections" role="tablist">
@@ -192,20 +189,20 @@ export default function CustomerDrawer({ mode, initialValue, initialTab = 'info'
                 <div className="customer-drawer-fields">
                     <label>
                         Customer name
-                        <input autoFocus value={draft.name} onChange={(event) => {
+                        <input autoFocus maxLength={200} value={draft.name} onChange={(event) => {
                             setDraft({ ...draft, name: event.target.value })
                             if (errors.customerName) setErrors({ ...errors, customerName: undefined })
                         }} />
                         {errors.customerName && <span className="customer-drawer-field-error" role="alert">{errors.customerName}</span>}
                     </label>
-                    <label>Accounts contact<input value={draft.accountsContact} onChange={(event) => setDraft({ ...draft, accountsContact: event.target.value })} /></label>
-                    <label>Accounts phone<input type="tel" value={draft.accountsPhone} onChange={(event) => setDraft({ ...draft, accountsPhone: event.target.value })} /></label>
-                    <label>Accounts email<input type="email" aria-invalid={Boolean(errors.accountsEmail)} value={draft.accountsEmail} onChange={(event) => {
+                    <label>Accounts contact<input maxLength={200} value={draft.accountsContact} onChange={(event) => setDraft({ ...draft, accountsContact: event.target.value })} /></label>
+                    <label>Accounts phone<input type="tel" maxLength={100} value={draft.accountsPhone} onChange={(event) => setDraft({ ...draft, accountsPhone: event.target.value })} /></label>
+                    <label>Accounts email<input type="email" maxLength={320} aria-invalid={Boolean(errors.accountsEmail)} value={draft.accountsEmail} onChange={(event) => {
                         setDraft({ ...draft, accountsEmail: event.target.value })
                         if (errors.accountsEmail) setErrors({ ...errors, accountsEmail: undefined })
                     }} />{errors.accountsEmail && <span className="customer-drawer-field-error" role="alert">{errors.accountsEmail}</span>}</label>
-                    <label className="wide">Preferred purchase order requirements<textarea rows={3} value={draft.purchaseOrderRequirements} onChange={(event) => setDraft({ ...draft, purchaseOrderRequirements: event.target.value })} /></label>
-                    <label className="wide">Customer notes<textarea rows={5} placeholder="Long-term information that applies to this Customer" value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} /></label>
+                    <label className="wide">Preferred purchase order requirements<textarea rows={3} maxLength={4000} value={draft.purchaseOrderRequirements} onChange={(event) => setDraft({ ...draft, purchaseOrderRequirements: event.target.value })} /></label>
+                    <label className="wide">Customer notes<textarea rows={5} maxLength={10000} placeholder="Long-term information that applies to this Customer" value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} /></label>
                 </div>
             </EditDrawerSection></div>}
 
@@ -230,7 +227,6 @@ export default function CustomerDrawer({ mode, initialValue, initialTab = 'info'
                             <div className="customer-drawer-fields">
                                 <label>Site name<input autoFocus={site.id === initialSiteId} aria-invalid={Boolean(errors.siteNames[site.id])} value={site.name} onChange={(event) => updateSite(site.id, 'name', event.target.value)} />{errors.siteNames[site.id] && <span className="customer-drawer-field-error" role="alert">{errors.siteNames[site.id]}</span>}</label>
                                 <label>Address<input value={site.address} onChange={(event) => updateSite(site.id, 'address', event.target.value)} /></label>
-                                {mode === 'create' && <label className="wide">Operating hours<textarea rows={3} placeholder="e.g. Monday–Friday, 7:00 am–5:00 pm" value={site.operatingHours} onChange={(event) => updateSite(site.id, 'operatingHours', event.target.value)} /></label>}
                             </div>
                         </article>)}
                     </div>

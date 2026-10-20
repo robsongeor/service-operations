@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('JobBranchApply', 'JobBranchVerify', 'UserBranchApply', 'UserBranchVerify')]
+    [ValidateSet('JobBranchApply', 'JobBranchVerify', 'JobStatusApply', 'JobStatusVerify', 'UserBranchApply', 'UserBranchVerify')]
     [string]$Operation,
     [string]$EnvironmentUrl = 'https://org0d4246d7.crm6.dynamics.com',
     [string]$UserName = 'georger@liftrucks.co.nz',
@@ -17,24 +17,12 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-function Get-ToolsPath {
-    $root = Join-Path $env:LOCALAPPDATA 'Microsoft\PowerAppsCLI'
-    $path = Get-ChildItem -LiteralPath $root -Directory -Filter 'Microsoft.PowerApps.CLI.*' |
-        Sort-Object Name -Descending | ForEach-Object { Join-Path $_.FullName 'tools' } |
-        Where-Object { Test-Path -LiteralPath (Join-Path $_ 'Microsoft.Xrm.Sdk.dll') } |
-        Select-Object -First 1
-    if (-not $path) { throw 'Power Apps CLI SDK assemblies were not found.' }
-    return $path
-}
-
-$toolsPath = Get-ToolsPath
-'Microsoft.Xrm.Sdk.dll', 'Microsoft.Crm.Sdk.Proxy.dll', 'Microsoft.Xrm.Tooling.Connector.dll' |
-    ForEach-Object { [Reflection.Assembly]::LoadFrom((Join-Path $toolsPath $_)) | Out-Null }
-$connection = "AuthType=OAuth;Url=$($EnvironmentUrl.TrimEnd('/'));AppId=51f81489-12ee-4a9e-aaae-a2591f45987d;RedirectUri=app://58145B91-0C36-4500-8554-080854F2AC97;LoginPrompt=$LoginPrompt;UserName=$($UserName.Trim())"
-$service = [Microsoft.Xrm.Tooling.Connector.CrmServiceClient]::new($connection)
-if (-not $service.IsReady) { throw "Dataverse sign-in failed: $($service.LastCrmError)" }
+$null = $LoginPrompt # Retained for command compatibility; live migration uses the cached Azure CLI identity.
+$account = & az account show --query user.name -o tsv
+if ($LASTEXITCODE -ne 0 -or $account.Trim() -ne $UserName.Trim()) { throw "Azure CLI must be signed in as $UserName." }
 try {
-    $token = [string]$service.CurrentAccessToken
+    $base = $EnvironmentUrl.TrimEnd('/')
+    $token = (& az account get-access-token --resource $base --query accessToken -o tsv).Trim()
     if ([string]::IsNullOrWhiteSpace($token)) { throw 'Dataverse access token was unavailable.' }
     $env:DATAVERSE_ACCESS_TOKEN = $token
     $isUser = $Operation.StartsWith('UserBranch')
@@ -49,5 +37,4 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Migration $Operation failed with exit code $LASTEXITCODE." }
 } finally {
     Remove-Item Env:DATAVERSE_ACCESS_TOKEN -ErrorAction SilentlyContinue
-    if ($service -is [IDisposable]) { $service.Dispose() }
 }

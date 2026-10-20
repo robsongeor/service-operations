@@ -16,7 +16,7 @@ type TimecloudJobSkipped = Readonly<{
     timecloudEntered: false
     created: false
     skipped: true
-    reason: 'disabled' | 'test-mode-manual-only'
+    reason: 'disabled'
 }>
 
 export type TimecloudJobSyncResult = TimecloudJobConfirmation | TimecloudJobSkipped
@@ -44,7 +44,7 @@ export async function syncJobBookJobToTimecloud(
     if (!body || body.jobId.toLowerCase() !== input.jobId.toLowerCase()) {
         throw new Error('TimeCloud returned an invalid confirmation. Reload Job Book before retrying.')
     }
-    if (body.timecloudEntered === false && body.skipped === true && ['disabled', 'test-mode-manual-only'].includes(body.reason)) return body
+    if (body.timecloudEntered === false && body.skipped === true && body.reason === 'disabled') return body
     if (body.timecloudEntered !== true || !body.timecloudJobItemId || !body.timecloudCode || !/^W\/"[^"]+"$/.test(body.etag)) {
         throw new Error('TimeCloud returned an invalid confirmation. Reload Job Book before retrying.')
     }

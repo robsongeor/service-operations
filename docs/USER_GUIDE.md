@@ -98,7 +98,7 @@ The app normally remembers the customer you were last viewing during your signed
 
 ### Customer details and contacts
 
-Use the customer information area to review details. Do not rely on its unfinished general Info editor to persist accounts details or notes; see the rollout caution above. Purchase-order recipient settings have their own saved workflow. The Contacts tab shows customer-wide contacts and contacts linked to a particular site.
+Use the customer information area to review and edit accounts details, purchase-order requirements and long-term notes. These fields are saved to Dataverse. Purchase-order recipient settings have their own saved workflow. The Contacts tab shows customer-wide contacts and contacts linked to a particular site.
 
 Purchase-order contacts can be set at customer level or overridden for an individual site. Use a site-specific override only when that site has different people who should receive PO requests.
 

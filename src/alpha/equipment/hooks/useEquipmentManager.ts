@@ -3,10 +3,10 @@ import { updateEquipmentDetails } from '../services/equipmentDetailsApi'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { useActiveMsalAccount } from '../../../auth/useActiveMsalAccount'
-import { createCustomer as createCustomerApi, fetchCustomers, searchCustomers } from '../../jobs/services/customersApi'
+import { createCustomer as createCustomerApi, fetchCustomers, searchCustomers, updateCustomer as updateCustomerApi } from '../../jobs/services/customersApi'
 import { updateEquipmentSite } from '../../jobs/services/equipmentApi'
 import { createSite as createSiteApi, fetchCustomerSites, fetchSites, updateSite as updateSiteApi } from '../../jobs/services/sitesApi'
-import type { Customer } from '../../jobs/types/customer.types'
+import type { Customer, CustomerSaveInput } from '../../jobs/types/customer.types'
 import type { Equipment } from '../../jobs/types/equipment.types'
 import type { Site, SiteInductionDocument, SiteUpdateInput } from '../../jobs/types/site.types'
 import {
@@ -323,12 +323,37 @@ export function useEquipmentManager(options: UseEquipmentManagerOptions = {}) {
         }
     }
 
-    const createCustomer = async (input: { name: string }) => {
+    const createCustomer = async (input: CustomerSaveInput) => {
         const token = await getToken()
-        const customerId = await createCustomerApi(token, { name: input.name.trim() })
-        const created: Customer = { gr_customerid: customerId, gr_name: input.name.trim() }
+        const customerId = await createCustomerApi(token, input)
+        const created: Customer = {
+            gr_customerid: customerId,
+            gr_name: input.name.trim(),
+            gr_accountscontact: input.accountsContact?.trim() || null,
+            gr_accountsphone: input.accountsPhone?.trim() || null,
+            gr_accountsemail: input.accountsEmail?.trim() || null,
+            gr_purchaseorderrequirements: input.purchaseOrderRequirements?.trim() || null,
+            gr_customernotes: input.notes?.trim() || null,
+        }
         setCustomers((current) => [...current, created].sort((a, b) => a.gr_name.localeCompare(b.gr_name)))
         return created
+    }
+
+    const updateCustomer = async (customerId: string, input: CustomerSaveInput) => {
+        setIsSaving(true)
+        setSaveError('')
+        try {
+            const updated = await updateCustomerApi(await getToken(), customerId, input)
+            setCustomers((current) => current
+                .map((customer) => customer.gr_customerid === customerId ? updated : customer)
+                .sort((a, b) => a.gr_name.localeCompare(b.gr_name)))
+            return updated
+        } catch (error) {
+            setSaveError(error instanceof Error ? error.message : 'Customer information could not be saved.')
+            throw error
+        } finally {
+            setIsSaving(false)
+        }
     }
 
     const createSite = async (
@@ -650,6 +675,7 @@ export function useEquipmentManager(options: UseEquipmentManagerOptions = {}) {
         reload: load,
         clearSaveError: () => setSaveError(''),
         createCustomer,
+        updateCustomer,
         createSite,
         updateSites,
         updateSiteMaintenanceSettings,

@@ -110,7 +110,9 @@ read-only `Inspect` and review-artifact `Plan` for the deterministic `122830005`
 retirement. It has no Apply mode, performs no Dataverse write, and does not classify any other
 status. An offline synthetic snapshot exercises the PowerShell 5.1 path without authentication.
 Live Inspect found 1,353 Jobs, including 25 legacy Unconfirmed rows and zero missing row versions.
-The deterministic 25-row Plan has zero exceptions and remains unapplied. Evidence-based Plan,
+The deterministic 25-row Plan had zero exceptions and was applied on 20 October 2026. All 25
+conditional writes changed only `122830005` to `122830001`; verification reported zero mismatches,
+and the post-Apply live export found zero remaining legacy Unconfirmed Jobs. Evidence-based Plan,
 exact-hash conditional Apply/Verify, checkpoints and conditional rollback are implemented in
 `scripts/service-coordination-migration.mjs`; production Apply and Choice retirement remain
 separately gated work.

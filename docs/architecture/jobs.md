@@ -128,8 +128,10 @@ Ordinary Job sends never modify Job status, assignment, GT/Timecloud markers or 
 
 ## TimeCloud Job creation
 
-New unified Job Book registrations call the managed `/api/timecloudjobs` backend only after
-Dataverse has committed the permanent regional Job Number. The backend accepts only a regional
+New unified Job Book registrations and Service Coordination regional-number allocations call the
+managed `/api/timecloudjobs` backend only after Dataverse has committed the permanent regional Job
+Number. An unnumbered Service Coordination staging save cannot create a TimeCloud item; its
+successful number-allocation step owns that call. The backend accepts only a regional
 ledger ID and its linked Job ID, validates the caller against Dataverse, verifies the registered
 ledger/Job pair, and uses a dedicated Dataverse application identity for the narrow confirmation
 write.
@@ -138,10 +140,9 @@ TimeCloud authentication and the integrator key remain server-only. Creation is 
 `TIMECLOUD_JOB_CREATION_ENABLED=true` is explicitly configured. During validation,
 `TIMECLOUD_JOB_MODE=test` (also the fail-safe default) names every created item
 `<Job Number> [TEST ONLY - SAFE TO DELETE] <Description>` and sets its custom code to
-`JOBBOOK-TEST-ONLY`, making the test population easy to identify and remove. Test mode never creates
-automatically after registration; an operator must deliberately select Timecloud Entry on the
-registered disposable row. Production naming and automatic creation are unlocked only by
-deliberately setting the mode to `production`. A disabled integration returns a verified no-op so
+`JOBBOOK-TEST-ONLY`, making the test population easy to identify and remove. Test mode creates these
+clearly marked disposable items automatically after registration/allocation. Production naming is
+unlocked only by deliberately setting the mode to `production`. A disabled integration returns a verified no-op so
 deploying it cannot turn a successful Job save into a misleading TimeCloud error. The backend obtains and caches
 the temporary Bearer token, searches active Job Items by the exact Job Number prefix, and creates a
 Job Item only when no exact match exists. The payload uses `<Job Number> <Description>`, the
@@ -152,8 +153,8 @@ On confirmation, `gr_job.gr_timecloudentered`, `gr_timecloudjobitemid`, and `gr_
 written together under the Job ETag. A lost response or failed Dataverse write is recoverable: the
 next attempt finds the exact existing TimeCloud item and reconciles it instead of creating a
 duplicate. Multiple exact matches or an existing match with different details stop for review.
-The Job Book Timecloud Entry control is the retry path for registered rows; legacy/promoted marker
-behaviour remains unchanged.
+The Job Book Timecloud Entry control and a retained Service Coordination allocation request are the
+retry paths for registered rows; legacy/promoted marker behaviour remains unchanged.
 
 Required server settings are `TIMECLOUD_CLIENT_ID`, `TIMECLOUD_API_USERNAME`,
 `TIMECLOUD_API_PASSWORD`, `TIMECLOUD_INTEGRATOR_KEY`, `TIMECLOUD_JOB_LAYER_ID`, and

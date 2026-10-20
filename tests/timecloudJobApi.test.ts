@@ -44,10 +44,10 @@ test('TimeCloud client rejects an unverified response', async () => {
     await assert.rejects(syncJobBookJobToTimecloud('dataverse-token', input), /invalid confirmation/)
 })
 
-test('TimeCloud client accepts a verified disabled or manual-only skip', async () => {
+test('TimeCloud client accepts a verified disabled skip', async () => {
     globalThis.fetch = async () => Response.json({
         jobId: input.jobId, jobNumber: '146781', timecloudEntered: false, created: false,
-        skipped: true, reason: 'test-mode-manual-only',
+        skipped: true, reason: 'disabled',
     })
     const result = await syncJobBookJobToTimecloud('dataverse-token', { ...input, trigger: 'automatic' })
     assert.equal(result.timecloudEntered, false)
