@@ -7,6 +7,15 @@ Jobs. Auckland Job Book Admins and Office Admins must create and maintain Job Bo
 This change applies to **Auckland only**. Waikato, Hastings and Christchurch continue using their
 existing processes until a separate change is announced.
 
+## Why the process is changing
+
+The spreadsheet relies on people to coordinate numbering, copy details between systems and notice
+when a Job needs follow-up. Service Operations provides one connected record for the Job, Customer,
+Site, Contact and Equipment. It allocates permanent Job Numbers consistently, starts the TimeCloud
+entry automatically and exposes system status without requiring staff to maintain extra spreadsheet
+columns. This is intended to reduce duplicate entry, missed Jobs, numbering conflicts and manual
+checking while improving visibility and traceability.
+
 ## What changes
 
 - New Auckland Jobs are created from **Job Book** using **+ New entry**.

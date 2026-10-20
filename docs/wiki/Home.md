@@ -5,6 +5,21 @@ Welcome to the user guide for Service Operations.
 These guides explain the everyday tasks available to your assigned role. The options you see may
 be different from another person's because access is matched to the work each person performs.
 
+## Why Service Operations was created
+
+Service Operations is replacing disconnected spreadsheets and manual hand-offs with one controlled
+record of each Job. It is intended to:
+
+- reduce duplicate entry, missed Jobs and Job Number conflicts;
+- keep the Job, Customer, Site, Contact and Equipment information connected;
+- make it clear who created or changed a record and what still needs attention;
+- automate reliable steps such as permanent Job Number allocation and TimeCloud entry creation;
+- show GreenTree and TimeCloud status in the same place as the Job; and
+- provide a consistent process that can be introduced to other branches and workflows over time.
+
+The Auckland Job Book is the first spreadsheet process moving into the app. The rollout is staged so
+the new process can be supported and improved before any other branch changes its existing process.
+
 ## Auckland Job Book migration
 
 From **Wednesday 21 October 2026**, Auckland will use Service Operations instead of the Job Book
