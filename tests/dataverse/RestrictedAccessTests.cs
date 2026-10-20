@@ -32,6 +32,25 @@ public static class RestrictedAccessTests
             Test(r+" moves Equipment", () => Change(r, "gr_equipment", "gr_site", new EntityReference("gr_site", Id)));
             Test(r+" creates Customer", () => { var target=Row("gr_customer"); target["gr_name"]="New Customer"; RestrictedWritePolicy.Validate(r,"Create",target,null); });
             Test(r+" creates Site", () => { var target=Row("gr_site"); target["gr_name"]="New Site"; target["gr_customer"]=new EntityReference("gr_customer",Id); RestrictedWritePolicy.Validate(r,"Create",target,null); });
+            Test(r+" creates platform-enriched Site", () => {
+                var target=Row("gr_site"); target["gr_name"]="New Site"; target["gr_address"]="13 Sims Road"; target["gr_customer"]=new EntityReference("gr_customer",Id);
+                target["gr_siteid"]=Id; target["ownerid"]=new EntityReference("systemuser",Id); target["createdby"]=new EntityReference("systemuser",Id);
+                target["createdon"]=DateTime.UtcNow; target["statecode"]=new OptionSetValue(0); target["statuscode"]=new OptionSetValue(1);
+                RestrictedWritePolicy.Validate(r,"Create",target,null,Id);
+            });
+            Test(r+" rejects Site owned by another user", () => {
+                var target=Row("gr_site"); target["gr_name"]="New Site"; target["gr_customer"]=new EntityReference("gr_customer",Id);
+                target["ownerid"]=new EntityReference("systemuser",OtherId);
+                Denied(() => RestrictedWritePolicy.Validate(r,"Create",target,null,Id));
+            });
+            Test(r+" rejects inactive Site create", () => {
+                var target=Row("gr_site"); target["gr_name"]="New Site"; target["gr_customer"]=new EntityReference("gr_customer",Id); target["statecode"]=new OptionSetValue(1);
+                Denied(() => RestrictedWritePolicy.Validate(r,"Create",target,null,Id));
+            });
+            Test(r+" rejects mismatched Site primary key", () => {
+                var target=Row("gr_site"); target["gr_name"]="New Site"; target["gr_customer"]=new EntityReference("gr_customer",Id); target["gr_siteid"]=OtherId;
+                Denied(() => RestrictedWritePolicy.Validate(r,"Create",target,null,Id));
+            });
             foreach (string field in new[] { "gr_mechanic", "gr_status", "gr_jobtype", "gr_jobnumber", "gr_coordinatormanaged", "gr_techniciansubmissionstory" })
             {
                 string f=field; Test(r+" rejects Job field "+f, () => Denied(() => Change(r,"gr_job",f,"tampered")));

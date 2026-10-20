@@ -206,6 +206,14 @@ retained its approved server-writer identities, and all 15 number-invariant guar
 Independent verification reported all 29 workflow steps enabled. A final number audit still reported
 maximum `147474`, so deployment did not consume the first live number `147475`.
 
+On 21 October 2026, signed workflow assembly `1.0.20.0` was deployed to correct restricted Customer
+and Site creation for Office Admin and Job Book Admin users. Dataverse-supplied create-time identity,
+owner and active-status defaults are accepted only when they remain consistent with the caller and
+new record; unrelated business fields, another owner, inactive status and mismatched IDs remain
+denied. The assembly-only deployment changed no roles, metadata, Jobs, customers, sites, numbering,
+migration state or feature flags. Verification preserved the 2 Office Admin and 7 Job Book Admin
+assignments and confirmed all 29 workflow guard steps enabled.
+
 The next action is a controlled live test with the dedicated Job Book Admin and Office Admin accounts.
 The first successful creation is permanent history: use a real or deliberately retained/voided test
 Job, verify it remains Staging until confirmed dispatch, and do not delete or reseed it.

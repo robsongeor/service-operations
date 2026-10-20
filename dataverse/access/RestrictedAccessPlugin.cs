@@ -122,7 +122,7 @@ namespace ServiceOperations.Access
                 if (IsRegistrationChild(context, target) || IsRegisteredVoidChild(context, target) || IsInitialDispatchChild(context, target)) return;
                 TraceRegistrationDenial(tracing, context, target);
             }
-            RestrictedWritePolicy.Validate(profile, context.MessageName, target, before);
+            RestrictedWritePolicy.Validate(profile, context.MessageName, target, before, context.InitiatingUserId);
         }
 
         static Entity RetrieveServerWriterIdentity(IOrganizationServiceFactory factory, Guid userId, Guid roleId, out bool holdsRole)
@@ -500,6 +500,14 @@ namespace ServiceOperations.Access
         static readonly string[] JobDetails = { "gr_description", "gr_ordernumber", "gr_equipment", "gr_site", "gr_contact" };
         static readonly string[] EquipmentDetails = { "gr_fleet", "gr_alternatefleetnumbers", "gr_make", "gr_model", "gr_serial", "gr_site" };
         static readonly string[] IntakeDetails = { "gr_description", "gr_customerpo", "gr_equipment", "gr_customer", "gr_site", "gr_contact", "gr_fleetsnapshot", "gr_serialsnapshot", "gr_makesnapshot", "gr_modelsnapshot", "gr_customersnapshot", "gr_sitesnapshot", "gr_addresssnapshot", "gr_addressverified", "gr_addressnotfoundconfirmed", "gr_equipmentreviewrequired" };
+        // Dataverse can enrich a Create Target before a synchronous PreOperation plug-in runs.
+        // These are platform-owned attributes, not additional business fields granted to the
+        // Office or Job Book Admin profile. Writable defaults are validated below.
+        static readonly string[] CreatePlatformFields = {
+            "createdby", "createdon", "createdonbehalfby", "importsequencenumber", "modifiedby", "modifiedon", "modifiedonbehalfby",
+            "organizationid", "ownerid", "owningbusinessunit", "owningteam", "owninguser", "statecode", "statuscode",
+            "timezoneruleversionnumber", "utcconversiontimezonecode", "versionnumber"
+        };
         static void Deny() { throw new InvalidPluginExecutionException("The requested change is outside this role's permitted actions."); }
         static void Fields(Entity target, IEnumerable<string> allowed)
         {
@@ -520,14 +528,52 @@ namespace ServiceOperations.Access
                     !new[] { "open", "closed", "finalised" }.Contains(value, StringComparer.Ordinal)) Deny();
             }
         }
+        static void ValidateCreate(Entity target, IEnumerable<string> businessFields, Guid initiatingUserId)
+        {
+            Fields(target, businessFields.Concat(CreatePlatformFields).Concat(new[] { target.LogicalName + "id" }));
+            string primaryKey = target.LogicalName + "id";
+            if (target.Contains(primaryKey) && (!(target[primaryKey] is Guid) || (Guid)target[primaryKey] != target.Id)) Deny();
+            if (target.Contains("ownerid"))
+            {
+                var owner = target.GetAttributeValue<EntityReference>("ownerid");
+                if (initiatingUserId == Guid.Empty || owner == null || owner.LogicalName != "systemuser" || owner.Id != initiatingUserId) Deny();
+            }
+            if (target.Contains("statecode"))
+            {
+                var state = target.GetAttributeValue<OptionSetValue>("statecode");
+                if (state == null || state.Value != 0) Deny();
+            }
+            if (target.Contains("statuscode"))
+            {
+                var status = target.GetAttributeValue<OptionSetValue>("statuscode");
+                if (status == null || status.Value != 1) Deny();
+            }
+            foreach (string field in new[] { "createdby", "modifiedby" })
+            {
+                if (!target.Contains(field)) continue;
+                var actor = target.GetAttributeValue<EntityReference>(field);
+                if (initiatingUserId == Guid.Empty || actor == null || actor.LogicalName != "systemuser" || actor.Id != initiatingUserId) Deny();
+            }
+            foreach (string field in new[] { "createdon", "modifiedon" })
+            {
+                if (!target.Contains(field)) continue;
+                if (!(target[field] is DateTime)) Deny();
+                var timestamp = ((DateTime)target[field]).ToUniversalTime();
+                if (timestamp < DateTime.UtcNow.AddHours(-1) || timestamp > DateTime.UtcNow.AddMinutes(5)) Deny();
+            }
+        }
         public static void Validate(string profile, string message, Entity target, Entity before)
+        {
+            Validate(profile, message, target, before, Guid.Empty);
+        }
+        public static void Validate(string profile, string message, Entity target, Entity before, Guid initiatingUserId)
         {
             if (profile != "office" && profile != "book") { Deny(); return; }
             bool office = profile == "office";
             if (message == "Create")
             {
-                if (target.LogicalName == "gr_customer") { Fields(target, new[] { "gr_name" }); return; }
-                if (target.LogicalName == "gr_site") { Fields(target, new[] { "gr_name", "gr_address", "gr_customer" }); return; }
+                if (target.LogicalName == "gr_customer") { ValidateCreate(target, new[] { "gr_name" }, initiatingUserId); return; }
+                if (target.LogicalName == "gr_site") { ValidateCreate(target, new[] { "gr_name", "gr_address", "gr_customer" }, initiatingUserId); return; }
                 // Registration/dispatch require dedicated guarded operations. Do not authorize
                 // generic Job/ledger/Email Dispatch creation merely from an Admin role.
                 Deny(); return;
