@@ -76,12 +76,14 @@ action parameter exist.
 `useJobCorrections` owns exact-record loading, bounded Customer/Equipment searches and scoped
 Site/Contact choices. It never loads schedules, assignments, Quotes or submission evidence.
 
-`jobCorrectionsApi` projects only changed description, order/PO, Equipment, Site and Contact
-bindings. Customer is represented through Site; its consistency is validated, not separately
-written. Address displays the selected Site's address, without editing a shared Site or moving
-Equipment. Historical unchanged Contact links are retained; changed links must belong to the Site.
-Opening does not auto-select a previously empty Contact or change Job state. The shared editor's
-job number/type/status/service type/mechanic/office values never reach the correction PATCH.
+`jobCorrectionsApi` projects only changed description, order/PO, Equipment, Site, Contact and
+mechanic/other-supplier bindings. Customer is represented through Site; its consistency is
+validated, not separately written. Address displays the selected Site's address, without editing
+a shared Site or moving Equipment. Historical unchanged Contact links are retained; changed links
+must belong to the Site. The restricted Dataverse guard revalidates selected Staff as active and
+assignment-enabled and keeps Staff mutually exclusive with another supplier. Opening does not
+auto-select a previously empty Contact or change Job state. The shared editor's job number/type/
+status/service type/office values never reach the correction PATCH.
 
 Writes require the original exact ETag. A conflict blocks subsequent saves and offers explicit
 reload/discard confirmation; no automatic retry or wildcard overwrite. A successful write with

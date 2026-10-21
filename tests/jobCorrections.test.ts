@@ -138,6 +138,15 @@ test('permission rejection is actionable and does not retry', async () => {
     await assert.rejects(saveJobCorrections('sample', job, input), /permission.*No changes were saved/)
 })
 
+test('restricted access policy rejection is reported instead of presented as a stale Job', async () => {
+    globalThis.fetch = async (url, options) => {
+        if (String(url).includes('gr_sites(')) return json(job.gr_Site)
+        if (options?.method === 'PATCH') return Response.json({ error: { message: "The requested change is outside this role's permitted actions." } }, { status: 400 })
+        throw new Error('Unexpected request')
+    }
+    await assert.rejects(saveJobCorrections('sample', job, input), /current access policy.*No changes were saved/)
+})
+
 test('historical unlinked Job can receive a description correction without invented relationships', async () => {
     const historical = { ...job, gr_Equipment: undefined, gr_Site: undefined, gr_Contact: undefined }
     globalThis.fetch = async (_url, options) => {

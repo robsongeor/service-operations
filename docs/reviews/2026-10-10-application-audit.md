@@ -77,6 +77,12 @@ manifests and server-owned operations. **Do not disable the guard or grant broad
 Verify allowed edits AND rejected unrelated fields, direct API requests, changed relationships,
 mixed-role users and ETag conflicts using real restricted accounts.
 
+**Mechanic/supplier source resolution recorded 21 October 2026:** the restricted Job correction
+allowlist now accepts only the existing mechanic and other-supplier fields, re-reads the referenced
+Staff record, requires it to be active and assignment-enabled, and rejects mixed Staff/supplier
+state. Offline policy and Job Book tests pass. The guard assembly still requires deployment and
+named-user verification; the Equipment and confirmed-dispatch portions of A01 remain open.
+
 ### A02 — Registration allocates before dispatch
 
 **Confirmed behavioral defect.** `JobRegistrationPlugin` creates Allocated status when a mechanic

@@ -7,10 +7,14 @@ legacy number-invariant steps remain registered but disabled while V1/manual
 numbering is still in use. Do not assign the obsolete Job Book Only role to the
 new Admin cohorts.
 
-## Known policy gap — source audit 10 October 2026
+## Policy alignment status
 
-The current client exposes mechanic selection to all admitted Job Book roles and sends WOF/REGO
-fields during restricted Equipment detail saves. The allowlists below reject those fields.
+The 21 October source update aligns the restricted Job correction allowlist with the approved
+mechanic/supplier selector. The guard revalidates the exact referenced Staff record as active and
+assignment-enabled and rejects a Job that would retain both a technician and another supplier.
+This source change is not a claim that the updated assembly is deployed; named-user verification
+remains required. The client still sends WOF/REGO
+fields during restricted Equipment detail saves, while the allowlists below reject those fields.
 Confirmed Office dispatch also performs a separate status PATCH that the normal guard rejects.
 These are rollout blockers, not evidence the UI is correctly enforced end-to-end.
 Registration's special child rule also allocates when a mechanic/supplier is selected, before delivery.
