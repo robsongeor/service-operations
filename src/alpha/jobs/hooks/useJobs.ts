@@ -37,7 +37,7 @@ import {
 import type { JobAssignment } from '../types/jobAssignment.types'
 import { fetchMechanics as fetchStaffDirectory } from '../../mechanics/services/mechanicsApi'
 import { subscribeToStaffChanges } from '../../mechanics/services/staffRealtime'
-import { createEmailDispatch, waitForEmailDispatch } from '../services/emailDispatchApi'
+import { createEmailDispatch, fetchJobEmailDispatches, waitForEmailDispatch } from '../services/emailDispatchApi'
 import { assertJobEmailSendingAllowed, buildAssignmentJobEmail, buildPrimaryJobEmail, onlineJobCardPilotEnabled, type JobEmailDraft } from '../services/jobEmail'
 import { usePrimaryJobEmail } from './usePrimaryJobEmail'
 import { assertJobNumberUnchanged } from '../domain/jobNumberPolicy'
@@ -392,6 +392,10 @@ export function useJobs(options: UseJobsOptions = {}) {
 
     const loadJobAssignments = useCallback(async (jobId: string, signal?: AbortSignal) => (
         fetchJobAssignmentsForJobApi(await getAccessToken(), jobId, signal)
+    ), [getAccessToken])
+
+    const loadJobEmailDispatches = useCallback(async (jobId: string, signal?: AbortSignal) => (
+        fetchJobEmailDispatches(await getAccessToken(), jobId, signal)
     ), [getAccessToken])
 
     useEffect(() => {
@@ -1548,6 +1552,7 @@ export function useJobs(options: UseJobsOptions = {}) {
         prepareJobReferenceData,
         loadJobQuotes,
         loadJobAssignments,
+        loadJobEmailDispatches,
         prepareJobEditorReferenceData,
         searchEquipmentForEditor,
         searchCustomersForEditor,

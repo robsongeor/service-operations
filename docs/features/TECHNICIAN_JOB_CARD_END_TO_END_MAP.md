@@ -251,7 +251,9 @@ The roster panel's primary actions are:
 Implementation note (21 October 2026): the shared Job Book/Service Coordination composer now
 implements the side-by-side roster, bounded fail-closed history/assignment load, participant
 selection, additional assignment creation and scoped send, active-request withdrawal with a reason,
-and removal of never-sent additional assignments. The separate **No longer attending — card still
+removal of never-sent additional assignments, and read-only recovery of previously emailed
+technicians from Dataverse dispatch history even when no online Job Card link was generated. The
+separate **No longer attending — card still
 required** state and stable assignment identity for the first technician remain architecture work;
 the current Dataverse `gr_Mechanic` compatibility path is still in use for that first row.
 

@@ -14,7 +14,7 @@ import { assertJobEmailSendingAllowed, buildAssignmentJobEmail, onlineJobCardPil
 import { assertJobHasEmailableJobNumber } from '../jobs/services/jobEmailRules'
 import { isValidTechnicianEmail } from '../jobs/utils/technicianMailto'
 import { generateJobSubmissionLink } from '../jobs/services/jobSubmissionLinkApi'
-import { createEmailDispatch, waitForEmailDispatch } from '../jobs/services/emailDispatchApi'
+import { createEmailDispatch, fetchJobEmailDispatches, waitForEmailDispatch } from '../jobs/services/emailDispatchApi'
 import { markJobAllocatedAfterConfirmedDelivery } from '../jobs/services/jobsApi'
 import { usesAzureJobCards } from '../jobs/types/jobCardWorkflow'
 import { JOB_CARD_STATUSES } from '../jobs/types/jobCardStatus.types'
@@ -68,6 +68,9 @@ export function useJobBookActions(getAccessToken: () => Promise<string>, canEmai
     const loadAssignments = useCallback(async (jobId: string, signal?: AbortSignal) => (
         fetchJobAssignmentsForJob(await getAccessToken(), jobId, signal)
     ), [getAccessToken])
+    const loadDispatches = useCallback(async (jobId: string, signal?: AbortSignal) => (
+        fetchJobEmailDispatches(await getAccessToken(), jobId, signal)
+    ), [getAccessToken])
     const addAssignment = useCallback(async (assignment: JobAssignmentInput) => {
         await createJobAssignment(await getAccessToken(), assignment)
     }, [getAccessToken])
@@ -97,6 +100,6 @@ export function useJobBookActions(getAccessToken: () => Promise<string>, canEmai
     }, [getAccessToken])
     return {
         emailJob, loadingJobId, feedback, dismissFeedback: () => setFeedback(null), emailDeliveryStates,
-        copy, openEmail, close, send, loadAssignments, addAssignment, removeAssignment, sendAssignment,
+        copy, openEmail, close, send, loadAssignments, loadDispatches, addAssignment, removeAssignment, sendAssignment,
     }
 }

@@ -35,6 +35,7 @@ import { EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED } from '../domain/externalSupplier
 import { OPERATING_BRANCH_LABELS } from '../types/operatingBranch.types'
 import type { CoordinationView, JobCardProgressSummary } from '../types/serviceCoordination.types'
 import type { JobAssignment, JobAssignmentInput } from '../types/jobAssignment.types'
+import type { JobEmailDispatch } from '../types/emailDispatch.types'
 
 type Props = {
     unifiedWorklist?: boolean
@@ -59,6 +60,7 @@ type Props = {
     ) => Promise<void>
     onEmailTechnician: (job: Job, draft: JobEmailDraft) => Promise<void>
     loadJobAssignments: (jobId: string, signal?: AbortSignal) => Promise<JobAssignment[]>
+    loadJobEmailDispatches: (jobId: string, signal?: AbortSignal) => Promise<JobEmailDispatch[]>
     onCreateAssignment: (assignment: JobAssignmentInput) => Promise<void>
     onEmailAssignment: (job: Job, assignment: JobAssignment, draft?: JobEmailDraft) => Promise<void>
     onDeleteAssignment: (assignmentId: string) => Promise<void>
@@ -99,6 +101,7 @@ export default function JobsTable({
     onJobFieldsChange,
     onEmailTechnician,
     loadJobAssignments,
+    loadJobEmailDispatches,
     onCreateAssignment,
     onEmailAssignment,
     onDeleteAssignment,
@@ -714,6 +717,7 @@ export default function JobsTable({
             job={emailComposerJob}
             mechanics={mechanics}
             loadAssignments={loadJobAssignments}
+            loadDispatches={loadJobEmailDispatches}
             onCreateAssignment={onCreateAssignment}
             onSendAssignment={onEmailAssignment}
             onDeleteAssignment={onDeleteAssignment}

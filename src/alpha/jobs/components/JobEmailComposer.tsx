@@ -13,6 +13,7 @@ import { formatFleetNumbers } from '../../equipment/identifiers/alternateFleetNu
 import { canBeAssignedJobs } from '../../mechanics/staffDirectory'
 import { useJobCardHistory } from '../../job-card-reviews/useJobCardHistory'
 import type { JobCardRequestSummary } from '../../job-card-reviews/jobCardReview.types'
+import type { JobEmailDispatch } from '../types/emailDispatch.types'
 import './JobEmailComposer.css'
 
 type Props = {
@@ -22,6 +23,7 @@ type Props = {
     assignedRecipientOnly?: boolean
     mechanics?: Mechanic[]
     loadAssignments?: (jobId: string, signal?: AbortSignal) => Promise<JobAssignment[]>
+    loadDispatches?: (jobId: string, signal?: AbortSignal) => Promise<JobEmailDispatch[]>
     onCreateAssignment?: (assignment: JobAssignmentInput) => Promise<void>
     onSendAssignment?: (job: Job, assignment: JobAssignment, draft: JobEmailDraft) => Promise<void>
     onDeleteAssignment?: (assignmentId: string) => Promise<void>
@@ -51,6 +53,7 @@ export default function JobEmailComposer({
     assignedRecipientOnly = false,
     mechanics = [],
     loadAssignments,
+    loadDispatches,
     onCreateAssignment,
     onSendAssignment,
     onDeleteAssignment,
@@ -62,6 +65,9 @@ export default function JobEmailComposer({
     const [assignmentResult, setAssignmentResult] = useState<{ revision: number; data?: JobAssignment[]; error?: string }>()
     const assignments = useMemo(() => assignmentResult?.revision === assignmentRevision ? assignmentResult.data ?? [] : [], [assignmentResult, assignmentRevision])
     const assignmentsBusy = rosterEnabled && assignmentResult?.revision !== assignmentRevision
+    const [dispatchResult, setDispatchResult] = useState<{ revision: number; data?: JobEmailDispatch[]; error?: string }>()
+    const dispatches = useMemo(() => dispatchResult?.revision === assignmentRevision ? dispatchResult.data ?? [] : [], [dispatchResult, assignmentRevision])
+    const dispatchesBusy = Boolean(loadDispatches) && dispatchResult?.revision !== assignmentRevision
     const [selectedAssignmentId, setSelectedAssignmentId] = useState('')
     const selectedAssignment = assignments.find((item) => item.gr_jobassignmentid === selectedAssignmentId)
     const mechanic = selectedAssignment?.gr_Mechanic ?? primaryMechanic
@@ -100,6 +106,20 @@ export default function JobEmailComposer({
         return () => controller.abort()
     }, [assignmentRevision, job.gr_jobid, loadAssignments])
 
+    useEffect(() => {
+        if (!loadDispatches) return
+        const controller = new AbortController()
+        void loadDispatches(job.gr_jobid, controller.signal)
+            .then((data) => { if (!controller.signal.aborted) setDispatchResult({ revision: assignmentRevision, data }) })
+            .catch((reason: unknown) => {
+                if (!controller.signal.aborted) setDispatchResult({
+                    revision: assignmentRevision,
+                    error: reason instanceof Error ? reason.message : 'Technician email history could not be loaded.',
+                })
+            })
+        return () => controller.abort()
+    }, [assignmentRevision, job.gr_jobid, loadDispatches])
+
     const requestsByAssignment = useMemo(() => {
         const result = new Map<string, JobCardRequestSummary>()
         for (const request of history.data?.items ?? []) {
@@ -109,11 +129,45 @@ export default function JobEmailComposer({
         }
         return result
     }, [history.data])
+    const historicalRequests = useMemo(() => {
+        const activeAssignmentIds = new Set(assignments.map((assignment) => assignment.gr_jobassignmentid.toLowerCase()))
+        const result = new Map<string, JobCardRequestSummary>()
+        for (const request of history.data?.items ?? []) {
+            const assignmentId = request.assignmentId?.toLowerCase()
+            const matchesCurrentPrimary = !assignmentId && request.technicianName.trim().toLowerCase() === primaryMechanic?.gr_name.trim().toLowerCase()
+            if (assignmentId ? activeAssignmentIds.has(assignmentId) : matchesCurrentPrimary) continue
+            const key = assignmentId || request.technicianName.trim().toLowerCase()
+            const current = result.get(key)
+            if (!current || current.createdOn < request.createdOn) result.set(key, request)
+        }
+        return [...result.values()]
+    }, [assignments, history.data, primaryMechanic])
     const historyError = history.error || (history.data?.truncated ? 'Technician history is incomplete. Reload before sending another Job Card.' : '')
-    const rosterError = assignmentResult?.revision === assignmentRevision ? assignmentResult.error || historyError : historyError
-    const rosterBusy = assignmentsBusy || (rosterEnabled && usesAzureJobCards(job) && history.busy)
+    const assignmentError = assignmentResult?.revision === assignmentRevision ? assignmentResult.error : ''
+    const dispatchError = dispatchResult?.revision === assignmentRevision ? dispatchResult.error : ''
+    const rosterError = assignmentError || dispatchError || historyError
+    const rosterBusy = assignmentsBusy || dispatchesBusy || (rosterEnabled && usesAzureJobCards(job) && history.busy)
     const showRoster = rosterEnabled
-    const assignedTechnicianCount = (primaryMechanic ? 1 : 0) + assignments.length
+    const dispatchMatchesMechanic = (dispatch: JobEmailDispatch, rowMechanic?: Pick<Mechanic, 'gr_name'> & { gr_email?: string }) => Boolean(rowMechanic && (
+        dispatch.gr_recipientemail?.trim().toLowerCase() === rowMechanic.gr_email?.trim().toLowerCase()
+        || dispatch.gr_recipientname?.trim().toLowerCase() === rowMechanic.gr_name.trim().toLowerCase()
+    ))
+    const dispatchFor = (assignment?: JobAssignment) => dispatches.find((dispatch) => assignment
+        ? dispatch._gr_jobassignment_value?.toLowerCase() === assignment.gr_jobassignmentid.toLowerCase()
+        : !dispatch._gr_jobassignment_value && dispatchMatchesMechanic(dispatch, primaryMechanic))
+    const historicalDispatches = useMemo(() => {
+        const activeAssignmentIds = new Set(assignments.map((assignment) => assignment.gr_jobassignmentid.toLowerCase()))
+        const result = new Map<string, JobEmailDispatch>()
+        for (const dispatch of dispatches) {
+            const assignmentId = dispatch._gr_jobassignment_value?.toLowerCase()
+            if (assignmentId ? activeAssignmentIds.has(assignmentId) : dispatchMatchesMechanic(dispatch, primaryMechanic)) continue
+            if (historicalRequests.some((request) => request.technicianName.trim().toLowerCase() === dispatch.gr_recipientname?.trim().toLowerCase())) continue
+            const key = assignmentId || dispatch.gr_recipientemail?.trim().toLowerCase() || dispatch.gr_recipientname?.trim().toLowerCase()
+            if (key && !result.has(key)) result.set(key, dispatch)
+        }
+        return [...result.values()]
+    }, [assignments, dispatches, historicalRequests, primaryMechanic])
+    const assignedTechnicianCount = (primaryMechanic ? 1 : 0) + assignments.length + historicalRequests.length + historicalDispatches.length
 
     const selectTechnician = (assignment?: JobAssignment) => {
         if (assignedRecipientOnly && assignment) return
@@ -224,7 +278,11 @@ export default function JobEmailComposer({
     const rosterRow = (assignment?: JobAssignment) => {
         const rowMechanic = assignment?.gr_Mechanic ?? primaryMechanic
         const key = assignment?.gr_jobassignmentid ?? 'primary'
-        const request = requestsByAssignment.get(assignment?.gr_jobassignmentid.toLowerCase() ?? 'primary')
+        const request = assignment
+            ? requestsByAssignment.get(assignment.gr_jobassignmentid.toLowerCase())
+            : [...(history.data?.items ?? [])].filter((item) => !item.assignmentId && item.technicianName.trim().toLowerCase() === primaryMechanic?.gr_name.trim().toLowerCase())
+                .sort((first, second) => second.createdOn.localeCompare(first.createdOn))[0]
+        const dispatch = dispatchFor(assignment)
         const selected = assignment ? selectedAssignmentId === assignment.gr_jobassignmentid : !selectedAssignmentId
         const removable = Boolean(assignment && onDeleteAssignment && !request && !assignment.gr_emailsenton && !assignment.gr_submittedon)
         return <article key={key} className={`job-email-roster-row${selected ? ' is-selected' : ''}`}>
@@ -232,7 +290,7 @@ export default function JobEmailComposer({
                 <span className="job-email-roster-avatar" aria-hidden="true">{rowMechanic?.gr_name.slice(0, 1).toUpperCase() || '?'}</span>
                 <span><strong>{rowMechanic?.gr_name || 'Unassigned technician'}</strong><small>{assignment ? 'Additional technician' : 'First technician'}</small></span>
             </button>
-            <div className="job-email-roster-state"><strong>{requestStatusLabel(request)}</strong>{requestTimeLabel(request) && <small>{requestTimeLabel(request)}</small>}</div>
+            <div className="job-email-roster-state"><strong>{request ? requestStatusLabel(request) : dispatch ? dispatch.gr_errormessage ? 'Email failed' : dispatch.gr_emailsent ? 'Email sent' : 'Email queued' : 'Not sent'}</strong>{request ? requestTimeLabel(request) && <small>{requestTimeLabel(request)}</small> : dispatch?.gr_requestedon && <small>{new Date(dispatch.gr_requestedon).toLocaleString('en-NZ', { dateStyle: 'medium', timeStyle: 'short' })}</small>}</div>
             {!assignedRecipientOnly && <div className="job-email-roster-actions">
                 {!selected && <button type="button" onClick={() => selectTechnician(assignment)}>Compose</button>}
                 {request?.status === 'active' && <button type="button" onClick={() => { setWithdrawRequestId(request.reviewId); setWithdrawReason('') }}>Withdraw</button>}
@@ -244,6 +302,27 @@ export default function JobEmailComposer({
             </div>}
         </article>
     }
+
+    const historicalDispatchRow = (dispatch: JobEmailDispatch) => <article key={dispatch.gr_emaildispatchid} className="job-email-roster-row">
+        <div className="job-email-roster-person is-read-only">
+            <span className="job-email-roster-avatar" aria-hidden="true">{dispatch.gr_recipientname?.slice(0, 1).toUpperCase() || '?'}</span>
+            <span><strong>{dispatch.gr_recipientname || dispatch.gr_recipientemail || 'Previous technician'}</strong><small>Previously emailed</small></span>
+        </div>
+        <div className="job-email-roster-state"><strong>{dispatch.gr_errormessage ? 'Email failed' : dispatch.gr_emailsent ? 'Email sent' : 'Email queued'}</strong>{dispatch.gr_requestedon && <small>{new Date(dispatch.gr_requestedon).toLocaleString('en-NZ', { dateStyle: 'medium', timeStyle: 'short' })}</small>}</div>
+    </article>
+
+    const historicalRequestRow = (request: JobCardRequestSummary) => <article key={request.reviewId} className="job-email-roster-row">
+        <div className="job-email-roster-person is-read-only">
+            <span className="job-email-roster-avatar" aria-hidden="true">{request.technicianName.slice(0, 1).toUpperCase() || '?'}</span>
+            <span><strong>{request.technicianName || 'Previous technician'}</strong><small>Previous technician</small></span>
+        </div>
+        <div className="job-email-roster-state"><strong>{requestStatusLabel(request)}</strong>{requestTimeLabel(request) && <small>{requestTimeLabel(request)}</small>}</div>
+        {!assignedRecipientOnly && request.status === 'active' && <div className="job-email-roster-actions"><button type="button" onClick={() => { setWithdrawRequestId(request.reviewId); setWithdrawReason('') }}>Withdraw</button></div>}
+        {withdrawRequestId === request.reviewId && <div className="job-email-roster-withdraw">
+            <label><span>Reason</span><textarea rows={2} value={withdrawReason} onChange={(event) => setWithdrawReason(event.currentTarget.value)} placeholder="For example: Sick before attending" /></label>
+            <div><button type="button" onClick={() => { setWithdrawRequestId(''); setWithdrawReason('') }}>Cancel</button><button type="button" className="danger" disabled={rosterBusyId === request.reviewId || !withdrawReason.trim()} onClick={() => void withdrawTechnician(request)}>Withdraw card</button></div>
+        </div>}
+    </article>
 
     return <>
         <EditDrawerFormDialog
@@ -345,6 +424,8 @@ export default function JobEmailComposer({
                     : <div className="job-email-roster-list">
                         {primaryMechanic ? rosterRow() : assignments.length === 0 && <p className="job-email-roster-message">No technicians assigned yet.</p>}
                         {assignments.map((assignment) => rosterRow(assignment))}
+                        {historicalRequests.map(historicalRequestRow)}
+                        {historicalDispatches.map(historicalDispatchRow)}
                     </div>}
                 {!assignedRecipientOnly && !rosterBusy && !rosterError && onCreateAssignment && <>
                     {showAddTechnician ? <div className="job-email-roster-add">
