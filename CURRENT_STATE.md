@@ -31,7 +31,24 @@ from V2 to V3 without changing V2 or replacing any of yellow-cliff's 25 existing
 destination values were verified against their source without printing them. A read-only production
 smoke returned 200 from GreenTree, TimeCloud authentication and TimeCloud search. TimeCloud is in
 production mode with Job creation enabled; no Job or TimeCloud record was created or changed during
-verification. Named-role UI acceptance remains open.
+verification.
+
+Live Full Access UI acceptance then passed on V3 without a write: the 254 managed Jobs loaded,
+Auckland Home branch, All branches and the empty personal watchlist were selectable, the create
+drawer opened and cancelled, and Job Book membership controls were visible. A fresh read-only audit
+verified all 13 enabled named users have the intended app role and matching Dataverse workflow role
+without broader overlapping workflow access. The isolated restricted-role walkthrough confirmed
+Office Admin and Job Book Admin cannot open Service Coordination, Job Book Admin has no dispatch or
+membership controls, and Service Coordinator has both add-to-management and stop-managing controls.
+The focused access/workflow/Job Book suites passed 289 tests.
+
+Real-account restricted-user UI acceptance remains open. The owner approved the seven exact
+single-user plans for Jess, Nargiza, Martin, Lance, Ranjani, Ashneel and Kaizer. Each plan changed
+only the Dataverse home branch to Auckland (`122830000`), and the automatic live verification
+reported one verified row, zero mismatches and `onboardingComplete: true` for every user. Home
+branch is an initial worklist/new-Service-Coordination-Job default, not a visibility boundary; the
+All branches view remains available to participating Service Coordinators. The remaining release
+gate is named Service Coordinator, Job Book Admin and Office Admin sign-in acceptance.
 
 A fresh read-only production snapshot at `2026-10-21T05:12:10Z` found 1,396 Jobs. The owner
 explicitly approved plan hash

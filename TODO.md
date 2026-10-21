@@ -67,7 +67,10 @@ This is remaining work, not a completed-change log. See [current state](CURRENT_
   The separately approved V3 GreenTree/TimeCloud settings are installed and passed read-only
   production smoke checks. The explicitly approved historical plan is applied: a post-apply snapshot
   verifies all 254 active Jobs as managed Auckland and all 1,142 GreenTree-closed Jobs unchanged,
-  with zero mismatches. Complete named-role UI acceptance and record the release go/no-go decision.
+  with zero mismatches. Full Access live acceptance, a 13-user role audit and restricted-role
+  simulation passed. The seven exact Auckland home-branch plans were owner-approved, applied and
+  automatically verified with zero mismatches. Complete real-account restricted-role UI acceptance,
+  then record the release go/no-go decision.
 
 - [ ] Execute the ordered
   [Service Coordination workflow implementation plan](docs/features/SERVICE_COORDINATION_WORKFLOW_IMPLEMENTATION_PLAN.md)

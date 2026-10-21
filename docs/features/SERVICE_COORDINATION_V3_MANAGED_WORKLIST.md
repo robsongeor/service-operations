@@ -1,7 +1,8 @@
 # Service Coordination V3 — managed worklist release plan
 
 Status: source, signed Dataverse backend, isolated yellow-cliff V3 pilot, operational integrations
-and historical managed/Auckland migration deployed; named-role acceptance and go/no-go remain open.
+and historical managed/Auckland migration deployed; restricted-user live acceptance and go/no-go
+remain open.
 
 ## Business boundary
 
@@ -69,6 +70,30 @@ redacted comparison. Read-only production smoke checks returned 200 from GreenTr
 authentication and TimeCloud search. TimeCloud is configured in production mode with Job creation
 enabled; verification did not create or change a Job or TimeCloud record.
 
+## Acceptance evidence
+
+On 21 October 2026, the live V3 Full Access walkthrough passed without creating or changing a Job.
+It loaded the 254-record managed worklist, resolved George's home branch to Auckland, switched
+between Home branch, All branches and the empty personal watchlist, opened and cancelled the
+Service Coordination create drawer, and displayed the Job Book membership controls. A fresh
+read-only roster audit verified all 13 enabled named users have exactly their intended application
+role and matching Dataverse workflow role, with no broader overlapping workflow role.
+
+The isolated local walkthrough then verified the restricted UI boundaries: Office Admin and Job
+Book Admin cannot open Service Coordination; Job Book Admin cannot email technicians or change
+coordinator membership; Service Coordinator can add an unmanaged numbered Job Book entry, stop
+managing a managed Job and open the managed worklist. The focused access, workflow and Job Book
+suites passed 289 tests. This simulation does not replace a sign-in under each restricted production
+account.
+
+The audit also found seven Auckland rollout users without a Dataverse home branch: Jess, Nargiza,
+Martin, Lance, Ranjani, Ashneel and Kaizer. They were added to the reviewed Auckland mapping, and
+the owner approved each exact single-user production plan. Apply changed only
+`gr_homebranch=122830000`. The automatic live Verify step reported one verified row, zero
+mismatches and `onboardingComplete: true` for every user. Home branch remains a default rather than
+an access boundary: participating Service Coordinators may still select All branches, while regional
+Job Book creation uses the explicitly selected regional book.
+
 ## Release gates
 
 1. [x] Review the source diff, plugin package and six-Custom-API manifest.
@@ -77,9 +102,11 @@ enabled; verification did not create or change a Job or TimeCloud record.
 4. [x] Deploy and verify assembly `1.0.24.0` plus `gr_UnmanageJobBookJob` without changing human role
    assignments beyond the existing Full/Coordinator privilege boundary.
 5. [ ] V3 is deployed to yellow-cliff and the approved GreenTree/TimeCloud settings passed read-only
-   production smoke tests. Run Full Access, Service Coordinator, Job Book Admin and Office Admin
-   acceptance while V2 remains available.
+   production smoke tests. Full Access live acceptance and the restricted-role simulation passed;
+   run Service Coordinator, Job Book Admin and Office Admin acceptance under real named accounts
+   while V2 remains available.
 6. [x] Apply and independently verify the approved migration; the authenticated watchlist boundary
    returned 200 with no invalid managed/terminal rows.
-7. Run named-role branch, all-branches, membership and watchlist UI acceptance.
+7. [x] Apply and verify the seven approved Auckland home-branch plans. Run named-role branch,
+   all-branches, membership and watchlist UI acceptance under real restricted accounts.
 8. Record explicit go/no-go approval before treating V3 as released.

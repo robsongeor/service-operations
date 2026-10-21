@@ -15,6 +15,12 @@
 
 ## Unreleased
 
+- Completed the non-writing V3 Full Access walkthrough, exact 13-user application/Dataverse role
+  audit and isolated restricted-role UI walkthrough. The three focused suites passed 289 tests.
+  Applied the owner-approved, exact single-user plans for the seven Auckland Job Book/Office Admin
+  users whose home branch was blank. Jess, Nargiza, Martin, Lance, Ranjani, Ashneel and Kaizer now
+  each verify as Auckland with zero mismatches. Real restricted-account acceptance remains a
+  release gate.
 - Deployed the signed unified Dataverse assembly `1.0.24.0` and created/verified the coordinator-
   only `gr_UnmanageJobBookJob` API without changing roles, assignments, business data or migration
   state. Published the isolated V3 pilot from `v3-deployment` to yellow-cliff and enabled its
