@@ -1,9 +1,9 @@
 # Current application state
 
-Reviewed 20 October 2026 against branch `v2-deployment`, after the Auckland production cutover.
+Reviewed 21 October 2026 against production V2 and the isolated `v3-deployment` pilot.
 This page is a current summary, not a release history or blanket live-cloud certification.
 
-## V3 managed Service Coordination worklist — local implementation, 21 October 2026
+## V3 managed Service Coordination worklist — pilot deployed, 21 October 2026
 
 Local branch `v3-deployment` now separates the complete Auckland Job Book from the smaller
 coordinator-managed worklist. Job Book creation explicitly starts unmanaged; Service Coordination
@@ -12,17 +12,30 @@ Job to Service Coordination and can stop managing it without deleting the Job, n
 assignments, schedules or history. Job Book Admin and Office Admin profiles cannot change this
 membership. Personal watchlist reads and additions require the Job to remain explicitly managed.
 
-The source contract adds coordinator-only `gr_UnmanageJobBookJob` to assembly version `1.0.24.0`.
-That assembly and API have not been deployed. The former V1 yellow-cliff Static Web App workflow is
-prepared to build `v3-deployment`, but its production branch has not been switched and V2 remains
-live at kind-wave. Yellow-cliff remains the shared Job Card backend and must not be deleted.
+Signed assembly `1.0.24.0` and coordinator-only `gr_UnmanageJobBookJob` are deployed and verified.
+The package retains public-key token `0edea2881bb8578c` and SHA-256
+`e1f173c0426f79d8ae700c13aacb31614b75040006fb44100444c4fb65eb257b`. The scoped deployment changed
+only the assembly and six reviewed Custom APIs; it changed no roles, assignments, steps, business
+records, seeds or migration state. All 29 existing workflow steps and the current two Office Admin
+and seven Job Book Admin direct Dataverse assignments were independently reverified.
+
+V3 commit `da3bb42` was deployed successfully by GitHub Actions run `39546791899` to
+`yellow-cliff-068680700.7.azurestaticapps.net`. Root and `/jobs` return the V3 application without a
+V2 redirect. The Service Coordination backend is enabled; its anonymous request returns `401`, and
+George's delegated smoke check resolves to Auckland. The personal watch endpoint returned zero rows
+and zero invalid managed/terminal rows before migration. V2 remains live at kind-wave and continues
+using yellow-cliff's preserved Job Card backend.
+
+Yellow-cliff still lacks the GreenTree and TimeCloud operational settings present on V2. No secret
+was copied. Do not treat V3 job creation or GreenTree checks as accepted until that separately
+approved configuration is installed and smoke-tested. Named-role UI acceptance also remains open.
 
 A read-only production snapshot at `2026-10-21T04:47:38Z` found 1,396 Jobs. The deterministic dry
 run plans 254 active historical Jobs as managed Auckland (204 already Auckland and 50 branchless)
 and excludes 1,142 GreenTree-closed Jobs, with zero exceptions. Plan hash
 `6d95606d55fecc00147c8cefb6423d3eb1ab923238ff1f5c14fcbaebdbf912da` is evidence only: counts must
-be regenerated and the exact new hash approved immediately before any Apply. No V3 data migration,
-Dataverse deployment, push or cloud configuration change has occurred. See the
+be regenerated and the exact new hash approved immediately before any Apply. No V3 data migration
+has occurred. See the
 [V3 managed-worklist release plan](docs/features/SERVICE_COORDINATION_V3_MANAGED_WORKLIST.md).
 
 ## V2 release scope — 11 October 2026

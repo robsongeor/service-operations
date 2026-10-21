@@ -15,6 +15,12 @@
 
 ## Unreleased
 
+- Deployed the signed unified Dataverse assembly `1.0.24.0` and created/verified the coordinator-
+  only `gr_UnmanageJobBookJob` API without changing roles, assignments, business data or migration
+  state. Published the isolated V3 pilot from `v3-deployment` to yellow-cliff and enabled its
+  Service Coordination backend; authenticated smoke verification resolved George to Auckland and
+  the unauthenticated boundary failed closed. GreenTree and TimeCloud V3 configuration, named-role
+  acceptance and the historical managed/Auckland migration remain release gates.
 - Began the isolated V3 Service Coordination release. Job Book remains the complete numbered-job
   record; Service Coordination now loads only Jobs explicitly marked for coordinator management.
   Jobs created in Service Coordination are managed by default, while Job Book registration remains

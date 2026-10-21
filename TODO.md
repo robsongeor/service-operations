@@ -63,11 +63,11 @@ This is remaining work, not a completed-change log. See [current state](CURRENT_
 
 - [ ] Release the reviewed
   [Service Coordination V3 managed worklist](docs/features/SERVICE_COORDINATION_V3_MANAGED_WORKLIST.md):
-  deploy and verify assembly/API `1.0.24.0`, publish V3 to the preserved yellow-cliff environment,
-  complete named-role acceptance, regenerate and explicitly approve the migration hash, then apply
-  and verify active historical Jobs as managed Auckland while leaving GreenTree terminal Jobs
-  excluded. Source implementation and the first zero-exception dry run are complete; no live V3
-  mutation or deployment has occurred.
+  signed assembly/API `1.0.24.0` and the preserved yellow-cliff V3 pilot are deployed and verified.
+  Separately approve and install the missing V3 GreenTree/TimeCloud operational settings, complete
+  named-role acceptance, regenerate and explicitly approve the migration hash, then apply and
+  verify active historical Jobs as managed Auckland while leaving GreenTree terminal Jobs excluded.
+  The first zero-exception dry run is evidence only; no live historical migration has occurred.
 
 - [ ] Execute the ordered
   [Service Coordination workflow implementation plan](docs/features/SERVICE_COORDINATION_WORKFLOW_IMPLEMENTATION_PLAN.md)
