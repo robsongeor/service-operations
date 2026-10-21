@@ -140,7 +140,7 @@ test('focused Job assignments request is bounded to the opened Job', async () =>
         const assignments = await fetchJobAssignmentsForJob(token, 'job-id')
         const url = new URL(requestedUrl)
         assert.equal(assignments.length, 1)
-        assert.equal(url.searchParams.get('$filter'), '_gr_job_value eq job-id')
+        assert.equal(url.searchParams.get('$filter'), '_gr_job_value eq job-id and statecode eq 0 and (gr_jobcardstatus ne 122830003 or gr_jobcardstatus eq null)')
         assert.equal(url.searchParams.get('$top'), '51')
         assert.equal(url.searchParams.get('$orderby'), 'gr_assignedon desc')
         assert.match(url.searchParams.get('$expand') ?? '', /gr_Mechanic/)

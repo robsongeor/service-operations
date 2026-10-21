@@ -9,7 +9,7 @@ import { copyNumberedJobBookSpreadsheetRow } from '../jobs/utils/jobBookClipboar
 import { usePrimaryJobEmail } from '../jobs/hooks/usePrimaryJobEmail'
 import { jobBookClipboardSource, jobBookCopyBlockedReason, jobBookEmailBlockedReason } from './jobBookActions'
 import type { JobAssignment, JobAssignmentInput } from '../jobs/types/jobAssignment.types'
-import { createJobAssignment, deleteJobAssignment, fetchJobAssignmentsForJob, updateJobAssignmentStatus } from '../jobs/services/jobAssignmentsApi'
+import { createJobAssignment, deleteJobAssignment, fetchJobAssignmentsForJob, updateJobAssignmentStatus, withdrawJobAssignment } from '../jobs/services/jobAssignmentsApi'
 import { assertJobEmailSendingAllowed, buildAssignmentJobEmail, onlineJobCardPilotEnabled } from '../jobs/services/jobEmail'
 import { assertJobHasEmailableJobNumber } from '../jobs/services/jobEmailRules'
 import { isValidTechnicianEmail } from '../jobs/utils/technicianMailto'
@@ -84,6 +84,9 @@ export function useJobBookActions(getAccessToken: () => Promise<string>, canEmai
     const removeAssignment = useCallback(async (assignmentId: string) => {
         await deleteJobAssignment(await getAccessToken(), assignmentId)
     }, [getAccessToken])
+    const withdrawAssignment = useCallback(async (assignmentId: string) => {
+        await withdrawJobAssignment(await getAccessToken(), assignmentId)
+    }, [getAccessToken])
     const withdrawPrimaryTechnician = useCallback(async () => {
         if (!emailJob?.gr_Mechanic) throw new Error('This Job no longer has an assigned technician.')
         const saved = await saveJobCorrections(await getAccessToken(), emailJob, {
@@ -121,6 +124,6 @@ export function useJobBookActions(getAccessToken: () => Promise<string>, canEmai
     }, [getAccessToken])
     return {
         emailJob, emailPreviousTechnicians, loadingJobId, feedback, dismissFeedback: () => setFeedback(null), emailDeliveryStates,
-        copy, openEmail, close, send, loadAssignments, loadDispatches, addAssignment, removeAssignment, withdrawPrimaryTechnician, sendAssignment,
+        copy, openEmail, close, send, loadAssignments, loadDispatches, addAssignment, removeAssignment, withdrawAssignment, withdrawPrimaryTechnician, sendAssignment,
     }
 }

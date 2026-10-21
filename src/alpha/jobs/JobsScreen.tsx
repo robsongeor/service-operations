@@ -86,7 +86,7 @@ export default function JobsScreen() {
         createJob, updateJob, deleteJob, updateJobStatus, updateJobFields,
         updateJobCardStatus,
         sendPrimaryJobEmail, queuePrimaryJobEmail, emailDeliveryStates, sendAssignmentJobEmail, retryConfirmedDeliveryStatus,
-        createJobAssignment, deleteJobAssignment,
+        createJobAssignment, deleteJobAssignment, withdrawJobAssignment,
         createContactForSite, createEquipment, createSite, createCustomer,
         updateEquipment, setupEquipmentMaintenance, saveEquipmentMaintenanceHistory, deleteEquipment,
         isEquipmentSaving, equipmentSaveError, clearEquipmentSaveError,
@@ -392,6 +392,7 @@ export default function JobsScreen() {
                     onCreateAssignment={createJobAssignment}
                     onEmailAssignment={sendAssignmentJobEmail}
                     onDeleteAssignment={deleteJobAssignment}
+                    onWithdrawAssignment={withdrawJobAssignment}
                     emailDeliveryStates={emailDeliveryStates}
                     onEditJob={(job) => openJob(job)}
                     onOpenJobCard={(job) => openJob(job, 'jobcard')}

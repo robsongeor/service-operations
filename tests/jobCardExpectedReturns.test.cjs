@@ -12,6 +12,7 @@ test('expected returns include assigned technicians who were never sent a link',
     assert.deepEqual(expectedReturns(job, [assignment], [card]).map((item) => item.state), ['received', 'notSent'])
     assert.equal(expectedReturns({ ...job, _gr_mechanic_value: id(5) }, [], [card])[0].state, 'notSent')
     assert.equal(expectedReturns({}, [{ gr_jobassignmentid: id(3) }], [{ assignmentId: id(3), status: 'reviewed' }])[0].state, 'notSent')
+    assert.deepEqual(expectedReturns(job, [{ ...assignment, gr_jobcardstatus: 122830003 }], [card]).map((item) => item.technicianId), [id(2)])
 })
 
 test('latest links determine returns; expired, withdrawn and unreturned cards stay distinct', () => {

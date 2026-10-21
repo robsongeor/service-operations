@@ -64,6 +64,7 @@ type Props = {
     onCreateAssignment: (assignment: JobAssignmentInput) => Promise<void>
     onEmailAssignment: (job: Job, assignment: JobAssignment, draft?: JobEmailDraft) => Promise<void>
     onDeleteAssignment: (assignmentId: string) => Promise<void>
+    onWithdrawAssignment: (assignmentId: string) => Promise<void>
     emailDeliveryStates: Record<string, JobEmailDeliveryState>
     onEditJob: (job: Job) => void
     onOpenJobCard: (job: Job) => void
@@ -105,6 +106,7 @@ export default function JobsTable({
     onCreateAssignment,
     onEmailAssignment,
     onDeleteAssignment,
+    onWithdrawAssignment,
     emailDeliveryStates,
     onEditJob,
     onOpenJobCard,
@@ -721,6 +723,7 @@ export default function JobsTable({
             onCreateAssignment={onCreateAssignment}
             onSendAssignment={onEmailAssignment}
             onDeleteAssignment={onDeleteAssignment}
+            onWithdrawAssignment={onWithdrawAssignment}
             onWithdrawPrimaryTechnician={async () => {
                 await onJobFieldsChange(emailComposerJob.gr_jobid, { 'gr_Mechanic@odata.bind': null })
                 setEmailComposerJob((current) => current?.gr_jobid === emailComposerJob.gr_jobid ? { ...current, gr_Mechanic: undefined } : current)

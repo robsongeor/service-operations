@@ -29,6 +29,7 @@ type Props = {
     onSendAssignment?: (job: Job, assignment: JobAssignment, draft: JobEmailDraft) => Promise<void>
     onDeleteAssignment?: (assignmentId: string) => Promise<void>
     onWithdrawPrimaryTechnician?: () => Promise<void>
+    onWithdrawAssignment?: (assignmentId: string) => Promise<void>
 }
 
 const requestStatusLabel = (request?: JobCardRequestSummary) => {
@@ -61,6 +62,7 @@ export default function JobEmailComposer({
     onSendAssignment,
     onDeleteAssignment,
     onWithdrawPrimaryTechnician,
+    onWithdrawAssignment,
 }: Props) {
     const [primaryRemoved, setPrimaryRemoved] = useState(false)
     const primaryMechanic = primaryRemoved ? undefined : job.gr_Mechanic
@@ -296,6 +298,14 @@ export default function JobEmailComposer({
                     setRecipientEmail('')
                 } catch (reason) {
                     throw new Error(`The Job Card was withdrawn, but ${primaryMechanic.gr_name} could not be unassigned from the Job. ${reason instanceof Error ? reason.message : 'Refresh the Job and try again.'}`)
+                }
+            } else if (request.assignmentId && onWithdrawAssignment) {
+                try {
+                    await onWithdrawAssignment(request.assignmentId)
+                    if (selectedAssignmentId.toLowerCase() === request.assignmentId.toLowerCase()) selectTechnician()
+                    reloadRoster()
+                } catch (reason) {
+                    throw new Error(`The Job Card was withdrawn, but ${request.technicianName}'s assignment could not be closed. ${reason instanceof Error ? reason.message : 'Refresh the Job and try again.'}`)
                 }
             }
             setWithdrawRequestId('')

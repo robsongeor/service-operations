@@ -178,6 +178,7 @@ test('Jobs table uses the in-app composer and pilot-gated link generation', () =
     assert.match(composer, /onWithdrawPrimaryTechnician/)
     assert.match(composer, /primaryWithdrawable/)
     assert.match(composer, /await history\.withdraw[\s\S]*await onWithdrawPrimaryTechnician\(\)[\s\S]*setPrimaryRemoved\(true\)/)
+    assert.match(composer, /request\.assignmentId[\s\S]*await onWithdrawAssignment\(request\.assignmentId\)[\s\S]*reloadRoster\(\)/)
     assert.match(composer, /withdrawn from this Job\. Their Job Card is no longer required/)
     assert.match(composer, /historicalRequests/)
     assert.match(composer, /onSendAssignment/)

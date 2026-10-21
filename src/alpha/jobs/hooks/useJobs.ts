@@ -33,6 +33,7 @@ import {
     deleteJobAssignment as deleteJobAssignmentApi,
     fetchJobAssignmentsForJob as fetchJobAssignmentsForJobApi,
     updateJobAssignmentStatus as updateJobAssignmentStatusApi,
+    withdrawJobAssignment as withdrawJobAssignmentApi,
 } from '../services/jobAssignmentsApi'
 import type { JobAssignment } from '../types/jobAssignment.types'
 import { fetchMechanics as fetchStaffDirectory } from '../../mechanics/services/mechanicsApi'
@@ -978,6 +979,11 @@ export function useJobs(options: UseJobsOptions = {}) {
         await deleteJobAssignmentApi(token, assignmentId)
     }
 
+    const withdrawJobAssignment = async (assignmentId: string) => {
+        const token = await getAccessToken()
+        await withdrawJobAssignmentApi(token, assignmentId)
+    }
+
     const updateJobCardStatus = async (jobId: string, status: JobCardStatus) => {
         const token = await getAccessToken()
         await updateJobCardStatusApi(token, jobId, status)
@@ -1600,6 +1606,7 @@ export function useJobs(options: UseJobsOptions = {}) {
         retryConfirmedDeliveryStatus,
         createJobAssignment,
         updateJobAssignmentStatus,
+        withdrawJobAssignment,
         deleteJobAssignment,
         updateJobFields,
         updateJob,

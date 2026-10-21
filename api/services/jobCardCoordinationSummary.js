@@ -101,7 +101,7 @@ async function readDataverseBatch({ origin, authorization, jobIds, fetchImpl }) 
     const assignmentFilter = jobIds.map((jobId) => `_gr_job_value eq ${jobId}`).join(' or ')
     const [jobsResponse, assignmentsResponse] = await Promise.all([
         fetchImpl(`${origin}/api/data/v9.2/gr_jobs?$select=gr_jobid,gr_status,_gr_mechanic_value&$filter=${encodeURIComponent(`(${jobFilter})`)}`, { headers, redirect: 'error' }),
-        fetchImpl(`${origin}/api/data/v9.2/gr_jobassignments?$select=gr_jobassignmentid,_gr_job_value,_gr_mechanic_value&$filter=${encodeURIComponent(`(${assignmentFilter}) and statecode eq 0`)}&$top=501`, { headers, redirect: 'error' }),
+        fetchImpl(`${origin}/api/data/v9.2/gr_jobassignments?$select=gr_jobassignmentid,_gr_job_value,_gr_mechanic_value,gr_jobcardstatus&$filter=${encodeURIComponent(`(${assignmentFilter}) and statecode eq 0`)}&$top=501`, { headers, redirect: 'error' }),
     ])
     if ([jobsResponse, assignmentsResponse].some((response) => response.status === 401 || response.status === 403)) {
         const error = new Error('access')
