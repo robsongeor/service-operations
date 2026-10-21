@@ -84,7 +84,7 @@ export function useJobBookActions(getAccessToken: () => Promise<string>, canEmai
     const removeAssignment = useCallback(async (assignmentId: string) => {
         await deleteJobAssignment(await getAccessToken(), assignmentId)
     }, [getAccessToken])
-    const removePrimaryTechnician = useCallback(async () => {
+    const withdrawPrimaryTechnician = useCallback(async () => {
         if (!emailJob?.gr_Mechanic) throw new Error('This Job no longer has an assigned technician.')
         const saved = await saveJobCorrections(await getAccessToken(), emailJob, {
             description: emailJob.gr_description ?? '',
@@ -121,6 +121,6 @@ export function useJobBookActions(getAccessToken: () => Promise<string>, canEmai
     }, [getAccessToken])
     return {
         emailJob, emailPreviousTechnicians, loadingJobId, feedback, dismissFeedback: () => setFeedback(null), emailDeliveryStates,
-        copy, openEmail, close, send, loadAssignments, loadDispatches, addAssignment, removeAssignment, removePrimaryTechnician, sendAssignment,
+        copy, openEmail, close, send, loadAssignments, loadDispatches, addAssignment, removeAssignment, withdrawPrimaryTechnician, sendAssignment,
     }
 }
