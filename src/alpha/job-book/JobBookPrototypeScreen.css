@@ -934,7 +934,7 @@
     width: 100%;
     min-width: 0;
     max-width: 100%;
-    max-height: max(280px, calc(100dvh - 300px));
+    max-height: max(280px, calc(100dvh - 184px));
     overflow: auto;
     overscroll-behavior-x: contain;
     scrollbar-gutter: stable;
