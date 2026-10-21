@@ -34,6 +34,10 @@ const serviceCoordinationService = require('./api/services/serviceCoordinationSe
   handleServiceCoordination: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
   jsonResponse: (status: number, body: object, headers?: Record<string, string>) => LocalFunctionResponse
 }
+const workshopAssistantService = require('./api/services/workshopAssistantService') as {
+  handleWorkshopAssistant: (request: LocalFunctionRequest) => Promise<LocalFunctionResponse>
+  jsonResponse: (status: number, body: object, headers?: Record<string, string>) => LocalFunctionResponse
+}
 type GreenTreeJobChangesEndpoint = (
   context: { res?: LocalFunctionResponse },
   request: LocalFunctionRequest,
@@ -650,6 +654,44 @@ function serviceCoordinationProxy(env: Record<string, string | undefined>): Plug
   }
 }
 
+function workshopAssistantProxy(env: Record<string, string | undefined>): Plugin {
+  for (const name of [
+    'WORKSHOP_ASSISTANT_BACKEND_ENABLED',
+    'AZURE_OPENAI_ENDPOINT',
+    'AZURE_OPENAI_API_KEY',
+    'AZURE_OPENAI_REALTIME_DEPLOYMENT',
+    'AZURE_OPENAI_REALTIME_VOICE',
+    'AZURE_OPENAI_TRANSCRIPTION_DEPLOYMENT',
+  ]) {
+    if (env[name]) process.env[name] ||= env[name]
+  }
+  process.env.DATAVERSE_URL ||= env.DATAVERSE_URL || env.VITE_DATAVERSE_URL
+  const installMiddleware = (middlewares: { use: (handler: (request: IncomingMessage, response: ServerResponse, next: () => void) => void) => void }) => {
+    middlewares.use((request, response, next) => {
+      if (!request.url) return next()
+      const requestUrl = new URL(request.url, 'http://localhost')
+      if (requestUrl.pathname !== '/api/workshopassistant') return next()
+      void (async () => {
+        const parsed = await readLimitedJsonBody(request, 4096)
+        if (parsed.tooLarge) return sendFunctionResponse(response, workshopAssistantService.jsonResponse(413, { error: 'The request is too large.' }))
+        if (parsed.body === null) return sendFunctionResponse(response, workshopAssistantService.jsonResponse(400, { error: 'The request body is invalid.' }))
+        const result = await workshopAssistantService.handleWorkshopAssistant({
+          method: request.method,
+          headers: request.headers,
+          query: Object.fromEntries(requestUrl.searchParams),
+          body: parsed.body,
+        })
+        sendFunctionResponse(response, result)
+      })().catch(() => sendFunctionResponse(response, workshopAssistantService.jsonResponse(503, { error: 'The Workshop Assistant is temporarily unavailable.' })))
+    })
+  }
+  return {
+    name: 'workshop-assistant-api-proxy',
+    configureServer(server) { installMiddleware(server.middlewares) },
+    configurePreviewServer(server) { installMiddleware(server.middlewares) },
+  }
+}
+
 function greenTreeJobChangesProxy(env: Record<string, string | undefined>): Plugin {
   for (const name of [
     'DATAVERSE_URL',
@@ -738,6 +780,7 @@ export default defineConfig(({ mode }) => {
       liftTrucksProxy(env),
       greenTreeJobChangesProxy(env),
       serviceCoordinationProxy(env),
+      workshopAssistantProxy(env),
       jobSubmissionProxy(env),
       siteCheckAssignmentProxy(env),
       chargeableInvoicePreviewProxy(env),

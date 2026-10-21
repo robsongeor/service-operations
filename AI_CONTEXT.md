@@ -39,6 +39,10 @@ Dataverse requests. Domain helpers own reusable business calculations and valida
   [`docs/architecture/data-loading-and-synchronization.md`](docs/architecture/data-loading-and-synchronization.md):
   Dataverse remains authoritative, shared query state is account/environment scoped, and stale
   requests must never overwrite newer mutations or refreshes.
+- The Workshop Assistant is an owner-only, default-off, read-only pilot. Its Realtime session is
+  issued only after server-side Dataverse identity validation; model tools are fixed bounded reads
+  and model output never authorizes an operational write. Future task/transport actions require a
+  separately reviewed pending-action and manager-approval boundary.
 
 Feature-specific rules belong in their authoritative architecture documents.
 

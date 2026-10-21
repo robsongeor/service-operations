@@ -4,6 +4,17 @@ Updated 10 October 2026 from the [source audit](docs/reviews/2026-10-10-applicat
 This is remaining work, not a completed-change log. See [current state](CURRENT_STATE.md) and
 [release gates](RELEASE_READINESS.md); historical backlog is retained in Git.
 
+## Private Workshop Assistant pilot
+
+- [x] Add a default-off, George-only read-only assistant shell with text, push-to-talk, bounded
+  Equipment/Job tools, record-source chips and independently enforced server authorization.
+- [x] Provision the dedicated Azure OpenAI resource and quota-compatible Realtime/transcription
+  deployments, store the key only in server settings, and pass George's signed-in localhost session.
+- [ ] Publish the enabled V3 client and complete a deployed read-only Equipment/Job lookup. Keep the
+  permanent Azure key out of source and all `VITE_` settings.
+- [ ] Design and approve the Assistant Action, Workshop Task and Transport Request Dataverse schema,
+  manager permission and retention rules before implementing any mutation or provisioning metadata.
+
 ## Current review and technician workspace
 
 - [x] **Job Card review screens/functions — initial review completed 10 October:**

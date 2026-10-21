@@ -26,6 +26,9 @@ jobs:
       VITE_APPLICATION_ACCESS_CONTROL_ENABLED: "true"
       VITE_SERVICE_COORDINATION_BRANCH_ENABLED: "true"
       VITE_SERVICE_COORDINATION_WATCHLIST_ENABLED: "true"
+      # Private pilot: the application and API independently restrict access to George.
+      VITE_WORKSHOP_ASSISTANT_ENABLED: "true"
+      VITE_WORKSHOP_ASSISTANT_REALTIME_ENABLED: "true"
       VITE_JOB_CARD_PROGRESS_SUMMARY_ENABLED: "false"
       # Yellow-cliff remains the authoritative same-origin Job Card backend. V2 continues to proxy to it.
       VITE_JOB_CARD_METER_APPROVAL_ENABLED: "false"

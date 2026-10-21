@@ -1,0 +1,57 @@
+.workshop-assistant-launcher {
+    position: fixed;
+    z-index: 900;
+    right: 22px;
+    bottom: 22px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-height: 46px;
+    padding: 0 16px 0 9px;
+    border: 1px solid #165f58;
+    border-radius: 24px;
+    background: #176f66;
+    color: #fff;
+    box-shadow: 0 12px 28px rgba(24, 73, 66, .25);
+    font-size: .78rem;
+    font-weight: 760;
+    cursor: pointer;
+}
+.workshop-assistant-launcher > span { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 50%; background: rgba(255,255,255,.17); font-size: .68rem; letter-spacing: .04em; }
+.workshop-assistant-launcher:focus-visible { outline: 3px solid rgba(23,111,102,.35); outline-offset: 3px; }
+.workshop-assistant-drawer { width: min(560px, 94vw); }
+.workshop-assistant-clear { width: auto !important; padding: 0 12px; border-radius: 18px !important; font-size: .72rem !important; font-weight: 750; }
+.workshop-assistant-notice { margin: 18px 0 0; padding: 11px 12px; border: 1px solid #d9e5df; border-radius: 10px; background: #f3f8f5; color: #52615a; line-height: 1.45; }
+.workshop-assistant-messages { display: grid; gap: 12px; padding: 18px 0; }
+.workshop-assistant-message { max-width: 88%; padding: 10px 12px; border-radius: 13px; }
+.workshop-assistant-message > span { display: block; margin-bottom: 4px; color: #69736d; font-size: .63rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.workshop-assistant-message p { margin: 0; color: #26312c; line-height: 1.5; white-space: pre-wrap; }
+.workshop-assistant-message p i { color: #176f66; font-style: normal; }
+.workshop-assistant-message.assistant { justify-self: start; background: #eef3f0; }
+.workshop-assistant-message.user { justify-self: end; background: #dceee9; }
+.workshop-assistant-sources { margin-bottom: 18px; padding-top: 14px; border-top: 1px solid #e2e6e3; }
+.workshop-assistant-sources h3 { margin: 0 0 8px; color: #35413b; font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; }
+.workshop-assistant-sources > div { display: flex; flex-wrap: wrap; gap: 7px; }
+.workshop-assistant-sources span { display: grid; gap: 1px; max-width: 220px; padding: 7px 9px; border: 1px solid #dce3df; border-radius: 8px; background: #fff; color: #34413b; font-size: .72rem; font-weight: 720; }
+.workshop-assistant-sources small { overflow: hidden; color: #77807b; font-size: .64rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.workshop-assistant-error { margin: 0 0 12px; padding: 10px 12px; border-radius: 8px; background: #fae8e6; color: #943d37; line-height: 1.4; }
+.workshop-assistant-composer { display: grid; gap: 6px; padding-top: 14px; border-top: 1px solid #e2e6e3; }
+.workshop-assistant-composer > label { color: #37433d; font-size: .72rem; font-weight: 760; }
+.workshop-assistant-composer > div { display: flex; gap: 8px; }
+.workshop-assistant-composer input { flex: 1; min-width: 0; min-height: 42px; box-sizing: border-box; padding: 0 11px; border: 1px solid #cdd6d1; border-radius: 9px; color: #202823; }
+.workshop-assistant-composer button, .workshop-assistant-talk { border: 1px solid #176f66; border-radius: 9px; background: #176f66; color: #fff; font-weight: 760; cursor: pointer; }
+.workshop-assistant-composer button { padding: 0 14px; }
+.workshop-assistant-composer button:disabled { cursor: wait; opacity: .55; }
+.workshop-assistant-talk { display: grid; width: 100%; gap: 2px; margin-top: 10px; padding: 12px; text-align: center; touch-action: none; }
+.workshop-assistant-talk.active { border-color: #963e3e; background: #a64640; box-shadow: 0 0 0 4px rgba(166,70,64,.12); }
+.workshop-assistant-talk small { color: rgba(255,255,255,.8); font-size: .65rem; font-weight: 500; }
+.workshop-assistant-status { position: relative; padding-left: 15px; color: #657069; font-size: .72rem; font-weight: 720; }
+.workshop-assistant-status::before { position: absolute; top: 50%; left: 0; width: 8px; height: 8px; border-radius: 50%; background: #9aa39e; content: ''; transform: translateY(-50%); }
+.workshop-assistant-status.ready::before { background: #2f8c68; }
+.workshop-assistant-status.listening::before { background: #a64640; }
+.workshop-assistant-status.connecting::before { background: #c38a2c; }
+.workshop-assistant-status.error::before { background: #a64640; }
+@media (max-width: 760px) {
+    .workshop-assistant-launcher { right: 14px; bottom: 14px; }
+    .workshop-assistant-drawer { width: 100vw; max-width: none; }
+}

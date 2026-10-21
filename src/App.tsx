@@ -36,6 +36,7 @@ const OverviewScreen = lazy(() => import('./alpha/overview/OverviewScreen'))
 const EquipmentPhotoUploadScreen = lazy(() => import('./alpha/equipment-photos/EquipmentPhotoUploadScreen'))
 const MaintenanceBookingScreen = lazy(() => import('./alpha/maintenance-booking/MaintenanceBookingScreen'))
 const JobSpreadsheetImportScreen = lazy(() => import('./alpha/job-import/JobSpreadsheetImportScreen'))
+const WorkshopAssistantLauncher = lazy(() => import('./alpha/workshop-assistant/WorkshopAssistantLauncher'))
 
 function RouteLoadingFallback() {
   return <div role="status" aria-live="polite" style={{ padding: '24px', color: '#66736c', fontSize: '.8rem' }}>Loading page…</div>
@@ -47,6 +48,9 @@ function App() {
   const activeAccount = useActiveMsalAccount()
   const signedInUser = getSignedInUserInfo(activeAccount)
   const access = applicationAccessFromEnvironment(activeAccount)
+  const workshopAssistantAvailable = import.meta.env.VITE_WORKSHOP_ASSISTANT_ENABLED === 'true'
+    && import.meta.env.VITE_WORKSHOP_ASSISTANT_REALTIME_ENABLED === 'true'
+    && isServiceOperationsAdministrator(signedInUser)
 
   if (location.pathname === '/portal/job' || location.pathname.startsWith('/portal/job/')) {
     return <Suspense fallback={<RouteLoadingFallback />}>
@@ -83,6 +87,7 @@ function App() {
     <QuoteEditorOverlayProvider>
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       <DataverseSessionRecovery />
+      {workshopAssistantAvailable && <Suspense fallback={null}><WorkshopAssistantLauncher /></Suspense>}
       {/* Sidebar */}
       <Sidebar access={access} />
 

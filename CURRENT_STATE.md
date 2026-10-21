@@ -3,6 +3,30 @@
 Reviewed 21 October 2026 against production V2 and the deployed `v3-deployment` acceptance candidate.
 This page is a current summary, not a release history or blanket live-cloud certification.
 
+## Private Workshop Assistant — private pilot, 21 October 2026
+
+The first Workshop Assistant slice is implemented and passes a signed-in localhost acceptance. It
+is fail-closed behind separate browser and server feature flags and is restricted on both sides to
+George's existing Full Access account (`georger@liftrucks.co.nz`). The assistant is lazy-loaded, so
+other users do not receive its application bundle when they are not the owner.
+
+The pilot supports typed questions and hold-to-talk voice through Azure OpenAI Realtime WebRTC. A
+server function validates George's delegated Dataverse identity before issuing a short-lived Azure
+OpenAI client secret; the permanent Azure key remains server-only. The model can call four bounded,
+read-only tools to search Equipment and Jobs or retrieve their operational context. It cannot create
+or update workshop tasks, transport requests, Jobs, Equipment or any other Dataverse record. Returned
+records are shown as sources in the drawer, and the session instructions treat retrieved business
+data as untrusted content rather than instructions.
+
+The dedicated East US 2 Azure OpenAI resource, quota-compatible Realtime mini and transcription
+deployments, and server-only V3 settings are provisioned. A signed-in George-only localhost session
+opened the drawer, created a short-lived session and returned a successful harmless response. The
+production build, focused lint, all existing regression suites and the 180-test Job Book suite pass.
+The normal parallel Job Book command can encounter a Windows Vite-cache file lock in this workspace;
+the same suite passes with serial test execution. Publishing the enabled V3 client and completing a
+deployed read-only lookup remain pending. See the
+[Workshop Assistant architecture](docs/architecture/workshop-assistant.md) and `TODO.md`.
+
 ## V3 managed Service Coordination worklist — deployed acceptance candidate, 21 October 2026
 
 Local branch `v3-deployment` now separates the complete Auckland Job Book from the smaller
