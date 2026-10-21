@@ -1,9 +1,10 @@
 # Unified Job workflow — Dataverse readiness and rollout
 
-Recorded deployment: restricted-access guard deployed 9 October 2026. The 10 October source audit
-confirms V2 builds unified registration/workflow enabled; the older flag-off wording and readiness
-manifest are not current build configuration. Migration and number-invariant activation remain
-separate gates. No fresh cloud verification was performed in the documentation audit.
+Recorded deployment: restricted-access guard deployed 9 October 2026 and superseded by signed
+assembly `1.0.24.0` on 21 October. V2/V3 build unified registration/workflow enabled; all 29
+restricted-access and number-invariant steps are enabled and independently verified. The Auckland
+cutover and approved migrations are complete. Other regional cutovers, real named-account acceptance
+and recovery/monitoring evidence remain separate gates.
 
 Current blockers: [release readiness](../RELEASE_READINESS.md) and
 [source audit](reviews/2026-10-10-application-audit.md). Keep the dated preflight below as history;
@@ -94,16 +95,18 @@ The exact offline expansion is now captured in the validated
 additions, one four-type `1.0.1.0` assembly, five APIs, 29 registered guard steps, four default-deny
 profiles and the eleven-account assignment plan.
 
-## Remaining gates before unified-workflow enablement
+## Original remaining gates before unified-workflow enablement
 
-The access guard is provisioned. The following remain open:
+This dated checklist explains the original gate. Unified workflow is now enabled; only the items not
+explicitly recorded complete in current-state/release-readiness documents remain open:
 
 - approve migration/backfill, regional sequence ownership and rollback, preserving historical rows;
 - complete real named-user allowed/denied tests for the restricted profiles;
 - complete signing-key recovery backup and prove a recovery build;
 - define controlled target records, evidence capture and rollback ownership.
 
-Keep the 15 number-invariant steps disabled until the separate cutover is approved.
+The separate Auckland cutover was approved and all 15 number-invariant steps are now enabled and
+verified. Do not reuse the original instruction to disable them.
 
 The separate [migration and role review](unified-job-workflow-migration-and-security.md) now defines
 the aggregate-only historical classifier, no-auto-link rule, backfill evidence/rollback gates and

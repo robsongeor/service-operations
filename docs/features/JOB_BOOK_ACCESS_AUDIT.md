@@ -1,5 +1,16 @@
 # Microsoft access audit — Job Book rollout
 
+> **Current-state note — 21 October 2026:** the tables below are the original 3 October snapshot,
+> not the present assignment state. A fresh exact audit verified all 13 enabled named users have
+> their intended application role and matching Dataverse workflow role, with no broader overlapping
+> workflow role. George is Full Access; Bruce, Andy and Pubudu are Service Coordinators; Jess and
+> Nargiza are Office Admins; Martin, Lance, Ranjani, Ashneel, Kaizer, Paul and James are Job Book
+> Admins. Andy's home branch is Christchurch and the other 12 are Auckland. The seven home branches
+> that were blank were applied through owner-approved exact plans and verified with zero mismatches.
+> Real-account operation acceptance remains open; use
+> [the access plan](JOB_BOOK_ACCESS_PLAN.md) and [current state](../../CURRENT_STATE.md) for current
+> decisions rather than treating the historic findings below as live.
+
 Read-only audit performed 3 October 2026 using George's existing Azure sign-in.
 No role definitions, grants, assignments, environment settings or business data were changed.
 

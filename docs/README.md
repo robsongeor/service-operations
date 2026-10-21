@@ -16,6 +16,7 @@ by scanning the repository.
 | Dedicated Job Card meter identity, guard rollout and rollback | [`job-card-meter-writer-rollout.md`](job-card-meter-writer-rollout.md) |
 | Obsolete features, dependencies and safe-removal checks | [`architecture/retirement-plan.md`](architecture/retirement-plan.md) |
 | Active branch, blockers, and deployment readiness | [`../CURRENT_STATE.md`](../CURRENT_STATE.md) |
+| Current V3 managed-worklist release record | [`features/SERVICE_COORDINATION_V3_MANAGED_WORKLIST.md`](features/SERVICE_COORDINATION_V3_MANAGED_WORKLIST.md) |
 | Prioritised product and technical backlog | [`../TODO.md`](../TODO.md) |
 | System boundaries and document map | [`architecture/README.md`](architecture/README.md) |
 | Dataverse conventions and relationships | [`architecture/dataverse.md`](architecture/dataverse.md) |
@@ -33,7 +34,12 @@ is intentionally task-focused; this knowledge base remains authoritative for arc
 security, rollout and operational controls.
 
 - [`wiki/Getting-Started-and-Signing-In.md`](wiki/Getting-Started-and-Signing-In.md)
+- [`wiki/Auckland-Job-Book-Migration.md`](wiki/Auckland-Job-Book-Migration.md)
 - [`wiki/Job-Book-Admin-Guide.md`](wiki/Job-Book-Admin-Guide.md)
+- [`wiki/Office-Admin-Guide.md`](wiki/Office-Admin-Guide.md)
+- [`wiki/Customers-Sites-and-Contacts.md`](wiki/Customers-Sites-and-Contacts.md)
+- [`wiki/Equipment-Guide.md`](wiki/Equipment-Guide.md)
+- [`wiki/Office-Job-Card-Review.md`](wiki/Office-Job-Card-Review.md)
 
 ## Job Book rollout
 
@@ -60,7 +66,7 @@ The [Microsoft access audit](features/JOB_BOOK_ACCESS_AUDIT.md) records live rea
 | Maintenance | [`architecture/maintenance.md`](architecture/maintenance.md) | [`maintenance-programmes-dataverse.md`](maintenance-programmes-dataverse.md), [`site-maintenance-settings-schema.md`](site-maintenance-settings-schema.md) |
 | Customers | [`architecture/customer-dashboard.md`](architecture/customer-dashboard.md) | [`purchase-order-recipient-schema.md`](purchase-order-recipient-schema.md); Site and Equipment schemas linked from their owning documents |
 | Scheduler | [`architecture/scheduler.md`](architecture/scheduler.md) | Job scheduling relationships are documented with Jobs |
-| WOF/REGO | [`architecture/wof.md`](architecture/wof.md) | [`wof-dataverse-schema.md`](wof-dataverse-schema.md) |
+| WOF | [`architecture/wof.md`](architecture/wof.md) | [`wof-dataverse-schema.md`](wof-dataverse-schema.md) — includes registration/REGO fields used by the WOF workflow |
 | Quotes and pricing | [`architecture/quotes.md`](architecture/quotes.md) | [`quotes-dataverse-schema.md`](quotes-dataverse-schema.md) |
 | Chargeable Invoice Review (release validation pending) | [`features/CHARGEABLE_INVOICE_REVIEW_IMPLEMENTATION_PLAN.md`](features/CHARGEABLE_INVOICE_REVIEW_IMPLEMENTATION_PLAN.md) | [`chargeable-invoice-review-dataverse-schema.md`](chargeable-invoice-review-dataverse-schema.md) — provisioned schema and unassigned role; [`chargeable-invoice-review-operations.md`](chargeable-invoice-review-operations.md) — release/smoke/rollback checklist |
 

@@ -461,8 +461,9 @@ Implemented in this mode:
 - Both creation drawers also use the canonical Equipment/location selector and Job details fields.
   Customer, Site and Contact remain hidden until Equipment is selected or the user explicitly
   chooses **Equipment not known yet**. Service Coordination adds only Job type and Status controls.
-- Service coordination uses one tab row: Operational, Breakdown, Service, Workshop, WOF,
-  Site Check and All jobs. Operational uses explicit coordinator membership. The retired
+- Service Coordination uses managed-work type tabs for Operational, Breakdown, Service, Workshop,
+  WOF and All jobs. The former Site Check tab has been removed; generated Site Check work remains
+  in its dedicated workflow. Operational uses explicit coordinator membership. The retired
   Unconfirmed status has no tab and legacy values behave as Staging. All jobs includes read-only unlinked ledger history
   alongside working Jobs, without creating or converting historical records. An unnumbered managed Job can belong to both Staging and
   Operational. Older Jobs lacking the new membership metadata keep their existing managed fallback.

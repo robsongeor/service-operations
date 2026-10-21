@@ -27,7 +27,7 @@ jobs:
       # Service Coordination metadata, historical branch migration, user home branches and backend are verified.
       VITE_SERVICE_COORDINATION_BRANCH_ENABLED: "true"
       VITE_SERVICE_COORDINATION_WATCHLIST_ENABLED: "true"
-      # Keep progress off until the shared V1 Job Card backend supports and accepts the summary contract.
+      # Keep progress off until the authoritative yellow-cliff Job Card backend accepts the summary contract.
       VITE_JOB_CARD_PROGRESS_SUMMARY_ENABLED: "false"
       # V2 reuses the proven production Job Card API/storage until its private backend settings are provisioned.
       VITE_JOB_CARD_SHARED_BACKEND: "v1-production"

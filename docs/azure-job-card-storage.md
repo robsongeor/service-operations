@@ -2,12 +2,14 @@
 
 ## Current V2 dependency
 
-The V2 build sets `VITE_JOB_CARD_SHARED_BACKEND=v1-production`; interactive Job Card APIs
-therefore use the V1 backend bridge. Do not provision a new isolated store and simply clear that
+The V2 build sets the legacy compatibility value `VITE_JOB_CARD_SHARED_BACKEND=v1-production`;
+interactive Job Card APIs therefore use the authoritative yellow-cliff backend bridge. The
+yellow-cliff frontend is now V3, but the preserved Job Card storage/API contract is unchanged. Do
+not provision a new isolated store and simply clear that
 flag: existing links, submissions, evidence and review history must remain reachable. Verify the
 reconciliation service uses the same authoritative store. See
 [deployment](architecture/deployment.md#temporary-v2-job-card-backend-bridge) and the
-[retirement runbook](architecture/retirement-plan.md#v2--v1-job-card-bridge).
+[retirement runbook](architecture/retirement-plan.md#v2--authoritative-yellow-cliff-job-card-bridge).
 
 
 ## Purpose

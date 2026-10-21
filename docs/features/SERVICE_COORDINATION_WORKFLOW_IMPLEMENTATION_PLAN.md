@@ -1,5 +1,15 @@
 # Service Coordination Workflow Implementation Plan
 
+> **Current deployment overlay — 21 October 2026:** this is the original ordered delivery plan.
+> Phases 0–9 contain dated evidence that remains useful, but their earlier “not deployed,” gate-off
+> and unapplied-Plan statements are not the current release status. V3 is deployed to yellow-cliff;
+> branch and personal-watch client/server gates are enabled; the 254 active historical Jobs are
+> verified managed Auckland; 1,142 GreenTree-closed Jobs remain excluded unchanged; and all 13
+> reviewed users have verified home branches. Job Card progress summaries remain disabled. Real
+> restricted-account acceptance and the explicit go/no-go record remain open. See the
+> [V3 managed-worklist release plan](SERVICE_COORDINATION_V3_MANAGED_WORKLIST.md) and
+> [current state](../../CURRENT_STATE.md) for the authoritative status.
+
 ## Objective
 
 Implement the agreed Service Coordination lifecycle, branch-scoped work queue and private personal
@@ -102,7 +112,7 @@ Status: [x] Complete — source inventory recorded 19 October 2026; no schema or
 - [x] Confirm the deployed/source numeric Job Status contract and current global Choice labels.
 - [x] Inventory all regional ledger relationships and every current source of branch-like data.
 - [x] Confirm that no authoritative Job operating-branch or personal-watch table already exists.
-- [x] Inventory V1/V2 Job Card routing so the progress endpoint is implemented against the same
+- [x] Inventory V2/yellow-cliff Job Card routing so the progress endpoint is implemented against the same
   Azure Table store used by technician submission and office review.
 - [x] Record which participating System Users are intended for Auckland and Christchurch without
   committing email addresses, tenant identifiers or customer data.
@@ -139,8 +149,9 @@ Status: [x] Complete — source inventory recorded 19 October 2026; no schema or
   Allocated, and its exact allowed-payload mirror exists in
   `dataverse/access/RestrictedAccessPlugin.cs`. Phase 2 must change and test both together; neither
   was edited in Phase 0 or 1.
-- V2 marks shared Job Card requests with `VITE_JOB_CARD_SHARED_BACKEND=v1-production`; Vite and the
-  `jobsubmission`/`jobcardreviews` proxies route them to the V1 production authority. New progress
+- V2 marks shared Job Card requests with the legacy compatibility value
+  `VITE_JOB_CARD_SHARED_BACKEND=v1-production`; Vite and the `jobsubmission`/`jobcardreviews`
+  proxies route them to the authoritative yellow-cliff backend. New progress
   reads must use that same backend and store rather than infer state from V2 Dataverse projections.
 - Regional ledgers provide Auckland, Waikato, Hastings and Christchurch number-book relationships.
   Technician `gr_region` is free text, Business Unit is not the accepted operating-branch source,
@@ -211,7 +222,8 @@ Status: [x] Complete — source implementation and full validation passed 19 Oct
 
 ## Phase 2 — Align registration, dispatch and return automation
 
-Status: [x] Complete — source alignment and full validation passed 19 October 2026; not deployed
+Status: [x] Complete — source alignment validated 19 October and deployed through the later signed
+workflow packages; real restricted-account acceptance remains separate
 
 ### Source changes
 
@@ -393,7 +405,8 @@ confirms there is no target-environment conflict.
 
 ## Phase 4 — Implement authenticated branch/watch service boundaries
 
-Status: [x] Complete in source — backend and local middleware implemented; gate remains off
+Status: [x] Deployed — authenticated branch/watch backend is enabled on V2/V3; anonymous access
+fails closed and real named-account acceptance remains open
 
 ### Server design
 
@@ -440,7 +453,8 @@ proxy helper merely to match these suggested filenames.
 
 ## Phase 5 — Add bounded Job Card progress summaries
 
-Status: [x] Complete in source — authoritative batched summary operation implemented; gate remains off
+Status: [x] Complete in source — authoritative batched summary operation implemented; client and
+server progress-summary gates remain off pending shared-backend acceptance
 
 ### Backend contract
 
@@ -460,7 +474,7 @@ table row. Fail visibly on truncation/incomplete roster evidence rather than cla
 
 ### Shared-backend constraint
 
-V2 currently bridges Job Card requests to the authoritative V1 backend. Deploy/verify the backend
+V2 currently bridges Job Card requests to the authoritative yellow-cliff backend. Deploy/verify the backend
 summary capability before enabling the V2 client gate. Do not calculate progress from a different
 partial store or from legacy Job Card Status alone.
 
@@ -481,8 +495,8 @@ partial store or from legacy Job Card Status alone.
 
 ## Phase 6 — Implement branch queue and personal watchlist UI
 
-Status: [x] Complete in source — branch/watch/progress UI and Job Book branch stamping implemented;
-gates remain off pending migration and named-user acceptance
+Status: [x] Deployed — branch queue, All branches, personal watchlist and Job Book branch stamping
+are enabled; Job Card progress remains off and real named-account acceptance remains open
 
 ### Data-loading changes
 
@@ -539,12 +553,14 @@ gates remain off pending migration and named-user acceptance
 ### Exit criteria
 
 - Focused UI/data-loading tests and full source gate pass.
-- Gates remain off until Phases 3, 7 and 8 are approved/complete.
+- Branch/watch gates were enabled only after Phases 3, 7 and 8 passed their approved rollout;
+  Job Card progress remains independently off.
 
 ## Phase 7 — Complete evidence-based status reconciliation and branch migration tooling
 
-Status: [x] Complete in source — deterministic classifier and branch hierarchy, exact-hash Plan,
-checkpointed ETag Apply/Verify and conditional rollback implemented; no live Apply performed
+Status: [x] Complete — deterministic classifier and branch hierarchy, exact-hash Plan,
+checkpointed ETag Apply/Verify and conditional rollback implemented. Approved live migrations are
+recorded below and in the V3 managed-worklist release plan; ordinary source tasks still cannot Apply.
 
 ### Remaining status reconciliation
 
@@ -596,8 +612,9 @@ exceptions unless an exact population decision is approved.
 
 ## Phase 8 — Controlled metadata, user mapping and migration rehearsal
 
-Status: [ ] Exact-Plan approval gate — metadata is verified, the Auckland historical baseline is
-planned, 43 unclassified Jobs are quarantined, and participating-user mappings are not authoritative
+Status: [x] Completed for the approved rollout population — metadata, reviewed branch mappings and
+approved migrations were applied and verified. The dated rehearsal evidence below remains the audit
+trail for superseded plans and exceptions.
 
 ### Order
 
@@ -618,7 +635,8 @@ planned, 43 unclassified Jobs are quarantined, and participating-user mappings a
   `1b63fb82340a1b2bca732f7b91020f69936fc5900387000418bca5247f24421c`.
 - 17 Jobs classify from unambiguous supported regional prefixes; 1,293 plain-number Jobs require
   an approved legacy source map and 43 Jobs have no accepted branch evidence.
-- No branch Plan was applied. No participating System User branch was set because the exact
+- At that 19 October checkpoint, no branch Plan was applied and no participating System User branch
+  was set because the exact
   Auckland/Christchurch user mapping has not been supplied as an approved artifact.
 - These counts trigger the documented stop condition: enabling branch scope now would hide most
   historical work.
@@ -633,21 +651,22 @@ planned, 43 unclassified Jobs are quarantined, and participating-user mappings a
   `de9c8454ed78460d46cfebd9b60dd1fc37c6c484727b5774f87fc8df6df3ab74`.
 - A CSV exception queue and a blank branch-mapping sheet for the three current Full/Coordinator
   participants were generated outside Git. No branch value was guessed.
-- No branch Plan was applied and no participating System User branch was set. Apply still requires
-  explicit approval of the exact revised Plan hash.
+- At that early 20 October checkpoint, no branch Plan was applied and no participating System User
+  branch was set. Apply still required explicit approval of the exact revised Plan hash.
 - A read-only System User lookup resolved one enabled Dataverse identity for each current
   Full/Coordinator participant and confirmed all three home-branch fields are blank. The review
   mapping records Andy Lee with Christchurch as the home/default branch and Bruce Frost plus George
   Robson with Auckland. Every participating user may switch to All branches; the home branch drives
-  only the initial worklist and new-Job default. No user field has been updated.
+  only the initial worklist and new-Job default. No user field had been updated at that checkpoint.
 - Home branch, All branches and My watchlist are implemented as distinct persisted worklist views.
   The exact three-user home-branch Plan contains three changes and has hash
   `b6c4bdc48e6c83b2b756abaa403037f6892fce47d55a5f0c32cdbd7315c83271`. It was conditionally
   applied and verified: three updated, three verified and zero mismatches.
 - The approved historical Job Apply attempted no writes after all 1,310 planned rows failed the
   stale-row-version guard. A refreshed 1,361-Job snapshot produced 1,320 changes and 41 exceptions;
-  replacement Plan hash `5a9029f01c18784788c4260b15370dc9a6520465bc840e82ec2dfd7e357aed10`
-  remains unapplied pending exact approval.
+  replacement Plan hash `5a9029f01c18784788c4260b15370dc9a6520465bc840e82ec2dfd7e357aed10`.
+  That replacement was later approved, applied and verified for 1,320 Jobs; 41 exceptions were
+  exported and deliberately left unchanged.
 
 ### Stop conditions
 
@@ -656,7 +675,7 @@ planned, 43 unclassified Jobs are quarantined, and participating-user mappings a
 - Job Watch permissions allow cross-user mutation.
 - Status/branch plan counts do not reconcile.
 - Migration would touch fields outside its exact allowlist.
-- V1/V2 Job Card stores or deployed summary capability do not match.
+- V2 and yellow-cliff Job Card stores or deployed summary capability do not match.
 - Rollback artifact or signing-key recovery is unavailable where required.
 
 ### Exit criteria
@@ -664,12 +683,13 @@ planned, 43 unclassified Jobs are quarantined, and participating-user mappings a
 - Verified metadata and roles.
 - Every participating user has a home branch.
 - Approved migration plans and reviewed exception queues exist.
-- No feature flag enabled yet.
+- Branch/watch feature gates are now enabled in V2 and V3; Job Card progress remains disabled.
 
 ## Phase 9 — Apply historical reconciliation and enable staged release
 
-Status: [ ] Not started — exact branch Plan approval and authoritative user mappings still prevent
-migration, deployment and feature enablement
+Status: Partially complete — approved branch/user and V3 managed-worklist migrations are
+verified and branch/watch features are deployed. Job Card progress enablement, real restricted-role
+acceptance and the final go/no-go record remain open.
 
 ### Cutover order
 
@@ -739,7 +759,8 @@ be able to read another branch.”
 - Preserve Auckland collaboration through a shared Auckland team rather than personal Job ownership.
 - Define cross-branch management, reassignment, transfer, reporting, scheduled integrations and
   application-user access.
-- Migrate ownership with ETags/audit and prove V1 compatibility.
+- Migrate ownership with ETags/audit and prove compatibility with both V2 and V3/yellow-cliff
+  integrations.
 - Run direct Dataverse Web API allowed/denied tests with real Auckland, Christchurch, mixed-role and
   management identities. UI filtering is not evidence.
 - Release separately from the initial operational-filtering/watchlist change.

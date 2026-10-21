@@ -1,8 +1,8 @@
 # Service Coordination V3 — managed worklist release plan
 
-Status: source, signed Dataverse backend, isolated yellow-cliff V3 pilot, operational integrations
-and historical managed/Auckland migration deployed; restricted-user live acceptance and go/no-go
-remain open.
+Status: V3 acceptance candidate, signed Dataverse backend, operational integrations and historical
+managed/Auckland migration are deployed to yellow-cliff; restricted-user live acceptance and the
+explicit go/no-go record remain open.
 
 ## Business boundary
 
@@ -60,6 +60,10 @@ V2 remains at `kind-wave-0cdea2200.2.azurestaticapps.net`. V3 is deployed to the
 yellow-cliff Static Web App from branch `v3-deployment`. Yellow-cliff must not be deleted: it is the
 authoritative Job Card backend currently used by V2. The V3 client uses that backend same-origin;
 V2 continues through its fixed proxy. Existing Job Card storage/email settings were preserved.
+
+The latest deployed V3 behavior/mapping commit is `0ac63fb`; GitHub Actions run `39550927453`
+deployed it successfully on 21 October 2026. Post-deployment smoke checks returned 200 for `/` and `/jobs`, and
+the anonymous Service Coordination context boundary correctly returned 401.
 
 The V3 Service Coordination backend flag is enabled. Anonymous access fails with `401`; an
 authenticated George smoke check resolved home branch Auckland, and the empty pre-migration

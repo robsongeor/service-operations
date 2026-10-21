@@ -1,15 +1,17 @@
 # Jobs Architecture
 
-## Audit status — 10 October 2026
+## Current status — 21 October 2026
 
-The lifecycle below is the intended contract, not a claim that all entry points enforce it.
-Registration allocates too early; restricted correction/dispatch payloads conflict with the
-server guard; historical GreenTree completion bypassed canonical side effects; the unified worklist does not
-yet participate fully in shared invalidation. See audit A01–A06 in the
-[application audit](../reviews/2026-10-10-application-audit.md). V2 builds both unified flags enabled.
-The local [Job Card implementation](../reviews/2026-10-10-job-card-implementation.md) now routes
-GT closure to Completion Review and adds gated office-approved meter evidence. Not deployed;
-historical/void/reopen rules and real-account acceptance remain outstanding.
+The 10 October audit remains the source for findings A01–A06, but several of its deployment facts
+are superseded. Signed assembly `1.0.24.0`, unified registration/workflow and the V3 managed
+Service Coordination worklist are deployed. Registration now remains Staging when a mechanic is
+selected and moves to With Technician only after confirmed dispatch. Job Book is the complete
+numbered record; Service Coordination contains only explicitly managed, GreenTree-active Jobs.
+Branch and personal-watch features are enabled, while Job Card progress summaries and automatic
+Completion Review → Complete remain disabled. Real restricted-account, two-browser freshness and
+completion/reconciliation acceptance remain open. See [current state](../../CURRENT_STATE.md),
+[release readiness](../../RELEASE_READINESS.md) and the
+[V3 release plan](../features/SERVICE_COORDINATION_V3_MANAGED_WORKLIST.md).
 
 ## Purpose
 
@@ -237,12 +239,12 @@ and rejects numbered deletion; an unnumbered deletion uses that current ETag, pr
 allocation. This is not a new cancellation action. When the unified runtime gate is enabled, remaining
 direct number paste/create/import paths fail closed, Site Check number clearing is unavailable, and an
 occurrence containing a numbered Job cannot be deleted. WOF corrections omit the number field and new
-WOF Jobs remain unnumbered. Both specialist types use the same guarded per-Job regional allocator from
-their Jobs tabs; allocation preserves type, evidence and source relationships while creating the ledger.
-No new server-side immutable-column enforcement is active. The registered invariant steps remain
-disabled during the V1/V2 shared-Dataverse overlap because V1 still needs its existing manual-number
-workflow; V2 is frontend-blocked only. Enable and verify the invariant steps only as a separate V1
-retirement or migration cutover. `tests/jobNumberPolicy.test.ts` covers
+WOF Jobs remain unnumbered until the applicable guarded workflow allocates them. Specialist work uses
+the guarded regional allocator from its owning workflow; allocation preserves type, evidence and
+source relationships while creating the ledger. The signed `1.0.24.0` server package now enforces the
+number invariants, and all 15 invariant steps are enabled and independently verified. Current V2/V3
+clients therefore rely on both frontend fail-closed controls and server enforcement; any older manual
+number writer is incompatible with the Auckland cutover. `tests/jobNumberPolicy.test.ts` covers
 payload exclusions, permissions presentation, regional formats, bounded preflight, stale callers,
 allocation/deletion races and fail-closed responses; drawer rendering is also covered by the
 corrections UI tests.
@@ -589,10 +591,10 @@ The status-specific polling and provisioning contract is documented in
 - Site Check is a protected Job Type created only by the Site Check workflow. It is excluded
   from ordinary Job creation options, requires Equipment, and reuses the canonical Job
   payload mapping inside an atomic Site Check transaction.
-- The default Operational Jobs view excludes Site Check Type. Site Checks has a dedicated
-  type tab, while All jobs is explicitly unfiltered by type. Versioned current/default view
-  migration maps legacy `all` to `operational` and preserves status, search, sorting,
-  office/scheduled filters, reset behavior, and sticky-column preferences.
+- Service Coordination excludes Site Check Type and no longer exposes a Site Check tab. The
+  dedicated Site Checks workflow owns generated Site Check work. Versioned view migration moves an
+  old saved Site Check selection to the supported managed-work view while preserving status,
+  search, sorting, office/scheduled filters, reset behavior and sticky-column preferences.
 - Job Status and Job Card Status are never interchangeable.
 - Completion Review is not completion.
 - Every Job completed through an operational completion workflow must have linked Equipment and

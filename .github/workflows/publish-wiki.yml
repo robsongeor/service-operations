@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - v2-deployment
+      - v3-deployment
     paths:
       - docs/wiki/**
       - .github/workflows/publish-wiki.yml

@@ -7,6 +7,12 @@ Completed checklist items must remain visible. Future changes must mark only imp
 validated work complete, record deviations and discoveries in the relevant phase notes, and
 leave unfinished work unchecked.
 
+> **Current UI override — 21 October 2026:** historical phase evidence below refers to a dedicated
+> Site Check tab inside Jobs/Service Coordination. That tab has since been deliberately removed.
+> Generated Site Check work is owned and discovered through the dedicated Site Checks workflow and
+> is excluded from the V3 coordinator-managed worklist. Do not restore the old tab from an earlier
+> checked phase without a new product decision.
+
 ## Audit reconciliation — 10 October 2026
 
 The phase checklists below retain their original evidence; none are bulk-marked complete by this
@@ -1202,9 +1208,9 @@ mutation. The pass verified:
 
 - disabled Schedules contribute zero to Up to date, Due, Overdue, and In progress Customer
   summary counts and expose the Site Checks settings tab with disabled cadence fields;
-- the Jobs page opens on Operational, exposes a dedicated Site Check tab, returns zero rows
-  for that tab in the current environment, and retains a separate truly unfiltered All jobs
-  tab;
+- at that 26 July checkpoint, the Jobs page opened on Operational and exposed a dedicated Site
+  Check tab. That observation is historical; the 21 October product decision removed the tab and
+  V3 now excludes Site Check work from Service Coordination;
 - the Scheduler exposes Breakdown, Service, Workshop, WOF, and All jobs only, with no Site
   Check label in its rendered projection; and
 - the shared Site Settings drawer receives initial dialog focus and has a unique

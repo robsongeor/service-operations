@@ -104,4 +104,4 @@ the screenshot into your email.
 
 Back to [Service Operations user guides](Home) · [Auckland Job Book migration](Auckland-Job-Book-Migration) · [Customers, Sites and Contacts](Customers-Sites-and-Contacts) · [Office Job Card review](Office-Job-Card-Review)
 
-_Last reviewed: 20 October 2026._
+_Last reviewed: 21 October 2026._

@@ -58,4 +58,4 @@ then paste the screenshot into your support email. Never include a password or v
 > These pages are user instructions. Technical architecture, security controls and rollout records
 > remain in the main Service Operations repository.
 
-_Last reviewed: 20 October 2026._
+_Last reviewed: 21 October 2026._

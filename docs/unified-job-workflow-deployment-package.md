@@ -1,8 +1,9 @@
 # Unified Job workflow — deployment package review
 
-Recorded deployment: restricted-access package completed 9 October 2026. V2's current workflow
-builds unified registration/workflow enabled; data migration and invariant activation still have
-independent gates. This documentation audit did not reverify the cloud.
+Recorded deployment: restricted-access package completed 9 October 2026 and was superseded by the
+verified `1.0.24.0` package on 21 October. V2/V3 build unified registration/workflow enabled; all 29
+workflow steps are enabled. Historical status reconciliation, other regional cutovers and optional
+Job Card progress/meter features retain independent gates.
 
 ## V3 managed-worklist backend deployment — 21 October 2026
 
@@ -135,19 +136,25 @@ redeploy the last compatible flag-off application. Restore changed assignments f
 pre-change export. Retain nullable schema, numbers, ledgers, links and completed business history;
 never delete or renumber records as generic rollback.
 
-## Remaining approval blockers
+## Blockers recorded after the 9 October package (superseded status)
+
+The bullets below preserve the original package review. The later Auckland cutover enabled and
+verified all 15 number-invariant steps, deployed signed assembly `1.0.24.0`, enabled unified
+registration/workflow in V2/V3 and completed the approved Auckland migrations. Current remaining
+work is real named-account acceptance, monitoring/reconciliation evidence and protected off-PC
+signing-key recovery; see [release readiness](../RELEASE_READINESS.md).
 
 - The Entra `ServiceOperations.ServiceCoordinator` application role is provisioned and Bruce's
   temporary FullAccess overlap has been removed. Complete the remaining named-user allowed/denied
   workflow acceptance for the restricted profile.
-- Keep the 15 shared Dataverse Job number/ledger invariant steps disabled while V1 still requires
-  manual Job Number entry. V2 blocks manual entry in its frontend during this explicitly accepted
-  overlap. When V1 is retired or migrated, enable and verify the invariant steps as a separate
-  cutover so direct Dataverse, integration and stale-client writes are also rejected.
-- Complete signing-key recovery backup; the owner-approved key and deployed `1.0.1.0` package exist.
+- At that checkpoint, the 15 shared Dataverse Job number/ledger invariant steps remained disabled
+  for the manual-numbering overlap. This blocker was resolved by the separately approved Auckland
+  cutover; all 15 are now enabled and verified.
+- Complete signing-key recovery backup; the owner-approved key and deployed `1.0.24.0` package exist.
 - Complete named-user allowed/denied tests for Job Book Admin and Office Admin across all four books.
 - Approve AutoNumber cutover ownership and recalculate the verified provisional sequence evidence.
-- Approve the later migration/number-invariant activation and feature enablement separately.
+- The later migration/number-invariant activation and feature enablement were separately approved;
+  other regional cutovers remain independent future decisions.
 
 ## Validation
 

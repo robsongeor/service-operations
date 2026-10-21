@@ -18,7 +18,9 @@ nullable Job/System User branch columns and user-owned Job Watch table were prov
 post-verified on 19 October 2026. The approved historical Auckland Job migration and the reviewed
 home branches for Andy Lee, Bruce Frost, George Robson and Pubudu were applied and verified on
 20 October 2026. Paul Robson and James Ashby were subsequently onboarded with verified Auckland
-home branches alongside their Job Book Admin assignments. Reviewed exceptions remain unclassified;
+home branches alongside their Job Book Admin assignments. On 21 October the exact single-user plans
+for Jessamyn, Nargiza, Martin, Lance, Ranjani, Ashneel and Kaizer were applied and automatically
+verified as Auckland with zero mismatches. Reviewed historical Job exceptions remain unclassified;
 the application gates are a separate release control.
 
 ## User experience
@@ -32,7 +34,7 @@ Service Coordination has these worklist views:
 | **All branches** | Cross-branch work for participating Service Coordination users. | Available to every participating user; home branch remains the default view. |
 
 Branch work remains the operational default. It is not filtered by Job creator, Dataverse owner,
-assigned technician or watcher. Both Auckland users therefore see the same Auckland queue and can
+assigned technician or watcher. Auckland coordinators therefore see the same Auckland queue and can
 work from the same current Job state.
 
 Every Job row and the canonical Job drawer expose a watch/unwatch control. A watch does not change
@@ -78,8 +80,9 @@ Proposed Choice values preserve the existing regional-book order:
 | Hastings | `122830002` |
 | Christchurch | `122830003` |
 
-These values now exist in the verified target metadata. They remain nullable until the separately
-reviewed user and historical Job mappings are applied.
+These values exist in the verified target metadata. The columns remain nullable by schema design,
+but every one of the 13 reviewed rollout users now has an explicitly verified home branch. Missing
+future mappings remain a setup error rather than defaulting to Auckland.
 
 The verified Phase 3 source contract lives in
 `dataverse/service-coordination/schema-manifest.json`, with the approval-gated manager at
@@ -166,7 +169,8 @@ The initial branch feature is a worklist scope, not automatically a security bou
 Auckland rows in the Christchurch UI does not prevent a user with organization-wide Dataverse Read
 from retrieving them through another client or API.
 
-Before rollout, choose and record one of these modes:
+The initial rollout uses mode 1 below. This is an operational filter, not a claim of Dataverse
+row-level security. Mode 2 remains a separate future security decision:
 
 1. **Operational filtering:** users retain their existing Dataverse access, but normal app queries
    are branch-filtered. Cross-branch access may be exposed only through an explicit capability.
@@ -209,9 +213,11 @@ conditional rollback preserves any newer operational edit. Simulation tests cove
 conflicts, interruption/resume and partial outcomes. On 20 October 2026 the approved Auckland
 historical migration was applied and verified for 1,320 Jobs. Forty-one unclassified Jobs were
 exported for review and intentionally left unchanged. The reviewed System User mappings were also
-applied and verified: Andy Lee uses Christchurch; Bruce Frost, George Robson, Pubudu, Paul Robson
-and James Ashby use Auckland. All participating users may still select All branches where their
-application role exposes branch selection.
+applied and verified: Andy Lee uses Christchurch; George Robson, Bruce Frost, Pubudu, Jessamyn,
+Nargiza, Martin, Lance, Ranjani, Ashneel, Kaizer, Paul Robson and James Ashby use Auckland.
+Participating Service Coordinators may still select All branches. Office Admin and Job Book Admin
+roles retain their own route boundaries and do not gain Service Coordination access from a branch
+assignment.
 
 ## Release order and acceptance
 

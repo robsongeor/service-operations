@@ -9,7 +9,7 @@ See the [audit](../reviews/2026-10-10-application-audit.md) for current release 
 1. Recheck imports, route references, tests, scripts, CSS and runtime/configuration selection at
    the commit being changed. This snapshot can become stale.
 2. For a data/backend feature, inventory real records, active links, scheduled consumers,
-   application identities and **both V1 and V2** deployments read-only. Source searches alone
+   application identities and **both V2 and V3/yellow-cliff** deployments read-only. Source searches alone
    cannot prove there are no consumers.
 3. Define the replacement, evidence-retention policy, user-visible behavior, rollback and owner.
    Obtain explicit approval for data deletion or cloud changes; avoid combining those with source cleanup.
@@ -37,11 +37,13 @@ file is not enough. None of these candidates justify a Dataverse table deletion.
 
 ## Active compatibility features — not safe to remove now
 
-### V2 → V1 Job Card bridge
+### V2 → authoritative yellow-cliff Job Card bridge
 
-The V2 workflow sets `VITE_JOB_CARD_SHARED_BACKEND=v1-production`; marked requests are proxied
-to fixed V1 endpoints. V1 owns the configured links, submissions, private evidence and reviews.
-Deleting V1, its storage/settings, the proxy or its headers now can break existing technician
+The V2 workflow sets the legacy compatibility value
+`VITE_JOB_CARD_SHARED_BACKEND=v1-production`; marked requests are proxied to fixed yellow-cliff
+endpoints. The yellow-cliff frontend is now V3, but its preserved backend owns the configured links,
+submissions, private evidence and reviews. Deleting yellow-cliff, its storage/settings, the proxy or
+its headers now can break existing technician
 links, photos and office reviews. Simply clearing the flag is not a migration.
 
 Before retirement:
@@ -67,25 +69,26 @@ portal to call Dataverse as a shortcut.
 
 ### Legacy `ServiceOperations.JobBookOnly` role
 
-The restricted-user cleanup is recorded as complete for the reviewed eight-user cohort; this
-audit did not re-enumerate live assignments. Compatibility remains in client routes, scripts and
-tests. Removing an assignment is different from deleting the Entra role definition or a Dataverse role.
+The restricted-user cleanup is recorded as complete for the reviewed 13-user roster. A fresh
+21 October audit found no restricted Admin retaining the obsolete application role, but compatibility
+remains in client routes, scripts and tests. Removing an assignment is different from deleting the
+Entra role definition or a Dataverse role.
 
-Check all direct/group assignments, effective mixed roles, V1 consumers, tokens/session refresh
+Check all direct/group assignments, effective mixed roles, V2/V3 consumers, tokens/session refresh
 and the replacement JobBookAdmin access. Migrate assignments and verify named users first; then
 remove fallback code/tests/configuration in a separate change. Deleting the role prematurely can
 deny access to forgotten users. Removing Entra assignments does not remove Dataverse permissions.
 
 ### Separate regional books and registration/numbering compatibility
 
-Regional-book flags are false in V2, but staging tables, historical ledgers, migration tools and
-V1 workflows remain dependencies. Numbering invariant guards are recorded registered but disabled
-for V1 compatibility. Do not equate a disabled guard or feature flag with obsolete functionality.
+Regional-book flags outside Auckland are false in V2/V3, but staging tables, historical ledgers,
+migration tools and Auckland workflows remain dependencies. All 15 numbering invariant guards are
+enabled and verified. Do not equate a disabled regional feature flag with obsolete schema or data.
 
 Read-only inventory number allocations, uniqueness, linked/promoted/voided entries and each live
 writer. Rehearse migration and counter seeding; compare counts and exact numbers. Stop incompatible
 writers before enabling stricter invariants. Deleting ledgers or turning guards off risks duplicate
-or reused job numbers; enabling them prematurely can reject V1 saves. Use the dedicated migration
+or reused job numbers; changing them incompatibly can reject current saves. Use the dedicated migration
 and deployment runbooks, with backups and rollback, rather than deleting feature folders.
 
 ### `Unconfirmed`, `WAITING_FOR_PARTS`, and coordinator-managed data

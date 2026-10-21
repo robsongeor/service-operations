@@ -68,11 +68,12 @@ Never run this mode from application deployment, routine validation, or an infer
 request. Record counts first and require explicit confirmation that Schedules, history, and
 generated Jobs may all be permanently deleted.
 
-When the disabled unified Job workflow gate is enabled, the legacy Excel copy/paste allocation and
-Job-number clearing controls are removed. Their service methods also fail before any Dataverse request.
+With the unified Job workflow enabled, the legacy Excel copy/paste allocation and Job-number
+clearing controls are removed. Their service methods also fail before any Dataverse request.
 Occurrence deletion remains available only when every generated Job is unnumbered; allocated Jobs are
-retained as history. Generated Jobs are allocated individually from the Jobs **Site Check** tab through
-the guarded regional operation, which creates the linked ledger without changing Site Check evidence.
+retained as history. Service Coordination no longer exposes a Site Check tab. Generated Job review
+and navigation stay in the dedicated Site Checks workflow; any future numbered allocation path must
+continue using the guarded regional operation and preserve Site Check evidence.
 
 ## Confirmed request budgets
 
@@ -113,8 +114,8 @@ credentials, or role assignments for the test.
 3. Start a due Site Check with an active technician and confirm exactly one Job per current
    Site Equipment record.
 4. Retry the same start action and confirm it reconciles rather than duplicating records.
-5. Confirm generated Jobs appear in the Site Checks and truly unfiltered Jobs views, but
-   not Operational or Scheduler views.
+5. Confirm generated Jobs appear in the dedicated Site Checks workflow, but not Service
+   Coordination's managed worklist or Scheduler views.
 6. Submit or change Job Card Status and confirm operational Job Status and Site Check
    progress do not change.
 7. Leave at least one generated Job incomplete until the next interval has passed. Confirm

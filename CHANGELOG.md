@@ -15,6 +15,11 @@
 
 ## Unreleased
 
+- Reconciled repository and Wiki documentation with the deployed V3 managed-worklist state:
+  yellow-cliff now hosts V3 plus the preserved authoritative Job Card backend; assembly `1.0.24.0`,
+  the 13-user role/home-branch roster, managed-history counts, branch/watch activation, Auckland
+  numbering history, removed Site Check tab and WOF navigation label are now recorded consistently.
+  Historical audits/plans are explicitly marked as snapshots rather than current deployment facts.
 - Completed the non-writing V3 Full Access walkthrough, exact 13-user application/Dataverse role
   audit and isolated restricted-role UI walkthrough. The three focused suites passed 289 tests.
   Applied the owner-approved, exact single-user plans for the seven Auckland Job Book/Office Admin

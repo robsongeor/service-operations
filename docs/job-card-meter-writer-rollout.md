@@ -1,7 +1,8 @@
 # Job Card meter writer — controlled rollout
 
-10 October 2026. **Implemented locally; not deployed or activated.** The technician app remains
-parked. This checklist covers office-approved Job meter writes only, not broader application rollout.
+Reviewed 21 October 2026. **The guard capability is deployed, but the meter-writer feature is not
+provisioned or activated.** The technician app remains parked. This checklist covers office-approved
+Job meter writes only, not broader application rollout.
 
 ## Verified state
 
@@ -10,8 +11,8 @@ parked. This checklist covers office-approved Job meter writes only, not broader
 | Existing Job reading type and recorded date | Live read-only verification passed: Actual/Estimated Choice and Date Only metadata |
 | `gr_hourmeterapprovalreference` | Missing; optional String(100) definition is local only |
 | Dedicated meter role/application | Named role absent; no application user or credential provisioned in this work |
-| Live access guard | `1.0.1.0`, 14 access steps; no new secure configuration |
-| Local candidate | `1.0.2.0`; 114 access-policy tests, 47 registration tests, 890 Node tests, lint/build pass |
+| Live access guard | `1.0.24.0`, 14 access steps; the meter-writer identity/secure configuration remains unactivated |
+| Guard capability | The earlier `1.0.2.0` minimum meter-writer guard contract is incorporated into the newer assembly, but its dedicated identity/role/reference-column rollout is still incomplete |
 | Activation | Both meter flags remain off; no production data writes |
 
 Schema provisioning was rejected at the approval gate before execution. Obtain explicit approval
@@ -50,7 +51,8 @@ See [Microsoft plug-in caller context](https://learn.microsoft.com/en-us/power-a
 
 ## Approved rollout sequence
 
-1. **Capture recovery evidence.** Confirm the authoritative V1 backend behind the V2 bridge.
+1. **Capture recovery evidence.** Confirm the authoritative yellow-cliff Job Card backend behind
+   the V2 bridge. Its frontend is V3; the preserved backend/storage contract remains authoritative.
    Record the source revision, API/client artifacts, current assembly hash/step configuration,
    human role IDs, setting names/flag states and rollback artifacts. Resolve the existing
    [signing-key recovery gate](unified-job-workflow-signing-key.md). Keep secrets outside Git/output.
@@ -85,7 +87,7 @@ See [Microsoft plug-in caller context](https://learn.microsoft.com/en-us/power-a
    use ordinary customer Jobs as test fixtures. Record before/after evidence and tested identities.
 8. **Activate only after acceptance.** Enable `JOB_CARD_METER_APPROVAL_ENABLED` on the authoritative
    backend and release the compatible frontend with `VITE_JOB_CARD_METER_APPROVAL_ENABLED`.
-   Confirm schema reads and user approval prompts. Test both V1/V2 clients; old clients cannot
+   Confirm schema reads and user approval prompts. Test both V2 and V3/yellow-cliff clients; old clients cannot
    silently approve a meter. Monitor pending/failed approvals and replay after office filing.
    Cursor queue activation is a different release gate, not included here.
 

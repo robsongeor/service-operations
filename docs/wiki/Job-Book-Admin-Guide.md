@@ -156,4 +156,4 @@ screenshot. Hold **Windows key + Shift + S**, select the affected area, then pas
 
 Back to [Service Operations user guides](Home) · [Auckland Job Book migration](Auckland-Job-Book-Migration) · [Customers, Sites and Contacts](Customers-Sites-and-Contacts) · [Equipment guide](Equipment-Guide)
 
-_Last reviewed: 20 October 2026._
+_Last reviewed: 21 October 2026._

@@ -6,7 +6,7 @@ Prepared 3 October 2026. This plan covers Job Book and its connection to Service
 ## Outcome and release rule
 
 Staff use Job Book to register work, obtain a regional number, correct permitted details and
-record GreenTree/Timecloud entry. George and the other coordinator use Service coordination
+record GreenTree/Timecloud entry. George and the Service Coordinators use Service coordination
 to manage the same working Job. Historical spreadsheet entries remain identifiable history.
 
 Do not move users until the acceptance checks below have evidence and George signs off.
@@ -20,20 +20,23 @@ Use [current state](../../CURRENT_STATE.md) for configuration/evidence and
 [release readiness](../../RELEASE_READINESS.md) for the current gate checklist. The previous
 sample-only description is obsolete: V2 builds unified registration/workflow and role enforcement
 enabled, and plugin/role deployment is recorded. That does not prove restricted-role acceptance,
-migration completion or V1 compatibility.
+other regional migration completion or shared-backend compatibility.
 
-Critical gaps are client/server write-policy disagreement, premature Allocated status at
-registration, GreenTree completion bypass, reconciliation backlog/identity verification and
-unified worklist freshness. This rollout remains blocked on those checks. Regional migration
-and number cutover retain their independent gates below.
+The Auckland number cutover, production TimeCloud integration, reviewed role assignments and V3
+managed Service Coordination deployment are complete. The earlier premature Allocated behavior is
+fixed: registration remains Staging until confirmed dispatch. Remaining gates are real restricted-
+account allowed/denied operation checks, shared reconciliation/monitoring work, completion-evidence
+consistency and two-browser freshness acceptance. Other regional migrations and number cutovers
+retain their independent gates below.
 
 ## 1. George's preparation checklist
 
 - [ ] Confirm one business owner for each regional book. Bruce and Andy are the named coordinators.
 - [ ] List every proposed user: individual work email, region(s), duties, intended role and pilot wave.
 - [ ] Confirm who only enters jobs and who also reviews returned Job Cards or emails technicians.
-- [x] Office Admins may view and work across all four regions without regional restrictions;
-  role-based action permissions still apply.
+- [x] Office Admins may view and work across regional Job Books when each region is enabled; there
+  is no user-level regional restriction. Auckland is the only production Job Book currently enabled,
+  and role-based action permissions still apply.
 - [ ] Identify the authoritative Excel file for Auckland, Waikato, Hastings and Christchurch,
   its location, owner, number format, formulas/macros, other consumers and current allocation process.
 - [ ] Confirm which history is imported and how older excluded history remains accessible.
@@ -231,9 +234,20 @@ pre-image. Unrelated Equipment fields and delegated updates remain denied. The a
 changed no roles, records, numbering, metadata, steps, migration state or feature flags and retained
 all 29 enabled guards.
 
-The next action is a controlled live test with the dedicated Job Book Admin and Office Admin accounts.
-The first successful creation is permanent history: use a real or deliberately retained/voided test
-Job, verify it remains Staging until confirmed dispatch, and do not delete or reseed it.
+Signed workflow assembly `1.0.24.0` subsequently added the coordinator-only guarded unmanage action
+while retaining the registration, restricted-access and numbering protections above. Its six
+reviewed Custom APIs, all 29 workflow steps, two Office Admin assignments and seven Job Book Admin
+assignments were independently verified. V3's approved historical managed-worklist migration then
+verified 254 active Jobs as managed Auckland and left 1,142 GreenTree-closed Jobs unchanged.
+
+The first seeded Auckland number `147475` has since been consumed by normal production use. It is a
+permanent historical number and must not be described as the current “next number.” The guarded
+regional allocator and active alternate keys are authoritative for every subsequent number; never
+derive a new seed from this dated pre-launch record.
+
+The next action is controlled live acceptance with the dedicated Job Book Admin, Office Admin and
+Service Coordinator accounts. Use real work or deliberately retained/voided test history, verify a
+new registration remains Staging until confirmed dispatch, and do not delete or reseed it.
 
 This was an explicitly approved pre-launch cleanup of identified rollout fixtures, not the normal
 handling for a real or post-launch Job. Permanent business Jobs must remain in history and follow the
@@ -270,10 +284,11 @@ read-only under the company's retention arrangements.
 
 ## Immediate next actions
 
-1. George supplies the proposed users/duties/regions and identifies the authoritative spreadsheets.
-2. Walk through one complete job with both coordinators and an office Admin; confirm the launch scope.
-3. Finish the production integration and security work in section 3 before scheduling migration.
-4. Rehearse migration and complete the acceptance record; then choose a cutover date.
+1. Complete the named Service Coordinator, Office Admin and Job Book Admin acceptance matrix on V3.
+2. Run the two-browser update/focus/reconnect check and record observed freshness.
+3. Record George's explicit V3 go/no-go decision while keeping V2 available as the fallback.
+4. Keep Waikato, Hastings and Christchurch on their current processes until each regional owner,
+   migration, seed and cutover is separately approved.
 
 Related owners: [Job Book design](JOB_BOOK_INTAKE_DESIGN.md),
 [Admin review plan](JOB_CARD_ADMIN_REVIEW_IMPLEMENTATION_PLAN.md),

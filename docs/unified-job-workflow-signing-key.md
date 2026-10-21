@@ -58,7 +58,8 @@ reviewed Dataverse replacement path.
 
 - requires an existing `.snk` path outside the repository;
 - refuses to overwrite an existing DLL or manifest;
-- compiles the exact five reviewed source files (current local source version `1.0.2.0`, not deployed);
+- compiles the exact reviewed source files (current assembly version `1.0.24.0`, deployed); any
+  future package still requires a new reviewed output directory and explicit deployment approval;
 - requires a non-empty public key token;
 - writes the signed DLL and a companion JSON manifest containing the public token, assembly hash,
   source hashes and plugin type list;

@@ -4,7 +4,7 @@ Service Operations is the day-to-day workspace for forklift and materials-handli
 
 This guide is written for people who do not work with computer systems every day. It explains every area of the app, what it is for, and the normal steps to use it.
 
-## Current rollout cautions — 10 October 2026
+## Current rollout cautions — 21 October 2026
 
 Available screens depend on your role and deployed feature switches. This guide describes
 workflows, not a guarantee that every feature is enabled or signed off for your account.
@@ -27,7 +27,7 @@ The technical [release checklist](../RELEASE_READINESS.md) tracks these blockers
 5. [Staff](#staff)
 6. [Equipment](#equipment)
 7. [Equipment Map](#equipment-map)
-8. [WOF / REGO](#wof--rego)
+8. [WOF](#wof)
 9. [Jobs](#jobs)
 10. [Scheduling](#scheduling)
 11. [Site Checks](#site-checks)
@@ -98,7 +98,11 @@ The app normally remembers the customer you were last viewing during your signed
 
 ### Customer details and contacts
 
-Use the customer information area to review and edit accounts details, purchase-order requirements and long-term notes. These fields are saved to Dataverse. Purchase-order recipient settings have their own saved workflow. The Contacts tab shows customer-wide contacts and contacts linked to a particular site.
+Use the customer information area to review accounts details, purchase-order requirements and
+long-term notes. Do not assume an unfinished free-text Customer Info editor has saved a change; use
+only fields with an explicit working save action, and report required corrections when the role or
+field is read-only. Purchase-order recipient settings have their own saved workflow. The Contacts
+tab shows customer-wide contacts and contacts linked to a particular site.
 
 Purchase-order contacts can be set at customer level or overridden for an individual site. Use a site-specific override only when that site has different people who should receive PO requests.
 
@@ -182,15 +186,15 @@ Open **Equipment Map** to see equipment locations visually.
 
 Use it to quickly understand where machines are recorded, identify records without a usable location, and open a machine record for correction. Mapping is an aid to finding equipment; the customer, site and equipment record remains the official information to update.
 
-## WOF / REGO
+## WOF
 
-Open **WOF / REGO** to manage road-compliance work.
+Open **WOF** to manage road-compliance work.
 
 The table brings together equipment, registration number, customer, site, WOF expiry, workflow state and any related job. Use the tabs to focus on records that are due soon, overdue, already scheduled or otherwise need attention. Use search for fleet number, serial number, REGO, customer or job.
 
 ### Normal WOF workflow
 
-1. Find the machine in **WOF / REGO**.
+1. Find the machine in **WOF**.
 2. Open its equipment record or create/open the related WOF job.
 3. Arrange and carry out the inspection.
 4. When complete, update the inspection and new WOF expiry date.
@@ -202,19 +206,28 @@ not limited by the active tab or search and includes any linked Job Number.
 
 ## Jobs
 
-Open **Jobs** to create, allocate, track and complete work. This is the main operational work list.
+**Job Book** is the complete numbered register. **Service coordination** is the smaller shared
+worklist of Jobs that Full Access or Service Coordinator users have chosen to manage. Creating a
+Job in Job Book starts it unmanaged; creating directly in Service coordination starts it managed.
+GreenTree Closed or Finalised Jobs are excluded from Service coordination but remain historical
+records in Job Book/Dataverse.
 
 ### The Jobs list
 
-The page has job-type tabs, status filters, search, sorting and settings. Use them to narrow the work list:
+Service coordination has job-type tabs, status filters, search, sorting and settings. Use them to
+narrow the managed worklist:
 
-- Use the job-type tabs to focus on operational work, a particular job type, unnumbered jobs, or all jobs.
+- Use the job-type tabs to focus on managed operational work, a particular supported job type,
+  unnumbered managed Jobs, or all managed Jobs. Site Check work stays in the dedicated Site Checks workflow.
 - Use status filters to show only the job statuses you need.
 - Use search to find a job number, customer, site, equipment or description.
 - Select a column heading to sort the list.
-- Use Settings to choose which scheduled jobs appear and save your preferred default view.
+- Use **Home branch**, **All branches** or **My watchlist** to choose shared branch work,
+  cross-branch work or your private watched subset. Home branch is a default, not a visibility rule.
+- Use Settings to choose which scheduled Jobs appear and save your preferred default view.
 
-Some job-book controls allow selected job rows to be copied for a spreadsheet and job numbers to be assigned back in the same order. Use these only when you are confident the selected order is correct.
+The old spreadsheet copy/paste allocation workflow is not the current Service coordination process.
+Permanent numbers come from the selected regional Job Book/guarded allocator.
 
 ### Create a job
 
@@ -226,7 +239,19 @@ Some job-book controls allow selected job rows to be copied for a spreadsheet an
 6. Add the technician, date and schedule information when known.
 7. Save the job.
 
-You can also create jobs from Customer and Equipment pages. Those entry points pre-fill the related information for you.
+The new Service coordination Job is managed by default and uses your home branch as its default.
+You can also create Jobs from Customer and Equipment pages. Those entry points pre-fill related
+information. For regional work, the safer process is to create it in the correct regional Job Book,
+then use **Add to Service Coordination** if a coordinator wants to track it.
+
+### Add or remove managed work
+
+- In Job Book, a Full Access or Service Coordinator user can select **Add to Service Coordination**
+  for a numbered, eligible Job.
+- In Service coordination, the same roles can select **Stop managing**. This removes only managed
+  membership; it does not delete the Job, number, assignment, schedule or history.
+- Office Admin and Job Book Admin users cannot change managed membership.
+- **Watch** is personal and only applies to managed work. Unwatching does not unmanage the Job.
 
 ### Edit a job
 
@@ -453,7 +478,7 @@ The Details tab is the machine's core record. It can include its fleet number, s
 
 Use the Customer and Site selectors together. Equipment belongs at a site, and its customer relationship is normally determined through that site. If the machine has moved, use the transfer option from the correct customer site or update the location carefully; do not create another equipment record for the same physical machine.
 
-Road-compliance fields are for machinery that needs them. Keep registration number and WOF expiry current, because WOF / REGO uses these values to identify work that is due.
+Road-compliance fields are for machinery that needs them. Keep registration number and WOF expiry current, because WOF uses these values to identify work that is due.
 
 #### Equipment panel: Maintenance tab
 
@@ -498,9 +523,9 @@ The map is a read-and-investigate tool for current equipment location.
 
 If a machine does not appear where expected, check its customer, site and address in the Equipment or Customer screen. The map cannot repair missing address data itself.
 
-### WOF / REGO screen: detailed use
+### WOF screen: detailed use
 
-WOF / REGO is a work queue, not just a list of dates. It shows what is due and links the compliance record to the work needed to resolve it.
+WOF is a work queue, not just a list of dates. It shows what is due and links the compliance record to the work needed to resolve it.
 
 | Column or control | Meaning |
 | --- | --- |
@@ -536,7 +561,7 @@ The standard table presents the important at-a-glance information:
 | Status | The operational position of the work. Some status changes can be made directly in the table. |
 | Order | Purchase order/order number. |
 | Latest update | The newest office note. |
-| Actions | Select/copy job-book information and prepare a technician email where available. |
+| Actions | Open/edit the Job, work with Job Cards or email where permitted, and use coordinator-only managed-membership actions where eligible. |
 
 Use the filter **Needs Attention** when you are working through office follow-ups. Use **No Attention Required** when you need to focus on normal work without those flags.
 
@@ -568,17 +593,12 @@ A job can have schedule options that describe how it fits into the work plan:
 
 Mark an option confirmed only when the appointment is actually confirmed. This lets the weekly Scheduling board distinguish firm bookings from possible times.
 
-#### Job book copy/paste
+#### Job Book and managed membership
 
-The Jobs table supports a controlled spreadsheet handoff.
-
-1. Filter and sort the list into the order you want.
-2. Select the job rows you need, or use the row copy control for a single row.
-3. Copy the job-book information into the external spreadsheet.
-4. To allocate returned job numbers, make sure one numeric job number is present per selected row, in the same visible order.
-5. Use the paste/allocate action and carefully check the confirmation.
-
-Do not change the sort/filter or selection between copying rows and allocating numbers, because the order is important.
+Use Job Book for the complete numbered register and Service coordination for the subset a
+coordinator actively manages. Do not paste numbers back from a spreadsheet. Add an existing numbered
+Job to Service coordination with the guarded membership action, or stop managing it later without
+removing its permanent history.
 
 #### Completing work: what the prompts change
 
@@ -792,7 +812,7 @@ Select **Submit Job Card** when all information is complete. A confirmation page
 
 ### A WOF is close to expiry
 
-1. Find the machine in **WOF / REGO**.
+1. Find the machine in **WOF**.
 2. Create or open the WOF job.
 3. Schedule the inspection.
 4. Record the inspection result and new expiry date.

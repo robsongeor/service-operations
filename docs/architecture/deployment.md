@@ -11,12 +11,25 @@ There are two frontend deployment workflows, not one:
 
 | Branch | Workflow / destination |
 | --- | --- |
-| `v1-deployment` | `azure-static-web-apps-yellow-cliff-068680700.yml` / V1 |
+| `v3-deployment` | `azure-static-web-apps-yellow-cliff-068680700.yml` / V3 managed-worklist acceptance candidate |
 | `v2-deployment` | `azure-static-web-apps-kind-wave-0cdea2200.yml` / V2 |
 
 Both explicitly build on Node 20 with `npm ci` and `npm run build`, upload `dist` with
-`skip_app_build: true`, and deploy managed API source from `api`. V1 version metadata uses
-a tag/SHA; V2 labels its short SHA as a V2 Pilot. Server settings remain separate from public build-time flags.
+`skip_app_build: true`, and deploy managed API source from `api`. V3 and V2 label their short SHA as
+acceptance/pilot builds. Server settings remain separate from public build-time flags.
+
+Yellow-cliff's frontend is V3, but its existing same-origin Job Card API/storage remains the
+authoritative shared backend used by V2. Do not call the current yellow-cliff frontend V1 or remove
+the host merely because V1 navigation was replaced.
+
+### V3 configuration in source (21 October 2026)
+
+V3 enables application-role enforcement, unified registration/workflow, Service Coordination
+branch filtering and personal watchlists. Regional Job Books outside Auckland and Job Card progress
+summaries remain disabled. The Service Coordination server gate and required GreenTree/TimeCloud
+settings are enabled in the yellow-cliff environment. Commit `0ac63fb` deployed successfully in
+GitHub Actions run `39550927453`; `/` and `/jobs` returned 200 and the anonymous Service
+Coordination context boundary returned 401.
 
 ### V2 configuration in source (21 October 2026)
 
@@ -39,8 +52,8 @@ The workflows currently build without enforcing the full test/lint/plugin policy
 The initial audit failures have been repaired locally; see
 [release readiness](../../RELEASE_READINESS.md). Add CI gates before broader rollout.
 
-Do not enable registered numbering invariant guards, retire V1, or toggle all feature switches
-together: V1 and V2 share backend dependencies. Capture exact artifact/configuration and rollback
+Do not retire yellow-cliff's authoritative Job Card backend or toggle all feature switches
+together: V2 and V3 share backend dependencies. Capture exact artifact/configuration and rollback
 before changing cloud resources. [Retirement checks](retirement-plan.md) cover those dependencies.
 
 ## Configuration
@@ -79,14 +92,16 @@ configuration before the API/client cutover. Keep existing settings for Site Che
 
 ### Temporary V2 Job Card backend bridge
 
-The V2 pilot currently sets `VITE_JOB_CARD_SHARED_BACKEND=v1-production`. Marked Job Card
+The V2 pilot currently sets the legacy compatibility value
+`VITE_JOB_CARD_SHARED_BACKEND=v1-production`. Marked Job Card
 requests received by V2's managed `/api/jobsubmission` and `/api/jobcardreviews` endpoints are
-forwarded server-to-server to the fixed V1 production Static Web App origin. V1 therefore remains
-the source of truth for Job Card links, private storage, technician submissions, photos, email,
+forwarded server-to-server to the fixed yellow-cliff Static Web App origin. That preserved backend,
+now hosted alongside the V3 frontend, remains the source of truth for Job Card links, private
+storage, technician submissions, photos, email,
 review queues and office review actions while the bridge is enabled. The bridge forwards only the
 delegated Dataverse bearer token and bounded request data; it does not forward browser cookies,
-standard authorization headers, origins or caller-selected destinations. Do not retire V1 or its
-Job Card resources during this period.
+standard authorization headers, origins or caller-selected destinations. Do not retire the
+yellow-cliff Job Card resources during this period.
 
 The 11 October V2 release keeps this bridge and explicitly disables meter approval and cursor
 queue flags. New review controls require the authoritative detail response's boolean
@@ -94,7 +109,7 @@ queue flags. New review controls require the authoritative detail response's boo
 Missing/false capabilities hide the new actions/field, while existing completion, follow-up,
 PDF and photo downloads continue using the legacy contract. The proxy accepts the new bounded
 query keys for a future compatible shared-backend upgrade; it does not implement those operations
-itself. Publishing V2 does not publish the new services to V1 or deploy the Dataverse meter guard.
+itself. Publishing V2 does not publish new services to yellow-cliff or deploy the Dataverse meter guard.
 
 This bridge is an interim rollout measure, not the permanent architecture. Before it can be
 removed, provision the equivalent settings on V2 or on a dedicated shared Job Card backend:
@@ -175,7 +190,8 @@ Authenticated bounded PDF preview and Job lookup are read-only and do not requir
 Despite its legacy name, `CHARGEABLE_INVOICE_PREVIEW_ENABLED` gates confirmed import and source
 File persistence. Do not set either flag to `true` as part of ordinary deployment. Enable the
 relevant File-write path only after manager role assignments and its target-environment smoke are
-approved. V1 deliberately has no malware-scanning setting or integration. The API package installs
+approved. The authoritative yellow-cliff backend deliberately has no malware-scanning setting or
+integration. The API package installs
 `pdfjs-dist` and `pdf-lib`; dependency installation is required when the managed Function build
 runs. Vite's local approval middleware loads that API service only when a development/preview
 server is configured, so the root production build does not require or duplicate API-only PDF

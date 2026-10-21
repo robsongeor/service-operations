@@ -1,9 +1,9 @@
 # Current application state
 
-Reviewed 21 October 2026 against production V2 and the isolated `v3-deployment` pilot.
+Reviewed 21 October 2026 against production V2 and the deployed `v3-deployment` acceptance candidate.
 This page is a current summary, not a release history or blanket live-cloud certification.
 
-## V3 managed Service Coordination worklist — pilot deployed, 21 October 2026
+## V3 managed Service Coordination worklist — deployed acceptance candidate, 21 October 2026
 
 Local branch `v3-deployment` now separates the complete Auckland Job Book from the smaller
 coordinator-managed worklist. Job Book creation explicitly starts unmanaged; Service Coordination
@@ -19,12 +19,12 @@ only the assembly and six reviewed Custom APIs; it changed no roles, assignments
 records, seeds or migration state. All 29 existing workflow steps and the current two Office Admin
 and seven Job Book Admin direct Dataverse assignments were independently reverified.
 
-V3 commit `da3bb42` was deployed successfully by GitHub Actions run `39546791899` to
+V3 commit `0ac63fb` was deployed successfully by GitHub Actions run `39550927453` to
 `yellow-cliff-068680700.7.azurestaticapps.net`. Root and `/jobs` return the V3 application without a
 V2 redirect. The Service Coordination backend is enabled; its anonymous request returns `401`, and
 George's delegated smoke check resolves to Auckland. The personal watch endpoint returned zero rows
 and zero invalid managed/terminal rows before migration. V2 remains live at kind-wave and continues
-using yellow-cliff's preserved Job Card backend.
+using the authoritative Job Card backend preserved on yellow-cliff.
 
 With separate explicit approval, the 15 GreenTree and TimeCloud operational settings were copied
 from V2 to V3 without changing V2 or replacing any of yellow-cliff's 25 existing settings. All 15
@@ -65,9 +65,11 @@ personal-watch endpoint returned 200 with no invalid managed/terminal rows. See 
 
 Owner requested commit/push and V2 deployment. This release includes the review popout, official
 Job Card PDF/photo ZIP, compact office workflow, clipboard fix, shared-search/state fixes and
-documentation audit. V1 and Dataverse are not deployed by the V2 workflow.
+documentation audit. The authoritative yellow-cliff Job Card backend and Dataverse packages are
+not deployed by the V2 frontend workflow.
 
-V2 keeps the existing V1 Job Card bridge. Recovery controls (office corrections, Resume entry,
+V2 keeps the existing compatibility bridge to yellow-cliff's authoritative Job Card backend.
+Recovery controls (office corrections, Resume entry,
 technician-return checks) require `officeRecoveryAvailable: true` from the authoritative backend.
 Meter-date entry requires `meterRecordedDateAvailable: true`; an old backend must not silently
 discard a displayed field. Without these capabilities, established filing/follow-up and downloads
@@ -105,10 +107,13 @@ unified workflow does not activate those features. See the
 - Office UI: React/TypeScript, MSAL delegated Dataverse access, lazy feature routes.
 - V2 workflow builds application-role enforcement and unified Job registration/workflow enabled.
   Separate regional-book/allocation flags are false.
-- V2 Job Card requests bridge to V1 using `VITE_JOB_CARD_SHARED_BACKEND=v1-production`.
-  V1 storage, endpoints and existing technician links remain dependencies.
-- V2 realtime API URL is empty in its workflow. The unified worklist also needs its own
-  shared invalidation integration; enabling the URL alone does not fix freshness.
+- V2 Job Card requests retain the compatibility setting
+  `VITE_JOB_CARD_SHARED_BACKEND=v1-production`; the destination is the preserved authoritative
+  Job Card API/storage now hosted alongside V3 on yellow-cliff. Existing technician links remain
+  dependencies even though the yellow-cliff frontend is no longer V1.
+- Both V2 and V3 workflows configure the Equipment realtime API. The Service Coordination
+  branch/watch path has separate bounded refresh behavior; real two-browser acceptance remains the
+  evidence gate for cross-user freshness.
 - External supplier and hour-meter classification switches are not enabled by the V2 workflow.
   Source/schema presence does not mean those workflows are ready for activation.
 - Customer/Site operational relationships remain separate from GreenTree account references.
@@ -123,7 +128,7 @@ See [deployment](docs/architecture/deployment.md), [routing](docs/architecture/r
 
 - George confirmed the Auckland spreadsheet allocator was frozen and explicitly approved deployment.
 - The final pre-cutover audit found 1,316 numbered Jobs, Auckland maximum `147474`, active Job and
-  Auckland-ledger uniqueness keys, and `147475` available as the next permanent number.
+  Auckland-ledger uniqueness keys, and `147475` available at that time as the next permanent number.
 - Signed assembly `ServiceOperations.UnifiedJobWorkflow` `1.0.19.0` was deployed with public-key token
   `0edea2881bb8578c` and SHA-256
   `1033a8c660c29e7dcba59cb0e42517447cee6846852eb0f7cc244b02f3852a04`.
@@ -136,9 +141,11 @@ See [deployment](docs/architecture/deployment.md), [routing](docs/architecture/r
   consume `147475`.
 
 The remaining release action is controlled live acceptance with George's Job Book Admin and Office
-Admin test accounts. The first successful Auckland creation consumes `147475` permanently; use a real
-or deliberately retained/voided acceptance Job, never delete or reseed it. A protected off-PC signing-
-key recovery copy and proof build also remain operational recovery work before unattended broad use.
+Admin test accounts. The seeded first number `147475` has already been consumed by normal production
+use; the guarded allocator, not this dated cutover maximum, is authoritative for the next number.
+Use a real or deliberately retained/voided acceptance Job, never delete or reseed it. A protected
+off-PC signing-key recovery copy and proof build also remain operational recovery work before
+unattended broad use.
 
 ## Current blockers
 
@@ -212,10 +219,13 @@ Auckland historical migration was applied and verified for 1,320 Jobs. Forty-one
 were exported to CSV for later review and intentionally left unchanged. The Auckland registration
 backend and number guards were deployed at cutover; named restricted-user acceptance remains.
 
-Andy Lee's verified home/default branch is Christchurch. Bruce Frost, George Robson and Pubudu use
-Auckland. Home branch controls the initial worklist and new-Job default, while every participating
-user may switch to All branches. This is operational filtering, not Dataverse row-level isolation.
-The final four-user verification reported four verified users and zero mismatches. The onboarding
+Andy Lee's verified home/default branch is Christchurch. George Robson, Bruce Frost, Pubudu,
+Jessamyn, Nargiza, Martin, Lance, Ranjani, Ashneel, Kaizer, Paul and James use Auckland. Home branch
+controls the initial worklist and new-Service-Coordination-Job default, while participating Service
+Coordinators may switch to All branches. Regional Job Book creation uses the explicitly selected
+regional book. This is operational filtering, not Dataverse row-level isolation. The latest seven
+single-user plans each verified one user with zero mismatches, completing the reviewed 13-user
+mapping. The onboarding
 manifest now makes an explicit reviewed home branch mandatory for every new user; the single-user
 setup command requires an exact Plan hash and automatically verifies Apply before the assignment is
 considered complete. It never defaults a missing branch to Auckland.

@@ -1,7 +1,7 @@
 # Service Operations
 
 Service Operations coordinates forklift and materials-handling work across Customers, Sites,
-Equipment, Jobs, scheduling, maintenance, Quotes, WOF/REGO, and technician submissions. It
+Equipment, Jobs, scheduling, maintenance, Quotes, WOF, and technician submissions. It
 is a React and TypeScript application backed by Microsoft Dataverse.
 
 ## Architecture at a glance
@@ -23,12 +23,13 @@ Common starting points:
 
 - [Architecture overview](docs/architecture/README.md)
 - [Jobs](docs/architecture/jobs.md)
+- [V3 managed Service Coordination worklist](docs/features/SERVICE_COORDINATION_V3_MANAGED_WORKLIST.md)
 - [Technician Job Card Submission](docs/architecture/technician-job-submission.md)
 - [Equipment and maintenance](docs/architecture/equipment.md)
 - [Customer Dashboard](docs/architecture/customer-dashboard.md)
 - [Site Checks release tracker](docs/features/SITE_CHECKS_IMPLEMENTATION_PLAN.md)
 - [Scheduler](docs/architecture/scheduler.md)
-- [WOF/REGO](docs/architecture/wof.md)
+- [WOF](docs/architecture/wof.md)
 - [Reusable components](docs/architecture/reusable-components.md)
 - [Development workflow](docs/architecture/development-workflow.md)
 - [Deployment](docs/architecture/deployment.md)

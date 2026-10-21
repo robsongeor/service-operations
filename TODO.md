@@ -41,7 +41,7 @@ This is remaining work, not a completed-change log. See [current state](CURRENT_
 - [ ] **A01:** align client capabilities, narrow payloads, role-policy manifests and server guards.
   Cover mechanic/supplier edits, Equipment saves containing compliance fields, and post-email allocation.
   Preserve server-side rejection of unrelated writes; test real restricted identities.
-- [ ] **A02:** registration must remain Unallocated until confirmed dispatch, regardless of a selected
+- [ ] **A02:** registration must remain Staging (stored as Unallocated) until confirmed dispatch, regardless of a selected
   mechanic/supplier. Update registration/guard/tests together and plan historical correction separately.
 - [ ] **A03, owner-approved:** GreenTree closure without required completion evidence remains
   Completion Review. Safeguard implemented locally; verify deployment and historical/void/reopen
@@ -91,13 +91,11 @@ This is remaining work, not a completed-change log. See [current state](CURRENT_
   default to Christchurch work. Do not derive branch from technician text, Site address, creator or
   browser storage, and do not reuse shared Office Attention as a personal watch. Follow the
   [branch/watchlist schema, migration and acceptance plan](docs/job-branch-and-personal-watchlist.md).
-  Backend/client gates remain off pending mappings, migration and named-user acceptance.
-  The revised read-only branch Plan incorporates the approved Auckland baseline for 1,293 legacy
-  plain-number Jobs. It plans 1,310 updates and quarantines 43 otherwise unclassified Jobs. The
-  exception CSV and initial three-user branch-mapping sheet are ready; live Apply and user mapping
-  remain pending exact approval.
-- [ ] Decide whether branch scope is a normal worklist filter or enforced Dataverse row-level
-  isolation. If isolation is required, design branch owner teams/business units and prove allowed
+  Backend/client gates are enabled in V2 and V3. The approved Auckland branch migration and all 13
+  reviewed user home branches are applied and verified. The separate V3 managed-worklist migration
+  verified 254 active Jobs as managed Auckland and left 1,142 GreenTree-closed Jobs unchanged.
+- [x] Record the initial branch scope as normal operational filtering, not Dataverse row-level
+  isolation. If isolation is later required, design branch owner teams/business units and prove allowed
   Auckland collaboration plus denied cross-branch reads with direct named-user/API tests; a hidden UI
   row is not a security boundary.
 - [x] Implement the agreed Service Coordination lifecycle presentation in source and verified metadata without changing Dataverse
@@ -192,7 +190,9 @@ certified unconditionally safe.
   drawer component; preserve CSS still imported by current consumers.
 - [ ] Migrate remaining JobsTableSortIcon wrapper consumers before removing the wrapper.
 - [ ] Remove dormant prototype Customer draft branches only after proving no live entry point.
-- [ ] Retire legacy JobBookOnly compatibility only after tenant-wide assignment and V1 checks.
-- [ ] Replace V2 → V1 Job Card bridge only after storage/link/evidence/authorization migration is verified.
+- [ ] Retire legacy JobBookOnly compatibility only after tenant-wide assignment and V2/V3
+  authoritative-backend checks.
+- [ ] Replace the V2 → authoritative yellow-cliff Job Card bridge only after
+  storage/link/evidence/authorization migration is verified.
 - [ ] Retain Site Check/legacy Dataverse submissions, regional ledgers and numbering compatibility
   until their independent migrations pass. Disabled flags and old filenames are not deletion evidence.
