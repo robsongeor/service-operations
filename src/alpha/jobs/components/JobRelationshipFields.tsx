@@ -319,6 +319,7 @@ export default function JobRelationshipFields({
                     selectCustomer(customerId)
                 }}
                 onCreateCustomerAndSite={correctionsOnly && !allowCorrectionMasterCreation ? undefined : createCustomerAndSite}
+                createPresentation="drawer"
                 onCreateOpenChange={(open) => {
                     setCustomerCreateOpen(open)
                     if (open) setPanel('')

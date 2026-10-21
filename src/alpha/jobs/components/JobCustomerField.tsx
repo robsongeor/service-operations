@@ -16,6 +16,7 @@ type Props = {
     onSearchCustomers?: SearchCustomers
     onCreateCustomerAndSite?: (input: { customerName: string; siteName: string; address: string }) => Promise<void>
     onCreateOpenChange?: (open: boolean) => void
+    createPresentation?: 'modal' | 'drawer'
     createDescription?: string
     createActionLabel?: string
 }

@@ -168,6 +168,7 @@ function CustomerPicker({ id, value, customerName, required, error, onSearchCust
         }}
         onCreateCustomerAndSite={onCreateCustomerAndSite}
         onCreateOpenChange={onCreateOpenChange}
+        createPresentation="drawer"
         createDescription={UNIFIED_JOB_RUNTIME ? 'Create a saved Customer and Site. These remain available if the entry is cancelled.' : 'Use this customer and site on the Job Book entry. This does not create master Dataverse records.'}
         createActionLabel="Create customer"
     />

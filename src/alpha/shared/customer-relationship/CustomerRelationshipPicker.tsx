@@ -26,6 +26,7 @@ type Props = {
     onOpenChange?: (open: boolean) => void
     onCreateCustomerAndSite?: (input: { customerName: string; siteName: string; address: string }) => Promise<void>
     onCreateOpenChange?: (open: boolean) => void
+    createPresentation?: 'modal' | 'drawer'
     createDescription?: string
     createActionLabel?: string
     searchStatus?: 'idle' | 'loading' | 'error'
@@ -48,6 +49,7 @@ export default function CustomerRelationshipPicker({
     onOpenChange,
     onCreateCustomerAndSite,
     onCreateOpenChange,
+    createPresentation = 'modal',
     createDescription = 'Create both records together and select them.',
     createActionLabel = 'Create customer and site',
     searchStatus = 'idle',
@@ -136,6 +138,28 @@ export default function CustomerRelationshipPicker({
     }
 
     const selectedOption = options.find((option) => option.id === selectedId)
+    const createForm = <section ref={createDialogRef} className={`customer-relationship-create${createPresentation === 'drawer' ? ' drawer' : ''}`} role="dialog" aria-modal="true" aria-labelledby={createTitleId} tabIndex={-1} onKeyDown={handleCreateKeyDown} onMouseDown={(event) => event.stopPropagation()}>
+        <div><h4 id={createTitleId}>New customer and site</h4><p>{createDescription}</p></div>
+        <label><span>Customer name</span><input autoFocus value={draft.customerName} onChange={(event) => setDraft((current) => ({ ...current, customerName: event.target.value }))} /></label>
+        <label><span>Site name</span><input value={draft.siteName} onChange={(event) => setDraft((current) => ({ ...current, siteName: event.target.value }))} /></label>
+        <VerifiedAddressField value={draft.address} onChange={(address, selection) => {
+            const previousDerived = deriveSiteNameFromAddress(draft.address)
+            const nextDerived = selection?.siteName || deriveSiteNameFromAddress(address)
+            setAddressSelection(selection)
+            setCreateError('')
+            setDraft((current) => ({
+                ...current,
+                address,
+                siteName: !current.siteName.trim() || current.siteName === previousDerived ? nextDerived : current.siteName,
+            }))
+        }} />
+        {draft.siteName && draft.siteName === deriveSiteNameFromAddress(draft.address) && <p>Site Name generated from address.</p>}
+        {createError && <p className="customer-relationship-error" role="alert">{createError}</p>}
+        <div className="customer-relationship-actions">
+            <button type="button" onClick={cancelCreate} disabled={isSaving}>Cancel</button>
+            <button type="button" className="primary" onClick={() => void create()} disabled={isSaving || !addressSelection || addressSelection.formattedAddress !== draft.address}>{isSaving ? 'Saving…' : createActionLabel}</button>
+        </div>
+    </section>
 
     return <div className="customer-relationship-picker">
         <SearchableSelect
@@ -173,29 +197,8 @@ export default function CustomerRelationshipPicker({
             menuAction={onCreateCustomerAndSite ? { label: '+ Add new customer', onSelect: openCreate } : undefined}
         />
 
-        {creating && createPortal(<div className="customer-relationship-create-backdrop" role="presentation" onMouseDown={cancelCreate}>
-        <section ref={createDialogRef} className="customer-relationship-create" role="dialog" aria-modal="true" aria-labelledby={createTitleId} tabIndex={-1} onKeyDown={handleCreateKeyDown} onMouseDown={(event) => event.stopPropagation()}>
-            <div><h4 id={createTitleId}>New customer and site</h4><p>{createDescription}</p></div>
-            <label><span>Customer name</span><input autoFocus value={draft.customerName} onChange={(event) => setDraft((current) => ({ ...current, customerName: event.target.value }))} /></label>
-            <label><span>Site name</span><input value={draft.siteName} onChange={(event) => setDraft((current) => ({ ...current, siteName: event.target.value }))} /></label>
-            <VerifiedAddressField value={draft.address} onChange={(address, selection) => {
-                const previousDerived = deriveSiteNameFromAddress(draft.address)
-                const nextDerived = selection?.siteName || deriveSiteNameFromAddress(address)
-                setAddressSelection(selection)
-                setCreateError('')
-                setDraft((current) => ({
-                    ...current,
-                    address,
-                    siteName: !current.siteName.trim() || current.siteName === previousDerived ? nextDerived : current.siteName,
-                }))
-            }} />
-            {draft.siteName && draft.siteName === deriveSiteNameFromAddress(draft.address) && <p>Site Name generated from address.</p>}
-            {createError && <p className="customer-relationship-error" role="alert">{createError}</p>}
-            <div className="customer-relationship-actions">
-                <button type="button" onClick={cancelCreate} disabled={isSaving}>Cancel</button>
-                <button type="button" className="primary" onClick={() => void create()} disabled={isSaving || !addressSelection || addressSelection.formattedAddress !== draft.address}>{isSaving ? 'Saving…' : createActionLabel}</button>
-            </div>
-        </section>
-        </div>, document.body)}
+        {creating && (createPresentation === 'drawer'
+            ? <><div className="customer-relationship-create-backdrop drawer" role="presentation" onMouseDown={cancelCreate} />{createForm}</>
+            : createPortal(<div className="customer-relationship-create-backdrop" role="presentation" onMouseDown={cancelCreate}>{createForm}</div>, document.body))}
     </div>
 }

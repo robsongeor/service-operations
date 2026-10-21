@@ -419,8 +419,11 @@ test('new Customer and Site creation is a focused modal and hides stale dependen
     assert.match(picker, /event\.key !== 'Tab'/)
     assert.match(pickerStyles, /customer-relationship-create-backdrop[^{]*\{[^}]*backdrop-filter: blur\(4px\)/)
     assert.match(screen, /onCreateOpenChange=\{\(open\) => \{[\s\S]*setIntakeCustomerCreateOpen\(open\)/)
+    assert.match(screen, /createPresentation="drawer"/)
     assert.match(screen, /!intakeCustomerCreateOpen && <JobSiteContactFields/)
+    assert.match(relationshipFields, /createPresentation="drawer"/)
     assert.match(relationshipFields, /!customerCreateOpen && <JobSiteContactFields/)
+    assert.match(equipmentLocation, /createPresentation="drawer"/)
     assert.match(equipmentLocation, /!createFormOpen && <JobSiteContactFields/)
 })
 

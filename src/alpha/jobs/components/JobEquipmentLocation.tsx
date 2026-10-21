@@ -33,6 +33,7 @@ export default function JobEquipmentLocation({ equipment, onLocationChange, onPe
                 customers={location.customer ? [location.customer] : []} onSearchCustomers={location.search}
                 onQueryChange={location.setQuery} onClearSelection={() => location.chooseCustomer()}
                 onSelect={location.chooseCustomer}
+                createPresentation="drawer"
                 onCreateOpenChange={setCreateFormOpen}
                 createDescription="Create a Customer and its first Site. They are saved immediately; the machine moves only when you select Save equipment location."
                 onCreateCustomerAndSite={location.canCreateDestination ? location.createDestination : undefined} />
