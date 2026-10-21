@@ -321,8 +321,8 @@ export default function JobRelationshipFields({
             />
         </div>)}
 
-        {showRelationshipFields && !showLocationSummary && <JobSiteContactFields
-            showSite={!hasEquipmentLocation}
+        {showRelationshipFields && <JobSiteContactFields
+            showSite={!hasEquipmentLocation && !showLocationSummary}
             locationRequired={locationRequired}
             siteError={locationErrors?.site}
             addressError={locationErrors?.address}
