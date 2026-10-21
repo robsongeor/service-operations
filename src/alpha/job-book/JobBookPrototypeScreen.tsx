@@ -1086,6 +1086,7 @@ export default function JobBookPrototypeScreen({
             mechanics={mechanics}
             loadAssignments={rowActions.loadAssignments}
             loadDispatches={rowActions.loadDispatches}
+            previousTechnicians={rowActions.emailPreviousTechnicians}
             onCreateAssignment={canManageJobs ? rowActions.addAssignment : undefined}
             onSendAssignment={canManageJobs ? rowActions.sendAssignment : undefined}
             onDeleteAssignment={canManageJobs ? rowActions.removeAssignment : undefined}

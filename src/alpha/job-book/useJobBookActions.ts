@@ -21,6 +21,7 @@ import { JOB_CARD_STATUSES } from '../jobs/types/jobCardStatus.types'
 
 export function useJobBookActions(getAccessToken: () => Promise<string>, canEmail: boolean, assignedRecipientOnly: boolean, signedInUserName: string) {
     const [emailJob, setEmailJob] = useState<CorrectableJob | null>(null)
+    const [emailPreviousTechnicians, setEmailPreviousTechnicians] = useState<Array<{ id?: string; name: string }>>([])
     const [loadingJobId, setLoadingJobId] = useState('')
     const [feedback, setFeedback] = useState<{ message: string; error: boolean } | null>(null)
     const readController = useRef<AbortController | null>(null)
@@ -40,6 +41,7 @@ export function useJobBookActions(getAccessToken: () => Promise<string>, canEmai
     const close = () => {
         readController.current?.abort()
         setEmailJob(null)
+        setEmailPreviousTechnicians([])
         setLoadingJobId('')
     }
     const openEmail = async (row: JobBookRow) => {
@@ -55,6 +57,11 @@ export function useJobBookActions(getAccessToken: () => Promise<string>, canEmai
             if (controller.signal.aborted) return
             const latestBlocked = assignedTechnicianEmailBlockedReason(job)
             if (latestBlocked) throw new Error(latestBlocked)
+            const originalName = row.originalMechanicName?.trim() ?? ''
+            const currentId = job.gr_Mechanic?.gr_mechanicid?.toLowerCase()
+            setEmailPreviousTechnicians(originalName && row.originalMechanicId?.toLowerCase() !== currentId
+                ? [{ id: row.originalMechanicId, name: originalName }]
+                : [])
             setEmailJob(job)
         } catch (error) {
             if (!controller.signal.aborted) setFeedback({ message: error instanceof Error ? error.message : 'The Job email preview could not be loaded.', error: true })
@@ -99,7 +106,7 @@ export function useJobBookActions(getAccessToken: () => Promise<string>, canEmai
         setFeedback({ message: `Job Card email queued for ${draft.recipientEmail}. Delivery is shown in the technician roster.`, error: false })
     }, [getAccessToken])
     return {
-        emailJob, loadingJobId, feedback, dismissFeedback: () => setFeedback(null), emailDeliveryStates,
+        emailJob, emailPreviousTechnicians, loadingJobId, feedback, dismissFeedback: () => setFeedback(null), emailDeliveryStates,
         copy, openEmail, close, send, loadAssignments, loadDispatches, addAssignment, removeAssignment, sendAssignment,
     }
 }

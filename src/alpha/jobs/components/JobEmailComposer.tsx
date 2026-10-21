@@ -24,6 +24,7 @@ type Props = {
     mechanics?: Mechanic[]
     loadAssignments?: (jobId: string, signal?: AbortSignal) => Promise<JobAssignment[]>
     loadDispatches?: (jobId: string, signal?: AbortSignal) => Promise<JobEmailDispatch[]>
+    previousTechnicians?: Array<{ id?: string; name: string }>
     onCreateAssignment?: (assignment: JobAssignmentInput) => Promise<void>
     onSendAssignment?: (job: Job, assignment: JobAssignment, draft: JobEmailDraft) => Promise<void>
     onDeleteAssignment?: (assignmentId: string) => Promise<void>
@@ -54,6 +55,7 @@ export default function JobEmailComposer({
     mechanics = [],
     loadAssignments,
     loadDispatches,
+    previousTechnicians = [],
     onCreateAssignment,
     onSendAssignment,
     onDeleteAssignment,
@@ -167,7 +169,14 @@ export default function JobEmailComposer({
         }
         return [...result.values()]
     }, [assignments, dispatches, historicalRequests, primaryMechanic])
-    const assignedTechnicianCount = (primaryMechanic ? 1 : 0) + assignments.length + historicalRequests.length + historicalDispatches.length
+    const previousAssignments = useMemo(() => previousTechnicians.filter((person) => {
+        const name = person.name.trim().toLowerCase()
+        if (!name || name === primaryMechanic?.gr_name.trim().toLowerCase()) return false
+        if (assignments.some((assignment) => assignment.gr_Mechanic?.gr_mechanicid === person.id || assignment.gr_Mechanic?.gr_name.trim().toLowerCase() === name)) return false
+        if (historicalRequests.some((request) => request.technicianName.trim().toLowerCase() === name)) return false
+        return !historicalDispatches.some((dispatch) => dispatch.gr_recipientname?.trim().toLowerCase() === name)
+    }), [assignments, historicalDispatches, historicalRequests, previousTechnicians, primaryMechanic])
+    const assignedTechnicianCount = (primaryMechanic ? 1 : 0) + assignments.length + historicalRequests.length + historicalDispatches.length + previousAssignments.length
 
     const selectTechnician = (assignment?: JobAssignment) => {
         if (assignedRecipientOnly && assignment) return
@@ -324,6 +333,14 @@ export default function JobEmailComposer({
         </div>}
     </article>
 
+    const previousAssignmentRow = (person: { id?: string; name: string }) => <article key={person.id || person.name} className="job-email-roster-row">
+        <div className="job-email-roster-person is-read-only">
+            <span className="job-email-roster-avatar" aria-hidden="true">{person.name.slice(0, 1).toUpperCase()}</span>
+            <span><strong>{person.name}</strong><small>Previously assigned</small></span>
+        </div>
+        <div className="job-email-roster-state"><strong>Not emailed</strong></div>
+    </article>
+
     return <>
         <EditDrawerFormDialog
             eyebrow="Technician job card"
@@ -426,6 +443,7 @@ export default function JobEmailComposer({
                         {assignments.map((assignment) => rosterRow(assignment))}
                         {historicalRequests.map(historicalRequestRow)}
                         {historicalDispatches.map(historicalDispatchRow)}
+                        {previousAssignments.map(previousAssignmentRow)}
                     </div>}
                 {!assignedRecipientOnly && !rosterBusy && !rosterError && onCreateAssignment && <>
                     {showAddTechnician ? <div className="job-email-roster-add">

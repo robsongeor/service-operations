@@ -174,6 +174,7 @@ test('Jobs table uses the in-app composer and pilot-gated link generation', () =
     assert.match(composer, /loadAssignments/)
     assert.match(composer, /loadDispatches/)
     assert.match(composer, /Previously emailed/)
+    assert.match(composer, /Previously assigned/)
     assert.match(composer, /historicalRequests/)
     assert.match(composer, /onSendAssignment/)
     assert.match(composer, /showRoster = rosterEnabled/)

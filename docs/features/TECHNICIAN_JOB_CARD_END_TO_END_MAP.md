@@ -253,6 +253,8 @@ implements the side-by-side roster, bounded fail-closed history/assignment load,
 selection, additional assignment creation and scoped send, active-request withdrawal with a reason,
 removal of never-sent additional assignments, and read-only recovery of previously emailed
 technicians from Dataverse dispatch history even when no online Job Card link was generated. The
+Job Book path also retains a differing original ledger technician as a read-only **Previously
+assigned** participant, without making an unsent historical allocation a required Job Card return.
 separate **No longer attending — card still
 required** state and stable assignment identity for the first technician remain architecture work;
 the current Dataverse `gr_Mechanic` compatibility path is still in use for that first row.

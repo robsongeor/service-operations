@@ -326,6 +326,8 @@ function mapIntakeRow(row: IntakeApiRow, book: JobBookConfig): JobBookRow {
         return {
             ...mapManagedJobBookRow(job, book),
             registeredLedgerId: intakeRecordId, intakeRecordId, ledgerEtag: row['@odata.etag'] ?? '',
+            originalMechanicId: row.gr_Mechanic?.gr_mechanicid ?? '',
+            originalMechanicName: row.gr_Mechanic?.gr_name ?? '',
             allocationSnapshot: { customer: row.gr_customersnapshot ?? '', site: row.gr_sitesnapshot ?? '', address: row.gr_addresssnapshot ?? '', description: row.gr_description },
         }
     }
