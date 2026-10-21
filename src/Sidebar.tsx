@@ -86,8 +86,6 @@ export default function Sidebar({ access }: { access: ApplicationAccess }) {
                 ))}
             </nav>
 
-            <div className="sidebar-spacer" />
-
             <SidebarFooter />
         </aside>
     )
