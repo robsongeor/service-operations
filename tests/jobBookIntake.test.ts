@@ -599,3 +599,11 @@ test('Job Book create drawer does not double-divide the Scheduling section', () 
     const styles = readFileSync('src/alpha/job-book/JobBookPrototypeScreen.css', 'utf8')
     assert.match(styles, /\.job-book-intake-section\s*>\s*\.job-schedule-section\s*\{[^}]*border-top:\s*0;/s)
 })
+
+test('Job Book grid keeps horizontal overflow reachable within the viewport', () => {
+    const styles = readFileSync(new URL('../src/alpha/job-book/JobBookPrototypeScreen.css', import.meta.url), 'utf8')
+    const gridWrap = styles.slice(styles.indexOf('.job-book-grid-wrap {'), styles.indexOf('.job-book-page-loader {'))
+    assert.match(gridWrap, /max-height: max\(280px, calc\(100dvh - 300px\)\)/)
+    assert.match(gridWrap, /overflow: auto/)
+    assert.match(gridWrap, /scrollbar-gutter: stable/)
+})
