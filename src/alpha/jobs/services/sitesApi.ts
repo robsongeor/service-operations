@@ -80,6 +80,9 @@ export async function createSite(
         body: JSON.stringify({
             gr_name: name,
             gr_address: site.address?.trim() || null,
+            // Keep the restricted Create contract deterministic. Induction settings remain a
+            // separate existing-Site workflow and are not granted by destination creation.
+            gr_inductionrequired: false,
             'gr_Customer@odata.bind':
                 `/gr_customers(${customerId})`,
         }),

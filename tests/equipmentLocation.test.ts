@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { createEquipmentDestination, createEquipmentSite, isPersistedEquipmentId, moveEquipmentLocation } from '../src/alpha/equipment/services/equipmentLocationWorkflow.ts'
+import { createSite } from '../src/alpha/jobs/services/sitesApi.ts'
 import type { Equipment } from '../src/alpha/jobs/types/equipment.types'
 import type { Site } from '../src/alpha/jobs/types/site.types'
 
@@ -99,6 +100,23 @@ test('adding a Site uses the selected Customer ID and writes only the Site', asy
     assert.deepEqual(calls, [id(31), { customerId: id(31), name: 'New Depot', address: 'Verified address' }])
     assert.equal(result.gr_Customer, customer)
     assert.equal(result.gr_siteid, id(32))
+})
+
+test('Site creation submits the restricted safe induction default', async (context) => {
+    const previousFetch = globalThis.fetch
+    context.after(() => { globalThis.fetch = previousFetch })
+    let payload: Record<string, unknown> = {}
+    globalThis.fetch = async (_input, init) => {
+        payload = JSON.parse(String(init?.body)) as Record<string, unknown>
+        return Response.json({ gr_siteid: id(32) })
+    }
+    assert.equal(await createSite('token', { customerId: id(31), name: 'New Depot', address: 'Verified address' }), id(32))
+    assert.deepEqual(payload, {
+        gr_name: 'New Depot',
+        gr_address: 'Verified address',
+        gr_inductionrequired: false,
+        'gr_Customer@odata.bind': `/gr_customers(${id(31)})`,
+    })
 })
 
 test('Site-only creation rejects denied, missing Customer and incomplete details before reads', async () => {
