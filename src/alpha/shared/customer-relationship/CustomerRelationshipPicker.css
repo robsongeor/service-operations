@@ -8,7 +8,7 @@
 .customer-relationship-results button small { color: #707a74; font-size: .68rem; font-weight: 450; }.customer-relationship-results > span { color: #7a827d; }.customer-relationship-results > :last-child { border-bottom: 0; }.customer-relationship-results .customer-relationship-add { color: #176f66; font-weight: 750; }
 .customer-relationship-create-backdrop { position: fixed; z-index: 1150; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(19,24,21,.38); backdrop-filter: blur(4px); }
 .customer-relationship-create { display: grid; overflow-y: auto; width: min(440px, 100%); max-height: calc(100dvh - 40px); box-sizing: border-box; gap: 14px; padding: 20px; border: 1px solid #cfe0dc; border-radius: 12px; background: #f7fbf9; box-shadow: 0 24px 60px rgba(22,30,26,.24); }
-.customer-relationship-create-backdrop.drawer { left: auto; width: min(480px, 92vw); box-sizing: border-box; }
+.customer-relationship-create-backdrop.drawer { left: auto; width: min(480px, 92vw); box-sizing: border-box; background: rgba(19,24,21,.16); backdrop-filter: blur(1.5px); }
 .customer-relationship-create.drawer { position: relative; z-index: 1160; width: 100%; max-height: none; padding: 16px; border-radius: 10px; box-shadow: 0 14px 36px rgba(22,30,26,.2); }
 .customer-relationship-create:focus { outline: none; }
 .customer-relationship-create h4, .customer-relationship-create p { margin: 0; }.customer-relationship-create > div:first-child p { margin-top: 4px; color: #69746e; font-size: .72rem; font-weight: 450; }
