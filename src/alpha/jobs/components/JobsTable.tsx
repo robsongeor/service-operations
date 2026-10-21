@@ -68,6 +68,7 @@ type Props = {
     coordinationView?: CoordinationView
     watchedJobIds?: ReadonlySet<string>
     onToggleWatch?: (job: Job) => Promise<void>
+    onStopManaging?: (job: Job) => Promise<void>
     progressSummaries?: Readonly<Record<string, JobCardProgressSummary>>
     progressUnavailable?: boolean
 }
@@ -103,6 +104,7 @@ export default function JobsTable({
     coordinationView = 'branch',
     watchedJobIds = new Set<string>(),
     onToggleWatch,
+    onStopManaging,
     progressSummaries = {},
     progressUnavailable = false,
 }: Props) {
@@ -629,6 +631,15 @@ export default function JobsTable({
                                             onClick={() => { void onToggleWatch(job).catch((error) => window.alert(error instanceof Error ? error.message : 'The watchlist could not be updated.')) }}
                                         >
                                             {watchedJobIds.has(job.gr_jobid.toLowerCase()) ? 'Watching' : 'Watch'}
+                                        </button>}
+                                        {onStopManaging && Boolean(job.gr_jobnumber?.trim()) && !job.gr_registrationvoid && <button
+                                            type="button"
+                                            className="jobs-stop-managing-action"
+                                            aria-label={`Stop managing Job ${job.gr_jobnumber}`}
+                                            title="Keep this Job in the Job Book but remove it from Service Coordination."
+                                            onClick={() => { void onStopManaging(job).catch((error) => window.alert(error instanceof Error ? error.message : 'The Job could not be removed from Service Coordination.')) }}
+                                        >
+                                            Stop managing
                                         </button>}
                                         {unifiedWorklist && job.gr_registrationvoid && <span className="jobs-table-muted">Void</span>}
                                         {!unifiedWorklist && <input

@@ -12,8 +12,9 @@ export type JobWorklist = 'operational' | 'staging' | 'all'
 export const UNIFIED_JOB_SELECT = `,gr_coordinatormanaged,gr_registrationvoid,gr_registrationvoidreason${SERVICE_COORDINATION_CLIENT_ENABLED ? ',gr_operatingbranch' : ''}`
 
 export function isCoordinatorManaged(job: Job) {
-    // Missing migration metadata must never silently remove existing work.
-    return job.gr_coordinatormanaged !== false
+    // V3 uses explicit membership. Historical rows are migrated before release;
+    // null must not silently turn every Job Book record into coordinator work.
+    return job.gr_coordinatormanaged === true
 }
 
 export function jobMatchesWorklist(job: Job, worklist: JobWorklist) {

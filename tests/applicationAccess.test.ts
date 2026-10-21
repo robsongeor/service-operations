@@ -110,15 +110,15 @@ test('only Full Access coordinators can manage Jobs, including development simul
     }
 })
 
-test('Job Book guards Manage job presentation and entry point while retaining Intake editing', () => {
+test('Job Book guards Service Coordination management while retaining Intake editing', () => {
     const screen = readFileSync(new URL('../src/alpha/job-book/JobBookPrototypeScreen.tsx', import.meta.url), 'utf8')
     assert.match(screen, /const \{ canManageJobs, canScheduleJobs, canCorrectJobDetails, canEmailAssignedTechnician \} = applicationAccessFromEnvironment\(account\)/)
-    assert.match(screen, /const openManageJob = \(row: JobBookRow\) => \{\s*if \(!canManageJobs \|\| \(!isEditableJobBookIntake\(row\) && !row\.registeredLedgerId\)\) return/)
-    assert.match(screen, /if \(UNIFIED_JOB_RUNTIME && row\.registeredLedgerId\) \{[\s\S]*?fetchJobForCorrection[\s\S]*?setManagingJob[\s\S]*?return\s*\}\s*setPromotionRow\(row\)/)
-    assert.match(screen, /\{canManageJobs && row\.coordinatorManaged !== true && <button[^>]*onClick=\{\(\) => openManageJob\(row\)\}>Manage job<\/button>\}/)
+    assert.match(screen, /const openManageJob = \(row: JobBookRow\) => \{\s*if \(!canManageJobs \|\| \(!isEditableJobBookIntake\(row\) && !row\.linkedJobId\)\) return/)
+    assert.match(screen, /if \(UNIFIED_JOB_RUNTIME && row\.linkedJobId\) \{[\s\S]*?fetchJobForCorrection[\s\S]*?setManagingJob[\s\S]*?return\s*\}\s*setPromotionRow\(row\)/)
+    assert.match(screen, /\{canManageJobs && row\.coordinatorManaged !== true && <button[^>]*onClick=\{\(\) => openManageJob\(row\)\}>Add to Service Coordination<\/button>\}/)
     assert.match(screen, /canEditIntake\s*\? <button[^>]*onClick=\{\(\) => openIntakeEntryEditor\(row\)\}>Edit entry<\/button>/)
     assert.match(screen, /\{canManageJobs && promotionRow && promotionReadiness &&/)
-    assert.match(screen, /id="promotion-dialog-title">Manage job \{promotionRow\.jobNumber\}/)
+    assert.match(screen, /id="promotion-dialog-title">Add Job \{promotionRow\.jobNumber\} to Service Coordination/)
     assert.match(screen, /<button[^>]*disabled[^>]*>Create managed Job<\/button>/)
     assert.doesNotMatch(screen, /Prepare promotion/)
 })

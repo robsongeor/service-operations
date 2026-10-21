@@ -231,6 +231,24 @@ namespace ServiceOperations.JobRegistration.Tests
                 var tampered = ManageRequest(job); tampered["JobType"] = 122830000;
                 Reject(() => db.Invoke(JobWorkflowPlugin.ManageMessage, tampered), "INVALID");
             });
+            Test("Stop managing a numbered job preserves its operational data and safely replays", () => {
+                var db = Fixture(); var job = Draft(db); job["gr_jobnumber"] = "145999";
+                var request = ManageRequest(job); var first = db.Invoke(JobWorkflowPlugin.UnmanageMessage, request);
+                var saved = db.Get("gr_job", job.Id);
+                Check(!saved.GetAttributeValue<bool>(JobRegistrationPlugin.CoordinatorManaged), "Membership was not disabled");
+                Check(saved.GetAttributeValue<string>("gr_jobnumber") == "145999" && saved.GetAttributeValue<OptionSetValue>("gr_status").Value == 122830001 && saved.GetAttributeValue<string>("gr_techniciansubmissionstory") == "Immutable evidence", "Stop managing changed Job Book or operational data");
+                Check(!(bool)first["WasReplay"] && (bool)db.Invoke(JobWorkflowPlugin.UnmanageMessage, request)["WasReplay"], "Stop managing replay failed");
+            });
+            Test("Stop managing rejects stale, Void, unnumbered and additional-field requests", () => {
+                var db = Fixture(); var job = Draft(db);
+                Reject(() => db.Invoke(JobWorkflowPlugin.UnmanageMessage, ManageRequest(job)), "INVALID");
+                job["gr_jobnumber"] = "145999"; var stale = ManageRequest(job); job.RowVersion = "999";
+                Reject(() => db.Invoke(JobWorkflowPlugin.UnmanageMessage, stale), "CONFLICT");
+                job[JobWorkflowPlugin.RegistrationVoid] = true;
+                Reject(() => db.Invoke(JobWorkflowPlugin.UnmanageMessage, ManageRequest(job)), "INVALID");
+                var tampered = ManageRequest(job); tampered["Status"] = 122830003;
+                Reject(() => db.Invoke(JobWorkflowPlugin.UnmanageMessage, tampered), "INVALID");
+            });
             foreach (string book in new[] { "auckland", "waikato", "hastings", "christchurch" })
             {
                 string selected = book;
@@ -426,7 +444,7 @@ namespace ServiceOperations.JobRegistration.Tests
                     { "InitiatingUserId", identity }, { "MessageName", message }, { "InputParameters", request }, { "OutputParameters", output }
                 });
                 try {
-                    if (message == JobWorkflowPlugin.ManageMessage || message == JobWorkflowPlugin.VoidMessage || message == JobWorkflowPlugin.DispatchMessage)
+                    if (message == JobWorkflowPlugin.ManageMessage || message == JobWorkflowPlugin.UnmanageMessage || message == JobWorkflowPlugin.VoidMessage || message == JobWorkflowPlugin.DispatchMessage)
                         new JobWorkflowPlugin().Execute(new Provider(context, new Factory(this, service), new Tracer(this)));
                     else new JobRegistrationPlugin().Execute(new Provider(context, new Factory(this, service), new Tracer(this)));
                     service.Commit(); return output;

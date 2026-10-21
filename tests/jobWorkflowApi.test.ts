@@ -4,8 +4,10 @@ import { buildJobWorkflowAction, createJobWorkflowClient, runJobWorkflow, type V
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 const manage = { kind: 'manage', jobId: id(1), jobEtag: 'W/"10"' } as const
+const unmanage = { kind: 'unmanage', jobId: id(1), jobEtag: 'W/"10"' } as const
 const voidCommand: VoidRegisteredJobBookEntryCommand = { kind: 'void', book: 'christchurch', jobId: id(1), ledgerId: id(2), jobEtag: 'W/"10"', ledgerEtag: 'W/"20"', reason: ' Entered twice ' }
 const manageResult = { JobId: id(1), JobRowVersion: '11', CoordinatorManaged: true, RegistrationVoid: false, WasReplay: false }
+const unmanageResult = { JobId: id(1), JobRowVersion: '11', CoordinatorManaged: false, RegistrationVoid: false, WasReplay: false }
 const voidResult = { JobId: id(1), LedgerId: id(2), JobRowVersion: '11', LedgerRowVersion: '21', CoordinatorManaged: false, RegistrationVoid: true, WasReplay: false }
 const dispatch = { kind: 'dispatch', requestId: id(3), jobId: id(1), jobEtag: 'W/"10"', recipientEmail: ' TECH@example.invalid ', subject: ' Job details ', body: ' <p>Body</p> ' } as const
 const dispatchResult = { DispatchId: id(3), WasReplay: false }
@@ -22,6 +24,11 @@ test('Manage job accepts only identity and an exact Job version', () => {
     assert.ok(Object.isFrozen(buildJobWorkflowAction(manage).parameters))
     for (const jobEtag of ['', '*', 'W/"*"', 'W/"1"\r\nOther: x']) assert.throws(() => buildJobWorkflowAction({ ...manage, jobEtag }), /exact current version/)
     assert.throws(() => buildJobWorkflowAction({ ...manage, jobType: 122830000 } as never), /unrelated/)
+})
+
+test('Stop managing accepts only identity and an exact Job version', () => {
+    assert.deepEqual(buildJobWorkflowAction(unmanage), { action: 'gr_UnmanageJobBookJob', parameters: { JobId: id(1), ExpectedJobRowVersion: '10' } })
+    assert.throws(() => buildJobWorkflowAction({ ...unmanage, status: 122830003 } as never), /unrelated/)
 })
 
 test('registered Void carries both exact versions, region and trimmed reason only', () => {
@@ -101,4 +108,12 @@ test('mismatched or contradictory success payloads remain unconfirmed', async ()
         { CoordinatorManaged: true }, { RegistrationVoid: false }, { WasReplay: undefined },
     ]) await assert.rejects(() => client(async () => Response.json({ ...voidResult, ...change }))('sample', voidCommand), { kind: 'unknown' })
     await assert.rejects(() => client(async () => Response.json({ ...manageResult, CoordinatorManaged: false }))('sample', manage), { kind: 'unknown' })
+    await assert.rejects(() => client(async () => Response.json({ ...unmanageResult, CoordinatorManaged: true }))('sample', unmanage), { kind: 'unknown' })
+})
+
+test('Stop managing verifies the server-confirmed unmanaged state', async () => {
+    assert.deepEqual(await client(async () => Response.json(unmanageResult))('sample', unmanage), {
+        jobId: id(1), jobEtag: 'W/"11"', ledgerId: undefined, ledgerEtag: undefined,
+        coordinatorManaged: false, registrationVoid: false, replayed: false,
+    })
 })

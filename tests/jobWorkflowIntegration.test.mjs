@@ -135,7 +135,7 @@ test('production unified worklist is server-filtered, bounded and explicitly pag
     assert.equal(first.next, next)
     const initial = new URL(requests[0].url)
     assert.equal(initial.pathname, '/api/data/v9.2/gr_jobs')
-    assert.equal(initial.searchParams.get('$filter'), "((gr_coordinatormanaged eq true or gr_coordinatormanaged eq null) and gr_registrationvoid ne true) and (gr_greentreestatus eq null or (gr_greentreestatus ne 'closed' and gr_greentreestatus ne 'finalised'))")
+    assert.equal(initial.searchParams.get('$filter'), "(gr_registrationvoid ne true) and gr_coordinatormanaged eq true and (gr_greentreestatus eq null or (gr_greentreestatus ne 'closed' and gr_greentreestatus ne 'finalised'))")
     assert.match(initial.searchParams.get('$select'), /gr_coordinatormanaged/)
     assert.equal(requests[0].headers.Prefer, 'odata.maxpagesize=100')
     await fetchUnifiedJobsPage('token', 'operational', first.next)
@@ -143,7 +143,7 @@ test('production unified worklist is server-filtered, bounded and explicitly pag
 })
 
 test('production worklist filters preserve tab meaning and reject untrusted paging', async () => {
-    const activeGreenTree = "(gr_greentreestatus eq null or (gr_greentreestatus ne 'closed' and gr_greentreestatus ne 'finalised'))"
+    const activeGreenTree = "gr_coordinatormanaged eq true and (gr_greentreestatus eq null or (gr_greentreestatus ne 'closed' and gr_greentreestatus ne 'finalised'))"
     assert.equal(unifiedJobsServerFilter('all'), activeGreenTree)
     assert.match(unifiedJobsServerFilter('priority'), /gr_status eq 122830001 or gr_status eq 122830005 or gr_status eq 122830000 or gr_status eq 122830002/)
     assert.match(unifiedJobsServerFilter('priority'), /gr_jobnumber eq null/)
@@ -151,6 +151,7 @@ test('production worklist filters preserve tab meaning and reject untrusted pagi
         assert.match(unifiedJobsServerFilter(scope, new Date('2026-10-07T00:00:00Z')), /gr_greentreestatus eq null/)
         assert.match(unifiedJobsServerFilter(scope, new Date('2026-10-07T00:00:00Z')), /gr_greentreestatus ne 'closed'/)
         assert.match(unifiedJobsServerFilter(scope, new Date('2026-10-07T00:00:00Z')), /gr_greentreestatus ne 'finalised'/)
+        assert.match(unifiedJobsServerFilter(scope, new Date('2026-10-07T00:00:00Z')), /gr_coordinatormanaged eq true/)
     }
     assert.match(unifiedJobsServerFilter('deferred'), /gr_status eq 122830004 and gr_registrationvoid ne true/)
     assert.match(unifiedJobsServerFilter('recent-complete', new Date('2026-10-07T00:00:00Z')), /gr_status eq 122830003 and gr_completeddate ge 2026-07-09 and gr_registrationvoid ne true/)
@@ -160,7 +161,7 @@ test('production worklist filters preserve tab meaning and reject untrusted pagi
     assert.match(unifiedJobsServerFilter(122830004), /gr_jobtype eq 122830004 and gr_registrationvoid ne true/)
     assert.equal(
         unifiedJobsServerFilter('operational', new Date('2026-10-07T00:00:00Z'), 122830003),
-        "(((gr_coordinatormanaged eq true or gr_coordinatormanaged eq null) and gr_registrationvoid ne true) and (gr_greentreestatus eq null or (gr_greentreestatus ne 'closed' and gr_greentreestatus ne 'finalised'))) and gr_operatingbranch eq 122830003",
+        "((gr_registrationvoid ne true) and gr_coordinatormanaged eq true and (gr_greentreestatus eq null or (gr_greentreestatus ne 'closed' and gr_greentreestatus ne 'finalised'))) and gr_operatingbranch eq 122830003",
     )
     assert.throws(() => unifiedJobsServerFilter('all', new Date(), 99), /operating branch is invalid/i)
     globalThis.fetch = async () => Response.json({ value: [], '@odata.nextLink': 'https://attacker.invalid/api/data/v9.2/gr_jobs?$skiptoken=x' })
@@ -188,6 +189,14 @@ test('unified Job creation omits the number field entirely', () => {
         status: 122830001, serviceType: 122830000, siteId: id(3), operatingBranch: 122830003,
     })
     assert.equal(branchPayload.gr_operatingbranch, 122830003)
+})
+
+test('Service Coordination creation explicitly stamps managed membership', () => {
+    const payload = buildJobCreatePayload({
+        jobNumber: '', orderNumber: '', description: 'Managed work', jobType: 122830000,
+        status: 122830001, serviceType: 122830000, siteId: id(3), coordinatorManaged: true,
+    })
+    assert.equal(payload.gr_coordinatormanaged, true)
 })
 
 test('unified WOF corrections never submit the Job number field', async () => {

@@ -53,7 +53,7 @@ test('watch add derives watcher while delegated Create owns the row and is idemp
         enabled: true,
         fetchImpl: fetchFor({
             WhoAmI: { UserId: userId },
-            [`gr_jobs(${jobId})`]: { gr_jobid: jobId },
+            [`gr_jobs(${jobId})`]: { gr_jobid: jobId, gr_coordinatormanaged: true },
             'gr_jobwatchs?': () => Response.json({ value: ++lookup === 1 ? [] : [{ gr_jobwatchid: watchId }] }),
             '/gr_jobwatchs': (_url, options) => options.method === 'POST' ? new Response(null, { status: 409 }) : new Response(null, { status: 404 }),
         }, calls),
@@ -65,6 +65,20 @@ test('watch add derives watcher while delegated Create owns the row and is idemp
     assert.equal(body['gr_Watcher@odata.bind'], `/systemusers(${userId})`)
     assert.equal(Object.hasOwn(body, 'ownerid@odata.bind'), false)
     assert.equal(body['gr_Job@odata.bind'], `/gr_jobs(${jobId})`)
+})
+
+test('watch add rejects a Job that is not explicitly managed', async () => {
+    const calls = []
+    const result = await handleServiceCoordination(request({ method: 'POST', query: {}, body: { action: 'watch', jobId } }), {
+        enabled: true,
+        fetchImpl: fetchFor({
+            WhoAmI: { UserId: userId },
+            [`gr_jobs(${jobId})`]: { gr_jobid: jobId, gr_coordinatormanaged: false },
+        }, calls),
+    })
+    assert.equal(result.status, 404)
+    assert.deepEqual(JSON.parse(result.body), { code: 'job-unavailable', error: 'The Job is unavailable.' })
+    assert.equal(calls.some(([url]) => url.includes('gr_jobwatchs')), false)
 })
 
 test('caller-supplied identity fields are rejected and unwatch only targets the caller-owned row', async () => {
@@ -90,7 +104,7 @@ test('caller-supplied identity fields are rejected and unwatch only targets the 
     assert.equal(new URL(calls.find(([url]) => url.includes('gr_jobwatchs?'))[0]).searchParams.get('$filter'), `_gr_watcher_value eq ${userId} and _ownerid_value eq ${userId} and _gr_job_value eq ${jobId}`)
 })
 
-test('watch listing validates opaque continuation and excludes invalid, void, or GreenTree-closed expanded jobs', async () => {
+test('watch listing validates opaque continuation and excludes invalid, unmanaged, void, or GreenTree-closed expanded jobs', async () => {
     const next = `https://org0d4246d7.crm6.dynamics.com/api/data/v9.2/gr_jobwatchs?$skiptoken=safe`
     const calls = []
     const result = await handleServiceCoordination(request({ query: { view: 'watches' } }), {
@@ -99,7 +113,8 @@ test('watch listing validates opaque continuation and excludes invalid, void, or
             WhoAmI: { UserId: userId },
             [`systemusers(${userId})`]: { systemuserid: userId },
             'gr_jobwatchs?': { value: [
-                { gr_jobwatchid: watchId, _gr_job_value: jobId, createdon: '2026-10-19', gr_Job: { gr_jobid: jobId, gr_status: 122830001 } },
+                { gr_jobwatchid: watchId, _gr_job_value: jobId, createdon: '2026-10-19', gr_Job: { gr_jobid: jobId, gr_status: 122830001, gr_coordinatormanaged: true } },
+                { gr_jobwatchid: id(10), _gr_job_value: id(11), gr_Job: { gr_jobid: id(11), gr_coordinatormanaged: false } },
                 { gr_jobwatchid: id(4), _gr_job_value: id(5), gr_Job: { gr_jobid: id(5), gr_registrationvoid: true } },
                 { gr_jobwatchid: id(6), _gr_job_value: id(7), gr_Job: { gr_jobid: id(7), gr_greentreestatus: 'closed' } },
                 { gr_jobwatchid: id(8), _gr_job_value: id(9), gr_Job: { gr_jobid: id(9), gr_greentreestatus: 'finalised' } },
@@ -112,6 +127,7 @@ test('watch listing validates opaque continuation and excludes invalid, void, or
     assert.match(filter, /gr_Job\/gr_greentreestatus eq null/)
     assert.match(filter, /gr_Job\/gr_greentreestatus ne 'closed'/)
     assert.match(filter, /gr_Job\/gr_greentreestatus ne 'finalised'/)
+    assert.match(filter, /gr_Job\/gr_coordinatormanaged eq true/)
     assert.equal(Buffer.from(body.next, 'base64url').toString('utf8'), next)
     assert.throws(() => _test.decodeCursor(_test.encodeCursor('https://untrusted.invalid/api/data/v9.2/gr_jobwatchs'), 'https://org0d4246d7.crm6.dynamics.com'))
 })

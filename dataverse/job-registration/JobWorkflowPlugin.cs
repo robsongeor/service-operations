@@ -15,6 +15,7 @@ namespace ServiceOperations.JobRegistration
     public sealed class JobWorkflowPlugin : IPlugin
     {
         public const string ManageMessage = "gr_ManageJobBookJob";
+        public const string UnmanageMessage = "gr_UnmanageJobBookJob";
         public const string VoidMessage = "gr_VoidRegisteredJobBookEntry";
         public const string DispatchMessage = "gr_QueueInitialJobDispatch";
         public const string RegistrationVoid = "gr_registrationvoid";
@@ -34,7 +35,7 @@ namespace ServiceOperations.JobRegistration
                 throw Failure("CONFIGURATION", "Job workflow changes require a synchronous transactional Custom API.");
             if (context.UserId == Guid.Empty || context.UserId != context.InitiatingUserId)
                 throw Failure("FORBIDDEN", "Job workflow changes must run as the signed-in caller, without impersonation.");
-            if (context.MessageName != ManageMessage && context.MessageName != VoidMessage && context.MessageName != DispatchMessage)
+            if (context.MessageName != ManageMessage && context.MessageName != UnmanageMessage && context.MessageName != VoidMessage && context.MessageName != DispatchMessage)
                 throw Failure("CONFIGURATION", "This operation is not supported.");
 
             // Each Custom API must also have a reviewed ExecutePrivilegeName. The service remains
@@ -52,6 +53,7 @@ namespace ServiceOperations.JobRegistration
         private static void Run(IOrganizationService service, IPluginExecutionContext context)
         {
             if (context.MessageName == ManageMessage) Manage(service, context);
+            else if (context.MessageName == UnmanageMessage) Unmanage(service, context);
             else if (context.MessageName == VoidMessage) Void(service, context);
             else Dispatch(service, context);
         }
@@ -73,6 +75,29 @@ namespace ServiceOperations.JobRegistration
 
             var patch = new Entity("gr_job", jobId) { RowVersion = expected };
             patch[JobRegistrationPlugin.CoordinatorManaged] = true;
+            ConditionalUpdate(service, patch);
+            Output(context, service.Retrieve("gr_job", jobId, new ColumnSet(JobRegistrationPlugin.CoordinatorManaged)), null, false);
+        }
+
+        private static void Unmanage(IOrganizationService service, IPluginExecutionContext context)
+        {
+            RequireOnly(context.InputParameters, "JobId", "ExpectedJobRowVersion");
+            Guid jobId = RequiredId(context.InputParameters, "JobId");
+            string expected = Version(context.InputParameters, "ExpectedJobRowVersion");
+            var job = Find(service, "gr_job", jobId, "gr_jobnumber", JobRegistrationPlugin.CoordinatorManaged, RegistrationVoid);
+            if (job == null) throw Failure("NOT_FOUND", "The Job is no longer available.");
+            if (job.GetAttributeValue<bool>(RegistrationVoid)) throw Failure("INVALID", "A Void Job cannot leave Service coordination.");
+            if (String.IsNullOrWhiteSpace(job.GetAttributeValue<string>("gr_jobnumber")))
+                throw Failure("INVALID", "Delete an unnumbered draft instead of removing it from management.");
+            if (!job.GetAttributeValue<bool>(JobRegistrationPlugin.CoordinatorManaged))
+            {
+                Output(context, job, null, true);
+                return;
+            }
+            if (job.RowVersion != expected) throw Failure("CONFLICT", "The Job changed elsewhere. Reload before removing it from management.");
+
+            var patch = new Entity("gr_job", jobId) { RowVersion = expected };
+            patch[JobRegistrationPlugin.CoordinatorManaged] = false;
             ConditionalUpdate(service, patch);
             Output(context, service.Retrieve("gr_job", jobId, new ColumnSet(JobRegistrationPlugin.CoordinatorManaged)), null, false);
         }

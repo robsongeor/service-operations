@@ -3,6 +3,28 @@
 Reviewed 20 October 2026 against branch `v2-deployment`, after the Auckland production cutover.
 This page is a current summary, not a release history or blanket live-cloud certification.
 
+## V3 managed Service Coordination worklist — local implementation, 21 October 2026
+
+Local branch `v3-deployment` now separates the complete Auckland Job Book from the smaller
+coordinator-managed worklist. Job Book creation explicitly starts unmanaged; Service Coordination
+creation starts managed. Full Access and Service Coordinator profiles can add a numbered Job Book
+Job to Service Coordination and can stop managing it without deleting the Job, number, status,
+assignments, schedules or history. Job Book Admin and Office Admin profiles cannot change this
+membership. Personal watchlist reads and additions require the Job to remain explicitly managed.
+
+The source contract adds coordinator-only `gr_UnmanageJobBookJob` to assembly version `1.0.24.0`.
+That assembly and API have not been deployed. The former V1 yellow-cliff Static Web App workflow is
+prepared to build `v3-deployment`, but its production branch has not been switched and V2 remains
+live at kind-wave. Yellow-cliff remains the shared Job Card backend and must not be deleted.
+
+A read-only production snapshot at `2026-10-21T04:47:38Z` found 1,396 Jobs. The deterministic dry
+run plans 254 active historical Jobs as managed Auckland (204 already Auckland and 50 branchless)
+and excludes 1,142 GreenTree-closed Jobs, with zero exceptions. Plan hash
+`6d95606d55fecc00147c8cefb6423d3eb1ab923238ff1f5c14fcbaebdbf912da` is evidence only: counts must
+be regenerated and the exact new hash approved immediately before any Apply. No V3 data migration,
+Dataverse deployment, push or cloud configuration change has occurred. See the
+[V3 managed-worklist release plan](docs/features/SERVICE_COORDINATION_V3_MANAGED_WORKLIST.md).
+
 ## V2 release scope — 11 October 2026
 
 Owner requested commit/push and V2 deployment. This release includes the review popout, official

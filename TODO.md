@@ -61,6 +61,14 @@ This is remaining work, not a completed-change log. See [current state](CURRENT_
 
 ## P1 — Data integrity and operational reliability
 
+- [ ] Release the reviewed
+  [Service Coordination V3 managed worklist](docs/features/SERVICE_COORDINATION_V3_MANAGED_WORKLIST.md):
+  deploy and verify assembly/API `1.0.24.0`, publish V3 to the preserved yellow-cliff environment,
+  complete named-role acceptance, regenerate and explicitly approve the migration hash, then apply
+  and verify active historical Jobs as managed Auckland while leaving GreenTree terminal Jobs
+  excluded. Source implementation and the first zero-exception dry run are complete; no live V3
+  mutation or deployment has occurred.
+
 - [ ] Execute the ordered
   [Service Coordination workflow implementation plan](docs/features/SERVICE_COORDINATION_WORKFLOW_IMPLEMENTATION_PLAN.md)
   phase by phase. Initial delivery ends with lifecycle, branch queue, personal watchlist, card

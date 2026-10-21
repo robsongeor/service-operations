@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Provision', 'Verify', 'AssignPilot', 'UpdateAssembly')]
+    [ValidateSet('Provision', 'Verify', 'AssignPilot', 'UpdateAssembly', 'UpdateAssemblyAndApis')]
     [string]$Mode = 'Verify',
     [string]$EnvironmentUrl = 'https://org0d4246d7.crm6.dynamics.com',
     [string]$SolutionUniqueName = 'ServiceOperationsNew',
@@ -26,7 +26,9 @@ $contract = Get-Content -LiteralPath (Join-Path $repository 'dataverse\job-regis
 $packageManifestPath = if ($PackageDirectory) { Join-Path $PackageDirectory 'ServiceOperations.UnifiedJobWorkflow.manifest.json' } else { '' }
 $assemblyPath = if ($PackageDirectory) { Join-Path $PackageDirectory 'ServiceOperations.UnifiedJobWorkflow.dll' } else { '' }
 $provision = $Mode -eq 'Provision'
-$updateAssembly = $Mode -eq 'UpdateAssembly'
+$updateAssemblyAndApis = $Mode -eq 'UpdateAssemblyAndApis'
+$updateAssembly = $Mode -in @('UpdateAssembly', 'UpdateAssemblyAndApis')
+$apiProvision = $provision -or $updateAssemblyAndApis
 
 function Require([bool]$Condition, [string]$Message) { if (-not $Condition) { throw $Message } }
 function New-Label([string]$Text) { [Microsoft.Xrm.Sdk.Label]::new($Text, 1033) }
@@ -228,11 +230,11 @@ function Ensure-ApiChildren($Service, [guid]$ApiId, $Api, [bool]$Response) {
     $table=if($Response){'customapiresponseproperty'}else{'customapirequestparameter'};$expected=if($Response){@($Api.responses)}else{@($Api.requests)}
     $columns=if($Response){@('name','uniquename','type')}else{@('name','uniquename','type','isoptional')}
     $query=[Microsoft.Xrm.Sdk.Query.QueryExpression]::new($table);$query.ColumnSet=[Microsoft.Xrm.Sdk.Query.ColumnSet]::new($columns);$query.Criteria.AddCondition('customapiid',[Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,$ApiId);$existing=@($Service.RetrieveMultiple($query).Entities)
-    foreach($name in $expected){$rows=@($existing|Where-Object{[string]$_['uniquename']-eq[string]$name});Require($rows.Count -le 1) "Duplicate API property $($Api.name).$name";$contractApi=@($contract.apis|Where-Object name -eq $Api.name)[0];$description=if($Response){if($name -match 'Id$'){'Guid'}elseif($name -in @('WasReplay','CoordinatorManaged','RegistrationVoid')){'Boolean'}else{'String'}}else{[string]$contractApi.parameters.$name};$expectedType=ParameterType $description;if(-not $rows.Count){if(-not $provision){throw "Missing API property $($Api.name).$name"};$entity=[Microsoft.Xrm.Sdk.Entity]::new($table);$entity['name']=[string]$name;$entity['uniquename']=[string]$name;$entity['displayname']=[string]$name;$entity['description']=$description;$entity['type']=[Microsoft.Xrm.Sdk.OptionSetValue]::new($expectedType);if(-not $Response){$entity['isoptional']=$description -match 'optional'};$entity['customapiid']=[Microsoft.Xrm.Sdk.EntityReference]::new('customapi',$ApiId);$Service.Create($entity)|Out-Null;Write-Host "Created API property $($Api.name).$name"}else{Require([int]$rows[0]['type'].Value-eq$expectedType) "API property type conflict $($Api.name).$name"}}
+    foreach($name in $expected){$rows=@($existing|Where-Object{[string]$_['uniquename']-eq[string]$name});Require($rows.Count -le 1) "Duplicate API property $($Api.name).$name";$contractApi=@($contract.apis|Where-Object name -eq $Api.name)[0];$description=if($Response){if($name -match 'Id$'){'Guid'}elseif($name -in @('WasReplay','CoordinatorManaged','RegistrationVoid')){'Boolean'}else{'String'}}else{[string]$contractApi.parameters.$name};$expectedType=ParameterType $description;if(-not $rows.Count){if(-not $apiProvision){throw "Missing API property $($Api.name).$name"};$entity=[Microsoft.Xrm.Sdk.Entity]::new($table);$entity['name']=[string]$name;$entity['uniquename']=[string]$name;$entity['displayname']=[string]$name;$entity['description']=$description;$entity['type']=[Microsoft.Xrm.Sdk.OptionSetValue]::new($expectedType);if(-not $Response){$entity['isoptional']=$description -match 'optional'};$entity['customapiid']=[Microsoft.Xrm.Sdk.EntityReference]::new('customapi',$ApiId);$Service.Create($entity)|Out-Null;Write-Host "Created API property $($Api.name).$name"}else{Require([int]$rows[0]['type'].Value-eq$expectedType) "API property type conflict $($Api.name).$name"}}
     $existing=@($Service.RetrieveMultiple($query).Entities);Require (@($existing|Where-Object{$expected -notcontains [string]$_['uniquename']}).Count -eq 0) "Unexpected API properties on $($Api.name)."
 }
 function Ensure-CustomApis($Service, $PluginTypes) {
-    foreach($api in $readiness.customApis){$rows=@(Find-Exactly $Service 'customapi' 'uniquename' ([string]$api.name) @('customapiid','uniquename','isfunction','bindingtype','allowedcustomprocessingsteptype','executeprivilegename','plugintypeid'));Require($rows.Count -le 1) "Duplicate API $($api.name)";if(-not $rows.Count){if(-not $provision){throw "Missing API $($api.name)"};$entity=[Microsoft.Xrm.Sdk.Entity]::new('customapi');$entity['name']=[string]$api.name;$entity['uniquename']=[string]$api.name;$entity['displayname']=[string]$api.name;$entity['description']='Service Operations unified Job workflow';$entity['isfunction']=$false;$entity['bindingtype']=[Microsoft.Xrm.Sdk.OptionSetValue]::new(0);$entity['allowedcustomprocessingsteptype']=[Microsoft.Xrm.Sdk.OptionSetValue]::new(0);$entity['executeprivilegename']=[string]$api.executePrivilege;$entity['plugintypeid']=$PluginTypes[[string]$api.pluginType].ToEntityReference();$id=$Service.Create($entity);$rows=@($Service.Retrieve('customapi',$id,[Microsoft.Xrm.Sdk.Query.ColumnSet]::new('customapiid','uniquename','isfunction','bindingtype','allowedcustomprocessingsteptype','executeprivilegename','plugintypeid')));Write-Host "Created Custom API $($api.name)"};$row=$rows[0];Require(-not[bool]$row['isfunction'] -and [int]$row['bindingtype'].Value -eq 0 -and [int]$row['allowedcustomprocessingsteptype'].Value -eq 0 -and [string]$row['executeprivilegename'] -eq [string]$api.executePrivilege) "Custom API conflict: $($api.name)";Ensure-ApiChildren $Service $row.Id $api $false;Ensure-ApiChildren $Service $row.Id $api $true}
+    foreach($api in $readiness.customApis){$rows=@(Find-Exactly $Service 'customapi' 'uniquename' ([string]$api.name) @('customapiid','uniquename','isfunction','bindingtype','allowedcustomprocessingsteptype','executeprivilegename','plugintypeid'));Require($rows.Count -le 1) "Duplicate API $($api.name)";if(-not $rows.Count){if(-not $apiProvision){throw "Missing API $($api.name)"};$entity=[Microsoft.Xrm.Sdk.Entity]::new('customapi');$entity['name']=[string]$api.name;$entity['uniquename']=[string]$api.name;$entity['displayname']=[string]$api.name;$entity['description']='Service Operations unified Job workflow';$entity['isfunction']=$false;$entity['bindingtype']=[Microsoft.Xrm.Sdk.OptionSetValue]::new(0);$entity['allowedcustomprocessingsteptype']=[Microsoft.Xrm.Sdk.OptionSetValue]::new(0);$entity['executeprivilegename']=[string]$api.executePrivilege;$entity['plugintypeid']=$PluginTypes[[string]$api.pluginType].ToEntityReference();$id=$Service.Create($entity);$rows=@($Service.Retrieve('customapi',$id,[Microsoft.Xrm.Sdk.Query.ColumnSet]::new('customapiid','uniquename','isfunction','bindingtype','allowedcustomprocessingsteptype','executeprivilegename','plugintypeid')));Write-Host "Created Custom API $($api.name)"};$row=$rows[0];Require(-not[bool]$row['isfunction'] -and [int]$row['bindingtype'].Value -eq 0 -and [int]$row['allowedcustomprocessingsteptype'].Value -eq 0 -and [string]$row['executeprivilegename'] -eq [string]$api.executePrivilege) "Custom API conflict: $($api.name)";Ensure-ApiChildren $Service $row.Id $api $false;Ensure-ApiChildren $Service $row.Id $api $true}
 }
 function Get-Message($Service,[string]$Name){$rows=@(Find-Exactly $Service 'sdkmessage' 'name' $Name @('sdkmessageid','name'));Require($rows.Count -eq 1) "Expected one SDK message $Name";$rows[0]}
 function Get-Filter($Service,[guid]$MessageId,[string]$Table){$query=[Microsoft.Xrm.Sdk.Query.QueryExpression]::new('sdkmessagefilter');$query.ColumnSet=[Microsoft.Xrm.Sdk.Query.ColumnSet]::new('sdkmessagefilterid','primaryobjecttypecode','sdkmessageid');$query.Criteria.AddCondition('primaryobjecttypecode',[Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,$Table);$query.Criteria.AddCondition('sdkmessageid',[Microsoft.Xrm.Sdk.Query.ConditionOperator]::Equal,$MessageId);$rows=@($Service.RetrieveMultiple($query).Entities);Require($rows.Count -eq 1) "Expected one $Table message filter.";$rows[0]}
@@ -344,9 +346,16 @@ try {
     $who=$service.Execute([Microsoft.Crm.Sdk.Messages.WhoAmIRequest]::new());Write-Output "Connected read/write operator $($who.UserId). Feature flag remains OFF."
     $solution=@(Find-Exactly $service 'solution' 'uniquename' $SolutionUniqueName @('solutionid','uniquename','ismanaged'));Require($solution.Count-eq1 -and -not[bool]$solution[0]['ismanaged']) 'Expected one unmanaged target solution.'
     $manifest=Get-PackageManifest
-    if($updateAssembly){
+    if($Mode -eq 'UpdateAssembly'){
         $assembly=Ensure-Assembly $service $manifest
         Write-Output "Unified workflow assembly-only update completed at $($manifest.version). Metadata, roles, steps, migration, seeds, application deployment and feature enablement: NONE."
+        return
+    }
+    if($updateAssemblyAndApis){
+        $assembly=Ensure-Assembly $service $manifest
+        $pluginTypes=Ensure-PluginTypes $service $assembly $manifest
+        Ensure-CustomApis $service $pluginTypes
+        Write-Output "Unified workflow assembly/API update completed at $($manifest.version). Schema, roles, assignments, steps, migration, seeds, application deployment and feature enablement: NONE."
         return
     }
     foreach($column in $readiness.columns){if($column.type-eq'Lookup'){Ensure-Lookup $service $column}else{Ensure-Column $service $column}}

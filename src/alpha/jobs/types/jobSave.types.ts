@@ -13,6 +13,8 @@ export type JobSaveInput = {
     status: JobStatus
     /** Set only at creation from the authenticated coordinator or authoritative regional ledger. */
     operatingBranch?: OperatingBranch
+    /** Creation intent only. Job Book registration always supplies false; Service Coordination supplies true. */
+    coordinatorManaged?: boolean
     equipmentId?: string
     /** Creation drawer has explicitly managed the asset location; never move it again on Job save. */
     equipmentLocationHandled?: boolean

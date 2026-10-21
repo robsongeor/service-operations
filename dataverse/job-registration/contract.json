@@ -39,6 +39,18 @@
       "response": { "JobId": "Guid", "JobRowVersion": "String", "CoordinatorManaged": "Boolean", "RegistrationVoid": "Boolean", "WasReplay": "Boolean" }
     },
     {
+      "name": "gr_UnmanageJobBookJob",
+      "pluginType": "ServiceOperations.JobRegistration.JobWorkflowPlugin",
+      "isFunction": false,
+      "binding": "Global",
+      "allowedCustomProcessingStepType": "None",
+      "requiredPrivilegeSource": { "table": "gr_jobscheduleoption", "operation": "Create" },
+      "privilegeGate": "Use the same reviewed coordinator-only ExecutePrivilegeName as number allocation and management. FullAccess and ServiceCoordinator only; Admin roles must not hold it.",
+      "parameters": { "JobId": "Guid required", "ExpectedJobRowVersion": "String required, numeric exact SDK RowVersion" },
+      "response": { "JobId": "Guid", "JobRowVersion": "String", "CoordinatorManaged": "Boolean", "RegistrationVoid": "Boolean", "WasReplay": "Boolean" },
+      "boundary": "Only a numbered, non-Void Job can leave Service Coordination. The Job remains in its regional Job Book and its status and history are unchanged."
+    },
+    {
       "name": "gr_VoidRegisteredJobBookEntry",
       "pluginType": "ServiceOperations.JobRegistration.JobWorkflowPlugin",
       "isFunction": false,

@@ -257,13 +257,13 @@ export function mapManagedJobBookRow(job: JobBookApiRow, book: JobBookConfig): J
         timecloudEntered: Boolean(job.gr_timecloudentered),
         equipmentConfigured: Boolean(job.gr_Equipment?.gr_fleet?.trim() || job.gr_Equipment?.gr_serial?.trim()),
         equipmentReviewRequired: UNIFIED_JOB_RUNTIME && !job.gr_Equipment,
-        entryStage: job.gr_registrationvoid ? JOB_BOOK_ENTRY_STAGES.VOID : job.gr_coordinatormanaged === false ? JOB_BOOK_ENTRY_STAGES.REGISTERED : JOB_BOOK_ENTRY_STAGES.PROMOTED,
+        entryStage: job.gr_registrationvoid ? JOB_BOOK_ENTRY_STAGES.VOID : job.gr_coordinatormanaged === true ? JOB_BOOK_ENTRY_STAGES.PROMOTED : JOB_BOOK_ENTRY_STAGES.REGISTERED,
         voidReason: job.gr_registrationvoidreason ?? '',
         entrySource: 'dataverse-job',
         linkedJobId: job.gr_jobid,
         intakeRecordId: '',
         etag: job['@odata.etag'] ?? '',
-        coordinatorManaged: job.gr_coordinatormanaged !== false,
+        coordinatorManaged: job.gr_coordinatormanaged === true,
     }
 }
 

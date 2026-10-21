@@ -58,12 +58,12 @@ test('retained allocation can be retried after refresh even when its number is n
     const other = renderRegistration({ job: { ...job, gr_jobid: id(3) } })
     assert.match(other, /class="primary" disabled="">Retry same request/)
 })
-test('numbered and Void Jobs cannot start another allocation; Manage does not create another record', () => {
+test('numbered and Void Jobs cannot start another allocation; Service Coordination membership does not create another record', () => {
     assert.match(renderRegistration({ job: { ...job, gr_jobnumber: '1' } }), /class="primary" disabled="">Allocate number/)
     assert.match(renderRegistration({ job: { ...job, gr_registrationvoid: true } }), /class="primary" disabled="">Allocate number/)
     const html = renderRegistration({ mode: 'manage' })
     assert.match(html, /No new Job or number is created/)
-    assert.match(html, /Add to Operational/)
+    assert.match(html, /Add to Service Coordination/)
     assert.doesNotMatch(html, /<select/)
 })
 test('Staging reuses the create drawer without exposing numbering or scheduling', () => {
@@ -99,7 +99,7 @@ function renderWorklist(rows, tab) {
     }))
 }
 
-test('Service Coordination treats every Dataverse Job as operational while retaining type and status filters', () => {
+test('Service Coordination table retains type and status filters for its server-managed worklist', () => {
     const rows = [
         { ...job, gr_jobid: id(10), gr_description: 'Managed site check', gr_coordinatormanaged: true, gr_jobtype: 122830004 },
         { ...job, gr_jobid: id(11), gr_description: 'Unnumbered staging' },
@@ -130,13 +130,15 @@ test('Service Coordination treats every Dataverse Job as operational while retai
     assert.doesNotMatch(legacy, /Allocate job number|Manage job|>Edit</)
 })
 
-test('Service Coordination has one operational edit path and no Manage job action', () => {
+test('Service Coordination has one operational edit path and a coordinator-only stop-managing action', () => {
     const screen = readFileSync(new URL('../src/alpha/jobs/JobsScreen.tsx', import.meta.url), 'utf8')
     const table = readFileSync(new URL('../src/alpha/jobs/components/JobsTable.tsx', import.meta.url), 'utf8')
     assert.doesNotMatch(screen, /JobCorrectionsDrawer|workflowJob|mode="manage"/)
     assert.match(screen, /\{editingJob && \(\s*<JobEditDrawer/)
     assert.doesNotMatch(table, /Manage job|onManageJob|!isCoordinatorManaged/)
     assert.doesNotMatch(table, /unifiedWorklist && !isCoordinatorManaged/)
+    assert.match(screen, /onStopManaging=\{canManageJobs \? stopManagingJob : undefined\}/)
+    assert.match(table, /Stop managing/)
 })
 
 test('restricted Equipment editor includes road compliance but excludes maintenance, ownership and deletion', () => {

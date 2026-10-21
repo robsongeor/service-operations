@@ -5,6 +5,11 @@ export type ManageJobBookJobCommand = Readonly<{
     jobId: string
     jobEtag: string
 }>
+export type UnmanageJobBookJobCommand = Readonly<{
+    kind: 'unmanage'
+    jobId: string
+    jobEtag: string
+}>
 export type VoidRegisteredJobBookEntryCommand = Readonly<{
     kind: 'void'
     book: JobBookKey
@@ -23,7 +28,7 @@ export type QueueInitialJobDispatchCommand = Readonly<{
     subject: string
     body: string
 }>
-export type JobWorkflowCommand = ManageJobBookJobCommand | VoidRegisteredJobBookEntryCommand | QueueInitialJobDispatchCommand
+export type JobWorkflowCommand = ManageJobBookJobCommand | UnmanageJobBookJobCommand | VoidRegisteredJobBookEntryCommand | QueueInitialJobDispatchCommand
 export type JobWorkflowResult = Readonly<{
     jobId: string
     ledgerId?: string
@@ -78,8 +83,8 @@ function email(value: string) {
 }
 
 export function buildJobWorkflowAction(command: JobWorkflowCommand) {
-    if (!command || !['manage', 'void', 'dispatch'].includes(command.kind)) throw new JobWorkflowError('invalid', 'Select a supported Job workflow action.')
-    const allowed = command.kind === 'manage'
+    if (!command || !['manage', 'unmanage', 'void', 'dispatch'].includes(command.kind)) throw new JobWorkflowError('invalid', 'Select a supported Job workflow action.')
+    const allowed = command.kind === 'manage' || command.kind === 'unmanage'
         ? ['kind', 'jobId', 'jobEtag']
         : command.kind === 'void'
             ? ['kind', 'book', 'jobId', 'ledgerId', 'jobEtag', 'ledgerEtag', 'reason']
@@ -102,7 +107,7 @@ export function buildJobWorkflowAction(command: JobWorkflowCommand) {
         parameters.Body = boundedText(command.body, 100000, 'email body')
     }
     return {
-        action: command.kind === 'manage' ? 'gr_ManageJobBookJob' : command.kind === 'void' ? 'gr_VoidRegisteredJobBookEntry' : 'gr_QueueInitialJobDispatch',
+        action: command.kind === 'manage' ? 'gr_ManageJobBookJob' : command.kind === 'unmanage' ? 'gr_UnmanageJobBookJob' : command.kind === 'void' ? 'gr_VoidRegisteredJobBookEntry' : 'gr_QueueInitialJobDispatch',
         parameters: Object.freeze(parameters),
     }
 }
@@ -144,6 +149,7 @@ export function createJobWorkflowClient(options: { apiUrl: string; enabled: bool
                 (expectedLedger !== undefined && (typeof result.LedgerRowVersion !== 'string' || !/^[0-9]+$/.test(result.LedgerRowVersion))) ||
                 typeof result.CoordinatorManaged !== 'boolean' || typeof result.RegistrationVoid !== 'boolean' || typeof result.WasReplay !== 'boolean' ||
                 (command.kind === 'manage' && (!result.CoordinatorManaged || result.RegistrationVoid)) ||
+                (command.kind === 'unmanage' && (result.CoordinatorManaged || result.RegistrationVoid)) ||
                 (command.kind === 'void' && (result.CoordinatorManaged || !result.RegistrationVoid))) throw unknownResult()
             return {
                 jobId: expectedJob,

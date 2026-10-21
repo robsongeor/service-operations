@@ -26,12 +26,15 @@ import { useOperationalScreenReady } from '../shared/data/OperationalScreenPerfo
 import { useJobCardProgress, useServiceCoordination } from './hooks/useServiceCoordination'
 import { JOB_CARD_PROGRESS_SUMMARY_ENABLED, SERVICE_COORDINATION_BRANCH_ENABLED, SERVICE_COORDINATION_WATCHLIST_ENABLED } from './domain/serviceCoordinationConfig'
 import ServiceCoordinationViews from './components/ServiceCoordinationViews'
+import { applicationAccessFromEnvironment } from '../../auth/applicationAccess'
+import { runJobWorkflow } from './services/jobWorkflowApi'
 
 export default function JobsScreen() {
     const navigate = useNavigate()
     const quoteEditor = useQuoteEditorOverlay()
     const [searchParams, setSearchParams] = useSearchParams()
     const activeAccount = useActiveMsalAccount()
+    const { canManageJobs } = applicationAccessFromEnvironment(activeAccount)
     const signedInUser = getSignedInUserInfo(activeAccount)
     const storageKey = signedInUser ? getJobsViewStateKey(signedInUser.storageId) : null
     const defaultViewStorageKey = signedInUser ? getJobsDefaultViewKey(signedInUser.storageId) : null
@@ -156,6 +159,20 @@ export default function JobsScreen() {
         if (!equipment) return
         clearEquipmentSaveError()
         setEditingEquipment(equipment)
+    }
+
+    const stopManagingJob = async (job: Job) => {
+        const jobNumber = job.gr_jobnumber?.trim()
+        if (!canManageJobs) throw new Error('Your current access does not permit this workflow action.')
+        if (!jobNumber) throw new Error('Unnumbered drafts stay in Service Coordination. Delete the draft instead if it is no longer required.')
+        if (!window.confirm(`Stop managing Job ${jobNumber}? It will remain in the Auckland Job Book, but will leave Service Coordination and personal watchlists.`)) return
+        await runJobWorkflow(await unifiedWorklist.getAccessToken(), {
+            kind: 'unmanage',
+            jobId: job.gr_jobid,
+            jobEtag: job['@odata.etag'] ?? '',
+        })
+        if (editingJob?.gr_jobid.toLowerCase() === job.gr_jobid.toLowerCase()) setEditingJob(null)
+        await Promise.all([unifiedWorklist.reload(true), coordination.reload()])
     }
 
     useEffect(() => {
@@ -352,6 +369,7 @@ export default function JobsScreen() {
                     coordinationView={activeCoordinationView}
                     watchedJobIds={coordination.watchedJobIds}
                     onToggleWatch={SERVICE_COORDINATION_WATCHLIST_ENABLED ? coordination.toggleWatch : undefined}
+                    onStopManaging={canManageJobs ? stopManagingJob : undefined}
                     progressSummaries={progress.summaries}
                     progressUnavailable={JOB_CARD_PROGRESS_SUMMARY_ENABLED && Boolean(progress.error)}
                     signedInUserName={signedInUser?.displayName ?? ''}
@@ -479,6 +497,7 @@ export default function JobsScreen() {
                     existingJobs={jobs}
                     onCreateJob={(input) => createJob({
                         ...input,
+                        coordinatorManaged: true,
                         ...(SERVICE_COORDINATION_BRANCH_ENABLED && coordination.context?.branch
                             ? { operatingBranch: coordination.context.branch.value }
                             : {}),

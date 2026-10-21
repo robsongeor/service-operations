@@ -773,8 +773,8 @@ export default function JobBookPrototypeScreen({
         setIntakeDrawerOpen(true)
     }
     const openManageJob = (row: JobBookRow) => {
-        if (!canManageJobs || (!isEditableJobBookIntake(row) && !row.registeredLedgerId)) return
-        if (UNIFIED_JOB_RUNTIME && row.registeredLedgerId) {
+        if (!canManageJobs || (!isEditableJobBookIntake(row) && !row.linkedJobId)) return
+        if (UNIFIED_JOB_RUNTIME && row.linkedJobId) {
             void getAccessToken().then((token) => fetchJobForCorrection(token, row.linkedJobId)).then(setManagingJob).catch((cause) => setSaveError(cause instanceof Error ? cause.message : 'Job could not be loaded.'))
             return
         }
@@ -1049,8 +1049,8 @@ export default function JobBookPrototypeScreen({
                             emailDelivery={rowActions.emailDeliveryStates[row.linkedJobId]}
                             emailBusy={Boolean(rowActions.loadingJobId)}
                         />}
-                        {(canEditIntake || (row.registeredLedgerId && !isVoid)) && <>
-                            {canManageJobs && row.coordinatorManaged !== true && <button type="button" className="job-quick-action job-quick-action-edit" onClick={() => openManageJob(row)}>Manage job</button>}
+                        {(canEditIntake || (row.linkedJobId && !isVoid)) && <>
+                            {canManageJobs && row.coordinatorManaged !== true && <button type="button" className="job-quick-action job-quick-action-edit" onClick={() => openManageJob(row)}>Add to Service Coordination</button>}
                             <button type="button" className="job-quick-action job-book-void-action" aria-label="Mark as void" disabled={Boolean(voidBlocked) || markerBusy || loading || greenTreeSyncStatus === 'syncing'} title={greenTreeSyncStatus === 'syncing' ? 'Wait for the GreenTree check to finish before voiding this entry.' : voidBlocked || 'Mark as void — keep this allocated number with a required reason.'} onClick={() => voidEntry.open(row)}>
                                 <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="m6.5 6.5 11 11" /></svg>
                             </button>
@@ -1080,8 +1080,7 @@ export default function JobBookPrototypeScreen({
 
         {voidEntry.row && <JobBookVoidDialog key={voidEntry.row.id} row={voidEntry.row} busy={voidEntry.busy} error={voidEntry.error} needsReload={voidEntry.needsReload} onCancel={voidEntry.close} onSubmit={(reason) => void voidEntry.submit(reason)} onReload={() => void voidEntry.reload()} />}
         {canManageJobs && managingJob && <JobRegistrationDialog job={managingJob} mode="manage" getAccessToken={getAccessToken} onClose={() => setManagingJob(null)} onSaved={async () => {
-            const ledger = intakeRows.find((row) => row.linkedJobId === managingJob.gr_jobid)
-            if (ledger) reconcileIntakeRow(await fetchJobBookIntakeRow(await getAccessToken(), ledger))
+            await refreshJobBookRows()
         }} />}
 
         {intakeDrawerOpen && <JobDrawerShell
@@ -1253,7 +1252,7 @@ export default function JobBookPrototypeScreen({
             if (event.target === event.currentTarget) setPromotionRow(null)
         }}>
             <section className="job-book-dialog job-book-promotion-dialog" role="dialog" aria-modal="true" aria-labelledby="promotion-dialog-title">
-                <header><div><span className="job-book-eyebrow">SERVICE COORDINATION</span><h2 id="promotion-dialog-title">Manage job {promotionRow.jobNumber}</h2></div><button type="button" aria-label="Close" onClick={() => setPromotionRow(null)}>×</button></header>
+                <header><div><span className="job-book-eyebrow">SERVICE COORDINATION</span><h2 id="promotion-dialog-title">Add Job {promotionRow.jobNumber} to Service Coordination</h2></div><button type="button" aria-label="Close" onClick={() => setPromotionRow(null)}>×</button></header>
                 <p className="job-book-dialog-note">Review this entry before creating a managed Job for scheduling and technician allocation. It will keep the allocated job number and link back to this Intake entry.</p>
                 <div className="job-book-promotion-summary">
                     <div><span>Equipment</span><strong>{promotionRow.fleet || promotionRow.serial || 'Unconfigured'}</strong></div>

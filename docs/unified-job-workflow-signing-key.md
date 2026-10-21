@@ -3,6 +3,9 @@
 Status: primary local key used for the production `1.0.23.0` deployment on 21 October 2026; recovery
 backup remains required.
 
+V3 source declares `1.0.24.0` for the reviewed Stop-managing Custom API. That source version is not
+the production assembly until a signed package is built, explicitly approved, deployed and verified.
+
 ## Current custody record
 
 - Primary owner: George Robson.

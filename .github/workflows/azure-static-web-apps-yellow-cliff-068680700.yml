@@ -3,11 +3,11 @@ name: Azure Static Web Apps CI/CD
 on:
   push:
     branches:
-      - v1-deployment
+      - v3-deployment
   pull_request:
     types: [opened, synchronize, reopened, closed]
     branches:
-      - v1-deployment
+      - v3-deployment
 
 jobs:
   build_and_deploy_job:
@@ -21,6 +21,15 @@ jobs:
       VITE_JOB_BOOK_CONTACT_LOOKUP_ENABLED: "true"
       VITE_REGIONAL_JOB_BOOKS_ENABLED: "false"
       VITE_REGIONAL_JOB_BOOK_ALLOCATION_ENABLED: "false"
+      VITE_UNIFIED_JOB_REGISTRATION_ENABLED: "true"
+      VITE_UNIFIED_JOB_WORKFLOW_ENABLED: "true"
+      VITE_APPLICATION_ACCESS_CONTROL_ENABLED: "true"
+      VITE_SERVICE_COORDINATION_BRANCH_ENABLED: "true"
+      VITE_SERVICE_COORDINATION_WATCHLIST_ENABLED: "true"
+      VITE_JOB_CARD_PROGRESS_SUMMARY_ENABLED: "false"
+      # Yellow-cliff remains the authoritative same-origin Job Card backend. V2 continues to proxy to it.
+      VITE_JOB_CARD_METER_APPROVAL_ENABLED: "false"
+      VITE_JOB_CARD_CURSOR_QUEUE_ENABLED: "false"
       VITE_EQUIPMENT_REALTIME_API_URL: https://serviceops-equipment-realtime-bbd3f9.azurewebsites.net/api
     steps:
       - uses: actions/checkout@v3
@@ -31,26 +40,9 @@ jobs:
       - name: Determine application version
         shell: bash
         run: |
-          EXACT_TAG=$(git describe --tags --exact-match HEAD 2>/dev/null || true)
           SHORT_SHA=$(git rev-parse --short HEAD)
-
-          if [ -n "$EXACT_TAG" ]; then
-            VERSION="$EXACT_TAG"
-            IS_RELEASE="true"
-          else
-            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
-
-            if [ -n "$LATEST_TAG" ]; then
-              VERSION="Unreleased · $SHORT_SHA"
-            else
-              VERSION="Development · $SHORT_SHA"
-            fi
-
-            IS_RELEASE="false"
-          fi
-
-          echo "VITE_APP_VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "VITE_APP_VERSION_IS_RELEASE=$IS_RELEASE" >> "$GITHUB_ENV"
+          echo "VITE_APP_VERSION=V3 Pilot · $SHORT_SHA" >> "$GITHUB_ENV"
+          echo "VITE_APP_VERSION_IS_RELEASE=false" >> "$GITHUB_ENV"
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:

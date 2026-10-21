@@ -50,8 +50,10 @@ prove live effective privileges; both meter feature flags remain off.
 - Office and Book profiles have separate marker permissions. Customer/Site
   creation, factual Job corrections, Equipment details and eligible unlinked
   Intake Void have narrow allowlists. Other generic writes fail closed.
-- The local transactional `JobWorkflowPlugin` implements exact-version Manage
-  job and linked registered-entry Void operations. Linked Void updates the Job
+- The local transactional `JobWorkflowPlugin` implements exact-version Manage,
+  Stop managing and linked registered-entry Void operations. Stop managing is
+  coordinator-only, requires a numbered non-Void Job and changes only
+  `gr_coordinatormanaged`. Linked Void updates the Job
   and regional ledger together, and this guard permits only those exact child
   writes from the matching caller-context Custom API. Direct writes still fail.
 - The same local plugin implements replay-safe initial dispatch. It resolves the

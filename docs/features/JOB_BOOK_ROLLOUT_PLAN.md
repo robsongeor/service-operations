@@ -124,8 +124,9 @@ Mark each check Pass / Fail / Not run; a unit test alone does not close a live i
 | Simultaneous allocation | Two people allocate at once without duplicate numbers; gaps are acceptable, number reuse is not |
 | Double click / connection loss | Refresh/retry confirms the same operation and number, without duplicate work or lost corrections |
 | Edit collision | Two people edit one record; the later stale save prompts recovery instead of silently overwriting the first |
-| Operational access | All non-void Jobs shown in Service Coordination open the canonical operational drawer across type tabs; no duplicate Job/number or separate Manage job step is required in that screen |
-| Views and search | Operational contains managed work; legacy Unconfirmed rows appear as Staging with no separate tab; All jobs and Job Book find the expected records across all pages/history |
+| Operational access | Only explicitly managed, non-Void and GreenTree-active Jobs appear in Service Coordination; every type tab opens the canonical operational drawer without creating a duplicate Job or number |
+| Manage / unmanage | Coordinators can add a numbered Job Book Job to Service Coordination and stop managing it later; Office/Book Admin users cannot; unnumbered drafts use Delete instead |
+| Views and search | Service Coordination contains managed work only; Job Book remains the complete numbered record; legacy Unconfirmed rows appear as Staging with no separate tab |
 | GT / Timecloud markers | Values persist, audit identities are correct and stale updates cannot clear another person's work; ticks do not claim automated external entry |
 | Void | Reason required; number and history retained; already-entered or otherwise protected work is blocked; no ordinary delete/reuse escape |
 | Technician dispatch, if in launch scope | Correct recipient and current details; explicit authorized send produces one tracked dispatch; retry does not duplicate it; local sample never sends |

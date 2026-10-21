@@ -58,9 +58,9 @@ export default function JobRegistrationDialog({ job: initial, mode, getAccessTok
         } catch (cause) { setError(cause instanceof Error ? cause.message : 'The change could not be confirmed. Reload or retry the same request.') }
         finally { setBusy(false) }
     }
-    return <EditDrawerFormDialog eyebrow="Job workflow" title={mode === 'allocate' ? 'Confirm Job Number allocation' : 'Manage job'}
+    return <EditDrawerFormDialog eyebrow="Job workflow" title={mode === 'allocate' ? 'Confirm Job Number allocation' : 'Add to Service Coordination'}
         isBusy={busy || registration.busy} error={error || registration.error} onCancel={onClose} onSubmit={() => void save()}
-        submitLabel={mode === 'manage' ? 'Add to Operational' : registration.pending ? 'Retry same request' : 'Allocate number'}
+        submitLabel={mode === 'manage' ? 'Add to Service Coordination' : registration.pending ? 'Retry same request' : 'Allocate number'}
         submitDisabled={Boolean(job.gr_registrationvoid || (mode === 'allocate' && (!book || (job.gr_jobnumber && !registration.pending))) || (registration.pending?.kind === 'allocate' && registration.pending.jobId !== job.gr_jobid))}>
         <p>{job.gr_description}</p>
         {mode === 'allocate' ? <>
@@ -69,7 +69,7 @@ export default function JobRegistrationDialog({ job: initial, mode, getAccessTok
             {job.gr_jobnumber && <p>Current number: <strong>{job.gr_jobnumber}</strong>. It cannot be replaced.</p>}
             {registration.pending && <p>The original request is retained across closing or reloading this tab.</p>}
             {registration.conflict && reloaded && <button type="button" disabled={busy} onClick={() => { registration.complete(); setReloaded(false) }}>Accept refreshed Job and discard rejected request</button>}
-        </> : <p>Add this same Job to the coordinator’s Operational worklist. No new Job or number is created. Configure its type, status and scheduling in Jobs.</p>}
+        </> : <p>Add this existing Job Book job to Service Coordination. No new Job or number is created. Coordinators can then track its status, technician and scheduling, or stop managing it later.</p>}
         <button type="button" disabled={busy || registration.busy} onClick={() => void reload()}>Reload latest Job</button>
     </EditDrawerFormDialog>
 }

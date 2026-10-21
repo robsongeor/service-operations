@@ -8,14 +8,14 @@
       "profile": "full",
       "dataverseRole": "System Administrator",
       "frontendProfile": "ServiceOperations.FullAccess",
-      "allowedApis": ["gr_RegisterJobBookJob", "gr_AllocateJobBookNumber", "gr_ManageJobBookJob", "gr_VoidRegisteredJobBookEntry", "gr_QueueInitialJobDispatch"],
+      "allowedApis": ["gr_RegisterJobBookJob", "gr_AllocateJobBookNumber", "gr_ManageJobBookJob", "gr_UnmanageJobBookJob", "gr_VoidRegisteredJobBookEntry", "gr_QueueInitialJobDispatch"],
       "capabilities": ["factual-job-correction", "initial-technician-assignment", "later-assignment-and-scheduling", "entry-markers", "job-card-review", "customer-site-create", "customer-site-edit", "restricted-equipment-edit", "coordinator-worklist"]
     },
     {
       "profile": "coordinator",
       "dataverseRole": "Service Operations",
       "frontendProfile": "ServiceOperations.ServiceCoordinator",
-      "allowedApis": ["gr_RegisterJobBookJob", "gr_AllocateJobBookNumber", "gr_ManageJobBookJob", "gr_VoidRegisteredJobBookEntry", "gr_QueueInitialJobDispatch"],
+      "allowedApis": ["gr_RegisterJobBookJob", "gr_AllocateJobBookNumber", "gr_ManageJobBookJob", "gr_UnmanageJobBookJob", "gr_VoidRegisteredJobBookEntry", "gr_QueueInitialJobDispatch"],
       "capabilities": ["factual-job-correction", "initial-technician-assignment", "later-assignment-and-scheduling", "entry-markers", "job-card-review", "customer-site-create", "customer-site-edit", "restricted-equipment-edit", "coordinator-worklist"]
     },
     {

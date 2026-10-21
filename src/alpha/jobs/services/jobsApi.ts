@@ -47,10 +47,11 @@ export function unifiedJobsServerFilter(scope: UnifiedJobsServerScope, now = new
         filter = `gr_status eq ${JOB_STATUSES.COMPLETE} and gr_completeddate ge ${cutoff.toISOString().slice(0, 10)} and gr_registrationvoid ne true`
     }
     else if (scope === 'complete-archive') filter = `gr_status eq ${JOB_STATUSES.COMPLETE} and gr_registrationvoid ne true`
-    else if (scope === 'operational') filter = '(gr_coordinatormanaged eq true or gr_coordinatormanaged eq null) and gr_registrationvoid ne true'
+    else if (scope === 'operational') filter = 'gr_registrationvoid ne true'
     else if (scope === 'staging' || scope === 'unnumbered') filter = 'gr_jobnumber eq null and gr_registrationvoid ne true'
     else if (scope !== 'all') filter = `gr_jobtype eq ${scope} and gr_registrationvoid ne true`
-    filter = filter ? `(${filter}) and ${ACTIVE_GREENTREE_JOB_FILTER}` : ACTIVE_GREENTREE_JOB_FILTER
+    const managedActiveFilter = `gr_coordinatormanaged eq true and ${ACTIVE_GREENTREE_JOB_FILTER}`
+    filter = filter ? `(${filter}) and ${managedActiveFilter}` : managedActiveFilter
     if (operatingBranch !== undefined) {
         if (!(operatingBranch in OPERATING_BRANCH_LABELS)) throw new Error('The operating branch is invalid.')
         const branchFilter = `gr_operatingbranch eq ${operatingBranch}`
@@ -509,7 +510,7 @@ export function buildJobCreatePayload(
     assertJobDescriptionLength(job.description)
     if ((job.externalSupplierDetails?.trim().length ?? 0) > 1000) throw new Error('Other supplier details must be 1,000 characters or fewer.')
     if (job.mechanicId && job.externalSupplierDetails?.trim()) throw new Error('Choose either a Staff member or another supplier, not both.')
-    const newJob: Record<string, string | number> = {
+    const newJob: Record<string, string | number | boolean> = {
         gr_ordernumber: job.orderNumber,
         gr_description: job.description,
         gr_jobtype: job.jobType,
@@ -520,6 +521,7 @@ export function buildJobCreatePayload(
         if (!(job.operatingBranch in OPERATING_BRANCH_LABELS)) throw new Error('The operating branch is invalid.')
         newJob.gr_operatingbranch = job.operatingBranch
     }
+    if (job.coordinatorManaged !== undefined) newJob.gr_coordinatormanaged = job.coordinatorManaged
 
     if (job.equipmentId) {
         newJob['gr_Equipment@odata.bind'] = `/gr_equipments(${job.equipmentId})`

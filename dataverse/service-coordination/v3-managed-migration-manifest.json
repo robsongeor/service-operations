@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "migrationId": "service-coordination-v3-managed-auckland-v1",
+  "maximumRecords": 100000,
+  "batchSize": 20,
+  "activeRule": "statecode is active, registration is not Void, and GreenTree status is neither closed nor finalised",
+  "target": {
+    "coordinatorManaged": true,
+    "operatingBranch": 122830000,
+    "operatingBranchLabel": "Auckland"
+  },
+  "dataverseFields": {
+    "coordinatorManaged": "gr_coordinatormanaged",
+    "operatingBranch": "gr_operatingbranch"
+  },
+  "terminalGreenTreeStatuses": ["closed", "finalised"],
+  "applyAllowlist": ["gr_coordinatormanaged", "gr_operatingbranch"],
+  "requiresApprovedPlanHash": true,
+  "customerContentAllowedInArtifacts": false
+}

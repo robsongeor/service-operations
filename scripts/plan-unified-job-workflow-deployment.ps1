@@ -24,7 +24,7 @@ Require (-not $plan.provisioningIncluded -and -not $plan.deploymentIncluded -and
 Require (-not $plan.featureFlagDuringDeployment) 'Feature flag must remain disabled.'
 Require (@($readiness.columns).Count -eq 13) 'Expected exactly 13 proposed columns.'
 Require (@($readiness.regionalTables).Count -eq 4) 'Expected four regional ledgers.'
-Require (@($readiness.customApis).Count -eq 5) 'Expected five Custom APIs.'
+Require (@($readiness.customApis).Count -eq 6) 'Expected six Custom APIs.'
 Require (@($readiness.customApis | Group-Object name | Where-Object Count -ne 1).Count -eq 0) 'Custom API names must be unique.'
 Require (@($roles.profiles).Count -eq 4 -and $roles.default -eq 'deny') 'Expected four default-deny role profiles.'
 Require ($roleGrants.status -eq 'approved-for-flag-off-provisioning' -and $roleGrants.baselineRole -eq 'Basic User' -and $roleGrants.depth -eq 'Global') 'Restricted role grant manifest is not approved or uses an unsafe baseline.'

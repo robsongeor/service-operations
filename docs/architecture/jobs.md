@@ -91,10 +91,23 @@ Technician snapshots/evidence, completion/maintenance history and operational ch
 The ordinary coordinator editor retains its existing controls and save path. Dataverse write
 authority and column-level enforcement remain separately approval-gated, not provided by UI roles.
 
-Service Coordination treats every non-Void Dataverse Job in its worklist as operational. Its
-Operational and specialist type tabs are client-side views of the same Jobs and always open the
-canonical `JobEditDrawer`; they never invoke `JobCorrectionsDrawer` or require a **Manage job**
-membership transition. The corrections-only adapter remains a restricted Job Book capability.
+Job Book is the complete numbered regional record. Service Coordination is the smaller shared
+management worklist chosen by service coordinators. A Job appears there only when
+`gr_coordinatormanaged` is explicitly `true`; null is not treated as managed. Job Book creation
+explicitly saves `false`, while Service Coordination creation explicitly saves `true`.
+
+Full Access and Service Coordinator users can add an existing numbered Job Book Job to Service
+Coordination through the guarded `gr_ManageJobBookJob` action. They can use **Stop managing** on a
+numbered Job through the guarded `gr_UnmanageJobBookJob` action. Stopping management changes only
+membership: the regional Job Book record, permanent number, status, assignment, scheduling and
+history remain. Unnumbered managed drafts cannot be unmanaged; they use the existing draft-delete
+workflow. Office Admin and Job Book Admin have neither action. Personal watches are permitted only
+for currently managed, non-Void and GreenTree-active Jobs, so an unmanaged Job also leaves every
+watchlist response.
+
+Operational and specialist type tabs are client-side views of the managed set and always open the
+canonical `JobEditDrawer`; they never invoke `JobCorrectionsDrawer`. The corrections-only adapter
+remains a restricted Job Book capability.
 
 ## Job Book quick actions (3 October 2026, local implementation)
 

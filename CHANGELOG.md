@@ -15,6 +15,21 @@
 
 ## Unreleased
 
+- Began the isolated V3 Service Coordination release. Job Book remains the complete numbered-job
+  record; Service Coordination now loads only Jobs explicitly marked for coordinator management.
+  Jobs created in Service Coordination are managed by default, while Job Book registration remains
+  unmanaged by default.
+- Added coordinator-only, exact-version **Add to Service Coordination** and **Stop managing**
+  operations. Stopping management retains the permanent Job Book number, operational status,
+  assignments, schedules and history; unnumbered drafts remain delete-only. Unmanaged Jobs are
+  excluded from personal watchlists.
+- Added a dry-run-first historical V3 migration that assigns every active historical managed Job
+  to Auckland and excludes GreenTree Closed/Finalised, Void and inactive rows. The migration uses
+  privacy-minimal snapshots, an exact plan hash, conditional row versions, checkpoints, verification
+  and conflict-preserving rollback.
+- Prepared the former yellow-cliff V1 Static Web App workflow for the isolated `v3-deployment`
+  branch while preserving its authoritative Job Card backend for the existing V2 proxy.
+
 - Reconciled the live user roster: Bruce now has only Service Coordinator; Paul and James now have
   only Job Book Admin in the Service Operations application and Dataverse, with verified Auckland
   home branches. Unrelated Dataverse roles and the Job Card reviewer allowlist were preserved.
@@ -57,9 +72,10 @@
 - Standardised the Equipment drawer Customer and Site selectors on the shared searchable dropdown.
   Customer selection now has the same arrow-key navigation, Enter selection, Escape handling,
   loading/error presentation and menu behaviour while retaining Customer/Site creation.
-- Removed the obsolete **Manage job** split from Service Coordination. Every non-Void Dataverse Job
-  is now treated as operational there, every type tab opens the canonical operational Job editor,
-  and the Operational tab no longer depends on the migration-era coordinator-membership flag.
+- Previously removed the separate in-screen **Manage job** split so every Service Coordination type
+  tab uses the canonical Job editor. V3 narrows the server worklist to explicit coordinator
+  membership and restores management changes at the Job Book/worklist boundary without duplicating
+  Jobs or numbers.
 - Fixed the restricted Job Book correction drawer so its shared intake
   layout, spacing, metadata row, and field sizing no longer depend on first visiting Job Book.
 - Added a bounded server-side retry of submitted Job Card status transitions to the existing

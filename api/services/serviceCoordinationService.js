@@ -1,7 +1,7 @@
 const GUID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i
 const WATCH_ENTITY_SET = 'gr_jobwatchs'
 const WATCH_PAGE_SIZE = 100
-const ACTIVE_GREENTREE_JOB_FILTER = "(gr_Job/gr_greentreestatus eq null or (gr_Job/gr_greentreestatus ne 'closed' and gr_Job/gr_greentreestatus ne 'finalised'))"
+const ACTIVE_MANAGED_JOB_FILTER = "gr_Job/gr_coordinatormanaged eq true and (gr_Job/gr_greentreestatus eq null or (gr_Job/gr_greentreestatus ne 'closed' and gr_Job/gr_greentreestatus ne 'finalised'))"
 const BRANCHES = new Map([
     [122830000, 'Auckland'],
     [122830001, 'Waikato'],
@@ -10,7 +10,7 @@ const BRANCHES = new Map([
 ])
 const WATCH_JOB_SELECT = [
     'gr_jobid', 'createdon', 'gr_jobnumber', 'gr_status', 'gr_ordernumber', 'gr_description',
-    'gr_jobtype', 'gr_registrationvoid', 'gr_operatingbranch', 'gr_greentreestatus', 'gr_currentofficeaction',
+    'gr_jobtype', 'gr_coordinatormanaged', 'gr_registrationvoid', 'gr_operatingbranch', 'gr_greentreestatus', 'gr_currentofficeaction',
     'gr_officeactionowner', 'gr_officeattentionrequired',
 ].join(',')
 const WATCH_JOB_EXPAND = [
@@ -116,7 +116,7 @@ function watchListUrl(identity, cursor) {
     const url = new URL(`/api/data/v9.2/${WATCH_ENTITY_SET}`, identity.origin)
     url.searchParams.set('$select', 'gr_jobwatchid,createdon,_gr_job_value')
     url.searchParams.set('$expand', `gr_Job($select=${WATCH_JOB_SELECT};$expand=${WATCH_JOB_EXPAND})`)
-    url.searchParams.set('$filter', `${ownWatchFilter(identity.userId)} and ${ACTIVE_GREENTREE_JOB_FILTER}`)
+    url.searchParams.set('$filter', `${ownWatchFilter(identity.userId)} and ${ACTIVE_MANAGED_JOB_FILTER}`)
     url.searchParams.set('$orderby', 'createdon desc,gr_jobwatchid asc')
     url.searchParams.set('$top', String(WATCH_PAGE_SIZE))
     return url.href
@@ -126,7 +126,7 @@ function safeWatchItem(row) {
     if (!GUID.test(row?.gr_jobwatchid || '') || !GUID.test(row?._gr_job_value || '')) return null
     const job = row.gr_Job
     const greenTreeStatus = typeof job?.gr_greentreestatus === 'string' ? job.gr_greentreestatus.trim().toLowerCase() : ''
-    if (!job || !GUID.test(job.gr_jobid || '') || String(job.gr_jobid).toLowerCase() !== String(row._gr_job_value).toLowerCase() || job.gr_registrationvoid === true || greenTreeStatus === 'closed' || greenTreeStatus === 'finalised') return null
+    if (!job || !GUID.test(job.gr_jobid || '') || String(job.gr_jobid).toLowerCase() !== String(row._gr_job_value).toLowerCase() || job.gr_coordinatormanaged !== true || job.gr_registrationvoid === true || greenTreeStatus === 'closed' || greenTreeStatus === 'finalised') return null
     return { watchId: String(row.gr_jobwatchid).toLowerCase(), watchedOn: String(row.createdon || ''), job }
 }
 
@@ -161,14 +161,14 @@ async function findOwnWatch(identity, jobId, fetchImpl) {
 }
 
 async function readableJob(identity, jobId, fetchImpl) {
-    const response = await fetchImpl(`${identity.origin}/api/data/v9.2/gr_jobs(${jobId})?$select=gr_jobid,gr_registrationvoid,gr_greentreestatus`, {
+    const response = await fetchImpl(`${identity.origin}/api/data/v9.2/gr_jobs(${jobId})?$select=gr_jobid,gr_coordinatormanaged,gr_registrationvoid,gr_greentreestatus`, {
         headers: { Authorization: identity.authorization, Accept: 'application/json' },
         redirect: 'error',
     })
     if (!response.ok) return null
     const job = await readJson(response)
     const greenTreeStatus = typeof job?.gr_greentreestatus === 'string' ? job.gr_greentreestatus.trim().toLowerCase() : ''
-    return job && String(job.gr_jobid || '').toLowerCase() === jobId && job.gr_registrationvoid !== true && greenTreeStatus !== 'closed' && greenTreeStatus !== 'finalised' ? job : null
+    return job && String(job.gr_jobid || '').toLowerCase() === jobId && job.gr_coordinatormanaged === true && job.gr_registrationvoid !== true && greenTreeStatus !== 'closed' && greenTreeStatus !== 'finalised' ? job : null
 }
 
 async function addWatch(identity, jobId, fetchImpl) {
