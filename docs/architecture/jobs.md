@@ -132,6 +132,15 @@ Admins can edit the subject and email-only comments, not the recipient or techni
 The corrections drawer itself still has no dispatch controls. Coordinators retain their existing
 Jobs composer recipient controls.
 
+The shared composer now performs a bounded assignment and Job Card history check when it opens.
+With no prior activity it retains the existing compact first-send layout. If a request or additional
+assignment exists, the same window widens with **Assigned technicians** attached on the right; it
+does not open a second dialog. Coordinators can select an existing participant, add another
+technician, prepare that assignment's scoped email, withdraw an active request with a reason, or
+remove an additional assignment only when it has no request or submission evidence. Restricted
+Admins see the same history for context but cannot change the allocation or select another
+recipient. An unavailable or truncated roster/history read disables sending and requires retry.
+
 Opening a Job Book preview performs one focused current-Job read, with no link or dispatch writes.
 Sending rereads that Job and checks its ETag, assignment/email and rendered message data against
 the preview, rejecting stale details with a reopen instruction. This is a preflight check, not an

@@ -34,6 +34,7 @@ import { buildJobBookSpreadsheetRow, copyNumberedJobBookSpreadsheetRow } from '.
 import { EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED } from '../domain/externalSupplierAssignment'
 import { OPERATING_BRANCH_LABELS } from '../types/operatingBranch.types'
 import type { CoordinationView, JobCardProgressSummary } from '../types/serviceCoordination.types'
+import type { JobAssignment, JobAssignmentInput } from '../types/jobAssignment.types'
 
 type Props = {
     unifiedWorklist?: boolean
@@ -57,6 +58,10 @@ type Props = {
         }
     ) => Promise<void>
     onEmailTechnician: (job: Job, draft: JobEmailDraft) => Promise<void>
+    loadJobAssignments: (jobId: string, signal?: AbortSignal) => Promise<JobAssignment[]>
+    onCreateAssignment: (assignment: JobAssignmentInput) => Promise<void>
+    onEmailAssignment: (job: Job, assignment: JobAssignment, draft?: JobEmailDraft) => Promise<void>
+    onDeleteAssignment: (assignmentId: string) => Promise<void>
     emailDeliveryStates: Record<string, JobEmailDeliveryState>
     onEditJob: (job: Job) => void
     onOpenJobCard: (job: Job) => void
@@ -93,6 +98,10 @@ export default function JobsTable({
     onStatusChange,
     onJobFieldsChange,
     onEmailTechnician,
+    loadJobAssignments,
+    onCreateAssignment,
+    onEmailAssignment,
+    onDeleteAssignment,
     emailDeliveryStates,
     onEditJob,
     onOpenJobCard,
@@ -161,7 +170,6 @@ export default function JobsTable({
         try {
             await onEmailTechnician(job, draft)
             setCopyFeedback({ message: `Job Card email queued for ${draft.recipientEmail}.`, isError: false })
-            setEmailComposerJob(null)
         } finally {
             setEmailingJobId(null)
         }
@@ -704,6 +712,11 @@ export default function JobsTable({
         </TablePanel>
         {emailComposerJob && <JobEmailComposer
             job={emailComposerJob}
+            mechanics={mechanics}
+            loadAssignments={loadJobAssignments}
+            onCreateAssignment={onCreateAssignment}
+            onSendAssignment={onEmailAssignment}
+            onDeleteAssignment={onDeleteAssignment}
             onCancel={() => setEmailComposerJob(null)}
             onSend={(draft) => sendEmail(emailComposerJob, draft)}
         />}

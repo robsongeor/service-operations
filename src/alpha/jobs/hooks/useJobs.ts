@@ -38,7 +38,7 @@ import type { JobAssignment } from '../types/jobAssignment.types'
 import { fetchMechanics as fetchStaffDirectory } from '../../mechanics/services/mechanicsApi'
 import { subscribeToStaffChanges } from '../../mechanics/services/staffRealtime'
 import { createEmailDispatch, waitForEmailDispatch } from '../services/emailDispatchApi'
-import { assertJobEmailSendingAllowed, buildAssignmentJobEmail, buildPrimaryJobEmail, onlineJobCardPilotEnabled } from '../services/jobEmail'
+import { assertJobEmailSendingAllowed, buildAssignmentJobEmail, buildPrimaryJobEmail, onlineJobCardPilotEnabled, type JobEmailDraft } from '../services/jobEmail'
 import { usePrimaryJobEmail } from './usePrimaryJobEmail'
 import { assertJobNumberUnchanged } from '../domain/jobNumberPolicy'
 import { assertJobHasEmailableJobNumber } from '../services/jobEmailRules'
@@ -932,7 +932,7 @@ export function useJobs(options: UseJobsOptions = {}) {
 
     const { queuePrimaryJobEmail, emailDeliveryStates } = usePrimaryJobEmail({ getAccessToken, onDelivered: fetchJobs })
 
-    const sendAssignmentJobEmail = async (job: Job, assignment: JobAssignment) => {
+    const sendAssignmentJobEmail = async (job: Job, assignment: JobAssignment, draft?: JobEmailDraft) => {
         assertJobEmailSendingAllowed(window.location.hostname)
         assertJobHasEmailableJobNumber(job)
         if (!isValidTechnicianEmail(assignment.gr_Mechanic?.gr_email)) {
@@ -948,7 +948,7 @@ export function useJobs(options: UseJobsOptions = {}) {
                 recipientEmail: assignment.gr_Mechanic?.gr_email ?? '',
             })).url
             : ''
-        const email = buildAssignmentJobEmail(job, assignment, submissionUrl)
+        const email = buildAssignmentJobEmail(job, assignment, submissionUrl, draft)
         const dispatchId = await createEmailDispatch(token, {
             jobId: job.gr_jobid,
             assignmentId: assignment.gr_jobassignmentid,

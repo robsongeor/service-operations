@@ -270,7 +270,7 @@ function JobCardContent({ job, mechanics, assignments, onStatusChange, onCreateA
 
             <section className="job-card-people" aria-label="Technician Job Cards">
                 <TechnicianCard
-                    name={job.gr_Mechanic?.gr_name ?? 'No primary technician'} email={job.gr_Mechanic?.gr_email} label="Primary technician"
+                    name={job.gr_Mechanic?.gr_name ?? 'No first technician'} email={job.gr_Mechanic?.gr_email} label="First technician"
                     status={azure ? undefined : primarySubmission?.gr_status ?? (legacy ? JOB_CARD_STATUSES.SUBMITTED : getJobCardStatus(job.gr_jobcardstatus))}
                     submission={azure ? undefined : primarySubmission ?? legacy} isBusy={isUpdating} canSend={!localSendingDisabled && hasJobNumber && Boolean(job.gr_Mechanic?.gr_email)}
                     expanded={!azure && expandedId === (primarySubmission ?? legacy)?.gr_jobcardsubmissionid}

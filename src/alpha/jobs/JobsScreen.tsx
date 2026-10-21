@@ -387,6 +387,10 @@ export default function JobsScreen() {
                     }}
                     onJobFieldsChange={updateJobFields}
                     onEmailTechnician={queuePrimaryJobEmail}
+                    loadJobAssignments={loadJobAssignments}
+                    onCreateAssignment={createJobAssignment}
+                    onEmailAssignment={sendAssignmentJobEmail}
+                    onDeleteAssignment={deleteJobAssignment}
                     emailDeliveryStates={emailDeliveryStates}
                     onEditJob={(job) => openJob(job)}
                     onOpenJobCard={(job) => openJob(job, 'jobcard')}

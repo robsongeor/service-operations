@@ -1080,7 +1080,18 @@ export default function JobBookPrototypeScreen({
             <span>{rowActions.loadingJobId ? 'Loading the latest Job and assigned technician…' : rowActions.feedback?.message}</span>
             {rowActions.feedback && <button type="button" aria-label="Dismiss action message" onClick={rowActions.dismissFeedback}>×</button>}
         </div>}
-        {canEmailAssignedTechnician && rowActions.emailJob && <JobEmailComposer key={rowActions.emailJob.gr_jobid} job={rowActions.emailJob} assignedRecipientOnly={!canManageJobs} onCancel={rowActions.close} onSend={rowActions.send} />}
+        {canEmailAssignedTechnician && rowActions.emailJob && <JobEmailComposer
+            key={rowActions.emailJob.gr_jobid}
+            job={rowActions.emailJob}
+            mechanics={mechanics}
+            loadAssignments={rowActions.loadAssignments}
+            onCreateAssignment={canManageJobs ? rowActions.addAssignment : undefined}
+            onSendAssignment={canManageJobs ? rowActions.sendAssignment : undefined}
+            onDeleteAssignment={canManageJobs ? rowActions.removeAssignment : undefined}
+            assignedRecipientOnly={!canManageJobs}
+            onCancel={rowActions.close}
+            onSend={rowActions.send}
+        />}
         </section>
 
         {voidEntry.row && <JobBookVoidDialog key={voidEntry.row.id} row={voidEntry.row} busy={voidEntry.busy} error={voidEntry.error} needsReload={voidEntry.needsReload} onCancel={voidEntry.close} onSubmit={(reason) => void voidEntry.submit(reason)} onReload={() => void voidEntry.reload()} />}
