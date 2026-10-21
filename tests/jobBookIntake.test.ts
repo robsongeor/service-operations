@@ -484,6 +484,7 @@ test('Job Book rows use bounded Dataverse pages, server search and infinite scro
     assert.doesNotMatch(api, /while \(nextUrl\)/)
     assert.match(screen, /new IntersectionObserver/)
     assert.match(screen, /infiniteScrollSentinelRef/)
+    assert.match(screen, /root: gridScrollRef\.current/)
     assert.match(screen, /fetchRecentJobBookRows\(token, selectedJobBook, recentNextLink\)/)
     assert.match(screen, /fetchJobBookIntakeRows\(token, selectedJobBook, intakeNextLink\)/)
     assert.match(screen, /fetchJobBookSearchBatch/)
