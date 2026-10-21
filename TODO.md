@@ -10,8 +10,8 @@ This is remaining work, not a completed-change log. See [current state](CURRENT_
   Equipment/Job tools, record-source chips and independently enforced server authorization.
 - [x] Provision the dedicated Azure OpenAI resource and quota-compatible Realtime/transcription
   deployments, store the key only in server settings, and pass George's signed-in localhost session.
-- [ ] Publish the enabled V3 client and complete a deployed read-only Equipment/Job lookup. Keep the
-  permanent Azure key out of source and all `VITE_` settings.
+- [x] Publish the enabled V3 client and complete a signed-in deployed read-only Equipment lookup.
+  The permanent Azure key remains only in server settings and outside all `VITE_` values.
 - [ ] Design and approve the Assistant Action, Workshop Task and Transport Request Dataverse schema,
   manager permission and retention rules before implementing any mutation or provisioning metadata.
 

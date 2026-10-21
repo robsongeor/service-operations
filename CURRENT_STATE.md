@@ -23,9 +23,13 @@ deployments, and server-only V3 settings are provisioned. A signed-in George-onl
 opened the drawer, created a short-lived session and returned a successful harmless response. The
 production build, focused lint, all existing regression suites and the 180-test Job Book suite pass.
 The normal parallel Job Book command can encounter a Windows Vite-cache file lock in this workspace;
-the same suite passes with serial test execution. Publishing the enabled V3 client and completing a
-deployed read-only lookup remain pending. See the
-[Workshop Assistant architecture](docs/architecture/workshop-assistant.md) and `TODO.md`.
+the same suite passes with serial test execution.
+
+Commit `d306f31` deployed the enabled private client to V3 at `2026-10-21T07:58:05Z`. Signed-in live
+acceptance displayed the launcher only for George, opened the read-only drawer, returned a Realtime
+response and completed an Equipment `4582` lookup with a safe no-match result. No Dataverse record
+was created or changed. See the [Workshop Assistant architecture](docs/architecture/workshop-assistant.md)
+and `TODO.md`.
 
 ## V3 managed Service Coordination worklist — deployed acceptance candidate, 21 October 2026
 
