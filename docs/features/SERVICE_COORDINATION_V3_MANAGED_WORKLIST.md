@@ -1,7 +1,7 @@
 # Service Coordination V3 — managed worklist release plan
 
-Status: source, signed Dataverse backend and isolated yellow-cliff V3 pilot deployed; operational
-integration configuration, named-role acceptance and live migration remain held.
+Status: source, signed Dataverse backend, isolated yellow-cliff V3 pilot and operational integrations
+deployed; named-role acceptance and live migration remain held.
 
 ## Business boundary
 
@@ -61,10 +61,12 @@ V2 continues through its fixed proxy. Existing Job Card storage/email settings w
 
 The V3 Service Coordination backend flag is enabled. Anonymous access fails with `401`; an
 authenticated George smoke check resolved home branch Auckland, and the empty pre-migration
-watchlist contained no invalid managed/terminal rows. Yellow-cliff does not yet contain V2's
-GreenTree and TimeCloud operational settings. They were not copied because they contain production
-credentials and require separate explicit approval. Do not accept V3 Job creation, GT status checks
-or operational release until those settings and both integrations have passed smoke tests.
+watchlist contained no invalid managed/terminal rows. With separate explicit approval, exactly the
+15 GreenTree and TimeCloud operational settings were copied from V2 to V3 without changing V2 or
+replacing any of yellow-cliff's 25 existing settings. All copied values matched their source in a
+redacted comparison. Read-only production smoke checks returned 200 from GreenTree, TimeCloud
+authentication and TimeCloud search. TimeCloud is configured in production mode with Job creation
+enabled; verification did not create or change a Job or TimeCloud record.
 
 ## Release gates
 
@@ -73,8 +75,8 @@ or operational release until those settings and both integrations have passed sm
 3. Export a fresh live snapshot and approve its exact plan hash/counts.
 4. [x] Deploy and verify assembly `1.0.24.0` plus `gr_UnmanageJobBookJob` without changing human role
    assignments beyond the existing Full/Coordinator privilege boundary.
-5. [ ] V3 is deployed to yellow-cliff; install and smoke-test the held GreenTree/TimeCloud settings,
-   then run Full Access, Service Coordinator, Job Book Admin and Office Admin acceptance while V2
-   remains available.
+5. [ ] V3 is deployed to yellow-cliff and the approved GreenTree/TimeCloud settings passed read-only
+   production smoke tests. Run Full Access, Service Coordinator, Job Book Admin and Office Admin
+   acceptance while V2 remains available.
 6. Apply and verify the approved migration, then confirm branch, all-branches and watchlist views.
 7. Record explicit go/no-go approval before treating V3 as released.

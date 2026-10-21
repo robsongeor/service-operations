@@ -26,9 +26,12 @@ George's delegated smoke check resolves to Auckland. The personal watch endpoint
 and zero invalid managed/terminal rows before migration. V2 remains live at kind-wave and continues
 using yellow-cliff's preserved Job Card backend.
 
-Yellow-cliff still lacks the GreenTree and TimeCloud operational settings present on V2. No secret
-was copied. Do not treat V3 job creation or GreenTree checks as accepted until that separately
-approved configuration is installed and smoke-tested. Named-role UI acceptance also remains open.
+With separate explicit approval, the 15 GreenTree and TimeCloud operational settings were copied
+from V2 to V3 without changing V2 or replacing any of yellow-cliff's 25 existing settings. All 15
+destination values were verified against their source without printing them. A read-only production
+smoke returned 200 from GreenTree, TimeCloud authentication and TimeCloud search. TimeCloud is in
+production mode with Job creation enabled; no Job or TimeCloud record was created or changed during
+verification. Named-role UI acceptance remains open.
 
 A read-only production snapshot at `2026-10-21T04:47:38Z` found 1,396 Jobs. The deterministic dry
 run plans 254 active historical Jobs as managed Auckland (204 already Auckland and 50 branchless)
