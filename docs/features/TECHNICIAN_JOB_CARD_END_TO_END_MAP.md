@@ -245,7 +245,9 @@ The roster panel's primary actions are:
 4. **No longer attending** — stops future attendance but keeps the card required when the technician
    has already performed work and still owes evidence.
 5. **Withdraw — no card required** — requires a reason, revokes an active link and removes that
-   participant from required-return completeness without erasing the audit.
+   participant from required-return completeness without erasing the audit. When this is the
+   Job's current first technician, the same action also clears their current Job assignment so
+   they cannot reappear later as an expected Job Card return.
 6. **Withdraw** — available for the current first technician when they have not been emailed and
    have no Job Card or submission evidence. It unassigns them while retaining their historical
    roster entry. **Remove** remains only for cleaning up a never-sent additional assignment that was

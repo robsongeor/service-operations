@@ -289,9 +289,18 @@ export default function JobEmailComposer({
         setError('')
         try {
             await history.withdraw(request.reviewId, request.etag, withdrawReason.trim())
+            if (!request.assignmentId && primaryMechanic && onWithdrawPrimaryTechnician) {
+                try {
+                    await onWithdrawPrimaryTechnician()
+                    setPrimaryRemoved(true)
+                    setRecipientEmail('')
+                } catch (reason) {
+                    throw new Error(`The Job Card was withdrawn, but ${primaryMechanic.gr_name} could not be unassigned from the Job. ${reason instanceof Error ? reason.message : 'Refresh the Job and try again.'}`)
+                }
+            }
             setWithdrawRequestId('')
             setWithdrawReason('')
-            setSuccess(`${request.technicianName} withdrawn. Their Job Card is no longer required.`)
+            setSuccess(`${request.technicianName} withdrawn from this Job. Their Job Card is no longer required.`)
         } catch (reason) {
             setError(reason instanceof Error ? reason.message : 'The technician could not be withdrawn.')
         } finally { setRosterBusyId('') }
