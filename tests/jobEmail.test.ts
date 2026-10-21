@@ -104,9 +104,11 @@ test('Mouhib pilot email renders escaped content and the generated secure link',
 })
 
 test('online Job Card pilot is restricted to approved recipients and other email stays disabled', () => {
-    assert.equal(onlineJobCardPilotEnabled('nzmouhib@yahoo.co.nz'), true)
-    assert.equal(onlineJobCardPilotEnabled(' NZMOUHIB@YAHOO.CO.NZ '), true)
+    assert.equal(onlineJobCardPilotEnabled('mou@liftrucks.co.nz'), true)
+    assert.equal(onlineJobCardPilotEnabled(' MOU@LIFTRUCKS.CO.NZ '), true)
+    assert.equal(onlineJobCardPilotEnabled('ricardo@liftrucks.co.nz'), true)
     assert.equal(onlineJobCardPilotEnabled(' georger@liftrucks.co.nz '), true)
+    assert.equal(onlineJobCardPilotEnabled('nzmouhib@yahoo.co.nz'), false)
     assert.equal(onlineJobCardPilotEnabled('another.technician@example.test'), false)
     const body = buildTechnicianJobCardHtml(job, 'Anthony Example', '')
     assert.doesNotMatch(body, /href=/)

@@ -63,6 +63,15 @@ async function generate(overrides = {}) {
 test.beforeEach(configure)
 test.afterEach(restore)
 
+test('server pilot recipients match the approved Liftrucks technician addresses', () => {
+    assert.equal(service.test.pilotRecipientEnabled('mou@liftrucks.co.nz'), true)
+    assert.equal(service.test.pilotRecipientEnabled(' MOU@LIFTRUCKS.CO.NZ '), true)
+    assert.equal(service.test.pilotRecipientEnabled('ricardo@liftrucks.co.nz'), true)
+    assert.equal(service.test.pilotRecipientEnabled('georger@liftrucks.co.nz'), true)
+    assert.equal(service.test.pilotRecipientEnabled('nzmouhib@yahoo.co.nz'), false)
+    assert.equal(service.test.pilotRecipientEnabled('another.technician@example.test'), false)
+})
+
 test('secure tokens are URL-safe, random, and stored only as hashes', async () => {
     const first = service.test.generateToken()
     const second = service.test.generateToken()

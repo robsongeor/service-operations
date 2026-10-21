@@ -56,8 +56,10 @@ JPEG, PNG, HEIC and HEIF signatures are checked; this is not a malware-scanning 
 Office photos load only on demand. HEIC/HEIF are downloadable even without browser image support.
 The adapter splits large Table string properties into bounded chunks.
 
-The online pilot remains restricted client- and server-side to `nzmouhib@yahoo.co.nz` and
-`georger@liftrucks.co.nz`. The localhost email guard and existing non-portal dispatch remain.
+The online pilot remains restricted client- and server-side to Mou (`mou@liftrucks.co.nz`),
+Ricardo (`ricardo@liftrucks.co.nz`) and George's test address (`georger@liftrucks.co.nz`). Mou's
+obsolete personal address is no longer accepted. The localhost email guard and existing non-portal
+dispatch remain.
 
 ## Review authorization and operational invariants
 

@@ -24,7 +24,11 @@ const MAX_PARTS = 100
 const PHOTO_TYPES = new Set(['image/jpeg', 'image/png', 'image/heic', 'image/heif'])
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/
 const GUID_PATTERN = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i
-const PILOT_RECIPIENTS = new Set(['nzmouhib@yahoo.co.nz', 'georger@liftrucks.co.nz'])
+const PILOT_RECIPIENTS = new Set(['mou@liftrucks.co.nz', 'ricardo@liftrucks.co.nz', 'georger@liftrucks.co.nz'])
+
+function pilotRecipientEnabled(email) {
+    return PILOT_RECIPIENTS.has(String(email || '').trim().toLowerCase())
+}
 
 function jsonResponse(status, body, headers = {}) {
     return { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers }, body: JSON.stringify(body) }
@@ -259,7 +263,7 @@ async function generate(request) {
     const assignmentId = typeof request.body?.assignmentId === 'string' ? request.body.assignmentId.trim() : ''
     if (!GUID_PATTERN.test(jobId) || (assignmentId && !GUID_PATTERN.test(assignmentId))) return jsonResponse(400, { error: 'A valid Job is required.' })
     const recipientEmail = typeof request.body?.recipientEmail === 'string' ? request.body.recipientEmail.trim().toLowerCase() : ''
-    if (!isLocalDevelopment() && !PILOT_RECIPIENTS.has(recipientEmail)) return jsonResponse(403, { error: 'Online Job Cards are restricted to the approved pilot recipients.' })
+    if (!isLocalDevelopment() && !pilotRecipientEnabled(recipientEmail)) return jsonResponse(403, { error: 'Online Job Cards are restricted to the approved pilot recipients.' })
     const snapshot = isLocalDevelopment()
         ? snapshotFromLocalBody(request.body)
         : await loadDataverseSnapshot(identity.authorization, jobId, assignmentId, recipientEmail)
@@ -588,5 +592,5 @@ async function synchronizeMeter(record) {
 
 module.exports = {
     generate, handlePublicGet, handlePublicPost, handleReviewRequest, jsonResponse,
-    test: { generateToken, hashToken, publicDetails, validateSubmission, validatePhotoUpload, reset: resetJobCardStore },
+    test: { generateToken, hashToken, publicDetails, validateSubmission, validatePhotoUpload, pilotRecipientEnabled, reset: resetJobCardStore },
 }

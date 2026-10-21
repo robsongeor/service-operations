@@ -2,6 +2,8 @@
 
 ## 2026-10-21 — Restricted Equipment location saves
 
+- Re-enabled Mou's online Job Card pilot access at his current Liftrucks address and added Ricardo
+  to the same client-and-server enforced pilot. Mou's obsolete personal address is no longer accepted.
 - Updated the signed unified Dataverse guard to `1.0.23.0` so Office Admin and Job Book Admin users
   can save the explicitly selected Equipment Site when Dataverse enriches the update with its own
   record ID and modification metadata.
