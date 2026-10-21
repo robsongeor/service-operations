@@ -721,6 +721,10 @@ export default function JobsTable({
             onCreateAssignment={onCreateAssignment}
             onSendAssignment={onEmailAssignment}
             onDeleteAssignment={onDeleteAssignment}
+            onRemovePrimaryTechnician={async () => {
+                await onJobFieldsChange(emailComposerJob.gr_jobid, { 'gr_Mechanic@odata.bind': null })
+                setEmailComposerJob((current) => current?.gr_jobid === emailComposerJob.gr_jobid ? { ...current, gr_Mechanic: undefined } : current)
+            }}
             onCancel={() => setEmailComposerJob(null)}
             onSend={(draft) => sendEmail(emailComposerJob, draft)}
         />}

@@ -1090,6 +1090,7 @@ export default function JobBookPrototypeScreen({
             onCreateAssignment={canManageJobs ? rowActions.addAssignment : undefined}
             onSendAssignment={canManageJobs ? rowActions.sendAssignment : undefined}
             onDeleteAssignment={canManageJobs ? rowActions.removeAssignment : undefined}
+            onRemovePrimaryTechnician={canManageJobs ? rowActions.removePrimaryTechnician : undefined}
             assignedRecipientOnly={!canManageJobs}
             onCancel={rowActions.close}
             onSend={rowActions.send}

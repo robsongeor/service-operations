@@ -246,7 +246,9 @@ The roster panel's primary actions are:
    has already performed work and still owes evidence.
 5. **Withdraw — no card required** — requires a reason, revokes an active link and removes that
    participant from required-return completeness without erasing the audit.
-6. **Remove** — available only for a never-sent assignment with no Azure or historical evidence.
+6. **Remove** — available for the current first technician or an additional assignment only when
+   that participant has not been emailed and has no Job Card or submission evidence. Previously
+   emailed rows remain visible as read-only history.
 
 Implementation note (21 October 2026): the shared Job Book/Service Coordination composer now
 implements the side-by-side roster, bounded fail-closed history/assignment load, participant

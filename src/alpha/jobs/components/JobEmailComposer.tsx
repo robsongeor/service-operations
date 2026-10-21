@@ -28,6 +28,7 @@ type Props = {
     onCreateAssignment?: (assignment: JobAssignmentInput) => Promise<void>
     onSendAssignment?: (job: Job, assignment: JobAssignment, draft: JobEmailDraft) => Promise<void>
     onDeleteAssignment?: (assignmentId: string) => Promise<void>
+    onRemovePrimaryTechnician?: () => Promise<void>
 }
 
 const requestStatusLabel = (request?: JobCardRequestSummary) => {
@@ -59,8 +60,10 @@ export default function JobEmailComposer({
     onCreateAssignment,
     onSendAssignment,
     onDeleteAssignment,
+    onRemovePrimaryTechnician,
 }: Props) {
-    const primaryMechanic = job.gr_Mechanic
+    const [primaryRemoved, setPrimaryRemoved] = useState(false)
+    const primaryMechanic = primaryRemoved ? undefined : job.gr_Mechanic
     const rosterEnabled = Boolean(loadAssignments)
     const history = useJobCardHistory(rosterEnabled && usesAzureJobCards(job) ? job.gr_jobid : undefined)
     const [assignmentRevision, setAssignmentRevision] = useState(0)
@@ -266,6 +269,20 @@ export default function JobEmailComposer({
         } finally { setRosterBusyId('') }
     }
 
+    const removePrimaryTechnician = async () => {
+        if (!primaryMechanic || !onRemovePrimaryTechnician || !window.confirm(`Remove ${primaryMechanic.gr_name} from this Job?`)) return
+        setRosterBusyId('primary')
+        setError('')
+        try {
+            await onRemovePrimaryTechnician()
+            setPrimaryRemoved(true)
+            setRecipientEmail('')
+            setSuccess(`${primaryMechanic.gr_name} removed from this Job.`)
+        } catch (reason) {
+            setError(reason instanceof Error ? reason.message : 'The technician could not be removed.')
+        } finally { setRosterBusyId('') }
+    }
+
     const withdrawTechnician = async (request: JobCardRequestSummary) => {
         if (!withdrawReason.trim()) return setError('Enter why this technician is no longer attending.')
         setRosterBusyId(request.reviewId)
@@ -294,6 +311,7 @@ export default function JobEmailComposer({
         const dispatch = dispatchFor(assignment)
         const selected = assignment ? selectedAssignmentId === assignment.gr_jobassignmentid : !selectedAssignmentId
         const removable = Boolean(assignment && onDeleteAssignment && !request && !assignment.gr_emailsenton && !assignment.gr_submittedon)
+        const primaryRemovable = Boolean(!assignment && onRemovePrimaryTechnician && !request && !dispatch)
         return <article key={key} className={`job-email-roster-row${selected ? ' is-selected' : ''}`}>
             <button type="button" className="job-email-roster-person" onClick={() => selectTechnician(assignment)} disabled={!rowMechanic || (assignedRecipientOnly && Boolean(assignment))}>
                 <span className="job-email-roster-avatar" aria-hidden="true">{rowMechanic?.gr_name.slice(0, 1).toUpperCase() || '?'}</span>
@@ -304,6 +322,7 @@ export default function JobEmailComposer({
                 {!selected && <button type="button" onClick={() => selectTechnician(assignment)}>Compose</button>}
                 {request?.status === 'active' && <button type="button" onClick={() => { setWithdrawRequestId(request.reviewId); setWithdrawReason('') }}>Withdraw</button>}
                 {removable && <button type="button" className="danger" disabled={rosterBusyId === key} onClick={() => void removeTechnician(assignment!)}>Remove</button>}
+                {primaryRemovable && <button type="button" className="danger" disabled={rosterBusyId === key} onClick={() => void removePrimaryTechnician()}>Remove</button>}
             </div>}
             {withdrawRequestId === request?.reviewId && <div className="job-email-roster-withdraw">
                 <label><span>Reason</span><textarea rows={2} value={withdrawReason} onChange={(event) => setWithdrawReason(event.currentTarget.value)} placeholder="For example: Sick before attending" /></label>

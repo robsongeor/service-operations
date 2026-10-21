@@ -3,7 +3,7 @@ import type { JobBookRow } from './jobBookPrototype'
 import type { CorrectableJob } from '../jobs/services/jobCorrectionsApi'
 import type { Job } from '../jobs/types/job.types'
 import type { JobEmailDraft } from '../jobs/services/jobEmail'
-import { fetchJobForCorrection } from '../jobs/services/jobCorrectionsApi'
+import { fetchJobForCorrection, saveJobCorrections } from '../jobs/services/jobCorrectionsApi'
 import { assignedTechnicianEmailBlockedReason } from '../jobs/services/primaryJobEmailWorkflow'
 import { copyNumberedJobBookSpreadsheetRow } from '../jobs/utils/jobBookClipboard'
 import { usePrimaryJobEmail } from '../jobs/hooks/usePrimaryJobEmail'
@@ -84,6 +84,20 @@ export function useJobBookActions(getAccessToken: () => Promise<string>, canEmai
     const removeAssignment = useCallback(async (assignmentId: string) => {
         await deleteJobAssignment(await getAccessToken(), assignmentId)
     }, [getAccessToken])
+    const removePrimaryTechnician = useCallback(async () => {
+        if (!emailJob?.gr_Mechanic) throw new Error('This Job no longer has an assigned technician.')
+        const saved = await saveJobCorrections(await getAccessToken(), emailJob, {
+            description: emailJob.gr_description ?? '',
+            orderNumber: emailJob.gr_ordernumber ?? '',
+            equipmentId: emailJob.gr_Equipment?.gr_equipmentid ?? '',
+            mechanicId: '',
+            externalSupplierDetails: emailJob.gr_externalsupplierdetails ?? '',
+            customerId: emailJob.gr_Site?.gr_Customer?.gr_customerid ?? '',
+            siteId: emailJob.gr_Site?.gr_siteid ?? '',
+            contactId: emailJob.gr_Contact?.gr_contactid ?? '',
+        })
+        setEmailJob(saved)
+    }, [emailJob, getAccessToken])
     const sendAssignment = useCallback(async (job: Job, assignment: JobAssignment, draft: JobEmailDraft) => {
         assertJobEmailSendingAllowed(window.location.hostname)
         assertJobHasEmailableJobNumber(job)
@@ -107,6 +121,6 @@ export function useJobBookActions(getAccessToken: () => Promise<string>, canEmai
     }, [getAccessToken])
     return {
         emailJob, emailPreviousTechnicians, loadingJobId, feedback, dismissFeedback: () => setFeedback(null), emailDeliveryStates,
-        copy, openEmail, close, send, loadAssignments, loadDispatches, addAssignment, removeAssignment, sendAssignment,
+        copy, openEmail, close, send, loadAssignments, loadDispatches, addAssignment, removeAssignment, removePrimaryTechnician, sendAssignment,
     }
 }
