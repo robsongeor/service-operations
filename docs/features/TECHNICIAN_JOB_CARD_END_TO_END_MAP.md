@@ -165,22 +165,35 @@ with an independent delivery and Job Card lifecycle.
 
 The row action should be contextual:
 
-- Before any technician-card activity exists: **Email technician** may open the existing compose
-  dialog directly for the selected first technician, preserving the fast first-send path.
+- Before any technician-card activity exists: **Email technician** opens the shared technician
+  pop-out directly in its **Compose** view for the selected first technician, preserving the fast
+  first-send path.
 - After any request, dispatch or submission history exists: clicking **Email technician** must first
-  open the technician roster dialog. It must not jump directly to another send or replacement.
+  open the same pop-out in its **Roster** view. It must not jump directly to another send or
+  replacement.
 - After the dialog is opened, the row action may be relabelled **Technicians (n)** or **Manage
   technicians** so the continuing behavior is obvious.
-- The dialog is available from both Job Book and Service Coordination and uses one shared workflow.
+- The pop-out is available from both Job Book and Service Coordination and uses one shared workflow.
+
+The roster and email composer are not separate or stacked dialogs. They are views within one
+technician pop-out:
+
+- **Roster view** shows every known technician and the valid actions for each lifecycle.
+- **Compose view** replaces the roster content in the same pop-out for the selected technician.
+- **Back to technicians** returns to the roster without closing the pop-out or losing the selected
+  technician context.
+- After a successful send, the pop-out returns to the roster and refreshes the selected
+  technician's delivery/card state.
+- Closing either view closes the single pop-out and returns focus to the originating Job row.
 
 For Job Book specifically, the click sequence is:
 
 1. Load the current Job version, current primary/assignments, bounded Azure Job Card history and
    relevant dispatch state.
-2. If there is genuinely no technician-card activity, open the existing composer for the selected
-   first technician.
-3. If any activity exists, open **Manage technicians** and show the complete known list before the
-   user chooses Compose, Resend, Withdraw or Add technician.
+2. If there is genuinely no technician-card activity, open the shared pop-out directly in Compose
+   view for the selected first technician.
+3. If any activity exists, open the shared pop-out in **Manage technicians** roster view and show
+   the complete known list before the user chooses Compose, Resend, Withdraw or Add technician.
 4. If roster/history cannot be verified, show a retryable error. Do not assume the Job is new and
    open a blank composer, because that could create an accidental replacement/duplicate cycle.
 
@@ -212,7 +225,7 @@ Sam                        Withdrawn · No card required
 [+ Add technician]                                      [Done]
 ```
 
-The dialog's primary actions are:
+The roster view's primary actions are:
 
 1. **Add technician** — creates a stable participant/assignment without changing existing rows.
 2. **Compose and send** — sends only the selected technician's assignment-scoped card.
@@ -401,8 +414,8 @@ Compatibility rules:
 
 | ID | Case | Expected behavior | Status |
 | --- | --- | --- | --- |
-| JC-H01 | Open row action before any send | Show roster dialog with selected first technician and Compose action. | Proposed |
-| JC-H02 | Open row action after one or more sends | Show every participant and independent delivery/card state before composing. | Proposed |
+| JC-H01 | Open row action before any activity | Open the shared technician pop-out directly in Compose view for the selected first technician. | Proposed |
+| JC-H02 | Open row action after one or more activities | Open the shared technician pop-out in Roster view and show every participant and independent delivery/card state before composing. | Proposed |
 | JC-H03 | Add Rick after Mo was sent | Create a separate stable participant; Mo remains visible and required. | Proposed |
 | JC-H04 | Send Rick | Generate and dispatch only Rick's assignment-scoped card; never replace Mo's link/evidence. | Proposed |
 | JC-H05 | Resend Mo with unused active link | Confirm replacement of Mo's link only. | Existing server rule; proposed roster UI |
@@ -413,12 +426,15 @@ Compatibility rules:
 | JC-H10 | Attempt to remove a sent/received technician | Offer lifecycle-safe actions instead of deletion; never erase history. | Proposed |
 | JC-H11 | Change current lead after dispatch | Earlier participants remain matched by stable IDs and do not disappear/rebind. | Required architecture change |
 | JC-H12 | Existing blank-assignment primary cycle | Display as legacy initial participant and preserve its saved technician identity. | Required compatibility design |
-| JC-H13 | Job Book versus Service Coordination | Both open the same roster/dialog and invoke the same guarded assignment/send actions. | Proposed |
+| JC-H13 | Job Book versus Service Coordination | Both open the same technician pop-out and invoke the same guarded assignment/send actions. | Proposed |
 | JC-H14 | Mixed states | Dialog may show Mo Awaiting, Rick Sent, Sam Withdrawn and prior received cycles without collapsing them. | Proposed |
-| JC-H15 | Job Book first send with no history | Email button opens the existing composer directly for the selected first technician. | Proposed |
+| JC-H15 | Job Book first send with no history | Email button opens the shared pop-out directly in Compose view for the selected first technician. | Proposed |
 | JC-H16 | Job Book click with any existing activity | Email button opens the roster summary first; no send/replacement occurs until a row action is chosen. | Proposed |
 | JC-H17 | Existing failed/pending dispatch or active/expired link | Treat as activity and show the roster even when confirmed delivery is absent. | Proposed safety rule |
 | JC-H18 | Roster/history check fails or is truncated | Show retryable unavailable state and do not fall back to direct compose. | Proposed fail-closed rule |
+| JC-H19 | Choose Compose, Resend or Add from roster | Transition to Compose view within the same pop-out; do not open a second dialog. | Proposed |
+| JC-H20 | Return from Compose | Back returns to the roster in the same pop-out with technician context intact. | Proposed |
+| JC-H21 | Successful send from Compose | Return to the roster and refresh that technician's delivery/card state. | Proposed |
 
 ## Known open decisions and gaps
 
