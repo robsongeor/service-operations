@@ -137,6 +137,110 @@ Completion Review ──separate accepted completion workflow──> Complete
 - Action Required and unrelated statuses are not automatically overridden.
 - Technician submission, office filing and GreenTree status cannot individually set Complete.
 
+## Proposed roster-first dispatch interaction
+
+**Status: proposed product design — not implemented.** This section records the desired interaction
+identified during workflow mapping. It deliberately separates technician participation from email
+composition so a later send cannot silently replace an earlier technician or their required card.
+
+### What the current buttons do
+
+- The Job Book/Service Coordination row email action opens a composer for the Job's current
+  `gr_Mechanic`. Sending does **not** set that person as primary; the Job already stored them.
+- Clicking that row action again targets the same stored technician. For an unused active request,
+  the server requires confirmation before replacing only that technician's secure link.
+- The canonical Job drawer already has a Job Cards section where users can add a
+  `gr_jobassignment`, then send that additional technician a separately scoped card.
+- The row action does not expose that roster, its delivery/card states, or the add/withdraw flow.
+- The first/“primary” Azure request currently has a blank assignment ID and is matched against the
+  Job's *current* primary technician. Changing `gr_Mechanic` after dispatch can therefore make the
+  earlier technician stop matching the current expected-return roster. This is the core data-model
+  issue to resolve, not merely a label change.
+
+### Recommended user model
+
+Use **Assigned technicians** as the group and **First technician** as a chronological display label,
+not a privileged ownership role. Every technician who is sent the Job remains a visible participant
+with an independent delivery and Job Card lifecycle.
+
+The row action should be contextual:
+
+- Before any technician is sent: **Send to technician** opens the roster dialog with the selected
+  first technician and a Compose action.
+- After any send/history exists: **Technicians (n)** or **Manage technicians** opens the same dialog.
+- The dialog is available from both Job Book and Service Coordination and uses one shared workflow.
+
+Each technician row should show:
+
+- name and optional **First technician** label;
+- assignment/attendance state;
+- delivery state: Not sent, Sending, Sent or Failed;
+- card state: No card sent, Awaiting card, Expired, Received or Withdrawn;
+- last sent/submitted time where known; and
+- only the actions valid for that lifecycle.
+
+```text
+Manage technicians — Job 147497
+
+Mo    First technician    Sent · Awaiting card
+      Last sent yesterday                 [Resend] [No longer attending] [Withdraw]
+
+Rick                       Not sent
+      Added today                         [Compose and send] [Remove]
+
+Sam                        Withdrawn · No card required
+      Sick before attending
+
+[+ Add technician]                                      [Done]
+```
+
+The dialog's primary actions are:
+
+1. **Add technician** — creates a stable participant/assignment without changing existing rows.
+2. **Compose and send** — sends only the selected technician's assignment-scoped card.
+3. **Resend** — sends the same technician again. Replacing an unused active link requires explicit
+   confirmation; submitted evidence remains immutable and a new cycle is created.
+4. **No longer attending** — stops future attendance but keeps the card required when the technician
+   has already performed work and still owes evidence.
+5. **Withdraw — no card required** — requires a reason, revokes an active link and removes that
+   participant from required-return completeness without erasing the audit.
+6. **Remove** — available only for a never-sent assignment with no Azure or historical evidence.
+
+### Example: parts arrive and another technician finishes
+
+1. Mo was sent the Job and remains **Awaiting card**.
+2. Office opens **Manage technicians**, adds Rick and sends Rick his own card.
+3. The dialog shows Mo and Rick independently; neither send replaces the other.
+4. Mo remains required because he performed work before the parts delay.
+5. Rick also becomes required for his completion work.
+6. Completion Review waits until both are Received, unless an authorized office user explicitly
+   withdraws one as **no card required** with an audit reason.
+
+### Example: planned technician is sick before attending
+
+1. Mo was sent the Job but did no work.
+2. Office opens **Manage technicians** and chooses **Withdraw — no card required** for Mo, recording
+   “Sick before attending” (or another bounded reason).
+3. Mo remains visible as Withdrawn; his link no longer works and no card is expected.
+4. Office adds Rick and sends a separately scoped card.
+5. If Rick is the only non-withdrawn participant, only Rick's return is required.
+
+### Required identity change
+
+The safest implementation is to give **every sent technician, including the first**, a stable Job
+Assignment/participant ID and generate every new request with that ID. `gr_Mechanic` may remain the
+current lead/scheduling shortcut, but it must not be the identity of an already-issued card.
+
+Compatibility rules:
+
+- Existing blank-assignment “primary” Azure cycles remain visible as an **Initial technician
+  (legacy scope)** bound to their saved technician ID.
+- Changing the current lead never relabels, transfers or hides an earlier request/evidence record.
+- Migration/backfill must be deterministic and must not create duplicate required returns.
+- The expected-return check uses stable active participant IDs plus explicit withdrawal state, not
+  whichever person currently occupies `gr_Mechanic`.
+- Delivery, evidence and withdrawal history remain immutable when the scheduling lead changes.
+
 ## Case catalogue
 
 ### A. Eligibility, identity and dispatch
@@ -275,6 +379,25 @@ Completion Review ──separate accepted completion workflow──> Complete
 | JC-G09 | Legacy evidence exists | Show in labelled historical read-only section; never merge into Azure state. | Legacy |
 | JC-G10 | Secrets/tokens/photos | Raw token returned once; no token/hash/Blob path in review payload, DOM, archive or logs. | Current security boundary |
 
+### H. Proposed technician-roster interaction
+
+| ID | Case | Expected behavior | Status |
+| --- | --- | --- | --- |
+| JC-H01 | Open row action before any send | Show roster dialog with selected first technician and Compose action. | Proposed |
+| JC-H02 | Open row action after one or more sends | Show every participant and independent delivery/card state before composing. | Proposed |
+| JC-H03 | Add Rick after Mo was sent | Create a separate stable participant; Mo remains visible and required. | Proposed |
+| JC-H04 | Send Rick | Generate and dispatch only Rick's assignment-scoped card; never replace Mo's link/evidence. | Proposed |
+| JC-H05 | Resend Mo with unused active link | Confirm replacement of Mo's link only. | Existing server rule; proposed roster UI |
+| JC-H06 | Resend after Mo submitted | Preserve Mo's earlier evidence/outcome and create a new Mo cycle. | Existing server rule; proposed roster UI |
+| JC-H07 | Mo stops attending but performed work | Keep Mo as required; mark attendance ended without withdrawing the owed card. | Proposed |
+| JC-H08 | Mo is sick before attending | Withdraw with reason, revoke link and exclude Mo from required returns; keep audit visible. | Existing withdrawal rule; proposed roster UI |
+| JC-H09 | Remove a never-sent technician | Delete only when no request, dispatch or historical evidence exists. | Partially current; proposed shared UI |
+| JC-H10 | Attempt to remove a sent/received technician | Offer lifecycle-safe actions instead of deletion; never erase history. | Proposed |
+| JC-H11 | Change current lead after dispatch | Earlier participants remain matched by stable IDs and do not disappear/rebind. | Required architecture change |
+| JC-H12 | Existing blank-assignment primary cycle | Display as legacy initial participant and preserve its saved technician identity. | Required compatibility design |
+| JC-H13 | Job Book versus Service Coordination | Both open the same roster/dialog and invoke the same guarded assignment/send actions. | Proposed |
+| JC-H14 | Mixed states | Dialog may show Mo Awaiting, Rick Sent, Sam Withdrawn and prior received cycles without collapsing them. | Proposed |
+
 ## Known open decisions and gaps
 
 | ID | Decision/gap | Why it matters |
@@ -289,6 +412,7 @@ Completion Review ──separate accepted completion workflow──> Complete
 | JC-O08 | Type-specific Service/WOF Job Card fields and atomic completion processor. | Required before office-reviewed evidence can safely replace manual completion dialogs. |
 | JC-O09 | Technician authenticated workspace, offline/photo persistence and notifications. | Parked; do not infer requirements or licensing from the bearer-link workflow. |
 | JC-O10 | Named-user, multi-browser, mobile and service-identity acceptance. | Automated tests do not prove live permissions, deployment or device behavior. |
+| JC-O11 | Stable participant model for the first technician. | Must be decided before implementing the roster dialog; a label-only change leaves the primary-scope identity bug intact. |
 
 ## Acceptance walkthrough set
 
@@ -311,6 +435,8 @@ each run. Never use production evidence mutation merely to prove a UI state.
 14. Legacy Dataverse evidence beside a current Azure cycle.
 15. Gated meter approval: success, failed write/retry, newer reading and changed Equipment.
 16. Narrow/mobile portal and office review, private photo/PDF/ZIP downloads, cancellation and account switch.
+17. Parts handover: Mo remains Awaiting while Rick is added/sent; both returns remain independently required.
+18. Sick before attendance: withdraw Mo with a reason, add/send Rick and verify Mo remains visible but not required.
 
 ## Automated coverage anchors
 
