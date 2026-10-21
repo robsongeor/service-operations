@@ -406,6 +406,24 @@ test('shared Job Book relationship dropdowns close when focus moves outside them
     assert.match(coordination, /exclusive-dropdown-open/)
 })
 
+test('new Customer and Site creation is a focused modal and hides stale dependent fields', () => {
+    const screen = readFileSync(new URL('../src/alpha/job-book/JobBookPrototypeScreen.tsx', import.meta.url), 'utf8')
+    const picker = readFileSync(new URL('../src/alpha/shared/customer-relationship/CustomerRelationshipPicker.tsx', import.meta.url), 'utf8')
+    const pickerStyles = readFileSync(new URL('../src/alpha/shared/customer-relationship/CustomerRelationshipPicker.css', import.meta.url), 'utf8')
+    const relationshipFields = readFileSync(new URL('../src/alpha/jobs/components/JobRelationshipFields.tsx', import.meta.url), 'utf8')
+    const equipmentLocation = readFileSync(new URL('../src/alpha/jobs/components/JobEquipmentLocation.tsx', import.meta.url), 'utf8')
+
+    assert.match(picker, /createPortal\(/)
+    assert.match(picker, /role="dialog" aria-modal="true"/)
+    assert.match(picker, /event\.key === 'Escape'/)
+    assert.match(picker, /event\.key !== 'Tab'/)
+    assert.match(pickerStyles, /customer-relationship-create-backdrop[^{]*\{[^}]*backdrop-filter: blur\(4px\)/)
+    assert.match(screen, /onCreateOpenChange=\{\(open\) => \{[\s\S]*setIntakeCustomerCreateOpen\(open\)/)
+    assert.match(screen, /!intakeCustomerCreateOpen && <JobSiteContactFields/)
+    assert.match(relationshipFields, /!customerCreateOpen && <JobSiteContactFields/)
+    assert.match(equipmentLocation, /!createFormOpen && <JobSiteContactFields/)
+})
+
 test('Equipment Change opens a focused replacement search without clearing selected relationships', () => {
     const field = readFileSync(new URL('../src/alpha/jobs/components/JobEquipmentField.tsx', import.meta.url), 'utf8')
     const change = field.slice(field.indexOf('const changeEquipment ='), field.indexOf('const select ='))

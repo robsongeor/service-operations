@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { deriveSiteNameFromAddress } from '../siteName'
 import VerifiedAddressField from '../../jobs/components/VerifiedAddressField'
 import type { VerifiedAddressSuggestion } from '../../jobs/services/addressSearchApi'
@@ -59,6 +60,8 @@ export default function CustomerRelationshipPicker({
     const [createError, setCreateError] = useState('')
     const [draft, setDraft] = useState({ customerName: '', siteName: '', address: '' })
     const [addressSelection, setAddressSelection] = useState<VerifiedAddressSuggestion | null>(null)
+    const createDialogRef = useRef<HTMLElement>(null)
+    const createTitleId = useId()
     const openCreate = () => {
         setDraft({ customerName: query.trim(), siteName: '', address: '' })
         setAddressSelection(null)
@@ -68,10 +71,43 @@ export default function CustomerRelationshipPicker({
     }
 
     const cancelCreate = () => {
+        if (isSaving) return
         setCreating(false)
         onCreateOpenChange?.(false)
         setCreateError('')
         setAddressSelection(null)
+    }
+
+    useEffect(() => {
+        if (!creating) return
+        const frame = requestAnimationFrame(() => createDialogRef.current?.querySelector<HTMLElement>('input, button:not([disabled])')?.focus())
+        return () => cancelAnimationFrame(frame)
+    }, [creating])
+
+    const handleCreateKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+        if (event.key === 'Escape') {
+            event.preventDefault()
+            event.stopPropagation()
+            cancelCreate()
+            return
+        }
+        if (event.key !== 'Tab') return
+        const controls = [...(createDialogRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])') ?? [])]
+            .filter((element) => element.offsetParent !== null)
+        const first = controls[0]
+        const last = controls[controls.length - 1]
+        if (!first || !last) {
+            event.preventDefault()
+            return
+        }
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault()
+            last.focus()
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault()
+            first.focus()
+        }
+        event.stopPropagation()
     }
 
     const create = async () => {
@@ -137,8 +173,9 @@ export default function CustomerRelationshipPicker({
             menuAction={onCreateCustomerAndSite ? { label: '+ Add new customer', onSelect: openCreate } : undefined}
         />
 
-        {creating && <section className="customer-relationship-create">
-            <div><h4>New customer and site</h4><p>{createDescription}</p></div>
+        {creating && createPortal(<div className="customer-relationship-create-backdrop" role="presentation" onMouseDown={cancelCreate}>
+        <section ref={createDialogRef} className="customer-relationship-create" role="dialog" aria-modal="true" aria-labelledby={createTitleId} tabIndex={-1} onKeyDown={handleCreateKeyDown} onMouseDown={(event) => event.stopPropagation()}>
+            <div><h4 id={createTitleId}>New customer and site</h4><p>{createDescription}</p></div>
             <label><span>Customer name</span><input autoFocus value={draft.customerName} onChange={(event) => setDraft((current) => ({ ...current, customerName: event.target.value }))} /></label>
             <label><span>Site name</span><input value={draft.siteName} onChange={(event) => setDraft((current) => ({ ...current, siteName: event.target.value }))} /></label>
             <VerifiedAddressField value={draft.address} onChange={(address, selection) => {
@@ -158,6 +195,7 @@ export default function CustomerRelationshipPicker({
                 <button type="button" onClick={cancelCreate} disabled={isSaving}>Cancel</button>
                 <button type="button" className="primary" onClick={() => void create()} disabled={isSaving || !addressSelection || addressSelection.formattedAddress !== draft.address}>{isSaving ? 'Saving…' : createActionLabel}</button>
             </div>
-        </section>}
+        </section>
+        </div>, document.body)}
     </div>
 }

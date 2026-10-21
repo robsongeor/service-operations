@@ -137,7 +137,7 @@ function applyCustomerSelection(row: JobBookRow, customerId: string, customer: s
     return clearEquipmentContext(row, customerId, customer)
 }
 
-function CustomerPicker({ id, value, customerName, required, error, onSearchCustomers, onChange, onCreateCustomerAndSite }: {
+function CustomerPicker({ id, value, customerName, required, error, onSearchCustomers, onChange, onCreateCustomerAndSite, onCreateOpenChange }: {
     id: string
     required?: boolean
     error?: string
@@ -146,6 +146,7 @@ function CustomerPicker({ id, value, customerName, required, error, onSearchCust
     onSearchCustomers: (query: string, signal?: AbortSignal) => Promise<Customer[]>
     onChange: (customerId: string, customerName: string) => void
     onCreateCustomerAndSite?: (input: { customerName: string; siteName: string; address: string }) => Promise<void>
+    onCreateOpenChange?: (open: boolean) => void
 }) {
     // Keep typing local; a newly selected Equipment/entry supplies its exact Customer immediately.
     const [input, setInput] = useState({ customerId: value, customerName, text: customerName })
@@ -166,6 +167,7 @@ function CustomerPicker({ id, value, customerName, required, error, onSearchCust
             onChange(selected.gr_customerid, selected.gr_name)
         }}
         onCreateCustomerAndSite={onCreateCustomerAndSite}
+        onCreateOpenChange={onCreateOpenChange}
         createDescription={UNIFIED_JOB_RUNTIME ? 'Create a saved Customer and Site. These remain available if the entry is cancelled.' : 'Use this customer and site on the Job Book entry. This does not create master Dataverse records.'}
         createActionLabel="Create customer"
     />
@@ -216,6 +218,7 @@ export default function JobBookPrototypeScreen({
     const [intakeDrawerOpen, setIntakeDrawerOpen] = useState(false)
     const [editingIntakeRow, setEditingIntakeRow] = useState<JobBookRow | null>(null)
     const [intakeCreatePanel, setIntakeCreatePanel] = useState<'' | 'site' | 'contact'>('')
+    const [intakeCustomerCreateOpen, setIntakeCustomerCreateOpen] = useState(false)
     const [editingEntryLocation, setEditingEntryLocation] = useState(false)
     const [createdEntryLocation, setCreatedEntryLocation] = useState(false)
     const showEntryLocationSummary = jobBookLocationSummaryVisible(draft, Boolean(editingIntakeRow) || createdEntryLocation, editingEntryLocation)
@@ -1152,6 +1155,10 @@ export default function JobBookPrototypeScreen({
                         setIntakeContacts([])
                         setDraft((current) => applyCustomerSelection(current, customerId, customerName))
                     }}
+                    onCreateOpenChange={(open) => {
+                        setIntakeCustomerCreateOpen(open)
+                        if (open) setIntakeCreatePanel('')
+                    }}
                     onCreateCustomerAndSite={async ({ customerName, siteName, address }) => {
                         if (UNIFIED_JOB_RUNTIME && !editingIntakeRow) {
                             const token = await getAccessToken()
@@ -1180,7 +1187,7 @@ export default function JobBookPrototypeScreen({
                         setCreatedEntryLocation(true)
                         setEditingEntryLocation(false)
                     }} /></div>}
-                <JobSiteContactFields
+                {!intakeCustomerCreateOpen && <JobSiteContactFields
                     showSite={!locationEquipment && !showEntryLocationSummary}
                     locationRequired={requireIntakeLocation}
                     address={draft.address}
@@ -1202,7 +1209,7 @@ export default function JobBookPrototypeScreen({
                     onAddContact={UNIFIED_JOB_RUNTIME && !editingIntakeRow && intakeContactLookupAvailable ? () => setIntakeCreatePanel('contact') : undefined}
                     onRetrySites={() => setIntakeSiteLoadAttempt((current) => current + 1)}
                     onRetryContacts={() => setIntakeContactLoadAttempt((current) => current + 1)}
-                />
+                />}
                 {intakeCreatePanel === 'site' && <JobSiteCreatePanel key={draft.customerId}
                     customerName={draft.customer}
                     description="Create and select this Site for the Job Book entry."
