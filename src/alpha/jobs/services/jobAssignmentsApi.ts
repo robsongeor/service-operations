@@ -33,12 +33,14 @@ export async function fetchJobAssignments(token: string): Promise<JobAssignment[
     const query = [
         '$select=gr_jobassignmentid,gr_name,gr_workinstructions,gr_assignedon,gr_jobcardstatus,gr_emailsenton,gr_submittedon,gr_closedon,_gr_job_value',
         '$expand=gr_Mechanic($select=gr_mechanicid,gr_name,gr_phone,gr_email)',
+        `$filter=statecode eq 0 and (gr_jobcardstatus ne ${JOB_CARD_STATUSES.CLOSED} or gr_jobcardstatus eq null)`,
         '$orderby=gr_assignedon desc',
     ].join('&')
-    return fetchAllDataversePages<JobAssignment>(`${API_URL}/gr_jobassignments?${query}`, {
+    const assignments = await fetchAllDataversePages<JobAssignment>(`${API_URL}/gr_jobassignments?${query}`, {
         cache: 'no-store',
         headers: headers(token),
     }, (response) => ensureSuccess(response, 'Failed to load technician assignments'))
+    return assignments.filter((assignment) => assignment.gr_jobcardstatus !== JOB_CARD_STATUSES.CLOSED)
 }
 
 export async function fetchJobAssignmentsForJob(
@@ -49,7 +51,7 @@ export async function fetchJobAssignmentsForJob(
     const url = new URL(`${API_URL}/gr_jobassignments`)
     url.searchParams.set('$select', 'gr_jobassignmentid,gr_name,gr_workinstructions,gr_assignedon,gr_jobcardstatus,gr_emailsenton,gr_submittedon,gr_closedon,_gr_job_value')
     url.searchParams.set('$expand', 'gr_Mechanic($select=gr_mechanicid,gr_name,gr_phone,gr_email)')
-    url.searchParams.set('$filter', `_gr_job_value eq ${jobId}`)
+    url.searchParams.set('$filter', `_gr_job_value eq ${jobId} and statecode eq 0 and (gr_jobcardstatus ne ${JOB_CARD_STATUSES.CLOSED} or gr_jobcardstatus eq null)`)
     url.searchParams.set('$orderby', 'gr_assignedon desc')
     url.searchParams.set('$top', '51')
     const response = await fetch(url.toString(), {
@@ -63,7 +65,7 @@ export async function fetchJobAssignmentsForJob(
     if (assignments.length > 50 || data['@odata.nextLink']) {
         throw new Error('This Job has more than 50 technician assignments and cannot be displayed safely.')
     }
-    return assignments
+    return assignments.filter((assignment) => assignment.gr_jobcardstatus !== JOB_CARD_STATUSES.CLOSED)
 }
 
 export async function createJobAssignment(
@@ -106,6 +108,10 @@ export async function updateJobAssignmentStatus(
         body: JSON.stringify(fields),
     })
     await ensureSuccess(response, 'Failed to update assignment status')
+}
+
+export async function withdrawJobAssignment(token: string, assignmentId: string): Promise<void> {
+    await updateJobAssignmentStatus(token, assignmentId, JOB_CARD_STATUSES.CLOSED)
 }
 
 export async function deleteJobAssignment(token: string, assignmentId: string): Promise<void> {

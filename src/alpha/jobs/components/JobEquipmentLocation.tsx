@@ -33,13 +33,14 @@ export default function JobEquipmentLocation({ equipment, onLocationChange, onPe
                 customers={location.customer ? [location.customer] : []} onSearchCustomers={location.search}
                 onQueryChange={location.setQuery} onClearSelection={() => location.chooseCustomer()}
                 onSelect={location.chooseCustomer}
+                createPresentation="drawer"
                 onCreateOpenChange={setCreateFormOpen}
                 createDescription="Create a Customer and its first Site. They are saved immediately; the machine moves only when you select Save equipment location."
                 onCreateCustomerAndSite={location.canCreateDestination ? location.createDestination : undefined} />
-            <JobSiteContactFields customerId={location.customer?.gr_customerid ?? ''} siteId={location.siteId}
+            {!createFormOpen && <JobSiteContactFields customerId={location.customer?.gr_customerid ?? ''} siteId={location.siteId}
                 sites={location.sites} siteLoadStatus={location.siteStatus} onRetrySites={location.retrySites}
                 onAddSite={location.canCreateDestination && !createFormOpen ? () => setSiteFormOpen(true) : undefined}
-                onSiteChange={location.setSiteId} showContact={false} contactId="" contacts={[]} onContactChange={() => undefined} /></>}
+                onSiteChange={location.setSiteId} showContact={false} contactId="" contacts={[]} onContactChange={() => undefined} />}</>}
             {siteFormOpen && location.customer && <JobSiteCreatePanel customerName={location.customer.gr_name}
                 description="The Site is saved immediately. Select Save equipment location afterwards to move the machine."
                 onCancel={() => setSiteFormOpen(false)}

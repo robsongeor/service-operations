@@ -83,7 +83,40 @@ public static class RestrictedAccessTests
                 var target=Row("gr_site"); target["gr_name"]="New Site"; target["gr_customer"]=new EntityReference("gr_customer",Id); target["gr_siteid"]=OtherId;
                 Denied(() => RestrictedWritePolicy.Validate(r,"Create",target,null,Id));
             });
-            foreach (string field in new[] { "gr_mechanic", "gr_status", "gr_jobtype", "gr_jobnumber", "gr_coordinatormanaged", "gr_techniciansubmissionstory" })
+            Test(r+" assigns an active technician", () => {
+                var before=Row("gr_job"); var target=Row("gr_job"); target["gr_mechanic"]=new EntityReference("gr_mechanic",OtherId);
+                var mechanic=new Entity("gr_mechanic",OtherId); mechanic["statecode"]=new OptionSetValue(0); mechanic["gr_jobassignmentenabled"]=true;
+                RestrictedWritePolicy.ValidateJobAssignment(target,before,mechanic); RestrictedWritePolicy.Validate(r,"Update",target,before);
+            });
+            Test(r+" assigns an active technician with validated Dataverse update metadata", () => {
+                var before=Row("gr_job"); var target=Row("gr_job"); target["gr_mechanic"]=new EntityReference("gr_mechanic",OtherId);
+                target["gr_jobid"]=Id; target["modifiedby"]=new EntityReference("systemuser",Id);
+                target["modifiedon"]=DateTime.UtcNow; target["modifiedonbehalfby"]=null;
+                var mechanic=new Entity("gr_mechanic",OtherId); mechanic["statecode"]=new OptionSetValue(0); mechanic["gr_jobassignmentenabled"]=true;
+                RestrictedWritePolicy.ValidateJobAssignment(target,before,mechanic); RestrictedWritePolicy.Validate(r,"Update",target,before,Id);
+            });
+            Test(r+" rejects Job update metadata for another user", () => {
+                var target=Row("gr_job"); target["gr_mechanic"]=new EntityReference("gr_mechanic",OtherId);
+                target["modifiedby"]=new EntityReference("systemuser",OtherId);
+                Denied(() => RestrictedWritePolicy.Validate(r,"Update",target,Row("gr_job"),Id));
+            });
+            Test(r+" rejects an inactive technician", () => {
+                var before=Row("gr_job"); var target=Row("gr_job"); target["gr_mechanic"]=new EntityReference("gr_mechanic",OtherId);
+                var mechanic=new Entity("gr_mechanic",OtherId); mechanic["statecode"]=new OptionSetValue(1); mechanic["gr_jobassignmentenabled"]=true;
+                Denied(() => RestrictedWritePolicy.ValidateJobAssignment(target,before,mechanic));
+            });
+            Test(r+" rejects a technician disabled for Job assignment", () => {
+                var before=Row("gr_job"); var target=Row("gr_job"); target["gr_mechanic"]=new EntityReference("gr_mechanic",OtherId);
+                var mechanic=new Entity("gr_mechanic",OtherId); mechanic["statecode"]=new OptionSetValue(0); mechanic["gr_jobassignmentenabled"]=false;
+                Denied(() => RestrictedWritePolicy.ValidateJobAssignment(target,before,mechanic));
+            });
+            Test(r+" rejects simultaneous technician and other supplier", () => {
+                var before=Row("gr_job"); before["gr_externalsupplierdetails"]="Supplier";
+                var target=Row("gr_job"); target["gr_mechanic"]=new EntityReference("gr_mechanic",OtherId);
+                var mechanic=new Entity("gr_mechanic",OtherId); mechanic["statecode"]=new OptionSetValue(0); mechanic["gr_jobassignmentenabled"]=true;
+                Denied(() => RestrictedWritePolicy.ValidateJobAssignment(target,before,mechanic));
+            });
+            foreach (string field in new[] { "gr_status", "gr_jobtype", "gr_jobnumber", "gr_coordinatormanaged", "gr_techniciansubmissionstory" })
             {
                 string f=field; Test(r+" rejects Job field "+f, () => Denied(() => Change(r,"gr_job",f,"tampered")));
             }

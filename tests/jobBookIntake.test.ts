@@ -406,6 +406,27 @@ test('shared Job Book relationship dropdowns close when focus moves outside them
     assert.match(coordination, /exclusive-dropdown-open/)
 })
 
+test('new Customer and Site creation is a focused modal and hides stale dependent fields', () => {
+    const screen = readFileSync(new URL('../src/alpha/job-book/JobBookPrototypeScreen.tsx', import.meta.url), 'utf8')
+    const picker = readFileSync(new URL('../src/alpha/shared/customer-relationship/CustomerRelationshipPicker.tsx', import.meta.url), 'utf8')
+    const pickerStyles = readFileSync(new URL('../src/alpha/shared/customer-relationship/CustomerRelationshipPicker.css', import.meta.url), 'utf8')
+    const relationshipFields = readFileSync(new URL('../src/alpha/jobs/components/JobRelationshipFields.tsx', import.meta.url), 'utf8')
+    const equipmentLocation = readFileSync(new URL('../src/alpha/jobs/components/JobEquipmentLocation.tsx', import.meta.url), 'utf8')
+
+    assert.match(picker, /createPortal\(/)
+    assert.match(picker, /role="dialog" aria-modal="true"/)
+    assert.match(picker, /event\.key === 'Escape'/)
+    assert.match(picker, /event\.key !== 'Tab'/)
+    assert.match(pickerStyles, /customer-relationship-create-backdrop[^{]*\{[^}]*backdrop-filter: blur\(4px\)/)
+    assert.match(screen, /onCreateOpenChange=\{\(open\) => \{[\s\S]*setIntakeCustomerCreateOpen\(open\)/)
+    assert.match(screen, /createPresentation="drawer"/)
+    assert.match(screen, /!intakeCustomerCreateOpen && <JobSiteContactFields/)
+    assert.match(relationshipFields, /createPresentation="drawer"/)
+    assert.match(relationshipFields, /!customerCreateOpen && <JobSiteContactFields/)
+    assert.match(equipmentLocation, /createPresentation="drawer"/)
+    assert.match(equipmentLocation, /!createFormOpen && <JobSiteContactFields/)
+})
+
 test('Equipment Change opens a focused replacement search without clearing selected relationships', () => {
     const field = readFileSync(new URL('../src/alpha/jobs/components/JobEquipmentField.tsx', import.meta.url), 'utf8')
     const change = field.slice(field.indexOf('const changeEquipment ='), field.indexOf('const select ='))
@@ -463,6 +484,7 @@ test('Job Book rows use bounded Dataverse pages, server search and infinite scro
     assert.doesNotMatch(api, /while \(nextUrl\)/)
     assert.match(screen, /new IntersectionObserver/)
     assert.match(screen, /infiniteScrollSentinelRef/)
+    assert.match(screen, /root: gridScrollRef\.current/)
     assert.match(screen, /fetchRecentJobBookRows\(token, selectedJobBook, recentNextLink\)/)
     assert.match(screen, /fetchJobBookIntakeRows\(token, selectedJobBook, intakeNextLink\)/)
     assert.match(screen, /fetchJobBookSearchBatch/)
@@ -577,4 +599,12 @@ test('Job Book keeps status in the page header without a duplicated workspace ti
 test('Job Book create drawer does not double-divide the Scheduling section', () => {
     const styles = readFileSync('src/alpha/job-book/JobBookPrototypeScreen.css', 'utf8')
     assert.match(styles, /\.job-book-intake-section\s*>\s*\.job-schedule-section\s*\{[^}]*border-top:\s*0;/s)
+})
+
+test('Job Book grid keeps horizontal overflow reachable within the viewport', () => {
+    const styles = readFileSync(new URL('../src/alpha/job-book/JobBookPrototypeScreen.css', import.meta.url), 'utf8')
+    const gridWrap = styles.slice(styles.indexOf('.job-book-grid-wrap {'), styles.indexOf('.job-book-page-loader {'))
+    assert.match(gridWrap, /max-height: max\(280px, calc\(100dvh - 204px\)\)/)
+    assert.match(gridWrap, /overflow: auto/)
+    assert.match(gridWrap, /scrollbar-gutter: stable/)
 })

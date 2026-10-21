@@ -934,9 +934,10 @@
     width: 100%;
     min-width: 0;
     max-width: 100%;
-    overflow-x: auto;
-    overflow-y: visible;
+    max-height: max(280px, calc(100dvh - 204px));
+    overflow: auto;
     overscroll-behavior-x: contain;
+    scrollbar-gutter: stable;
     border: 0;
     border-top: 1px solid #dfe4e1;
     border-radius: 0 0 14px 14px;
@@ -946,11 +947,11 @@
 
 .job-book-page-loader {
     display: flex;
-    min-height: 56px;
+    min-height: 36px;
     align-items: center;
     justify-content: center;
     gap: 12px;
-    padding: 12px 18px 18px;
+    padding: 6px 18px;
     color: #66736e;
     font-size: .75rem;
 }

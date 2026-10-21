@@ -137,7 +137,7 @@ function applyCustomerSelection(row: JobBookRow, customerId: string, customer: s
     return clearEquipmentContext(row, customerId, customer)
 }
 
-function CustomerPicker({ id, value, customerName, required, error, onSearchCustomers, onChange, onCreateCustomerAndSite }: {
+function CustomerPicker({ id, value, customerName, required, error, onSearchCustomers, onChange, onCreateCustomerAndSite, onCreateOpenChange }: {
     id: string
     required?: boolean
     error?: string
@@ -146,6 +146,7 @@ function CustomerPicker({ id, value, customerName, required, error, onSearchCust
     onSearchCustomers: (query: string, signal?: AbortSignal) => Promise<Customer[]>
     onChange: (customerId: string, customerName: string) => void
     onCreateCustomerAndSite?: (input: { customerName: string; siteName: string; address: string }) => Promise<void>
+    onCreateOpenChange?: (open: boolean) => void
 }) {
     // Keep typing local; a newly selected Equipment/entry supplies its exact Customer immediately.
     const [input, setInput] = useState({ customerId: value, customerName, text: customerName })
@@ -166,6 +167,8 @@ function CustomerPicker({ id, value, customerName, required, error, onSearchCust
             onChange(selected.gr_customerid, selected.gr_name)
         }}
         onCreateCustomerAndSite={onCreateCustomerAndSite}
+        onCreateOpenChange={onCreateOpenChange}
+        createPresentation="drawer"
         createDescription={UNIFIED_JOB_RUNTIME ? 'Create a saved Customer and Site. These remain available if the entry is cancelled.' : 'Use this customer and site on the Job Book entry. This does not create master Dataverse records.'}
         createActionLabel="Create customer"
     />
@@ -208,6 +211,7 @@ export default function JobBookPrototypeScreen({
     const [pageLoadError, setPageLoadError] = useState('')
     const pageLoadInProgressRef = useRef(false)
     const infiniteScrollSentinelRef = useRef<HTMLDivElement>(null)
+    const gridScrollRef = useRef<HTMLElement>(null)
     const [draft, setDraft] = useState<JobBookRow>(() => createBlankJobBookRow(0))
     const [equipment, setEquipment] = useState<PrototypeEquipment[]>([])
     const [loading, setLoading] = useState(true)
@@ -216,6 +220,7 @@ export default function JobBookPrototypeScreen({
     const [intakeDrawerOpen, setIntakeDrawerOpen] = useState(false)
     const [editingIntakeRow, setEditingIntakeRow] = useState<JobBookRow | null>(null)
     const [intakeCreatePanel, setIntakeCreatePanel] = useState<'' | 'site' | 'contact'>('')
+    const [intakeCustomerCreateOpen, setIntakeCustomerCreateOpen] = useState(false)
     const [editingEntryLocation, setEditingEntryLocation] = useState(false)
     const [createdEntryLocation, setCreatedEntryLocation] = useState(false)
     const showEntryLocationSummary = jobBookLocationSummaryVisible(draft, Boolean(editingIntakeRow) || createdEntryLocation, editingEntryLocation)
@@ -648,7 +653,7 @@ export default function JobBookPrototypeScreen({
         if (!sentinel || !hasMoreRows || filtersActive) return
         const observer = new IntersectionObserver((entries) => {
             if (entries.some((entry) => entry.isIntersecting)) void loadMoreRows()
-        }, { rootMargin: '500px 0px' })
+        }, { root: gridScrollRef.current, rootMargin: '500px 0px' })
         observer.observe(sentinel)
         return () => observer.disconnect()
     }, [filtersActive, hasMoreRows, loadMoreRows])
@@ -1000,7 +1005,7 @@ export default function JobBookPrototypeScreen({
             </section>
         </details>
 
-        <section className="job-book-grid-wrap" aria-label={`${selectedJobBook.label} Job Book`} aria-busy={searchingRows}>
+        <section ref={gridScrollRef} className="job-book-grid-wrap" aria-label={`${selectedJobBook.label} Job Book`} aria-busy={searchingRows}>
             <table className="job-book-grid">
                 <thead><tr>
                     <th className="job-number-column">Job Number</th><th className="date-column">Date</th><th className="mechanic-column">Mechanic</th>
@@ -1058,24 +1063,39 @@ export default function JobBookPrototypeScreen({
                     </tr>
                 })}</tbody>
             </table>
+            <div ref={infiniteScrollSentinelRef} className="job-book-page-loader" aria-live="polite">
+                {pageLoadError && <span className="job-book-page-error" role="alert">{pageLoadError}</span>}
+                {searchingRows
+                    ? <span>Searching up to 100 matching entries…</span>
+                    : hasMoreRows
+                    ? <button type="button" onClick={() => void loadMoreRows()} disabled={loadingMoreRows}>
+                        {loadingMoreRows ? 'Loading more entries…' : filtersActive ? 'Load more results' : 'Scroll for more entries'}
+                    </button>
+                    : filtersActive && searchCurrent
+                        ? <span>{displayedRows.length ? 'All matching entries loaded' : 'No matching entries found'}</span>
+                        : !loading && allRows.length > 0 && <span>All available entries loaded</span>}
+            </div>
         </section>
         {(rowActions.feedback || rowActions.loadingJobId) && <div className="job-book-action-feedback" role={rowActions.feedback?.error ? 'alert' : 'status'}>
             <span>{rowActions.loadingJobId ? 'Loading the latest Job and assigned technician…' : rowActions.feedback?.message}</span>
             {rowActions.feedback && <button type="button" aria-label="Dismiss action message" onClick={rowActions.dismissFeedback}>×</button>}
         </div>}
-        {canEmailAssignedTechnician && rowActions.emailJob && <JobEmailComposer key={rowActions.emailJob.gr_jobid} job={rowActions.emailJob} assignedRecipientOnly={!canManageJobs} onCancel={rowActions.close} onSend={rowActions.send} />}
-        <div ref={infiniteScrollSentinelRef} className="job-book-page-loader" aria-live="polite">
-            {pageLoadError && <span className="job-book-page-error" role="alert">{pageLoadError}</span>}
-            {searchingRows
-                ? <span>Searching up to 100 matching entries…</span>
-                : hasMoreRows
-                ? <button type="button" onClick={() => void loadMoreRows()} disabled={loadingMoreRows}>
-                    {loadingMoreRows ? 'Loading more entries…' : filtersActive ? 'Load more results' : 'Scroll for more entries'}
-                </button>
-                : filtersActive && searchCurrent
-                    ? <span>{displayedRows.length ? 'All matching entries loaded' : 'No matching entries found'}</span>
-                    : !loading && allRows.length > 0 && <span>All available entries loaded</span>}
-        </div>
+        {canEmailAssignedTechnician && rowActions.emailJob && <JobEmailComposer
+            key={rowActions.emailJob.gr_jobid}
+            job={rowActions.emailJob}
+            mechanics={mechanics}
+            loadAssignments={rowActions.loadAssignments}
+            loadDispatches={rowActions.loadDispatches}
+            previousTechnicians={rowActions.emailPreviousTechnicians}
+            onCreateAssignment={canManageJobs ? rowActions.addAssignment : undefined}
+            onSendAssignment={canManageJobs ? rowActions.sendAssignment : undefined}
+            onDeleteAssignment={canManageJobs ? rowActions.removeAssignment : undefined}
+            onWithdrawAssignment={canManageJobs ? rowActions.withdrawAssignment : undefined}
+            onWithdrawPrimaryTechnician={canManageJobs ? rowActions.withdrawPrimaryTechnician : undefined}
+            assignedRecipientOnly={!canManageJobs}
+            onCancel={rowActions.close}
+            onSend={rowActions.send}
+        />}
         </section>
 
         {voidEntry.row && <JobBookVoidDialog key={voidEntry.row.id} row={voidEntry.row} busy={voidEntry.busy} error={voidEntry.error} needsReload={voidEntry.needsReload} onCancel={voidEntry.close} onSubmit={(reason) => void voidEntry.submit(reason)} onReload={() => void voidEntry.reload()} />}
@@ -1152,6 +1172,10 @@ export default function JobBookPrototypeScreen({
                         setIntakeContacts([])
                         setDraft((current) => applyCustomerSelection(current, customerId, customerName))
                     }}
+                    onCreateOpenChange={(open) => {
+                        setIntakeCustomerCreateOpen(open)
+                        if (open) setIntakeCreatePanel('')
+                    }}
                     onCreateCustomerAndSite={async ({ customerName, siteName, address }) => {
                         if (UNIFIED_JOB_RUNTIME && !editingIntakeRow) {
                             const token = await getAccessToken()
@@ -1180,7 +1204,7 @@ export default function JobBookPrototypeScreen({
                         setCreatedEntryLocation(true)
                         setEditingEntryLocation(false)
                     }} /></div>}
-                <JobSiteContactFields
+                {!intakeCustomerCreateOpen && <JobSiteContactFields
                     showSite={!locationEquipment && !showEntryLocationSummary}
                     locationRequired={requireIntakeLocation}
                     address={draft.address}
@@ -1202,7 +1226,7 @@ export default function JobBookPrototypeScreen({
                     onAddContact={UNIFIED_JOB_RUNTIME && !editingIntakeRow && intakeContactLookupAvailable ? () => setIntakeCreatePanel('contact') : undefined}
                     onRetrySites={() => setIntakeSiteLoadAttempt((current) => current + 1)}
                     onRetryContacts={() => setIntakeContactLoadAttempt((current) => current + 1)}
-                />
+                />}
                 {intakeCreatePanel === 'site' && <JobSiteCreatePanel key={draft.customerId}
                     customerName={draft.customer}
                     description="Create and select this Site for the Job Book entry."

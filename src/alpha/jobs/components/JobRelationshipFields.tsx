@@ -88,6 +88,7 @@ export default function JobRelationshipFields({
         filteredSites, filteredContacts, selectCustomer, selectSite,
     } = editor
     const [panel, setPanel] = useState<Panel>('')
+    const [customerCreateOpen, setCustomerCreateOpen] = useState(false)
     const [editingLocation, setEditingLocation] = useState(false)
     const selectedEquipment = equipmentList.find((item) => item.gr_equipmentid === draft.equipmentId)
     const selectedSite = filteredSites.find((site) => site.gr_siteid === draft.siteId) ?? selectedEquipment?.gr_Site
@@ -318,11 +319,16 @@ export default function JobRelationshipFields({
                     selectCustomer(customerId)
                 }}
                 onCreateCustomerAndSite={correctionsOnly && !allowCorrectionMasterCreation ? undefined : createCustomerAndSite}
+                createPresentation="drawer"
+                onCreateOpenChange={(open) => {
+                    setCustomerCreateOpen(open)
+                    if (open) setPanel('')
+                }}
             />
         </div>)}
 
-        {showRelationshipFields && !showLocationSummary && <JobSiteContactFields
-            showSite={!hasEquipmentLocation}
+        {showRelationshipFields && !customerCreateOpen && <JobSiteContactFields
+            showSite={!hasEquipmentLocation && !showLocationSummary}
             locationRequired={locationRequired}
             siteError={locationErrors?.site}
             addressError={locationErrors?.address}
@@ -345,7 +351,7 @@ export default function JobRelationshipFields({
             onRetrySites={() => setSiteLoadAttempt((current) => current + 1)}
             onRetryContacts={() => setContactLoadAttempt((current) => current + 1)}
         />}
-        {correctionsOnly && !showLocationSummary && !hasEquipmentLocation && draft.siteId && <label className="job-edit-field job-edit-field-wide"><span>Site address</span><input readOnly value={filteredSites.find((site) => site.gr_siteid === draft.siteId)?.gr_address ?? ''} /><small>The address comes from the selected Site. Correcting this Job does not edit the shared Site record or move Equipment.</small></label>}
+        {correctionsOnly && !customerCreateOpen && !showLocationSummary && !hasEquipmentLocation && draft.siteId && <label className="job-edit-field job-edit-field-wide"><span>Site address</span><input readOnly value={filteredSites.find((site) => site.gr_siteid === draft.siteId)?.gr_address ?? ''} /><small>The address comes from the selected Site. Correcting this Job does not edit the shared Site record or move Equipment.</small></label>}
         {panel === 'site' && <JobSiteCreatePanel key={draft.customerId} customerName={customerSearch}
             description="Create and select this Site for the job." onCreate={createSite} onCancel={() => setPanel('')} />}
 

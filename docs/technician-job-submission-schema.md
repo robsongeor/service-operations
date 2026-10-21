@@ -1,11 +1,16 @@
-# Technician Job Card Submission
+# Legacy Dataverse Technician Job Card Submission
 
-Phase 1 exposes `/portal/job/:token` without exposing the authenticated management application.
-An authenticated office request generates a 32-byte random token. Dataverse stores only its
-SHA-256 hash. Anonymous validation and submission run through the server API using a dedicated
-Dataverse application user with minimum privileges on the Job table.
+> **Retained historical schema — not the current submission path.** New `/portal/job/:token`
+> requests store token hashes and immutable evidence in private Azure Table/Blob storage. The
+> anonymous technician lookup and submission path does not call Dataverse. Read
+> [Technician Job Card Submission Architecture](architecture/technician-job-submission.md) first.
 
-## Job columns
+This page records the earlier Dataverse implementation so historical records, migrations, reader
+permissions and rollback behavior remain understandable. Do not provision these columns/tables or
+grant the old public-portal write role for new Azure Job Card functionality unless a separately
+reviewed legacy migration explicitly requires it.
+
+## Historical Job columns
 
 | Display name | Logical name | Type |
 | --- | --- | --- |
@@ -21,7 +26,7 @@ The existing `gr_jobcardstatus` and `gr_jobcardsubmittedon` fields record the Jo
 transition to `Submitted`. Technician submission does not change `gr_status`,
 `gr_completeddate`, `gr_hourmeter`, Equipment, maintenance plans, or assignments.
 
-## Server configuration
+## Historical server configuration
 
 The anonymous endpoint requires server-only `DATAVERSE_URL`, `DATAVERSE_TENANT_ID`,
 `DATAVERSE_CLIENT_ID`, and `DATAVERSE_CLIENT_SECRET`. Never expose them through `VITE_`
@@ -40,7 +45,7 @@ near-simultaneous repeat submissions cannot both succeed.
 Future portal phases may add separate evidence, checklist, inspection, signature, and
 customer sign-off records without widening this minimal public Job response.
 
-## Expanded Job Card submission
+## Legacy expanded Job Card submission
 
 The expanded submission keeps the original Job fields for compatibility and adds immutable
 technician evidence. The following optional Job columns hold conditional submission
@@ -86,7 +91,7 @@ The schema was provisioned and published on 25 July 2026. The idempotent
 `scripts/setup-job-card-submission-expansion-schema.ps1` preflights exact table, column,
 relationship, type, required-level, length, behaviour, range, and default metadata.
 
-## Generic Job Photos
+## Legacy generic Job Photos
 
 Technician photos use the generic User-owned `Job Photo` (`gr_jobphoto`) table so future
 office, WOF, Quote, delivery-inspection, and customer upload features can reuse the same
@@ -123,7 +128,7 @@ Organization Create, Read, Write, and Append on all three child tables and Job A
 which Dataverse requires to create lookup-related children. Delete, Assign, and Share are
 not granted.
 
-## Authenticated Job Card readers
+## Authenticated readers for historical evidence
 
 The Service Coordination Job drawer reads technician evidence directly from Dataverse. The
 `Service Operations` coordinator role and `Service Operations - Office Admin` role therefore need

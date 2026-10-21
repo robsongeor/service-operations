@@ -4,8 +4,32 @@
     overflow-y: auto;
 }
 
+.edit-form-dialog.job-email-composer.has-roster {
+    width: min(1180px, calc(100vw - 32px));
+}
+
 .job-email-composer-fields {
     gap: 14px;
+}
+
+.job-email-composer-fields.has-roster {
+    grid-template-columns: minmax(0, 1fr) 330px;
+    align-items: start;
+    gap: 0;
+    overflow: hidden;
+    border: 1px solid #d5e0db;
+    border-radius: 11px;
+    background: #fff;
+}
+
+.job-email-composer-main {
+    display: grid;
+    min-width: 0;
+    gap: 14px;
+}
+
+.job-email-composer-fields.has-roster .job-email-composer-main {
+    padding: 16px;
 }
 
 .job-email-composer-fields > label {
@@ -207,9 +231,248 @@
     font-size: 0.65rem;
 }
 
+.job-email-composer-success {
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: 7px;
+    background: #e3f3ec;
+    color: #23634f;
+    font-size: .72rem;
+    font-weight: 700;
+}
+
+.job-email-roster {
+    display: grid;
+    min-width: 0;
+    align-content: start;
+    align-self: stretch;
+    border-left: 1px solid #d5e0db;
+    background: #f5f8f7;
+}
+
+.job-email-roster > header {
+    display: grid;
+    gap: 4px;
+    padding: 16px;
+    border-bottom: 1px solid #d9e2de;
+}
+
+.job-email-roster > header div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.job-email-roster > header span {
+    color: #263a33;
+    font-size: .78rem;
+    font-weight: 800;
+}
+
+.job-email-roster > header strong {
+    min-width: 22px;
+    padding: 3px 6px;
+    border-radius: 999px;
+    background: #dcebe6;
+    color: #176f66;
+    font-size: .64rem;
+    text-align: center;
+}
+
+.job-email-roster > header small,
+.job-email-roster-state small {
+    color: #6b7872;
+    font-size: .64rem;
+}
+
+.job-email-roster-list {
+    display: grid;
+    max-height: min(590px, calc(100vh - 250px));
+    overflow-y: auto;
+}
+
+.job-email-roster-row {
+    display: grid;
+    gap: 8px;
+    padding: 13px 14px;
+    border-bottom: 1px solid #dfe6e2;
+    border-left: 3px solid transparent;
+    background: #fff;
+}
+
+.job-email-roster-row.is-selected {
+    border-left-color: #167b70;
+    background: #edf7f4;
+}
+
+.job-email-roster-person {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 9px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.job-email-roster-person:disabled {
+    cursor: default;
+    opacity: 1;
+}
+
+.job-email-roster-person.is-read-only {
+    cursor: default;
+}
+
+.job-email-roster-avatar {
+    display: grid;
+    width: 30px;
+    height: 30px;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 50%;
+    background: #dbeae5;
+    color: #176f66;
+    font-size: .7rem;
+    font-weight: 800;
+}
+
+.job-email-roster-person > span:last-child,
+.job-email-roster-state {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+}
+
+.job-email-roster-person strong,
+.job-email-roster-state strong {
+    overflow: hidden;
+    color: #263a33;
+    font-size: .72rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.job-email-roster-person small {
+    color: #6b7872;
+    font-size: .61rem;
+}
+
+.job-email-roster-actions,
+.job-email-roster-withdraw > div,
+.job-email-roster-add > div {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.job-email-roster-actions button,
+.job-email-roster-withdraw button,
+.job-email-roster-add button,
+.job-email-roster-add-button,
+.job-email-roster-message button {
+    min-height: 30px;
+    padding: 0 9px;
+    border: 1px solid #bdcbc5;
+    border-radius: 7px;
+    background: #fff;
+    color: #33443d;
+    font-size: .64rem;
+    font-weight: 750;
+    cursor: pointer;
+}
+
+.job-email-roster-actions button.danger,
+.job-email-roster-withdraw button.danger {
+    border-color: #d9a29a;
+    color: #9a4037;
+}
+
+.job-email-roster-add button.primary {
+    border-color: #176f66;
+    background: #176f66;
+    color: #fff;
+}
+
+.job-email-roster-withdraw,
+.job-email-roster-add {
+    display: grid;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid #e3c2bb;
+    border-radius: 8px;
+    background: #fff9f7;
+}
+
+.job-email-roster-withdraw label,
+.job-email-roster-add label {
+    display: grid;
+    gap: 5px;
+    color: #52615a;
+    font-size: .65rem;
+    font-weight: 750;
+}
+
+.job-email-roster-withdraw textarea,
+.job-email-roster-add select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 9px;
+    border: 1px solid #bdcbc5;
+    border-radius: 7px;
+    background: #fff;
+    color: #263a33;
+    font: inherit;
+}
+
+.job-email-roster-add,
+.job-email-roster-add-button,
+.job-email-roster-message {
+    margin: 12px;
+}
+
+.job-email-roster-add-button {
+    min-height: 36px;
+    border-style: dashed;
+    color: #176f66;
+}
+
+.job-email-roster-message {
+    color: #66736d;
+    font-size: .7rem;
+}
+
+.job-email-roster-message.error {
+    color: #9b4141;
+}
+
+.job-email-roster-message p {
+    margin: 0 0 8px;
+}
+
 @media (max-width: 600px) {
     .job-email-composer-intro {
         align-items: flex-start;
         flex-direction: column;
+    }
+}
+
+@media (max-width: 900px) {
+    .job-email-composer-fields.has-roster {
+        grid-template-columns: 1fr;
+    }
+
+    .job-email-roster {
+        border-top: 1px solid #d5e0db;
+        border-left: 0;
+    }
+
+    .job-email-roster-list {
+        max-height: 280px;
     }
 }

@@ -1,16 +1,22 @@
 # Restricted access guard
 
-**Live in production from 9 October 2026; current assembly `1.0.23.0`.** The signed assembly and 14
-synchronous PreOperation restricted-access steps are enabled with exact secure
-Dataverse role IDs, required `Before` images and no filtering attributes. The 15
-legacy number-invariant steps remain registered but disabled while V1/manual
-numbering is still in use. Do not assign the obsolete Job Book Only role to the
-new Admin cohorts.
+**Live in production from 9 October 2026; current assembly `1.0.25.0`.** The 21 October Job-update-
+metadata correction has SHA-256 `2285b69f253a85bdac8f409786c5d7d8ccf47e767c4fdf76e823016ec146ff7c`.
+The signed assembly and 14 synchronous PreOperation restricted-access steps are enabled with exact
+secure Dataverse role IDs, required `Before` images and no filtering attributes. The post-deployment
+read-only check also found all 15 number-invariant steps enabled; this pre-existing rollout state was
+not changed by the assembly-only update and must be reconciled separately against the V1 overlap
+record. Do not assign the obsolete Job Book Only role to the new Admin cohorts.
 
-## Known policy gap — source audit 10 October 2026
+## Policy alignment status
 
-The current client exposes mechanic selection to all admitted Job Book roles and sends WOF/REGO
-fields during restricted Equipment detail saves. The allowlists below reject those fields.
+The 21 October source updates align the restricted Job correction allowlist with the approved
+mechanic/supplier selector and safely validate Dataverse-owned update metadata. The guard revalidates
+the exact referenced Staff record as active and assignment-enabled, rejects a Job that would retain
+both a technician and another supplier, and rejects forged platform metadata. The assembly-only
+update was deployed on 21 October; named-user verification remains required.
+The client still sends WOF/REGO
+fields during restricted Equipment detail saves, while the allowlists below reject those fields.
 Confirmed Office dispatch also performs a separate status PATCH that the normal guard rejects.
 These are rollout blockers, not evidence the UI is correctly enforced end-to-end.
 Registration's special child rule also allocates when a mechanic/supplier is selected, before delivery.

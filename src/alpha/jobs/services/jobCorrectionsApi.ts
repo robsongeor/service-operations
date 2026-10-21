@@ -37,6 +37,16 @@ export class JobCorrectionRefreshError extends Error {
     }
 }
 
+async function correctionSaveError(response: Response) {
+    if (response.status === 403) return 'You do not have permission to correct this Job. No changes were saved.'
+    const body = await response.json().catch(() => null) as { error?: { message?: unknown } } | null
+    const message = typeof body?.error?.message === 'string' ? body.error.message : ''
+    if (response.status === 400 && /outside (?:this role's|the) permitted|not permitted|access policy/i.test(message)) {
+        return 'This Job change is not permitted by the current access policy. No changes were saved.'
+    }
+    return 'Job corrections could not be saved. Reload the Job before trying again.'
+}
+
 function requiredId(value: string) {
     if (!GUID.test(value)) throw new Error('Select a valid saved record before saving corrections.')
     return value.toLowerCase()
@@ -120,7 +130,7 @@ export async function saveJobCorrections(token: string, original: CorrectableJob
         body: JSON.stringify(patch),
     })
     if (response.status === 412) throw new JobCorrectionConflictError()
-    if (!response.ok) throw new Error(response.status === 403 ? 'You do not have permission to correct this Job. No changes were saved.' : 'Job corrections could not be saved. Reload the Job before trying again.')
+    if (!response.ok) throw new Error(await correctionSaveError(response))
     try {
         return await fetchJobForCorrection(token, original.gr_jobid)
     } catch {

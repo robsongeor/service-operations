@@ -25,7 +25,9 @@ test('coordination summary projects not-sent, awaiting, partial, ready, expired 
 })
 
 test('assignment changes and all-withdrawn lifecycles never claim ready', () => {
-    assert.equal(summarizeJob(jobId, { ...job, _gr_mechanic_value: id(9) }, [], [card()]).state, 'conflict')
+    const stacked = summarizeJob(jobId, { ...job, _gr_mechanic_value: id(9) }, [], [card()])
+    assert.equal(stacked.state, 'awaiting')
+    assert.equal(stacked.expectedTechnicianCount, 2)
     const withdrawn = summarizeJob(jobId, job, [], [card({ status: 'withdrawn', withdrawnOn: '2026-10-03' })])
     assert.equal(withdrawn.state, 'not-sent')
     assert.equal(withdrawn.officeAttentionRecommended, true)

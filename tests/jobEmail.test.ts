@@ -9,7 +9,7 @@ import {
     buildTechnicianEmailSubject,
 } from '../src/alpha/jobs/utils/technicianMailto.ts'
 import type { Job } from '../src/alpha/jobs/types/job.types.ts'
-import { assertJobEmailSendingAllowed, buildTechnicianJobCardHtml, jobEmailSendingAllowedForHostname, onlineJobCardPilotEnabled } from '../src/alpha/jobs/services/jobEmail.ts'
+import { assertJobEmailSendingAllowed, buildAssignmentJobEmail, buildTechnicianJobCardHtml, jobEmailSendingAllowedForHostname, onlineJobCardPilotEnabled } from '../src/alpha/jobs/services/jobEmail.ts'
 
 const job = {
     gr_jobid: '00000000-0000-4000-8000-000000000001',
@@ -133,6 +133,29 @@ test('technician email rejects comments beyond the bounded message limit', () =>
     )
 })
 
+test('additional technician email uses the selected assignment and shared composer draft', () => {
+    const email = buildAssignmentJobEmail(job, {
+        gr_jobassignmentid: 'assignment-1',
+        gr_name: 'Rick additional assignment',
+        gr_Mechanic: {
+            gr_mechanicid: 'mechanic-2',
+            gr_name: 'Rick Example',
+            gr_email: 'rick@example.test',
+            gr_phone: '',
+        },
+    }, 'https://service.example.test/portal/job/rick-token', {
+        recipientEmail: 'rick@example.test',
+        subject: 'Urgent return visit',
+        technicianComments: 'Parts are ready at the office.',
+    })
+    assert.equal(email.recipientName, 'Rick Example')
+    assert.equal(email.recipientEmail, 'rick@example.test')
+    assert.equal(email.subject, 'Urgent return visit')
+    assert.match(email.body, /Hi Rick/)
+    assert.match(email.body, /Parts are ready at the office/)
+    assert.match(email.body, /rick-token/)
+})
+
 test('Jobs table uses the in-app composer and pilot-gated link generation', () => {
     const table = readFileSync(new URL('../src/alpha/jobs/components/JobsTable.tsx', import.meta.url), 'utf8')
     const composer = readFileSync(new URL('../src/alpha/jobs/components/JobEmailComposer.tsx', import.meta.url), 'utf8')
@@ -146,6 +169,30 @@ test('Jobs table uses the in-app composer and pilot-gated link generation', () =
     assert.match(composer, /Comments for technician/)
     assert.match(composer, /onlineJobCardPilotEnabled/)
     assert.match(composer, /Contact email/)
+    assert.match(composer, /Assigned technicians/)
+    assert.match(composer, /First technician/)
+    assert.match(composer, /loadAssignments/)
+    assert.match(composer, /loadDispatches/)
+    assert.match(composer, /Previously emailed/)
+    assert.match(composer, /Previously assigned/)
+    assert.match(composer, /onWithdrawPrimaryTechnician/)
+    assert.match(composer, /primaryWithdrawable/)
+    assert.match(composer, /await history\.withdraw[\s\S]*await onWithdrawPrimaryTechnician\(\)[\s\S]*setPrimaryRemoved\(true\)/)
+    assert.match(composer, /request\.assignmentId[\s\S]*await onWithdrawAssignment\(request\.assignmentId\)[\s\S]*reloadRoster\(\)/)
+    assert.match(composer, /withdrawn from this Job\. Their Job Card is no longer required/)
+    assert.match(composer, /historicalRequests/)
+    assert.match(composer, /onSendAssignment/)
+    assert.match(composer, /showRoster = rosterEnabled/)
+    assert.match(composer, /No technicians assigned yet\./)
+    assert.match(composer, /\(primaryMechanic \? 1 : 0\) \+ assignments\.length/)
+    assert.match(composer, /history\.data\?\.truncated \? 'Technician history is incomplete/)
+    assert.match(composer, /setSuccess\(`Job Card email queued for/)
+    assert.match(composer, /reloadRoster\(\)/)
+    assert.match(composer, /!request && !assignment\.gr_emailsenton && !assignment\.gr_submittedon/)
+    assert.match(composer, /Withdrawn · No card required/)
+    assert.match(composer, /Enter why this technician is no longer attending/)
+    assert.match(composerStyles, /\.job-email-composer-fields\.has-roster\s*\{[\s\S]*grid-template-columns: minmax\(0, 1fr\) 330px/)
+    assert.match(composerStyles, /\.job-email-roster\s*\{[\s\S]*border-left: 1px solid/)
     assert.match(composerStyles, /\.edit-form-dialog\.job-email-composer\s*\{[\s\S]*width: min\(840px, calc\(100vw - 32px\)\)/)
     assert.match(hook, /onlineJobCardPilotEnabled/)
     assert.match(hook, /usePrimaryJobEmail\(\{ getAccessToken, onDelivered: fetchJobs \}\)/)

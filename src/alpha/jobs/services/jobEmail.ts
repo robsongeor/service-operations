@@ -113,16 +113,16 @@ export function buildPrimaryJobEmail(job: Job, submissionUrl: string, draft?: Jo
     }
 }
 
-export function buildAssignmentJobEmail(job: Job, assignment: JobAssignment, submissionUrl: string): JobEmail {
+export function buildAssignmentJobEmail(job: Job, assignment: JobAssignment, submissionUrl: string, draft?: JobEmailDraft): JobEmail {
     const mechanic = assignment.gr_Mechanic
     if (!mechanic?.gr_email) {
         throw new Error('This technician needs an email address before the job can be sent.')
     }
 
     return {
-        recipientEmail: mechanic.gr_email,
+        recipientEmail: draft?.recipientEmail.trim() || mechanic.gr_email,
         recipientName: mechanic.gr_name,
-        subject: buildTechnicianEmailSubject(job),
-        body: buildTechnicianJobCardHtml(job, mechanic.gr_name, submissionUrl),
+        subject: draft?.subject.trim() || buildTechnicianEmailSubject(job),
+        body: buildTechnicianJobCardHtml(job, mechanic.gr_name, submissionUrl, draft?.technicianComments),
     }
 }

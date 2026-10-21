@@ -33,12 +33,13 @@ import {
     deleteJobAssignment as deleteJobAssignmentApi,
     fetchJobAssignmentsForJob as fetchJobAssignmentsForJobApi,
     updateJobAssignmentStatus as updateJobAssignmentStatusApi,
+    withdrawJobAssignment as withdrawJobAssignmentApi,
 } from '../services/jobAssignmentsApi'
 import type { JobAssignment } from '../types/jobAssignment.types'
 import { fetchMechanics as fetchStaffDirectory } from '../../mechanics/services/mechanicsApi'
 import { subscribeToStaffChanges } from '../../mechanics/services/staffRealtime'
-import { createEmailDispatch, waitForEmailDispatch } from '../services/emailDispatchApi'
-import { assertJobEmailSendingAllowed, buildAssignmentJobEmail, buildPrimaryJobEmail, onlineJobCardPilotEnabled } from '../services/jobEmail'
+import { createEmailDispatch, fetchJobEmailDispatches, waitForEmailDispatch } from '../services/emailDispatchApi'
+import { assertJobEmailSendingAllowed, buildAssignmentJobEmail, buildPrimaryJobEmail, onlineJobCardPilotEnabled, type JobEmailDraft } from '../services/jobEmail'
 import { usePrimaryJobEmail } from './usePrimaryJobEmail'
 import { assertJobNumberUnchanged } from '../domain/jobNumberPolicy'
 import { assertJobHasEmailableJobNumber } from '../services/jobEmailRules'
@@ -392,6 +393,10 @@ export function useJobs(options: UseJobsOptions = {}) {
 
     const loadJobAssignments = useCallback(async (jobId: string, signal?: AbortSignal) => (
         fetchJobAssignmentsForJobApi(await getAccessToken(), jobId, signal)
+    ), [getAccessToken])
+
+    const loadJobEmailDispatches = useCallback(async (jobId: string, signal?: AbortSignal) => (
+        fetchJobEmailDispatches(await getAccessToken(), jobId, signal)
     ), [getAccessToken])
 
     useEffect(() => {
@@ -932,7 +937,7 @@ export function useJobs(options: UseJobsOptions = {}) {
 
     const { queuePrimaryJobEmail, emailDeliveryStates } = usePrimaryJobEmail({ getAccessToken, onDelivered: fetchJobs })
 
-    const sendAssignmentJobEmail = async (job: Job, assignment: JobAssignment) => {
+    const sendAssignmentJobEmail = async (job: Job, assignment: JobAssignment, draft?: JobEmailDraft) => {
         assertJobEmailSendingAllowed(window.location.hostname)
         assertJobHasEmailableJobNumber(job)
         if (!isValidTechnicianEmail(assignment.gr_Mechanic?.gr_email)) {
@@ -948,7 +953,7 @@ export function useJobs(options: UseJobsOptions = {}) {
                 recipientEmail: assignment.gr_Mechanic?.gr_email ?? '',
             })).url
             : ''
-        const email = buildAssignmentJobEmail(job, assignment, submissionUrl)
+        const email = buildAssignmentJobEmail(job, assignment, submissionUrl, draft)
         const dispatchId = await createEmailDispatch(token, {
             jobId: job.gr_jobid,
             assignmentId: assignment.gr_jobassignmentid,
@@ -972,6 +977,11 @@ export function useJobs(options: UseJobsOptions = {}) {
     const deleteJobAssignment = async (assignmentId: string) => {
         const token = await getAccessToken()
         await deleteJobAssignmentApi(token, assignmentId)
+    }
+
+    const withdrawJobAssignment = async (assignmentId: string) => {
+        const token = await getAccessToken()
+        await withdrawJobAssignmentApi(token, assignmentId)
     }
 
     const updateJobCardStatus = async (jobId: string, status: JobCardStatus) => {
@@ -1548,6 +1558,7 @@ export function useJobs(options: UseJobsOptions = {}) {
         prepareJobReferenceData,
         loadJobQuotes,
         loadJobAssignments,
+        loadJobEmailDispatches,
         prepareJobEditorReferenceData,
         searchEquipmentForEditor,
         searchCustomersForEditor,
@@ -1595,6 +1606,7 @@ export function useJobs(options: UseJobsOptions = {}) {
         retryConfirmedDeliveryStatus,
         createJobAssignment,
         updateJobAssignmentStatus,
+        withdrawJobAssignment,
         deleteJobAssignment,
         updateJobFields,
         updateJob,

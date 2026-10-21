@@ -86,7 +86,7 @@ export default function JobsScreen() {
         createJob, updateJob, deleteJob, updateJobStatus, updateJobFields,
         updateJobCardStatus,
         sendPrimaryJobEmail, queuePrimaryJobEmail, emailDeliveryStates, sendAssignmentJobEmail, retryConfirmedDeliveryStatus,
-        createJobAssignment, deleteJobAssignment,
+        createJobAssignment, deleteJobAssignment, withdrawJobAssignment,
         createContactForSite, createEquipment, createSite, createCustomer,
         updateEquipment, setupEquipmentMaintenance, saveEquipmentMaintenanceHistory, deleteEquipment,
         isEquipmentSaving, equipmentSaveError, clearEquipmentSaveError,
@@ -95,7 +95,7 @@ export default function JobsScreen() {
         updateJobOfficeAttention,
         completionRequest, isCompletingJob, completionError, completeStandardJob, completeServiceJob, completeWofJob, cancelJobCompletion,
         jobsCacheStatus, jobsRealtimeStatus,
-        referenceDataStatus, referenceDataError, prepareJobReferenceData, loadJobQuotes, loadJobAssignments,
+        referenceDataStatus, referenceDataError, prepareJobReferenceData, loadJobQuotes, loadJobAssignments, loadJobEmailDispatches,
         searchEquipmentForEditor, searchCustomersForEditor,
         loadCustomerSitesForEditor, loadSiteContactsForEditor, loadEquipmentForEditor,
         loadEquipmentServicePlansForEditor,
@@ -387,6 +387,12 @@ export default function JobsScreen() {
                     }}
                     onJobFieldsChange={updateJobFields}
                     onEmailTechnician={queuePrimaryJobEmail}
+                    loadJobAssignments={loadJobAssignments}
+                    loadJobEmailDispatches={loadJobEmailDispatches}
+                    onCreateAssignment={createJobAssignment}
+                    onEmailAssignment={sendAssignmentJobEmail}
+                    onDeleteAssignment={deleteJobAssignment}
+                    onWithdrawAssignment={withdrawJobAssignment}
                     emailDeliveryStates={emailDeliveryStates}
                     onEditJob={(job) => openJob(job)}
                     onOpenJobCard={(job) => openJob(job, 'jobcard')}

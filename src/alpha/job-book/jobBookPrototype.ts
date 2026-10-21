@@ -58,6 +58,8 @@ export type JobBookRow = {
     date: string
     mechanicId: string
     mechanicName: string
+    originalMechanicId?: string
+    originalMechanicName?: string
     externalSupplierDetails: string
     externalSupplierSelected: boolean
     equipmentId: string

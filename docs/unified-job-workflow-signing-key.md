@@ -1,10 +1,10 @@
 # Unified Job workflow — signing-key custody
 
-Status: primary local key used for the production `1.0.24.0` deployment on 21 October 2026; recovery
+Status: primary local key used for the production `1.0.25.0` deployment on 21 October 2026; recovery
 backup remains required.
 
-V3 source declares `1.0.24.0` for the reviewed Stop-managing Custom API. Its signed package was
-explicitly approved, deployed and verified on 21 October 2026.
+V3 source declares `1.0.25.0`. Its signed package was explicitly approved and deployed on
+21 October 2026.
 
 ## Current custody record
 
@@ -13,10 +13,10 @@ explicitly approved, deployed and verified on 21 October 2026.
 - Access: George's Windows account and `SYSTEM`, Full Control, inheritance disabled.
 - Generation: 2,048-bit Microsoft Strong Cryptographic Provider signature key, created locally with
   `scripts/new-unified-job-workflow-signing-key.ps1`.
-- Assembly identity: `ServiceOperations.UnifiedJobWorkflow`, version `1.0.24.0`, public key token
+- Assembly identity: `ServiceOperations.UnifiedJobWorkflow`, version `1.0.25.0`, public key token
   `0edea2881bb8578c`.
-- Deployed package: `%LOCALAPPDATA%\ServiceOperations\Packages\ServiceOperations.UnifiedJobWorkflow-1.0.24-20261021-v3-managed-r1`.
-- Assembly SHA-256: `e1f173c0426f79d8ae700c13aacb31614b75040006fb44100444c4fb65eb257b`.
+- Deployed package: `%LOCALAPPDATA%\ServiceOperations\Packages\ServiceOperations.UnifiedJobWorkflow-1.0.25-20261021-job-update-metadata-r1`.
+- Assembly SHA-256: `2285b69f253a85bdac8f409786c5d7d8ccf47e767c4fdf76e823016ec146ff7c`.
 - All earlier packages are superseded for the active assembly.
 - Deployment performed: 14 restricted-access and 15 number-invariant steps live; all 29 verified.
 - Open custody gate: nominate a backup owner, create protected recovery storage and prove recovery with
@@ -58,8 +58,7 @@ reviewed Dataverse replacement path.
 
 - requires an existing `.snk` path outside the repository;
 - refuses to overwrite an existing DLL or manifest;
-- compiles the exact reviewed source files (current assembly version `1.0.24.0`, deployed); any
-  future package still requires a new reviewed output directory and explicit deployment approval;
+- compiles the exact five reviewed source files (current local source version `1.0.2.0`, not deployed);
 - requires a non-empty public key token;
 - writes the signed DLL and a companion JSON manifest containing the public token, assembly hash,
   source hashes and plugin type list;

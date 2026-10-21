@@ -387,6 +387,23 @@ test('simultaneous generation creates one active cycle and additional technician
     assert.equal((await invoke({ method: 'GET', headers: {}, query: { token: primary.body.token } })).status, 200)
 })
 
+test('different first technicians retain separate active links while a resend only targets the same technician', async () => {
+    const first = await generate()
+    const otherSnapshot = snapshot({
+        technicianId: '00000000-0000-4000-8000-000000000004',
+        technicianName: 'Second Technician',
+        technicianEmail: 'second@example.com',
+    })
+    const second = await generate({ snapshot: otherSnapshot })
+    assert.equal(second.response.status, 201)
+    assert.equal((await invoke({ method: 'GET', headers: {}, query: { token: first.body.token } })).status, 200)
+    assert.equal((await generate({ snapshot: otherSnapshot })).response.status, 409)
+    const replacement = await generate({ snapshot: otherSnapshot, replaceActive: true })
+    assert.equal(replacement.response.status, 201)
+    assert.equal((await invoke({ method: 'GET', headers: {}, query: { token: first.body.token } })).status, 200)
+    assert.equal((await invoke({ method: 'GET', headers: {}, query: { token: second.body.token } })).status, 404)
+})
+
 test('retrying an identical photo reuses its blob and reservation', async () => {
     const created = await generate()
     const request = { method: 'POST', headers: {}, body: { action: 'uploadPhoto', token: created.body.token,
@@ -549,7 +566,7 @@ test('all required submissions move only an Allocated Job to Completion Review',
         jobId: '00000000-0000-4000-8000-000000000001',
         records: [
             { tokenHash: 'primary', technicianId: 'tech-1', assignmentId: '', status: 'pendingReview', createdOn: '2026-10-09T01:00:00Z' },
-            { tokenHash: 'additional', assignmentId: 'assignment-1', status: 'reviewed', createdOn: '2026-10-09T01:01:00Z' },
+            { tokenHash: 'additional', technicianId: 'tech-2', assignmentId: 'assignment-1', status: 'reviewed', createdOn: '2026-10-09T01:01:00Z' },
         ],
         dataverseOrigin: 'https://example.crm.dynamics.com',
         authorization: 'Bearer application-token',

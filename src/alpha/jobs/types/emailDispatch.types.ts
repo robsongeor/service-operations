@@ -13,3 +13,10 @@ export type EmailDispatchResult = {
     gr_completedon?: string | null
     gr_errormessage?: string | null
 }
+
+export type JobEmailDispatch = EmailDispatchResult & {
+    gr_recipientemail: string
+    gr_recipientname: string
+    gr_requestedon: string
+    _gr_jobassignment_value?: string | null
+}

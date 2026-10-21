@@ -17,6 +17,45 @@ Job Card progress/meter features retain independent gates.
 - Independently reverified all 29 enabled workflow steps, the preserved server-writer secure
   configuration, and the current two Office Admin and seven Job Book Admin direct assignments.
 
+## Job correction platform-metadata update — 21 October 2026
+
+- Deployed the signed assembly-only rebuild at version `1.0.25.0`, public-key token
+  `0edea2881bb8578c`, SHA-256
+  `2285b69f253a85bdac8f409786c5d7d8ccf47e767c4fdf76e823016ec146ff7c`.
+- Exception-only tracing captured the rejected update shape as `gr_jobid`, `gr_mechanic`,
+  `modifiedby`, `modifiedon` and `modifiedonbehalfby`. Tracing was immediately returned to Off.
+- Restricted Job corrections now validate those Dataverse-owned update fields using the same
+  fail-closed path already used for Equipment corrections; caller identity, timestamps, primary key
+  and delegated-update metadata remain checked.
+- Used `UpdateAssembly` only. No schema, roles, assignments, APIs, steps, migration, seeds,
+  application deployment, feature flags or business records were changed.
+
+## Mechanic-correction guard update — 21 October 2026
+
+- Deployed the signed assembly-only rebuild at version `1.0.24.0`, public-key token
+  `0edea2881bb8578c`, SHA-256
+  `381dacceb71f67a86172809648014f021774dc21265fde7097e61d0db6ca90db`.
+- The restricted Job correction guard now accepts the approved mechanic/other-supplier fields,
+  revalidates active assignment-enabled Staff and rejects mixed technician/supplier state.
+- Used `UpdateAssembly` only. No schema, roles, assignments, APIs, steps, migration, seeds,
+  application deployment, feature flags or business records were changed.
+- The subsequent read-only pass reached and verified all 14 enabled restricted-access steps and
+  preserved secure configuration. It then reported all 15 number-invariant steps enabled, contrary
+  to the AccessOnly verifier's legacy-disabled expectation. The assembly update did not change those
+  states; reconcile that existing rollout record separately rather than folding it into this fix.
+
+## V3 managed-worklist backend deployment — 21 October 2026
+
+- Deployed and verified signed `ServiceOperations.UnifiedJobWorkflow` `1.0.24.0`, public-key token
+  `0edea2881bb8578c`, SHA-256
+  `e1f173c0426f79d8ae700c13aacb31614b75040006fb44100444c4fb65eb257b`.
+- Created and verified coordinator-only `gr_UnmanageJobBookJob` with its exact two request and five
+  response properties. The six-API contract now passes production verification.
+- Used the scoped `UpdateAssemblyAndApis` operator. No schema, roles, assignments, guard steps,
+  business data, seeds, migration or application flags were changed by the Dataverse operation.
+- Independently reverified all 29 enabled workflow steps, the preserved server-writer secure
+  configuration, and the current two Office Admin and seven Job Book Admin direct assignments.
+
 The dry-run sequence below is dated historical planning, not the current build configuration.
 Do not reset live flags or rerun provisioning merely to match it. Resolve manifest/test drift and
 the client/server policy defects in the [audit](reviews/2026-10-10-application-audit.md), then use

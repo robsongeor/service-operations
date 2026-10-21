@@ -1,5 +1,11 @@
 # Job Card Admin Review implementation plan
 
+> **Historical delivery plan.** Use
+> [Technician Job Card Submission Architecture](../architecture/technician-job-submission.md) for
+> current behavior and [the 10 October implementation report](../reviews/2026-10-10-job-card-implementation.md)
+> for local-only recovery/meter work and activation gates. Checked items below are implementation
+> evidence, not proof that the shared backend, feature flags or named-user acceptance are live.
+
 ## Planning status
 
 **10 October follow-up:** the [focused screens/functions review](../reviews/2026-10-10-job-card-review.md)

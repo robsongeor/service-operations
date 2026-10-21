@@ -1,6 +1,7 @@
 import type {
     EmailDispatchInput,
     EmailDispatchResult,
+    JobEmailDispatch,
 } from '../types/emailDispatch.types'
 
 const API_URL = `${import.meta.env?.VITE_DATAVERSE_URL ?? ''}/api/data/v9.2`
@@ -76,4 +77,22 @@ export async function waitForEmailDispatch(
         await new Promise((resolve) => window.setTimeout(resolve, 1000))
     }
     throw new Error('The email flow did not complete within 45 seconds. Check its Power Automate run history.')
+}
+
+export async function fetchJobEmailDispatches(
+    token: string,
+    jobId: string,
+    signal?: AbortSignal,
+): Promise<JobEmailDispatch[]> {
+    const url = new URL(`${API_URL}/gr_emaildispatchs`)
+    url.searchParams.set('$select', 'gr_emaildispatchid,gr_recipientemail,gr_recipientname,gr_requestedon,gr_emailsent,gr_completedon,gr_errormessage,_gr_jobassignment_value')
+    url.searchParams.set('$filter', `_gr_job_value eq ${jobId}`)
+    url.searchParams.set('$orderby', 'gr_requestedon desc')
+    url.searchParams.set('$top', '51')
+    const response = await fetch(url.toString(), { cache: 'no-store', headers: headers(token), signal })
+    if (!response.ok) throw new Error(await errorMessage(response, 'Failed to load technician email history'))
+    const data = await response.json() as { value?: JobEmailDispatch[]; '@odata.nextLink'?: string }
+    const rows = data.value ?? []
+    if (rows.length > 50 || data['@odata.nextLink']) throw new Error('This Job has more than 50 technician emails and cannot be displayed safely.')
+    return rows
 }

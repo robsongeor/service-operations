@@ -54,4 +54,5 @@ explicitly.
 `VITE_PUBLIC_APP_URL` optionally overrides the browser origin used for generated technician Job
 Card links. Local development sets it to the deployed Azure Static Web Apps origin so a phone can
 open the link; production can omit it and use its own origin. Only credential-free HTTPS origins
-are accepted, and the secure token remains stored and validated in Dataverse.
+are accepted. Only the secure token hash is stored and validated in the private Azure Job Card
+store; the raw token is returned once for the link and is never stored in Dataverse.

@@ -12,6 +12,7 @@ test('expected returns include assigned technicians who were never sent a link',
     assert.deepEqual(expectedReturns(job, [assignment], [card]).map((item) => item.state), ['received', 'notSent'])
     assert.equal(expectedReturns({ ...job, _gr_mechanic_value: id(5) }, [], [card])[0].state, 'notSent')
     assert.equal(expectedReturns({}, [{ gr_jobassignmentid: id(3) }], [{ assignmentId: id(3), status: 'reviewed' }])[0].state, 'notSent')
+    assert.deepEqual(expectedReturns(job, [{ ...assignment, gr_jobcardstatus: 122830003 }], [card]).map((item) => item.technicianId), [id(2)])
 })
 
 test('latest links determine returns; expired, withdrawn and unreturned cards stay distinct', () => {
@@ -21,6 +22,13 @@ test('latest links determine returns; expired, withdrawn and unreturned cards st
     ]) {
         assert.equal(expectedReturns(job, [], [card, { ...card, status, expiresOn, createdOn: '2026-10-02', tokenHash: 'b' }])[0].state, expected)
     }
+})
+
+test('changing the first technician stacks both technician lifecycles instead of replacing the original return', () => {
+    const replacement = id(5)
+    const stacked = expectedReturns({ ...job, _gr_mechanic_value: replacement, gr_Mechanic: { gr_name: 'Replacement' } }, [], [card])
+    assert.deepEqual(stacked.map((item) => item.technicianId), [replacement, id(2)])
+    assert.deepEqual(stacked.map((item) => item.state), ['notSent', 'received'])
 })
 
 test('missing, unverified or truncated assignment reads fail closed', async () => {

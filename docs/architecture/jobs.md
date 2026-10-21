@@ -78,12 +78,14 @@ action parameter exist.
 `useJobCorrections` owns exact-record loading, bounded Customer/Equipment searches and scoped
 Site/Contact choices. It never loads schedules, assignments, Quotes or submission evidence.
 
-`jobCorrectionsApi` projects only changed description, order/PO, Equipment, Site and Contact
-bindings. Customer is represented through Site; its consistency is validated, not separately
-written. Address displays the selected Site's address, without editing a shared Site or moving
-Equipment. Historical unchanged Contact links are retained; changed links must belong to the Site.
-Opening does not auto-select a previously empty Contact or change Job state. The shared editor's
-job number/type/status/service type/mechanic/office values never reach the correction PATCH.
+`jobCorrectionsApi` projects only changed description, order/PO, Equipment, Site, Contact and
+mechanic/other-supplier bindings. Customer is represented through Site; its consistency is
+validated, not separately written. Address displays the selected Site's address, without editing
+a shared Site or moving Equipment. Historical unchanged Contact links are retained; changed links
+must belong to the Site. The restricted Dataverse guard revalidates selected Staff as active and
+assignment-enabled and keeps Staff mutually exclusive with another supplier. Opening does not
+auto-select a previously empty Contact or change Job state. The shared editor's job number/type/
+status/service type/office values never reach the correction PATCH.
 
 Writes require the original exact ETag. A conflict blocks subsequent saves and offers explicit
 reload/discard confirmation; no automatic retry or wildcard overwrite. A successful write with
@@ -133,6 +135,15 @@ Unconfirmed value is treated as Staging during migration.
 Admins can edit the subject and email-only comments, not the recipient or technician allocation.
 The corrections drawer itself still has no dispatch controls. Coordinators retain their existing
 Jobs composer recipient controls.
+
+The shared composer now performs a bounded assignment and Job Card history check when it opens.
+With no prior activity it retains the existing compact first-send layout. If a request or additional
+assignment exists, the same window widens with **Assigned technicians** attached on the right; it
+does not open a second dialog. Coordinators can select an existing participant, add another
+technician, prepare that assignment's scoped email, withdraw an active request with a reason, or
+remove an additional assignment only when it has no request or submission evidence. Restricted
+Admins see the same history for context but cannot change the allocation or select another
+recipient. An unavailable or truncated roster/history read disables sending and requires retry.
 
 Opening a Job Book preview performs one focused current-Job read, with no link or dispatch writes.
 Sending rereads that Job and checks its ETag, assignment/email and rendered message data against

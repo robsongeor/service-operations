@@ -14,7 +14,9 @@ function trustedCollectionResponse(body) {
 }
 
 function lifecycleKey(record) {
-    return normalize(record.assignmentId) || 'primary'
+    const assignmentId = normalize(record.assignmentId)
+    const technicianId = normalize(record.technicianId)
+    return assignmentId ? `assignment:${assignmentId}` : technicianId ? `technician:${technicianId}` : 'primary'
 }
 
 function hasAmbiguousLatestLifecycle(records) {
@@ -62,7 +64,7 @@ function summarizeJob(jobId, job, assignments, records) {
         if (!recordGroups.has(key)) recordGroups.set(key, [])
         recordGroups.get(key).push(record)
     })
-    const changedAssignment = returns.some((item) => item.state === 'notSent' && (recordGroups.get(normalize(item.assignmentId) || 'primary') || []).length > 0)
+    const changedAssignment = returns.some((item) => item.state === 'notSent' && (recordGroups.get(lifecycleKey(item)) || []).length > 0)
     if (changedAssignment) return conflictSummary(jobId, jobStatus)
     const returnedCount = returns.filter((item) => item.state === 'received').length
     const states = returns.map((item) => item.state)
@@ -101,7 +103,7 @@ async function readDataverseBatch({ origin, authorization, jobIds, fetchImpl }) 
     const assignmentFilter = jobIds.map((jobId) => `_gr_job_value eq ${jobId}`).join(' or ')
     const [jobsResponse, assignmentsResponse] = await Promise.all([
         fetchImpl(`${origin}/api/data/v9.2/gr_jobs?$select=gr_jobid,gr_status,_gr_mechanic_value&$filter=${encodeURIComponent(`(${jobFilter})`)}`, { headers, redirect: 'error' }),
-        fetchImpl(`${origin}/api/data/v9.2/gr_jobassignments?$select=gr_jobassignmentid,_gr_job_value,_gr_mechanic_value&$filter=${encodeURIComponent(`(${assignmentFilter}) and statecode eq 0`)}&$top=501`, { headers, redirect: 'error' }),
+        fetchImpl(`${origin}/api/data/v9.2/gr_jobassignments?$select=gr_jobassignmentid,_gr_job_value,_gr_mechanic_value,gr_jobcardstatus&$filter=${encodeURIComponent(`(${assignmentFilter}) and statecode eq 0`)}&$top=501`, { headers, redirect: 'error' }),
     ])
     if ([jobsResponse, assignmentsResponse].some((response) => response.status === 401 || response.status === 403)) {
         const error = new Error('access')

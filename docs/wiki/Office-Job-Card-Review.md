@@ -4,6 +4,10 @@ This guide is for **Office Admins** processing technician Job Card submissions. 
 records the office workflow. It does not close the operational Job and does not send information to
 GreenTree automatically.
 
+Some recovery controls, including **Resume entry**, office corrections and **Technician returns**,
+appear only when the shared Job Card service supports them. Their absence is a release capability
+boundary, not proof that no recovery or missing-return case exists.
+
 ## Understand the queues
 
 Open **Job Card reviews** and select the required stage:
@@ -53,8 +57,8 @@ be completed. Enter a clear note explaining:
 - who needs to respond; and
 - what must happen next.
 
-This saves an office note; it does not send a message automatically. When the issue is resolved,
-select **Resume entry**. Earlier notes remain in Activity history.
+This saves an office note; it does not send a message automatically. When the issue is resolved and
+**Resume entry** is available, select it. Earlier notes remain in Activity history.
 
 Use **Record office correction** to append an audited explanation of an office correction and who
 confirmed it. This does not alter the technician's original Job Card or update GreenTree.

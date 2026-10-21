@@ -34,6 +34,8 @@ import { buildJobBookSpreadsheetRow, copyNumberedJobBookSpreadsheetRow } from '.
 import { EXTERNAL_SUPPLIER_ASSIGNMENT_ENABLED } from '../domain/externalSupplierAssignment'
 import { OPERATING_BRANCH_LABELS } from '../types/operatingBranch.types'
 import type { CoordinationView, JobCardProgressSummary } from '../types/serviceCoordination.types'
+import type { JobAssignment, JobAssignmentInput } from '../types/jobAssignment.types'
+import type { JobEmailDispatch } from '../types/emailDispatch.types'
 
 type Props = {
     unifiedWorklist?: boolean
@@ -57,6 +59,12 @@ type Props = {
         }
     ) => Promise<void>
     onEmailTechnician: (job: Job, draft: JobEmailDraft) => Promise<void>
+    loadJobAssignments: (jobId: string, signal?: AbortSignal) => Promise<JobAssignment[]>
+    loadJobEmailDispatches: (jobId: string, signal?: AbortSignal) => Promise<JobEmailDispatch[]>
+    onCreateAssignment: (assignment: JobAssignmentInput) => Promise<void>
+    onEmailAssignment: (job: Job, assignment: JobAssignment, draft?: JobEmailDraft) => Promise<void>
+    onDeleteAssignment: (assignmentId: string) => Promise<void>
+    onWithdrawAssignment: (assignmentId: string) => Promise<void>
     emailDeliveryStates: Record<string, JobEmailDeliveryState>
     onEditJob: (job: Job) => void
     onOpenJobCard: (job: Job) => void
@@ -93,6 +101,12 @@ export default function JobsTable({
     onStatusChange,
     onJobFieldsChange,
     onEmailTechnician,
+    loadJobAssignments,
+    loadJobEmailDispatches,
+    onCreateAssignment,
+    onEmailAssignment,
+    onDeleteAssignment,
+    onWithdrawAssignment,
     emailDeliveryStates,
     onEditJob,
     onOpenJobCard,
@@ -161,7 +175,6 @@ export default function JobsTable({
         try {
             await onEmailTechnician(job, draft)
             setCopyFeedback({ message: `Job Card email queued for ${draft.recipientEmail}.`, isError: false })
-            setEmailComposerJob(null)
         } finally {
             setEmailingJobId(null)
         }
@@ -704,6 +717,17 @@ export default function JobsTable({
         </TablePanel>
         {emailComposerJob && <JobEmailComposer
             job={emailComposerJob}
+            mechanics={mechanics}
+            loadAssignments={loadJobAssignments}
+            loadDispatches={loadJobEmailDispatches}
+            onCreateAssignment={onCreateAssignment}
+            onSendAssignment={onEmailAssignment}
+            onDeleteAssignment={onDeleteAssignment}
+            onWithdrawAssignment={onWithdrawAssignment}
+            onWithdrawPrimaryTechnician={async () => {
+                await onJobFieldsChange(emailComposerJob.gr_jobid, { 'gr_Mechanic@odata.bind': null })
+                setEmailComposerJob((current) => current?.gr_jobid === emailComposerJob.gr_jobid ? { ...current, gr_Mechanic: undefined } : current)
+            }}
             onCancel={() => setEmailComposerJob(null)}
             onSend={(draft) => sendEmail(emailComposerJob, draft)}
         />}
