@@ -137,13 +137,15 @@ Completion Review ──separate accepted completion workflow──> Complete
 - Action Required and unrelated statuses are not automatically overridden.
 - Technician submission, office filing and GreenTree status cannot individually set Complete.
 
-## Proposed roster-first dispatch interaction
+## Roster-first dispatch interaction
 
-**Status: proposed product design — not implemented.** This section records the desired interaction
-identified during workflow mapping. It deliberately separates technician participation from email
-composition so a later send cannot silently replace an earlier technician or their required card.
+**Status: first increment implemented; two architecture gaps remain.** The shared Job Book and
+Service Coordination composer now separates technician participation from email composition so a
+later send does not silently replace an earlier additional technician or their required card. The
+remaining gaps are the **No longer attending — card still required** state and stable assignment
+identity for the first technician.
 
-### What the current buttons do
+### What the buttons do now
 
 - The Job Book/Service Coordination row email action opens a composer for the Job's current
   `gr_Mechanic`. Sending does **not** set that person as primary; the Job already stored them.
@@ -151,7 +153,8 @@ composition so a later send cannot silently replace an earlier technician or the
   the server requires confirmation before replacing only that technician's secure link.
 - The canonical Job drawer already has a Job Cards section where users can add a
   `gr_jobassignment`, then send that additional technician a separately scoped card.
-- The row action does not expose that roster, its delivery/card states, or the add/withdraw flow.
+- The row action opens the same composer and exposes that roster, its latest delivery/card state,
+  and the add/withdraw/remove flow in a right-side panel whenever activity exists.
 - The first/“primary” Azure request currently has a blank assignment ID and is matched against the
   Job's *current* primary technician. Changing `gr_Mechanic` after dispatch can therefore make the
   earlier technician stop matching the current expected-return roster. This is the core data-model
@@ -430,31 +433,31 @@ Compatibility rules:
 | JC-G09 | Legacy evidence exists | Show in labelled historical read-only section; never merge into Azure state. | Legacy |
 | JC-G10 | Secrets/tokens/photos | Raw token returned once; no token/hash/Blob path in review payload, DOM, archive or logs. | Current security boundary |
 
-### H. Proposed technician-roster interaction
+### H. Technician-roster interaction
 
 | ID | Case | Expected behavior | Status |
 | --- | --- | --- | --- |
-| JC-H01 | Open row action before any activity | Open the existing composer at normal width for the selected first technician. | Proposed |
-| JC-H02 | Open row action after one or more activities | Open the composer widened with the roster attached on the right, showing every participant and independent delivery/card state. | Proposed |
-| JC-H03 | Add Rick after Mo was sent | Create a separate stable participant; Mo remains visible and required. | Proposed |
-| JC-H04 | Send Rick | Generate and dispatch only Rick's assignment-scoped card; never replace Mo's link/evidence. | Proposed |
-| JC-H05 | Resend Mo with unused active link | Confirm replacement of Mo's link only. | Existing server rule; proposed roster UI |
-| JC-H06 | Resend after Mo submitted | Preserve Mo's earlier evidence/outcome and create a new Mo cycle. | Existing server rule; proposed roster UI |
-| JC-H07 | Mo stops attending but performed work | Keep Mo as required; mark attendance ended without withdrawing the owed card. | Proposed |
-| JC-H08 | Mo is sick before attending | Withdraw with reason, revoke link and exclude Mo from required returns; keep audit visible. | Existing withdrawal rule; proposed roster UI |
-| JC-H09 | Remove a never-sent technician | Delete only when no request, dispatch or historical evidence exists. | Partially current; proposed shared UI |
-| JC-H10 | Attempt to remove a sent/received technician | Offer lifecycle-safe actions instead of deletion; never erase history. | Proposed |
+| JC-H01 | Open row action before any activity | Open the existing composer at normal width for the selected first technician. | Current |
+| JC-H02 | Open row action after one or more activities | Open the composer widened with the roster attached on the right, showing every participant and independent delivery/card state. | Current |
+| JC-H03 | Add Rick after Mo was sent | Create a separate stable participant; Mo remains visible and required. | Current for additional technicians |
+| JC-H04 | Send Rick | Generate and dispatch only Rick's assignment-scoped card; never replace Mo's link/evidence. | Current |
+| JC-H05 | Resend Mo with unused active link | Confirm replacement of Mo's link only. | Current server and composer rule |
+| JC-H06 | Resend after Mo submitted | Preserve Mo's earlier evidence/outcome and create a new Mo cycle. | Current server and composer rule |
+| JC-H07 | Mo stops attending but performed work | Keep Mo as required; mark attendance ended without withdrawing the owed card. | Architecture gap |
+| JC-H08 | Mo is sick before attending | Withdraw with reason, revoke link and exclude Mo from required returns; keep audit visible. | Current |
+| JC-H09 | Remove a never-sent technician | Delete only when no request, dispatch or historical evidence exists. | Current for additional technicians |
+| JC-H10 | Attempt to remove a sent/received technician | Offer lifecycle-safe actions instead of deletion; never erase history. | Current deletion guard; attendance action remains a gap |
 | JC-H11 | Change current lead after dispatch | Earlier participants remain matched by stable IDs and do not disappear/rebind. | Required architecture change |
 | JC-H12 | Existing blank-assignment primary cycle | Display as legacy initial participant and preserve its saved technician identity. | Required compatibility design |
-| JC-H13 | Job Book versus Service Coordination | Both open the same technician pop-out and invoke the same guarded assignment/send actions. | Proposed |
-| JC-H14 | Mixed states | Dialog may show Mo Awaiting, Rick Sent, Sam Withdrawn and prior received cycles without collapsing them. | Proposed |
-| JC-H15 | Job Book first send with no history | Email button opens the existing composer at normal width for the selected first technician. | Proposed |
-| JC-H16 | Job Book click with any existing activity | Email button opens the composer and attached roster together; no replacement occurs and the recipient is explicit before sending. | Proposed |
-| JC-H17 | Existing failed/pending dispatch or active/expired link | Treat as activity and show the roster even when confirmed delivery is absent. | Proposed safety rule |
-| JC-H18 | Roster/history check fails or is truncated | Show retryable unavailable state and do not fall back to direct compose. | Proposed fail-closed rule |
-| JC-H19 | Select, Resend or Add from roster | Keep both panels visible and update the composer recipient/context on the left; do not open a second dialog. | Proposed |
-| JC-H20 | Change selected technician | Update the composer for the selected row while retaining the full roster and its statuses on the right. | Proposed |
-| JC-H21 | Successful send from composer | Keep the combined window open and refresh that technician's delivery/card state in the right-side roster. | Proposed |
+| JC-H13 | Job Book versus Service Coordination | Both open the same technician pop-out and invoke the same guarded assignment/send actions. | Current |
+| JC-H14 | Mixed states | Dialog may show Mo Awaiting, Rick Sent and Sam Withdrawn independently. Earlier cycles remain preserved in history but the roster row shows the latest cycle. | Current with latest-cycle roster summary |
+| JC-H15 | Job Book first send with no history | Email button opens the existing composer at normal width for the selected first technician. | Current |
+| JC-H16 | Job Book click with any existing activity | Email button opens the composer and attached roster together; no replacement occurs and the recipient is explicit before sending. | Current |
+| JC-H17 | Existing failed/pending dispatch or active/expired link | Treat as activity and show the roster even when confirmed delivery is absent. | Current for known request/assignment activity; dispatch-only reconciliation remains operational work |
+| JC-H18 | Roster/history check fails or is truncated | Show retryable unavailable state and do not fall back to direct compose. | Current fail-closed rule |
+| JC-H19 | Select, Resend or Add from roster | Keep both panels visible and update the composer recipient/context on the left; do not open a second dialog. | Current |
+| JC-H20 | Change selected technician | Update the composer for the selected row while retaining the full roster and its statuses on the right. | Current |
+| JC-H21 | Successful send from composer | Keep the combined window open and refresh that technician's delivery/card state in the right-side roster. | Current |
 
 ## Known open decisions and gaps
 
@@ -470,7 +473,7 @@ Compatibility rules:
 | JC-O08 | Type-specific Service/WOF Job Card fields and atomic completion processor. | Required before office-reviewed evidence can safely replace manual completion dialogs. |
 | JC-O09 | Technician authenticated workspace, offline/photo persistence and notifications. | Parked; do not infer requirements or licensing from the bearer-link workflow. |
 | JC-O10 | Named-user, multi-browser, mobile and service-identity acceptance. | Automated tests do not prove live permissions, deployment or device behavior. |
-| JC-O11 | Stable participant model for the first technician. | Must be decided before implementing the roster dialog; a label-only change leaves the primary-scope identity bug intact. |
+| JC-O11 | Stable participant model for the first technician. | Must be resolved before changing the first technician after dispatch can be considered safe; the compatibility row's blank assignment ID still follows the Job's current `gr_Mechanic`. |
 
 ## Acceptance walkthrough set
 
