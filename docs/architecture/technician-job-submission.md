@@ -1,5 +1,29 @@
 # Technician Job Card Submission Architecture
 
+> **Authoritative current workflow.** Use this document for the emailed technician link,
+> Azure-backed evidence lifecycle and Office Job Card review. The Dataverse schema pages
+> [`technician-job-submission-schema.md`](../technician-job-submission-schema.md) and
+> [`job-card-dataverse-schema.md`](../job-card-dataverse-schema.md) describe retained legacy
+> storage only; they are not the design for new submissions.
+
+## Current release position
+
+As at 21 October 2026, V3 is deployed but continues to use the preserved shared Job Card backend.
+Existing emailed links, private photos and review records remain authoritative. Office recovery
+controls are shown only when that backend returns `officeRecoveryAvailable: true`; meter-date
+capture has the equivalent `meterRecordedDateAvailable: true` capability check. Office-approved
+meter synchronization and cursor queue paging remain separately feature-flagged and are off in the
+released build. The technician workspace remains parked; technicians use one emailed link for one
+Job/assignment. These statements describe release state, not permission to enable the gated paths.
+
+For end-to-end mapping, read this page first, then:
+
+- [Multi-technician Job Cards](multi-technician-job-cards.md) for assignment ownership and expected returns;
+- [Office Job Card review](../wiki/Office-Job-Card-Review.md) for the user-facing office process;
+- [Job Card implementation and activation report](../reviews/2026-10-10-job-card-implementation.md)
+  for local-only recovery/meter behavior and rollout gates; and
+- [Current state](../../CURRENT_STATE.md) for the deployed version and enabled flags.
+
 ## Boundary and workflow
 
 Job-level links at `/portal/job/:token` use Azure Table snapshots and private Blob evidence.

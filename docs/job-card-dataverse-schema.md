@@ -1,8 +1,18 @@
-# Job card workflow Dataverse setup
+# Legacy Job Card Status Dataverse setup
 
-This document defines the first job-card workflow for Service Operations.
+> **Retained migration record — not the current workflow.** Ordinary Jobs no longer expose the
+> manual Job Card Status selector, legacy progress count, Submitted table badge or email lockout.
+> Current emailed links and review evidence use the Azure lifecycle described in
+> [Technician Job Card Submission Architecture](architecture/technician-job-submission.md).
 
-## Workflow rules
+This document records the first Job Card workflow and its existing Dataverse columns. Keep the
+columns and historical values for compatibility and audit, but do not use them to decide the
+current Azure request, submission, expected-return or office-review state.
+
+## Historical workflow rules
+
+The following were the original transition rules. They are preserved here to interpret legacy
+rows, not as instructions for current UI or automation:
 
 - The existing Job Status remains manually controlled by the office.
 - Mechanics do not update Job Status.
@@ -36,7 +46,10 @@ Add these columns to the existing **Job** table.
 
 Use **User local** behaviour for all three date-and-time columns so office users see timestamps in their local timezone.
 
-## Initial application behaviour
+## Retired initial application behaviour
+
+The following list describes the transition-era UI. It has been retired for ordinary Jobs and
+must not be reintroduced as a second workflow:
 
 1. Existing jobs without a value are displayed as `Not sent` during migration.
 2. The Jobs table shows a compact Job Card Status control.
@@ -44,6 +57,9 @@ Use **User local** behaviour for all three date-and-time columns so office users
 4. Until automatic email is implemented, the existing mail-draft action does not change status to `Sent`.
 5. Office users can correct the status manually during the transition.
 
-## Later submission tables
+## Superseded later-submission proposal
 
-The secure technician form and evidence uploads will use separate Job Card Submission and Job Card Evidence tables. They are intentionally deferred until the basic status workflow is live and verified.
+The proposed Dataverse submission/evidence tables were later implemented for legacy evidence, then
+superseded for new cards by private Azure Table/Blob storage. See
+[`technician-job-submission-schema.md`](technician-job-submission-schema.md) only when working with
+historical Dataverse evidence.

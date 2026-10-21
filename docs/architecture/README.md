@@ -63,6 +63,7 @@ Detailed Dataverse field lists remain in the schema references linked from
 | --- | --- |
 | Job workflow | `jobs.md`, `dataverse.md`, `reusable-components.md` |
 | Technician portal | `technician-job-submission.md`, `public-portal.md`, `security.md` |
+| Technician Job Card end-to-end and office review | `technician-job-submission.md`, `multi-technician-job-cards.md`, `../wiki/Office-Job-Card-Review.md`, `../reviews/2026-10-10-job-card-implementation.md` |
 | Equipment or maintenance | `equipment.md`, `maintenance.md`, `dataverse.md` |
 | Customer Dashboard | `customer-dashboard.md`, `equipment.md`, `shared-components.md` |
 | Scheduler | `scheduler.md`, `jobs.md`, `shared-components.md` |
