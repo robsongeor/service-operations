@@ -166,14 +166,10 @@ Use **Assigned technicians** as the group and **First technician** as a chronolo
 not a privileged ownership role. Every technician who is sent the Job remains a visible participant
 with an independent delivery and Job Card lifecycle.
 
-The row action should be contextual:
-
-- Before any technician-card activity exists: **Email technician** opens the shared technician
-  composer at its normal width for the selected first technician, preserving the fast first-send
-  path.
-- After any request, dispatch or submission history exists: clicking **Email technician** must first
-  open the same composer widened with an **Assigned technicians** roster attached on the right. It
-  must not jump directly to another send or replacement.
+The row action always opens the shared technician composer with the **Assigned technicians** roster
+attached on the right. Keeping the roster visible avoids a distracting layout change after loading
+and gives an unassigned Job an obvious place to add its first participant. Existing activity is
+loaded before another email can be sent; the action must never jump directly to a replacement send.
 - After the dialog is opened, the row action may be relabelled **Technicians (n)** or **Manage
   technicians** so the continuing behavior is obvious.
 - The pop-out is available from both Job Book and Service Coordination and uses one shared workflow.
@@ -206,10 +202,9 @@ For Job Book specifically, the click sequence is:
 
 1. Load the current Job version, current primary/assignments, bounded Azure Job Card history and
    relevant dispatch state.
-2. If there is genuinely no technician-card activity, open the existing composer at its normal
-   width for the selected first technician.
-3. If any activity exists, open the composer with the **Assigned technicians** panel attached on
-   the right and show the complete known list before another email is sent.
+2. Keep the **Assigned technicians** panel attached while those checks load and after they complete,
+   including when there are zero assigned technicians and no card history.
+3. Show the complete known list before another email is sent.
 4. If roster/history cannot be verified, show a retryable error. Do not assume the Job is new and
    open a blank composer, because that could create an accidental replacement/duplicate cycle.
 
@@ -437,7 +432,7 @@ Compatibility rules:
 
 | ID | Case | Expected behavior | Status |
 | --- | --- | --- | --- |
-| JC-H01 | Open row action before any activity | Open the existing composer at normal width for the selected first technician. | Current |
+| JC-H01 | Open row action before any activity | Open the shared composer with the empty or first-technician roster visible on the right. | Current |
 | JC-H02 | Open row action after one or more activities | Open the composer widened with the roster attached on the right, showing every participant and independent delivery/card state. | Current |
 | JC-H03 | Add Rick after Mo was sent | Create a separate stable participant; Mo remains visible and required. | Current for additional technicians |
 | JC-H04 | Send Rick | Generate and dispatch only Rick's assignment-scoped card; never replace Mo's link/evidence. | Current |
@@ -451,7 +446,7 @@ Compatibility rules:
 | JC-H12 | Existing blank-assignment primary cycle | Display as legacy initial participant and preserve its saved technician identity. | Required compatibility design |
 | JC-H13 | Job Book versus Service Coordination | Both open the same technician pop-out and invoke the same guarded assignment/send actions. | Current |
 | JC-H14 | Mixed states | Dialog may show Mo Awaiting, Rick Sent and Sam Withdrawn independently. Earlier cycles remain preserved in history but the roster row shows the latest cycle. | Current with latest-cycle roster summary |
-| JC-H15 | Job Book first send with no history | Email button opens the existing composer at normal width for the selected first technician. | Current |
+| JC-H15 | Job Book first send with no history | Email button opens the composer with the roster visible; an unassigned Job shows zero technicians and the add action. | Current |
 | JC-H16 | Job Book click with any existing activity | Email button opens the composer and attached roster together; no replacement occurs and the recipient is explicit before sending. | Current |
 | JC-H17 | Existing failed/pending dispatch or active/expired link | Treat as activity and show the roster even when confirmed delivery is absent. | Current for known request/assignment activity; dispatch-only reconciliation remains operational work |
 | JC-H18 | Roster/history check fails or is truncated | Show retryable unavailable state and do not fall back to direct compose. | Current fail-closed rule |

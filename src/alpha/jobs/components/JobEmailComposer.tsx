@@ -112,8 +112,8 @@ export default function JobEmailComposer({
     const historyError = history.error || (history.data?.truncated ? 'Technician history is incomplete. Reload before sending another Job Card.' : '')
     const rosterError = assignmentResult?.revision === assignmentRevision ? assignmentResult.error || historyError : historyError
     const rosterBusy = assignmentsBusy || (rosterEnabled && usesAzureJobCards(job) && history.busy)
-    const hasRosterActivity = assignments.length > 0 || (history.data?.items.length ?? 0) > 0
-    const showRoster = rosterEnabled && (rosterBusy || Boolean(rosterError) || hasRosterActivity)
+    const showRoster = rosterEnabled
+    const assignedTechnicianCount = (primaryMechanic ? 1 : 0) + assignments.length
 
     const selectTechnician = (assignment?: JobAssignment) => {
         if (assignedRecipientOnly && assignment) return
@@ -339,10 +339,13 @@ export default function JobEmailComposer({
             {success && <p className="job-email-composer-success" role="status">{success}</p>}
             </div>
             {showRoster && <aside className="job-email-roster" aria-label="Assigned technicians">
-                <header><div><span>Assigned technicians</span><strong>{1 + assignments.length}</strong></div><small>Select who this email is for.</small></header>
+                <header><div><span>Assigned technicians</span><strong>{assignedTechnicianCount}</strong></div><small>Select who this email is for.</small></header>
                 {rosterBusy ? <p className="job-email-roster-message" role="status">Loading technician activity…</p>
                     : rosterError ? <div className="job-email-roster-message error"><p>{rosterError}</p><button type="button" onClick={reloadRoster}>Try again</button></div>
-                    : <div className="job-email-roster-list">{rosterRow()}{assignments.map((assignment) => rosterRow(assignment))}</div>}
+                    : <div className="job-email-roster-list">
+                        {primaryMechanic ? rosterRow() : assignments.length === 0 && <p className="job-email-roster-message">No technicians assigned yet.</p>}
+                        {assignments.map((assignment) => rosterRow(assignment))}
+                    </div>}
                 {!assignedRecipientOnly && !rosterBusy && !rosterError && onCreateAssignment && <>
                     {showAddTechnician ? <div className="job-email-roster-add">
                         <label><span>Technician</span><select value={newMechanicId} onChange={(event) => setNewMechanicId(event.currentTarget.value)}><option value="">Select technician</option>{availableMechanics.map((item) => <option key={item.gr_mechanicid} value={item.gr_mechanicid}>{item.gr_name}</option>)}</select></label>
