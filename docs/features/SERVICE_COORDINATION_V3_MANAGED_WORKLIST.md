@@ -1,7 +1,7 @@
 # Service Coordination V3 — managed worklist release plan
 
-Status: source implementation and dry-run plan complete; no V3 deployment or live migration has
-been approved or applied.
+Status: source, signed Dataverse backend and isolated yellow-cliff V3 pilot deployed; operational
+integration configuration, named-role acceptance and live migration remain held.
 
 ## Business boundary
 
@@ -25,8 +25,9 @@ watch creation also require explicit managed membership and the same active Gree
 `gr_UnmanageJobBookJob` is the matching coordinator-only Custom API. It accepts only `JobId` and
 `ExpectedJobRowVersion`, rejects Void and unnumbered Jobs, and writes only
 `gr_coordinatormanaged=false`. It shares the reviewed coordinator-only execute privilege; Admin
-profiles do not receive it. Source assembly version is `1.0.24.0`; production remains on the
-previous version until a separately approved package/deployment.
+profiles do not receive it. Signed assembly `1.0.24.0` and the six-API manifest were deployed and
+independently verified on 21 October 2026. The scoped operation changed no roles, assignments,
+workflow steps, business data, seeds or migration state.
 
 ## Historical migration dry run
 
@@ -53,20 +54,27 @@ whose exact post-Apply ETag and values remain unchanged; newer user work is pres
 
 ## Hosting boundary
 
-V2 remains at `kind-wave-0cdea2200.2.azurestaticapps.net`. V3 is prepared for the former V1
-yellow-cliff Static Web App on branch `v3-deployment`. Yellow-cliff must not be deleted: it is the
+V2 remains at `kind-wave-0cdea2200.2.azurestaticapps.net`. V3 is deployed to the former V1
+yellow-cliff Static Web App from branch `v3-deployment`. Yellow-cliff must not be deleted: it is the
 authoritative Job Card backend currently used by V2. The V3 client uses that backend same-origin;
-V2 continues through its fixed proxy. Before release, verify the existing app settings, storage,
-Job Card generation/submission/review routes and V2 proxy compatibility against the V3 API build.
+V2 continues through its fixed proxy. Existing Job Card storage/email settings were preserved.
+
+The V3 Service Coordination backend flag is enabled. Anonymous access fails with `401`; an
+authenticated George smoke check resolved home branch Auckland, and the empty pre-migration
+watchlist contained no invalid managed/terminal rows. Yellow-cliff does not yet contain V2's
+GreenTree and TimeCloud operational settings. They were not copied because they contain production
+credentials and require separate explicit approval. Do not accept V3 Job creation, GT status checks
+or operational release until those settings and both integrations have passed smoke tests.
 
 ## Release gates
 
-1. Review the source diff, plugin package and six-Custom-API manifest.
-2. Verify the full automated suite and signed plugin tests.
+1. [x] Review the source diff, plugin package and six-Custom-API manifest.
+2. [x] Verify the full automated suite and signed plugin tests.
 3. Export a fresh live snapshot and approve its exact plan hash/counts.
-4. Deploy and verify assembly `1.0.24.0` plus `gr_UnmanageJobBookJob` without changing human role
+4. [x] Deploy and verify assembly `1.0.24.0` plus `gr_UnmanageJobBookJob` without changing human role
    assignments beyond the existing Full/Coordinator privilege boundary.
-5. Deploy V3 to yellow-cliff and run Full Access, Service Coordinator, Job Book Admin and Office
-   Admin acceptance tests while V2 remains available.
+5. [ ] V3 is deployed to yellow-cliff; install and smoke-test the held GreenTree/TimeCloud settings,
+   then run Full Access, Service Coordinator, Job Book Admin and Office Admin acceptance while V2
+   remains available.
 6. Apply and verify the approved migration, then confirm branch, all-branches and watchlist views.
 7. Record explicit go/no-go approval before treating V3 as released.

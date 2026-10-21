@@ -4,6 +4,18 @@ Recorded deployment: restricted-access package completed 9 October 2026. V2's cu
 builds unified registration/workflow enabled; data migration and invariant activation still have
 independent gates. This documentation audit did not reverify the cloud.
 
+## V3 managed-worklist backend deployment — 21 October 2026
+
+- Deployed and verified signed `ServiceOperations.UnifiedJobWorkflow` `1.0.24.0`, public-key token
+  `0edea2881bb8578c`, SHA-256
+  `e1f173c0426f79d8ae700c13aacb31614b75040006fb44100444c4fb65eb257b`.
+- Created and verified coordinator-only `gr_UnmanageJobBookJob` with its exact two request and five
+  response properties. The six-API contract now passes production verification.
+- Used the scoped `UpdateAssemblyAndApis` operator. No schema, roles, assignments, guard steps,
+  business data, seeds, migration or application flags were changed by the Dataverse operation.
+- Independently reverified all 29 enabled workflow steps, the preserved server-writer secure
+  configuration, and the current two Office Admin and seven Job Book Admin direct assignments.
+
 The dry-run sequence below is dated historical planning, not the current build configuration.
 Do not reset live flags or rerun provisioning merely to match it. Resolve manifest/test drift and
 the client/server policy defects in the [audit](reviews/2026-10-10-application-audit.md), then use
