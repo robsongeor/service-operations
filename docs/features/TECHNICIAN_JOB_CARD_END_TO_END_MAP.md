@@ -139,11 +139,11 @@ Completion Review ──separate accepted completion workflow──> Complete
 
 ## Roster-first dispatch interaction
 
-**Status: first increment implemented; two architecture gaps remain.** The shared Job Book and
+**Status: participant stacking implemented; one workflow choice remains.** The shared Job Book and
 Service Coordination composer now separates technician participation from email composition so a
-later send does not silently replace an earlier additional technician or their required card. The
-remaining gaps are the **No longer attending — card still required** state and stable assignment
-identity for the first technician.
+later send does not silently replace an earlier technician or their required card. First-technician
+links are keyed to that technician, while additional links retain their assignment identity. The
+remaining optional workflow is **No longer attending — card still required**.
 
 ### What the buttons do now
 

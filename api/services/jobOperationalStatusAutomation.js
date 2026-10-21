@@ -8,7 +8,8 @@ const { getJobCardMeterDataverseApplicationToken } = require('./dataverseApplica
 
 function lifecycleKey(record) {
     const assignmentId = String(record.assignmentId || '').trim().toLowerCase()
-    return assignmentId || 'primary'
+    const technicianId = String(record.technicianId || '').trim().toLowerCase()
+    return assignmentId ? `assignment:${assignmentId}` : technicianId ? `technician:${technicianId}` : 'primary'
 }
 
 function isNewerLifecycleRecord(candidate, current) {

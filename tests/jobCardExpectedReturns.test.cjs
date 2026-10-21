@@ -24,6 +24,13 @@ test('latest links determine returns; expired, withdrawn and unreturned cards st
     }
 })
 
+test('changing the first technician stacks both technician lifecycles instead of replacing the original return', () => {
+    const replacement = id(5)
+    const stacked = expectedReturns({ ...job, _gr_mechanic_value: replacement, gr_Mechanic: { gr_name: 'Replacement' } }, [], [card])
+    assert.deepEqual(stacked.map((item) => item.technicianId), [replacement, id(2)])
+    assert.deepEqual(stacked.map((item) => item.state), ['notSent', 'received'])
+})
+
 test('missing, unverified or truncated assignment reads fail closed', async () => {
     for (const payload of [{}, { value: [], '@odata.nextLink': 'more' }, { value: Array(501).fill(assignment) }, { value: [{ gr_jobassignmentid: id(3) }] }]) {
         await assert.rejects(readExpectedReturns({ ...config, fetchImpl: async (url) => Response.json(String(url).includes('/gr_jobassignments?') ? payload : job) }))

@@ -14,7 +14,9 @@ function trustedCollectionResponse(body) {
 }
 
 function lifecycleKey(record) {
-    return normalize(record.assignmentId) || 'primary'
+    const assignmentId = normalize(record.assignmentId)
+    const technicianId = normalize(record.technicianId)
+    return assignmentId ? `assignment:${assignmentId}` : technicianId ? `technician:${technicianId}` : 'primary'
 }
 
 function hasAmbiguousLatestLifecycle(records) {
@@ -62,7 +64,7 @@ function summarizeJob(jobId, job, assignments, records) {
         if (!recordGroups.has(key)) recordGroups.set(key, [])
         recordGroups.get(key).push(record)
     })
-    const changedAssignment = returns.some((item) => item.state === 'notSent' && (recordGroups.get(normalize(item.assignmentId) || 'primary') || []).length > 0)
+    const changedAssignment = returns.some((item) => item.state === 'notSent' && (recordGroups.get(lifecycleKey(item)) || []).length > 0)
     if (changedAssignment) return conflictSummary(jobId, jobStatus)
     const returnedCount = returns.filter((item) => item.state === 'received').length
     const states = returns.map((item) => item.state)

@@ -18,6 +18,13 @@ function preconditionError() {
 }
 
 function recipientKey(entity) {
+    const participant = entity.assignmentId
+        ? `assignment:${entity.assignmentId}`
+        : entity.technicianId ? `technician:${entity.technicianId}` : 'primary'
+    return 'recipient_' + createHash('sha256').update(`${entity.sourceJobId}:${participant}`).digest('hex')
+}
+
+function legacyRecipientKey(entity) {
     return 'recipient_' + createHash('sha256').update(`${entity.sourceJobId}:${entity.assignmentId || 'primary'}`).digest('hex')
 }
 
@@ -73,7 +80,11 @@ class MemoryJobCardStore {
 
     async createActive(entity, replaceActive) {
         const key = recipientKey(entity)
-        const previous = this.entities.get(this.recipients.get(key))
+        let previous = this.entities.get(this.recipients.get(key))
+        if (!previous && !entity.assignmentId) {
+            const legacy = this.entities.get(this.recipients.get(legacyRecipientKey(entity)))
+            if (legacy?.technicianId === entity.technicianId) previous = legacy
+        }
         if (isActive(previous) && !replaceActive) throw activeLinkError()
         if (isActive(previous)) {
             this.entities.set(previous.tokenHash, { ...previous, status: 'superseded', supersededOn: entity.createdOn, etag: `W/"${++this.version}"` })
@@ -196,7 +207,14 @@ class AzureJobCardStore {
         let sentinel
         try { sentinel = await this.table.getEntity(PARTITION_KEY, key) }
         catch (error) { if (error.statusCode !== 404) throw error }
-        const previous = sentinel ? await this.getByTokenHash(sentinel.activeTokenHash) : null
+        let previous = sentinel ? await this.getByTokenHash(sentinel.activeTokenHash) : null
+        if (!previous && !entity.assignmentId) {
+            let legacySentinel
+            try { legacySentinel = await this.table.getEntity(PARTITION_KEY, legacyRecipientKey(entity)) }
+            catch (error) { if (error.statusCode !== 404) throw error }
+            const legacy = legacySentinel ? await this.getByTokenHash(legacySentinel.activeTokenHash) : null
+            if (legacy?.technicianId === entity.technicianId) previous = legacy
+        }
         if (isActive(previous) && !replaceActive) throw activeLinkError()
         const next = { partitionKey: PARTITION_KEY, rowKey: key, activeTokenHash: entity.tokenHash }
         const actions = [sentinel ? ['update', next, 'Replace', { etag: sentinel.etag }] : ['create', next]]
