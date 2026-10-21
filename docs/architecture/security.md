@@ -41,7 +41,7 @@ The 10 October source audit found client/server-policy disagreement:
 
 - Mechanic/supplier corrections required a restricted-guard alignment. Source now permits only
   these exact fields and revalidates active, assignment-enabled Staff plus mutual exclusivity;
-  the updated guard still requires deployment and named-user verification.
+  the updated guard was deployed on 21 October and still requires named-user verification.
 - Equipment detail saves include compliance fields outside the restricted allowlist, potentially
   rejecting even an unrelated core-details edit.
 - Office confirmed-dispatch status updates are separate PATCH requests not permitted by the

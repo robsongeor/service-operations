@@ -1,19 +1,20 @@
 # Restricted access guard
 
-**Live in production from 9 October 2026; current assembly `1.0.23.0`.** The signed assembly and 14
-synchronous PreOperation restricted-access steps are enabled with exact secure
-Dataverse role IDs, required `Before` images and no filtering attributes. The 15
-legacy number-invariant steps remain registered but disabled while V1/manual
-numbering is still in use. Do not assign the obsolete Job Book Only role to the
-new Admin cohorts.
+**Live in production from 9 October 2026; current assembly `1.0.24.0`.** The 21 October mechanic-
+correction rebuild has SHA-256 `381dacceb71f67a86172809648014f021774dc21265fde7097e61d0db6ca90db`.
+The signed assembly and 14 synchronous PreOperation restricted-access steps are enabled with exact
+secure Dataverse role IDs, required `Before` images and no filtering attributes. The post-deployment
+read-only check also found all 15 number-invariant steps enabled; this pre-existing rollout state was
+not changed by the assembly-only update and must be reconciled separately against the V1 overlap
+record. Do not assign the obsolete Job Book Only role to the new Admin cohorts.
 
 ## Policy alignment status
 
 The 21 October source update aligns the restricted Job correction allowlist with the approved
 mechanic/supplier selector. The guard revalidates the exact referenced Staff record as active and
 assignment-enabled and rejects a Job that would retain both a technician and another supplier.
-This source change is not a claim that the updated assembly is deployed; named-user verification
-remains required. The client still sends WOF/REGO
+The assembly-only update was deployed on 21 October; named-user verification remains required.
+The client still sends WOF/REGO
 fields during restricted Equipment detail saves, while the allowlists below reject those fields.
 Confirmed Office dispatch also performs a separate status PATCH that the normal guard rejects.
 These are rollout blockers, not evidence the UI is correctly enforced end-to-end.

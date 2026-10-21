@@ -80,8 +80,9 @@ mixed-role users and ETag conflicts using real restricted accounts.
 **Mechanic/supplier source resolution recorded 21 October 2026:** the restricted Job correction
 allowlist now accepts only the existing mechanic and other-supplier fields, re-reads the referenced
 Staff record, requires it to be active and assignment-enabled, and rejects mixed Staff/supplier
-state. Offline policy and Job Book tests pass. The guard assembly still requires deployment and
-named-user verification; the Equipment and confirmed-dispatch portions of A01 remain open.
+state. Offline policy and Job Book tests pass. The guard assembly was deployed on 21 October with
+its reviewed identity preserved; named-user verification remains. The Equipment and confirmed-
+dispatch portions of A01 remain open.
 
 ### A02 — Registration allocates before dispatch
 

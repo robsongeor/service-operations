@@ -1,6 +1,6 @@
 # Unified Job workflow — signing-key custody
 
-Status: primary local key used for the production `1.0.24.0` deployment on 21 October 2026; recovery
+Status: primary local key used for the production `1.0.24.0` deployments on 21 October 2026; recovery
 backup remains required.
 
 V3 source declares `1.0.24.0` for the reviewed Stop-managing Custom API. Its signed package was
@@ -15,8 +15,8 @@ explicitly approved, deployed and verified on 21 October 2026.
   `scripts/new-unified-job-workflow-signing-key.ps1`.
 - Assembly identity: `ServiceOperations.UnifiedJobWorkflow`, version `1.0.24.0`, public key token
   `0edea2881bb8578c`.
-- Deployed package: `%LOCALAPPDATA%\ServiceOperations\Packages\ServiceOperations.UnifiedJobWorkflow-1.0.24-20261021-v3-managed-r1`.
-- Assembly SHA-256: `e1f173c0426f79d8ae700c13aacb31614b75040006fb44100444c4fb65eb257b`.
+- Deployed package: `%LOCALAPPDATA%\ServiceOperations\Packages\ServiceOperations.UnifiedJobWorkflow-1.0.24-20261021-mechanic-correction-r1`.
+- Assembly SHA-256: `381dacceb71f67a86172809648014f021774dc21265fde7097e61d0db6ca90db`.
 - All earlier packages are superseded for the active assembly.
 - Deployment performed: 14 restricted-access and 15 number-invariant steps live; all 29 verified.
 - Open custody gate: nominate a backup owner, create protected recovery storage and prove recovery with

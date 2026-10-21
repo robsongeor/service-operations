@@ -4,6 +4,20 @@ Recorded deployment: restricted-access package completed 9 October 2026. V2's cu
 builds unified registration/workflow enabled; data migration and invariant activation still have
 independent gates. This documentation audit did not reverify the cloud.
 
+## Mechanic-correction guard update — 21 October 2026
+
+- Deployed the signed assembly-only rebuild at version `1.0.24.0`, public-key token
+  `0edea2881bb8578c`, SHA-256
+  `381dacceb71f67a86172809648014f021774dc21265fde7097e61d0db6ca90db`.
+- The restricted Job correction guard now accepts the approved mechanic/other-supplier fields,
+  revalidates active assignment-enabled Staff and rejects mixed technician/supplier state.
+- Used `UpdateAssembly` only. No schema, roles, assignments, APIs, steps, migration, seeds,
+  application deployment, feature flags or business records were changed.
+- The subsequent read-only pass reached and verified all 14 enabled restricted-access steps and
+  preserved secure configuration. It then reported all 15 number-invariant steps enabled, contrary
+  to the AccessOnly verifier's legacy-disabled expectation. The assembly update did not change those
+  states; reconcile that existing rollout record separately rather than folding it into this fix.
+
 ## V3 managed-worklist backend deployment — 21 October 2026
 
 - Deployed and verified signed `ServiceOperations.UnifiedJobWorkflow` `1.0.24.0`, public-key token
