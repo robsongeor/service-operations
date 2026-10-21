@@ -13,6 +13,7 @@ by scanning the repository.
 | Source audit: readiness, defects and refactor opportunities | [`reviews/2026-10-10-application-audit.md`](reviews/2026-10-10-application-audit.md) |
 | Job Card review screens, tracking/recovery gaps and next work | [`reviews/2026-10-10-job-card-review.md`](reviews/2026-10-10-job-card-review.md) |
 | Current technician Job Card and office-review architecture | [`architecture/technician-job-submission.md`](architecture/technician-job-submission.md) |
+| Technician Job Card end-to-end flow and complete case catalogue | [`features/TECHNICIAN_JOB_CARD_END_TO_END_MAP.md`](features/TECHNICIAN_JOB_CARD_END_TO_END_MAP.md) |
 | Multi-technician ownership and expected returns | [`architecture/multi-technician-job-cards.md`](architecture/multi-technician-job-cards.md) |
 | Local office-approved meters, recovery implementation and activation gates | [`reviews/2026-10-10-job-card-implementation.md`](reviews/2026-10-10-job-card-implementation.md) |
 | Dedicated Job Card meter identity, guard rollout and rollback | [`job-card-meter-writer-rollout.md`](job-card-meter-writer-rollout.md) |

@@ -18,6 +18,8 @@ Job/assignment. These statements describe release state, not permission to enabl
 
 For end-to-end mapping, read this page first, then:
 
+- [Technician Job Cards and Office Review — End-to-End Map](../features/TECHNICIAN_JOB_CARD_END_TO_END_MAP.md)
+  for the numbered case catalogue and acceptance walkthroughs;
 - [Multi-technician Job Cards](multi-technician-job-cards.md) for assignment ownership and expected returns;
 - [Office Job Card review](../wiki/Office-Job-Card-Review.md) for the user-facing office process;
 - [Job Card implementation and activation report](../reviews/2026-10-10-job-card-implementation.md)
