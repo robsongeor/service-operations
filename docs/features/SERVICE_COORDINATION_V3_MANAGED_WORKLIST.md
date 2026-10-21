@@ -1,7 +1,7 @@
 # Service Coordination V3 — managed worklist release plan
 
-Status: source, signed Dataverse backend, isolated yellow-cliff V3 pilot and operational integrations
-deployed; named-role acceptance and live migration remain held.
+Status: source, signed Dataverse backend, isolated yellow-cliff V3 pilot, operational integrations
+and historical managed/Auckland migration deployed; named-role acceptance and go/no-go remain open.
 
 ## Business boundary
 
@@ -29,10 +29,10 @@ profiles do not receive it. Signed assembly `1.0.24.0` and the six-API manifest 
 independently verified on 21 October 2026. The scoped operation changed no roles, assignments,
 workflow steps, business data, seeds or migration state.
 
-## Historical migration dry run
+## Historical migration
 
-The read-only production snapshot exported at `2026-10-21T04:47:38Z` contained 1,396 Jobs. The
-current deterministic plan contains:
+The approved read-only production snapshot exported at `2026-10-21T05:12:10Z` contained 1,396
+Jobs. Its deterministic plan contained:
 
 | Classification | Count | Treatment |
 | --- | ---: | --- |
@@ -43,14 +43,15 @@ current deterministic plan contains:
 | Finalised, Void, inactive or plan exceptions | 0 | No write |
 
 Plan hash:
-`6d95606d55fecc00147c8cefb6423d3eb1ab923238ff1f5c14fcbaebdbf912da`
+`7cff8625c2dd0806d05d7bd97c418b9b759dbe9cdd8775fdfabc3d53ab4352ec`
 
-The count can change as real Jobs are created or closed. Therefore the snapshot and plan must be
-regenerated immediately before approval. Apply requires the exact approved hash, the original row
-ETag, a checkpoint file, the two-field allowlist and a zero-exception Plan. Verification rereads
-every active planned row as managed Auckland and every excluded terminal row as unchanged, including
-its original ETag. Rollback restores only rows
-whose exact post-Apply ETag and values remain unchanged; newer user work is preserved as a conflict.
+The owner explicitly approved that exact hash. Apply used the original row ETags, checkpoint file,
+two-field allowlist and zero-exception plan. Its audit recorded 207 updates, three already-applied
+rows and 44 conditional PATCH races; every invocation used the same approved hash and proposed
+values. A fresh authoritative snapshot at `2026-10-21T05:18:23Z` verified all 254 active planned
+rows as managed Auckland and every one of the 1,142 excluded terminal rows unchanged at its original
+state and ETag. There were zero mismatches and zero missing rows. Rollback remains conflict-safe: it
+restores only rows whose exact post-Apply ETag and values remain unchanged, preserving newer work.
 
 ## Hosting boundary
 
@@ -72,11 +73,13 @@ enabled; verification did not create or change a Job or TimeCloud record.
 
 1. [x] Review the source diff, plugin package and six-Custom-API manifest.
 2. [x] Verify the full automated suite and signed plugin tests.
-3. Export a fresh live snapshot and approve its exact plan hash/counts.
+3. [x] Export a fresh live snapshot and approve its exact plan hash/counts.
 4. [x] Deploy and verify assembly `1.0.24.0` plus `gr_UnmanageJobBookJob` without changing human role
    assignments beyond the existing Full/Coordinator privilege boundary.
 5. [ ] V3 is deployed to yellow-cliff and the approved GreenTree/TimeCloud settings passed read-only
    production smoke tests. Run Full Access, Service Coordinator, Job Book Admin and Office Admin
    acceptance while V2 remains available.
-6. Apply and verify the approved migration, then confirm branch, all-branches and watchlist views.
-7. Record explicit go/no-go approval before treating V3 as released.
+6. [x] Apply and independently verify the approved migration; the authenticated watchlist boundary
+   returned 200 with no invalid managed/terminal rows.
+7. Run named-role branch, all-branches, membership and watchlist UI acceptance.
+8. Record explicit go/no-go approval before treating V3 as released.

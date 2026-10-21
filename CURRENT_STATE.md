@@ -33,12 +33,15 @@ smoke returned 200 from GreenTree, TimeCloud authentication and TimeCloud search
 production mode with Job creation enabled; no Job or TimeCloud record was created or changed during
 verification. Named-role UI acceptance remains open.
 
-A read-only production snapshot at `2026-10-21T04:47:38Z` found 1,396 Jobs. The deterministic dry
-run plans 254 active historical Jobs as managed Auckland (204 already Auckland and 50 branchless)
-and excludes 1,142 GreenTree-closed Jobs, with zero exceptions. Plan hash
-`6d95606d55fecc00147c8cefb6423d3eb1ab923238ff1f5c14fcbaebdbf912da` is evidence only: counts must
-be regenerated and the exact new hash approved immediately before any Apply. No V3 data migration
-has occurred. See the
+A fresh read-only production snapshot at `2026-10-21T05:12:10Z` found 1,396 Jobs. The owner
+explicitly approved plan hash
+`7cff8625c2dd0806d05d7bd97c418b9b759dbe9cdd8775fdfabc3d53ab4352ec`: 254 active historical Jobs
+to managed Auckland (204 already Auckland and 50 branchless), 1,142 GreenTree-closed Jobs excluded,
+and zero exceptions. The checkpoint audit recorded 207 updates, three already-applied rows and 44
+conditional PATCH races from the same exact plan/target. A fresh authoritative snapshot at
+`2026-10-21T05:18:23Z` verified all 254 active rows as managed Auckland, all 1,142 excluded rows
+unchanged at their original state and ETag, and zero mismatches or missing rows. The authenticated
+personal-watch endpoint returned 200 with no invalid managed/terminal rows. See the
 [V3 managed-worklist release plan](docs/features/SERVICE_COORDINATION_V3_MANAGED_WORKLIST.md).
 
 ## V2 release scope — 11 October 2026

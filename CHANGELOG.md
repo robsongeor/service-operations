@@ -22,8 +22,13 @@
   the unauthenticated boundary failed closed. With separate explicit approval, copied only the 15
   GreenTree/TimeCloud operational settings from V2 while preserving all 25 existing V3 settings.
   Production GreenTree read, TimeCloud authentication and TimeCloud read checks each returned 200;
-  no Job or TimeCloud record was created or changed. Named-role acceptance and the historical
-  managed/Auckland migration remain release gates.
+  no Job or TimeCloud record was created or changed. Named-role acceptance remained a release gate.
+- Applied explicitly approved historical plan
+  `7cff8625c2dd0806d05d7bd97c418b9b759dbe9cdd8775fdfabc3d53ab4352ec`. The checkpoint audit
+  recorded 207 updates, three rows already applied and 44 conditional PATCH races; all invocations
+  used the same approved target. A fresh authoritative snapshot then verified all 254 active Jobs
+  as managed Auckland, all 1,142 GreenTree-closed Jobs unchanged, and zero mismatches or missing
+  rows. The authenticated personal-watch boundary returned 200 with no invalid rows.
 - Began the isolated V3 Service Coordination release. Job Book remains the complete numbered-job
   record; Service Coordination now loads only Jobs explicitly marked for coordinator management.
   Jobs created in Service Coordination are managed by default, while Job Book registration remains
