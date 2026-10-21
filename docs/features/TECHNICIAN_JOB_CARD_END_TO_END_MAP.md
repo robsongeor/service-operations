@@ -165,10 +165,28 @@ with an independent delivery and Job Card lifecycle.
 
 The row action should be contextual:
 
-- Before any technician is sent: **Send to technician** opens the roster dialog with the selected
-  first technician and a Compose action.
-- After any send/history exists: **Technicians (n)** or **Manage technicians** opens the same dialog.
+- Before any technician-card activity exists: **Email technician** may open the existing compose
+  dialog directly for the selected first technician, preserving the fast first-send path.
+- After any request, dispatch or submission history exists: clicking **Email technician** must first
+  open the technician roster dialog. It must not jump directly to another send or replacement.
+- After the dialog is opened, the row action may be relabelled **Technicians (n)** or **Manage
+  technicians** so the continuing behavior is obvious.
 - The dialog is available from both Job Book and Service Coordination and uses one shared workflow.
+
+For Job Book specifically, the click sequence is:
+
+1. Load the current Job version, current primary/assignments, bounded Azure Job Card history and
+   relevant dispatch state.
+2. If there is genuinely no technician-card activity, open the existing composer for the selected
+   first technician.
+3. If any activity exists, open **Manage technicians** and show the complete known list before the
+   user chooses Compose, Resend, Withdraw or Add technician.
+4. If roster/history cannot be verified, show a retryable error. Do not assume the Job is new and
+   open a blank composer, because that could create an accidental replacement/duplicate cycle.
+
+“Activity” is intentionally broader than confirmed email delivery. An active secure link, queued or
+failed dispatch, expired link, withdrawal, submission or completed review must also trigger the
+roster dialog, because each can affect whether a new send is safe.
 
 Each technician row should show:
 
@@ -397,6 +415,10 @@ Compatibility rules:
 | JC-H12 | Existing blank-assignment primary cycle | Display as legacy initial participant and preserve its saved technician identity. | Required compatibility design |
 | JC-H13 | Job Book versus Service Coordination | Both open the same roster/dialog and invoke the same guarded assignment/send actions. | Proposed |
 | JC-H14 | Mixed states | Dialog may show Mo Awaiting, Rick Sent, Sam Withdrawn and prior received cycles without collapsing them. | Proposed |
+| JC-H15 | Job Book first send with no history | Email button opens the existing composer directly for the selected first technician. | Proposed |
+| JC-H16 | Job Book click with any existing activity | Email button opens the roster summary first; no send/replacement occurs until a row action is chosen. | Proposed |
+| JC-H17 | Existing failed/pending dispatch or active/expired link | Treat as activity and show the roster even when confirmed delivery is absent. | Proposed safety rule |
+| JC-H18 | Roster/history check fails or is truncated | Show retryable unavailable state and do not fall back to direct compose. | Proposed fail-closed rule |
 
 ## Known open decisions and gaps
 
