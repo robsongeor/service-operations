@@ -51,7 +51,9 @@ This is remaining work, not a completed-change log. See [current state](CURRENT_
 
 - [ ] **A01:** align client capabilities, narrow payloads, role-policy manifests and server guards.
   Cover mechanic/supplier edits, Equipment saves containing compliance fields, and post-email allocation.
-  Preserve server-side rejection of unrelated writes; test real restricted identities.
+  Preserve server-side rejection of unrelated writes; test real restricted identities. The narrow
+  Nargiza Site-create fix is released in V2 with signed guard `1.0.26.0`; verify the allowed retry
+  and denied induction/master-data edits with her named account.
 - [ ] **A02:** registration must remain Staging (stored as Unallocated) until confirmed dispatch, regardless of a selected
   mechanic/supplier. Update registration/guard/tests together and plan historical correction separately.
 - [ ] **A03, owner-approved:** GreenTree closure without required completion evidence remains

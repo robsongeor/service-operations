@@ -2,7 +2,9 @@
 
 Recorded status: thirteen-account Entra and Dataverse roster and home branches re-audited live on
 21 October 2026.
-The restricted-access server guard is recorded deployed; named-user acceptance remains required.
+The restricted-access server guard `1.0.26.0` is recorded deployed; named-user acceptance remains
+required. Nargiza's 22 October Site-create attempt exposed a rejected safe Site default. The narrow
+release permits exactly that safe Boolean default without broadening Site master-data access.
 The 10 October source audit found the guard disagrees with approved mechanic and Equipment
 editing capabilities. See [release gates](../../RELEASE_READINESS.md) and
 [audit A01](../reviews/2026-10-10-application-audit.md#a01--client-permissions-and-server-allowlists-disagree).
@@ -156,7 +158,9 @@ and tested for the final approved reviewer roster.
 
 These are intended navigation and action boundaries. They must also hold for direct links,
 related-record drawers and API requests. The profiles and restricted screens are implemented;
-the current signed server guard is `1.0.24.0`. All 14 restricted-access and 15 numbering-invariant
+the current signed live server guard is `1.0.26.0`. It permits only the Boolean `false` induction
+default during restricted Site creation and still requires Nargiza's acceptance. All 14
+restricted-access and 15 numbering-invariant
 steps are enabled and independently verified. That deployment evidence still does not prove every
 capability above works with real restricted accounts.
 

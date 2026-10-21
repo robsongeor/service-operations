@@ -1,10 +1,10 @@
 # Unified Job workflow — signing-key custody
 
-Status: primary local key used for the production `1.0.25.0` deployment on 21 October 2026; recovery
+Status: primary local key used for the production `1.0.26.0` deployment on 22 October 2026; recovery
 backup remains required.
 
-V3 source declares `1.0.25.0`. Its signed package was explicitly approved and deployed on
-21 October 2026.
+Current source and production declare `1.0.26.0` for the restricted Site-create correction. The
+signed package has SHA-256 `50e59edf1dc3d2a92fa9d6c36b58f8194c61c186a3a7a4ceaf500cbcfaee6a85`.
 
 ## Current custody record
 

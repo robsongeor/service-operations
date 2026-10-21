@@ -67,8 +67,16 @@ public static class RestrictedAccessTests
             Test(r+" creates platform-enriched Site", () => {
                 var target=Row("gr_site"); target["gr_name"]="New Site"; target["gr_address"]="13 Sims Road"; target["gr_customer"]=new EntityReference("gr_customer",Id);
                 target["gr_siteid"]=Id; target["ownerid"]=new EntityReference("systemuser",Id); target["createdby"]=new EntityReference("systemuser",Id);
-                target["createdon"]=DateTime.UtcNow; target["statecode"]=new OptionSetValue(0); target["statuscode"]=new OptionSetValue(1);
+                target["createdon"]=DateTime.UtcNow; target["statecode"]=new OptionSetValue(0); target["statuscode"]=new OptionSetValue(1); target["gr_inductionrequired"]=false;
                 RestrictedWritePolicy.Validate(r,"Create",target,null,Id);
+            });
+            Test(r+" cannot configure induction requirements through Site creation", () => {
+                var target=Row("gr_site"); target["gr_name"]="New Site"; target["gr_customer"]=new EntityReference("gr_customer",Id); target["gr_inductionrequired"]=true;
+                Denied(() => RestrictedWritePolicy.Validate(r,"Create",target,null,Id));
+            });
+            Test(r+" rejects malformed induction defaults during Site creation", () => {
+                var target=Row("gr_site"); target["gr_name"]="New Site"; target["gr_customer"]=new EntityReference("gr_customer",Id); target["gr_inductionrequired"]="false";
+                Denied(() => RestrictedWritePolicy.Validate(r,"Create",target,null,Id));
             });
             Test(r+" rejects Site owned by another user", () => {
                 var target=Row("gr_site"); target["gr_name"]="New Site"; target["gr_customer"]=new EntityReference("gr_customer",Id);

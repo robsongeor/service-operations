@@ -3,6 +3,22 @@
 Reviewed 21 October 2026 against production V2 and the deployed `v3-deployment` acceptance candidate.
 This page is a current summary, not a release history or blanket live-cloud certification.
 
+## Restricted Site creation incident — 22 October 2026
+
+Nargiza's real Office Admin acceptance exposed a V2 Site-create denial after the Customer had already
+been saved. The shared create request and restricted server guard did not account for the Site
+table's `gr_inductionrequired = false` create default. Release `1.0.26.0` now sends that
+safe default explicitly and permits it only when it is the Boolean value `false`; restricted users
+still cannot configure induction requirements, edit existing Site master data or gain any broader
+write access through this path. Focused client, deployment-contract and all 240 offline
+restricted-access policy tests pass.
+
+The signed guard `1.0.26.0` is live in production with SHA-256
+`50e59edf1dc3d2a92fa9d6c36b58f8194c61c186a3a7a4ceaf500cbcfaee6a85`; its assembly-only
+deployment changed no Dataverse role, assignment, schema, business record, step or feature flag.
+The corresponding V2 client change is delivered by the V2 deployment branch. Nargiza's retry and
+denied-action acceptance remain required.
+
 ## Private Workshop Assistant — private pilot, 21 October 2026
 
 The first Workshop Assistant slice is implemented and passes a signed-in localhost acceptance. It

@@ -519,6 +519,7 @@ namespace ServiceOperations.Access
         static readonly string[] JobDetails = { "gr_description", "gr_ordernumber", "gr_equipment", "gr_site", "gr_contact", "gr_mechanic", "gr_externalsupplierdetails" };
         static readonly string[] EquipmentDetails = { "gr_fleet", "gr_alternatefleetnumbers", "gr_make", "gr_model", "gr_serial", "gr_site" };
         static readonly string[] IntakeDetails = { "gr_description", "gr_customerpo", "gr_equipment", "gr_customer", "gr_site", "gr_contact", "gr_fleetsnapshot", "gr_serialsnapshot", "gr_makesnapshot", "gr_modelsnapshot", "gr_customersnapshot", "gr_sitesnapshot", "gr_addresssnapshot", "gr_addressverified", "gr_addressnotfoundconfirmed", "gr_equipmentreviewrequired" };
+        static readonly string[] SiteCreateDefaults = { "gr_inductionrequired" };
         // Dataverse can enrich a Create Target before a synchronous PreOperation plug-in runs.
         // These are platform-owned attributes, not additional business fields granted to the
         // Office or Job Book Admin profile. Writable defaults are validated below.
@@ -604,6 +605,15 @@ namespace ServiceOperations.Access
                 if (timestamp < DateTime.UtcNow.AddHours(-1) || timestamp > DateTime.UtcNow.AddMinutes(5)) Deny();
             }
         }
+        static void ValidateSiteCreate(Entity target, Guid initiatingUserId)
+        {
+            ValidateCreate(target, new[] { "gr_name", "gr_address", "gr_customer" }.Concat(SiteCreateDefaults), initiatingUserId);
+            // The Site table supplies this Two Options default during Create even when the
+            // browser submits only name, address and Customer. Restricted users may accept the
+            // safe default, but cannot use Site creation to configure induction requirements.
+            if (target.Contains("gr_inductionrequired") &&
+                (!(target["gr_inductionrequired"] is bool) || (bool)target["gr_inductionrequired"])) Deny();
+        }
         static bool SamePlatformValue(object left, object right)
         {
             if (left == null || right == null) return left == null && right == null;
@@ -652,7 +662,7 @@ namespace ServiceOperations.Access
             if (message == "Create")
             {
                 if (target.LogicalName == "gr_customer") { ValidateCreate(target, new[] { "gr_name" }, initiatingUserId); return; }
-                if (target.LogicalName == "gr_site") { ValidateCreate(target, new[] { "gr_name", "gr_address", "gr_customer" }, initiatingUserId); return; }
+                if (target.LogicalName == "gr_site") { ValidateSiteCreate(target, initiatingUserId); return; }
                 // Registration/dispatch require dedicated guarded operations. Do not authorize
                 // generic Job/ledger/Email Dispatch creation merely from an Admin role.
                 Deny(); return;

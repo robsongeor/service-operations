@@ -221,7 +221,7 @@ test('dry-run deployment package is complete, ordered and cannot deploy', () => 
     assert.equal(readiness.regionalTables.length, 4)
     assert.equal(readiness.customApis.length, 6)
     assert.equal(plan.featureFlagDuringDeployment, false)
-    assert.equal(plan.assembly.version, '1.0.24.0')
+    assert.equal(plan.assembly.version, '1.0.26.0')
     assert.equal(/AssemblyVersion\("([^"]+)"\)/.exec(assemblyInfo)?.[1], plan.assembly.version)
     assert.equal(/AssemblyFileVersion\("([^"]+)"\)/.exec(assemblyInfo)?.[1], plan.assembly.version)
     assert.equal(plan.provisioningIncluded, false)

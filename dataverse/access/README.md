@@ -1,7 +1,8 @@
 # Restricted access guard
 
-**Live in production from 9 October 2026; current assembly `1.0.25.0`.** The 21 October Job-update-
-metadata correction has SHA-256 `2285b69f253a85bdac8f409786c5d7d8ccf47e767c4fdf76e823016ec146ff7c`.
+**Live in production from 9 October 2026; current live assembly `1.0.26.0`.** The 22 October
+restricted Site-create correction has SHA-256
+`50e59edf1dc3d2a92fa9d6c36b58f8194c61c186a3a7a4ceaf500cbcfaee6a85`.
 The signed assembly and 14 synchronous PreOperation restricted-access steps are enabled with exact
 secure Dataverse role IDs, required `Before` images and no filtering attributes. The post-deployment
 read-only check also found all 15 number-invariant steps enabled; this pre-existing rollout state was
@@ -9,6 +10,12 @@ not changed by the assembly-only update and must be reconciled separately agains
 record. Do not assign the obsolete Job Book Only role to the new Admin cohorts.
 
 ## Policy alignment status
+
+The 22 October release fixes the real Office Admin Site-create rejection by making the
+Site table's `gr_inductionrequired = false` default explicit in the client and accepting exactly
+that safe Boolean default in the Create guard. `true`, malformed values, induction requirements and
+all other Site business fields remain denied. The signed assembly-only update is live and changed no
+roles, assignments, schema, records, steps or feature flags. Named-user acceptance remains required.
 
 The 21 October source updates align the restricted Job correction allowlist with the approved
 mechanic/supplier selector and safely validate Dataverse-owned update metadata. The guard revalidates
