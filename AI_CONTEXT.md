@@ -43,6 +43,9 @@ Dataverse requests. Domain helpers own reusable business calculations and valida
   issued only after server-side Dataverse identity validation; model tools are fixed bounded reads
   and model output never authorizes an operational write. Future task/transport actions require a
   separately reviewed pending-action and manager-approval boundary.
+- Rental forklift fleet identifiers use the canonical `FN` prefix with no space (for example
+  `FN1000`). Voice and search handling normalize confident spoken variants such as `F N`, `eff en`
+  and `ef en` followed by digits before an Equipment lookup.
 
 Feature-specific rules belong in their authoritative architecture documents.
 

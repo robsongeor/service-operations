@@ -51,6 +51,12 @@ The assistant uses the established focused services for exact Equipment, Equipme
 exact Job and scoped Job Office Updates. Job search adds a new bounded `$top=8` projection. It does
 not populate or alter the shared operational caches because the pilot has no mutations.
 
+Rental Equipment identifiers follow the company `FN` convention. Transcription context supplies
+literal `FN1000`/`FN2000` examples, the conversation display canonicalizes confident spoken forms
+(`F N`, `eff en`, `ef en`) followed by digits, and `search_equipment` independently extracts the
+canonical `FN` identifier before calling Dataverse. This layered handling keeps a transcription
+spelling error from becoming a fleet lookup error.
+
 ## Configuration
 
 All gates default to false:

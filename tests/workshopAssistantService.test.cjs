@@ -75,4 +75,7 @@ test('Workshop Assistant creates an owner session with read-only tools and no br
     assert.equal(session.tools.some((tool) => /create|update|delete|send|book/i.test(tool.name)), false)
     assert.match(session.instructions, /read-only/i)
     assert.match(session.instructions, /cannot create or change/i)
+    assert.match(session.instructions, /FN1000 or FN2000/i)
+    assert.equal(session.audio.input.transcription.language, 'en')
+    assert.match(session.audio.input.transcription.prompt, /canonical FN identifier/i)
 })

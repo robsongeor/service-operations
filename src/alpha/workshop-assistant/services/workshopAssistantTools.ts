@@ -2,6 +2,7 @@ import { fetchEquipmentById, searchEquipment } from '../../jobs/services/equipme
 import { fetchEquipmentJobs, fetchJobCore } from '../../jobs/services/jobsApi.ts'
 import { fetchJobOfficeUpdatesForJobs } from '../../jobs/services/jobOfficeUpdatesApi.ts'
 import type { Job } from '../../jobs/types/job.types.ts'
+import { normalizeWorkshopEquipmentQuery } from '../domain/workshopIdentifier.ts'
 import type { WorkshopAssistantSource, WorkshopAssistantToolName, WorkshopAssistantToolResult } from '../types/workshopAssistant.types.ts'
 
 const DATAVERSE_URL = import.meta.env?.VITE_DATAVERSE_URL ?? ''
@@ -91,7 +92,7 @@ export async function runWorkshopAssistantTool(
     signal?: AbortSignal,
 ): Promise<WorkshopAssistantToolResult> {
     if (name === 'search_equipment') {
-        const query = requiredText(args.query, 'An Equipment search', 100)
+        const query = normalizeWorkshopEquipmentQuery(requiredText(args.query, 'An Equipment search', 100))
         const items = (await searchEquipment(accessToken, query, {}, signal)).slice(0, 8)
         return {
             output: { items: items.map((item) => ({

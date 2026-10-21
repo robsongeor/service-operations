@@ -18,6 +18,11 @@ or update workshop tasks, transport requests, Jobs, Equipment or any other Datav
 records are shown as sources in the drawer, and the session instructions treat retrieved business
 data as untrusted content rather than instructions.
 
+Rental fleet identifiers use the company `FN` convention. Voice transcription is prompted with
+examples such as `FN1000` and `FN2000`; confident `F N`, `eff en`, `ef en` and spaced `FN` variants
+are shown and searched in canonical `FN`-plus-digits form. The Equipment tool repeats this
+normalization independently, so a phonetic transcript does not become a failed literal search.
+
 The dedicated East US 2 Azure OpenAI resource, quota-compatible Realtime mini and transcription
 deployments, and server-only V3 settings are provisioned. A signed-in George-only localhost session
 opened the drawer, created a short-lived session and returned a successful harmless response. The

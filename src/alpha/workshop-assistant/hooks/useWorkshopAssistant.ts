@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMsal } from '@azure/msal-react'
 import { acquireDataverseAccessToken } from '../../../auth/dataverseAuthentication.ts'
 import { useActiveMsalAccount } from '../../../auth/useActiveMsalAccount.ts'
+import { canonicalizeWorkshopIdentifiers } from '../domain/workshopIdentifier.ts'
 import { connectWorkshopAssistantRealtime, type WorkshopAssistantRealtimeConnection } from '../realtime/workshopAssistantRealtime.ts'
 import type { WorkshopAssistantConnectionState, WorkshopAssistantMessage, WorkshopAssistantSource } from '../types/workshopAssistant.types.ts'
 
@@ -33,7 +34,7 @@ export function useWorkshopAssistant() {
 
     const callbacks = useRef({
         onState: setState,
-        onUserTranscript: addUserMessage,
+        onUserTranscript: (text: string) => addUserMessage(canonicalizeWorkshopIdentifiers(text)),
         onAssistantDelta(delta: string) {
             const id = pendingAssistantId.current || messageId()
             pendingAssistantId.current = id
@@ -64,7 +65,7 @@ export function useWorkshopAssistant() {
     })
 
     useEffect(() => {
-        callbacks.current.onUserTranscript = addUserMessage
+        callbacks.current.onUserTranscript = (text: string) => addUserMessage(canonicalizeWorkshopIdentifiers(text))
     }, [addUserMessage])
 
     useEffect(() => () => connection.current?.close(), [])
@@ -93,7 +94,7 @@ export function useWorkshopAssistant() {
     }, [account, instance])
 
     const sendText = useCallback(async (value: string) => {
-        const text = value.trim()
+        const text = canonicalizeWorkshopIdentifiers(value).trim()
         if (!text) return
         addUserMessage(text)
         const active = await ensureConnection(false)
