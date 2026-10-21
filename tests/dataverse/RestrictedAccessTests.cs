@@ -88,6 +88,18 @@ public static class RestrictedAccessTests
                 var mechanic=new Entity("gr_mechanic",OtherId); mechanic["statecode"]=new OptionSetValue(0); mechanic["gr_jobassignmentenabled"]=true;
                 RestrictedWritePolicy.ValidateJobAssignment(target,before,mechanic); RestrictedWritePolicy.Validate(r,"Update",target,before);
             });
+            Test(r+" assigns an active technician with validated Dataverse update metadata", () => {
+                var before=Row("gr_job"); var target=Row("gr_job"); target["gr_mechanic"]=new EntityReference("gr_mechanic",OtherId);
+                target["gr_jobid"]=Id; target["modifiedby"]=new EntityReference("systemuser",Id);
+                target["modifiedon"]=DateTime.UtcNow; target["modifiedonbehalfby"]=null;
+                var mechanic=new Entity("gr_mechanic",OtherId); mechanic["statecode"]=new OptionSetValue(0); mechanic["gr_jobassignmentenabled"]=true;
+                RestrictedWritePolicy.ValidateJobAssignment(target,before,mechanic); RestrictedWritePolicy.Validate(r,"Update",target,before,Id);
+            });
+            Test(r+" rejects Job update metadata for another user", () => {
+                var target=Row("gr_job"); target["gr_mechanic"]=new EntityReference("gr_mechanic",OtherId);
+                target["modifiedby"]=new EntityReference("systemuser",OtherId);
+                Denied(() => RestrictedWritePolicy.Validate(r,"Update",target,Row("gr_job"),Id));
+            });
             Test(r+" rejects an inactive technician", () => {
                 var before=Row("gr_job"); var target=Row("gr_job"); target["gr_mechanic"]=new EntityReference("gr_mechanic",OtherId);
                 var mechanic=new Entity("gr_mechanic",OtherId); mechanic["statecode"]=new OptionSetValue(1); mechanic["gr_jobassignmentenabled"]=true;

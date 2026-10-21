@@ -662,7 +662,7 @@ namespace ServiceOperations.Access
             if (target.LogicalName == "gr_job")
             {
                 if (before.GetAttributeValue<bool>("gr_registrationvoid")) Deny();
-                Fields(target, JobDetails.Concat(office ? new[] { "gr_gtentered", "gr_greentreestatus", "gr_greentreestatuscheckedon", "gr_timecloudentered" } : new string[0]));
+                ValidateUpdate(target, before, JobDetails.Concat(office ? new[] { "gr_gtentered", "gr_greentreestatus", "gr_greentreestatuscheckedon", "gr_timecloudentered" } : new string[0]), initiatingUserId);
                 GreenTreeStatus(target, "gr_gtentered");
                 return;
             }

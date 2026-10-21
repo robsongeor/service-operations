@@ -4,6 +4,19 @@ Recorded deployment: restricted-access package completed 9 October 2026. V2's cu
 builds unified registration/workflow enabled; data migration and invariant activation still have
 independent gates. This documentation audit did not reverify the cloud.
 
+## Job correction platform-metadata update — 21 October 2026
+
+- Deployed the signed assembly-only rebuild at version `1.0.25.0`, public-key token
+  `0edea2881bb8578c`, SHA-256
+  `2285b69f253a85bdac8f409786c5d7d8ccf47e767c4fdf76e823016ec146ff7c`.
+- Exception-only tracing captured the rejected update shape as `gr_jobid`, `gr_mechanic`,
+  `modifiedby`, `modifiedon` and `modifiedonbehalfby`. Tracing was immediately returned to Off.
+- Restricted Job corrections now validate those Dataverse-owned update fields using the same
+  fail-closed path already used for Equipment corrections; caller identity, timestamps, primary key
+  and delegated-update metadata remain checked.
+- Used `UpdateAssembly` only. No schema, roles, assignments, APIs, steps, migration, seeds,
+  application deployment, feature flags or business records were changed.
+
 ## Mechanic-correction guard update — 21 October 2026
 
 - Deployed the signed assembly-only rebuild at version `1.0.24.0`, public-key token
