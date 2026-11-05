@@ -15,6 +15,9 @@
 
 ## Unreleased
 
+- Expanded the client-and-server enforced online Job Card pilot to Lasantha
+  (`lasak2013@yahoo.com`), Shalvin (`shalvin2017prasad@gmail.com`) and Sabbi
+  (`sabbi@liftrucks.co.nz`), retaining the existing recipients and localhost send guard.
 - Reconciled the live user roster: Bruce now has only Service Coordinator; Paul and James now have
   only Job Book Admin in the Service Operations application and Dataverse, with verified Auckland
   home branches. Unrelated Dataverse roles and the Job Card reviewer allowlist were preserved.

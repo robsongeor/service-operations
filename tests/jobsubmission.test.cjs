@@ -63,10 +63,13 @@ async function generate(overrides = {}) {
 test.beforeEach(configure)
 test.afterEach(restore)
 
-test('server pilot recipients match the approved Liftrucks technician addresses', () => {
+test('server pilot recipients match the approved technician addresses', () => {
     assert.equal(service.test.pilotRecipientEnabled('mou@liftrucks.co.nz'), true)
     assert.equal(service.test.pilotRecipientEnabled(' MOU@LIFTRUCKS.CO.NZ '), true)
     assert.equal(service.test.pilotRecipientEnabled('ricardo@liftrucks.co.nz'), true)
+    assert.equal(service.test.pilotRecipientEnabled('lasak2013@yahoo.com'), true)
+    assert.equal(service.test.pilotRecipientEnabled(' SHALVIN2017PRASAD@GMAIL.COM '), true)
+    assert.equal(service.test.pilotRecipientEnabled('sabbi@liftrucks.co.nz'), true)
     assert.equal(service.test.pilotRecipientEnabled('georger@liftrucks.co.nz'), true)
     assert.equal(service.test.pilotRecipientEnabled('nzmouhib@yahoo.co.nz'), false)
     assert.equal(service.test.pilotRecipientEnabled('another.technician@example.test'), false)

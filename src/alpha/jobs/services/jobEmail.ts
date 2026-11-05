@@ -26,6 +26,9 @@ export const LOCAL_JOB_EMAIL_DISABLED_MESSAGE = 'Job Card email sending is disab
 export const ONLINE_JOB_CARD_PILOT_EMAILS = [
     'mou@liftrucks.co.nz',
     'ricardo@liftrucks.co.nz',
+    'lasak2013@yahoo.com',
+    'shalvin2017prasad@gmail.com',
+    'sabbi@liftrucks.co.nz',
     'georger@liftrucks.co.nz',
 ] as const
 
