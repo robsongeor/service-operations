@@ -44,7 +44,7 @@ jobs:
         shell: bash
         run: |
           SHORT_SHA=$(git rev-parse --short HEAD)
-          echo "VITE_APP_VERSION=V3 Pilot · $SHORT_SHA" >> "$GITHUB_ENV"
+          echo "VITE_APP_VERSION=V3 Dev · $SHORT_SHA" >> "$GITHUB_ENV"
           echo "VITE_APP_VERSION_IS_RELEASE=false" >> "$GITHUB_ENV"
       - name: Set up Node.js
         uses: actions/setup-node@v4

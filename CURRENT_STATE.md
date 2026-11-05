@@ -1,7 +1,20 @@
 # Current application state
 
-Reviewed 21 October 2026 against production V2 and the deployed `v3-deployment` acceptance candidate.
+Reviewed 5 November 2026 against V2 Live and the production-connected V3 Dev environment.
 This page is a current summary, not a release history or blanket live-cloud certification.
+
+## Hosted environment designation — 5 November 2026
+
+[`https://kind-wave-0cdea2200.2.azurestaticapps.net/job-book`](https://kind-wave-0cdea2200.2.azurestaticapps.net/job-book)
+is the user-facing **V2 Live** Job Book. The V2 deployment workflow labels its artifact `V2 Live`
+and the staff documentation directs users to kind-wave.
+
+[`https://yellow-cliff-068680700.7.azurestaticapps.net/`](https://yellow-cliff-068680700.7.azurestaticapps.net/)
+is the **V3 Dev** frontend for ongoing development and acceptance. It is not an isolated data sandbox:
+it retains production-connected configuration and hosts the authoritative shared Job Card API,
+private storage and review lifecycle used by V2 Live. Existing technician links therefore continue
+to depend on yellow-cliff, and backend changes there remain production changes even though its
+frontend is labelled Dev.
 
 ## Restricted Site creation incident — 22 October 2026
 
@@ -52,7 +65,7 @@ response and completed an Equipment `4582` lookup with a safe no-match result. N
 was created or changed. See the [Workshop Assistant architecture](docs/architecture/workshop-assistant.md)
 and `TODO.md`.
 
-## V3 managed Service Coordination worklist — deployed acceptance candidate, 21 October 2026
+## V3 managed Service Coordination worklist — V3 Dev, 21 October 2026
 
 Local branch `v3-deployment` now separates the complete Auckland Job Book from the smaller
 coordinator-managed worklist. Job Book creation explicitly starts unmanaged; Service Coordination

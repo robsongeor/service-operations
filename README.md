@@ -14,6 +14,14 @@ Job-level cards use private Azure snapshots/evidence without Dataverse access. S
 assignment links retain their separate server-side Dataverse Application User workflow.
 GreenTree account references remain separate from operational Customer/Site relationships.
 
+## Hosted environments
+
+- **V2 Live:** [Job Book](https://kind-wave-0cdea2200.2.azurestaticapps.net/job-book) is the
+  user-facing production application.
+- **V3 Dev:** [yellow-cliff](https://yellow-cliff-068680700.7.azurestaticapps.net/) is the
+  production-connected development frontend. It is not a data sandbox and also hosts the
+  authoritative shared Job Card backend used by V2 Live.
+
 ## Documentation
 
 Start with the [knowledge base](docs/README.md). It maps each feature to one authoritative

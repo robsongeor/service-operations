@@ -11,16 +11,25 @@ There are two frontend deployment workflows, not one:
 
 | Branch | Workflow / destination |
 | --- | --- |
-| `v3-deployment` | `azure-static-web-apps-yellow-cliff-068680700.yml` / V3 managed-worklist acceptance candidate |
-| `v2-deployment` | `azure-static-web-apps-kind-wave-0cdea2200.yml` / V2 |
+| `v2-deployment` | `azure-static-web-apps-kind-wave-0cdea2200.yml` / **V2 Live**, the user-facing production application |
+| `v3-deployment` | `azure-static-web-apps-yellow-cliff-068680700.yml` / **V3 Dev**, the production-connected development frontend |
 
 Both explicitly build on Node 20 with `npm ci` and `npm run build`, upload `dist` with
-`skip_app_build: true`, and deploy managed API source from `api`. V3 and V2 label their short SHA as
-acceptance/pilot builds. Server settings remain separate from public build-time flags.
+`skip_app_build: true`, and deploy managed API source from `api`. V2 labels its short SHA as
+`V2 Live`; V3 labels its short SHA as `V3 Dev`. Server settings remain separate from public
+build-time flags.
+
+The live office entry point is
+[`https://kind-wave-0cdea2200.2.azurestaticapps.net/job-book`](https://kind-wave-0cdea2200.2.azurestaticapps.net/job-book).
+Yellow-cliff's frontend is available at
+[`https://yellow-cliff-068680700.7.azurestaticapps.net/`](https://yellow-cliff-068680700.7.azurestaticapps.net/)
+for V3 development and acceptance. **V3 Dev is not a data sandbox:** it uses production-connected
+configuration and can reach shared operational services.
 
 Yellow-cliff's frontend is V3, but its existing same-origin Job Card API/storage remains the
 authoritative shared backend used by V2. Do not call the current yellow-cliff frontend V1 or remove
-the host merely because V1 navigation was replaced.
+the host merely because V1 navigation was replaced. A yellow-cliff frontend change is a development
+release; a yellow-cliff API/storage change can still affect V2 Live and requires production controls.
 
 ### V3 configuration in source (21 October 2026)
 
