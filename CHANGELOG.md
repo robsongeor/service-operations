@@ -15,6 +15,9 @@
 
 ## Unreleased
 
+- Designated kind-wave `/job-book` as the user-facing V2 Live application and yellow-cliff's
+  frontend as V3 Dev. Yellow-cliff remains production-critical because V2 Live uses its shared
+  Job Card API, private storage and review lifecycle; V3 Dev is not a data sandbox.
 - Expanded the client-and-server enforced online Job Card pilot to Lasantha
   (`lasak2013@yahoo.com`), Shalvin (`shalvin2017prasad@gmail.com`) and Sabbi
   (`sabbi@liftrucks.co.nz`), retaining the existing recipients and localhost send guard.
