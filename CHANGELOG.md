@@ -15,6 +15,9 @@
 
 ## Unreleased
 
+- Expanded the client-and-server enforced online Job Card pilot to Lasantha
+  (`lasak2013@yahoo.com`), Shalvin (`shalvin2017prasad@gmail.com`) and Sabbi
+  (`sabbi@liftrucks.co.nz`), retaining the existing recipients and localhost send guard.
 - Reconciled repository and Wiki documentation with the deployed V3 managed-worklist state:
   yellow-cliff now hosts V3 plus the preserved authoritative Job Card backend; assembly `1.0.24.0`,
   the 13-user role/home-branch roster, managed-history counts, branch/watch activation, Auckland

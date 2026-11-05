@@ -24,7 +24,14 @@ const MAX_PARTS = 100
 const PHOTO_TYPES = new Set(['image/jpeg', 'image/png', 'image/heic', 'image/heif'])
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/
 const GUID_PATTERN = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i
-const PILOT_RECIPIENTS = new Set(['mou@liftrucks.co.nz', 'ricardo@liftrucks.co.nz', 'georger@liftrucks.co.nz'])
+const PILOT_RECIPIENTS = new Set([
+    'mou@liftrucks.co.nz',
+    'ricardo@liftrucks.co.nz',
+    'lasak2013@yahoo.com',
+    'shalvin2017prasad@gmail.com',
+    'sabbi@liftrucks.co.nz',
+    'georger@liftrucks.co.nz',
+])
 
 function pilotRecipientEnabled(email) {
     return PILOT_RECIPIENTS.has(String(email || '').trim().toLowerCase())
