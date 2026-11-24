@@ -61,9 +61,11 @@ yellow-cliff Static Web App from branch `v3-deployment`. Yellow-cliff must not b
 authoritative Job Card backend currently used by V2. The V3 client uses that backend same-origin;
 V2 continues through its fixed proxy. Existing Job Card storage/email settings were preserved.
 
-The latest deployed V3 behavior/mapping commit is `0ac63fb`; GitHub Actions run `39550927453`
-deployed it successfully on 21 October 2026. Post-deployment smoke checks returned 200 for `/` and `/jobs`, and
-the anonymous Service Coordination context boundary correctly returned 401.
+The managed-worklist baseline behavior/mapping commit is `0ac63fb`; GitHub Actions run `39550927453`
+deployed it successfully on 21 October 2026. The later Job Card behavior commit `099c68b` deployed
+successfully in run `45465280063` on 25 November 2026 without changing the managed-worklist mapping
+or feature flags. Post-deployment smoke checks returned 200, and the anonymous Service Coordination
+context boundary correctly returned 401.
 
 The V3 Service Coordination backend flag is enabled. Anonymous access fails with `401`; an
 authenticated George smoke check resolved home branch Auckland, and the empty pre-migration

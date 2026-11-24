@@ -16,6 +16,22 @@ private storage and review lifecycle used by V2 Live. Existing technician links 
 to depend on yellow-cliff, and backend changes there remain production changes even though its
 frontend is labelled Dev.
 
+## Digital Job Card release — 25 November 2026
+
+The optional Customer PO field and Anthony (`anthonyc@liftrucks.co.nz`) recipient access are live on
+both hosted clients. The authoritative yellow-cliff backend was deployed from behavior commit
+`099c68b` by GitHub Actions run `45465280063` before V2 Live commit `2b3e326` completed in run
+`45465736451`. This ordering prevents V2 from displaying a field that an older shared backend would
+discard. The Customer PO is server-validated, stored with immutable submitted evidence, shown in
+office review and written into the existing **ORDER No.** PDF field; older submissions retain the
+dispatch order-number fallback.
+
+Post-deployment checks returned `200` from both hosted applications, matched the `V3 Dev · 099c68b`
+and `V2 Live · 2b3e326` release labels, and found the Customer PO form code in both deployed portal
+bundles. The shared Job Card API remained reachable and rejected an invalid anonymous token with the
+expected safe `404` response. This release changed no Dataverse schema, roles, assignments, feature
+flags or hosted settings.
+
 ## Restricted Site creation incident — 22 October 2026
 
 Nargiza's real Office Admin acceptance exposed a V2 Site-create denial after the Customer had already
@@ -81,7 +97,7 @@ only the assembly and six reviewed Custom APIs; it changed no roles, assignments
 records, seeds or migration state. All 29 existing workflow steps and the current two Office Admin
 and seven Job Book Admin direct Dataverse assignments were independently reverified.
 
-V3 commit `0ac63fb` was deployed successfully by GitHub Actions run `39550927453` to
+The managed-worklist baseline V3 commit `0ac63fb` was deployed successfully by GitHub Actions run `39550927453` to
 `yellow-cliff-068680700.7.azurestaticapps.net`. Root and `/jobs` return the V3 application without a
 V2 redirect. The Service Coordination backend is enabled; its anonymous request returns `401`, and
 George's delegated smoke check resolves to Auckland. The personal watch endpoint returned zero rows

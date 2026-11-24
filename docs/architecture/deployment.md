@@ -31,12 +31,22 @@ authoritative shared backend used by V2. Do not call the current yellow-cliff fr
 the host merely because V1 navigation was replaced. A yellow-cliff frontend change is a development
 release; a yellow-cliff API/storage change can still affect V2 Live and requires production controls.
 
+### Job Card release evidence (25 November 2026)
+
+The shared-backend-first release deployed yellow-cliff behavior commit `099c68b` in GitHub Actions
+run `45465280063`, followed by V2 Live behavior commit `2b3e326` in run `45465736451`. Both workflows
+completed successfully. Read-only smoke checks returned `200`, matched the expected release labels,
+found the Customer PO form code in both deployed portal bundles, and received the expected safe
+`404` response for an invalid anonymous Job Card token. The release added optional immutable
+Customer PO evidence/PDF mapping and Anthony's recipient allowlist entry. It changed no hosted
+settings, Dataverse schema, roles, assignments or feature flags.
+
 ### V3 configuration in source (21 October 2026)
 
 V3 enables application-role enforcement, unified registration/workflow, Service Coordination
 branch filtering and personal watchlists. Regional Job Books outside Auckland and Job Card progress
 summaries remain disabled. The Service Coordination server gate and required GreenTree/TimeCloud
-settings are enabled in the yellow-cliff environment. Commit `0ac63fb` deployed successfully in
+settings are enabled in the yellow-cliff environment. The managed-worklist baseline commit `0ac63fb` deployed successfully in
 GitHub Actions run `39550927453`; `/` and `/jobs` returned 200 and the anonymous Service
 Coordination context boundary returned 401.
 
