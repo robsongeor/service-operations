@@ -16,8 +16,9 @@ deployment, assignment concurrency and durable monitoring still require acceptan
 V2-only releases remain compatible with the older shared backend: detail responses must explicitly
 advertise `officeRecoveryAvailable: true` before Resume, correction or technician-return controls
 appear. Public lookup must advertise `meterRecordedDateAvailable: true` before the form displays,
-validates or sends a meter date. These are compatibility signals, not authorization; server checks
-remain mandatory. Original filing/follow-up and document exports do not require the new signals.
+validates or sends a meter date, and `customerPoAvailable: true` before the form displays or sends
+the Customer PO. These are compatibility signals, not authorization; server checks remain
+mandatory. Original filing/follow-up and document exports do not require the new signals.
 
 Site Check occurrence links remain a separate existing workflow, using
 `siteCheckAssignmentService.js` and `siteCheckPhotoStorage.js`. Retain their credentials.
@@ -41,14 +42,17 @@ Site Check occurrence links remain a separate existing workflow, using
 ## Preserved form and rules
 
 The mobile form and browser-local editable Job sheet download remain. Parts retain description and
-quantity. Public PDF data includes equipment make/model/serial, order number and Site address;
-Site Contact is not exposed. Limits are 50 Time & Travel entries, 100 Parts, 20 photos of 10 MiB
-each, and 10,000 characters for each story/observation. At least one real date, positive hours
-(up to 24) and non-negative whole kilometres is required. Lower meter readings require explicit
-technician confirmation, independently checked by the server.
+quantity. Customer PO is optional, limited to 100 characters, initialized from the dispatch order
+number when present, and stored as immutable submitted evidence. The Job sheet's existing
+**ORDER No.** field uses the submitted Customer PO, falling back to the dispatch snapshot for older
+records. Public PDF data also includes equipment make/model/serial and Site address; Site Contact is
+not exposed. Limits are 50 Time & Travel entries, 100 Parts, 20 photos of 10 MiB each, and 10,000
+characters for each story/observation. At least one real date, positive hours (up to 24) and
+non-negative whole kilometres is required. Lower meter readings require explicit technician
+confirmation, independently checked by the server.
 
-The form now captures the meter-reading date separately from submission time. Text, time and parts
-recover after same-tab reload using token-hashed session-storage keys. Drafts expire after seven
+The form now captures the meter-reading date separately from submission time. Customer PO, other
+text, time and parts recover after same-tab reload using token-hashed session-storage keys. Drafts expire after seven
 days and are removed after submission; closing the tab loses them. Photos must be reattached.
 This is not offline or cross-device support. The personal-account assigned-jobs app is parked.
 
@@ -61,7 +65,8 @@ Ricardo (`ricardo@liftrucks.co.nz`), Lasantha (`lasak2013@yahoo.com`), Shalvin
 (`shalvin2017prasad@gmail.com`), Sabbi (`sabbi@liftrucks.co.nz`), Nilanga
 (`nilanga@liftrucks.co.nz`), Anura (`anura@liftrucks.co.nz`), Asneel
 (`asneel_kumar98@yahoo.co.nz`), Nuwan (`nuwansampath911@gmail.com`), Rocky
-(`rocky@liftrucks.co.nz`) and George's test address (`georger@liftrucks.co.nz`). Mou's obsolete
+(`rocky@liftrucks.co.nz`), Anthony (`anthonyc@liftrucks.co.nz`) and George's test address
+(`georger@liftrucks.co.nz`). Mou's obsolete
 personal address is no longer accepted. The localhost email guard and existing non-portal dispatch
 remain.
 

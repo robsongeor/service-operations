@@ -90,6 +90,7 @@ export type JobCardReview = JobCardReviewSummary & {
     equipmentMake?: string
     equipmentModel?: string
     orderNumber?: string
+    customerPo?: string
     siteAddress?: string
     currentHourMeter?: number
     hourMeter?: number

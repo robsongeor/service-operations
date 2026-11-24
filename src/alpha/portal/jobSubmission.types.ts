@@ -15,6 +15,7 @@ export type PublicJobSubmissionDetails = {
     workRequired?: string
     requiresHourMeter: boolean
     meterRecordedDateAvailable?: boolean
+    customerPoAvailable?: boolean
     currentHourMeter?: number
 }
 
@@ -33,6 +34,7 @@ export type JobCardTimeEntryInput = {
 
 export type JobCardSubmissionInput = {
     story: string
+    customerPo?: string
     hourMeter?: number
     hourMeterRecordedDate?: string
     lowerHourMeterConfirmed?: boolean

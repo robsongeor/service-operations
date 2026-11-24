@@ -35,6 +35,7 @@ const PILOT_RECIPIENTS = new Set([
     'asneel_kumar98@yahoo.co.nz',
     'nuwansampath911@gmail.com',
     'rocky@liftrucks.co.nz',
+    'anthonyc@liftrucks.co.nz',
     'georger@liftrucks.co.nz',
 ])
 
@@ -183,6 +184,7 @@ function publicDetails(record) {
         workRequired: record.workRequired || undefined,
         requiresHourMeter: record.jobType === SERVICE_JOB && Boolean(record.equipmentId),
         meterRecordedDateAvailable: true,
+        customerPoAvailable: true,
         currentHourMeter: record.currentHourMeter ?? undefined,
     }
 }
@@ -199,8 +201,11 @@ async function findRequest(token) {
 }
 
 function normalizeSubmission(body) {
+    const customerPoProvided = Object.prototype.hasOwnProperty.call(body, 'customerPo')
     return {
-        story: typeof body.story === 'string' ? body.story.trim() : '', hourMeter: body.hourMeter,
+        story: typeof body.story === 'string' ? body.story.trim() : '',
+        customerPoProvided, customerPoValid: !customerPoProvided || typeof body.customerPo === 'string',
+        customerPo: typeof body.customerPo === 'string' ? body.customerPo.trim() : '', hourMeter: body.hourMeter,
         hourMeterRecordedDate: body.hourMeterRecordedDate,
         lowerHourMeterConfirmed: body.lowerHourMeterConfirmed === true,
         timeEntries: body.timeEntries ?? [], parts: body.parts ?? [],
@@ -216,6 +221,8 @@ function validateSubmission(record, body) {
     body = normalizeSubmission(body)
     if (!body.story) return 'Enter the work completed or job story.'
     if (body.story.length > 10000) return 'The job story is too long.'
+    if (!body.customerPoValid) return 'Customer PO must be text.'
+    if (body.customerPo.length > 100) return 'Customer PO must be 100 characters or fewer.'
     const required = record.jobType === SERVICE_JOB && Boolean(record.equipmentId)
     if (required && body.hourMeter == null) return 'Enter the current hour meter.'
     if (body.hourMeter != null && (!Number.isSafeInteger(body.hourMeter) || body.hourMeter < 0)) return 'Hour meter must be a non-negative whole number.'
@@ -359,14 +366,15 @@ async function handlePublicPost(request) {
     if (request.body?.action === 'uploadPhoto') return uploadPhoto(request)
     const found = await findRequest(request.body?.token)
     if (found.error) return found.error
+    const validation = validateSubmission(found.record, request.body || {})
     const body = normalizeSubmission(request.body || {})
-    const validation = validateSubmission(found.record, body)
     if (validation) return jsonResponse(400, { code: 'invalid', error: validation })
     let photos
     try { photos = await validateStoredPhotos(found.record, body.photos) }
     catch { return jsonResponse(400, { code: 'invalid', error: 'One or more uploaded photos are unavailable or invalid.' }) }
     const submitted = {
         ...found.record, status: 'pendingReview', submittedOn: new Date().toISOString(), story: body.story,
+        customerPo: body.customerPoProvided ? body.customerPo : found.record.orderNumber || '',
         hourMeter: body.hourMeter ?? null, lowerHourMeterConfirmed: body.lowerHourMeterConfirmed,
         hourMeterRecordedDate: body.hourMeterRecordedDate || '',
         timeEntriesJson: JSON.stringify(body.timeEntries.map(({ date, hours, kilometres }) => ({ date, hours, kilometres }))),
@@ -409,6 +417,7 @@ function reviewDetails(record) {
         workRequired: record.workRequired || undefined, equipmentDisplayName: record.equipmentDisplayName || undefined,
         equipmentMake: record.equipmentMake || undefined, equipmentModel: record.equipmentModel || undefined,
         equipmentSerial: record.equipmentSerial || undefined, orderNumber: record.orderNumber || undefined,
+        customerPo: typeof record.customerPo === 'string' ? record.customerPo : record.orderNumber || undefined,
         siteAddress: record.siteAddress || undefined,
         fleetNumber: record.fleetNumber || undefined, currentHourMeter: record.currentHourMeter ?? undefined, hourMeter: record.hourMeter ?? undefined,
         story: record.story, timeEntries: safeJson(record.timeEntriesJson, []), parts: safeJson(record.partsJson, []),

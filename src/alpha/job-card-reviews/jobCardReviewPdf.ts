@@ -13,6 +13,7 @@ export function buildReviewJobSheet(review: JobCardReview) {
         technicianName: review.technicianName, workRequired: review.workRequired, requiresHourMeter: false,
     }
     const draft: JobSheetDraft = {
+        customerPo: review.customerPo !== undefined ? review.customerPo : review.orderNumber,
         hourMeter: review.hourMeter == null ? '' : String(review.hourMeter),
         story: review.story, timeEntries: review.timeEntries, parts: review.parts,
         furtherWorkDetails: review.furtherWorkRequired ? review.furtherWorkDetails || 'Required - details not supplied.' : 'None reported.',
