@@ -28,6 +28,7 @@ const job = {
 }
 
 const draft = {
+    customerPo: 'TECH-PO-123',
     hourMeter: '3642',
     story: 'Replaced headlight and tested operation.',
     timeEntries: [
@@ -99,12 +100,13 @@ test('weekday collisions retain separate dates instead of adding different weeks
 })
 
 test('normal saved card fills template fields and leaves signatures untouched with NZ submitted date', async () => {
-    const review = { ...job, hourMeter: 0, story: 'SAMPLE ONLY - Replaced headlight and tested operation.', timeEntries: [{ date: '2026-10-03', hours: 2, kilometres: 12 }, { date: '2026-10-04', hours: 1, kilometres: 8 }], parts: draft.parts, furtherWorkRequired: false, safetyIssueIdentified: false, submittedOn: '2026-10-01T12:00:00Z' } as unknown as JobCardReview
+    const review = { ...job, customerPo: 'TECH-PO-123', hourMeter: 0, story: 'SAMPLE ONLY - Replaced headlight and tested operation.', timeEntries: [{ date: '2026-10-03', hours: 2, kilometres: 12 }, { date: '2026-10-04', hours: 1, kilometres: 8 }], parts: draft.parts, furtherWorkRequired: false, safetyIssueIdentified: false, submittedOn: '2026-10-01T12:00:00Z' } as unknown as JobCardReview
     const blob = await renderJobCardReviewPdf(review, await readFile('docs/templates/jobsheet-template.pdf'))
     const bytes = new Uint8Array(await blob.arrayBuffer())
     const pdf = await PDFDocument.load(bytes)
     const form = pdf.getForm()
     assert.equal(pdf.getPageCount(), 1)
+    assert.equal(form.getTextField('orderNo').getText()?.trim(), 'TECH-PO-123')
     assert.equal(form.getTextField('hours').getText()?.trim(), '0')
     assert.equal(form.getTextField('generated-date-footer').getText(), '02/10/2026')
     assert.equal(form.getTextField('site-contact').getText() || '', '')
@@ -122,7 +124,7 @@ test('normal saved card fills template fields and leaves signatures untouched wi
 test('Job sheet values combine Job details and current technician form entries', () => {
     const values = buildJobSheetValues(job, draft)
     assert.equal(values.job.trim(), '145995')
-    assert.equal(values.orderNo.trim(), 'PO-88')
+    assert.equal(values.orderNo.trim(), 'TECH-PO-123')
     assert.equal(values.hours.trim(), '3642')
     assert.match(values.description, /WORK REQUIRED/)
     assert.match(values.description, /WORK COMPLETED/)
@@ -131,6 +133,11 @@ test('Job sheet values combine Job details and current technician form entries',
     assert.equal(values['mileage-1'], '15')
     assert.equal(values.chargeable, '1 x Headlight assembly')
     assert.match(values['FURTHER WORK REQUIRED  REMARKSRow1'], /Further work/)
+})
+
+test('Job sheet falls back to the dispatch order number for older submissions', () => {
+    assert.equal(buildJobSheetValues(job, { ...draft, customerPo: undefined }).orderNo.trim(), 'PO-88')
+    assert.equal(buildJobSheetValues(job, { ...draft, customerPo: '' }).orderNo, '')
 })
 
 test('office Job Card download maps only the selected technician submission', () => {
@@ -174,6 +181,7 @@ test('filled Job sheet remains an interactive PDF with expected field values', a
     const form = pdf.getForm()
     assert.equal(form.getTextField('job').getText()?.trim(), '145995')
     assert.equal(form.getTextField('fleet').getText()?.trim(), 'FN1695')
+    assert.equal(form.getTextField('orderNo').getText()?.trim(), 'TECH-PO-123')
     assert.equal(form.getTextField('customer').getText()?.trim(), 'Example Customer')
     assert.equal(form.getTextField('machine-serial').getText()?.trim(), 'SER-1695')
     assert.equal(form.getTextField('description').getText()?.includes('Replaced headlight'), true)

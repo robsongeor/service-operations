@@ -78,7 +78,7 @@ export default function JobCardReviewDetail({ review, state, embedded = false, o
             <section className="review-scan-strip" aria-label="Review at a glance">
                 <article><span>Technician</span><strong>{review.technicianName || 'Not recorded'}</strong></article>
                 <article><span>Submitted</span><strong>{dateTime.format(new Date(review.submittedOn))}</strong></article>
-                <article><span>Order number</span><strong>{review.orderNumber || 'Not recorded'}</strong></article>
+                <article><span>Customer PO</span><strong>{(review.customerPo ?? review.orderNumber) || 'Not recorded'}</strong></article>
             </section>
         </div>}
         {error && <p className="review-error" role="alert">{error} {conflict ? 'Your entered note has been kept. Refresh the review and check the other administrator’s change before retrying.' : null} <button type="button" onClick={refresh}>Refresh</button></p>}
@@ -88,7 +88,7 @@ export default function JobCardReviewDetail({ review, state, embedded = false, o
                     <section className="review-summary review-card" aria-label="Job details">
                         {embedded && <dl className="review-job-details-meta">
                             <div><dt>Technician</dt><dd>{review.technicianName || 'Not recorded'}</dd></div>
-                            <div><dt>Order number</dt><dd>{review.orderNumber || 'Not recorded'}</dd></div>
+                            <div><dt>Customer PO</dt><dd>{(review.customerPo ?? review.orderNumber) || 'Not recorded'}</dd></div>
                         </dl>}
                         <article className="review-customer-summary">
                             <p className="review-eyebrow">Saved customer &amp; site</p><h2>{review.customerName || 'Customer not recorded'}</h2>

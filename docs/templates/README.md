@@ -25,4 +25,6 @@ Technician Job Card's post-submission **Download completed Job sheet PDF** actio
 the named fields from the token-authorised Job projection and the exact accepted submission payload;
 it does not upload or persist the generated PDF. The legacy artwork contains a fixed serviceman name
 and date, which the renderer covers with the current token recipient and download date. Client name
-and signature remain blank and the result remains interactive after download.
+and signature remain blank and the result remains interactive after download. The existing
+**ORDER No.** AcroForm field is populated from the submitted Customer PO, with the dispatch order
+number retained as the compatibility fallback for older submissions.

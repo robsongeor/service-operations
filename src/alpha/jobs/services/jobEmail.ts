@@ -34,6 +34,7 @@ export const ONLINE_JOB_CARD_PILOT_EMAILS = [
     'asneel_kumar98@yahoo.co.nz',
     'nuwansampath911@gmail.com',
     'rocky@liftrucks.co.nz',
+    'anthonyc@liftrucks.co.nz',
     'georger@liftrucks.co.nz',
 ] as const
 

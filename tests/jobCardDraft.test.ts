@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { jobCardDraftKey, loadJobCardDraft, saveJobCardDraft, type JobCardDraft } from '../src/alpha/portal/jobCardDraft.ts'
-const draft: JobCardDraft = { story: 'Work', hourMeter: '0', hourMeterRecordedDate: '2026-10-01', timeEntries: [{ date: '2026-10-01', hours: '1', kilometres: '0' }], parts: [], furtherWorkRequired: false, furtherWorkDetails: '', safetyIssueIdentified: false, safetyIssueDetails: '' }
+const draft: JobCardDraft = { story: 'Work', customerPo: 'PO-123', hourMeter: '0', hourMeterRecordedDate: '2026-10-01', timeEntries: [{ date: '2026-10-01', hours: '1', kilometres: '0' }], parts: [], furtherWorkRequired: false, furtherWorkDetails: '', safetyIssueIdentified: false, safetyIssueDetails: '' }
 test('drafts are token-isolated without storing bearer tokens and expire after seven days', async () => {
     const key = await jobCardDraftKey('secret-token')
     assert.notEqual(key, await jobCardDraftKey('another-token'))
@@ -14,4 +14,12 @@ test('drafts are token-isolated without storing bearer tokens and expire after s
     assert.equal(loadJobCardDraft(storage, 'different-key', 1100), null)
     storage.setItem(key, '{invalid')
     assert.equal(loadJobCardDraft(storage, key, 1100), null)
+})
+
+test('older valid drafts remain recoverable without a Customer PO', async () => {
+    const key = await jobCardDraftKey('legacy-token')
+    const legacyDraft = { ...draft } as Partial<JobCardDraft>
+    delete legacyDraft.customerPo
+    const storage = { getItem: () => JSON.stringify({ version: 1, savedOn: 1000, draft: legacyDraft }) }
+    assert.equal(loadJobCardDraft(storage, key, 1100)?.customerPo, '')
 })

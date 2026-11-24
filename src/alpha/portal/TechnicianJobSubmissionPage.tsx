@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useParams } from 'react-router-dom'
 import { fetchPublicJobSubmission, JobSubmissionError, submitPublicJobCard } from './jobSubmissionApi'
 import type { JobCardTimeEntryInput, PublicJobSubmissionDetails, PublicSubmissionErrorCode } from './jobSubmission.types'
@@ -36,6 +36,7 @@ function TechnicianJobSubmissionForm() {
     const [job, setJob] = useState<PublicJobSubmissionDetails | null>(null)
     const [loadError, setLoadError] = useState<PublicSubmissionErrorCode | null>(null)
     const [story, setStory] = useState('')
+    const [customerPo, setCustomerPo] = useState('')
     const [hourMeter, setHourMeter] = useState('')
     const [hourMeterRecordedDate, setHourMeterRecordedDate] = useState(today)
     const [timeEntries, setTimeEntries] = useState<TimeEntryDraft[]>([newTimeEntry()])
@@ -55,6 +56,7 @@ function TechnicianJobSubmissionForm() {
     const [draftKey, setDraftKey] = useState('')
     const [draftReady, setDraftReady] = useState(false)
     const [draftMessage, setDraftMessage] = useState('')
+    const restoredCustomerPo = useRef(false)
 
     useEffect(() => {
         let current = true
@@ -62,7 +64,8 @@ function TechnicianJobSubmissionForm() {
             if (!current) return
             const draft = loadJobCardDraft(sessionStorage, key)
             if (draft) {
-                setStory(draft.story); setHourMeter(draft.hourMeter); setHourMeterRecordedDate(draft.hourMeterRecordedDate)
+                setStory(draft.story); setCustomerPo(draft.customerPo); restoredCustomerPo.current = true
+                setHourMeter(draft.hourMeter); setHourMeterRecordedDate(draft.hourMeterRecordedDate)
                 setTimeEntries(draft.timeEntries); setParts(draft.parts)
                 setFurtherWorkRequired(draft.furtherWorkRequired); setFurtherWorkDetails(draft.furtherWorkDetails)
                 setSafetyIssueIdentified(draft.safetyIssueIdentified); setSafetyIssueDetails(draft.safetyIssueDetails)
@@ -75,16 +78,20 @@ function TechnicianJobSubmissionForm() {
     useEffect(() => {
         if (!draftReady || !draftKey || submitted || !job) return
         const timer = setTimeout(() => {
-            try { saveJobCardDraft(sessionStorage, draftKey, { story, hourMeter, hourMeterRecordedDate, timeEntries, parts, furtherWorkRequired, furtherWorkDetails, safetyIssueIdentified, safetyIssueDetails }) }
+            try { saveJobCardDraft(sessionStorage, draftKey, { story, customerPo, hourMeter, hourMeterRecordedDate, timeEntries, parts, furtherWorkRequired, furtherWorkDetails, safetyIssueIdentified, safetyIssueDetails }) }
             catch { setDraftMessage('Draft could not be saved. Keep this page open until submitted.') }
         }, 300)
         return () => clearTimeout(timer)
-    }, [draftReady, draftKey, submitted, job, story, hourMeter, hourMeterRecordedDate, timeEntries, parts, furtherWorkRequired, furtherWorkDetails, safetyIssueIdentified, safetyIssueDetails])
+    }, [draftReady, draftKey, submitted, job, story, customerPo, hourMeter, hourMeterRecordedDate, timeEntries, parts, furtherWorkRequired, furtherWorkDetails, safetyIssueIdentified, safetyIssueDetails])
 
     useEffect(() => {
         let current = true
         void fetchPublicJobSubmission(token)
-            .then((details) => { if (current) setJob(details) })
+            .then((details) => {
+                if (!current) return
+                setJob(details)
+                if (details.customerPoAvailable === true && !restoredCustomerPo.current) setCustomerPo(details.orderNumber || '')
+            })
             .catch((error: unknown) => {
                 if (current) setLoadError(error instanceof JobSubmissionError ? error.code : 'temporary')
             })
@@ -129,6 +136,7 @@ function TechnicianJobSubmissionForm() {
         setValidation('')
         const submission = {
             story: trimmedStory,
+            customerPo: job?.customerPoAvailable === true ? customerPo.trim() : undefined,
             hourMeter: parsedHourMeter,
             hourMeterRecordedDate: job?.meterRecordedDateAvailable === true && parsedHourMeter != null ? hourMeterRecordedDate : undefined,
             lowerHourMeterConfirmed: isLowerHourMeter && lowerHourMeterConfirmed,
@@ -143,6 +151,7 @@ function TechnicianJobSubmissionForm() {
         try {
             await submitPublicJobCard(token, submission)
             setSubmittedPdfDraft({
+                customerPo: submission.customerPo,
                 hourMeter: submission.hourMeter == null ? undefined : String(submission.hourMeter),
                 story: submission.story,
                 timeEntries: submission.timeEntries,
@@ -204,6 +213,9 @@ function TechnicianJobSubmissionForm() {
             <form onSubmit={submit}>
                 <p role="status">{draftMessage || 'Checking for a saved draft…'}</p>
                 <fieldset disabled={!draftReady || busy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+                {job.customerPoAvailable === true && <label>Customer PO
+                    <input type="text" maxLength={100} value={customerPo} placeholder="Enter PO number if supplied" onChange={(event) => setCustomerPo(event.target.value)} />
+                </label>}
                 <label>Current Hour Meter{job.requiresHourMeter && ' *'}
                     <input type="number" min="0" step="1" inputMode="numeric" value={hourMeter} onChange={(event) => {
                         setHourMeter(event.target.value)

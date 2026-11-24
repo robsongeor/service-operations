@@ -75,6 +75,7 @@ test('server pilot recipients match the approved technician addresses', () => {
     assert.equal(service.test.pilotRecipientEnabled(' ASNEEL_KUMAR98@YAHOO.CO.NZ '), true)
     assert.equal(service.test.pilotRecipientEnabled('nuwansampath911@gmail.com'), true)
     assert.equal(service.test.pilotRecipientEnabled('rocky@liftrucks.co.nz'), true)
+    assert.equal(service.test.pilotRecipientEnabled(' ANTHONYC@LIFTRUCKS.CO.NZ '), true)
     assert.equal(service.test.pilotRecipientEnabled('georger@liftrucks.co.nz'), true)
     assert.equal(service.test.pilotRecipientEnabled('nzmouhib@yahoo.co.nz'), false)
     assert.equal(service.test.pilotRecipientEnabled('another.technician@example.test'), false)
@@ -98,11 +99,12 @@ test('public lookup returns only the snapshotted minimum and performs no Dataver
     assert.equal(response.status, 200)
     const body = JSON.parse(response.body)
     assert.deepEqual(Object.keys(body).sort(), [
-        'currentHourMeter', 'customerName', 'equipmentDisplayName', 'fleetNumber', 'jobNumber',
+        'currentHourMeter', 'customerName', 'customerPoAvailable', 'equipmentDisplayName', 'fleetNumber', 'jobNumber',
         'meterRecordedDateAvailable', 'requiresHourMeter', 'siteName', 'technicianName', 'workRequired',
     ])
     assert.equal(body.technicianName, 'Test Technician')
     assert.equal(body.meterRecordedDateAvailable, true)
+    assert.equal(body.customerPoAvailable, true)
 })
 
 test('production link generation reads a snapshot with the office token and makes no Dataverse write', async () => {
@@ -159,11 +161,12 @@ test('submission validation preserves strict story, meter, child, and photo-refe
     assert.match(service.test.validateSubmission(record, { story: '', hourMeter: 2500 }), /story/i)
     assert.match(service.test.validateSubmission(record, { story: 'Done' }), /hour meter/i)
     assert.match(service.test.validateSubmission(record, { story: 'Done', hourMeter: 2499 }), /lower/i)
+    assert.match(service.test.validateSubmission(record, { story: 'Done', customerPo: 'P'.repeat(101), hourMeter: 2500 }), /Customer PO/)
     for (const date of ['2026-02-30', '2999-01-01', 'not-a-date']) {
         assert.match(service.test.validateSubmission(record, { story: 'Done', hourMeter: 2500, hourMeterRecordedDate: date }), /meter-reading date/)
     }
     assert.equal(service.test.validateSubmission(record, {
-        story: 'Done', hourMeter: 2500, hourMeterRecordedDate: '2026-07-25',
+        story: 'Done', customerPo: 'P'.repeat(100), hourMeter: 2500, hourMeterRecordedDate: '2026-07-25',
         timeEntries: [{ date: '2026-07-25', hours: 1.25, kilometres: 12 }],
         parts: [{ description: 'Oil filter', quantity: 2 }], furtherWorkRequired: false, safetyIssueIdentified: false, photos: [],
     }), '')
@@ -219,6 +222,29 @@ test('successful submission creates a pending review and replay is rejected', as
     assert.equal(items[0].fleetNumber, 'FN24')
     assert.equal(JSON.parse(reviews.body).truncated, false)
     for (const key of ['tokenHash', 'technicianEmail', 'story', 'photos', 'equipmentId', 'technicianId']) assert.equal(items[0][key], undefined, key)
+})
+
+test('Customer PO distinguishes an intentional blank from an older omitted field', async () => {
+    const omitted = await generate({
+        jobId: '00000000-0000-4000-8000-000000000081',
+        snapshot: snapshot({ jobNumber: '145981', orderNumber: 'DISPATCH-PO' }),
+    })
+    const blank = await generate({
+        jobId: '00000000-0000-4000-8000-000000000082',
+        snapshot: snapshot({ jobNumber: '145982', orderNumber: 'SHOULD-CLEAR' }),
+    })
+    const base = { story: 'Completed', hourMeter: 2500, timeEntries: [{ date: '2026-11-24', hours: 1, kilometres: 0 }], parts: [], furtherWorkRequired: false, safetyIssueIdentified: false, photos: [] }
+    assert.equal((await invoke({ method: 'POST', headers: {}, body: { token: omitted.body.token, ...base } })).status, 200)
+    assert.equal((await invoke({ method: 'POST', headers: {}, body: { token: blank.body.token, ...base, customerPo: '' } })).status, 200)
+
+    const list = JSON.parse((await service.handleReviewRequest({ method: 'GET', headers: { authorization: 'Bearer office' }, query: {} })).body)
+    const details = new Map()
+    for (const item of list.items) {
+        const detail = JSON.parse((await service.handleReviewRequest({ method: 'GET', headers: { authorization: 'Bearer office' }, query: { reviewId: item.reviewId } })).body)
+        details.set(detail.jobNumber, detail.customerPo)
+    }
+    assert.equal(details.get('145981'), 'DISPATCH-PO')
+    assert.equal(details.get('145982'), '')
 })
 
 test('final required public submission moves an Allocated Job to Completion Review with the server identity', async () => {
@@ -283,7 +309,7 @@ test('review details and photos require office authentication and support explic
     const pdfSnapshot = { equipmentMake: 'Still', equipmentModel: 'RX60', equipmentSerial: 'SER-TEST', orderNumber: 'PO-TEST', siteAddress: '1 Example Road' }
     const created = await generate({ snapshot: snapshot(pdfSnapshot) })
     const submitted = await invoke({ method: 'POST', headers: {}, body: {
-        token: created.body.token, story: 'Completed', hourMeter: 2500,
+        token: created.body.token, story: 'Completed', customerPo: 'TECH-PO-451', hourMeter: 2500,
         timeEntries: [{ date: '2026-07-25', hours: 1, kilometres: 0 }], parts: [], furtherWorkRequired: false, safetyIssueIdentified: false, photos: [],
     } })
     assert.equal(submitted.status, 200)
@@ -293,6 +319,7 @@ test('review details and photos require office authentication and support explic
     const reviewId = list.items[0].reviewId
     const detail = JSON.parse((await service.handleReviewRequest({ method: 'GET', headers: { authorization: 'Bearer office' }, query: { reviewId } })).body)
     for (const [key, value] of Object.entries(pdfSnapshot)) assert.equal(detail[key], value)
+    assert.equal(detail.customerPo, 'TECH-PO-451')
     assert.equal(detail.workRequired, 'Service forklift')
     assert.equal(detail.technicianEmail, undefined)
     assert.equal(detail.tokenHash, undefined)

@@ -4,6 +4,7 @@ import type { JobCardTimeEntryInput, PublicJobSubmissionDetails } from './jobSub
 const TEMPLATE_URL = new URL('../../../docs/templates/jobsheet-template.pdf', import.meta.url).href
 
 export type JobSheetDraft = {
+    customerPo?: string
     hourMeter?: string
     story?: string
     timeEntries: JobCardTimeEntryInput[]
@@ -84,7 +85,7 @@ export function buildJobSheetValues(job: PublicJobSubmissionDetails, draft: JobS
     const values: Record<string, string> = {
         job: inlineValue(job.jobNumber),
         fleet: inlineValue(job.fleetNumber),
-        orderNo: inlineValue(job.orderNumber),
+        orderNo: inlineValue(draft.customerPo !== undefined ? draft.customerPo : job.orderNumber),
         customer: inlineValue(job.customerName),
         'customer-address': ascii([job.siteName, job.siteAddress].filter(Boolean).join(' - ')),
         'site-contact': inlineValue(job.siteContactName),
@@ -139,12 +140,12 @@ export async function renderJobSheetPdf(
         continuation.push({ label, value })
         return font.widthOfTextAtSize('See continuation', size) <= width - 8 ? 'See continuation' : 'See cont.'
     }
-    const labels: Record<string, string> = { job: 'Job number', fleet: 'Fleet number', orderNo: 'Order number', customer: 'Customer', 'customer-address': 'Customer / site address', 'site-contact': 'Site contact', 'site-contact-phone': 'Site contact phone', 'machine-make': 'Make', 'machine-model': 'Model', 'machine-serial': 'Serial number', hours: 'Submitted hour meter', description: 'Work required and completed' }
+    const labels: Record<string, string> = { job: 'Job number', fleet: 'Fleet number', orderNo: 'Customer PO', customer: 'Customer', 'customer-address': 'Customer / site address', 'site-contact': 'Site contact', 'site-contact-phone': 'Site contact phone', 'machine-make': 'Make', 'machine-model': 'Model', 'machine-serial': 'Serial number', hours: 'Submitted hour meter', description: 'Work required and completed' }
     for (const [name, value] of Object.entries(values)) {
         if (name === 'chargeable' || name.startsWith('FURTHER WORK')) continue
         const field = form.getTextField(name)
         const multiline = name === 'description'
-        const fontSize = multiline ? 8 : 7.5
+        const fontSize = multiline ? 8 : name === 'orderNo' ? 6 : 7.5
         const { width, height } = field.acroField.getWidgets()[0].getRectangle()
         const isTime = /^(date|hours|mileage|mileae)-/.test(name)
         setField(field, isTime ? value : fit(labels[name] || name, value, width, height, fontSize, multiline), isTime ? 6 : fontSize, multiline)

@@ -62,7 +62,9 @@ The raw 32-byte link token is returned once and never stored. Its SHA-256 hash i
 row key. A separate random review ID is used in office links. States are `active`,
 `superseded`, `pendingReview`, and `reviewed`. Table fields include source Job/assignment
 IDs, minimum dispatch snapshot, creator identity, created/expiry/submitted/reviewed times,
-reviewer identity, notification outcome, submission values, and private photo references.
+reviewer identity, notification outcome, submission values (including the optional, server-validated
+Customer PO), and private photo references. The submitted Customer PO is stored on the existing row;
+no new Table or schema-provisioning step is required.
 
 Accepted technician fields are immutable evidence. Office review adds only allowlisted office
 fields: the explicit office status, bounded current note, optional GreenTree reference, review/

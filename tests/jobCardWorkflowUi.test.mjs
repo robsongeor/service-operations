@@ -135,6 +135,13 @@ test('meter date rendering, validation and submission require backend support', 
     assert.match(source, /hourMeterRecordedDate: job\?\.meterRecordedDateAvailable === true && parsedHourMeter != null \? hourMeterRecordedDate : undefined/)
 })
 
+test('Customer PO rendering and submission require backend support', () => {
+    const source = readFileSync(new URL('../src/alpha/portal/TechnicianJobSubmissionPage.tsx', import.meta.url), 'utf8')
+    assert.match(source, /job\.customerPoAvailable === true && <label>Customer PO/)
+    assert.match(source, /customerPo: job\?\.customerPoAvailable === true \? customerPo\.trim\(\) : undefined/)
+    assert.match(source, /maxLength=\{100\}/)
+})
+
 test('queue reuses shared table controls and exposes only review navigation, not operational actions', () => {
     const markup = renderQueue()
     for (const value of ['operations-table-panel', 'operations-table-toolbar', 'operations-filter-pills', 'operations-table-sort', 'searchable-select', 'drawer-tabs', 'Sort by photos', 'Reported attention', 'Repair hydraulics', '1 of 1 shown']) assert.ok(markup.includes(value), value)
@@ -251,7 +258,7 @@ test('review places Job, equipment/customer/contact/address, and prominent hour 
     assert.match(markup, /class="review-scan-strip"/)
     assert.match(markup, /class="review-overview-bar"/)
     const scanStrip = markup.match(/<section class="review-scan-strip"[\s\S]*?<\/section>/)?.[0] || ''
-    for (const text of ['Technician', 'Submitted', 'Order number']) assert.ok(scanStrip.includes(text), text)
+    for (const text of ['Technician', 'Submitted', 'Customer PO']) assert.ok(scanStrip.includes(text), text)
     assert.doesNotMatch(scanStrip, /Labour|1.25 h|Travel|12 km|Evidence|Reported attention|Safety issue|Further work/)
     assert.doesNotMatch(markup, /Office reference|Current Job contact/)
     assert.match(markup, /has-further-work/)
@@ -272,8 +279,8 @@ test('review handles missing photos, hour reading and failed current contact wit
 })
 
 test('embedded report keeps document access, evidence and audit exceptions without duplicate controls', () => {
-    const markup = renderReview({ technicianName: 'Alex', orderNumber: 'PO-123', notificationStatus: 'failed', reviewedOn: '2026-10-02T01:00:00Z' }, { readOnly: true }, true)
-    for (const value of ['Alex', 'PO-123', 'Fixture customer', 'Fixture serial', 'Inspected pump', 'Order seal kit', 'Damaged guard', 'Review email: failed', 'Reviewed 2 Oct']) assert.ok(markup.includes(value), value)
+    const markup = renderReview({ technicianName: 'Alex', orderNumber: 'PO-123', customerPo: 'TECH-PO-123', notificationStatus: 'failed', reviewedOn: '2026-10-02T01:00:00Z' }, { readOnly: true }, true)
+    for (const value of ['Alex', 'TECH-PO-123', 'Fixture customer', 'Fixture serial', 'Inspected pump', 'Order seal kit', 'Damaged guard', 'Review email: failed', 'Reviewed 2 Oct']) assert.ok(markup.includes(value), value)
     for (const label of ['Save all documentation', 'Associated quotes', 'Download job card PDF', 'Start GreenTree entry', 'Mark complete']) assert.equal(markup.split(`>${label}</button>`).length - 1, 1, label)
     assert.match(markup, /disabled="">Start GreenTree entry<\/button>/)
     assert.match(markup, /disabled="">Retry notification<\/button>/)
