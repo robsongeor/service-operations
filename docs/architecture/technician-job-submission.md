@@ -84,9 +84,12 @@ The adapter splits large Table string properties into bounded chunks.
 
 The online pilot remains restricted client- and server-side to Mou (`mou@liftrucks.co.nz`),
 Ricardo (`ricardo@liftrucks.co.nz`), Lasantha (`lasak2013@yahoo.com`), Shalvin
-(`shalvin2017prasad@gmail.com`), Sabbi (`sabbi@liftrucks.co.nz`) and George's test address
-(`georger@liftrucks.co.nz`). Mou's obsolete personal address is no longer accepted. The localhost
-email guard and existing non-portal dispatch remain.
+(`shalvin2017prasad@gmail.com`), Sabbi (`sabbi@liftrucks.co.nz`), Nilanga
+(`nilanga@liftrucks.co.nz`), Anura (`anura@liftrucks.co.nz`), Asneel
+(`asneel_kumar98@yahoo.co.nz`), Nuwan (`nuwansampath911@gmail.com`), Rocky
+(`rocky@liftrucks.co.nz`) and George's test address (`georger@liftrucks.co.nz`). Mou's obsolete
+personal address is no longer accepted. The localhost email guard and existing non-portal dispatch
+remain.
 
 ## Review authorization and operational invariants
 

@@ -30,6 +30,11 @@ const PILOT_RECIPIENTS = new Set([
     'lasak2013@yahoo.com',
     'shalvin2017prasad@gmail.com',
     'sabbi@liftrucks.co.nz',
+    'nilanga@liftrucks.co.nz',
+    'anura@liftrucks.co.nz',
+    'asneel_kumar98@yahoo.co.nz',
+    'nuwansampath911@gmail.com',
+    'rocky@liftrucks.co.nz',
     'georger@liftrucks.co.nz',
 ])
 

@@ -365,9 +365,11 @@ reuses the tracked interactive template and current unsaved technician form valu
 Job state or storing a generated document.
 Open Job Card is enabled as a bounded pilot only when the actual email recipient is Mou
 (`mou@liftrucks.co.nz`), Ricardo (`ricardo@liftrucks.co.nz`), Lasantha (`lasak2013@yahoo.com`),
-Shalvin (`shalvin2017prasad@gmail.com`), Sabbi (`sabbi@liftrucks.co.nz`) or George's manually
-entered test address (`georger@liftrucks.co.nz`). Mou's obsolete personal address is no longer
-accepted.
+Shalvin (`shalvin2017prasad@gmail.com`), Sabbi (`sabbi@liftrucks.co.nz`), Nilanga
+(`nilanga@liftrucks.co.nz`), Anura (`anura@liftrucks.co.nz`), Asneel
+(`asneel_kumar98@yahoo.co.nz`), Nuwan (`nuwansampath911@gmail.com`), Rocky
+(`rocky@liftrucks.co.nz`) or George's manually entered test address (`georger@liftrucks.co.nz`).
+Mou's obsolete personal address is no longer accepted.
 Every other recipient remains disabled, generates no secure link, and receives no portal URL. The
 authenticated server endpoint enforces the same allowlist. Editing the recipient away from an
 approved address disables the action immediately. The preview and delivered card show the Job's linked Site Contact name,
