@@ -16,19 +16,34 @@ private storage and review lifecycle used by V2 Live. Existing technician links 
 to depend on yellow-cliff, and backend changes there remain production changes even though its
 frontend is labelled Dev.
 
-## V2 release scope — 11 October 2026
+## Digital Job Card release — 25 November 2026
+
+The optional Customer PO field and Anthony (`anthonyc@liftrucks.co.nz`) recipient access are live on
+both hosted clients. The authoritative yellow-cliff backend was deployed from behavior commit
+`099c68b` by GitHub Actions run `45465280063` before V2 Live commit `2b3e326` completed in run
+`45465736451`. This ordering prevents V2 from displaying a field that an older shared backend would
+discard. The Customer PO is server-validated, stored with immutable submitted evidence, shown in
+office review and written into the existing **ORDER No.** PDF field; older submissions retain the
+dispatch order-number fallback.
+
+Post-deployment checks returned `200` from both hosted applications, matched the `V3 Dev · 099c68b`
+and `V2 Live · 2b3e326` release labels, and found the Customer PO form code in both deployed portal
+bundles. The shared Job Card API remained reachable and rejected an invalid anonymous token with the
+expected safe `404` response. This release changed no Dataverse schema, roles, assignments, feature
+flags or hosted settings.
+
+## V2 release scope — 11 October 2026 (historical snapshot)
 
 Owner requested commit/push and V2 deployment. This release includes the review popout, official
 Job Card PDF/photo ZIP, compact office workflow, clipboard fix, shared-search/state fixes and
 documentation audit. V1 and Dataverse are not deployed by the V2 workflow.
 
-V2 keeps the existing V1 Job Card bridge. Recovery controls (office corrections, Resume entry,
+V2 keeps the authoritative yellow-cliff Job Card bridge. Recovery controls (office corrections, Resume entry,
 technician-return checks) require `officeRecoveryAvailable: true` from the authoritative backend.
-Meter-date entry requires `meterRecordedDateAvailable: true`; an old backend must not silently
-discard a displayed field. Without these capabilities, established filing/follow-up and downloads
-remain available. Meter approval and cursor flags are explicitly false in the V2 build.
-Server-only recovery, GT reconciliation changes and the new meter guard are committed but are
-not made live on the authoritative shared service by a V2-only push. Broader release gates remain.
+Meter-date entry requires `meterRecordedDateAvailable: true`, and Customer PO requires
+`customerPoAvailable: true`; an old backend must not silently discard a displayed field. Without
+these capabilities, established filing/follow-up and downloads remain available. Meter approval and
+cursor flags remain explicitly false in the V2 build. Broader release gates remain.
 
 ## Release position
 

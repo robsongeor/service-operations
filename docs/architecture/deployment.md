@@ -31,6 +31,16 @@ authoritative shared backend used by V2. Do not remove the host merely because i
 designated Dev. A yellow-cliff frontend change is a development release; a yellow-cliff API/storage
 change can still affect V2 Live and requires production controls.
 
+### Job Card release evidence (25 November 2026)
+
+The shared-backend-first release deployed yellow-cliff behavior commit `099c68b` in GitHub Actions
+run `45465280063`, followed by V2 Live behavior commit `2b3e326` in run `45465736451`. Both workflows
+completed successfully. Read-only smoke checks returned `200`, matched the expected release labels,
+found the Customer PO form code in both deployed portal bundles, and received the expected safe
+`404` response for an invalid anonymous Job Card token. The release added optional immutable
+Customer PO evidence/PDF mapping and Anthony's recipient allowlist entry. It changed no hosted
+settings, Dataverse schema, roles, assignments or feature flags.
+
 ### V2 configuration in source (21 October 2026)
 
 | Setting | Workflow value |
