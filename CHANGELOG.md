@@ -15,6 +15,9 @@
 
 ## Unreleased
 
+- Added Nilanga Karunathilaka (`nilanga@liftrucks.co.nz`), Anura (`anura@liftrucks.co.nz`),
+  Asneel (`asneel_kumar98@yahoo.co.nz`), Nuwan (`nuwansampath911@gmail.com`) and Rocky
+  (`rocky@liftrucks.co.nz`) to the client-and-server enforced online Job Card recipient allowlist.
 - Designated kind-wave `/job-book` as the user-facing V2 Live application and yellow-cliff's
   frontend as V3 Dev. Yellow-cliff remains production-critical because V2 Live uses its shared
   Job Card API, private storage and review lifecycle; V3 Dev is not a data sandbox.
