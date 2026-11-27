@@ -76,6 +76,7 @@ test('server pilot recipients match the approved technician addresses', () => {
     assert.equal(service.test.pilotRecipientEnabled('nuwansampath911@gmail.com'), true)
     assert.equal(service.test.pilotRecipientEnabled('rocky@liftrucks.co.nz'), true)
     assert.equal(service.test.pilotRecipientEnabled(' ANTHONYC@LIFTRUCKS.CO.NZ '), true)
+    assert.equal(service.test.pilotRecipientEnabled(' RICHARDC@LIFTRUCKS.CO.NZ '), true)
     assert.equal(service.test.pilotRecipientEnabled('georger@liftrucks.co.nz'), true)
     assert.equal(service.test.pilotRecipientEnabled('nzmouhib@yahoo.co.nz'), false)
     assert.equal(service.test.pilotRecipientEnabled('another.technician@example.test'), false)

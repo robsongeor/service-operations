@@ -116,6 +116,7 @@ test('online Job Card pilot is restricted to approved recipients and other email
     assert.equal(onlineJobCardPilotEnabled('nuwansampath911@gmail.com'), true)
     assert.equal(onlineJobCardPilotEnabled('rocky@liftrucks.co.nz'), true)
     assert.equal(onlineJobCardPilotEnabled(' ANTHONYC@LIFTRUCKS.CO.NZ '), true)
+    assert.equal(onlineJobCardPilotEnabled(' RICHARDC@LIFTRUCKS.CO.NZ '), true)
     assert.equal(onlineJobCardPilotEnabled(' georger@liftrucks.co.nz '), true)
     assert.equal(onlineJobCardPilotEnabled('nzmouhib@yahoo.co.nz'), false)
     assert.equal(onlineJobCardPilotEnabled('another.technician@example.test'), false)

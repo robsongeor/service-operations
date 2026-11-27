@@ -15,6 +15,8 @@
 
 ## Unreleased
 
+- Added Richard (`richardc@liftrucks.co.nz`) to the client-and-server enforced online Job Card
+  recipient allowlist.
 - Added Anthony (`anthonyc@liftrucks.co.nz`) to the client-and-server enforced online Job Card
   recipient allowlist.
 - Added an optional, draft-recoverable Customer PO to the technician Job Card, stored it as immutable
