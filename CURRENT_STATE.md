@@ -16,6 +16,18 @@ private storage and review lifecycle used by V2 Live. Existing technician links 
 to depend on yellow-cliff, and backend changes there remain production changes even though its
 frontend is labelled Dev.
 
+## Richard Job Card access release — 27 November 2026
+
+Richard (`richardc@liftrucks.co.nz`) is live in the client-and-server enforced online Job Card
+recipient allowlist on both hosted applications. The authoritative yellow-cliff backend was deployed
+first from V3 commit `f422394` by GitHub Actions run `45937001025`; V2 Live commit `a94ddb8` then
+completed successfully in run `45937454265`.
+
+Post-deployment checks returned `200` from both hosted applications, matched the `V3 Dev · f422394`
+and `V2 Live · a94ddb8` release labels, found Richard's address in both deployed client bundles and
+received the expected safe `404` response for an invalid anonymous Job Card token. This release
+changed no Dataverse schema, roles, assignments, feature flags or hosted settings.
+
 ## Digital Job Card release — 25 November 2026
 
 The optional Customer PO field and Anthony (`anthonyc@liftrucks.co.nz`) recipient access are live on

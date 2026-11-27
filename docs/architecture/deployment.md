@@ -31,6 +31,15 @@ authoritative shared backend used by V2. Do not call the current yellow-cliff fr
 the host merely because V1 navigation was replaced. A yellow-cliff frontend change is a development
 release; a yellow-cliff API/storage change can still affect V2 Live and requires production controls.
 
+### Richard Job Card access release evidence (27 November 2026)
+
+The shared-backend-first release deployed yellow-cliff commit `f422394` in GitHub Actions run
+`45937001025`, followed by V2 Live commit `a94ddb8` in run `45937454265`. Both deployment jobs
+completed successfully. Read-only smoke checks returned `200`, matched the expected release labels,
+found `richardc@liftrucks.co.nz` in both deployed client bundles and received the expected safe `404`
+response for an invalid anonymous Job Card token. The release changed no hosted settings, Dataverse
+schema, roles, assignments or feature flags.
+
 ### Job Card release evidence (25 November 2026)
 
 The shared-backend-first release deployed yellow-cliff behavior commit `099c68b` in GitHub Actions
